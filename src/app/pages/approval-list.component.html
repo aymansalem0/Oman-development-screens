@@ -1,0 +1,63 @@
+<section class="list-page">
+  <div class="tab-strip">
+    <span class="tab active">Requests</span>
+  </div>
+
+  <section class="summary-panel">
+    <div class="section-heading">
+      <h1>Request for Approval of Maritime Navigation Aids Installation</h1>
+      <p>Follow up on the number of requests and achievement rates in real-time</p>
+    </div>
+
+    <div class="stats-grid">
+      <article class="stat-card" *ngFor="let stat of stats">
+        <div class="stat-icon">{{ stat.icon }}</div>
+        <div class="stat-label">{{ stat.label }}</div>
+        <div class="stat-value">{{ stat.value }}</div>
+      </article>
+    </div>
+  </section>
+
+  <section class="requests-panel">
+    <h2>Request for Approval of Maritime Navigation Aids Installation</h2>
+
+    <div class="filters-row">
+      <div class="search-box">⌕&nbsp;&nbsp; Search by request number or beneficiary</div>
+      <div class="filter-spacer"></div>
+      <button class="filter-button">Status <span>⌄</span></button>
+      <button class="filter-button">Month/Day/Year <span>▣</span></button>
+    </div>
+
+    <div class="request-table-wrap">
+      <table class="request-table">
+        <thead>
+          <tr>
+            <th>Request Number</th>
+            <th>Beneficiary Name</th>
+            <th>Status</th>
+            <th>Last Update</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let row of rows">
+            <td>{{ row.requestNumber }}</td>
+            <td>{{ row.beneficiary }}</td>
+            <td>
+              <span class="status-pill" [ngClass]="row.statusClass">{{ row.status }}</span>
+            </td>
+            <td>{{ row.lastUpdate }}</td>
+            <td>
+              <a
+                class="follow-link"
+                [routerLink]="['/dashboard/maritime-navigation/navigation-aids-installation-approval', row.id]"
+              >
+                Follow Up&nbsp; →
+              </a>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</section>
