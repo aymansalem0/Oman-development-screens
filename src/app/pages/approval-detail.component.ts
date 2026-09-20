@@ -9,6 +9,12 @@ interface DetailRow {
   translateValue?: boolean;
 }
 
+interface PartyInfoField {
+  labelKey: string;
+  valueEn: string;
+  valueAr?: string;
+}
+
 @Component({
   selector: 'app-approval-detail',
   standalone: true,
@@ -20,6 +26,38 @@ export class ApprovalDetailComponent {
   savedPayload: unknown = null;
 
   constructor(public lang: LanguageService) {}
+
+  applicantData: PartyInfoField[] = [
+    {
+      labelKey: 'applicantName',
+      valueEn: 'Al Murshid Navigation Services',
+      valueAr: 'المرشد للخدمات الملاحية'
+    },
+    { labelKey: 'applicantId', valueEn: '12345678' },
+    {
+      labelKey: 'authorizedPersonName',
+      valueEn: 'Mohammed Ahmed',
+      valueAr: 'محمد أحمد'
+    },
+    { labelKey: 'authorizedPersonPhone', valueEn: '+968 99 000 000' },
+    { labelKey: 'email', valueEn: 'applicant@example.om' }
+  ];
+
+  originalOwnerData: PartyInfoField[] = [
+    {
+      labelKey: 'originalOwnerName',
+      valueEn: 'Marine Project Owner Company',
+      valueAr: 'شركة مالك المشروع البحري'
+    },
+    {
+      labelKey: 'authorizedPersonName',
+      valueEn: 'Ahmed Al Balushi',
+      valueAr: 'أحمد البلوشي'
+    },
+    { labelKey: 'authorizedPersonPhone', valueEn: '+968 99 111 111' },
+    { labelKey: 'email', valueEn: 'owner@example.om' },
+    { labelKey: 'faxNumber', valueEn: '+968 24 000 000' }
+  ];
 
   rows: DetailRow[] = [
     { labelKey: 'aidType', value: 'BUOY', translateValue: true },
@@ -55,6 +93,10 @@ export class ApprovalDetailComponent {
 
   displayValue(row: DetailRow): string {
     return row.translateValue ? this.lang.term(row.value) : row.value;
+  }
+
+  partyValue(field: PartyInfoField): string {
+    return this.lang.isArabic && field.valueAr ? field.valueAr : field.valueEn;
   }
 
   onSpecificationsSaved(payload: any): void {
