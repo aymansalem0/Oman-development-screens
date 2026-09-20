@@ -1,11 +1,17 @@
 <div class="modal-backdrop" (click)="close()">
-  <section class="spec-modal spec-modal-uat" dir="ltr" [formGroup]="form" (click)="$event.stopPropagation()">
+  <section
+    class="spec-modal spec-modal-uat"
+    [class.rtl]="lang.isArabic"
+    [attr.dir]="lang.dir"
+    [formGroup]="form"
+    (click)="$event.stopPropagation()"
+  >
     <header class="spec-modal-header uat-modal-header">
       <div class="uat-modal-title">
-        <h2>Enter Technical Specifications</h2>
-        <span>Two complete specifications are required</span>
+        <h2>{{ lang.t('enterTechnicalSpecifications') }}</h2>
+        <span>{{ lang.t('twoSpecificationsRequired') }}</span>
       </div>
-      <button type="button" class="modal-close" (click)="close()" aria-label="Close">×</button>
+      <button type="button" class="modal-close" (click)="close()" [attr.aria-label]="lang.t('cancel')">×</button>
     </header>
 
     <div class="spec-modal-body uat-modal-body" formArrayName="specifications">
@@ -21,11 +27,11 @@
           [attr.aria-expanded]="isExpanded(i)"
         >
           <div>
-            <strong>Technical Specification {{ i + 1 }}</strong>
-            <span>Complete navigation-aid specification</span>
+            <strong>{{ lang.t('technicalSpecification') }} {{ i + 1 }}</strong>
+            <span>{{ lang.t('completeNavigationSpec') }}</span>
           </div>
           <div class="accordion-header-meta">
-            <span class="spec-number-badge">Specification {{ i + 1 }}</span>
+            <span class="spec-number-badge">{{ lang.t('specification') }} {{ i + 1 }}</span>
             <span class="accordion-chevron">{{ isExpanded(i) ? '⌃' : '⌄' }}</span>
           </div>
         </button>
@@ -33,118 +39,124 @@
         <div class="accordion-body" *ngIf="isExpanded(i)">
           <div class="spec-form-grid two uat-two-column">
             <div class="form-field">
-              <label>Navigation Aid Type <b>*</b></label>
+              <label>{{ lang.t('navigationAidType') }} <b>*</b></label>
               <select formControlName="navigationAidType">
-                <option value="">Select navigation aid type</option>
-                <option *ngFor="let type of navigationAidTypes" [value]="type">{{ type }}</option>
+                <option value="">{{ lang.t('selectNavigationAidType') }}</option>
+                <option *ngFor="let type of navigationAidTypes" [value]="type.code">
+                  {{ lang.term(type.code) }}
+                </option>
               </select>
             </div>
+
             <div class="form-field">
-              <label>Structure Type <b>*</b></label>
+              <label>{{ lang.t('structureType') }} <b>*</b></label>
               <div class="option-row uat-radio-row">
                 <label *ngFor="let type of structureTypes">
-                  <input type="radio" formControlName="structureType" [value]="type">
-                  {{ type }}
+                  <input type="radio" formControlName="structureType" [value]="type.code">
+                  {{ lang.term(type.code) }}
                 </label>
               </div>
             </div>
 
             <div class="form-field">
-              <label>Lit <b>*</b></label>
+              <label>{{ lang.t('lit') }} <b>*</b></label>
               <div class="option-row uat-radio-row">
-                <label><input type="radio" formControlName="lit" [value]="true"> Yes</label>
-                <label><input type="radio" formControlName="lit" [value]="false"> No</label>
+                <label><input type="radio" formControlName="lit" [value]="true"> {{ lang.t('yes') }}</label>
+                <label><input type="radio" formControlName="lit" [value]="false"> {{ lang.t('no') }}</label>
               </div>
             </div>
 
             <div class="form-field">
-              <label>Specification Purpose <b>*</b></label>
+              <label>{{ lang.t('specificationPurpose') }} <b>*</b></label>
               <select formControlName="specificationPurpose">
-                <option value="">Select purpose</option>
-                <option *ngFor="let purpose of purposes" [value]="purpose">{{ purpose }}</option>
+                <option value="">{{ lang.t('selectPurpose') }}</option>
+                <option *ngFor="let purpose of purposes" [value]="purpose.code">
+                  {{ lang.term(purpose.code) }}
+                </option>
               </select>
             </div>
 
             <div class="form-field">
-              <label>Structure Details</label>
-              <input type="text" formControlName="structureDetails" placeholder="Enter structure details">
+              <label>{{ lang.t('structureDetails') }}</label>
+              <input type="text" formControlName="structureDetails" [placeholder]="lang.t('enterStructureDetails')">
             </div>
 
             <div class="form-field">
-              <label>Focal Height</label>
-              <input type="number" formControlName="focalHeight" placeholder="Enter focal height">
+              <label>{{ lang.t('focalHeight') }}</label>
+              <input type="number" formControlName="focalHeight" [placeholder]="lang.t('enterFocalHeight')">
             </div>
 
             <div class="form-field">
-              <label>Colour of Light <b>*</b></label>
+              <label>{{ lang.t('colourOfLight') }} <b>*</b></label>
               <select formControlName="lightColour">
-                <option value="">Select colour of light</option>
-                <option *ngFor="let colour of lightColours" [value]="colour">{{ colour }}</option>
+                <option value="">{{ lang.t('selectColourOfLight') }}</option>
+                <option *ngFor="let colour of lightColours" [value]="colour.code">
+                  {{ lang.term(colour.code) }}
+                </option>
               </select>
             </div>
 
             <div class="form-field">
-              <label>Colour of Structure <b>*</b></label>
+              <label>{{ lang.t('colourOfStructure') }} <b>*</b></label>
               <select formControlName="structureColour" (change)="onStructureColourChange(i)">
-                <option value="">Select colour of structure</option>
-                <option *ngFor="let colour of structureColours" [value]="colour">{{ colour }}</option>
-                <option value="Other">Other</option>
+                <option value="">{{ lang.t('selectColourOfStructure') }}</option>
+                <option *ngFor="let colour of structureColours" [value]="colour.code">
+                  {{ lang.term(colour.code) }}
+                </option>
               </select>
               <input
-                *ngIf="spec.get('structureColour')?.value === 'Other'"
+                *ngIf="spec.get('structureColour')?.value === 'OTHER'"
                 class="other-colour"
                 type="text"
                 formControlName="structureColourOther"
-                placeholder="Enter other colour"
+                [placeholder]="lang.t('enterOtherColour')"
               >
             </div>
 
             <div class="form-field">
-              <label>Signal Character <b>*</b></label>
+              <label>{{ lang.t('signalCharacter') }} <b>*</b></label>
               <select formControlName="signalCharacter">
-                <option value="">Select signal character</option>
-                <option *ngFor="let signal of signalCharacters" [value]="signal">{{ signal }}</option>
+                <option value="">{{ lang.t('selectSignalCharacter') }}</option>
+                <option *ngFor="let signal of signalCharacters" [value]="signal.code">
+                  {{ lang.term(signal.code) }}
+                </option>
               </select>
             </div>
 
             <div class="form-field">
-              <label>Nominal Range <b>*</b></label>
+              <label>{{ lang.t('nominalRange') }} <b>*</b></label>
               <div class="suffix-input">
-                <input type="number" min="0" step="0.1" formControlName="nominalRange" placeholder="Enter nominal range">
+                <input type="number" min="0" step="0.1" formControlName="nominalRange" [placeholder]="lang.t('enterNominalRange')">
                 <span>NM</span>
               </div>
             </div>
 
             <div class="form-field">
-              <label>Proposed National Numbers <b>*</b></label>
-              <input type="text" formControlName="nationalNumbers" placeholder="Enter proposed national numbers">
+              <label>{{ lang.t('proposedNationalNumbers') }} <b>*</b></label>
+              <input type="text" formControlName="nationalNumbers" [placeholder]="lang.t('enterNationalNumbers')">
             </div>
 
             <div class="form-field">
-              <label>Top Mark</label>
+              <label>{{ lang.t('topMark') }}</label>
               <select formControlName="topMark">
-                <option value="">Select top mark</option>
-                <option *ngFor="let mark of topMarks" [value]="mark">{{ mark }}</option>
+                <option value="">{{ lang.t('selectTopMark') }}</option>
+                <option *ngFor="let mark of topMarks" [value]="mark.code">
+                  {{ lang.term(mark.code) }}
+                </option>
               </select>
             </div>
 
             <div class="form-field">
-              <label>Visible Sector</label>
+              <label>{{ lang.t('visibleSector') }}</label>
               <div class="suffix-input">
-                <input
-                  type="number"
-                  min="0"
-                  max="360"
-                  formControlName="visibleSector"
-                  placeholder="Enter visible sector"
-                >
+                <input type="number" min="0" max="360" formControlName="visibleSector" [placeholder]="lang.t('enterVisibleSector')">
                 <span>°</span>
               </div>
             </div>
           </div>
 
           <section class="manufacturer-section uat-subsection">
-            <div class="subsection-heading">Proposed Manufacturer</div>
+            <div class="subsection-heading">{{ lang.t('proposedManufacturer') }}</div>
 
             <div class="manufacturer-grid uat-manufacturer-grid">
               <div
@@ -154,7 +166,7 @@
               >
                 <div class="manufacturer-title">
                   <span>{{ manufacturer.icon }}</span>
-                  <strong>{{ manufacturer.label }}</strong>
+                  <strong>{{ lang.term(manufacturer.code) }}</strong>
                 </div>
 
                 <label class="file-drop">
@@ -164,29 +176,26 @@
                     (change)="onFileSelected($event, i, manufacturer.key)"
                   >
                   <span class="upload-mark">↥</span>
-                  <b>Choose File</b>
-                  <small>JPG, PNG or PDF · Max 5 MB</small>
+                  <b>{{ lang.t('chooseFile') }}</b>
+                  <small>{{ lang.t('fileHint') }}</small>
                 </label>
 
-                <div
-                  class="selected-file"
-                  *ngIf="manufacturerGroup(i, manufacturer.key).get('fileName')?.value"
-                >
+                <div class="selected-file" *ngIf="manufacturerGroup(i, manufacturer.key).get('fileName')?.value">
                   {{ manufacturerGroup(i, manufacturer.key).get('fileName')?.value }}
                 </div>
 
-                <label class="manufacturer-name-label">Manufacturer Name</label>
-                <input type="text" formControlName="companyName" placeholder="Enter manufacturer name">
+                <label class="manufacturer-name-label">{{ lang.t('manufacturerName') }}</label>
+                <input type="text" formControlName="companyName" [placeholder]="lang.t('enterManufacturerName')">
               </div>
             </div>
           </section>
 
           <section class="technical-location uat-subsection" formGroupName="location">
-            <div class="subsection-heading">Technical Location <b>*</b></div>
+            <div class="subsection-heading">{{ lang.t('technicalLocation') }} <b>*</b></div>
 
             <div class="coordinate-layout uat-coordinate-layout">
               <div class="coordinate-group">
-                <strong>Latitude - North (N)</strong>
+                <strong>{{ lang.t('latitudeNorth') }}</strong>
                 <div class="coordinate-fields">
                   <span>DD</span>
                   <input type="number" min="0" max="90" formControlName="latDeg" placeholder="24">
@@ -200,7 +209,7 @@
               </div>
 
               <div class="coordinate-group">
-                <strong>Longitude - East (E)</strong>
+                <strong>{{ lang.t('longitudeEast') }}</strong>
                 <div class="coordinate-fields">
                   <span>DDD</span>
                   <input type="number" min="0" max="180" formControlName="lonDeg" placeholder="56">
@@ -214,25 +223,25 @@
               </div>
 
               <div class="coordinate-example">
-                <b>Example</b>
+                <b>{{ lang.t('example') }}</b>
                 <span>24°30.7′ N, 56°37.8′ E</span>
               </div>
             </div>
           </section>
 
           <div class="form-field notes-field">
-            <label>Notes</label>
-            <textarea rows="3" formControlName="notes" placeholder="Enter notes"></textarea>
+            <label>{{ lang.t('notes') }}</label>
+            <textarea rows="3" formControlName="notes" [placeholder]="lang.t('enterNotes')"></textarea>
           </div>
         </div>
       </article>
     </div>
 
     <footer class="spec-modal-footer uat-modal-footer">
-      <span>Exactly two complete specifications are included in this request.</span>
+      <span>{{ lang.t('twoSpecificationsIncluded') }}</span>
       <div class="modal-footer-actions">
-        <button type="button" class="cancel-modal-button" (click)="close()">Cancel</button>
-        <button type="button" class="save-modal-button" (click)="submit()">Save</button>
+        <button type="button" class="cancel-modal-button" (click)="close()">{{ lang.t('cancel') }}</button>
+        <button type="button" class="save-modal-button" (click)="submit()">{{ lang.t('save') }}</button>
       </div>
     </footer>
   </section>
