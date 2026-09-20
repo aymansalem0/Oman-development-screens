@@ -1,9 +1,10 @@
 import { CommonModule } from '@angular/common';
 import { Component } from '@angular/core';
 import { RouterLink } from '@angular/router';
+import { LanguageService } from '../services/language.service';
 
 interface StatCard {
-  label: string;
+  labelKey: string;
   value: number;
   icon: string;
 }
@@ -11,7 +12,7 @@ interface StatCard {
 interface ApprovalRow {
   requestNumber: string;
   beneficiary: string;
-  status: string;
+  statusKey: string;
   statusClass: string;
   lastUpdate: string;
   id: number;
@@ -24,56 +25,58 @@ interface ApprovalRow {
   templateUrl: './approval-list.component.html'
 })
 export class ApprovalListComponent {
+  constructor(public lang: LanguageService) {}
+
   stats: StatCard[] = [
-    { label: 'Total Requests', value: 31, icon: '▣' },
-    { label: 'Under Processing', value: 14, icon: '⌛' },
-    { label: 'Rejected', value: 0, icon: '⊗' },
-    { label: 'Send', value: 2, icon: '➤' },
-    { label: 'Pending', value: 0, icon: '⌛' },
-    { label: 'Accepted', value: 6, icon: '✓' },
-    { label: 'Issued', value: 17, icon: '✹' },
-    { label: 'Awaiting Installation Company Review', value: 6, icon: '▧' }
+    { labelKey: 'totalRequests', value: 31, icon: '▣' },
+    { labelKey: 'underProcessing', value: 14, icon: '⌛' },
+    { labelKey: 'rejected', value: 0, icon: '⊗' },
+    { labelKey: 'send', value: 2, icon: '➤' },
+    { labelKey: 'pending', value: 0, icon: '⌛' },
+    { labelKey: 'accepted', value: 6, icon: '✓' },
+    { labelKey: 'issued', value: 17, icon: '✹' },
+    { labelKey: 'awaitingInstallationReview', value: 6, icon: '▧' }
   ];
 
   rows: ApprovalRow[] = [
     {
       requestNumber: '4365/2026',
       beneficiary: 'المرشد للخدمات الملاحية',
-      status: 'AWAITING INSTALLATION COMPANY REVIEW',
+      statusKey: 'awaitingStatusLong',
       statusClass: 'awaiting',
-      lastUpdate: '16 September 2026 11:51 AM',
+      lastUpdate: '2026-09-16T11:51:00+04:00',
       id: 100
     },
     {
       requestNumber: '4218/2026',
       beneficiary: 'المرشد للخدمات الملاحية',
-      status: 'Issued',
+      statusKey: 'issued',
       statusClass: 'issued',
-      lastUpdate: '7 September 2026 1:54 PM',
+      lastUpdate: '2026-09-07T13:54:00+04:00',
       id: 100
     },
     {
       requestNumber: '4173/2026',
       beneficiary: 'المرشد للخدمات الملاحية',
-      status: 'Issued',
+      statusKey: 'issued',
       statusClass: 'issued',
-      lastUpdate: '6 September 2026 1:18 PM',
+      lastUpdate: '2026-09-06T13:18:00+04:00',
       id: 100
     },
     {
       requestNumber: '3772/2026',
       beneficiary: 'المرشد للخدمات الملاحية',
-      status: 'Issued',
+      statusKey: 'issued',
       statusClass: 'issued',
-      lastUpdate: '25 August 2026 1:16 AM',
+      lastUpdate: '2026-08-25T01:16:00+04:00',
       id: 100
     },
     {
       requestNumber: '3755/2026',
       beneficiary: 'RED SEA SHIPPING AGENCIES',
-      status: 'AWAITING INSTALLATION COMPANY REVIEW',
+      statusKey: 'awaitingStatusLong',
       statusClass: 'awaiting',
-      lastUpdate: '9 September 2026 8:11 AM',
+      lastUpdate: '2026-09-09T08:11:00+04:00',
       id: 100
     }
   ];
