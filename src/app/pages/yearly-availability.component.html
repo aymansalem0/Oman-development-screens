@@ -1,0 +1,217 @@
+<section class="availability-page">
+  <div class="availability-heading">
+    <div>
+      <div class="eyebrow">
+        {{ copy('Appointment Management', 'إدارة المواعيد') }}
+      </div>
+      <h1>
+        {{ copy('Yearly Availability Calendar', 'تقويم المواعيد السنوي') }}
+      </h1>
+      <p>
+        {{
+          copy(
+            'Select any day of the year, then choose the one-hour appointments that will be available to customers.',
+            'اختر أي يوم من أيام السنة ثم حدد المواعيد المتاحة كل ساعة والتي ستظهر للعميل.'
+          )
+        }}
+      </p>
+    </div>
+
+    <div class="year-switcher" aria-label="Year navigation">
+      <button type="button" (click)="previousYear()" aria-label="Previous year">‹</button>
+      <strong>{{ currentYear }}</strong>
+      <button type="button" (click)="nextYear()" aria-label="Next year">›</button>
+    </div>
+  </div>
+
+  <div class="availability-stats">
+    <article>
+      <span>{{ copy('Configured Days', 'الأيام المحددة') }}</span>
+      <strong>{{ configuredDays }}</strong>
+    </article>
+    <article>
+      <span>{{ copy('Available Time Slots', 'المواعيد المتاحة') }}</span>
+      <strong>{{ totalSlots }}</strong>
+    </article>
+    <article>
+      <span>{{ copy('Slot Duration', 'مدة الموعد') }}</span>
+      <strong>60 <small>{{ copy('min', 'دقيقة') }}</small></strong>
+    </article>
+  </div>
+
+  <div class="availability-layout">
+    <section class="year-panel">
+      <div class="year-panel-header">
+        <div>
+          <h2>{{ copy('Full Year Calendar', 'تقويم السنة بالكامل') }}</h2>
+          <p>
+            {{
+              copy(
+                'Days with configured appointments are highlighted.',
+                'الأيام التي تم تحديد مواعيد لها تظهر بشكل مميز.'
+              )
+            }}
+          </p>
+        </div>
+        <div class="calendar-legend">
+          <span><i class="legend-dot configured"></i>{{ copy('Configured', 'محدد') }}</span>
+          <span><i class="legend-dot selected"></i>{{ copy('Selected', 'مختار') }}</span>
+        </div>
+      </div>
+
+      <div class="year-grid">
+        <article class="month-card" *ngFor="let month of months">
+          <h3>{{ monthLabel(month.monthIndex) }}</h3>
+
+          <div class="week-row">
+            <span *ngFor="let weekDay of weekDays">{{ weekDay }}</span>
+          </div>
+
+          <div class="days-grid">
+            <ng-container *ngFor="let day of month.days">
+              <span *ngIf="!day" class="calendar-day empty"></span>
+
+              <button
+                *ngIf="day"
+                type="button"
+                class="calendar-day"
+                [class.selected]="selectedDate === day.date"
+                [class.configured]="hasSlots(day.date)"
+                [attr.aria-label]="displayDate(day.date)"
+                (click)="selectDate(day)"
+              >
+                <span class="day-number">{{ day.day }}</span>
+                <span *ngIf="hasSlots(day.date)" class="day-slot-count">
+                  {{ slotCount(day.date) }}
+                </span>
+              </button>
+            </ng-container>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <aside class="slot-panel">
+      <div class="slot-panel-header">
+        <span>{{ copy('Selected Date', 'التاريخ المختار') }}</span>
+        <h2>{{ displayDate(selectedDate) }}</h2>
+        <p>
+          {{
+            copy(
+              'Choose one or more hourly appointments for this day.',
+              'اختر موعدًا أو أكثر لهذا اليوم، كل موعد مدته ساعة.'
+            )
+          }}
+        </p>
+      </div>
+
+      <div class="slot-toolbar">
+        <button type="button" class="outline-action" (click)="selectAllSlots()">
+          {{ copy('Select All', 'اختيار الكل') }}
+        </button>
+        <button type="button" class="danger-action" (click)="clearSelectedDay()">
+          {{ copy('Clear Day', 'مسح مواعيد اليوم') }}
+        </button>
+      </div>
+
+      <div class="slot-grid">
+        <button
+          *ngFor="let slot of timeSlots"
+          type="button"
+          class="slot-button"
+          [class.selected]="isSlotSelected(slot)"
+          (click)="toggleSlot(slot)"
+        >
+          <strong>{{ slot }}</strong>
+          <small>{{ slotRange(slot) }}</small>
+        </button>
+      </div>
+
+      <div class="selection-summary">
+        <div>
+          <span>{{ copy('Selected Slots', 'المواعيد المختارة') }}</span>
+          <strong>{{ selectedSlots.length }}</strong>
+        </div>
+
+        <div class="selected-slot-tags" *ngIf="selectedSlots.length; else noSlots">
+          <span *ngFor="let slot of selectedSlots">{{ slot }}</span>
+        </div>
+
+        <ng-template #noSlots>
+          <p class="no-slots">
+            {{ copy('No appointments selected for this day.', 'لا توجد مواعيد محددة لهذا اليوم.') }}
+          </p>
+        </ng-template>
+      </div>
+
+      <button type="button" class="primary-action" (click)="saveAvailability()">
+        {{ copy('Save Availability', 'حفظ المواعيد') }}
+      </button>
+
+      <div *ngIf="saveMessage" class="save-message">
+        ✓ {{ saveMessage }}
+      </div>
+
+      <section class="customer-preview">
+        <div class="preview-title">
+          <span>{{ copy('Customer Preview', 'معاينة شاشة العميل') }}</span>
+          <small>
+            {{
+              copy(
+                'Only configured appointments are shown.',
+                'تظهر فقط المواعيد التي حددها الموظف.'
+              )
+            }}
+          </small>
+        </div>
+
+        <ng-container *ngIf="availableDates.length; else noCustomerAvailability">
+          <label class="preview-label">
+            {{ copy('Available Date', 'التاريخ المتاح') }}
+          </label>
+
+          <select
+            [value]="customerSelectedDate"
+            (change)="selectCustomerDate($any($event.target).value)"
+          >
+            <option *ngFor="let date of availableDates" [value]="date">
+              {{ displayDate(date) }}
+            </option>
+          </select>
+
+          <label class="preview-label time-label">
+            {{ copy('Available Time', 'الوقت المتاح') }}
+          </label>
+
+          <div class="customer-slot-grid">
+            <button
+              *ngFor="let slot of customerSlots"
+              type="button"
+              [class.selected]="customerSelectedSlot === slot"
+              (click)="selectCustomerSlot(slot)"
+            >
+              {{ slot }}
+            </button>
+          </div>
+
+          <div class="customer-choice" *ngIf="customerSelectedSlot">
+            <span>{{ copy('Selected appointment', 'الموعد المختار') }}</span>
+            <strong>{{ displayDate(customerSelectedDate) }}</strong>
+            <b>{{ slotRange(customerSelectedSlot) }}</b>
+          </div>
+        </ng-container>
+
+        <ng-template #noCustomerAvailability>
+          <div class="customer-empty">
+            {{
+              copy(
+                'No available appointments have been configured for this year yet.',
+                'لم يتم تحديد أي مواعيد متاحة لهذه السنة حتى الآن.'
+              )
+            }}
+          </div>
+        </ng-template>
+      </section>
+    </aside>
+  </div>
+</section>

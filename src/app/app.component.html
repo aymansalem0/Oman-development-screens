@@ -13,11 +13,19 @@
       </div>
 
       <a
-        class="sidebar-link active"
+        class="sidebar-link"
         routerLink="/dashboard/maritime-navigation/navigation-aids-installation-approval"
       >
         <span class="rail-dot"></span>
         <span>{{ lang.t('navigationAidsApproval') }}</span>
+      </a>
+
+      <a
+        class="sidebar-link"
+        routerLink="/dashboard/appointment-availability"
+      >
+        <span class="rail-dot"></span>
+        <span>{{ lang.isArabic ? 'إدارة المواعيد السنوية' : 'Yearly Appointment Availability' }}</span>
       </a>
     </div>
   </aside>
