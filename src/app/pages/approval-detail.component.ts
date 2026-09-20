@@ -20,7 +20,6 @@ export class ApprovalDetailComponent {
   rows: DetailRow[] = [
     { label: 'Aid Type', value: 'Buoy' },
     { label: 'Navigation Aid Type', value: '--' },
-    { label: 'Aid Count', value: '--' },
     { label: 'Serial Numbers', value: '--' },
     { label: 'Structure Type', value: '--' },
     { label: 'Lit', value: '--' },
@@ -57,7 +56,6 @@ export class ApprovalDetailComponent {
 
     if (first) {
       this.patch('Navigation Aid Type', first.navigationAidType || '--');
-      this.patch('Aid Count', specifications.map((x: any) => x.count).join(' / '));
       this.patch('Structure Type', first.structureType || '--');
       this.patch('Lit', first.lit ? 'Yes' : 'No');
       this.patch('Specification Purpose', first.specificationPurpose || '--');
