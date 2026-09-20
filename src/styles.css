@@ -1657,3 +1657,204 @@ button {
     display: none;
   }
 }
+
+
+/* =====================================================================
+   Arabic / English language switching
+   ===================================================================== */
+
+.language-switch {
+  padding: 4px 8px;
+  border: 0;
+  background: transparent;
+  color: #27364a;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.language-switch:hover {
+  color: var(--blue);
+}
+
+/* Full application RTL layout */
+.app-shell.rtl {
+  direction: rtl;
+}
+
+.app-shell.rtl .sidebar {
+  right: 0;
+  left: auto;
+}
+
+.app-shell.rtl .workspace {
+  margin-right: 315px;
+  margin-left: 0;
+}
+
+.app-shell.rtl .sidebar-link {
+  padding-right: 54px;
+  padding-left: 12px;
+  text-align: right;
+}
+
+.app-shell.rtl .sidebar-link::before {
+  right: 29px;
+  left: auto;
+}
+
+.app-shell.rtl .rail-dot {
+  right: 22px;
+  left: auto;
+}
+
+.app-shell.rtl .circle-icon {
+  right: 16px;
+  left: auto;
+}
+
+.app-shell.rtl .chevron {
+  left: 14px;
+  right: auto;
+}
+
+.app-shell.rtl .ministry-brand {
+  flex-direction: row-reverse;
+  transform-origin: right center;
+}
+
+.app-shell.rtl .section-heading,
+.app-shell.rtl .requests-panel h2,
+.app-shell.rtl .detail-title-row,
+.app-shell.rtl .request-data-title,
+.app-shell.rtl .detail-label,
+.app-shell.rtl .detail-value {
+  text-align: right;
+}
+
+.app-shell.rtl .request-table th,
+.app-shell.rtl .request-table td {
+  text-align: right;
+}
+
+.app-shell.rtl .filters-row {
+  direction: rtl;
+}
+
+.app-shell.rtl .follow-link {
+  direction: rtl;
+}
+
+.app-shell.rtl .title-with-status {
+  direction: rtl;
+}
+
+.app-shell.rtl .decision-actions {
+  direction: rtl;
+}
+
+/* Specifications popup RTL while retaining the same MTCIT proportions */
+.spec-modal-uat.rtl {
+  direction: rtl;
+}
+
+.spec-modal-uat.rtl .uat-modal-header {
+  direction: rtl;
+}
+
+.spec-modal-uat.rtl .uat-modal-title,
+.spec-modal-uat.rtl .uat-modal-title h2,
+.spec-modal-uat.rtl .uat-modal-title span {
+  text-align: right;
+}
+
+.spec-modal-uat.rtl .uat-modal-header .modal-close {
+  right: auto;
+  left: 15px;
+}
+
+.spec-modal-uat.rtl .accordion-header {
+  direction: rtl;
+  text-align: right;
+}
+
+.spec-modal-uat.rtl .accordion-header > div:first-child {
+  align-items: flex-start;
+  text-align: right;
+}
+
+.spec-modal-uat.rtl .accordion-header-meta {
+  flex-direction: row-reverse;
+}
+
+.spec-modal-uat.rtl .form-field label,
+.spec-modal-uat.rtl .manufacturer-name-label,
+.spec-modal-uat.rtl .subsection-heading,
+.spec-modal-uat.rtl .coordinate-group > strong {
+  text-align: right;
+}
+
+.spec-modal-uat.rtl .form-field input,
+.spec-modal-uat.rtl .form-field select,
+.spec-modal-uat.rtl .form-field textarea,
+.spec-modal-uat.rtl .manufacturer-card input {
+  text-align: right;
+}
+
+.spec-modal-uat.rtl .uat-radio-row {
+  justify-content: flex-start;
+  direction: rtl;
+}
+
+.spec-modal-uat.rtl .suffix-input {
+  direction: rtl;
+}
+
+.spec-modal-uat.rtl .suffix-input input {
+  border-radius: 0 7px 7px 0;
+}
+
+.spec-modal-uat.rtl .suffix-input span {
+  border-right: 0;
+  border-left: 1px solid #8d98a7;
+  border-radius: 7px 0 0 7px;
+}
+
+.spec-modal-uat.rtl .manufacturer-title,
+.spec-modal-uat.rtl .file-drop {
+  text-align: center;
+}
+
+.spec-modal-uat.rtl .coordinate-group,
+.spec-modal-uat.rtl .coordinate-fields,
+.spec-modal-uat.rtl .coordinate-example span {
+  direction: ltr;
+}
+
+.spec-modal-uat.rtl .uat-modal-footer {
+  direction: rtl;
+}
+
+.spec-modal-uat.rtl .uat-modal-footer .modal-footer-actions {
+  margin-right: auto;
+  margin-left: 0;
+}
+
+@media (min-width: 1280px) {
+  .app-shell.rtl .workspace {
+    margin-right: 313px;
+    margin-left: 0;
+  }
+}
+
+@media (max-width: 1200px) and (min-width: 821px) {
+  .app-shell.rtl .workspace {
+    margin-right: 260px;
+    margin-left: 0;
+  }
+}
+
+@media (max-width: 820px) {
+  .app-shell.rtl .workspace {
+    margin-right: 0;
+  }
+}
