@@ -1,6 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component } from '@angular/core';
 import { RouterLink, RouterOutlet } from '@angular/router';
+import { LanguageService } from './services/language.service';
 
 @Component({
   selector: 'app-root',
@@ -8,4 +9,6 @@ import { RouterLink, RouterOutlet } from '@angular/router';
   imports: [CommonModule, RouterLink, RouterOutlet],
   templateUrl: './app.component.html'
 })
-export class AppComponent {}
+export class AppComponent {
+  constructor(public lang: LanguageService) {}
+}
