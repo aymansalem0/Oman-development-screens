@@ -22,60 +22,104 @@ export class SpecificationsModalComponent {
   readonly maxFileSize = 5 * 1024 * 1024;
   readonly allowedExtensions = ['jpg', 'jpeg', 'png', 'pdf'];
 
+  // IALA R1001 / R0110 / R0201 aligned controlled lists.
+  // Oman operates within IALA Maritime Buoyage Region A.
   readonly navigationAidTypes = [
-    'عوامة ملاحية',
-    'منارة بحرية',
-    'علامة نهارية',
-    'علامة قطاعية',
-    'ضوء قطاعي',
-    'ضوء نطاقي',
-    'ضوء إرشادي',
-    'ضوء ميناء',
-    'ضوء جسر',
-    'علامة مياه آمنة',
-    'علامة خطر منعزل',
-    'علامة خاصة',
-    'علامة جانبية',
-    'علامة أصلية',
-    'علامة طوارئ / مؤقتة'
+    'Port-hand Lateral Mark',
+    'Starboard-hand Lateral Mark',
+    'Preferred Channel - Port Hand',
+    'Preferred Channel - Starboard Hand',
+    'North Cardinal Mark',
+    'East Cardinal Mark',
+    'South Cardinal Mark',
+    'West Cardinal Mark',
+    'Isolated Danger Mark',
+    'Safe Water Mark',
+    'Special Mark',
+    'Emergency Wreck Marking Buoy (EWMB)',
+    'Lighthouse',
+    'Sector Light',
+    'Leading Line / Range Mark'
   ];
 
-  readonly lightColours = ['أبيض', 'أحمر', 'أخضر', 'أصفر', 'أزرق'];
-  readonly structureColours = ['أبيض', 'أحمر', 'أخضر', 'أصفر', 'أسود'];
+  readonly lightColours = [
+    'White',
+    'Red',
+    'Green',
+    'Yellow',
+    'Blue'
+  ];
+
+  readonly structureColours = [
+    'White',
+    'Black',
+    'Red',
+    'Green',
+    'Yellow',
+    'Blue',
+    'Orange',
+    'Other'
+  ];
 
   readonly signalCharacters = [
-    'ثابت',
-    'وميض مفرد',
-    'وميض جماعي',
-    'وميض مركب',
-    'وميض سريع',
-    'وميض سريع جداً',
-    'متساوي الطور',
-    'تعتيم',
-    'مورس'
+    'Fixed (F)',
+    'Occulting (Oc)',
+    'Group Occulting (Oc(n))',
+    'Isophase (Iso)',
+    'Flashing (Fl)',
+    'Long Flashing (LFl)',
+    'Group Flashing (Fl(n))',
+    'Composite Group Flashing (Fl(n+m))',
+    'Quick (Q)',
+    'Group Quick (Q(n))',
+    'Interrupted Quick (IQ)',
+    'Very Quick (VQ)',
+    'Group Very Quick (VQ(n))',
+    'Interrupted Very Quick (IVQ)',
+    'Ultra Quick (UQ)',
+    'Interrupted Ultra Quick (IUQ)',
+    'Morse Code (Mo)',
+    'Alternating (Al)'
   ];
 
   readonly topMarks = [
-    'بدون علامة علوية',
-    'مخروط واحد لأعلى',
-    'مخروط واحد لأسفل',
-    'مخروطان لأعلى',
-    'مخروطان متقابلان',
-    'كرة واحدة',
-    'كرتان',
-    'أسطوانة',
-    'علامة X'
+    'None',
+    'Cone, point up',
+    'Cone, point down',
+    'Two cones, points up',
+    'Two cones, points down',
+    'Two cones, base-to-base',
+    'Two cones, point-to-point',
+    'Cylinder / Can',
+    'Sphere',
+    'Two spheres',
+    "X-shape (St Andrew's Cross)",
+    'Vertical / Perpendicular Cross (Emergency Wreck)'
   ];
 
-  readonly structureTypes = ['ثابت', 'عائم'];
-  readonly purposes = ['دائم', 'مؤقت', 'اختبار', 'استبدال مساعد قائم'];
+  readonly structureTypes = [
+    'Fixed',
+    'Floating'
+  ];
+
+  // Service lifecycle list. This is a project/business classification rather
+  // than an IALA-defined AtoN taxonomy.
+  readonly purposes = [
+    'New Installation',
+    'Replacement',
+    'Relocation',
+    'Modification / Upgrade',
+    'Temporary Installation',
+    'Permanent Installation',
+    'Trial / Testing'
+  ];
 
   readonly manufacturers = [
-    { key: 'concrete', label: 'الخرسانة الأسمنتية', icon: '▦' },
-    { key: 'chains', label: 'السلاسل الحديدية', icon: '⌘' },
-    { key: 'buoys', label: 'العوامات البحرية', icon: '♟' },
-    { key: 'columns', label: 'الأعمدة الحديدية', icon: '♜' },
-    { key: 'light', label: 'النور الملاحي', icon: '☀' }
+    { key: 'concrete', label: 'Concrete Structure', icon: '▦' },
+    { key: 'chains', label: 'Mooring Chains', icon: '⌘' },
+    { key: 'buoys', label: 'Marine Buoy', icon: '♟' },
+    { key: 'columns', label: 'Steel Column / Pile', icon: '♜' },
+    { key: 'light', label: 'Navigation Light', icon: '☀' }
   ];
 
   form: UntypedFormGroup;
@@ -103,7 +147,7 @@ export class SpecificationsModalComponent {
 
   onStructureColourChange(index: number): void {
     const group = this.specification(index);
-    if (group.get('structureColour')?.value !== 'أخرى') {
+    if (group.get('structureColour')?.value !== 'Other') {
       group.get('structureColourOther')?.setValue('');
     }
   }
@@ -119,13 +163,13 @@ export class SpecificationsModalComponent {
     const extension = file.name.split('.').pop()?.toLowerCase() ?? '';
 
     if (!this.allowedExtensions.includes(extension)) {
-      window.alert('نوع الملف غير مسموح. المسموح: JPG, PNG, PDF');
+      window.alert('Unsupported file type. Allowed types: JPG, PNG, PDF.');
       input.value = '';
       return;
     }
 
     if (file.size > this.maxFileSize) {
-      window.alert('الحد الأقصى لحجم الملف هو 5 MB');
+      window.alert('Maximum file size is 5 MB.');
       input.value = '';
       return;
     }
