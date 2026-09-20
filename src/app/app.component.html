@@ -1,14 +1,14 @@
-<div class="app-shell">
+<div class="app-shell" [class.rtl]="lang.isArabic" [attr.dir]="lang.dir">
   <aside class="sidebar">
     <div class="sidebar-user">
       <div class="sidebar-user-icon">✣</div>
-      <span>AMENAS Employee</span>
+      <span>{{ lang.t('employee') }}</span>
     </div>
 
     <div class="sidebar-group">
       <div class="sidebar-group-title">
         <span class="circle-icon">✥</span>
-        <span>Foreign Vessels and Navigational<br>Aids Services</span>
+        <span>{{ lang.t('foreignVesselsGroup') }}</span>
         <span class="chevron">⌃</span>
       </div>
 
@@ -17,7 +17,7 @@
         routerLink="/dashboard/maritime-navigation/navigation-aids-installation-approval"
       >
         <span class="rail-dot"></span>
-        <span>Navigation Aids Installation Approval</span>
+        <span>{{ lang.t('navigationAidsApproval') }}</span>
       </a>
     </div>
   </aside>
@@ -27,14 +27,24 @@
       <div class="ministry-brand">
         <div class="oman-mark">⚓</div>
         <div>
-          <strong>وزارة النقل والاتصالات وتقنية المعلومات</strong>
-          <small>Ministry of Transport, Communications and Information Technology</small>
+          <strong>
+            {{ lang.isArabic
+              ? 'وزارة النقل والاتصالات وتقنية المعلومات'
+              : 'Ministry of Transport, Communications and Information Technology' }}
+          </strong>
+          <small>
+            {{ lang.isArabic
+              ? 'Ministry of Transport, Communications and Information Technology'
+              : 'وزارة النقل والاتصالات وتقنية المعلومات' }}
+          </small>
         </div>
       </div>
 
       <div class="topbar-actions">
         <span>◉</span>
-        <span>العربية</span>
+        <button type="button" class="language-switch" (click)="lang.toggle()">
+          {{ lang.isArabic ? lang.t('english') : lang.t('arabic') }}
+        </button>
         <span class="divider"></span>
         <span class="profile">●</span>
         <span>⌄</span>
