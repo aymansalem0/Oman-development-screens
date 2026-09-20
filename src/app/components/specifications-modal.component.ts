@@ -15,6 +15,7 @@ import {
   templateUrl: './specifications-modal.component.html'
 })
 export class SpecificationsModalComponent {
+  expandedSpecification = 0;
   @Output() closed = new EventEmitter<void>();
   @Output() saved = new EventEmitter<any>();
 
@@ -168,6 +169,14 @@ export class SpecificationsModalComponent {
 
   close(): void {
     this.closed.emit();
+  }
+
+  toggleSpecification(index: number): void {
+    this.expandedSpecification = this.expandedSpecification === index ? -1 : index;
+  }
+
+  isExpanded(index: number): boolean {
+    return this.expandedSpecification === index;
   }
 
   trackByIndex(index: number): number {
