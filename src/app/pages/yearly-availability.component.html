@@ -105,6 +105,11 @@
         </p>
       </div>
 
+      <div *ngIf="dateWarning" class="date-warning" role="status">
+        <span class="warning-icon">!</span>
+        <span>{{ dateWarning }}</span>
+      </div>
+
       <div class="slot-toolbar">
         <button type="button" class="outline-action" (click)="selectAllSlots()">
           {{ copy('Select All', 'اختيار الكل') }}

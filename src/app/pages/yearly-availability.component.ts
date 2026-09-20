@@ -29,6 +29,8 @@ export class YearlyAvailabilityComponent implements OnInit {
   customerSelectedDate = '';
   customerSelectedSlot = '';
   saveMessage = '';
+  dateWarning = '';
+  private hasSelectedDateInteraction = false;
 
   readonly weekDaysEn = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   readonly weekDaysAr = ['أحد', 'إث', 'ثلا', 'أرب', 'خمي', 'جمع', 'سبت'];
@@ -93,7 +95,31 @@ export class YearlyAvailabilityComponent implements OnInit {
   }
 
   selectDate(day: CalendarDay): void {
+    if (day.date === this.selectedDate) {
+      this.hasSelectedDateInteraction = true;
+      return;
+    }
+
+    const previousDate = this.selectedDate;
+
+    if (
+      this.hasSelectedDateInteraction &&
+      previousDate &&
+      !this.hasSlots(previousDate)
+    ) {
+      this.dateWarning = this.copy(
+        this.displayDate(previousDate) +
+          ' was not saved because no time slots were selected.',
+        'لم يتم حفظ ' +
+          this.displayDate(previousDate) +
+          ' لأنه لم يتم تحديد أي توقيتات له.'
+      );
+    } else {
+      this.dateWarning = '';
+    }
+
     this.selectedDate = day.date;
+    this.hasSelectedDateInteraction = true;
     this.saveMessage = '';
   }
 
@@ -119,6 +145,7 @@ export class YearlyAvailabilityComponent implements OnInit {
     this.persistAvailability();
     this.syncCustomerSelection();
     this.saveMessage = '';
+    this.dateWarning = '';
   }
 
   isSlotSelected(slot: string): boolean {
@@ -140,6 +167,7 @@ export class YearlyAvailabilityComponent implements OnInit {
     this.persistAvailability();
     this.syncCustomerSelection();
     this.saveMessage = '';
+    this.dateWarning = '';
   }
 
   clearSelectedDay(): void {

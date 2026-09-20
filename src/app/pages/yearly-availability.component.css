@@ -274,6 +274,33 @@ button.calendar-day:hover {
   text-transform: uppercase;
 }
 
+.date-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 9px 10px;
+  border: 1px solid #f1d59b;
+  border-radius: 9px;
+  background: #fff8e8;
+  color: #8a6418;
+  font-size: 9px;
+  line-height: 1.5;
+}
+
+.warning-icon {
+  flex: 0 0 18px;
+  width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #f0bd51;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+}
+
 .slot-toolbar {
   display: grid;
   grid-template-columns: 1fr 1fr;
