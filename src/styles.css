@@ -1355,3 +1355,305 @@ button {
     background: #aeb8c5;
   }
 }
+
+
+/* =====================================================================
+   FINAL UAT POPUP PASS — English/LTR + two specification accordion
+   ===================================================================== */
+
+.spec-modal-uat {
+  width: min(1020px, 92vw);
+  max-height: 90vh;
+  border-radius: 17px;
+  direction: ltr;
+}
+
+.uat-modal-header {
+  min-height: 70px;
+  padding: 16px 20px;
+  direction: ltr;
+}
+
+.uat-modal-title h2 {
+  margin: 0;
+  color: #263348;
+  font-size: 19px;
+  font-weight: 700;
+}
+
+.uat-modal-title span {
+  display: block;
+  margin-top: 4px;
+  color: #7b8492;
+  font-size: 11px;
+}
+
+.uat-modal-header .modal-close {
+  top: 15px;
+  right: 15px;
+  left: auto;
+  color: #202c3c;
+  font-size: 22px;
+}
+
+.uat-modal-body {
+  padding: 12px 14px;
+  background: #f7f8fa;
+}
+
+.accordion-spec-card {
+  overflow: hidden;
+  margin-bottom: 12px;
+  border: 1px solid #d3d9e1;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.accordion-header {
+  width: 100%;
+  min-height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 12px 16px;
+  border: 0;
+  border-bottom: 1px solid #e0e5eb;
+  background: #fff;
+  color: #29364a;
+  text-align: left;
+}
+
+.accordion-header:hover {
+  background: #fbfcfe;
+}
+
+.accordion-header > div:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.accordion-header strong {
+  font-size: 14px;
+}
+
+.accordion-header > div:first-child span {
+  color: #7b8592;
+  font-size: 11px;
+}
+
+.accordion-header-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.spec-number-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #edf2fb;
+  color: #365e9f;
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.accordion-chevron {
+  width: 26px;
+  text-align: center;
+  color: #40526b;
+  font-size: 17px;
+}
+
+.accordion-body {
+  padding-bottom: 2px;
+  background: #fff;
+}
+
+.uat-two-column {
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 12px 20px;
+  padding: 15px 18px 0;
+}
+
+.spec-modal-uat .form-field label,
+.spec-modal-uat .manufacturer-name-label {
+  color: #3a485e;
+  font-size: 11px;
+  font-weight: 650;
+  text-align: left;
+}
+
+.spec-modal-uat .form-field input,
+.spec-modal-uat .form-field select,
+.spec-modal-uat .form-field textarea,
+.spec-modal-uat .manufacturer-card input,
+.spec-modal-uat .coordinate-group input,
+.spec-modal-uat .coordinate-group select {
+  min-height: 40px;
+  border: 1px solid #8d98a7;
+  border-radius: 7px;
+  color: #242c38;
+  font-size: 12px;
+  text-align: left;
+}
+
+.spec-modal-uat .form-field select {
+  padding-right: 30px;
+}
+
+.uat-radio-row {
+  height: 40px;
+  justify-content: flex-start;
+  gap: 28px;
+  padding: 0 8px;
+}
+
+.uat-radio-row label {
+  color: #2f3540 !important;
+  font-size: 13px !important;
+}
+
+.spec-modal-uat .suffix-input {
+  direction: ltr;
+}
+
+.spec-modal-uat .suffix-input input {
+  border-radius: 7px 0 0 7px;
+}
+
+.spec-modal-uat .suffix-input span {
+  border-color: #8d98a7;
+  border-radius: 0 7px 7px 0;
+  background: #eef1f5;
+}
+
+.uat-subsection {
+  margin: 16px 18px;
+  padding: 13px;
+  border: 1px solid #d7dee7;
+  border-radius: 9px;
+  background: #fbfcfe;
+}
+
+.spec-modal-uat .subsection-heading {
+  color: #36465d;
+  font-size: 12px;
+  text-align: left;
+}
+
+.uat-manufacturer-grid {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.spec-modal-uat .manufacturer-card {
+  padding: 8px;
+  border-color: #d6dce4;
+}
+
+.spec-modal-uat .manufacturer-title {
+  min-height: 33px;
+  color: #344965;
+  font-size: 10px;
+}
+
+.spec-modal-uat .file-drop {
+  min-height: 72px;
+  margin: 5px 0 7px;
+  border-color: #98aecd;
+  background: #fff;
+  color: #31599a;
+}
+
+.spec-modal-uat .file-drop small {
+  font-size: 8px;
+}
+
+.uat-coordinate-layout {
+  grid-template-columns: 1fr 1fr 205px;
+}
+
+.spec-modal-uat .coordinate-group {
+  direction: ltr;
+}
+
+.spec-modal-uat .coordinate-group > strong {
+  color: #405571;
+  font-size: 10px;
+  text-align: left;
+}
+
+.spec-modal-uat .coordinate-example {
+  background: #f1f4f8;
+}
+
+.spec-modal-uat .notes-field {
+  padding: 0 18px 16px;
+}
+
+.uat-modal-footer {
+  min-height: 62px;
+  padding: 11px 16px;
+  direction: ltr;
+}
+
+.uat-modal-footer > span {
+  color: #747f8e;
+  font-size: 10px;
+}
+
+.uat-modal-footer .modal-footer-actions {
+  margin-left: auto;
+}
+
+.uat-modal-footer .cancel-modal-button,
+.uat-modal-footer .save-modal-button {
+  min-width: 84px;
+  height: 38px;
+}
+
+.uat-modal-footer .cancel-modal-button {
+  border-color: #b5bdc8;
+  color: #3c4654;
+}
+
+.uat-modal-footer .save-modal-button {
+  border-color: #93a9e8;
+  background: #8ca6e9;
+}
+
+.uat-modal-footer .save-modal-button:hover {
+  background: #7694e3;
+}
+
+@media (max-width: 1100px) {
+  .spec-modal-uat {
+    width: min(900px, 95vw);
+  }
+
+  .uat-manufacturer-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .uat-coordinate-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  .uat-two-column {
+    grid-template-columns: 1fr !important;
+  }
+
+  .uat-manufacturer-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .accordion-header-meta .spec-number-badge {
+    display: none;
+  }
+}
