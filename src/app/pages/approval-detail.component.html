@@ -17,6 +17,42 @@
     </div>
   </div>
 
+  <section class="party-data-grid">
+    <article class="party-data-card">
+      <div class="party-data-header">
+        <span class="party-data-icon">◉</span>
+        <div>
+          <h2>{{ lang.t('applicantData') }}</h2>
+          <p>{{ lang.t('applicantDataHint') }}</p>
+        </div>
+      </div>
+
+      <div class="party-data-content">
+        <div class="party-data-field" *ngFor="let field of applicantData">
+          <span class="party-data-label">{{ lang.t(field.labelKey) }}</span>
+          <strong class="party-data-value">{{ partyValue(field) }}</strong>
+        </div>
+      </div>
+    </article>
+
+    <article class="party-data-card">
+      <div class="party-data-header">
+        <span class="party-data-icon">◎</span>
+        <div>
+          <h2>{{ lang.t('originalOwnerData') }}</h2>
+          <p>{{ lang.t('originalOwnerDataHint') }}</p>
+        </div>
+      </div>
+
+      <div class="party-data-content">
+        <div class="party-data-field" *ngFor="let field of originalOwnerData">
+          <span class="party-data-label">{{ lang.t(field.labelKey) }}</span>
+          <strong class="party-data-value">{{ partyValue(field) }}</strong>
+        </div>
+      </div>
+    </article>
+  </section>
+
   <section class="request-data-panel">
     <div class="request-data-title">{{ lang.t('requestData') }}</div>
 
