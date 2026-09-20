@@ -1858,3 +1858,109 @@ button {
     margin-right: 0;
   }
 }
+
+
+/* Applicant + Original Owner data on request details */
+.party-data-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.party-data-card {
+  overflow: hidden;
+  border: 1px solid #d7e0ec;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(28, 47, 76, .04);
+}
+
+.party-data-header {
+  min-height: 62px;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 12px 16px;
+  border-bottom: 1px solid #dce5f0;
+  background: #eaf1ff;
+}
+
+.party-data-icon {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 34px;
+  border-radius: 9px;
+  background: #315fd1;
+  color: #fff;
+  font-size: 14px;
+}
+
+.party-data-header h2 {
+  margin: 0;
+  color: #253a59;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.party-data-header p {
+  margin: 3px 0 0;
+  color: #718096;
+  font-size: 10px;
+}
+
+.party-data-content {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 24px;
+  padding: 4px 16px 8px;
+}
+
+.party-data-field {
+  min-width: 0;
+  min-height: 53px;
+  display: flex;
+  justify-content: center;
+  flex-direction: column;
+  padding: 8px 0;
+  border-bottom: 1px solid #edf0f4;
+}
+
+.party-data-label {
+  margin-bottom: 4px;
+  color: #69768a;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.party-data-value {
+  overflow: hidden;
+  color: #28384d;
+  font-size: 12px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-shell.rtl .party-data-header,
+.app-shell.rtl .party-data-field {
+  text-align: right;
+}
+
+.app-shell.rtl .party-data-header {
+  direction: rtl;
+}
+
+@media (max-width: 1000px) {
+  .party-data-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 620px) {
+  .party-data-content {
+    grid-template-columns: 1fr;
+  }
+}
