@@ -1,0 +1,48 @@
+<div class="app-shell">
+  <aside class="sidebar">
+    <div class="sidebar-user">
+      <div class="sidebar-user-icon">✣</div>
+      <span>AMENAS Employee</span>
+    </div>
+
+    <div class="sidebar-group">
+      <div class="sidebar-group-title">
+        <span class="circle-icon">✥</span>
+        <span>Foreign Vessels and Navigational<br>Aids Services</span>
+        <span class="chevron">⌃</span>
+      </div>
+
+      <a
+        class="sidebar-link active"
+        routerLink="/dashboard/maritime-navigation/navigation-aids-installation-approval"
+      >
+        <span class="rail-dot"></span>
+        <span>Navigation Aids Installation Approval</span>
+      </a>
+    </div>
+  </aside>
+
+  <div class="workspace">
+    <header class="topbar">
+      <div class="ministry-brand">
+        <div class="oman-mark">⚓</div>
+        <div>
+          <strong>وزارة النقل والاتصالات وتقنية المعلومات</strong>
+          <small>Ministry of Transport, Communications and Information Technology</small>
+        </div>
+      </div>
+
+      <div class="topbar-actions">
+        <span>◉</span>
+        <span>العربية</span>
+        <span class="divider"></span>
+        <span class="profile">●</span>
+        <span>⌄</span>
+      </div>
+    </header>
+
+    <main class="page-content">
+      <router-outlet></router-outlet>
+    </main>
+  </div>
+</div>
