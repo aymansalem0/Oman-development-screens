@@ -1,10 +1,12 @@
 import { CommonModule } from '@angular/common';
 import { Component } from '@angular/core';
 import { SpecificationsModalComponent } from '../components/specifications-modal.component';
+import { LanguageService } from '../services/language.service';
 
 interface DetailRow {
-  label: string;
+  labelKey: string;
   value: string;
+  translateValue?: boolean;
 }
 
 @Component({
@@ -17,28 +19,30 @@ export class ApprovalDetailComponent {
   showSpecifications = false;
   savedPayload: unknown = null;
 
+  constructor(public lang: LanguageService) {}
+
   rows: DetailRow[] = [
-    { label: 'Aid Type', value: 'Buoy' },
-    { label: 'Navigation Aid Type', value: '--' },
-    { label: 'Serial Numbers', value: '--' },
-    { label: 'Structure Type', value: '--' },
-    { label: 'Lit', value: '--' },
-    { label: 'Specification Purpose', value: '--' },
-    { label: 'Structure Details', value: '--' },
-    { label: 'Focal Height', value: '--' },
-    { label: 'Colour of Light', value: '--' },
-    { label: 'Colour of Structure', value: '--' },
-    { label: 'Signal Character', value: '--' },
-    { label: 'Nominal Range', value: '--' },
-    { label: 'Proposed National Numbers', value: '--' },
-    { label: 'Top Mark', value: '--' },
-    { label: 'Visible Sector', value: '--' },
-    { label: 'Proposed Manufacturer', value: '--' },
-    { label: 'Notes', value: '--' },
-    { label: 'Technical Location', value: '--' },
-    { label: 'Location', value: 'ميناء الدقم' },
-    { label: 'Purpose', value: 'اختبار' },
-    { label: 'Installation Responsible Company', value: 'Aminas' }
+    { labelKey: 'aidType', value: 'BUOY', translateValue: true },
+    { labelKey: 'navigationAidType', value: '--' },
+    { labelKey: 'serialNumbers', value: '--' },
+    { labelKey: 'structureType', value: '--' },
+    { labelKey: 'lit', value: '--' },
+    { labelKey: 'specificationPurpose', value: '--' },
+    { labelKey: 'structureDetails', value: '--' },
+    { labelKey: 'focalHeight', value: '--' },
+    { labelKey: 'colourOfLight', value: '--' },
+    { labelKey: 'colourOfStructure', value: '--' },
+    { labelKey: 'signalCharacter', value: '--' },
+    { labelKey: 'nominalRange', value: '--' },
+    { labelKey: 'proposedNationalNumbers', value: '--' },
+    { labelKey: 'topMark', value: '--' },
+    { labelKey: 'visibleSector', value: '--' },
+    { labelKey: 'proposedManufacturer', value: '--' },
+    { labelKey: 'notes', value: '--' },
+    { labelKey: 'technicalLocation', value: '--' },
+    { labelKey: 'location', value: 'DUQM_PORT', translateValue: true },
+    { labelKey: 'purpose', value: 'TEST', translateValue: true },
+    { labelKey: 'installationCompany', value: 'AMENAS' }
   ];
 
   openSpecifications(): void {
@@ -49,41 +53,50 @@ export class ApprovalDetailComponent {
     this.showSpecifications = false;
   }
 
+  displayValue(row: DetailRow): string {
+    return row.translateValue ? this.lang.term(row.value) : row.value;
+  }
+
   onSpecificationsSaved(payload: any): void {
     this.savedPayload = payload;
     const specifications = payload?.specifications ?? [];
     const first = specifications[0];
 
     if (first) {
-      this.patch('Navigation Aid Type', first.navigationAidType || '--');
-      this.patch('Structure Type', first.structureType || '--');
-      this.patch('Lit', first.lit ? 'Yes' : 'No');
-      this.patch('Specification Purpose', first.specificationPurpose || '--');
-      this.patch('Structure Details', first.structureDetails || '--');
-      this.patch('Focal Height', first.focalHeight ? String(first.focalHeight) : '--');
-      this.patch('Colour of Light', first.lightColour || '--');
+      this.patch('navigationAidType', first.navigationAidType || '--', true);
+      this.patch('structureType', first.structureType || '--', true);
+      this.patch('lit', first.lit ? 'YES' : 'NO', true);
+      this.patch('specificationPurpose', first.specificationPurpose || '--', true);
+      this.patch('structureDetails', first.structureDetails || '--');
+      this.patch('focalHeight', first.focalHeight ? String(first.focalHeight) : '--');
+      this.patch('colourOfLight', first.lightColour || '--', true);
       this.patch(
-        'Colour of Structure',
-        first.structureColour === 'Other'
-          ? first.structureColourOther || 'Other'
-          : first.structureColour || '--'
+        'colourOfStructure',
+        first.structureColour === 'OTHER'
+          ? first.structureColourOther || 'OTHER'
+          : first.structureColour || '--',
+        first.structureColour !== 'OTHER'
       );
-      this.patch('Signal Character', first.signalCharacter || '--');
-      this.patch('Nominal Range', first.nominalRange ? first.nominalRange + ' NM' : '--');
-      this.patch('Proposed National Numbers', first.nationalNumbers || '--');
-      this.patch('Top Mark', first.topMark || '--');
-      this.patch('Visible Sector', first.visibleSector !== null && first.visibleSector !== '' ? first.visibleSector + '°' : '--');
-      this.patch('Notes', first.notes || '--');
-      this.patch('Technical Location', first.technicalLocationDisplay || '--');
+      this.patch('signalCharacter', first.signalCharacter || '--', true);
+      this.patch('nominalRange', first.nominalRange ? first.nominalRange + ' NM' : '--');
+      this.patch('proposedNationalNumbers', first.nationalNumbers || '--');
+      this.patch('topMark', first.topMark || '--', true);
+      this.patch(
+        'visibleSector',
+        first.visibleSector !== null && first.visibleSector !== '' ? first.visibleSector + '°' : '--'
+      );
+      this.patch('notes', first.notes || '--');
+      this.patch('technicalLocation', first.technicalLocationDisplay || '--');
     }
 
     this.showSpecifications = false;
   }
 
-  private patch(label: string, value: string): void {
-    const row = this.rows.find(item => item.label === label);
+  private patch(labelKey: string, value: string, translateValue = false): void {
+    const row = this.rows.find(item => item.labelKey === labelKey);
     if (row) {
       row.value = value;
+      row.translateValue = translateValue;
     }
   }
 }
