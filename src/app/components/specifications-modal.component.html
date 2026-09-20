@@ -1,249 +1,247 @@
 <div class="modal-backdrop" (click)="close()">
-  <section class="spec-modal" dir="rtl" [formGroup]="form" (click)="$event.stopPropagation()">
-    <header class="spec-modal-header">
-      <button type="button" class="modal-close" (click)="close()" aria-label="إغلاق">×</button>
-      <div class="modal-heading">
-        <span class="modal-heading-icon">⚓</span>
-        <div>
-          <h2>إدخال المواصفات الفنية</h2>
-          <p>Enter Technical Specifications</p>
-        </div>
+  <section class="spec-modal spec-modal-uat" dir="ltr" [formGroup]="form" (click)="$event.stopPropagation()">
+    <header class="spec-modal-header uat-modal-header">
+      <div class="uat-modal-title">
+        <h2>Enter Technical Specifications</h2>
+        <span>Two complete specifications are required</span>
       </div>
-      <span class="two-spec-badge">مواصفتان فقط</span>
+      <button type="button" class="modal-close" (click)="close()" aria-label="Close">×</button>
     </header>
 
-    <div class="spec-modal-body" formArrayName="specifications">
+    <div class="spec-modal-body uat-modal-body" formArrayName="specifications">
       <article
-        class="technical-spec-card"
+        class="technical-spec-card accordion-spec-card"
         *ngFor="let spec of specifications.controls; let i = index; trackBy: trackByIndex"
         [formGroupName]="i"
       >
-        <div class="technical-spec-title">
+        <button
+          type="button"
+          class="accordion-header"
+          (click)="toggleSpecification(i)"
+          [attr.aria-expanded]="isExpanded(i)"
+        >
           <div>
-            <strong>المواصفة رقم ({{ i + 1 }})</strong>
-            <span>Technical Specification {{ i + 1 }}</span>
+            <strong>Technical Specification {{ i + 1 }}</strong>
+            <span>Complete navigation-aid specification</span>
           </div>
-          <span class="complete-spec-label">مواصفة كاملة</span>
-        </div>
-
-        <div class="spec-form-grid four">
-          <div class="form-field">
-            <label>نوع المساعدة الملاحية البحرية <b>*</b></label>
-            <select formControlName="navigationAidType">
-              <option value="">اختر نوع المساعدة الملاحية</option>
-              <option *ngFor="let type of navigationAidTypes" [value]="type">{{ type }}</option>
-            </select>
+          <div class="accordion-header-meta">
+            <span class="spec-number-badge">Specification {{ i + 1 }}</span>
+            <span class="accordion-chevron">{{ isExpanded(i) ? '⌃' : '⌄' }}</span>
           </div>
+        </button>
 
-          <div class="form-field">
-            <label>العدد <b>*</b></label>
-            <div class="option-row count-options">
-              <label><input type="radio" formControlName="count" [value]="1"> 1</label>
-              <label><input type="radio" formControlName="count" [value]="2"> 2</label>
+        <div class="accordion-body" *ngIf="isExpanded(i)">
+          <div class="spec-form-grid two uat-two-column">
+            <div class="form-field">
+              <label>Navigation Aid Type <b>*</b></label>
+              <select formControlName="navigationAidType">
+                <option value="">Select navigation aid type</option>
+                <option *ngFor="let type of navigationAidTypes" [value]="type">{{ type }}</option>
+              </select>
             </div>
-          </div>
 
-          <div class="form-field">
-            <label>نوع الهيكل <b>*</b></label>
-            <div class="option-row">
-              <label *ngFor="let type of structureTypes">
-                <input type="radio" formControlName="structureType" [value]="type"> {{ type }}
-              </label>
+            <div class="form-field">
+              <label>Count <b>*</b></label>
+              <div class="option-row count-options uat-radio-row">
+                <label><input type="radio" formControlName="count" [value]="1"> 1</label>
+                <label><input type="radio" formControlName="count" [value]="2"> 2</label>
+              </div>
             </div>
-          </div>
 
-          <div class="form-field">
-            <label>مضاء <b>*</b></label>
-            <div class="option-row">
-              <label><input type="radio" formControlName="lit" [value]="true"> نعم</label>
-              <label><input type="radio" formControlName="lit" [value]="false"> لا</label>
+            <div class="form-field">
+              <label>Structure Type <b>*</b></label>
+              <div class="option-row uat-radio-row">
+                <label *ngFor="let type of structureTypes">
+                  <input type="radio" formControlName="structureType" [value]="type">
+                  {{ type === 'ثابت' ? 'Fixed' : 'Floating' }}
+                </label>
+              </div>
             </div>
-          </div>
-        </div>
 
-        <div class="spec-form-grid four">
-          <div class="form-field">
-            <label>الغرض من المواصفة <b>*</b></label>
-            <select formControlName="specificationPurpose">
-              <option value="">اختر الغرض</option>
-              <option *ngFor="let purpose of purposes" [value]="purpose">{{ purpose }}</option>
-            </select>
-          </div>
-
-          <div class="form-field">
-            <label>تفاصيل الهيكل</label>
-            <input type="text" formControlName="structureDetails" placeholder="أدخل تفاصيل الهيكل">
-          </div>
-
-          <div class="form-field">
-            <label>الارتفاع البؤري</label>
-            <input type="number" formControlName="focalHeight" placeholder="أدخل الارتفاع البؤري">
-          </div>
-
-          <div class="form-field">
-            <label>لون الضوء <b>*</b></label>
-            <select formControlName="lightColour">
-              <option value="">اختر لون الضوء</option>
-              <option *ngFor="let colour of lightColours" [value]="colour">{{ colour }}</option>
-            </select>
-          </div>
-        </div>
-
-        <div class="spec-form-grid four">
-          <div class="form-field">
-            <label>لون الهيكل <b>*</b></label>
-            <select formControlName="structureColour" (change)="onStructureColourChange(i)">
-              <option value="">اختر لون الهيكل</option>
-              <option *ngFor="let colour of structureColours" [value]="colour">{{ colour }}</option>
-              <option value="أخرى">أخرى</option>
-            </select>
-            <input
-              *ngIf="spec.get('structureColour')?.value === 'أخرى'"
-              class="other-colour"
-              type="text"
-              formControlName="structureColourOther"
-              placeholder="أدخل لون الهيكل"
-            >
-          </div>
-
-          <div class="form-field">
-            <label>نوع الوميض <b>*</b></label>
-            <select formControlName="signalCharacter">
-              <option value="">اختر نوع الوميض</option>
-              <option *ngFor="let signal of signalCharacters" [value]="signal">{{ signal }}</option>
-            </select>
-          </div>
-
-          <div class="form-field">
-            <label>مدى النور الملاحي <b>*</b></label>
-            <div class="suffix-input">
-              <input type="number" min="0" step="0.1" formControlName="nominalRange" placeholder="أدخل المدى">
-              <span>NM</span>
+            <div class="form-field">
+              <label>Lit <b>*</b></label>
+              <div class="option-row uat-radio-row">
+                <label><input type="radio" formControlName="lit" [value]="true"> Yes</label>
+                <label><input type="radio" formControlName="lit" [value]="false"> No</label>
+              </div>
             </div>
-          </div>
 
-          <div class="form-field">
-            <label>الأرقام الوطنية المقترحة <b>*</b></label>
-            <input type="text" formControlName="nationalNumbers" placeholder="أدخل الأرقام الوطنية المقترحة">
-          </div>
-        </div>
+            <div class="form-field">
+              <label>Specification Purpose <b>*</b></label>
+              <select formControlName="specificationPurpose">
+                <option value="">Select purpose</option>
+                <option *ngFor="let purpose of purposes" [value]="purpose">{{ purpose }}</option>
+              </select>
+            </div>
 
-        <div class="spec-form-grid two">
-          <div class="form-field">
-            <label>العلامة العلوية</label>
-            <select formControlName="topMark">
-              <option value="">اختر العلامة العلوية</option>
-              <option *ngFor="let mark of topMarks" [value]="mark">{{ mark }}</option>
-            </select>
-          </div>
+            <div class="form-field">
+              <label>Structure Details</label>
+              <input type="text" formControlName="structureDetails" placeholder="Enter structure details">
+            </div>
 
-          <div class="form-field">
-            <label>مدى زاوية الرؤية</label>
-            <div class="suffix-input">
+            <div class="form-field">
+              <label>Focal Height</label>
+              <input type="number" formControlName="focalHeight" placeholder="Enter focal height">
+            </div>
+
+            <div class="form-field">
+              <label>Colour of Light <b>*</b></label>
+              <select formControlName="lightColour">
+                <option value="">Select colour of light</option>
+                <option *ngFor="let colour of lightColours" [value]="colour">{{ colour }}</option>
+              </select>
+            </div>
+
+            <div class="form-field">
+              <label>Colour of Structure <b>*</b></label>
+              <select formControlName="structureColour" (change)="onStructureColourChange(i)">
+                <option value="">Select colour of structure</option>
+                <option *ngFor="let colour of structureColours" [value]="colour">{{ colour }}</option>
+                <option value="أخرى">Other</option>
+              </select>
               <input
-                type="number"
-                min="0"
-                max="360"
-                formControlName="visibleSector"
-                placeholder="أدخل مدى زاوية الرؤية"
+                *ngIf="spec.get('structureColour')?.value === 'أخرى'"
+                class="other-colour"
+                type="text"
+                formControlName="structureColourOther"
+                placeholder="Enter other colour"
               >
-              <span>°</span>
             </div>
-          </div>
-        </div>
 
-        <section class="manufacturer-section">
-          <div class="subsection-heading">الشركة المصنعة المقترحة</div>
+            <div class="form-field">
+              <label>Signal Character <b>*</b></label>
+              <select formControlName="signalCharacter">
+                <option value="">Select signal character</option>
+                <option *ngFor="let signal of signalCharacters" [value]="signal">{{ signal }}</option>
+              </select>
+            </div>
 
-          <div class="manufacturer-grid">
-            <div
-              class="manufacturer-card"
-              *ngFor="let manufacturer of manufacturers"
-              [formGroup]="manufacturerGroup(i, manufacturer.key)"
-            >
-              <div class="manufacturer-title">
-                <span>{{ manufacturer.icon }}</span>
-                <strong>{{ manufacturer.label }}</strong>
+            <div class="form-field">
+              <label>Nominal Range <b>*</b></label>
+              <div class="suffix-input">
+                <input type="number" min="0" step="0.1" formControlName="nominalRange" placeholder="Enter nominal range">
+                <span>NM</span>
               </div>
+            </div>
 
-              <label class="file-drop">
+            <div class="form-field">
+              <label>Proposed National Numbers <b>*</b></label>
+              <input type="text" formControlName="nationalNumbers" placeholder="Enter proposed national numbers">
+            </div>
+
+            <div class="form-field">
+              <label>Top Mark</label>
+              <select formControlName="topMark">
+                <option value="">Select top mark</option>
+                <option *ngFor="let mark of topMarks" [value]="mark">{{ mark }}</option>
+              </select>
+            </div>
+
+            <div class="form-field">
+              <label>Visible Sector</label>
+              <div class="suffix-input">
                 <input
-                  type="file"
-                  accept=".jpg,.jpeg,.png,.pdf"
-                  (change)="onFileSelected($event, i, manufacturer.key)"
+                  type="number"
+                  min="0"
+                  max="360"
+                  formControlName="visibleSector"
+                  placeholder="Enter visible sector"
                 >
-                <span class="upload-mark">↥</span>
-                <b>إرفاق ملف</b>
-                <small>PDF, JPG, PNG (Max 5 MB)</small>
-              </label>
+                <span>°</span>
+              </div>
+            </div>
+          </div>
 
+          <section class="manufacturer-section uat-subsection">
+            <div class="subsection-heading">Proposed Manufacturer</div>
+
+            <div class="manufacturer-grid uat-manufacturer-grid">
               <div
-                class="selected-file"
-                *ngIf="manufacturerGroup(i, manufacturer.key).get('fileName')?.value"
+                class="manufacturer-card"
+                *ngFor="let manufacturer of manufacturers"
+                [formGroup]="manufacturerGroup(i, manufacturer.key)"
               >
-                {{ manufacturerGroup(i, manufacturer.key).get('fileName')?.value }}
-              </div>
+                <div class="manufacturer-title">
+                  <span>{{ manufacturer.icon }}</span>
+                  <strong>{{ manufacturer.label }}</strong>
+                </div>
 
-              <label class="manufacturer-name-label">اسم الشركة المصنعة</label>
-              <input type="text" formControlName="companyName" placeholder="أدخل اسم الشركة">
-            </div>
-          </div>
-        </section>
+                <label class="file-drop">
+                  <input
+                    type="file"
+                    accept=".jpg,.jpeg,.png,.pdf"
+                    (change)="onFileSelected($event, i, manufacturer.key)"
+                  >
+                  <span class="upload-mark">↥</span>
+                  <b>Choose File</b>
+                  <small>JPG, PNG or PDF · Max 5 MB</small>
+                </label>
 
-        <section class="technical-location" formGroupName="location">
-          <div class="subsection-heading">
-            <span class="location-pin">●</span>
-            الموقع الفني <b>*</b>
-          </div>
+                <div
+                  class="selected-file"
+                  *ngIf="manufacturerGroup(i, manufacturer.key).get('fileName')?.value"
+                >
+                  {{ manufacturerGroup(i, manufacturer.key).get('fileName')?.value }}
+                </div>
 
-          <div class="coordinate-layout">
-            <div class="coordinate-group">
-              <strong>Latitude - North (N)</strong>
-              <div class="coordinate-fields">
-                <span>DD</span>
-                <input type="number" min="0" max="90" formControlName="latDeg" placeholder="24">
-                <span>MM</span>
-                <input type="number" min="0" max="59.999" step="0.1" formControlName="latMin" placeholder="30.7">
-                <select formControlName="latDir">
-                  <option value="N">N</option>
-                  <option value="S">S</option>
-                </select>
+                <label class="manufacturer-name-label">Manufacturer Name</label>
+                <input type="text" formControlName="companyName" placeholder="Enter manufacturer name">
               </div>
             </div>
+          </section>
 
-            <div class="coordinate-group">
-              <strong>Longitude - East (E)</strong>
-              <div class="coordinate-fields">
-                <span>DDD</span>
-                <input type="number" min="0" max="180" formControlName="lonDeg" placeholder="56">
-                <span>MM</span>
-                <input type="number" min="0" max="59.999" step="0.1" formControlName="lonMin" placeholder="37.8">
-                <select formControlName="lonDir">
-                  <option value="E">E</option>
-                  <option value="W">W</option>
-                </select>
+          <section class="technical-location uat-subsection" formGroupName="location">
+            <div class="subsection-heading">Technical Location <b>*</b></div>
+
+            <div class="coordinate-layout uat-coordinate-layout">
+              <div class="coordinate-group">
+                <strong>Latitude - North (N)</strong>
+                <div class="coordinate-fields">
+                  <span>DD</span>
+                  <input type="number" min="0" max="90" formControlName="latDeg" placeholder="24">
+                  <span>MM</span>
+                  <input type="number" min="0" max="59.999" step="0.1" formControlName="latMin" placeholder="30.7">
+                  <select formControlName="latDir">
+                    <option value="N">N</option>
+                    <option value="S">S</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="coordinate-group">
+                <strong>Longitude - East (E)</strong>
+                <div class="coordinate-fields">
+                  <span>DDD</span>
+                  <input type="number" min="0" max="180" formControlName="lonDeg" placeholder="56">
+                  <span>MM</span>
+                  <input type="number" min="0" max="59.999" step="0.1" formControlName="lonMin" placeholder="37.8">
+                  <select formControlName="lonDir">
+                    <option value="E">E</option>
+                    <option value="W">W</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="coordinate-example">
+                <b>Example</b>
+                <span>24°30.7′ N, 56°37.8′ E</span>
               </div>
             </div>
+          </section>
 
-            <div class="coordinate-example">
-              <b>مثال</b>
-              <span>24°30.7′ N, 56°37.8′ E</span>
-            </div>
+          <div class="form-field notes-field">
+            <label>Notes</label>
+            <textarea rows="3" formControlName="notes" placeholder="Enter notes"></textarea>
           </div>
-        </section>
-
-        <div class="form-field notes-field">
-          <label>ملاحظات</label>
-          <textarea rows="3" formControlName="notes" placeholder="أدخل أي ملاحظات إضافية"></textarea>
         </div>
       </article>
     </div>
 
-    <footer class="spec-modal-footer">
-      <span>يجب إدخال مواصفتين فقط، ولكل مواصفة العدد والبيانات الفنية الخاصة بها.</span>
+    <footer class="spec-modal-footer uat-modal-footer">
+      <span>Exactly two complete specifications are included in this request.</span>
       <div class="modal-footer-actions">
-        <button type="button" class="cancel-modal-button" (click)="close()">إلغاء</button>
-        <button type="button" class="save-modal-button" (click)="submit()">حفظ</button>
+        <button type="button" class="cancel-modal-button" (click)="close()">Cancel</button>
+        <button type="button" class="save-modal-button" (click)="submit()">Save</button>
       </div>
     </footer>
   </section>
