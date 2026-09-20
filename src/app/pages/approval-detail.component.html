@@ -1,0 +1,34 @@
+<section class="detail-page">
+  <div class="detail-title-row">
+    <div>
+      <div class="title-with-status">
+        <h1>Request for Approval of Maritime Navigation Aids Installation</h1>
+        <span class="status-pill awaiting">AWAITING INSTALLATION COMPANY REVIEW</span>
+        <button class="enter-spec-button" type="button" (click)="openSpecifications()">
+          ←&nbsp;&nbsp; Enter Specifications
+        </button>
+      </div>
+      <p>Follow up on the number of requests and achievement rates in real-time</p>
+    </div>
+
+    <div class="decision-actions">
+      <button class="send-button">✓&nbsp; Send</button>
+      <button class="reject-button">×&nbsp; Reject</button>
+    </div>
+  </div>
+
+  <section class="request-data-panel">
+    <div class="request-data-title">Request Data</div>
+
+    <div class="detail-row" *ngFor="let row of rows">
+      <div class="detail-label">{{ row.label }}</div>
+      <div class="detail-value">{{ row.value }}</div>
+    </div>
+  </section>
+
+  <app-specifications-modal
+    *ngIf="showSpecifications"
+    (closed)="closeSpecifications()"
+    (saved)="onSpecificationsSaved($event)"
+  ></app-specifications-modal>
+</section>
