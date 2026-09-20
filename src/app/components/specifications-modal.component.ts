@@ -230,7 +230,6 @@ export class SpecificationsModalComponent {
   private createSpecification(): UntypedFormGroup {
     return this.fb.group({
       navigationAidType: ['', Validators.required],
-      count: [1, Validators.required],
       structureType: ['', Validators.required],
       lit: [null, Validators.required],
       specificationPurpose: ['', Validators.required],
