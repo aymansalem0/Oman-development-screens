@@ -53,7 +53,7 @@
               <div class="option-row uat-radio-row">
                 <label *ngFor="let type of structureTypes">
                   <input type="radio" formControlName="structureType" [value]="type">
-                  {{ type === 'ثابت' ? 'Fixed' : 'Floating' }}
+                  {{ type }}
                 </label>
               </div>
             </div>
@@ -97,10 +97,10 @@
               <select formControlName="structureColour" (change)="onStructureColourChange(i)">
                 <option value="">Select colour of structure</option>
                 <option *ngFor="let colour of structureColours" [value]="colour">{{ colour }}</option>
-                <option value="أخرى">Other</option>
+                <option value="Other">Other</option>
               </select>
               <input
-                *ngIf="spec.get('structureColour')?.value === 'أخرى'"
+                *ngIf="spec.get('structureColour')?.value === 'Other'"
                 class="other-colour"
                 type="text"
                 formControlName="structureColourOther"
