@@ -7,6 +7,17 @@ import {
   UntypedFormGroup,
   Validators
 } from '@angular/forms';
+import { LanguageService } from '../services/language.service';
+
+interface DdlOption {
+  code: string;
+}
+
+interface ManufacturerOption {
+  key: string;
+  code: string;
+  icon: string;
+}
 
 @Component({
   selector: 'app-specifications-modal',
@@ -16,115 +27,115 @@ import {
 })
 export class SpecificationsModalComponent {
   expandedSpecification = 0;
+
   @Output() closed = new EventEmitter<void>();
   @Output() saved = new EventEmitter<any>();
 
   readonly maxFileSize = 5 * 1024 * 1024;
   readonly allowedExtensions = ['jpg', 'jpeg', 'png', 'pdf'];
 
-  // IALA R1001 / R0110 / R0201 aligned controlled lists.
-  // Oman operates within IALA Maritime Buoyage Region A.
-  readonly navigationAidTypes = [
-    'Port-hand Lateral Mark',
-    'Starboard-hand Lateral Mark',
-    'Preferred Channel - Port Hand',
-    'Preferred Channel - Starboard Hand',
-    'North Cardinal Mark',
-    'East Cardinal Mark',
-    'South Cardinal Mark',
-    'West Cardinal Mark',
-    'Isolated Danger Mark',
-    'Safe Water Mark',
-    'Special Mark',
-    'Emergency Wreck Marking Buoy (EWMB)',
-    'Lighthouse',
-    'Sector Light',
-    'Leading Line / Range Mark'
+  readonly navigationAidTypes: DdlOption[] = [
+    { code: 'PORT_HAND_LATERAL' },
+    { code: 'STARBOARD_HAND_LATERAL' },
+    { code: 'PREFERRED_CHANNEL_PORT' },
+    { code: 'PREFERRED_CHANNEL_STARBOARD' },
+    { code: 'NORTH_CARDINAL' },
+    { code: 'EAST_CARDINAL' },
+    { code: 'SOUTH_CARDINAL' },
+    { code: 'WEST_CARDINAL' },
+    { code: 'ISOLATED_DANGER' },
+    { code: 'SAFE_WATER' },
+    { code: 'SPECIAL_MARK' },
+    { code: 'EWMB' },
+    { code: 'LIGHTHOUSE' },
+    { code: 'SECTOR_LIGHT' },
+    { code: 'LEADING_LINE' }
   ];
 
-  readonly lightColours = [
-    'White',
-    'Red',
-    'Green',
-    'Yellow',
-    'Blue'
+  readonly lightColours: DdlOption[] = [
+    { code: 'WHITE' },
+    { code: 'RED' },
+    { code: 'GREEN' },
+    { code: 'YELLOW' },
+    { code: 'BLUE' }
   ];
 
-  readonly structureColours = [
-    'White',
-    'Black',
-    'Red',
-    'Green',
-    'Yellow',
-    'Blue',
-    'Orange',
-    'Other'
+  readonly structureColours: DdlOption[] = [
+    { code: 'WHITE' },
+    { code: 'BLACK' },
+    { code: 'RED' },
+    { code: 'GREEN' },
+    { code: 'YELLOW' },
+    { code: 'BLUE' },
+    { code: 'ORANGE' },
+    { code: 'OTHER' }
   ];
 
-  readonly signalCharacters = [
-    'Fixed (F)',
-    'Occulting (Oc)',
-    'Group Occulting (Oc(n))',
-    'Isophase (Iso)',
-    'Flashing (Fl)',
-    'Long Flashing (LFl)',
-    'Group Flashing (Fl(n))',
-    'Composite Group Flashing (Fl(n+m))',
-    'Quick (Q)',
-    'Group Quick (Q(n))',
-    'Interrupted Quick (IQ)',
-    'Very Quick (VQ)',
-    'Group Very Quick (VQ(n))',
-    'Interrupted Very Quick (IVQ)',
-    'Ultra Quick (UQ)',
-    'Interrupted Ultra Quick (IUQ)',
-    'Morse Code (Mo)',
-    'Alternating (Al)'
+  readonly signalCharacters: DdlOption[] = [
+    { code: 'FIXED_LIGHT' },
+    { code: 'OCCULTING' },
+    { code: 'GROUP_OCCULTING' },
+    { code: 'ISOPHASE' },
+    { code: 'FLASHING' },
+    { code: 'LONG_FLASHING' },
+    { code: 'GROUP_FLASHING' },
+    { code: 'COMPOSITE_GROUP_FLASHING' },
+    { code: 'QUICK' },
+    { code: 'GROUP_QUICK' },
+    { code: 'INTERRUPTED_QUICK' },
+    { code: 'VERY_QUICK' },
+    { code: 'GROUP_VERY_QUICK' },
+    { code: 'INTERRUPTED_VERY_QUICK' },
+    { code: 'ULTRA_QUICK' },
+    { code: 'INTERRUPTED_ULTRA_QUICK' },
+    { code: 'MORSE' },
+    { code: 'ALTERNATING' }
   ];
 
-  readonly topMarks = [
-    'None',
-    'Cone, point up',
-    'Cone, point down',
-    'Two cones, points up',
-    'Two cones, points down',
-    'Two cones, base-to-base',
-    'Two cones, point-to-point',
-    'Cylinder / Can',
-    'Sphere',
-    'Two spheres',
-    "X-shape (St Andrew's Cross)",
-    'Vertical / Perpendicular Cross (Emergency Wreck)'
+  readonly topMarks: DdlOption[] = [
+    { code: 'TOP_NONE' },
+    { code: 'CONE_UP' },
+    { code: 'CONE_DOWN' },
+    { code: 'TWO_CONES_UP' },
+    { code: 'TWO_CONES_DOWN' },
+    { code: 'TWO_CONES_BASE_TO_BASE' },
+    { code: 'TWO_CONES_POINT_TO_POINT' },
+    { code: 'CYLINDER_CAN' },
+    { code: 'SPHERE' },
+    { code: 'TWO_SPHERES' },
+    { code: 'X_SHAPE' },
+    { code: 'EW_CROSS' }
   ];
 
-  readonly structureTypes = [
-    'Fixed',
-    'Floating'
+  readonly structureTypes: DdlOption[] = [
+    { code: 'FIXED' },
+    { code: 'FLOATING' }
   ];
 
-  // Service lifecycle list. This is a project/business classification rather
-  // than an IALA-defined AtoN taxonomy.
-  readonly purposes = [
-    'New Installation',
-    'Replacement',
-    'Relocation',
-    'Modification / Upgrade',
-    'Temporary Installation',
-    'Permanent Installation',
-    'Trial / Testing'
+  readonly purposes: DdlOption[] = [
+    { code: 'NEW_INSTALLATION' },
+    { code: 'REPLACEMENT' },
+    { code: 'RELOCATION' },
+    { code: 'MODIFICATION_UPGRADE' },
+    { code: 'TEMPORARY_INSTALLATION' },
+    { code: 'PERMANENT_INSTALLATION' },
+    { code: 'TRIAL_TESTING' }
   ];
 
-  readonly manufacturers = [
-    { key: 'concrete', label: 'Concrete Structure', icon: '▦' },
-    { key: 'chains', label: 'Mooring Chains', icon: '⌘' },
-    { key: 'buoys', label: 'Marine Buoy', icon: '♟' },
-    { key: 'columns', label: 'Steel Column / Pile', icon: '♜' },
-    { key: 'light', label: 'Navigation Light', icon: '☀' }
+  readonly manufacturers: ManufacturerOption[] = [
+    { key: 'concrete', code: 'CONCRETE_STRUCTURE', icon: '▦' },
+    { key: 'chains', code: 'MOORING_CHAINS', icon: '⌘' },
+    { key: 'buoys', code: 'MARINE_BUOY', icon: '♟' },
+    { key: 'columns', code: 'STEEL_COLUMN', icon: '♜' },
+    { key: 'light', code: 'NAVIGATION_LIGHT', icon: '☀' }
   ];
 
   form: UntypedFormGroup;
 
-  constructor(private fb: UntypedFormBuilder) {
+  constructor(
+    private fb: UntypedFormBuilder,
+    public lang: LanguageService
+  ) {
     this.form = this.fb.group({
       specifications: this.fb.array([
         this.createSpecification(),
@@ -147,7 +158,7 @@ export class SpecificationsModalComponent {
 
   onStructureColourChange(index: number): void {
     const group = this.specification(index);
-    if (group.get('structureColour')?.value !== 'Other') {
+    if (group.get('structureColour')?.value !== 'OTHER') {
       group.get('structureColourOther')?.setValue('');
     }
   }
@@ -163,13 +174,13 @@ export class SpecificationsModalComponent {
     const extension = file.name.split('.').pop()?.toLowerCase() ?? '';
 
     if (!this.allowedExtensions.includes(extension)) {
-      window.alert('Unsupported file type. Allowed types: JPG, PNG, PDF.');
+      window.alert(this.lang.t('unsupportedFile'));
       input.value = '';
       return;
     }
 
     if (file.size > this.maxFileSize) {
-      window.alert('Maximum file size is 5 MB.');
+      window.alert(this.lang.t('maxFileSize'));
       input.value = '';
       return;
     }
