@@ -1046,3 +1046,312 @@ button {
     flex: 1;
   }
 }
+
+
+/* =====================================================================
+   MTCIT screenshot refinement
+   Tuned against the supplied Oman UAT Navigation Aids screenshots.
+   ===================================================================== */
+
+@media (min-width: 1280px) {
+  .sidebar {
+    width: 313px;
+    padding: 26px 16px 24px;
+    background: #315dcb;
+  }
+
+  .workspace {
+    width: calc(100% - 313px);
+    margin-left: 313px;
+  }
+
+  .topbar {
+    height: 64px;
+    padding-right: 23px;
+    padding-left: 17px;
+  }
+
+  .page-content {
+    padding: 18px 28px 44px;
+  }
+
+  .sidebar-user {
+    height: 57px;
+    margin-bottom: 25px;
+    border-radius: 13px;
+    background: rgba(255, 255, 255, .105);
+  }
+
+  .sidebar-group-title {
+    min-height: 60px;
+    border-radius: 11px;
+    background: rgba(255, 255, 255, .09);
+    font-size: 13px;
+  }
+
+  .sidebar-link {
+    padding-top: 24px;
+    font-size: 12px;
+  }
+
+  .tab-strip {
+    height: 51px;
+    margin-bottom: 20px;
+  }
+
+  .summary-panel {
+    padding: 16px 14px 14px;
+    border-radius: 11px;
+    background: #e0ebff;
+  }
+
+  .section-heading h1 {
+    font-size: 16px;
+    font-weight: 700;
+  }
+
+  .section-heading p {
+    font-size: 12px;
+  }
+
+  .stats-grid {
+    gap: 13px;
+  }
+
+  .stat-card {
+    height: 99px;
+    padding: 13px 14px 12px;
+    border-radius: 9px;
+    background: #b8d2ff;
+  }
+
+  .stat-icon {
+    width: 41px;
+    height: 41px;
+    border-radius: 11px;
+    background: #23489a;
+    font-size: 20px;
+  }
+
+  .stat-label {
+    font-size: 12px;
+  }
+
+  .stat-value {
+    right: 14px;
+    bottom: 14px;
+    font-size: 16px;
+  }
+
+  .requests-panel {
+    margin-top: 14px;
+    padding: 23px 14px 18px;
+    border-radius: 33px 33px 0 0;
+  }
+
+  .requests-panel h2 {
+    margin-bottom: 21px;
+    font-size: 15px;
+  }
+
+  .search-box,
+  .filter-button {
+    height: 37px;
+    font-size: 11px;
+  }
+
+  .request-table {
+    font-size: 11px;
+  }
+
+  .request-table th,
+  .request-table td {
+    height: 45px;
+    padding: 10px 14px;
+  }
+
+  .status-pill {
+    min-height: 26px;
+    font-size: 10px;
+  }
+
+  .detail-title-row {
+    padding: 5px 0 15px;
+  }
+
+  .detail-title-row h1 {
+    font-size: 16px;
+  }
+
+  .detail-title-row p {
+    font-size: 12px;
+  }
+
+  .enter-spec-button,
+  .send-button,
+  .reject-button {
+    height: 29px;
+    font-size: 10px;
+  }
+
+  .request-data-title {
+    padding: 14px 18px;
+    background: #dce6f9;
+    font-size: 13px;
+  }
+
+  .detail-row {
+    min-height: 45px;
+    grid-template-columns: 215px 1fr;
+    font-size: 11px;
+  }
+}
+
+/* Modal visual language follows the existing UAT popup:
+   white surface, subtle rounded border, compact inputs and blue primary action. */
+.spec-modal {
+  border: 1px solid #d6dde7;
+}
+
+.spec-modal-header {
+  min-height: 70px;
+  padding: 12px 22px;
+}
+
+.modal-heading-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  font-size: 23px;
+}
+
+.modal-heading h2 {
+  color: #233348;
+  font-size: 19px;
+}
+
+.modal-heading p {
+  margin-top: 1px;
+  color: #68758a;
+  font-size: 11px;
+}
+
+.two-spec-badge {
+  background: #f0f4fa;
+  color: #415a77;
+}
+
+.spec-modal-body {
+  padding: 12px 14px;
+  background: #f9fbfd;
+}
+
+.technical-spec-card {
+  border-color: #cbd7e4;
+  border-radius: 9px;
+  box-shadow: 0 1px 2px rgba(26, 45, 71, .035);
+}
+
+.technical-spec-title {
+  min-height: 43px;
+  padding: 9px 14px;
+  background: #edf4fc;
+  border-bottom-color: #d8e2ed;
+}
+
+.spec-form-grid {
+  gap: 11px;
+  padding: 12px 14px 0;
+}
+
+.form-field input,
+.form-field select,
+.form-field textarea,
+.manufacturer-card input,
+.coordinate-group input,
+.coordinate-group select {
+  border-color: #9da9b8;
+  border-radius: 7px;
+  background: #fff;
+}
+
+.form-field label,
+.manufacturer-name-label {
+  color: #405068;
+  font-size: 11px;
+}
+
+.option-row {
+  gap: 24px;
+}
+
+.option-row input {
+  width: 19px;
+  height: 19px;
+}
+
+.manufacturer-section,
+.technical-location {
+  margin: 14px;
+  padding: 12px;
+  border-color: #d6e0eb;
+  background: #fff;
+}
+
+.manufacturer-card {
+  border-color: #d6e0ea;
+  box-shadow: 0 1px 2px rgba(38, 58, 84, .03);
+}
+
+.file-drop {
+  min-height: 78px;
+  border-color: #82aede;
+  background: #fbfdff;
+}
+
+.notes-field {
+  padding: 0 14px 14px;
+}
+
+.spec-modal-footer {
+  min-height: 60px;
+  padding: 10px 14px;
+}
+
+.cancel-modal-button,
+.save-modal-button {
+  height: 37px;
+  border-radius: 7px;
+}
+
+.save-modal-button {
+  background: #315fd1;
+  border-color: #315fd1;
+}
+
+.save-modal-button:hover {
+  background: #2853bb;
+}
+
+/* Keep the two full specifications usable without turning the popup
+   into a huge page. The modal owns its vertical scroll, like UAT. */
+@media (min-width: 1280px) {
+  .spec-modal {
+    width: min(1210px, 92vw);
+    max-height: 91vh;
+  }
+
+  .spec-modal-body {
+    scrollbar-width: thin;
+    scrollbar-color: #aeb8c5 transparent;
+  }
+
+  .spec-modal-body::-webkit-scrollbar {
+    width: 7px;
+  }
+
+  .spec-modal-body::-webkit-scrollbar-thumb {
+    border-radius: 999px;
+    background: #aeb8c5;
+  }
+}
