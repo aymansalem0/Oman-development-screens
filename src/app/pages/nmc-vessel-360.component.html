@@ -1,0 +1,274 @@
+<div class="v360-shell">
+  <header class="v360-topbar">
+    <div class="brand-block">
+      <div class="brand-mark">⚓</div>
+      <div>
+        <div class="eyebrow">MOEI · National Maritime Center</div>
+        <h1>Vessel 360</h1>
+        <p>Unified maritime intelligence & data correlation</p>
+      </div>
+    </div>
+
+    <div class="top-actions">
+      <a class="back-btn" routerLink="/moei/nmc">← Back to Command Center</a>
+      <button type="button" class="secondary-btn">Export vessel brief</button>
+      <button type="button" class="primary-btn">Open NMC Case</button>
+    </div>
+  </header>
+
+  <main class="v360-main">
+    <section class="hero-card">
+      <div class="identity-block">
+        <div class="vessel-avatar">GH</div>
+        <div>
+          <div class="hero-kicker">UNIFIED VESSEL IDENTITY</div>
+          <h2>{{ vessel.name }}</h2>
+          <div class="identity-row">
+            <span>IMO {{ vessel.imo }}</span>
+            <span>MMSI {{ vessel.mmsi }}</span>
+            <span>{{ vessel.flag }}</span>
+            <span>{{ vessel.type }}</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="hero-right">
+        <div class="confidence-card">
+          <small>Data confidence</small>
+          <strong>{{ vessel.dataConfidence }}%</strong>
+          <span>1 source conflict</span>
+        </div>
+        <div class="risk-card critical">
+          <small>Composite risk</small>
+          <strong>{{ vessel.riskScore }}</strong>
+          <span>{{ vessel.riskLevel }}</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="critical-banner">
+      <div class="critical-icon">!</div>
+      <div>
+        <strong>Critical operational attention required</strong>
+        <p>
+          Movement anomaly, unresolved fire-safety deficiency and a certificate data conflict have been correlated into one vessel risk picture.
+        </p>
+      </div>
+      <button type="button">Review recommendation</button>
+    </section>
+
+    <nav class="tabs" aria-label="Vessel 360 sections">
+      <button type="button" [class.active]="activeTab === 'overview'" (click)="setTab('overview')">Overview</button>
+      <button type="button" [class.active]="activeTab === 'movement'" (click)="setTab('movement')">Movement</button>
+      <button type="button" [class.active]="activeTab === 'compliance'" (click)="setTab('compliance')">Compliance</button>
+      <button type="button" [class.active]="activeTab === 'inspection'" (click)="setTab('inspection')">Inspection</button>
+      <button type="button" [class.active]="activeTab === 'certificates'" (click)="setTab('certificates')">Certificates</button>
+      <button type="button" [class.active]="activeTab === 'sources'" (click)="setTab('sources')">Data Sources</button>
+    </nav>
+
+    <section class="overview-layout" *ngIf="activeTab === 'overview'">
+      <div class="left-column">
+        <article class="panel summary-panel">
+          <div class="panel-header">
+            <div>
+              <h3>Vessel Identity & Operational Context</h3>
+              <p>One correlated record linked by IMO number</p>
+            </div>
+            <span class="matched-badge">IMO MATCHED</span>
+          </div>
+
+          <div class="data-grid">
+            <div><small>Call sign</small><strong>{{ vessel.callSign }}</strong></div>
+            <div><small>Year built / Age</small><strong>{{ vessel.built }} · {{ vessel.age }} years</strong></div>
+            <div><small>Gross tonnage</small><strong>{{ vessel.grossTonnage }}</strong></div>
+            <div><small>Deadweight</small><strong>{{ vessel.deadweight }}</strong></div>
+            <div><small>Owner</small><strong>{{ vessel.owner }}</strong></div>
+            <div><small>Operator</small><strong>{{ vessel.operator }}</strong></div>
+            <div><small>Class society</small><strong>{{ vessel.classSociety }}</strong></div>
+            <div><small>Destination</small><strong>{{ vessel.destination }}</strong></div>
+            <div><small>ETA</small><strong>{{ vessel.eta }}</strong></div>
+            <div><small>Current speed</small><strong>{{ vessel.speed }}</strong></div>
+            <div><small>Course</small><strong>{{ vessel.course }}</strong></div>
+            <div><small>Navigation status</small><strong>{{ vessel.navStatus }}</strong></div>
+          </div>
+        </article>
+
+        <article class="panel movement-panel">
+          <div class="panel-header">
+            <div>
+              <h3>Movement Correlation</h3>
+              <p>Expected arrival corridor versus observed movement</p>
+            </div>
+            <div class="legend">
+              <span><i class="line expected"></i> Expected</span>
+              <span><i class="line observed"></i> Observed</span>
+              <span><i class="dot anomaly"></i> Anomaly</span>
+            </div>
+          </div>
+          <div class="map-wrap">
+            <div #vesselMap class="vessel-map"></div>
+            <div class="map-callout">
+              <strong>Movement anomaly detected</strong>
+              <span>Route deviation started near 25.18°N, 55.78°E</span>
+            </div>
+          </div>
+        </article>
+
+        <article class="panel source-panel">
+          <div class="panel-header">
+            <div>
+              <h3>Correlated Data Sources</h3>
+              <p>Every business fact retains source, timestamp and confidence</p>
+            </div>
+            <span class="source-summary">6 sources · 1 conflict</span>
+          </div>
+
+          <div class="source-table">
+            <div class="source-row header">
+              <span>Source</span>
+              <span>Record</span>
+              <span>Last sync</span>
+              <span>Confidence</span>
+              <span>Status</span>
+            </div>
+
+            <div class="source-row" *ngFor="let source of sources">
+              <div>
+                <strong>{{ source.name }}</strong>
+                <small>{{ source.system }}</small>
+              </div>
+              <span>{{ source.record }}</span>
+              <span>{{ source.lastSync }}</span>
+              <span>{{ source.confidence }}%</span>
+              <span class="status-chip" [ngClass]="source.status.toLowerCase()">{{ source.status }}</span>
+            </div>
+          </div>
+        </article>
+      </div>
+
+      <aside class="right-column">
+        <article class="panel risk-panel">
+          <div class="panel-header">
+            <div>
+              <h3>Why is this vessel Critical?</h3>
+              <p>Transparent composite risk contribution</p>
+            </div>
+            <span class="risk-confidence">{{ vessel.riskConfidence }}% confidence</span>
+          </div>
+
+          <div class="risk-score-row">
+            <div class="risk-gauge">
+              <span>{{ vessel.riskScore }}</span>
+              <small>/100</small>
+            </div>
+            <div>
+              <strong>Critical risk</strong>
+              <p>5 correlated indicators contributing to current prioritization.</p>
+            </div>
+          </div>
+
+          <div class="factor-list">
+            <div class="factor-row" *ngFor="let factor of riskFactors">
+              <div class="factor-main">
+                <strong>{{ factor.label }}</strong>
+                <small>{{ factor.source }}</small>
+              </div>
+              <span>+{{ factor.value }}</span>
+            </div>
+          </div>
+
+          <button type="button" class="outline-btn">Open full explainability view</button>
+        </article>
+
+        <article class="panel conflict-panel">
+          <div class="panel-header">
+            <div>
+              <h3>Data Conflict</h3>
+              <p>Human verification required</p>
+            </div>
+            <span class="conflict-badge">UNRESOLVED</span>
+          </div>
+
+          <div class="compare-box">
+            <div>
+              <small>MOEI Certificate Registry</small>
+              <strong>Conditionally Valid</strong>
+              <span>Updated 22:41:56</span>
+            </div>
+            <div class="vs">≠</div>
+            <div>
+              <small>External Classification Feed</small>
+              <strong>Valid</strong>
+              <span>Updated 22:41:57</span>
+            </div>
+          </div>
+
+          <div class="verification-note">
+            <strong>System behavior</strong>
+            <p>
+              The conflict is preserved and highlighted. The platform does not silently choose one source or auto-enforce a restriction before authorized verification.
+            </p>
+          </div>
+
+          <button type="button" class="primary-btn wide">Start verification task</button>
+        </article>
+
+        <article class="panel timeline-panel">
+          <div class="panel-header">
+            <div>
+              <h3>Vessel Intelligence Timeline</h3>
+              <p>How the operational picture evolved</p>
+            </div>
+          </div>
+
+          <div class="timeline">
+            <div class="timeline-item" *ngFor="let item of timeline">
+              <div class="time">{{ item.time }}</div>
+              <div class="timeline-rail">
+                <i [ngClass]="item.kind"></i>
+                <span></span>
+              </div>
+              <div>
+                <strong>{{ item.title }}</strong>
+                <p>{{ item.detail }}</p>
+              </div>
+            </div>
+          </div>
+        </article>
+      </aside>
+    </section>
+
+    <section class="single-tab panel" *ngIf="activeTab !== 'overview'">
+      <div class="single-tab-head">
+        <div>
+          <span class="section-kicker">{{ activeTab | uppercase }}</span>
+          <h3>{{ activeTab === 'movement' ? 'Movement & Route Intelligence' :
+                 activeTab === 'compliance' ? 'Compliance Picture' :
+                 activeTab === 'inspection' ? 'Inspection History & Deficiencies' :
+                 activeTab === 'certificates' ? 'Certificates & Validity Conditions' :
+                 'Source Provenance & Data Quality' }}</h3>
+          <p>This POC view is connected to the same correlated vessel record. Detailed business functions will be expanded in the next build blocks.</p>
+        </div>
+        <button type="button" class="secondary-btn" (click)="setTab('overview')">Return to overview</button>
+      </div>
+
+      <div class="placeholder-grid">
+        <div>
+          <span class="placeholder-icon">✓</span>
+          <strong>Correlated vessel context retained</strong>
+          <p>IMO {{ vessel.imo }} remains the common identity key across the NMC record.</p>
+        </div>
+        <div>
+          <span class="placeholder-icon">↗</span>
+          <strong>Source provenance available</strong>
+          <p>Every displayed item keeps the originating system and last synchronization timestamp.</p>
+        </div>
+        <div>
+          <span class="placeholder-icon">!</span>
+          <strong>Exceptions remain visible</strong>
+          <p>Data conflicts and incomplete information are shown explicitly instead of being hidden.</p>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>

@@ -509,3 +509,11 @@ button, input, select { font: inherit; }
   .source-note { display: none; }
   .vessel-data-grid { grid-template-columns: repeat(2, 1fr); }
 }
+
+
+.action-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+}
