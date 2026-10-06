@@ -1,0 +1,387 @@
+<div class="nmc-shell">
+  <header class="nmc-topbar">
+    <div class="brand-block">
+      <div class="brand-mark">
+        <span class="brand-ring"></span>
+        <span class="brand-anchor">⚓</span>
+      </div>
+      <div>
+        <div class="eyebrow">MOEI · Maritime Transformation</div>
+        <h1>National Maritime Center</h1>
+        <p>Maritime Situational Awareness · Business POC</p>
+      </div>
+    </div>
+
+    <div class="topbar-center">
+      <div class="live-pill" [class.paused]="!feedLive">
+        <span class="pulse-dot"></span>
+        {{ feedLive ? 'AIS / LRIT SYNTHETIC FEED · LIVE' : 'FEED PAUSED' }}
+      </div>
+      <div class="clock">{{ now | date:'dd MMM yyyy · HH:mm:ss' }}</div>
+    </div>
+
+    <div class="topbar-actions">
+      <button class="ghost-btn" (click)="replayScenario()">↻ Replay POC Scenario</button>
+      <button class="icon-btn" title="Notifications">
+        <span>⌁</span>
+        <b>3</b>
+      </button>
+      <div class="user-chip">
+        <span class="user-avatar">NO</span>
+        <span>
+          <strong>NMC Officer</strong>
+          <small>Duty Operations</small>
+        </span>
+        <span class="chev">⌄</span>
+      </div>
+    </div>
+  </header>
+
+  <aside class="nmc-sidebar">
+    <div class="sidebar-section-label">OPERATIONS</div>
+    <button class="nav-item active">
+      <span class="nav-icon">◉</span>
+      <span>Command Center</span>
+      <span class="nav-accent"></span>
+    </button>
+    <button class="nav-item">
+      <span class="nav-icon">⌖</span>
+      <span>Vessel Monitoring</span>
+      <span class="count-badge">{{ monitoredCount }}</span>
+    </button>
+    <button class="nav-item">
+      <span class="nav-icon">⚠</span>
+      <span>Alerts & Events</span>
+      <span class="count-badge alert">{{ attentionCount }}</span>
+    </button>
+    <button class="nav-item">
+      <span class="nav-icon">▣</span>
+      <span>Cases & Incidents</span>
+      <span class="count-badge">4</span>
+    </button>
+    <button class="nav-item">
+      <span class="nav-icon">✓</span>
+      <span>Smart Inspection</span>
+    </button>
+
+    <div class="sidebar-section-label second">INTELLIGENCE</div>
+    <button class="nav-item">
+      <span class="nav-icon">✦</span>
+      <span>Maritime Intelligence</span>
+    </button>
+    <button class="nav-item">
+      <span class="nav-icon">▥</span>
+      <span>Dashboards</span>
+    </button>
+    <button class="nav-item">
+      <span class="nav-icon">⚙</span>
+      <span>Configuration</span>
+    </button>
+
+    <div class="sidebar-bottom">
+      <div class="system-health">
+        <div class="health-head">
+          <span>System Health</span>
+          <strong>Operational</strong>
+        </div>
+        <div class="health-bar"><span></span></div>
+        <small>5/5 data sources available</small>
+      </div>
+    </div>
+  </aside>
+
+  <main class="nmc-main">
+    <section class="page-heading">
+      <div>
+        <div class="breadcrumb">National Maritime Center / <b>Operational Picture</b></div>
+        <h2>UAE Maritime Operational Picture</h2>
+        <p>One national view of vessel activity, monitoring zones and matters requiring attention.</p>
+      </div>
+      <div class="heading-actions">
+        <button class="secondary-btn">Export Situation Report</button>
+        <button class="primary-btn" (click)="toggleFeed()">
+          <span>{{ feedLive ? '❚❚' : '▶' }}</span>
+          {{ feedLive ? 'Pause Live Feed' : 'Resume Live Feed' }}
+        </button>
+      </div>
+    </section>
+
+    <section class="kpi-grid">
+      <article class="kpi-card">
+        <div class="kpi-icon cyan">⌖</div>
+        <div>
+          <small>Vessels Monitored</small>
+          <strong>{{ monitoredCount }}</strong>
+          <span class="trend neutral">in / approaching UAE area</span>
+        </div>
+        <div class="sparkline s1"></div>
+      </article>
+
+      <article class="kpi-card">
+        <div class="kpi-icon amber">◎</div>
+        <div>
+          <small>Require Attention</small>
+          <strong>{{ attentionCount }}</strong>
+          <span class="trend amber">risk score ≥ 45</span>
+        </div>
+        <div class="sparkline s2"></div>
+      </article>
+
+      <article class="kpi-card">
+        <div class="kpi-icon orange">▲</div>
+        <div>
+          <small>High Risk</small>
+          <strong>{{ highRiskCount }}</strong>
+          <span class="trend orange">priority monitoring</span>
+        </div>
+        <div class="sparkline s3"></div>
+      </article>
+
+      <article class="kpi-card critical-card">
+        <div class="kpi-icon red">!</div>
+        <div>
+          <small>Critical Events</small>
+          <strong>{{ criticalCount }}</strong>
+          <span class="trend red">immediate action required</span>
+        </div>
+        <div class="sparkline s4"></div>
+      </article>
+    </section>
+
+    <section class="workspace-grid">
+      <div class="map-panel panel">
+        <div class="panel-header map-header">
+          <div>
+            <h3>Live Maritime Picture</h3>
+            <p>UAE waters & approach monitoring zones</p>
+          </div>
+
+          <div class="map-filters">
+            <div class="search-box">
+              <span>⌕</span>
+              <input [(ngModel)]="searchTerm" placeholder="Search vessel / IMO / destination" />
+            </div>
+
+            <select [(ngModel)]="riskFilter">
+              <option>All</option>
+              <option>Critical</option>
+              <option>High</option>
+              <option>Watch</option>
+              <option>Normal</option>
+            </select>
+
+            <select [(ngModel)]="typeFilter">
+              <option *ngFor="let type of vesselTypes" [value]="type">{{ type }}</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="map-canvas">
+          <div class="ocean-grid"></div>
+
+          <svg class="geo-layer" viewBox="0 0 1000 650" preserveAspectRatio="none" aria-hidden="true">
+            <defs>
+              <linearGradient id="landGradient" x1="0" x2="1">
+                <stop offset="0%" stop-color="#183840" />
+                <stop offset="100%" stop-color="#254b4b" />
+              </linearGradient>
+              <filter id="glow">
+                <feGaussianBlur stdDeviation="4" result="blur"></feGaussianBlur>
+                <feMerge>
+                  <feMergeNode in="blur"></feMergeNode>
+                  <feMergeNode in="SourceGraphic"></feMergeNode>
+                </feMerge>
+              </filter>
+            </defs>
+
+            <path class="coast land"
+              d="M 0 510 L 80 490 L 130 455 L 220 445 L 300 410 L 375 415 L 455 390 L 530 400 L 605 360 L 660 325 L 720 300 L 790 300 L 840 270 L 910 250 L 1000 230 L 1000 650 L 0 650 Z">
+            </path>
+            <path class="coast oman"
+              d="M 810 0 L 1000 0 L 1000 230 L 910 250 L 850 275 L 805 235 L 780 180 Z">
+            </path>
+
+            <path class="shoreline"
+              d="M 0 510 L 80 490 L 130 455 L 220 445 L 300 410 L 375 415 L 455 390 L 530 400 L 605 360 L 660 325 L 720 300 L 790 300 L 840 270 L 910 250 L 1000 230">
+            </path>
+
+            <ellipse class="zone zone-outer" cx="500" cy="330" rx="335" ry="205"></ellipse>
+            <ellipse class="zone zone-inner" cx="520" cy="330" rx="225" ry="132"></ellipse>
+            <path class="shipping-lane" d="M 180 170 C 330 205, 450 225, 580 275 S 780 330, 880 260"></path>
+            <path class="shipping-lane secondary" d="M 140 345 C 260 330, 390 315, 540 315 S 760 280, 920 180"></path>
+
+            <g class="geo-labels">
+              <text x="430" y="530">ABU DHABI</text>
+              <text x="620" y="405">DUBAI</text>
+              <text x="705" y="360">SHARJAH</text>
+              <text x="885" y="210">FUJAIRAH</text>
+              <text x="465" y="205" class="water-label">ARABIAN GULF</text>
+              <text x="845" y="85" class="water-label">GULF OF OMAN</text>
+              <text x="500" y="315" class="zone-label">UAE MONITORING AREA</text>
+            </g>
+          </svg>
+
+          <button
+            *ngFor="let vessel of filteredVessels"
+            class="vessel-marker"
+            [class.selected]="selectedVessel?.id === vessel.id"
+            [ngClass]="riskClass(vessel.risk)"
+            [style.left.%]="vessel.x"
+            [style.top.%]="vessel.y"
+            (click)="selectVessel(vessel)"
+            [title]="vessel.name + ' · Risk ' + vessel.risk"
+          >
+            <span class="vessel-arrow" [style.transform]="'rotate(' + vessel.course + 'deg)'">▲</span>
+            <span class="marker-pulse" *ngIf="vessel.risk >= 65"></span>
+            <span class="marker-label" *ngIf="selectedVessel?.id === vessel.id || vessel.risk >= 65">
+              {{ vessel.name }}
+              <b>{{ vessel.risk }}</b>
+            </span>
+          </button>
+
+          <div class="map-legend">
+            <span><i class="dot critical"></i> Critical</span>
+            <span><i class="dot high"></i> High</span>
+            <span><i class="dot watch"></i> Watch</span>
+            <span><i class="dot normal"></i> Normal</span>
+          </div>
+
+          <div class="map-caption">
+            Synthetic geo view for POC demonstration · Not for navigation
+          </div>
+        </div>
+      </div>
+
+      <aside class="attention-panel panel">
+        <div class="panel-header">
+          <div>
+            <h3>Requires Attention Now</h3>
+            <p>Prioritized by operational risk</p>
+          </div>
+          <button class="text-btn">View all</button>
+        </div>
+
+        <div class="attention-list">
+          <button
+            *ngFor="let vessel of attentionVessels; let i = index"
+            class="attention-item"
+            [class.active]="selectedVessel?.id === vessel.id"
+            (click)="selectVessel(vessel)"
+          >
+            <div class="rank" [ngClass]="riskClass(vessel.risk)">{{ i + 1 }}</div>
+            <div class="attention-main">
+              <div class="attention-title">
+                <strong>{{ vessel.name }}</strong>
+                <span class="risk-chip" [ngClass]="riskClass(vessel.risk)">
+                  {{ riskLevel(vessel.risk) }} · {{ vessel.risk }}
+                </span>
+              </div>
+              <p *ngIf="vessel.id === 1">Movement anomaly + open deficiency + certificate conflict</p>
+              <p *ngIf="vessel.id !== 1">{{ vessel.type }} · {{ vessel.flag }} · {{ vessel.zone }}</p>
+              <div class="attention-meta">
+                <span>IMO {{ vessel.imo }}</span>
+                <span>{{ vessel.speed | number:'1.1-1' }} kn</span>
+                <span>→ {{ vessel.destination }}</span>
+              </div>
+            </div>
+            <span class="open-arrow">›</span>
+          </button>
+        </div>
+
+        <div class="attention-footer">
+          <div class="ai-mini">
+            <span class="ai-icon">✦</span>
+            <div>
+              <strong>AI prioritization active</strong>
+              <p>30 vessels continuously evaluated across movement and risk indicators.</p>
+            </div>
+          </div>
+        </div>
+      </aside>
+    </section>
+
+    <section class="bottom-grid">
+      <div class="events-panel panel">
+        <div class="panel-header">
+          <div>
+            <h3>Live Event Stream</h3>
+            <p>Movement, monitoring and correlated maritime events</p>
+          </div>
+          <span class="stream-indicator"><i></i> streaming</span>
+        </div>
+
+        <div class="event-list">
+          <div class="event-row" *ngFor="let event of events.slice(0,5)">
+            <div class="event-time">{{ event.time }}</div>
+            <div class="event-line">
+              <span class="event-dot" [ngClass]="event.severity"></span>
+              <span class="event-track"></span>
+            </div>
+            <div class="event-content">
+              <div>
+                <strong>{{ event.title }}</strong>
+                <span>{{ event.vessel }}</span>
+              </div>
+              <p>{{ event.detail }}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="vessel-panel panel" *ngIf="selectedVessel as v">
+        <div class="vessel-panel-head">
+          <div>
+            <div class="vessel-kicker">SELECTED VESSEL</div>
+            <h3>{{ v.name }}</h3>
+            <p>IMO {{ v.imo }} · MMSI {{ v.mmsi }}</p>
+          </div>
+          <div class="big-risk" [ngClass]="riskClass(v.risk)">
+            <small>RISK</small>
+            <strong>{{ v.risk }}</strong>
+            <span>{{ riskLevel(v.risk) }}</span>
+          </div>
+        </div>
+
+        <div class="vessel-data-grid">
+          <div>
+            <small>Flag / Type</small>
+            <strong>{{ v.flag }} · {{ v.type }}</strong>
+          </div>
+          <div>
+            <small>Current Speed</small>
+            <strong>{{ v.speed | number:'1.1-1' }} kn</strong>
+          </div>
+          <div>
+            <small>Course</small>
+            <strong>{{ v.course }}°</strong>
+          </div>
+          <div>
+            <small>Destination / ETA</small>
+            <strong>{{ v.destination }} · {{ v.eta }}</strong>
+          </div>
+          <div>
+            <small>Monitoring Zone</small>
+            <strong>{{ v.zone }}</strong>
+          </div>
+          <div>
+            <small>Last AIS Update</small>
+            <strong>{{ v.lastUpdate }} sec ago</strong>
+          </div>
+        </div>
+
+        <div class="scenario-alert" *ngIf="v.id === 1">
+          <span class="scenario-icon">!</span>
+          <div>
+            <strong>Critical attention required</strong>
+            <p>Unusual movement correlated with unresolved historical inspection deficiency and a conflicting certificate condition.</p>
+          </div>
+        </div>
+
+        <div class="vessel-actions">
+          <button class="secondary-btn">Open Vessel 360</button>
+          <button class="primary-btn">Review Maritime Event</button>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
