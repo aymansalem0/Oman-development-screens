@@ -517,3 +517,27 @@ button, input, select { font: inherit; }
   justify-content: center;
   text-decoration: none;
 }
+
+
+.nav-link-item {
+  text-decoration: none;
+}
+.demo-badge {
+  min-width: 31px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background: #e8f8f5;
+  color: #0f766e;
+  border: 1px solid #ccefe6;
+  font-size: 7px;
+  font-weight: 900;
+}
+.vessel360-entry {
+  color: #0f766e;
+  border-color: #bfe6df;
+  background: #f1fbf9;
+  font-weight: 800;
+}
