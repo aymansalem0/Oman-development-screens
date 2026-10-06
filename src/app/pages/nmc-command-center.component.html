@@ -42,6 +42,11 @@
       <span>Vessel Monitoring</span>
       <span class="count-badge">{{ monitoredCount }}</span>
     </button>
+    <a class="nav-item nav-link-item" routerLink="/moei/nmc/vessel/9328471">
+      <span class="nav-icon">◎</span>
+      <span>Vessel 360 Demo</span>
+      <span class="demo-badge">NEW</span>
+    </a>
     <button type="button" class="nav-item">
       <span class="nav-icon">⚠</span>
       <span>Alerts & Events</span>
@@ -90,6 +95,7 @@
       </div>
 
       <div class="heading-actions">
+        <a class="secondary-btn action-link vessel360-entry" routerLink="/moei/nmc/vessel/9328471">◎ Open Vessel 360 Demo</a>
         <button type="button" class="secondary-btn" (click)="resetMapView()">⌂ Reset map</button>
         <button type="button" class="primary-btn" (click)="toggleFeed()">
           <span>{{ feedLive ? '❚❚' : '▶' }}</span>
