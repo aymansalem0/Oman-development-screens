@@ -195,15 +195,14 @@ export class NmcCommandCenterComponent implements OnInit, OnDestroy {
     this.scenarioActive = true;
 
     const time = new Date().toLocaleTimeString('en-GB', { hour12: false });
-    this.events = [
-      {
-        time,
-        vessel: vessel.name,
-        title: 'POC scenario replayed',
-        detail: 'Movement anomaly + open deficiency + certificate conflict correlated into a critical maritime event.',
-        severity: 'critical'
-      },
-      ...this.events
-    ].slice(0, 8);
+    const replayEvent: MaritimeEvent = {
+      time,
+      vessel: vessel.name,
+      title: 'POC scenario replayed',
+      detail: 'Movement anomaly + open deficiency + certificate conflict correlated into a critical maritime event.',
+      severity: 'critical'
+    };
+
+    this.events = [replayEvent, ...this.events].slice(0, 8);
   }
 }
