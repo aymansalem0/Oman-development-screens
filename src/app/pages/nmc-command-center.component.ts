@@ -10,6 +10,7 @@ import {
   ViewChild
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { RouterLink } from '@angular/router';
 import * as L from 'leaflet';
 
 type RiskLevel = 'Critical' | 'High' | 'Watch' | 'Normal';
@@ -43,7 +44,7 @@ interface MaritimeEvent {
 @Component({
   selector: 'app-nmc-command-center',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, RouterLink],
   templateUrl: './nmc-command-center.component.html',
   styleUrl: './nmc-command-center.component.css'
 })
