@@ -2,12 +2,13 @@ import { CommonModule } from '@angular/common';
 import { Component, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { NmcVesselProfile, riskLevel } from '../data/nmc-vessel-catalog';
+import { NmcVesselProfile } from '../data/nmc-vessel-catalog';
 import {
   NMC_OPERATIONAL_VESSELS,
   getOperationalVesselByImo
 } from '../data/nmc-expanded-vessel-catalog';
 import { LanguageService } from '../services/language.service';
+import { NmcRiskEngineService } from '../services/nmc-risk-engine.service';
 import {
   NmcCaseStateService,
   NmcInspectionOutcome
@@ -47,12 +48,14 @@ export class NmcSmartInspectionComponent implements OnInit {
     private route: ActivatedRoute,
     private router: Router,
     public lang: LanguageService,
-    private caseState: NmcCaseStateService
+    private caseState: NmcCaseStateService,
+    private riskEngine: NmcRiskEngineService
   ) {}
 
   ngOnInit(): void {
     const imo = this.route.snapshot.paramMap.get('imo') || NMC_OPERATIONAL_VESSELS[0].imo;
-    this.vessel = getOperationalVesselByImo(imo) || NMC_OPERATIONAL_VESSELS[0];
+    const profile = getOperationalVesselByImo(imo) || NMC_OPERATIONAL_VESSELS[0];
+    this.vessel = this.riskEngine.applyToVessel(profile);
     this.existingOutcome = this.caseState.getInspectionOutcome(this.vessel.imo);
     this.buildChecklist();
   }
@@ -86,7 +89,7 @@ export class NmcSmartInspectionComponent implements OnInit {
   }
 
   get riskLabel(): string {
-    const level = riskLevel(this.vessel.risk);
+    const level = this.riskEngine.levelForScore(this.vessel.risk);
     const map: Record<string,string> = {
       Critical: this.copy('Critical', 'حرج'),
       High: this.copy('High', 'مرتفع'),
@@ -97,7 +100,7 @@ export class NmcSmartInspectionComponent implements OnInit {
   }
 
   get riskClass(): string {
-    return riskLevel(this.vessel.risk).toLowerCase();
+    return this.riskEngine.levelForScore(this.vessel.risk).toLowerCase();
   }
 
   get completedChecks(): number {
@@ -135,7 +138,7 @@ export class NmcSmartInspectionComponent implements OnInit {
     if (this.criticalFindings > 0) return 4;
     if (this.majorFindings > 0) return 10;
     if (this.findings.length > 0) return 14;
-    return this.vessel.risk >= 65 ? 18 : 8;
+    return ['High','Critical'].includes(this.riskEngine.levelForScore(this.vessel.risk)) ? 18 : 8;
   }
 
   setStatus(item: InspectionCheck, status: CheckStatus): void {
@@ -192,8 +195,9 @@ export class NmcSmartInspectionComponent implements OnInit {
   }
 
   private buildChecklist(): void {
-    const critical = this.vessel.risk >= 85;
-    const high = this.vessel.risk >= 65;
+    const level = this.riskEngine.levelForScore(this.vessel.risk);
+    const critical = level === 'Critical';
+    const high = level === 'Critical' || level === 'High';
 
     this.checks = [
       {

@@ -2,12 +2,13 @@ import { CommonModule } from '@angular/common';
 import { Component, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { NmcVesselProfile, riskLevel } from '../data/nmc-vessel-catalog';
+import { NmcVesselProfile } from '../data/nmc-vessel-catalog';
 import {
   NMC_OPERATIONAL_VESSELS,
   getOperationalVesselByImo
 } from '../data/nmc-expanded-vessel-catalog';
 import { LanguageService } from '../services/language.service';
+import { NmcRiskEngineService } from '../services/nmc-risk-engine.service';
 import {
   NmcCaseStateService,
   NmcInspectionOutcome
@@ -66,12 +67,14 @@ export class NmcCaseWorkspaceComponent implements OnInit {
     private route: ActivatedRoute,
     private router: Router,
     public lang: LanguageService,
-    private caseState: NmcCaseStateService
+    private caseState: NmcCaseStateService,
+    private riskEngine: NmcRiskEngineService
   ) {}
 
   ngOnInit(): void {
     const imo = this.route.snapshot.paramMap.get('imo') || NMC_OPERATIONAL_VESSELS[0].imo;
-    this.vessel = getOperationalVesselByImo(imo) || NMC_OPERATIONAL_VESSELS[0];
+    const profile = getOperationalVesselByImo(imo) || NMC_OPERATIONAL_VESSELS[0];
+    this.vessel = this.riskEngine.applyToVessel(profile);
     this.buildCase();
   }
 
@@ -90,7 +93,7 @@ export class NmcCaseWorkspaceComponent implements OnInit {
   }
 
   get riskLevelLabel(): string {
-    const level = riskLevel(this.currentRisk);
+    const level = this.riskEngine.levelForScore(this.currentRisk);
     const labels: Record<string,string> = {
       Critical: this.copy('Critical', 'حرج'),
       High: this.copy('High', 'مرتفع'),
@@ -101,7 +104,7 @@ export class NmcCaseWorkspaceComponent implements OnInit {
   }
 
   get riskClass(): string {
-    return riskLevel(this.currentRisk).toLowerCase();
+    return this.riskEngine.levelForScore(this.currentRisk).toLowerCase();
   }
 
   get completedTasks(): number {
@@ -133,7 +136,7 @@ export class NmcCaseWorkspaceComponent implements OnInit {
     if (this.isTaskCompleted('verify-certificate')) score -= this.vessel.risk >= 80 ? 12 : 6;
 
     if (this.isTaskCompleted('priority-inspection')) {
-      score -= this.inspectionOutcome?.riskReduction ?? (this.vessel.risk >= 65 ? 18 : 8);
+      score -= this.inspectionOutcome?.riskReduction ?? (['High','Critical'].includes(this.riskEngine.levelForScore(this.vessel.risk)) ? 18 : 8);
     }
 
     if (this.isTaskCompleted('enhanced-monitoring')) score -= 3;
@@ -308,10 +311,11 @@ export class NmcCaseWorkspaceComponent implements OnInit {
       previous.set(id, status as TaskStatus);
     });
 
-    const critical = this.vessel.risk >= 85;
-    const high = this.vessel.risk >= 65;
-    const watch = this.vessel.risk >= 45;
-    const conflict = this.vessel.risk >= 80;
+    const level = this.riskEngine.levelForScore(this.vessel.risk);
+    const critical = level === 'Critical';
+    const high = level === 'Critical' || level === 'High';
+    const watch = level !== 'Normal';
+    const conflict = this.riskEngine.evaluate(this.vessel).baseScore >= 80;
 
     const tasks: CaseTask[] = [];
 
@@ -457,7 +461,7 @@ export class NmcCaseWorkspaceComponent implements OnInit {
         {
           time: '22:42',
           type: 'Risk',
-          title: this.copy(`Risk assessed as ${riskLevel(this.vessel.risk)}`, `تم تقييم المخاطر عند المستوى ${this.riskLevelLabel}`),
+          title: this.copy(`Risk assessed as ${this.riskEngine.levelForScore(this.vessel.risk)}`, `تم تقييم المخاطر عند المستوى ${this.riskLevelLabel}`),
           detail: this.copy(`Composite vessel score reached ${this.vessel.risk}/100.`, `وصلت الدرجة المركبة لمخاطر السفينة إلى ${this.vessel.risk}/100.`),
           actor: this.copy('NMC Risk Engine', 'محرك مخاطر المركز البحري')
         }

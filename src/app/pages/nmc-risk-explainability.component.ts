@@ -2,11 +2,11 @@ import { CommonModule } from '@angular/common';
 import { Component, OnInit } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import {
-  NmcVesselProfile,
-  riskLevel
+  NmcVesselProfile
 } from '../data/nmc-vessel-catalog';
 import { NMC_OPERATIONAL_VESSELS, getOperationalVesselByImo } from '../data/nmc-expanded-vessel-catalog';
 import { LanguageService } from '../services/language.service';
+import { NmcRiskEngineService } from '../services/nmc-risk-engine.service';
 
 type SourceClass =
   | 'MOEI Authoritative'
@@ -54,17 +54,26 @@ export class NmcRiskExplainabilityComponent implements OnInit {
   factors: RiskFactorEvidence[] = [];
   selectedFactor?: RiskFactorEvidence;
 
-  readonly thresholds: ThresholdBand[] = [
-    { label: 'Normal', min: 0, max: 44, className: 'normal' },
-    { label: 'Watch', min: 45, max: 64, className: 'watch' },
-    { label: 'High', min: 65, max: 84, className: 'high' },
-    { label: 'Critical', min: 85, max: 100, className: 'critical' }
-  ];
+  get thresholds(): ThresholdBand[] {
+    return this.riskEngine.thresholds().map(item => ({
+      label: item.label,
+      min: item.min,
+      max: item.max,
+      className: item.label.toLowerCase()
+    }));
+  }
 
-  readonly engineVersion = 'NMC Risk Ruleset 1.0';
+  get engineVersion(): string {
+    return this.riskEngine.config.version;
+  }
+
   readonly evaluatedAt = '07 Oct 2026 · 22:42:18';
 
-  constructor(private route: ActivatedRoute, public lang: LanguageService) {}
+  constructor(
+    private route: ActivatedRoute,
+    public lang: LanguageService,
+    private riskEngine: NmcRiskEngineService
+  ) {}
 
   copy(en: string, ar: string): string {
     return this.lang.pick(en, ar);
@@ -119,13 +128,14 @@ export class NmcRiskExplainabilityComponent implements OnInit {
 
   ngOnInit(): void {
     const imo = this.route.snapshot.paramMap.get('imo') || NMC_OPERATIONAL_VESSELS[0].imo;
-    this.vessel = getOperationalVesselByImo(imo) || NMC_OPERATIONAL_VESSELS[0];
+    const profile = getOperationalVesselByImo(imo) || NMC_OPERATIONAL_VESSELS[0];
+    this.vessel = this.riskEngine.applyToVessel(profile);
     this.factors = this.buildFactors();
     this.selectedFactor = this.factors[0];
   }
 
   get riskLevel(): string {
-    return riskLevel(this.vessel.risk);
+    return this.riskEngine.levelForScore(this.vessel.risk);
   }
 
   get riskClass(): string {
@@ -171,23 +181,21 @@ export class NmcRiskExplainabilityComponent implements OnInit {
   }
 
   private buildFactors(): RiskFactorEvidence[] {
-    const risk = this.vessel.risk;
-    const hasOpenDeficiency = risk >= 45;
-    const hasMovementException = risk >= 65;
-    const hasCertificateConcern = risk >= 55;
-    const hasSourceConflict = risk >= 80;
+    const evaluation = this.riskEngine.evaluate(this.vessel);
+    const evidenceRisk = evaluation.baseScore;
+    const hasOpenDeficiency = evidenceRisk >= 45;
+    const hasMovementException = evidenceRisk >= 65;
+    const hasCertificateConcern = evidenceRisk >= 55;
+    const hasSourceConflict = evidenceRisk >= 80;
 
-    const movement = Math.max(3, Math.round(risk * 0.25));
-    const inspection = hasOpenDeficiency
-      ? Math.max(6, Math.round(risk * 0.28))
-      : Math.max(2, Math.round(risk * 0.12));
-    const certificate = hasCertificateConcern
-      ? Math.max(5, Math.round(risk * 0.20))
-      : Math.max(2, Math.round(risk * 0.10));
-    const dataConflict = hasSourceConflict
-      ? Math.max(5, Math.round(risk * 0.14))
-      : Math.max(1, Math.round(risk * 0.06));
-    const historical = Math.max(1, risk - movement - inspection - certificate - dataConflict);
+    const contribution = (key: 'movement' | 'inspection' | 'certificate' | 'dataQuality' | 'history'): number =>
+      evaluation.factors.find(factor => factor.key === key)?.contribution || 0;
+
+    const movement = contribution('movement');
+    const inspection = contribution('inspection');
+    const certificate = contribution('certificate');
+    const dataConflict = contribution('dataQuality');
+    const historical = contribution('history');
 
     const certificateSource = this.isUaeFlag
       ? 'MOEI Certificate Registry'

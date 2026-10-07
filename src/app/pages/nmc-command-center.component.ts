@@ -8,17 +8,18 @@ import {
   ViewChild
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { Subscription } from 'rxjs';
 import { Router, RouterLink } from '@angular/router';
 import * as L from 'leaflet';
 import {
   NmcVesselProfile,
-  riskLevel,
   RiskLevel,
   RouteDirection,
   SEA_ROUTES
 } from '../data/nmc-vessel-catalog';
 import { NMC_OPERATIONAL_VESSELS } from '../data/nmc-expanded-vessel-catalog';
 import { LanguageService } from '../services/language.service';
+import { NmcRiskEngineService } from '../services/nmc-risk-engine.service';
 
 interface MaritimeEvent {
   time: string;
@@ -71,8 +72,13 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
   private markers = new Map<number, L.Marker>();
   private selectedTrack?: L.Polyline;
   private lastInteractiveVesselId?: number;
+  private riskSubscription?: Subscription;
 
-  constructor(private router: Router, public lang: LanguageService) {}
+  constructor(
+    private router: Router,
+    public lang: LanguageService,
+    private riskEngine: NmcRiskEngineService
+  ) {}
 
   copy(en: string, ar: string): string {
     return this.lang.pick(en, ar);
@@ -177,7 +183,13 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
   }
 
   ngOnInit(): void {
-    this.selectedVessel = this.vessels[0];
+    this.riskSubscription = this.riskEngine.config$.subscribe(() => {
+      const selectedId = this.selectedVessel?.id;
+      this.vessels = this.vessels.map(vessel => this.riskEngine.applyToVessel(vessel));
+      this.selectedVessel = this.vessels.find(vessel => vessel.id === selectedId) || this.vessels[0];
+      this.attentionPage = Math.min(this.attentionPage, this.attentionPageCount);
+      this.refreshMapMarkers();
+    });
 
     this.timer = setInterval(() => {
       this.now = new Date();
@@ -191,6 +203,7 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
 
   ngOnDestroy(): void {
     if (this.timer) clearInterval(this.timer);
+    this.riskSubscription?.unsubscribe();
     this.map?.remove();
   }
 
@@ -317,7 +330,7 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
 
   get allAttentionVessels(): NmcVesselProfile[] {
     return [...this.vessels]
-      .filter(vessel => vessel.risk >= 45)
+      .filter(vessel => this.riskEngine.levelForScore(vessel.risk) !== 'Normal')
       .sort((a,b) => b.risk - a.risk);
   }
 
@@ -362,7 +375,7 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
   }
 
   private syncAttentionPageForVessel(vessel: NmcVesselProfile): void {
-    if (vessel.risk < 45) return;
+    if (this.riskEngine.levelForScore(vessel.risk) === 'Normal') return;
     const index = this.allAttentionVessels.findIndex(item => item.id === vessel.id);
     if (index >= 0) this.attentionPage = Math.floor(index / this.attentionPageSize) + 1;
   }
@@ -373,16 +386,16 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
 
   get monitoredCount(): number { return this.trafficSnapshot.totalContacts; }
   get correlatedProfileCount(): number { return this.trafficSnapshot.correlatedProfiles; }
-  get attentionCount(): number { return this.vessels.filter(vessel => vessel.risk >= 45).length; }
-  get highRiskCount(): number { return this.vessels.filter(vessel => vessel.risk >= 65).length; }
-  get criticalCount(): number { return this.vessels.filter(vessel => vessel.risk >= 85).length; }
+  get attentionCount(): number { return this.vessels.filter(vessel => this.riskEngine.levelForScore(vessel.risk) !== 'Normal').length; }
+  get highRiskCount(): number { return this.vessels.filter(vessel => ['High','Critical'].includes(this.riskEngine.levelForScore(vessel.risk))).length; }
+  get criticalCount(): number { return this.vessels.filter(vessel => this.riskEngine.levelForScore(vessel.risk) === 'Critical').length; }
 
   riskLevel(score: number): RiskLevel {
-    return riskLevel(score);
+    return this.riskEngine.levelForScore(score);
   }
 
   riskClass(score: number): string {
-    return riskLevel(score).toLowerCase();
+    return this.riskEngine.levelForScore(score).toLowerCase();
   }
 
   selectVessel(vessel: NmcVesselProfile, fly = true): void {
@@ -490,7 +503,7 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
             <path class="ship-deck" d="M9.2 10.6h5.6v8.2H9.2z"></path>
             <path class="ship-centerline" d="M12 3.5v24.3"></path>
           </svg>
-          ${isSelected || vessel.risk >= 85 ? `<span class="ship-label">${vessel.name}<b>${vessel.risk}</b></span>` : ''}
+          ${isSelected || this.riskEngine.levelForScore(vessel.risk) === 'Critical' ? `<span class="ship-label">${vessel.name}<b>${vessel.risk}</b></span>` : ''}
         </div>
       `,
       iconSize:[52,52],

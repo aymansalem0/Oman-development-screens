@@ -3,14 +3,14 @@ import { Component, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import {
-  NmcVesselProfile,
-  riskLevel
+  NmcVesselProfile
 } from '../data/nmc-vessel-catalog';
 import {
   NMC_OPERATIONAL_VESSELS,
   getOperationalVesselByImo
 } from '../data/nmc-expanded-vessel-catalog';
 import { LanguageService } from '../services/language.service';
+import { NmcRiskEngineService } from '../services/nmc-risk-engine.service';
 
 type DecisionStatus = 'Pending' | 'Accepted' | 'Modified' | 'Rejected';
 type EvidenceType = 'Movement' | 'Inspection' | 'Certificate' | 'Data Quality' | 'History';
@@ -57,11 +57,16 @@ export class NmcAiSituationAssessmentComponent implements OnInit {
   readonly generatedAt = '07 Oct 2026 · 22:43:06';
   readonly modelLabel = 'Maritime Situation Intelligence';
 
-  constructor(private route: ActivatedRoute, public lang: LanguageService) {}
+  constructor(
+    private route: ActivatedRoute,
+    public lang: LanguageService,
+    private riskEngine: NmcRiskEngineService
+  ) {}
 
   ngOnInit(): void {
     const imo = this.route.snapshot.paramMap.get('imo') || NMC_OPERATIONAL_VESSELS[0].imo;
-    this.vessel = getOperationalVesselByImo(imo) || NMC_OPERATIONAL_VESSELS[0];
+    const profile = getOperationalVesselByImo(imo) || NMC_OPERATIONAL_VESSELS[0];
+    this.vessel = this.riskEngine.applyToVessel(profile);
     this.rebuildAssessment();
   }
 
@@ -86,7 +91,7 @@ export class NmcAiSituationAssessmentComponent implements OnInit {
   }
 
   get riskLevelLabel(): string {
-    const level = riskLevel(this.vessel.risk);
+    const level = this.riskEngine.levelForScore(this.vessel.risk);
     const labels: Record<string, string> = {
       Critical: this.copy('Critical', 'حرج'),
       High: this.copy('High', 'مرتفع'),
@@ -97,23 +102,34 @@ export class NmcAiSituationAssessmentComponent implements OnInit {
   }
 
   get riskClass(): string {
-    return riskLevel(this.vessel.risk).toLowerCase();
+    return this.riskEngine.levelForScore(this.vessel.risk).toLowerCase();
+  }
+
+  get baseRisk(): number {
+    return this.riskEngine.evaluate(this.vessel).baseScore;
+  }
+
+  private atLeast(level: 'Watch' | 'High' | 'Critical'): boolean {
+    const thresholds = this.riskEngine.config.thresholds;
+    if (level === 'Critical') return this.vessel.risk >= thresholds.critical;
+    if (level === 'High') return this.vessel.risk >= thresholds.high;
+    return this.vessel.risk >= thresholds.watch;
   }
 
   get hasConflict(): boolean {
-    return this.vessel.risk >= 80;
+    return this.baseRisk >= 80;
   }
 
   get hasOpenDeficiency(): boolean {
-    return this.vessel.risk >= 45;
+    return this.baseRisk >= 45;
   }
 
   get hasMovementException(): boolean {
-    return this.vessel.risk >= 65;
+    return this.baseRisk >= 65;
   }
 
   get hasCertificateConcern(): boolean {
-    return this.vessel.risk >= 55;
+    return this.baseRisk >= 55;
   }
 
   get aiConfidence(): number {
@@ -122,26 +138,26 @@ export class NmcAiSituationAssessmentComponent implements OnInit {
   }
 
   get situationPriority(): string {
-    if (this.vessel.risk >= 85) return this.copy('Immediate Review', 'مراجعة فورية');
-    if (this.vessel.risk >= 65) return this.copy('Priority Review', 'مراجعة ذات أولوية');
-    if (this.vessel.risk >= 45) return this.copy('Enhanced Monitoring', 'مراقبة معززة');
+    if (this.atLeast('Critical')) return this.copy('Immediate Review', 'مراجعة فورية');
+    if (this.atLeast('High')) return this.copy('Priority Review', 'مراجعة ذات أولوية');
+    if (this.atLeast('Watch')) return this.copy('Enhanced Monitoring', 'مراقبة معززة');
     return this.copy('Routine Monitoring', 'مراقبة اعتيادية');
   }
 
   get situationSummary(): string {
-    if (this.vessel.risk >= 85) {
+    if (this.atLeast('Critical')) {
       return this.copy(
         `${this.vessel.name} is operating toward ${this.vessel.destination} with a critical combination of movement, inspection and certificate indicators. The current picture includes an unresolved inspection finding and a cross-source certificate conflict that requires authorized verification before any enforcement decision.`,
         `تتحرك السفينة ${this.vessel.name} باتجاه ${this.vessel.destination} مع اجتماع مؤشرات حرجة مرتبطة بالحركة والمعاينة والشهادات. وتتضمن الصورة الحالية ملاحظة معاينة غير مغلقة وتعارضاً بين مصادر الشهادات يتطلب تحققاً معتمداً قبل اتخاذ أي قرار تنفيذي.`
       );
     }
-    if (this.vessel.risk >= 65) {
+    if (this.atLeast('High')) {
       return this.copy(
         `${this.vessel.name} has multiple active operational and compliance indicators requiring coordinated review. Movement behavior and compliance history currently place the vessel above the high-risk threshold.`,
         `لدى السفينة ${this.vessel.name} عدة مؤشرات تشغيلية وتنظيمية نشطة تتطلب مراجعة منسقة. ويضع سلوك الحركة وسجل الامتثال السفينة حالياً فوق حد المخاطر المرتفعة.`
       );
     }
-    if (this.vessel.risk >= 45) {
+    if (this.atLeast('Watch')) {
       return this.copy(
         `${this.vessel.name} is within the monitored UAE maritime picture and has indicators that justify enhanced monitoring. No immediate critical intervention is currently indicated.`,
         `تقع السفينة ${this.vessel.name} ضمن الصورة البحرية المراقبة لدولة الإمارات ولديها مؤشرات تبرر المراقبة المعززة، دون وجود تدخل حرج فوري مطلوب حالياً.`
@@ -154,19 +170,19 @@ export class NmcAiSituationAssessmentComponent implements OnInit {
   }
 
   get whyItMatters(): string {
-    if (this.vessel.risk >= 85) {
+    if (this.atLeast('Critical')) {
       return this.copy(
         'The significance comes from correlation, not from one alert: live movement, an unresolved regulatory finding, certificate condition and source disagreement are reinforcing each other. The vessel should therefore be reviewed ahead of lower-risk traffic.',
         'تكمن أهمية الحالة في ترابط المؤشرات وليس في تنبيه منفرد: فالحركة الحية، والملاحظة التنظيمية غير المغلقة، وحالة الشهادة، واختلاف المصادر تعزز بعضها بعضاً. ولذلك يجب مراجعة السفينة قبل حركة السفن الأقل خطورة.'
       );
     }
-    if (this.vessel.risk >= 65) {
+    if (this.atLeast('High')) {
       return this.copy(
         'Several independent indicators are aligned. Early review can prevent a compliance or safety issue from becoming an operational disruption.',
         'تتوافق عدة مؤشرات مستقلة في الاتجاه نفسه. ويمكن للمراجعة المبكرة أن تمنع تحول مشكلة امتثال أو سلامة إلى تعطيل تشغيلي.'
       );
     }
-    if (this.vessel.risk >= 45) {
+    if (this.atLeast('Watch')) {
       return this.copy(
         'The vessel does not require immediate intervention, but the current indicators justify closer monitoring so that escalation can happen early if conditions deteriorate.',
         'لا تتطلب السفينة تدخلاً فورياً، لكن المؤشرات الحالية تبرر مراقبة أقرب حتى يتم التصعيد مبكراً إذا ساءت الظروف.'
@@ -251,12 +267,14 @@ export class NmcAiSituationAssessmentComponent implements OnInit {
   }
 
   private buildEvidence(): AiEvidence[] {
-    const risk = this.vessel.risk;
-    const movement = Math.max(3, Math.round(risk * 0.25));
-    const inspection = this.hasOpenDeficiency ? Math.max(6, Math.round(risk * 0.28)) : Math.max(2, Math.round(risk * 0.12));
-    const certificate = this.hasCertificateConcern ? Math.max(5, Math.round(risk * 0.20)) : Math.max(2, Math.round(risk * 0.10));
-    const quality = this.hasConflict ? Math.max(5, Math.round(risk * 0.14)) : Math.max(1, Math.round(risk * 0.06));
-    const history = Math.max(1, risk - movement - inspection - certificate - quality);
+    const evaluation = this.riskEngine.evaluate(this.vessel);
+    const contribution = (key: 'movement' | 'inspection' | 'certificate' | 'dataQuality' | 'history'): number =>
+      evaluation.factors.find(factor => factor.key === key)?.contribution || 0;
+    const movement = contribution('movement');
+    const inspection = contribution('inspection');
+    const certificate = contribution('certificate');
+    const quality = contribution('dataQuality');
+    const history = contribution('history');
 
     return [
       {
@@ -357,10 +375,10 @@ export class NmcAiSituationAssessmentComponent implements OnInit {
       });
     }
 
-    if (this.vessel.risk >= 45) {
+    if (this.atLeast('Watch')) {
       items.push({
         id: 'enhanced-monitoring',
-        priority: this.vessel.risk >= 85 ? 'Immediate' : 'Monitor',
+        priority: this.atLeast('Critical') ? 'Immediate' : 'Monitor',
         title: this.copy('Maintain enhanced vessel monitoring', 'استمرار المراقبة المعززة للسفينة'),
         owner: this.copy('NMC Operations', 'عمليات المركز البحري الوطني'),
         target: this.copy('Continuous', 'مستمر'),
@@ -375,10 +393,10 @@ export class NmcAiSituationAssessmentComponent implements OnInit {
       });
     }
 
-    if (this.hasOpenDeficiency && this.vessel.risk >= 65) {
+    if (this.hasOpenDeficiency && this.atLeast('High')) {
       items.push({
         id: 'priority-inspection',
-        priority: this.vessel.risk >= 85 ? 'Immediate' : 'High',
+        priority: this.atLeast('Critical') ? 'Immediate' : 'High',
         title: this.copy('Create priority follow-up inspection', 'إنشاء معاينة متابعة ذات أولوية'),
         owner: this.copy('Smart Inspection', 'المعاينة الذكية'),
         target: this.copy('Before normal clearance / next operational window', 'قبل التخليص الاعتيادي / أقرب نافذة تشغيلية'),
@@ -394,7 +412,7 @@ export class NmcAiSituationAssessmentComponent implements OnInit {
       });
     }
 
-    if (this.vessel.risk >= 85) {
+    if (this.atLeast('Critical')) {
       items.push({
         id: 'restriction-review',
         priority: 'Conditional',
