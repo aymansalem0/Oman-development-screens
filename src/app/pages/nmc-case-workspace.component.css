@@ -483,3 +483,25 @@ a, button, textarea { font:inherit; }
   .case-metrics,.stakeholder-grid,.task-facts,.drawer-status-grid,.drawer-actions { grid-template-columns:1fr; }
   .case-context { flex-direction:column; }
 }
+
+
+.task-actions .inspection-action,
+.drawer-actions .inspection-action {
+  min-height: 34px;
+  border-radius: 8px;
+  border: 1px solid #bfe2db;
+  background: linear-gradient(180deg,#effaf7,#e7f6f2);
+  color: #0f766e;
+  font-size: 8px;
+  font-weight: 900;
+  cursor: pointer;
+}
+.task-actions .inspection-action:hover,
+.drawer-actions .inspection-action:hover {
+  background: #0f766e;
+  border-color: #0f766e;
+  color: #fff;
+}
+.task-actions .inspection-action {
+  grid-row: span 2;
+}
