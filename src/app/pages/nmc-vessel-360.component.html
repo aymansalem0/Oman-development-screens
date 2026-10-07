@@ -28,6 +28,7 @@
             <span>MMSI {{ vessel.mmsi }}</span>
             <span>{{ vessel.flag }}</span>
             <span>{{ vessel.type }}</span>
+            <span>{{ vessel.lengthM }} m</span>
           </div>
         </div>
       </div>
@@ -103,13 +104,14 @@
               <span><i class="line expected"></i> Expected</span>
               <span><i class="line observed"></i> Observed</span>
               <span><i class="dot anomaly"></i> Anomaly</span>
+              <span><i class="dot critical-vessel"></i> Current vessel / Critical</span>
             </div>
           </div>
           <div class="map-wrap">
             <div #vesselMap class="vessel-map"></div>
             <div class="map-callout">
               <strong>Movement anomaly detected</strong>
-              <span>Route deviation started near 25.18°N, 55.78°E</span>
+              <span>Route deviation started offshore near 25.34°N, 54.89°E</span>
             </div>
           </div>
         </article>
