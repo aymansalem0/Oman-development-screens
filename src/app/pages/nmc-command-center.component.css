@@ -634,3 +634,11 @@ button, input, select { font: inherit; }
   background: #fff0f0;
   color: #df4e4e;
 }
+
+
+.route-key {
+  width: 18px;
+  height: 0;
+  border-top: 2px dashed #0f766e;
+  display: inline-block;
+}
