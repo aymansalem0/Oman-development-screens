@@ -136,7 +136,7 @@ export class NmcCaseWorkspaceComponent implements OnInit {
     if (this.isTaskCompleted('verify-certificate')) score -= this.vessel.risk >= 80 ? 12 : 6;
 
     if (this.isTaskCompleted('priority-inspection')) {
-      score -= this.inspectionOutcome?.riskReduction ?? (this.vessel.risk >= 65 ? 18 : 8);
+      score -= this.inspectionOutcome?.riskReduction ?? (['High','Critical'].includes(this.riskEngine.levelForScore(this.vessel.risk)) ? 18 : 8);
     }
 
     if (this.isTaskCompleted('enhanced-monitoring')) score -= 3;
