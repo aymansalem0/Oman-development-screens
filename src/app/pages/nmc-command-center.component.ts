@@ -330,7 +330,7 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
 
   get allAttentionVessels(): NmcVesselProfile[] {
     return [...this.vessels]
-      .filter(vessel => vessel.risk >= 45)
+      .filter(vessel => this.riskEngine.levelForScore(vessel.risk) !== 'Normal')
       .sort((a,b) => b.risk - a.risk);
   }
 
@@ -503,7 +503,7 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
             <path class="ship-deck" d="M9.2 10.6h5.6v8.2H9.2z"></path>
             <path class="ship-centerline" d="M12 3.5v24.3"></path>
           </svg>
-          ${isSelected || vessel.risk >= 85 ? `<span class="ship-label">${vessel.name}<b>${vessel.risk}</b></span>` : ''}
+          ${isSelected || this.riskEngine.levelForScore(vessel.risk) === 'Critical' ? `<span class="ship-label">${vessel.name}<b>${vessel.risk}</b></span>` : ''}
         </div>
       `,
       iconSize:[52,52],
