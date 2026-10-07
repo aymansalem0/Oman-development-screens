@@ -46,7 +46,7 @@
       <span>{{ copy('Cases & Incidents', 'الحالات والحوادث') }}</span>
     </a>
 
-    <a class="nav-item" [routerLink]="['/moei/nmc/vessel', vessel.imo]" [queryParams]="{tab:'inspection'}">
+    <a class="nav-item" [routerLink]="['/moei/nmc/vessel', vessel.imo, 'smart-inspection']">
       <span class="nav-icon">✓</span>
       <span>{{ copy('Smart Inspection', 'المعاينة الذكية') }}</span>
     </a>
