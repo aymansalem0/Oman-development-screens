@@ -17,6 +17,8 @@ interface SourceStatus {
   lastSync: string;
   record: string;
   confidence: number;
+  authority: string;
+  sourceClass: 'MOEI Authoritative' | 'Internal Master' | 'External Authoritative' | 'External Trusted' | 'Operational Feed';
 }
 
 interface TimelineItem {
@@ -167,6 +169,63 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
     return this.certificates.find(certificate => certificate.id === this.selectedCertificateId);
   }
 
+  get isUaeFlag(): boolean {
+    return this.vessel.flag === 'UAE';
+  }
+
+  get flagRegistryAuthority(): string {
+    const authorities: Record<string, string> = {
+      UAE: 'MOEI Vessel Registry',
+      Liberia: 'Liberia Maritime Authority',
+      Panama: 'Panama Maritime Authority',
+      'Marshall Is.': 'Marshall Islands Maritime Administrator',
+      Singapore: 'Maritime and Port Authority of Singapore',
+      Malta: 'Malta Ship Registry',
+      'Hong Kong': 'Hong Kong Shipping Registry',
+      Bahamas: 'Bahamas Maritime Authority'
+    };
+    return authorities[this.vessel.flag] || `${this.vessel.flag} Flag Administration`;
+  }
+
+  get registrationTitle(): string {
+    return this.isUaeFlag ? 'UAE Vessel Registration' : 'Flag Registration';
+  }
+
+  get registrationStatus(): string {
+    return 'Active';
+  }
+
+  get registrationSource(): string {
+    return this.flagRegistryAuthority;
+  }
+
+  get registrationAuthorityLabel(): string {
+    return this.isUaeFlag ? 'MOEI Authoritative' : 'External Authoritative';
+  }
+
+  get vesselMasterRole(): string {
+    return this.isUaeFlag
+      ? 'Authoritative internal vessel context linked to the UAE registry'
+      : 'Internal correlation record for a foreign-flag vessel operating in the NMC context';
+  }
+
+  get moeiRelationshipTitle(): string {
+    return this.isUaeFlag ? 'MOEI Flag-State Relationship' : 'MOEI Regulatory Relationship';
+  }
+
+  get moeiRelationshipStatus(): string {
+    if (this.isUaeFlag) return 'Registered UAE Vessel';
+    return this.vessel.risk >= 65 ? 'Active · Under Operational Review' : 'Active · Monitored';
+  }
+
+  get primaryCertificateSourceLabel(): string {
+    return this.isUaeFlag ? 'MOEI Certificate Registry' : `${this.vessel.flag} Flag / Verified Certificate Record`;
+  }
+
+  get primaryCertificateAuthorityLabel(): string {
+    return this.isUaeFlag ? 'MOEI Authoritative' : 'External Authoritative';
+  }
+
   get vesselInitials(): string {
     return this.vessel.name
       .replace(/^MV\s+/i, '')
@@ -243,13 +302,91 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private buildSources(): SourceStatus[] {
+    const certificateSourceName = this.isUaeFlag ? 'Certificates' : 'Foreign Certificates';
+    const certificateSystem = this.isUaeFlag ? 'MOEI Certificate Registry' : 'Flag / Recognized Organization Records';
+    const companySystem = this.isUaeFlag ? 'MOEI Company Master' : 'Verified Operator / Company Record';
+
     return [
-      { name:'Vessel Registry', system:'MOEI Vessel Master', status:'Matched', lastSync:'22:42:09', record:`IMO ${this.vessel.imo} · Active`, confidence:100 },
-      { name:'Movement Feed', system:'AIS / LRIT', status:'Matched', lastSync:'22:42:18', record:'Position / speed / course', confidence:Math.max(91, this.vessel.dataConfidence) },
-      { name:'Inspection', system:'Smart Inspection', status:'Matched', lastSync:'22:41:55', record:this.hasOpenDeficiency ? '1 open deficiency' : 'No open critical deficiencies', confidence:100 },
-      { name:'Certificates', system:'MOEI Certificate Registry', status:this.hasCertificateConflict ? 'Conflict' : 'Matched', lastSync:'22:41:56', record:this.hasCertificateConflict ? 'Certificate condition requires verification' : 'Certificate portfolio matched', confidence:100 },
-      { name:'External Classification', system:'Classification Data Feed', status:this.hasCertificateConflict ? 'Conflict' : 'Available', lastSync:'22:41:57', record:this.hasCertificateConflict ? 'External status differs from MOEI record' : 'External record available', confidence:this.hasCertificateConflict ? 68 : 94 },
-      { name:'Company Profile', system:'Company Master', status:'Available', lastSync:'22:40:12', record:this.vessel.operator, confidence:98 }
+      {
+        name:'Vessel Master',
+        system:'MOEI Unified Vessel Master',
+        status:'Matched',
+        lastSync:'22:42:09',
+        record:`IMO ${this.vessel.imo} · Internal correlated vessel record`,
+        confidence:100,
+        authority:'NMC correlation context',
+        sourceClass:'Internal Master'
+      },
+      {
+        name:'Flag Registration',
+        system:this.registrationSource,
+        status:this.isUaeFlag ? 'Matched' : 'Available',
+        lastSync:'22:42:06',
+        record:`${this.vessel.flag} registration · ${this.registrationStatus}`,
+        confidence:this.isUaeFlag ? 100 : 96,
+        authority:this.registrationAuthorityLabel,
+        sourceClass:this.isUaeFlag ? 'MOEI Authoritative' : 'External Authoritative'
+      },
+      {
+        name:'Movement Feed',
+        system:'AIS / LRIT',
+        status:'Matched',
+        lastSync:'22:42:18',
+        record:'Position / speed / course / destination',
+        confidence:Math.max(91, this.vessel.dataConfidence),
+        authority:'Operational tracking source',
+        sourceClass:'Operational Feed'
+      },
+      {
+        name:'Inspection',
+        system:'MOEI Smart Inspection',
+        status:'Matched',
+        lastSync:'22:41:55',
+        record:this.hasOpenDeficiency ? '1 open deficiency' : 'No open critical deficiencies',
+        confidence:100,
+        authority:'MOEI inspection record',
+        sourceClass:'MOEI Authoritative'
+      },
+      {
+        name:certificateSourceName,
+        system:certificateSystem,
+        status:this.hasCertificateConflict ? 'Conflict' : 'Matched',
+        lastSync:'22:41:56',
+        record:this.hasCertificateConflict ? 'Certificate condition requires verification' : 'Certificate portfolio matched',
+        confidence:this.isUaeFlag ? 100 : 95,
+        authority:this.primaryCertificateAuthorityLabel,
+        sourceClass:this.isUaeFlag ? 'MOEI Authoritative' : 'External Authoritative'
+      },
+      {
+        name:'Classification / RO',
+        system:this.vessel.classSociety,
+        status:this.hasCertificateConflict ? 'Conflict' : 'Available',
+        lastSync:'22:41:57',
+        record:this.hasCertificateConflict ? 'Class / certificate status differs from primary record' : 'Classification record available',
+        confidence:this.hasCertificateConflict ? 92 : 96,
+        authority:'Recognized external maritime source',
+        sourceClass:'External Trusted'
+      },
+      {
+        name:'Company / Operator',
+        system:companySystem,
+        status:'Available',
+        lastSync:'22:40:12',
+        record:this.vessel.operator,
+        confidence:this.isUaeFlag ? 100 : 94,
+        authority:this.isUaeFlag ? 'MOEI company record' : 'Verified external operator context',
+        sourceClass:this.isUaeFlag ? 'MOEI Authoritative' : 'External Trusted'
+      },
+      {
+        name:'UAE Restrictions',
+        system:'MOEI Enforcement & Restrictions',
+        status:'Matched',
+        lastSync:'22:40:48',
+        record:'No active UAE restriction recorded',
+        confidence:100,
+        authority:'MOEI regulatory action',
+        sourceClass:'MOEI Authoritative'
+      }
     ];
   }
 
@@ -262,11 +399,11 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
         id:`CERT-SC-${this.vessel.imo}`,
         type:'Cargo Ship Safety Construction Certificate',
         number:`CSC-${this.vessel.imo}-2026`,
-        issuer:'MOEI Maritime Affairs',
+        issuer:this.isUaeFlag ? 'MOEI Maritime Affairs' : this.flagRegistryAuthority,
         issued:'12 Feb 2026',
         expiry:this.vessel.risk >= 55 ? '19 Dec 2026' : '11 Feb 2031',
         status:firstStatus,
-        source:'MOEI Certificate Registry',
+        source:this.isUaeFlag ? 'MOEI Certificate Registry' : 'Verified Flag / RO Certificate Record',
         condition:this.hasCertificateConflict ? 'Subject to verification of an outstanding safety condition before unrestricted operation.' : undefined,
         conflict:this.hasCertificateConflict
       },
@@ -274,31 +411,31 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
         id:`CERT-SR-${this.vessel.imo}`,
         type:'Ship Safety Radio Certificate',
         number:`CSR-${this.vessel.imo}-2025`,
-        issuer:'Recognized Organization',
+        issuer:this.isUaeFlag ? 'MOEI Recognized Organization' : this.vessel.classSociety,
         issued:'18 Nov 2025',
         expiry:'17 Nov 2027',
         status:'Valid',
-        source:'MOEI Certificate Registry'
+        source:this.isUaeFlag ? 'MOEI Certificate Registry' : 'Recognized Organization Record'
       },
       {
         id:`CERT-SE-${this.vessel.imo}`,
         type:'Ship Safety Equipment Certificate',
         number:`CSE-${this.vessel.imo}-2025`,
-        issuer:'Recognized Organization',
+        issuer:this.isUaeFlag ? 'MOEI Recognized Organization' : this.vessel.classSociety,
         issued:'02 Sep 2025',
         expiry:this.vessel.risk >= 65 ? '01 Dec 2026' : '01 Sep 2028',
         status:this.vessel.risk >= 65 ? 'Expiring' : 'Valid',
-        source:'MOEI Certificate Registry'
+        source:this.isUaeFlag ? 'MOEI Certificate Registry' : 'Recognized Organization Record'
       },
       {
         id:`CERT-ISSC-${this.vessel.imo}`,
         type:'International Ship Security Certificate',
         number:`ISSC-${this.vessel.imo}-2024`,
-        issuer:'Flag Administration',
+        issuer:this.flagRegistryAuthority,
         issued:'04 Apr 2024',
         expiry:'03 Apr 2029',
         status:'Valid',
-        source:'External Flag Record'
+        source:this.isUaeFlag ? 'MOEI / Flag-State Record' : 'External Flag Record'
       }
     ];
   }
