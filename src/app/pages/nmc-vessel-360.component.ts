@@ -3,12 +3,11 @@ import { AfterViewInit, Component, ElementRef, OnDestroy, OnInit, ViewChild } fr
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import * as L from 'leaflet';
 import {
-  getVesselByImo,
-  NMC_VESSELS,
   NmcVesselProfile,
   riskLevel,
   SEA_ROUTES
 } from '../data/nmc-vessel-catalog';
+import { NMC_OPERATIONAL_VESSELS, getOperationalVesselByImo } from '../data/nmc-expanded-vessel-catalog';
 import { LanguageService } from '../services/language.service';
 
 interface SourceStatus {
@@ -257,8 +256,8 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
   }
 
   ngOnInit(): void {
-    this.imo = this.route.snapshot.paramMap.get('imo') || NMC_VESSELS[0].imo;
-    const profile = getVesselByImo(this.imo) || NMC_VESSELS[0];
+    this.imo = this.route.snapshot.paramMap.get('imo') || NMC_OPERATIONAL_VESSELS[0].imo;
+    const profile = getOperationalVesselByImo(this.imo) || NMC_OPERATIONAL_VESSELS[0];
 
     this.vessel = {
       ...profile,
