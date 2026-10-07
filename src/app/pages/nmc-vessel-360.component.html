@@ -16,7 +16,9 @@
       <a class="secondary-btn ai-assessment-btn" [routerLink]="['/moei/nmc/vessel', vessel.imo, 'ai-assessment']">
         ✦ {{ copy('AI Situation Assessment', 'تقييم الموقف بالذكاء الاصطناعي') }}
       </a>
-      <button type="button" class="primary-btn">{{ copy('Open NMC Case', 'فتح حالة بالمركز البحري') }}</button>
+      <a class="primary-btn case-link-btn" [routerLink]="['/moei/nmc/vessel', vessel.imo, 'case']">
+        ▣ {{ copy('Open NMC Case', 'فتح حالة بالمركز البحري') }}
+      </a>
     </div>
   </header>
 

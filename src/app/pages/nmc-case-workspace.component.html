@@ -1,0 +1,332 @@
+<div class="case-shell" [class.rtl]="lang.isArabic" [attr.dir]="lang.dir">
+  <header class="case-topbar">
+    <div class="brand-block">
+      <div class="brand-mark">▣</div>
+      <div>
+        <div class="eyebrow">{{ copy('MOEI · National Maritime Center', 'وزارة الطاقة والبنية التحتية · المركز البحري الوطني') }}</div>
+        <h1>{{ copy('NMC Case Workspace', 'مساحة عمل الحالة بالمركز البحري') }}</h1>
+        <p>{{ copy('Coordinated maritime action, ownership, SLA and resolution', 'تنسيق الإجراءات البحرية والملكية ومستويات الخدمة والإغلاق') }}</p>
+      </div>
+    </div>
+
+    <div class="top-actions">
+      <button type="button" class="language-btn" (click)="toggleLanguage()">{{ lang.isArabic ? 'English' : 'العربية' }}</button>
+      <a class="back-link" [routerLink]="['/moei/nmc/vessel', vessel.imo, 'ai-assessment']">
+        {{ lang.isArabic ? 'العودة إلى تقييم الذكاء الاصطناعي →' : '← Back to AI Assessment' }}
+      </a>
+      <a class="secondary-btn" [routerLink]="['/moei/nmc/vessel', vessel.imo]">
+        {{ copy('Vessel 360', 'ملف السفينة 360') }}
+      </a>
+    </div>
+  </header>
+
+  <aside class="nmc-sidebar">
+    <div class="sidebar-section-label">{{ copy('OPERATIONS', 'العمليات') }}</div>
+
+    <a class="nav-item" routerLink="/moei/nmc">
+      <span class="nav-icon">◉</span>
+      <span>{{ copy('Command Center', 'مركز القيادة') }}</span>
+    </a>
+
+    <a class="nav-item" [routerLink]="['/moei/nmc/vessel', vessel.imo]">
+      <span class="nav-icon">⌖</span>
+      <span>{{ copy('Vessel Monitoring', 'مراقبة السفن') }}</span>
+    </a>
+
+    <button type="button" class="nav-item">
+      <span class="nav-icon">⚠</span>
+      <span>{{ copy('Alerts & Events', 'التنبيهات والأحداث') }}</span>
+    </button>
+
+    <a class="nav-item active" [routerLink]="['/moei/nmc/vessel', vessel.imo, 'case']">
+      <span class="nav-icon">▣</span>
+      <span>{{ copy('Cases & Incidents', 'الحالات والحوادث') }}</span>
+    </a>
+
+    <a class="nav-item" [routerLink]="['/moei/nmc/vessel', vessel.imo]" [queryParams]="{tab:'inspection'}">
+      <span class="nav-icon">✓</span>
+      <span>{{ copy('Smart Inspection', 'المعاينة الذكية') }}</span>
+    </a>
+
+    <div class="sidebar-section-label second">{{ copy('INTELLIGENCE', 'الاستخبارات') }}</div>
+
+    <a class="nav-item" [routerLink]="['/moei/nmc/vessel', vessel.imo, 'ai-assessment']">
+      <span class="nav-icon">✦</span>
+      <span>{{ copy('Maritime Intelligence', 'الاستخبارات البحرية') }}</span>
+    </a>
+
+    <button type="button" class="nav-item">
+      <span class="nav-icon">▥</span>
+      <span>{{ copy('Dashboards', 'لوحات المعلومات') }}</span>
+    </button>
+
+    <button type="button" class="nav-item">
+      <span class="nav-icon">⚙</span>
+      <span>{{ copy('Configuration', 'الإعدادات') }}</span>
+    </button>
+
+    <div class="system-health">
+      <div>
+        <span class="health-dot"></span>
+        <strong>{{ copy('Systems operational', 'الأنظمة تعمل بصورة طبيعية') }}</strong>
+      </div>
+      <small>{{ copy('Case orchestration active', 'تنسيق الحالات نشط') }}</small>
+    </div>
+  </aside>
+
+  <main class="case-main">
+    <section class="case-hero">
+      <div class="case-identity">
+        <span class="case-kicker">{{ copy('ACTIVE MARITIME CASE', 'حالة بحرية نشطة') }}</span>
+        <div class="case-title-row">
+          <div>
+            <h2>{{ caseId }}</h2>
+            <p>{{ vessel.name }} · IMO {{ vessel.imo }} · {{ vessel.destination }}</p>
+          </div>
+          <span class="case-status" [ngClass]="caseStatus.toLowerCase().replace(' ','-')">{{ statusLabel(caseStatus) }}</span>
+        </div>
+
+        <div class="case-context">
+          <span>{{ copy('Case owner', 'مالك الحالة') }}: <strong>{{ copy('NMC Duty Officer', 'ضابط مناوبة المركز البحري') }}</strong></span>
+          <span>{{ copy('Opened', 'تاريخ الفتح') }}: <strong>07 Oct 2026 · 22:45</strong></span>
+          <span>{{ copy('Source', 'المصدر') }}: <strong>{{ copy('AI assessment + human approval', 'تقييم الذكاء الاصطناعي + اعتماد بشري') }}</strong></span>
+        </div>
+      </div>
+
+      <div class="case-metrics">
+        <article class="metric-card risk" [ngClass]="riskClass">
+          <small>{{ copy('Current risk', 'المخاطر الحالية') }}</small>
+          <strong>{{ currentRisk }}</strong>
+          <span>{{ riskLevelLabel }}</span>
+        </article>
+        <article class="metric-card">
+          <small>{{ copy('Risk change', 'تغير المخاطر') }}</small>
+          <strong [class.positive-change]="riskDelta < 0">{{ riskDelta > 0 ? '+' : '' }}{{ riskDelta }}</strong>
+          <span>{{ copy('from', 'من') }} {{ vessel.risk }}</span>
+        </article>
+        <article class="metric-card">
+          <small>{{ copy('Case progress', 'تقدم الحالة') }}</small>
+          <strong>{{ progressPercent }}%</strong>
+          <span>{{ completedTasks }}/{{ tasks.length }} {{ copy('tasks complete', 'مهام مكتملة') }}</span>
+        </article>
+        <article class="metric-card">
+          <small>{{ copy('Open / escalated', 'مفتوحة / مصعدة') }}</small>
+          <strong>{{ openTasks }} / {{ overdueTasks }}</strong>
+          <span>{{ copy('operational actions', 'إجراءات تشغيلية') }}</span>
+        </article>
+      </div>
+    </section>
+
+    <section class="case-progress-strip">
+      <div class="progress-head">
+        <div>
+          <strong>{{ copy('Case progress', 'تقدم الحالة') }}</strong>
+          <p>{{ copy('Mandatory tasks must be completed before case resolution.', 'يجب استكمال المهام الإلزامية قبل إغلاق الحالة.') }}</p>
+        </div>
+        <span>{{ progressPercent }}%</span>
+      </div>
+      <div class="progress-track"><i [style.width.%]="progressPercent"></i></div>
+      <div class="next-action">
+        <span>{{ copy('Next action', 'الإجراء التالي') }}</span>
+        <strong>{{ nextAction }}</strong>
+      </div>
+    </section>
+
+    <section class="workspace-grid">
+      <div class="left-column">
+        <article class="panel task-panel">
+          <div class="panel-header">
+            <div>
+              <span class="section-kicker">{{ copy('ACTION ORCHESTRATION', 'تنسيق الإجراءات') }}</span>
+              <h3>{{ copy('Tasks & SLA', 'المهام ومستويات الخدمة') }}</h3>
+              <p>{{ copy('Each action has ownership, evidence, SLA and escalation status.', 'لكل إجراء مسؤولية وأدلة ومستوى خدمة وحالة تصعيد.') }}</p>
+            </div>
+            <span class="task-count">{{ tasks.length }} {{ copy('tasks', 'مهام') }}</span>
+          </div>
+
+          <div class="task-list">
+            <article class="task-card" *ngFor="let task of tasks" [class.selected]="selectedTask?.id === task.id">
+              <button type="button" class="task-main" (click)="openTask(task)">
+                <div class="task-priority" [ngClass]="task.priority.toLowerCase()">
+                  <span>{{ priorityLabel(task.priority) }}</span>
+                </div>
+
+                <div class="task-content">
+                  <div class="task-title-row">
+                    <div>
+                      <strong>{{ task.title }}</strong>
+                      <p>{{ task.source }}</p>
+                    </div>
+                    <span class="task-status" [ngClass]="task.status.toLowerCase().replace(' ','-')">{{ statusLabel(task.status) }}</span>
+                  </div>
+
+                  <div class="task-facts">
+                    <span><small>{{ copy('Owner', 'المسؤول') }}</small><b>{{ task.owner }}</b></span>
+                    <span><small>{{ copy('SLA / Due', 'مستوى الخدمة / الاستحقاق') }}</small><b>{{ task.dueLabel }}</b></span>
+                    <span><small>{{ copy('Evidence', 'الأدلة') }}</small><b>{{ task.evidence.length }} {{ copy('linked', 'مرتبطة') }}</b></span>
+                    <span><small>{{ copy('Required', 'إلزامية') }}</small><b>{{ task.mandatory ? copy('Yes', 'نعم') : copy('No', 'لا') }}</b></span>
+                  </div>
+                </div>
+              </button>
+
+              <div class="task-actions">
+                <button type="button" class="start" (click)="startTask(task)" [disabled]="task.status === 'In Progress' || task.status === 'Completed' || task.status === 'Escalated'">
+                  ▶ {{ copy('Start', 'بدء') }}
+                </button>
+                <button type="button" class="complete" (click)="completeTask(task)" [disabled]="task.status === 'Completed'">
+                  ✓ {{ copy('Complete', 'استكمال') }}
+                </button>
+                <button type="button" class="escalate" (click)="escalateTask(task)" [disabled]="task.status === 'Completed' || task.status === 'Escalated'">
+                  ↑ {{ copy('Escalate', 'تصعيد') }}
+                </button>
+              </div>
+            </article>
+          </div>
+        </article>
+
+        <article class="panel stakeholder-panel">
+          <div class="panel-header">
+            <div>
+              <span class="section-kicker">{{ copy('STAKEHOLDER COORDINATION', 'تنسيق أصحاب المصلحة') }}</span>
+              <h3>{{ copy('Who is involved?', 'من الأطراف المشاركة؟') }}</h3>
+            </div>
+          </div>
+
+          <div class="stakeholder-grid">
+            <article *ngFor="let item of stakeholders">
+              <div class="stakeholder-head">
+                <span class="stakeholder-icon">●</span>
+                <span class="stakeholder-state" [ngClass]="item.state.toLowerCase()">{{ stateLabel(item.state) }}</span>
+              </div>
+              <small>{{ item.role }}</small>
+              <strong>{{ item.unit }}</strong>
+              <p>{{ item.responsibility }}</p>
+            </article>
+          </div>
+        </article>
+      </div>
+
+      <aside class="right-column">
+        <article class="panel timeline-panel">
+          <div class="panel-header">
+            <div>
+              <span class="section-kicker">{{ copy('CASE TIMELINE', 'الخط الزمني للحالة') }}</span>
+              <h3>{{ copy('End-to-end traceability', 'تتبع الحالة من البداية للنهاية') }}</h3>
+            </div>
+            <span class="timeline-count">{{ timeline.length }}</span>
+          </div>
+
+          <div class="timeline">
+            <div class="timeline-item" *ngFor="let item of timeline">
+              <div class="timeline-time">{{ item.time }}</div>
+              <div class="timeline-track">
+                <span class="timeline-dot" [ngClass]="item.type.toLowerCase()"></span>
+                <i></i>
+              </div>
+              <div class="timeline-content">
+                <small>{{ item.type }}</small>
+                <strong>{{ item.title }}</strong>
+                <p>{{ item.detail }}</p>
+                <span>{{ item.actor }}</span>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <article class="panel resolution-panel">
+          <div class="panel-header">
+            <div>
+              <span class="section-kicker">{{ copy('RESOLUTION CONTROL', 'التحكم في الإغلاق') }}</span>
+              <h3>{{ copy('Close case with evidence', 'إغلاق الحالة بالأدلة') }}</h3>
+            </div>
+            <span class="ready-badge" [class.ready]="mandatoryComplete">
+              {{ mandatoryComplete ? copy('Ready', 'جاهزة') : copy('Not ready', 'غير جاهزة') }}
+            </span>
+          </div>
+
+          <div class="resolution-body">
+            <div class="resolution-checks">
+              <div [class.complete]="mandatoryComplete">
+                <span>{{ mandatoryComplete ? '✓' : '○' }}</span>
+                <p>
+                  <strong>{{ copy('Mandatory tasks completed', 'المهام الإلزامية مكتملة') }}</strong>
+                  <small>{{ completedTasks }}/{{ tasks.length }} {{ copy('tasks complete', 'مهام مكتملة') }}</small>
+                </p>
+              </div>
+              <div [class.complete]="currentRisk < vessel.risk">
+                <span>{{ currentRisk < vessel.risk ? '✓' : '○' }}</span>
+                <p>
+                  <strong>{{ copy('Risk recalculated', 'تمت إعادة احتساب المخاطر') }}</strong>
+                  <small>{{ vessel.risk }} → {{ currentRisk }}</small>
+                </p>
+              </div>
+            </div>
+
+            <label>{{ copy('Resolution note', 'ملاحظة الإغلاق') }}</label>
+            <textarea [(ngModel)]="resolutionNote" [placeholder]="copy(
+              'Summarize verified outcome, actions completed and any residual monitoring requirement...',
+              'لخص نتيجة التحقق والإجراءات المكتملة وأي متطلبات مراقبة متبقية...'
+            )"></textarea>
+
+            <button type="button" class="resolve-btn" (click)="resolveCase()" [disabled]="!mandatoryComplete || caseStatus === 'Resolved'">
+              ✓ {{ caseStatus === 'Resolved' ? copy('Case resolved', 'تم إغلاق الحالة') : copy('Resolve NMC Case', 'إغلاق الحالة بالمركز البحري') }}
+            </button>
+          </div>
+        </article>
+      </aside>
+    </section>
+  </main>
+
+  <div class="task-backdrop" *ngIf="selectedTask" (click)="closeTask()"></div>
+  <aside class="task-drawer" *ngIf="selectedTask as task">
+    <div class="drawer-head">
+      <div>
+        <span class="section-kicker">{{ copy('TASK DETAIL', 'تفاصيل المهمة') }}</span>
+        <h3>{{ task.title }}</h3>
+        <p>{{ caseId }} · {{ vessel.name }}</p>
+      </div>
+      <button type="button" (click)="closeTask()" [attr.aria-label]="copy('Close', 'إغلاق')">×</button>
+    </div>
+
+    <div class="drawer-status-grid">
+      <div>
+        <small>{{ copy('Status', 'الحالة') }}</small>
+        <strong>{{ statusLabel(task.status) }}</strong>
+      </div>
+      <div>
+        <small>{{ copy('Priority', 'الأولوية') }}</small>
+        <strong>{{ priorityLabel(task.priority) }}</strong>
+      </div>
+      <div>
+        <small>{{ copy('Owner', 'المسؤول') }}</small>
+        <strong>{{ task.owner }}</strong>
+      </div>
+      <div>
+        <small>{{ copy('SLA / Due', 'مستوى الخدمة / الاستحقاق') }}</small>
+        <strong>{{ task.dueLabel }}</strong>
+      </div>
+    </div>
+
+    <div class="drawer-note">
+      <strong>{{ copy('Operational instruction', 'التوجيه التشغيلي') }}</strong>
+      <p>{{ task.note }}</p>
+    </div>
+
+    <div class="drawer-evidence">
+      <strong>{{ copy('Linked evidence', 'الأدلة المرتبطة') }}</strong>
+      <span *ngFor="let record of task.evidence">{{ record }}</span>
+    </div>
+
+    <div class="drawer-actions">
+      <button type="button" (click)="startTask(task)" [disabled]="task.status === 'In Progress' || task.status === 'Completed' || task.status === 'Escalated'">
+        ▶ {{ copy('Start task', 'بدء المهمة') }}
+      </button>
+      <button type="button" class="complete" (click)="completeTask(task)" [disabled]="task.status === 'Completed'">
+        ✓ {{ copy('Complete task', 'استكمال المهمة') }}
+      </button>
+      <button type="button" class="escalate" (click)="escalateTask(task)" [disabled]="task.status === 'Completed' || task.status === 'Escalated'">
+        ↑ {{ copy('Escalate', 'تصعيد') }}
+      </button>
+    </div>
+  </aside>
+</div>

@@ -17,6 +17,9 @@
       <a class="secondary-btn" [routerLink]="['/moei/nmc/vessel', vessel.imo, 'risk']">
         {{ copy('Risk Explainability', 'تفسير المخاطر') }}
       </a>
+      <a class="case-action-btn" [routerLink]="['/moei/nmc/vessel', vessel.imo, 'case']">
+        ▣ {{ copy('Open NMC Case', 'فتح حالة بالمركز البحري') }}
+      </a>
     </div>
   </header>
 
@@ -38,10 +41,10 @@
       <span>{{ copy('Alerts & Events', 'التنبيهات والأحداث') }}</span>
     </button>
 
-    <button type="button" class="nav-item">
+    <a class="nav-item" [routerLink]="['/moei/nmc/vessel', vessel.imo, 'case']">
       <span class="nav-icon">▣</span>
       <span>{{ copy('Cases & Incidents', 'الحالات والحوادث') }}</span>
-    </button>
+    </a>
 
     <a class="nav-item" [routerLink]="['/moei/nmc/vessel', vessel.imo]" [queryParams]="{tab:'inspection'}">
       <span class="nav-icon">✓</span>
@@ -286,6 +289,20 @@
           <p>{{ copy('Accept, modify and reject decisions remain traceable.', 'تظل قرارات القبول والتعديل والرفض قابلة للتتبع.') }}</p>
         </div>
       </div>
+    </section>
+
+    <section class="case-creation-cta">
+      <div>
+        <span class="section-kicker">{{ copy('NEXT OPERATIONAL STEP', 'الخطوة التشغيلية التالية') }}</span>
+        <h3>{{ copy('Create a coordinated NMC case from the reviewed recommendations', 'إنشاء حالة منسقة بالمركز البحري من التوصيات التي تمت مراجعتها') }}</h3>
+        <p>{{ copy(
+          'The case workspace carries forward vessel risk, evidence, human decisions, tasks, owners, SLA, escalation and resolution tracking.',
+          'تنقل مساحة عمل الحالة مخاطر السفينة والأدلة والقرارات البشرية والمهام والمسؤوليات ومستويات الخدمة والتصعيد ومتابعة الإغلاق.'
+        ) }}</p>
+      </div>
+      <a [routerLink]="['/moei/nmc/vessel', vessel.imo, 'case']">
+        ▣ {{ copy('Create / Open NMC Case', 'إنشاء / فتح حالة بالمركز البحري') }}
+      </a>
     </section>
   </main>
 
