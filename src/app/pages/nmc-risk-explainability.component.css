@@ -695,3 +695,82 @@ a, button { font: inherit; }
   .trace-card.two-col > div:last-child,
   .decision-grid > div:last-child { border-bottom: 0; }
 }
+
+
+/* Bilingual / RTL support */
+.language-btn {
+  min-width: 74px;
+  height: 36px;
+  padding: 0 11px;
+  border-radius: 10px;
+  border: 1px solid #cfe5e2;
+  background: #f2fbf9;
+  color: #0f766e;
+  font-size: 9px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: .18s ease;
+}
+.language-btn:hover {
+  background: #0f766e;
+  border-color: #0f766e;
+  color: #fff;
+}
+
+.rx-shell.rtl {
+  direction: rtl;
+  font-family: "Segoe UI", Tahoma, Arial, sans-serif;
+}
+.rx-shell.rtl .rx-topbar,
+.rx-shell.rtl .hero-card,
+.rx-shell.rtl .threshold-head,
+.rx-shell.rtl .panel-header,
+.rx-shell.rtl .factor-card,
+.rx-shell.rtl .selected-factor-hero,
+.rx-shell.rtl .trace-card,
+.rx-shell.rtl .confidence-grid,
+.rx-shell.rtl .decision-grid {
+  direction: rtl;
+}
+.rx-shell.rtl .brand-block,
+.rx-shell.rtl .vessel-summary,
+.rx-shell.rtl .panel-header,
+.rx-shell.rtl .factor-content,
+.rx-shell.rtl .trace-section,
+.rx-shell.rtl .decision-grid,
+.rx-shell.rtl .explanation-note {
+  text-align: right;
+}
+.rx-shell.rtl .top-actions {
+  justify-content: flex-start;
+}
+.rx-shell.rtl .hero-metrics {
+  direction: rtl;
+}
+.rx-shell.rtl .metric-card {
+  text-align: right;
+}
+.rx-shell.rtl .factor-card {
+  grid-template-columns: 48px 1fr 14px;
+  text-align: right;
+}
+.rx-shell.rtl .factor-card.active {
+  box-shadow: inset -3px 0 0 #0f766e;
+}
+.rx-shell.rtl .chevron {
+  transform: scaleX(-1);
+}
+.rx-shell.rtl .trace-card > div,
+.rx-shell.rtl .selected-factor-hero > div:first-child,
+.rx-shell.rtl .decision-grid > div {
+  border-right: 0;
+  border-left: 1px solid #edf2f5;
+}
+.rx-shell.rtl .trace-card > div:last-child,
+.rx-shell.rtl .decision-grid > div:last-child {
+  border-left: 0;
+}
+.rx-shell.rtl .threshold-track,
+.rx-shell.rtl .threshold-track * {
+  direction: ltr;
+}
