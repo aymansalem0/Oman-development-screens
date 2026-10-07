@@ -147,6 +147,11 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
     };
 
     this.buildOperationalData();
+
+    const requestedTab = this.route.snapshot.queryParamMap.get('tab');
+    if (requestedTab && ['overview','movement','compliance','inspection','certificates','sources'].includes(requestedTab)) {
+      this.activeTab = requestedTab;
+    }
   }
 
   ngAfterViewInit(): void {
