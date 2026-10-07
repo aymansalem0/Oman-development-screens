@@ -406,3 +406,115 @@ button, a { font: inherit; }
   .compare-box { grid-template-columns: 1fr; }
   .compare-box .vs { transform: rotate(90deg); }
 }
+
+
+/* Vessel 360 map ship symbol / risk halo */
+:host ::ng-deep .v360-map-ship-wrap {
+  background: transparent !important;
+  border: 0 !important;
+}
+:host ::ng-deep .v360-map-ship {
+  position: relative;
+  width: 58px;
+  height: 58px;
+  display: grid;
+  place-items: center;
+  color: #e65353;
+}
+:host ::ng-deep .v360-risk-ring {
+  position: absolute;
+  z-index: 1;
+  width: var(--ring-size);
+  height: var(--ring-size);
+  border-radius: 50%;
+  border: 2.5px solid currentColor;
+  background: rgba(230,83,83,.08);
+  box-shadow:
+    0 0 0 4px rgba(255,255,255,.86),
+    0 4px 14px rgba(23,50,77,.13);
+}
+:host ::ng-deep .v360-risk-pulse {
+  position: absolute;
+  z-index: 0;
+  width: calc(var(--ring-size) + 10px);
+  height: calc(var(--ring-size) + 10px);
+  border-radius: 50%;
+  border: 1.5px solid currentColor;
+  animation: v360RiskPulse 1.9s infinite;
+}
+:host ::ng-deep .v360-ship-symbol {
+  position: relative;
+  z-index: 3;
+  width: var(--ship-size);
+  height: calc(var(--ship-size) * 1.42);
+  overflow: visible;
+  transform-origin: 50% 50%;
+  filter: drop-shadow(0 3px 4px rgba(23,50,77,.24));
+}
+:host ::ng-deep .v360-ship-symbol path:first-child {
+  fill: currentColor;
+  stroke: #fff;
+  stroke-width: 1.05;
+}
+:host ::ng-deep .v360-ship-symbol .ship-deck {
+  fill: rgba(255,255,255,.88);
+  stroke: none;
+}
+:host ::ng-deep .v360-ship-symbol .ship-centerline {
+  fill: none;
+  stroke: rgba(255,255,255,.74);
+  stroke-width: .85;
+  stroke-linecap: round;
+}
+:host ::ng-deep .v360-ship-label {
+  position: absolute;
+  z-index: 4;
+  left: 39px;
+  top: 7px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+  padding: 5px 6px 5px 8px;
+  border-radius: 8px;
+  background: rgba(255,255,255,.97);
+  border: 1px solid #dfe7ed;
+  box-shadow: 0 5px 14px rgba(23,50,77,.12);
+  color: #314f66;
+  font-size: 8px;
+  font-weight: 700;
+}
+:host ::ng-deep .v360-ship-label b {
+  min-width: 21px;
+  height: 19px;
+  padding: 0 4px;
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  background: #fff0f0;
+  color: #df4e4e;
+  font-size: 8px;
+}
+:host ::ng-deep .v360-map-tooltip {
+  min-width: 168px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 9px 10px;
+  background: #fff;
+  border-radius: 10px;
+}
+:host ::ng-deep .v360-map-tooltip strong { color: #24445f; font-size: 10px; }
+:host ::ng-deep .v360-map-tooltip span { color: #8393a2; font-size: 8px; }
+:host ::ng-deep .v360-map-tooltip b { color: #df4e4e; font-size: 8px; margin-top: 2px; }
+
+@keyframes v360RiskPulse {
+  0% { transform: scale(.72); opacity: .55; }
+  75% { transform: scale(1.65); opacity: 0; }
+  100% { transform: scale(1.65); opacity: 0; }
+}
+
+.dot.critical-vessel {
+  background: #e65353;
+  box-shadow: 0 0 0 3px #ffe8e8;
+}
