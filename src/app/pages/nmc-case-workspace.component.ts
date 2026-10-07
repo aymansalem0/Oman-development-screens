@@ -2,12 +2,13 @@ import { CommonModule } from '@angular/common';
 import { Component, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { NmcVesselProfile, riskLevel } from '../data/nmc-vessel-catalog';
+import { NmcVesselProfile } from '../data/nmc-vessel-catalog';
 import {
   NMC_OPERATIONAL_VESSELS,
   getOperationalVesselByImo
 } from '../data/nmc-expanded-vessel-catalog';
 import { LanguageService } from '../services/language.service';
+import { NmcRiskEngineService } from '../services/nmc-risk-engine.service';
 import {
   NmcCaseStateService,
   NmcInspectionOutcome
@@ -66,12 +67,14 @@ export class NmcCaseWorkspaceComponent implements OnInit {
     private route: ActivatedRoute,
     private router: Router,
     public lang: LanguageService,
-    private caseState: NmcCaseStateService
+    private caseState: NmcCaseStateService,
+    private riskEngine: NmcRiskEngineService
   ) {}
 
   ngOnInit(): void {
     const imo = this.route.snapshot.paramMap.get('imo') || NMC_OPERATIONAL_VESSELS[0].imo;
-    this.vessel = getOperationalVesselByImo(imo) || NMC_OPERATIONAL_VESSELS[0];
+    const profile = getOperationalVesselByImo(imo) || NMC_OPERATIONAL_VESSELS[0];
+    this.vessel = this.riskEngine.applyToVessel(profile);
     this.buildCase();
   }
 
@@ -90,7 +93,7 @@ export class NmcCaseWorkspaceComponent implements OnInit {
   }
 
   get riskLevelLabel(): string {
-    const level = riskLevel(this.currentRisk);
+    const level = this.riskEngine.levelForScore(this.currentRisk);
     const labels: Record<string,string> = {
       Critical: this.copy('Critical', 'حرج'),
       High: this.copy('High', 'مرتفع'),
@@ -101,7 +104,7 @@ export class NmcCaseWorkspaceComponent implements OnInit {
   }
 
   get riskClass(): string {
-    return riskLevel(this.currentRisk).toLowerCase();
+    return this.riskEngine.levelForScore(this.currentRisk).toLowerCase();
   }
 
   get completedTasks(): number {
