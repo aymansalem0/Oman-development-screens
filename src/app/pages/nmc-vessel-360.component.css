@@ -1881,17 +1881,6 @@ button, a { font: inherit; }
 }
 .vessel-map {
   z-index: 0;
-}
-:host ::ng-deep .leaflet-pane,
-:host ::ng-deep .leaflet-top,
-:host ::ng-deep .leaflet-bottom {
-  z-index: auto;
-}
-:host ::ng-deep .leaflet-map-pane { z-index: 1; }
-:host ::ng-deep .leaflet-control-container {
-  position: relative;
-  z-index: 20;
-}
-.map-callout {
+}.map-callout {
   z-index: 30 !important;
 }
