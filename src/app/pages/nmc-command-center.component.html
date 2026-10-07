@@ -185,11 +185,12 @@
             <span><i class="dot high"></i> High</span>
             <span><i class="dot watch"></i> Watch</span>
             <span><i class="dot normal"></i> Normal</span>
+            <span><i class="route-key"></i> Selected sea route</span>
           </div>
 
           <div class="map-overlay source-note">
             <strong>POC mode</strong>
-            <span>Full OpenStreetMap basemap · Synthetic vessel positions & monitoring zones</span>
+            <span>Full OpenStreetMap basemap · Synthetic vessel positions constrained to offshore maritime routes</span>
           </div>
         </div>
       </div>
@@ -294,6 +295,10 @@
           <div>
             <small>Flag / Type</small>
             <strong>{{ v.flag }} · {{ v.type }}</strong>
+          </div>
+          <div>
+            <small>Length</small>
+            <strong>{{ v.lengthM }} m</strong>
           </div>
           <div>
             <small>Current speed</small>

@@ -541,3 +541,104 @@ button, input, select { font: inherit; }
   background: #f1fbf9;
   font-weight: 800;
 }
+
+
+/* --- Maritime vessel symbol upgrade --- */
+:host ::ng-deep .nmc-map-marker {
+  width: 52px;
+  height: 52px;
+  color: #4da7a0;
+}
+:host ::ng-deep .nmc-map-marker.normal { color: #4da7a0; }
+:host ::ng-deep .nmc-map-marker.watch { color: #d7a738; }
+:host ::ng-deep .nmc-map-marker.high { color: #ef8b43; }
+:host ::ng-deep .nmc-map-marker.critical { color: #e65353; }
+
+:host ::ng-deep .ship-symbol {
+  position: relative;
+  z-index: 3;
+  width: var(--ship-size);
+  height: calc(var(--ship-size) * 1.42);
+  overflow: visible;
+  transform-origin: 50% 50%;
+  filter: drop-shadow(0 2px 3px rgba(23,50,77,.20));
+}
+:host ::ng-deep .ship-symbol path:first-child {
+  fill: currentColor;
+  stroke: rgba(255,255,255,.95);
+  stroke-width: 1.05;
+}
+:host ::ng-deep .ship-symbol .ship-deck {
+  fill: rgba(255,255,255,.86);
+  stroke: none;
+}
+:host ::ng-deep .ship-symbol .ship-centerline {
+  fill: none;
+  stroke: rgba(255,255,255,.72);
+  stroke-width: .85;
+  stroke-linecap: round;
+}
+
+:host ::ng-deep .risk-ring {
+  position: absolute;
+  z-index: 1;
+  width: var(--ring-size);
+  height: var(--ring-size);
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  background: color-mix(in srgb, currentColor 8%, transparent);
+  opacity: .78;
+  box-shadow: 0 0 0 3px rgba(255,255,255,.72);
+}
+
+:host ::ng-deep .ship-pulse {
+  display: none;
+  z-index: 0;
+  width: calc(var(--ring-size) + 8px);
+  height: calc(var(--ring-size) + 8px);
+  border: 1.5px solid currentColor;
+}
+:host ::ng-deep .nmc-map-marker.high .ship-pulse,
+:host ::ng-deep .nmc-map-marker.critical .ship-pulse {
+  display: block;
+}
+:host ::ng-deep .nmc-map-marker.selected .risk-ring {
+  border-width: 3px;
+  opacity: 1;
+  box-shadow:
+    0 0 0 4px rgba(255,255,255,.88),
+    0 4px 14px rgba(23,50,77,.15);
+}
+:host ::ng-deep .nmc-map-marker.selected .ship-symbol {
+  filter: drop-shadow(0 3px 5px rgba(23,50,77,.28));
+}
+
+:host ::ng-deep .ship-label {
+  left: 36px;
+  top: 6px;
+}
+
+:host ::ng-deep .nmc-map-marker.normal .ship-label b {
+  background: #eaf8f5;
+  color: #0f766e;
+}
+:host ::ng-deep .nmc-map-marker.watch .ship-label b {
+  background: #fff8e6;
+  color: #a97813;
+}
+:host ::ng-deep .nmc-map-marker.high .ship-label b {
+  background: #fff2e8;
+  color: #c86a1b;
+}
+:host ::ng-deep .nmc-map-marker.critical .ship-label b {
+  background: #fff0f0;
+  color: #df4e4e;
+}
+
+
+.route-key {
+  width: 18px;
+  height: 0;
+  border-top: 2px dashed #0f766e;
+  display: inline-block;
+}
