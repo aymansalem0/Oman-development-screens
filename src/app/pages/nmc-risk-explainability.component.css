@@ -242,6 +242,8 @@ a, button { font: inherit; }
 .threshold-track {
   position: relative;
   display: flex;
+  flex-direction: row;
+  direction: ltr;
   height: 34px;
   border-radius: 10px;
   overflow: visible;
@@ -250,6 +252,7 @@ a, button { font: inherit; }
 .band {
   display: flex;
   align-items: center;
+  direction: ltr;
   justify-content: center;
   font-size: 7px;
   font-weight: 800;
@@ -265,6 +268,7 @@ a, button { font: inherit; }
 .score-marker {
   position: absolute;
   top: -18px;
+  direction: ltr;
   transform: translateX(-50%);
   display: flex;
   flex-direction: column;
