@@ -40,10 +40,17 @@ Angular implementation of the Oman MTCIT **Navigation Aids Installation Approval
    - Example: `24°30.7′ N, 56°37.8′ E`.
    - JPG / PNG / PDF validation with 5 MB maximum per attachment.
 
+4. **Marine Classification & Activity Mapping**
+   - Manage vessel / marine-unit classifications.
+   - Link classifications to marine activities.
+   - Map marine activities to Oman Business activities using ISEC / activity code.
+   - Review and edit current mappings.
+
 ## Routes
 
 - `/dashboard/maritime-navigation/navigation-aids-installation-approval`
 - `/dashboard/maritime-navigation/navigation-aids-installation-approval/100`
+- `/dashboard/master-data/activity-classification-mapping`
 
 ## Run locally
 
