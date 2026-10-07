@@ -70,6 +70,24 @@ interface RiskFactor {
   source: string;
 }
 
+interface FieldProvenance {
+  key: string;
+  label: string;
+  value: string;
+  source: string;
+  system: string;
+  sourceClass: SourceStatus['sourceClass'];
+  authority: string;
+  recordId: string;
+  sourceTrust: number;
+  dataConfidence: number;
+  identityMatch: number;
+  freshness: number;
+  lastUpdated: string;
+  conflict: 'None' | 'Unresolved' | 'Verified';
+  note: string;
+}
+
 interface Vessel360View extends NmcVesselProfile {
   age: number;
   riskScore: number;
@@ -100,6 +118,8 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
   deficiencies: DeficiencyRecord[] = [];
   riskFactors: RiskFactor[] = [];
   timeline: TimelineItem[] = [];
+  fieldProvenance: Record<string, FieldProvenance> = {};
+  selectedProvenance?: FieldProvenance;
 
   hasCertificateConflict = false;
   hasOpenDeficiency = false;
@@ -167,6 +187,85 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
 
   selectedCertificate(): CertificateRecord | undefined {
     return this.certificates.find(certificate => certificate.id === this.selectedCertificateId);
+  }
+
+  openProvenance(key: string): void {
+    const provenance = this.fieldProvenance[key];
+    if (provenance) this.selectedProvenance = provenance;
+  }
+
+  closeProvenance(): void {
+    this.selectedProvenance = undefined;
+  }
+
+  provenanceFor(key: string): FieldProvenance | undefined {
+    return this.fieldProvenance[key];
+  }
+
+  openCertificateProvenance(certificate: CertificateRecord): void {
+    const moeiSource = certificate.source.includes('MOEI');
+    const externalAuthoritative =
+      certificate.source.includes('Flag') ||
+      certificate.source.includes('Recognized Organization') ||
+      certificate.source.includes('Verified');
+
+    this.selectedProvenance = {
+      key:`certificate-${certificate.id}`,
+      label:`${certificate.type} status`,
+      value:certificate.status,
+      source:certificate.source,
+      system:certificate.issuer,
+      sourceClass:moeiSource ? 'MOEI Authoritative' : externalAuthoritative ? 'External Authoritative' : 'External Trusted',
+      authority:moeiSource ? 'MOEI certificate record' : externalAuthoritative ? 'Flag / statutory certificate authority' : 'External maritime certificate source',
+      recordId:certificate.number,
+      sourceTrust:moeiSource ? 100 : 95,
+      dataConfidence:certificate.conflict ? 92 : 97,
+      identityMatch:100,
+      freshness:certificate.conflict ? 94 : 97,
+      lastUpdated:'22:41:56',
+      conflict:certificate.conflict ? 'Unresolved' : 'None',
+      note:certificate.condition || 'Certificate status is linked to the correlated vessel record and retained with source provenance.'
+    };
+  }
+
+  openInspectionProvenance(inspection: InspectionRecord): void {
+    this.selectedProvenance = {
+      key:`inspection-${inspection.id}`,
+      label:'Inspection result',
+      value:inspection.result,
+      source:'MOEI Smart Inspection',
+      system:inspection.source,
+      sourceClass:'MOEI Authoritative',
+      authority:'MOEI inspection record',
+      recordId:inspection.id,
+      sourceTrust:100,
+      dataConfidence:100,
+      identityMatch:100,
+      freshness:96,
+      lastUpdated:'22:41:55',
+      conflict:'None',
+      note:`Inspection performed through the MOEI inspection process at ${inspection.port}. Findings and evidence remain linked to the vessel record.`
+    };
+  }
+
+  openDeficiencyProvenance(deficiency: DeficiencyRecord): void {
+    this.selectedProvenance = {
+      key:`deficiency-${deficiency.id}`,
+      label:`${deficiency.category} deficiency`,
+      value:`${deficiency.severity} · ${deficiency.status}`,
+      source:'MOEI Smart Inspection',
+      system:'Inspection Findings & Corrective Actions',
+      sourceClass:'MOEI Authoritative',
+      authority:'MOEI inspection finding',
+      recordId:deficiency.id,
+      sourceTrust:100,
+      dataConfidence:100,
+      identityMatch:100,
+      freshness:deficiency.status === 'Open' ? 95 : 92,
+      lastUpdated:deficiency.raised,
+      conflict:'None',
+      note:deficiency.evidence
+    };
   }
 
   get isUaeFlag(): boolean {
@@ -299,6 +398,71 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
     this.riskFactors = this.buildRiskFactors();
     this.timeline = this.buildTimeline();
     this.selectedCertificateId = this.certificates[0].id;
+    this.fieldProvenance = this.buildFieldProvenance();
+  }
+
+  private buildFieldProvenance(): Record<string, FieldProvenance> {
+    const identitySource = this.isUaeFlag ? 'MOEI Vessel Registry' : this.flagRegistryAuthority;
+    const identityClass: SourceStatus['sourceClass'] = this.isUaeFlag ? 'MOEI Authoritative' : 'External Authoritative';
+    const identityAuthority = this.registrationAuthorityLabel;
+    const identityTrust = this.isUaeFlag ? 100 : 96;
+    const operatorSource = this.isUaeFlag ? 'MOEI Company / Vessel Master' : 'Verified Operator / Company Record';
+    const operatorClass: SourceStatus['sourceClass'] = this.isUaeFlag ? 'MOEI Authoritative' : 'External Trusted';
+    const operatorTrust = this.isUaeFlag ? 100 : 94;
+    const movementConfidence = Math.max(91, this.vessel.dataConfidence);
+    const movementFreshness = Math.max(94, 100 - Math.min(6, this.vessel.lastUpdate));
+    const fields: FieldProvenance[] = [];
+
+    const add = (
+      key: string,
+      label: string,
+      value: string,
+      source: string,
+      system: string,
+      sourceClass: SourceStatus['sourceClass'],
+      authority: string,
+      recordId: string,
+      sourceTrust: number,
+      dataConfidence: number,
+      identityMatch: number,
+      freshness: number,
+      lastUpdated: string,
+      conflict: FieldProvenance['conflict'],
+      note: string
+    ): void => {
+      fields.push({
+        key, label, value, source, system, sourceClass, authority, recordId,
+        sourceTrust, dataConfidence, identityMatch, freshness, lastUpdated, conflict, note
+      });
+    };
+
+    add('vesselName','Vessel name',this.vessel.name,identitySource,'Registry / Vessel Identity',identityClass,identityAuthority,`VES-${this.vessel.imo}`,identityTrust,identityTrust,100,98,'22:42:06','None','Official or verified vessel identity correlated to the IMO number.');
+    add('imo','IMO number',this.vessel.imo,identitySource,'Registry / Vessel Identity',identityClass,identityAuthority,`IMO-${this.vessel.imo}`,identityTrust,100,100,99,'22:42:06','None','Primary cross-system correlation key used by the NMC.');
+    add('mmsi','MMSI',this.vessel.mmsi,'AIS / LRIT','Vessel Tracking Feed','Operational Feed','Operational tracking source',`MMSI-${this.vessel.mmsi}`,96,movementConfidence,99,movementFreshness,`${this.vessel.lastUpdate} sec ago`,'None','Live tracking identity matched to the vessel master.');
+    add('flag','Flag',this.vessel.flag,identitySource,'Flag Registration',identityClass,identityAuthority,`REG-${this.vessel.imo}`,identityTrust,identityTrust,100,98,'22:42:06','None',this.isUaeFlag ? 'UAE flag status is maintained by MOEI.' : 'Foreign flag status is maintained by the vessel flag administration.');
+    add('type','Vessel type',this.vessel.type,identitySource,'Registry / Vessel Particulars',identityClass,identityAuthority,`VES-${this.vessel.imo}`,identityTrust,identityTrust,100,97,'22:42:06','None','Vessel type from the authoritative or verified vessel particulars.');
+    add('length','Length',`${this.vessel.lengthM} m`,identitySource,'Registry / Vessel Particulars',identityClass,identityAuthority,`VES-${this.vessel.imo}`,identityTrust,identityTrust,100,97,'22:42:06','None','Principal vessel dimension used for identification and operational context.');
+    add('callSign','Call sign',this.vessel.callSign,identitySource,'Registry / Vessel Identity',identityClass,identityAuthority,`VES-${this.vessel.imo}`,identityTrust,identityTrust,100,98,'22:42:06','None','Registered or verified radio call sign.');
+    add('built','Year built / Age',`${this.vessel.built} · ${this.vessel.age} years`,identitySource,'Registry / Vessel Particulars',identityClass,identityAuthority,`VES-${this.vessel.imo}`,identityTrust,identityTrust,100,95,'22:42:06','None','Construction year from vessel particulars; age is calculated by the platform.');
+    add('grossTonnage','Gross tonnage',this.vessel.grossTonnage,identitySource,'Registry / Vessel Particulars',identityClass,identityAuthority,`VES-${this.vessel.imo}`,identityTrust,identityTrust,100,95,'22:42:06','None','Gross tonnage retained in the correlated vessel particulars.');
+    add('deadweight','Deadweight',this.vessel.deadweight,identitySource,'Registry / Vessel Particulars',identityClass,identityAuthority,`VES-${this.vessel.imo}`,identityTrust,identityTrust,100,95,'22:42:06','None','Deadweight from vessel particulars.');
+    add('owner','Owner',this.vessel.owner,operatorSource,'Owner / Company Record',operatorClass,this.isUaeFlag ? 'MOEI company record' : 'Verified external owner context',`OWN-${this.vessel.id.toString().padStart(5,'0')}`,operatorTrust,operatorTrust,99,94,'22:40:12','None','Current owner linked to the vessel record.');
+    add('operator','Operator',this.vessel.operator,operatorSource,'Operator / Company Record',operatorClass,this.isUaeFlag ? 'MOEI company record' : 'Verified external operator context',`OPR-${this.vessel.id.toString().padStart(5,'0')}`,operatorTrust,operatorTrust,99,94,'22:40:12','None','Current operator used for compliance history and operator-risk correlation.');
+    add('classSociety','Class society',this.vessel.classSociety,this.vessel.classSociety,'Classification / Recognized Organization','External Trusted','Recognized external maritime source',`CLS-${this.vessel.imo}`,96,95,99,96,'22:41:57',this.hasCertificateConflict ? 'Unresolved' : 'None','Classification context is retained separately from flag registration authority.');
+    add('destination','Destination',this.vessel.destination,'AIS / LRIT','Vessel Tracking Feed','Operational Feed','Operational tracking source',`AIS-${this.vessel.mmsi}`,96,movementConfidence,99,movementFreshness,`${this.vessel.lastUpdate} sec ago`,'None','Reported voyage destination from the latest movement message.');
+    add('eta','ETA',this.vessel.eta,'AIS / LRIT','Vessel Tracking Feed','Operational Feed','Operational tracking source',`AIS-${this.vessel.mmsi}`,96,movementConfidence,99,movementFreshness,`${this.vessel.lastUpdate} sec ago`,'None','Reported estimated time of arrival from the latest voyage message.');
+    add('speed','Current speed',`${this.vessel.speed.toFixed(1)} kn`,'AIS / LRIT','Vessel Tracking Feed','Operational Feed','Operational tracking source',`AIS-${this.vessel.mmsi}`,96,movementConfidence,99,movementFreshness,`${this.vessel.lastUpdate} sec ago`,'None','Live speed over ground used by movement monitoring.');
+    add('course','Course',`${this.vessel.course}°`,'AIS / LRIT','Vessel Tracking Feed','Operational Feed','Operational tracking source',`AIS-${this.vessel.mmsi}`,96,movementConfidence,99,movementFreshness,`${this.vessel.lastUpdate} sec ago`,'None','Live course over ground used by route and anomaly monitoring.');
+    add('navStatus','Navigation status',this.vessel.navStatus,'AIS / LRIT','Vessel Tracking Feed','Operational Feed','Operational tracking source',`AIS-${this.vessel.mmsi}`,96,movementConfidence,99,movementFreshness,`${this.vessel.lastUpdate} sec ago`,'None','Navigation status from the latest vessel tracking message.');
+    add('position','Current position',this.vessel.position,'AIS / LRIT','Vessel Tracking Feed','Operational Feed','Operational tracking source',`AIS-${this.vessel.mmsi}`,96,movementConfidence,99,movementFreshness,`${this.vessel.lastUpdate} sec ago`,'None','Latest correlated vessel position.');
+    add('registration','Registration status',`${this.registrationStatus} · ${this.vessel.flag}`,this.registrationSource,'Flag Registration',identityClass,identityAuthority,`REG-${this.vessel.imo}`,identityTrust,identityTrust,100,98,'22:42:06','None',this.isUaeFlag ? 'MOEI is the flag-state registration authority.' : 'MOEI retains this as external authoritative flag-registration context.');
+    add('moeiRelationship','MOEI regulatory relationship',this.moeiRelationshipStatus,'MOEI Regulatory Platform','MOEI Regulatory Context','MOEI Authoritative','MOEI regulatory action',`MOEI-${this.vessel.imo}`,100,100,100,99,'22:40:48','None','MOEI authority applies to UAE regulatory actions, inspections, restrictions and other UAE maritime controls.');
+    add('dataConfidence','Overall data confidence',`${this.vessel.dataConfidence}%`,'NMC Data Correlation Layer','Data Quality & Correlation','Internal Master','Derived correlation metric',`DQC-${this.vessel.imo}`,98,this.vessel.dataConfidence,99,97,'22:42:18',this.conflictCount > 0 ? 'Unresolved' : 'None','Overall data confidence is distinct from source trust and from AI/risk confidence.');
+
+    return fields.reduce((map, field) => {
+      map[field.key] = field;
+      return map;
+    }, {} as Record<string, FieldProvenance>);
   }
 
   private buildSources(): SourceStatus[] {

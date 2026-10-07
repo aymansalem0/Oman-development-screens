@@ -24,21 +24,21 @@
           <div class="hero-kicker">UNIFIED VESSEL IDENTITY</div>
           <h2>{{ vessel.name }}</h2>
           <div class="identity-row">
-            <span>IMO {{ vessel.imo }}</span>
-            <span>MMSI {{ vessel.mmsi }}</span>
-            <span>{{ vessel.flag }}</span>
-            <span>{{ vessel.type }}</span>
-            <span>{{ vessel.lengthM }} m</span>
+            <span>IMO {{ vessel.imo }} <button type="button" class="inline-source" (click)="openProvenance('imo')" title="View source">i</button></span>
+            <span>MMSI {{ vessel.mmsi }} <button type="button" class="inline-source" (click)="openProvenance('mmsi')" title="View source">i</button></span>
+            <span>{{ vessel.flag }} <button type="button" class="inline-source" (click)="openProvenance('flag')" title="View source">i</button></span>
+            <span>{{ vessel.type }} <button type="button" class="inline-source" (click)="openProvenance('type')" title="View source">i</button></span>
+            <span>{{ vessel.lengthM }} m <button type="button" class="inline-source" (click)="openProvenance('length')" title="View source">i</button></span>
           </div>
         </div>
       </div>
 
       <div class="hero-right">
-        <div class="confidence-card">
+        <button type="button" class="confidence-card confidence-button" (click)="openProvenance('dataConfidence')" title="Open confidence details">
           <small>Data confidence</small>
           <strong>{{ vessel.dataConfidence }}%</strong>
-          <span>{{ conflictCount }} source conflict{{ conflictCount === 1 ? '': 's' }}</span>
-        </div>
+          <span>{{ conflictCount }} source conflict{{ conflictCount === 1 ? '': 's' }} · view basis</span>
+        </button>
         <div class="risk-card" [ngClass]="riskCssClass">
           <small>Composite risk</small>
           <strong>{{ vessel.riskScore }}</strong>
@@ -77,18 +77,19 @@
           </div>
 
           <div class="data-grid">
-            <div><small>Call sign</small><strong>{{ vessel.callSign }}</strong></div>
-            <div><small>Year built / Age</small><strong>{{ vessel.built }} · {{ vessel.age }} years</strong></div>
-            <div><small>Gross tonnage</small><strong>{{ vessel.grossTonnage }}</strong></div>
-            <div><small>Deadweight</small><strong>{{ vessel.deadweight }}</strong></div>
-            <div><small>Owner</small><strong>{{ vessel.owner }}</strong></div>
-            <div><small>Operator</small><strong>{{ vessel.operator }}</strong></div>
-            <div><small>Class society</small><strong>{{ vessel.classSociety }}</strong></div>
-            <div><small>Destination</small><strong>{{ vessel.destination }}</strong></div>
-            <div><small>ETA</small><strong>{{ vessel.eta }}</strong></div>
-            <div><small>Current speed</small><strong>{{ vessel.speed }}</strong></div>
-            <div><small>Course</small><strong>{{ vessel.course }}</strong></div>
-            <div><small>Navigation status</small><strong>{{ vessel.navStatus }}</strong></div>
+            <div class="field-cell"><div class="field-label"><small>Call sign</small><button type="button" class="source-info" (click)="openProvenance('callSign')" title="Source & confidence">i</button></div><strong>{{ vessel.callSign }}</strong></div>
+            <div class="field-cell"><div class="field-label"><small>Year built / Age</small><button type="button" class="source-info" (click)="openProvenance('built')" title="Source & confidence">i</button></div><strong>{{ vessel.built }} · {{ vessel.age }} years</strong></div>
+            <div class="field-cell"><div class="field-label"><small>Gross tonnage</small><button type="button" class="source-info" (click)="openProvenance('grossTonnage')" title="Source & confidence">i</button></div><strong>{{ vessel.grossTonnage }}</strong></div>
+            <div class="field-cell"><div class="field-label"><small>Deadweight</small><button type="button" class="source-info" (click)="openProvenance('deadweight')" title="Source & confidence">i</button></div><strong>{{ vessel.deadweight }}</strong></div>
+            <div class="field-cell"><div class="field-label"><small>Owner</small><button type="button" class="source-info" (click)="openProvenance('owner')" title="Source & confidence">i</button></div><strong>{{ vessel.owner }}</strong></div>
+            <div class="field-cell"><div class="field-label"><small>Operator</small><button type="button" class="source-info" (click)="openProvenance('operator')" title="Source & confidence">i</button></div><strong>{{ vessel.operator }}</strong></div>
+            <div class="field-cell"><div class="field-label"><small>Class society</small><button type="button" class="source-info" (click)="openProvenance('classSociety')" title="Source & confidence">i</button></div><strong>{{ vessel.classSociety }}</strong></div>
+            <div class="field-cell"><div class="field-label"><small>Destination</small><button type="button" class="source-info" (click)="openProvenance('destination')" title="Source & confidence">i</button></div><strong>{{ vessel.destination }}</strong></div>
+            <div class="field-cell"><div class="field-label"><small>ETA</small><button type="button" class="source-info" (click)="openProvenance('eta')" title="Source & confidence">i</button></div><strong>{{ vessel.eta }}</strong></div>
+            <div class="field-cell"><div class="field-label"><small>Current speed</small><button type="button" class="source-info" (click)="openProvenance('speed')" title="Source & confidence">i</button></div><strong>{{ vessel.speed }} kn</strong></div>
+            <div class="field-cell"><div class="field-label"><small>Course</small><button type="button" class="source-info" (click)="openProvenance('course')" title="Source & confidence">i</button></div><strong>{{ vessel.course }}°</strong></div>
+            <div class="field-cell"><div class="field-label"><small>Navigation status</small><button type="button" class="source-info" (click)="openProvenance('navStatus')" title="Source & confidence">i</button></div><strong>{{ vessel.navStatus }}</strong></div>
+            <div class="field-cell"><div class="field-label"><small>Current position</small><button type="button" class="source-info" (click)="openProvenance('position')" title="Source & confidence">i</button></div><strong>{{ vessel.position }}</strong></div>
           </div>
 
           <div class="registry-context">
@@ -109,6 +110,7 @@
                 <strong>{{ registrationStatus }} · {{ vessel.flag }}</strong>
                 <p>{{ registrationSource }}</p>
               </div>
+              <button type="button" class="source-info registry-source" (click)="openProvenance('registration')" title="Registration source">i</button>
               <span class="authority-chip" [class.moei]="isUaeFlag" [class.external]="!isUaeFlag">{{ registrationAuthorityLabel }}</span>
             </div>
 
@@ -119,6 +121,7 @@
                 <strong>{{ moeiRelationshipStatus }}</strong>
                 <p>{{ isUaeFlag ? 'MOEI acts as the flag-state administration for this vessel.' : 'MOEI maintains the UAE regulatory and operational context without becoming the vessel registry authority.' }}</p>
               </div>
+              <button type="button" class="source-info registry-source" (click)="openProvenance('moeiRelationship')" title="MOEI source">i</button>
               <span class="authority-chip moei">MOEI Context</span>
             </div>
           </div>
@@ -349,7 +352,7 @@
             <div><small>Certificate</small><strong>{{ certificate.type }}</strong></div>
             <div><small>Certificate No.</small><strong>{{ certificate.number }}</strong></div>
             <div><small>Issuer</small><strong>{{ certificate.issuer }}</strong></div>
-            <div><small>Source</small><strong>{{ certificate.source }}</strong></div>
+            <div><div class="field-label"><small>Source</small><button type="button" class="source-info" (click)="openCertificateProvenance(certificate)" title="Certificate provenance">i</button></div><strong>{{ certificate.source }}</strong></div>
             <div><small>Issue date</small><strong>{{ certificate.issued }}</strong></div>
             <div><small>Expiry date</small><strong>{{ certificate.expiry }}</strong></div>
           </div>
@@ -447,7 +450,7 @@
                 <span>{{ inspection.port }}</span>
               </div>
               <div class="inspection-main">
-                <strong>{{ inspection.type }}</strong>
+                <strong>{{ inspection.type }} <button type="button" class="inline-source table-source" (click)="openInspectionProvenance(inspection)" title="Inspection provenance">i</button></strong>
                 <p>{{ inspection.id }} · {{ inspection.inspector }}</p>
               </div>
               <div class="inspection-result">
@@ -487,7 +490,7 @@
               <div class="evidence-box">
                 <small>SUPPORTING EVIDENCE</small>
                 <strong>{{ deficiency.evidence }}</strong>
-                <button type="button">View inspection evidence</button>
+                <button type="button" (click)="openDeficiencyProvenance(deficiency)">View source & evidence</button>
               </div>
 
               <div class="risk-evidence-link critical-evidence">
@@ -726,5 +729,80 @@
         </div>
       </div>
     </section>
+    <div class="provenance-backdrop" *ngIf="selectedProvenance" (click)="closeProvenance()"></div>
+    <aside class="provenance-drawer" *ngIf="selectedProvenance as provenance" (click)="$event.stopPropagation()">
+      <div class="provenance-drawer-head">
+        <div>
+          <span class="section-kicker">FIELD PROVENANCE</span>
+          <h3>{{ provenance.label }}</h3>
+          <p>{{ vessel.name }} · IMO {{ vessel.imo }}</p>
+        </div>
+        <button type="button" class="drawer-close" (click)="closeProvenance()" aria-label="Close">×</button>
+      </div>
+
+      <div class="provenance-value-card">
+        <small>CURRENT VALUE</small>
+        <strong>{{ provenance.value }}</strong>
+        <span class="source-class" [ngClass]="{
+          'moei-authority': provenance.sourceClass === 'MOEI Authoritative',
+          'internal-authority': provenance.sourceClass === 'Internal Master',
+          'external-authority': provenance.sourceClass === 'External Authoritative',
+          'trusted-authority': provenance.sourceClass === 'External Trusted',
+          'operational-authority': provenance.sourceClass === 'Operational Feed'
+        }">{{ provenance.sourceClass }}</span>
+      </div>
+
+      <div class="provenance-source-block">
+        <div><small>Source</small><strong>{{ provenance.source }}</strong></div>
+        <div><small>System / Feed</small><strong>{{ provenance.system }}</strong></div>
+        <div><small>Authority</small><strong>{{ provenance.authority }}</strong></div>
+        <div><small>Record ID</small><strong>{{ provenance.recordId }}</strong></div>
+        <div><small>Last updated</small><strong>{{ provenance.lastUpdated }}</strong></div>
+        <div><small>Conflict</small><strong [class.conflict-text]="provenance.conflict === 'Unresolved'">{{ provenance.conflict }}</strong></div>
+      </div>
+
+      <div class="confidence-section">
+        <div class="confidence-title">
+          <div>
+            <h4>Confidence Breakdown</h4>
+            <p>Independent measures — not one combined source score.</p>
+          </div>
+        </div>
+
+        <div class="confidence-metric">
+          <div><span>Source trust</span><strong>{{ provenance.sourceTrust }}%</strong></div>
+          <div class="metric-bar"><i [style.width.%]="provenance.sourceTrust"></i></div>
+          <small>Reliability and authority of the originating source.</small>
+        </div>
+
+        <div class="confidence-metric">
+          <div><span>Data confidence</span><strong>{{ provenance.dataConfidence }}%</strong></div>
+          <div class="metric-bar"><i [style.width.%]="provenance.dataConfidence"></i></div>
+          <small>Quality and validation confidence for this specific record.</small>
+        </div>
+
+        <div class="confidence-metric">
+          <div><span>Identity match</span><strong>{{ provenance.identityMatch }}%</strong></div>
+          <div class="metric-bar"><i [style.width.%]="provenance.identityMatch"></i></div>
+          <small>Confidence that this record belongs to the same vessel.</small>
+        </div>
+
+        <div class="confidence-metric">
+          <div><span>Freshness</span><strong>{{ provenance.freshness }}%</strong></div>
+          <div class="metric-bar"><i [style.width.%]="provenance.freshness"></i></div>
+          <small>How current the information is for operational use.</small>
+        </div>
+      </div>
+
+      <div class="provenance-note" [class.warning]="provenance.conflict === 'Unresolved'">
+        <strong>{{ provenance.conflict === 'Unresolved' ? 'Attention required' : 'Traceability note' }}</strong>
+        <p>{{ provenance.note }}</p>
+      </div>
+
+      <div class="drawer-actions">
+        <button type="button" class="secondary-btn" (click)="setTab('sources'); closeProvenance()">Open Data Sources</button>
+        <button type="button" class="primary-btn" (click)="closeProvenance()">Done</button>
+      </div>
+    </aside>
   </main>
 </div>

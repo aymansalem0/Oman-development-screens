@@ -1542,3 +1542,328 @@ button, a { font: inherit; }
     grid-template-columns: 1fr;
   }
 }
+
+
+/* --- Field-level provenance & confidence --- */
+.identity-row span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.inline-source,
+.source-info {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid #cfe5e2;
+  background: #f2fbf9;
+  color: #0f766e;
+  display: inline-grid;
+  place-items: center;
+  font-size: 7px;
+  line-height: 1;
+  font-weight: 900;
+  cursor: pointer;
+  transition: .16s ease;
+}
+.inline-source:hover,
+.source-info:hover {
+  background: #0f766e;
+  border-color: #0f766e;
+  color: #fff;
+  box-shadow: 0 3px 10px rgba(15,118,110,.18);
+}
+.inline-source.table-source {
+  width: 16px;
+  height: 16px;
+  flex-basis: 16px;
+  vertical-align: middle;
+  margin-left: 3px;
+  font-size: 6px;
+}
+.confidence-button {
+  appearance: none;
+  cursor: pointer;
+  font-family: inherit;
+  transition: .16s ease;
+}
+.confidence-button:hover {
+  border-color: #b8dde7;
+  box-shadow: 0 5px 15px rgba(2,132,199,.08);
+  transform: translateY(-1px);
+}
+
+.field-cell {
+  position: relative;
+}
+.field-label {
+  min-height: 18px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  justify-content: space-between;
+}
+.field-label small {
+  margin-bottom: 0 !important;
+}
+.field-cell:hover {
+  background: #fbfefe;
+}
+.field-cell:hover .source-info {
+  border-color: #a9d9d3;
+}
+
+.registry-source {
+  position: absolute;
+  top: 11px;
+  right: 11px;
+}
+
+.provenance-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: rgba(18,39,54,.22);
+  backdrop-filter: blur(2px);
+  animation: provenanceFade .16s ease-out;
+}
+.provenance-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 90;
+  width: min(460px, 94vw);
+  overflow-y: auto;
+  padding: 18px;
+  background: #fff;
+  border-left: 1px solid #dde6ec;
+  box-shadow: -18px 0 45px rgba(23,50,77,.14);
+  animation: provenanceSlide .22s ease-out;
+}
+.provenance-drawer-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 14px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid #edf2f5;
+}
+.provenance-drawer-head h3 {
+  margin: 4px 0 3px;
+  color: #203f58;
+  font-size: 18px;
+  letter-spacing: -.2px;
+}
+.provenance-drawer-head p {
+  margin: 0;
+  color: #96a4af;
+  font-size: 8px;
+}
+.drawer-close {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  border: 1px solid #e1e8ed;
+  background: #fff;
+  color: #6f8291;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+.drawer-close:hover {
+  background: #f5f9fb;
+  color: #183f56;
+}
+
+.provenance-value-card {
+  position: relative;
+  margin-top: 14px;
+  padding: 14px;
+  border-radius: 12px;
+  border: 1px solid #dfe8ed;
+  background: linear-gradient(145deg, #f7fbfc, #fff);
+}
+.provenance-value-card > small {
+  display: block;
+  color: #91a0ac;
+  font-size: 6px;
+  font-weight: 900;
+  letter-spacing: .7px;
+}
+.provenance-value-card > strong {
+  display: block;
+  margin: 5px 0 8px;
+  padding-right: 120px;
+  color: #294a61;
+  font-size: 14px;
+  line-height: 1.35;
+  word-break: break-word;
+}
+.provenance-value-card > .source-class {
+  position: absolute;
+  top: 13px;
+  right: 13px;
+}
+
+.provenance-source-block {
+  display: grid;
+  grid-template-columns: repeat(2,1fr);
+  margin-top: 12px;
+  border: 1px solid #e8eef2;
+  border-radius: 11px;
+  overflow: hidden;
+}
+.provenance-source-block > div {
+  min-height: 66px;
+  padding: 11px;
+  border-right: 1px solid #edf2f5;
+  border-bottom: 1px solid #edf2f5;
+}
+.provenance-source-block > div:nth-child(2n) {
+  border-right: 0;
+}
+.provenance-source-block > div:nth-last-child(-n+2) {
+  border-bottom: 0;
+}
+.provenance-source-block small {
+  display: block;
+  color: #99a7b2;
+  font-size: 6px;
+  margin-bottom: 4px;
+}
+.provenance-source-block strong {
+  display: block;
+  color: #526b7e;
+  font-size: 8px;
+  line-height: 1.4;
+  word-break: break-word;
+}
+.conflict-text {
+  color: #c96a12 !important;
+}
+
+.confidence-section {
+  margin-top: 12px;
+  padding: 13px;
+  border-radius: 12px;
+  border: 1px solid #e5ecf1;
+  background: #fbfdfe;
+}
+.confidence-title h4 {
+  margin: 0;
+  color: #38576d;
+  font-size: 10px;
+}
+.confidence-title p {
+  margin: 3px 0 11px;
+  color: #96a4af;
+  font-size: 7px;
+}
+.confidence-metric {
+  margin-top: 11px;
+}
+.confidence-metric:first-of-type {
+  margin-top: 0;
+}
+.confidence-metric > div:first-child {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+.confidence-metric span {
+  color: #5f7586;
+  font-size: 8px;
+  font-weight: 700;
+}
+.confidence-metric strong {
+  color: #0f766e;
+  font-size: 9px;
+}
+.metric-bar {
+  height: 6px;
+  margin: 5px 0 4px;
+  border-radius: 999px;
+  background: #e8eef2;
+  overflow: hidden;
+}
+.metric-bar i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #0f766e, #2bb6a8);
+}
+.confidence-metric small {
+  display: block;
+  color: #9aa7b2;
+  font-size: 6px;
+  line-height: 1.4;
+}
+
+.provenance-note {
+  margin-top: 12px;
+  padding: 11px;
+  border-radius: 10px;
+  background: #f4faf8;
+  border: 1px solid #dcefeb;
+}
+.provenance-note.warning {
+  background: #fff8ee;
+  border-color: #f7ddb8;
+}
+.provenance-note strong {
+  color: #427068;
+  font-size: 8px;
+}
+.provenance-note.warning strong {
+  color: #b36716;
+}
+.provenance-note p {
+  margin: 4px 0 0;
+  color: #7e948f;
+  font-size: 7px;
+  line-height: 1.5;
+}
+.provenance-note.warning p {
+  color: #907c64;
+}
+
+.drawer-actions {
+  position: sticky;
+  bottom: -18px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin: 14px -18px -18px;
+  padding: 12px 18px 18px;
+  background: linear-gradient(180deg, rgba(255,255,255,.84), #fff 32%);
+  border-top: 1px solid #edf2f5;
+}
+
+@keyframes provenanceFade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes provenanceSlide {
+  from { transform: translateX(24px); opacity: .4; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+@media (max-width: 620px) {
+  .provenance-source-block {
+    grid-template-columns: 1fr;
+  }
+  .provenance-source-block > div {
+    border-right: 0;
+    border-bottom: 1px solid #edf2f5 !important;
+  }
+  .provenance-source-block > div:last-child {
+    border-bottom: 0 !important;
+  }
+  .provenance-value-card > strong {
+    padding-right: 0;
+    padding-top: 24px;
+  }
+}
