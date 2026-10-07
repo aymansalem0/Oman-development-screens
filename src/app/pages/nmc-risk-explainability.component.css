@@ -774,3 +774,103 @@ a, button { font: inherit; }
 .rx-shell.rtl .threshold-track * {
   direction: ltr;
 }
+
+
+/* --- Risk Explainability readability pass: larger typography --- */
+.rx-shell .eyebrow,
+.rx-shell .vessel-kicker,
+.rx-shell .section-label {
+  font-size: 9px !important;
+}
+.rx-shell .brand-block h1 {
+  font-size: 20px !important;
+}
+.rx-shell .brand-block p {
+  font-size: 10px !important;
+}
+.rx-shell .vessel-summary h2 {
+  font-size: 28px !important;
+}
+.rx-shell .identity-row span {
+  font-size: 9px !important;
+}
+.rx-shell .back-link,
+.rx-shell .secondary-btn,
+.rx-shell .language-btn {
+  font-size: 10px !important;
+}
+.rx-shell .metric-card small {
+  font-size: 8px !important;
+}
+.rx-shell .metric-card strong {
+  font-size: 25px !important;
+}
+.rx-shell .metric-card span {
+  font-size: 9px !important;
+}
+.rx-shell .threshold-head h3,
+.rx-shell .panel-header h3 {
+  font-size: 13px !important;
+}
+.rx-shell .threshold-head p,
+.rx-shell .panel-header p,
+.rx-shell .confidence-title p {
+  font-size: 9px !important;
+  line-height: 1.5;
+}
+.rx-shell .engine-meta span,
+.rx-shell .count-pill,
+.rx-shell .source-class,
+.rx-shell .status-chip {
+  font-size: 8.5px !important;
+}
+.rx-shell .band {
+  font-size: 9px !important;
+}
+.rx-shell .score-marker b {
+  font-size: 10px !important;
+}
+.rx-shell .factor-title-row strong {
+  font-size: 11px !important;
+}
+.rx-shell .factor-content p,
+.rx-shell .factor-meta span,
+.rx-shell .trace-card small,
+.rx-shell .trace-note p,
+.rx-shell .confidence-grid small,
+.rx-shell .explanation-note p,
+.rx-shell .decision-grid small,
+.rx-shell .decision-grid p {
+  font-size: 9px !important;
+  line-height: 1.5;
+}
+.rx-shell .trace-card strong,
+.rx-shell .trace-note strong,
+.rx-shell .confidence-grid strong,
+.rx-shell .explanation-note strong,
+.rx-shell .decision-grid strong {
+  font-size: 10px !important;
+}
+.rx-shell .selected-factor-hero small {
+  font-size: 8px !important;
+}
+.rx-shell .selected-factor-hero strong {
+  font-size: 11px !important;
+}
+.rx-shell .selected-factor-hero > div:first-child strong {
+  font-size: 26px !important;
+}
+.rx-shell .calculation-ledger span {
+  font-size: 9px !important;
+}
+.rx-shell .calculation-ledger strong {
+  font-size: 10px !important;
+}
+.rx-shell.rtl .brand-block p,
+.rx-shell.rtl .threshold-head p,
+.rx-shell.rtl .panel-header p,
+.rx-shell.rtl .trace-note p,
+.rx-shell.rtl .explanation-note p,
+.rx-shell.rtl .decision-grid p {
+  line-height: 1.75;
+}

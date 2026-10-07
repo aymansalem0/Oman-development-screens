@@ -729,3 +729,84 @@ button, input, select { font: inherit; }
     margin-right: 0;
   }
 }
+
+
+/* --- NMC readability pass: larger typography --- */
+.nmc-shell .eyebrow,
+.nmc-shell .sidebar-section-label,
+.nmc-shell .breadcrumb {
+  font-size: 10px !important;
+}
+.nmc-shell .brand-block h1 {
+  font-size: 20px !important;
+}
+.nmc-shell .brand-block p,
+.nmc-shell .page-heading p {
+  font-size: 12px !important;
+  line-height: 1.5;
+}
+.nmc-shell .page-heading h2 {
+  font-size: 28px !important;
+}
+.nmc-shell .nav-item {
+  font-size: 12px !important;
+}
+.nmc-shell .user-chip strong {
+  font-size: 12px !important;
+}
+.nmc-shell .user-chip small,
+.nmc-shell .clock,
+.nmc-shell .live-pill {
+  font-size: 10px !important;
+}
+.nmc-shell .kpi-label {
+  font-size: 11px !important;
+}
+.nmc-shell .kpi-card strong {
+  font-size: 29px !important;
+}
+.nmc-shell .kpi-card small {
+  font-size: 10px !important;
+}
+.nmc-shell .panel-header h3 {
+  font-size: 13px !important;
+}
+.nmc-shell .panel-header p {
+  font-size: 9.5px !important;
+  line-height: 1.45;
+}
+.nmc-shell .secondary-btn,
+.nmc-shell .primary-btn,
+.nmc-shell .ghost-btn,
+.nmc-shell .language-btn,
+.nmc-shell input,
+.nmc-shell select {
+  font-size: 11px !important;
+}
+.nmc-shell .attention-title strong,
+.nmc-shell .vessel-panel-head h3 {
+  font-size: 12px !important;
+}
+.nmc-shell .attention-main p,
+.nmc-shell .attention-meta,
+.nmc-shell .event-content p,
+.nmc-shell .vessel-data-grid small {
+  font-size: 9.5px !important;
+}
+.nmc-shell .attention-meta,
+.nmc-shell .vessel-data-grid strong,
+.nmc-shell .event-content strong,
+.nmc-shell .event-content span {
+  font-size: 10px !important;
+}
+.nmc-shell .risk-chip,
+.nmc-shell .count-badge,
+.nmc-shell .priority-count,
+.nmc-shell .stream-indicator {
+  font-size: 9px !important;
+}
+.nmc-shell.rtl .brand-block p,
+.nmc-shell.rtl .page-heading p,
+.nmc-shell.rtl .panel-header p {
+  line-height: 1.7;
+}
