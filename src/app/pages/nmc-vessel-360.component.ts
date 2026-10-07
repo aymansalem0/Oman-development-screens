@@ -202,6 +202,72 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
     return this.fieldProvenance[key];
   }
 
+  openCertificateProvenance(certificate: CertificateRecord): void {
+    const moeiSource = certificate.source.includes('MOEI');
+    const externalAuthoritative =
+      certificate.source.includes('Flag') ||
+      certificate.source.includes('Recognized Organization') ||
+      certificate.source.includes('Verified');
+
+    this.selectedProvenance = {
+      key:`certificate-${certificate.id}`,
+      label:`${certificate.type} status`,
+      value:certificate.status,
+      source:certificate.source,
+      system:certificate.issuer,
+      sourceClass:moeiSource ? 'MOEI Authoritative' : externalAuthoritative ? 'External Authoritative' : 'External Trusted',
+      authority:moeiSource ? 'MOEI certificate record' : externalAuthoritative ? 'Flag / statutory certificate authority' : 'External maritime certificate source',
+      recordId:certificate.number,
+      sourceTrust:moeiSource ? 100 : 95,
+      dataConfidence:certificate.conflict ? 92 : 97,
+      identityMatch:100,
+      freshness:certificate.conflict ? 94 : 97,
+      lastUpdated:'22:41:56',
+      conflict:certificate.conflict ? 'Unresolved' : 'None',
+      note:certificate.condition || 'Certificate status is linked to the correlated vessel record and retained with source provenance.'
+    };
+  }
+
+  openInspectionProvenance(inspection: InspectionRecord): void {
+    this.selectedProvenance = {
+      key:`inspection-${inspection.id}`,
+      label:'Inspection result',
+      value:inspection.result,
+      source:'MOEI Smart Inspection',
+      system:inspection.source,
+      sourceClass:'MOEI Authoritative',
+      authority:'MOEI inspection record',
+      recordId:inspection.id,
+      sourceTrust:100,
+      dataConfidence:100,
+      identityMatch:100,
+      freshness:96,
+      lastUpdated:'22:41:55',
+      conflict:'None',
+      note:`Inspection performed through the MOEI inspection process at ${inspection.port}. Findings and evidence remain linked to the vessel record.`
+    };
+  }
+
+  openDeficiencyProvenance(deficiency: DeficiencyRecord): void {
+    this.selectedProvenance = {
+      key:`deficiency-${deficiency.id}`,
+      label:`${deficiency.category} deficiency`,
+      value:`${deficiency.severity} · ${deficiency.status}`,
+      source:'MOEI Smart Inspection',
+      system:'Inspection Findings & Corrective Actions',
+      sourceClass:'MOEI Authoritative',
+      authority:'MOEI inspection finding',
+      recordId:deficiency.id,
+      sourceTrust:100,
+      dataConfidence:100,
+      identityMatch:100,
+      freshness:deficiency.status === 'Open' ? 95 : 92,
+      lastUpdated:deficiency.raised,
+      conflict:'None',
+      note:deficiency.evidence
+    };
+  }
+
   get isUaeFlag(): boolean {
     return this.vessel.flag === 'UAE';
   }
