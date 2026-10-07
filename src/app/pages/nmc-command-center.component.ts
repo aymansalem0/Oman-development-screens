@@ -18,6 +18,7 @@ import {
   RouteDirection,
   SEA_ROUTES
 } from '../data/nmc-vessel-catalog';
+import { LanguageService } from '../services/language.service';
 
 interface MaritimeEvent {
   time: string;
@@ -59,7 +60,109 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
   private markers = new Map<number, L.Marker>();
   private selectedTrack?: L.Polyline;
 
-  constructor(private router: Router) {}
+  constructor(private router: Router, public lang: LanguageService) {}
+
+  copy(en: string, ar: string): string {
+    return this.lang.pick(en, ar);
+  }
+
+  toggleLanguage(): void {
+    this.lang.toggle();
+
+    if (this.map) {
+      this.map.remove();
+      this.map = undefined;
+      this.markers.clear();
+      this.selectedTrack = undefined;
+      setTimeout(() => this.initMap());
+    }
+  }
+
+  get formattedNow(): string {
+    return new Intl.DateTimeFormat(this.lang.isArabic ? 'ar-AE' : 'en-GB', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    }).format(this.now);
+  }
+
+  riskLabel(score: number): string {
+    const level = this.riskLevel(score);
+    const labels: Record<RiskLevel, string> = {
+      Critical: this.copy('Critical', 'حرج'),
+      High: this.copy('High', 'مرتفع'),
+      Watch: this.copy('Watch', 'مراقبة'),
+      Normal: this.copy('Normal', 'طبيعي')
+    };
+    return labels[level];
+  }
+
+  vesselTypeLabel(type: string): string {
+    const labels: Record<string, string> = {
+      Cargo: 'سفينة بضائع',
+      Tanker: 'ناقلة',
+      Passenger: 'سفينة ركاب',
+      Container: 'سفينة حاويات',
+      Offshore: 'سفينة خدمات بحرية',
+      'Bulk Carrier': 'ناقلة بضائع صب',
+      Tug: 'قاطرة'
+    };
+    return this.lang.isArabic ? (labels[type] || type) : type;
+  }
+
+  flagLabel(flag: string): string {
+    const labels: Record<string, string> = {
+      UAE: 'الإمارات',
+      Liberia: 'ليبيريا',
+      Panama: 'بنما',
+      'Marshall Is.': 'جزر مارشال',
+      Singapore: 'سنغافورة',
+      Malta: 'مالطا',
+      'Hong Kong': 'هونغ كونغ',
+      Bahamas: 'الباهاما'
+    };
+    return this.lang.isArabic ? (labels[flag] || flag) : flag;
+  }
+
+  zoneLabel(zone: string): string {
+    const labels: Record<string, string> = {
+      'UAE Approach': 'مناطق الاقتراب من الإمارات',
+      'East Coast': 'الساحل الشرقي',
+      'UAE Waters': 'المياه الإماراتية',
+      'Abu Dhabi Approach': 'مناطق الاقتراب من أبوظبي',
+      Offshore: 'المناطق البحرية',
+      'Dubai Coastal': 'ساحل دبي',
+      'Northern Emirates': 'الإمارات الشمالية',
+      'Western Waters': 'المياه الغربية'
+    };
+    return this.lang.isArabic ? (labels[zone] || zone) : zone;
+  }
+
+  eventTitle(event: MaritimeEvent): string {
+    const ar: Record<string, string> = {
+      'Risk escalated to Critical': 'تصاعد مستوى المخاطر إلى حرج',
+      'Certificate data conflict': 'تعارض في بيانات الشهادة',
+      'Enhanced monitoring started': 'بدء المراقبة المعززة',
+      'Route deviation detected': 'تم اكتشاف انحراف عن المسار',
+      'Certificate expiry threshold reached': 'بلوغ حد مراقبة انتهاء الشهادة'
+    };
+    return this.lang.isArabic ? (ar[event.title] || event.title) : event.title;
+  }
+
+  eventDetail(event: MaritimeEvent): string {
+    const ar: Record<string, string> = {
+      'Movement anomaly correlated with unresolved inspection deficiency and certificate condition.': 'تم ربط نمط حركة غير اعتيادي بملاحظة تفتيش غير مغلقة وشرط قائم على إحدى الشهادات.',
+      'MOEI record and external classification source require verification.': 'يوجد اختلاف بين سجل الوزارة ومصدر التصنيف الخارجي ويستلزم التحقق.',
+      'Risk threshold exceeded due to inspection and certificate indicators.': 'تم تجاوز حد المخاطر نتيجة مؤشرات التفتيش والشهادات.',
+      'Observed route differs from expected arrival corridor.': 'المسار المرصود يختلف عن مسار الوصول المتوقع.',
+      'Certificate validity window entered the configured monitoring threshold.': 'دخلت صلاحية الشهادة ضمن حد المراقبة المهيأ.'
+    };
+    return this.lang.isArabic ? (ar[event.detail] || event.detail) : event.detail;
+  }
 
   ngOnInit(): void {
     this.selectedVessel = this.vessels[0];
@@ -100,12 +203,12 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
     L.polygon(
       [[26.40,51.85],[26.55,53.65],[26.15,55.45],[25.55,55.25],[24.45,54.70],[23.65,53.25],[23.90,51.95]],
       { color:'#0f766e', weight:1.6, dashArray:'8 7', fillColor:'#14b8a6', fillOpacity:0.045 }
-    ).bindTooltip('Gulf Monitoring Area', { sticky:true }).addTo(this.map);
+    ).bindTooltip(this.copy('Gulf Monitoring Area', 'منطقة مراقبة الخليج'), { sticky:true }).addTo(this.map);
 
     L.polygon(
       [[25.75,56.20],[25.80,56.95],[24.75,57.05],[24.20,56.58],[24.45,56.12]],
       { color:'#0284c7', weight:1.6, dashArray:'8 7', fillColor:'#38bdf8', fillOpacity:0.04 }
-    ).bindTooltip('East Coast Monitoring Area', { sticky:true }).addTo(this.map);
+    ).bindTooltip(this.copy('East Coast Monitoring Area', 'منطقة مراقبة الساحل الشرقي'), { sticky:true }).addTo(this.map);
 
     this.resetMapView();
     this.refreshMapMarkers();
@@ -267,9 +370,9 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
       marker.bindTooltip(
         `<div class="map-vessel-tooltip">
           <strong>${vessel.name}</strong>
-          <span>IMO ${vessel.imo} · ${vessel.flag} · ${vessel.type}</span>
-          <span>${vessel.speed.toFixed(1)} kn · ${vessel.destination}</span>
-          <b>Risk ${vessel.risk} · ${this.riskLevel(vessel.risk)}</b>
+          <span>IMO ${vessel.imo} · ${this.flagLabel(vessel.flag)} · ${this.vesselTypeLabel(vessel.type)}</span>
+          <span>${vessel.speed.toFixed(1)} ${this.copy('kn', 'عقدة')} · ${vessel.destination}</span>
+          <b>${this.copy('Risk', 'المخاطر')} ${vessel.risk} · ${this.riskLabel(vessel.risk)}</b>
         </div>`,
         { direction:'top', offset:[0,-18], opacity:1 }
       );
@@ -317,6 +420,12 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
       weight:3,
       opacity:0.72,
       dashArray:'9 7'
-    }).bindTooltip(`Monitored route to ${this.selectedVessel.destination}`, { sticky:true }).addTo(this.map);
+    }).bindTooltip(
+      this.copy(
+        `Monitored route to ${this.selectedVessel.destination}`,
+        `المسار المراقب إلى ${this.selectedVessel.destination}`
+      ),
+      { sticky:true }
+    ).addTo(this.map);
   }
 }
