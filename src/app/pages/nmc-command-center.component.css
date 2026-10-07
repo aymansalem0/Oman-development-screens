@@ -642,3 +642,90 @@ button, input, select { font: inherit; }
   border-top: 2px dashed #0f766e;
   display: inline-block;
 }
+
+
+/* Bilingual / RTL support */
+.language-btn {
+  min-width: 74px;
+  height: 36px;
+  padding: 0 11px;
+  border-radius: 10px;
+  border: 1px solid #cfe5e2;
+  background: #f2fbf9;
+  color: #0f766e;
+  font-size: 9px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: .18s ease;
+}
+.language-btn:hover {
+  background: #0f766e;
+  border-color: #0f766e;
+  color: #fff;
+}
+
+.nmc-shell.rtl {
+  direction: rtl;
+  font-family: "Segoe UI", Tahoma, Arial, sans-serif;
+}
+.nmc-shell.rtl .nmc-sidebar {
+  left: auto;
+  right: 0;
+  border-right: 0;
+  border-left: 1px solid #e6edf3;
+}
+.nmc-shell.rtl .nmc-main {
+  margin-left: 0;
+  margin-right: 216px;
+}
+.nmc-shell.rtl .nav-item {
+  text-align: right;
+}
+.nmc-shell.rtl .topbar-actions {
+  justify-content: flex-start;
+}
+.nmc-shell.rtl .page-heading,
+.nmc-shell.rtl .panel-header,
+.nmc-shell.rtl .vessel-panel-head,
+.nmc-shell.rtl .attention-title,
+.nmc-shell.rtl .event-content > div {
+  text-align: right;
+}
+.nmc-shell.rtl .heading-actions,
+.nmc-shell.rtl .map-filters,
+.nmc-shell.rtl .identity-row,
+.nmc-shell.rtl .attention-meta,
+.nmc-shell.rtl .vessel-actions,
+.nmc-shell.rtl .map-legend {
+  direction: rtl;
+}
+.nmc-shell.rtl .map-stage,
+.nmc-shell.rtl .real-map,
+.nmc-shell.rtl .leaflet-container {
+  direction: ltr !important;
+}
+.nmc-shell.rtl .map-legend {
+  direction: rtl !important;
+}
+.nmc-shell.rtl .attention-item {
+  text-align: right;
+}
+.nmc-shell.rtl .open-arrow {
+  transform: scaleX(-1);
+}
+.nmc-shell.rtl .event-row {
+  direction: rtl;
+}
+.nmc-shell.rtl .event-content {
+  text-align: right;
+}
+.nmc-shell.rtl .user-chip,
+.nmc-shell.rtl .brand-block {
+  text-align: right;
+}
+
+@media (max-width: 900px) {
+  .nmc-shell.rtl .nmc-main {
+    margin-right: 0;
+  }
+}
