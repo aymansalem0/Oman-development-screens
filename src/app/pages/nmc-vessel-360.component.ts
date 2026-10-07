@@ -213,6 +213,14 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
     return this.vessel.riskLevel.toLowerCase();
   }
 
+  get riskGaugeBackground(): string {
+    const color =
+      this.vessel.risk >= 85 ? '#e65353' :
+      this.vessel.risk >= 65 ? '#ef8b43' :
+      this.vessel.risk >= 45 ? '#d7a738' : '#4da7a0';
+    return `radial-gradient(circle at center, white 58%, transparent 59%), conic-gradient(${color} 0 ${this.vessel.risk}%, #edf1f3 ${this.vessel.risk}% 100%)`;
+  }
+
   private buildOperationalData(): void {
     const risk = this.vessel.risk;
     this.hasCertificateConflict = risk >= 80;
