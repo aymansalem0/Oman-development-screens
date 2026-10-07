@@ -1,17 +1,22 @@
 import { CommonModule } from '@angular/common';
 import { Component, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { ActivatedRoute, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { NmcVesselProfile, riskLevel } from '../data/nmc-vessel-catalog';
 import {
   NMC_OPERATIONAL_VESSELS,
   getOperationalVesselByImo
 } from '../data/nmc-expanded-vessel-catalog';
 import { LanguageService } from '../services/language.service';
+import {
+  NmcCaseStateService,
+  NmcInspectionOutcome,
+  NmcPersistedTaskStatus
+} from '../services/nmc-case-state.service';
 
 type CaseStatus = 'Open' | 'In Progress' | 'Pending Verification' | 'Resolved';
 type TaskStatus = 'Pending' | 'Assigned' | 'In Progress' | 'Completed' | 'Escalated';
-type TimelineType = 'Risk' | 'AI' | 'Decision' | 'Task' | 'Escalation' | 'Resolution';
+type TimelineType = 'Risk' | 'AI' | 'Decision' | 'Task' | 'Escalation' | 'Resolution' | 'Inspection';
 
 interface CaseTask {
   id: string;
@@ -58,7 +63,12 @@ export class NmcCaseWorkspaceComponent implements OnInit {
   timeline: CaseTimelineItem[] = [];
   stakeholders: Stakeholder[] = [];
 
-  constructor(private route: ActivatedRoute, public lang: LanguageService) {}
+  constructor(
+    private route: ActivatedRoute,
+    private router: Router,
+    public lang: LanguageService,
+    private caseState: NmcCaseStateService
+  ) {}
 
   ngOnInit(): void {
     const imo = this.route.snapshot.paramMap.get('imo') || NMC_OPERATIONAL_VESSELS[0].imo;
@@ -115,10 +125,18 @@ export class NmcCaseWorkspaceComponent implements OnInit {
     return this.tasks.filter(task => task.mandatory).every(task => task.status === 'Completed');
   }
 
+  get inspectionOutcome(): NmcInspectionOutcome | undefined {
+    return this.caseState.getInspectionOutcome(this.vessel.imo);
+  }
+
   get currentRisk(): number {
     let score = this.vessel.risk;
     if (this.isTaskCompleted('verify-certificate')) score -= this.vessel.risk >= 80 ? 12 : 6;
-    if (this.isTaskCompleted('priority-inspection')) score -= this.vessel.risk >= 65 ? 18 : 8;
+
+    if (this.isTaskCompleted('priority-inspection')) {
+      score -= this.inspectionOutcome?.riskReduction ?? (this.vessel.risk >= 65 ? 18 : 8);
+    }
+
     if (this.isTaskCompleted('enhanced-monitoring')) score -= 3;
     if (this.isTaskCompleted('restriction-review')) score -= 5;
     if (this.caseStatus === 'Resolved') score -= 6;
@@ -144,36 +162,53 @@ export class NmcCaseWorkspaceComponent implements OnInit {
   }
 
   startTask(task: CaseTask): void {
+    if (task.id === 'priority-inspection') {
+      this.openSmartInspection();
+      return;
+    }
+
     if (task.status === 'Pending' || task.status === 'Assigned') {
       task.status = 'In Progress';
       this.caseStatus = 'In Progress';
+      this.caseState.setTaskStatus(this.vessel.imo, task.id, task.status);
       this.addTimeline('Task',
         this.copy('Task started', 'بدء تنفيذ المهمة'),
         `${task.title} · ${task.owner}`,
         task.owner
       );
+      this.persistTimelineEvent('Task', task, this.copy('Task started', 'بدء تنفيذ المهمة'));
     }
   }
 
   completeTask(task: CaseTask): void {
     if (task.status === 'Completed') return;
+
+    if (task.id === 'priority-inspection' && !this.inspectionOutcome) {
+      this.openSmartInspection();
+      return;
+    }
+
     task.status = 'Completed';
+    this.caseState.setTaskStatus(this.vessel.imo, task.id, task.status);
     this.caseStatus = this.mandatoryComplete ? 'Pending Verification' : 'In Progress';
     this.addTimeline('Task',
       this.copy('Task completed', 'تم استكمال المهمة'),
       `${task.title} · ${this.copy('risk recalculated to', 'أعيد احتساب المخاطر إلى')} ${this.currentRisk}`,
       task.owner
     );
+    this.persistTimelineEvent('Task', task, this.copy('Task completed', 'تم استكمال المهمة'));
   }
 
   escalateTask(task: CaseTask): void {
     task.status = 'Escalated';
+    this.caseState.setTaskStatus(this.vessel.imo, task.id, task.status);
     this.caseStatus = 'In Progress';
     this.addTimeline('Escalation',
       this.copy('Task escalated', 'تم تصعيد المهمة'),
       `${task.title} · ${this.copy('supervisor attention required', 'يتطلب تدخل المشرف')}`,
       this.copy('NMC Duty Officer', 'ضابط مناوبة المركز البحري')
     );
+    this.persistTimelineEvent('Escalation', task, this.copy('Task escalated', 'تم تصعيد المهمة'));
   }
 
   resolveCase(): void {
@@ -187,6 +222,23 @@ export class NmcCaseWorkspaceComponent implements OnInit {
       ),
       this.copy('NMC Supervisor', 'مشرف المركز البحري الوطني')
     );
+
+    this.caseState.appendTimeline(this.vessel.imo, {
+      id: `resolution-${this.vessel.imo}`,
+      time: this.copy('Now', 'الآن'),
+      type: 'Resolution',
+      title: this.copy('Case resolved', 'تم إغلاق الحالة'),
+      detail: this.resolutionNote || this.copy(
+        'Mandatory actions completed and the case was resolved.',
+        'تم استكمال الإجراءات الإلزامية وإغلاق الحالة.'
+      ),
+      actor: this.copy('NMC Supervisor', 'مشرف المركز البحري الوطني')
+    });
+  }
+
+  openSmartInspection(): void {
+    this.caseState.setTaskStatus(this.vessel.imo, 'priority-inspection', 'In Progress');
+    this.router.navigate(['/moei/nmc/vessel', this.vessel.imo, 'smart-inspection']);
   }
 
   statusLabel(status: CaseStatus | TaskStatus): string {
@@ -236,10 +288,26 @@ export class NmcCaseWorkspaceComponent implements OnInit {
     });
   }
 
+  private persistTimelineEvent(type: 'Task' | 'Escalation', task: CaseTask, title: string): void {
+    this.caseState.appendTimeline(this.vessel.imo, {
+      id: `${type.toLowerCase()}-${task.id}-${task.status}`,
+      time: this.copy('Now', 'الآن'),
+      type,
+      title,
+      detail: `${task.title} · ${task.owner}`,
+      actor: task.owner
+    });
+  }
+
   private buildCase(preserveState = false): void {
+    const persistedStates = this.caseState.getTaskStates(this.vessel.imo);
     const previous = preserveState
       ? new Map(this.tasks.map(task => [task.id, task.status]))
       : new Map<string, TaskStatus>();
+
+    Object.entries(persistedStates).forEach(([id, status]) => {
+      previous.set(id, status as TaskStatus);
+    });
 
     const critical = this.vessel.risk >= 85;
     const high = this.vessel.risk >= 65;
@@ -387,6 +455,18 @@ export class NmcCaseWorkspaceComponent implements OnInit {
           actor: this.copy('NMC Risk Engine', 'محرك مخاطر المركز البحري')
         }
       ];
+
+      const persistedTimeline = this.caseState.getTimeline(this.vessel.imo).map(item => ({
+        time: item.time,
+        type: item.type as TimelineType,
+        title: item.title,
+        detail: item.detail,
+        actor: item.actor
+      }));
+
+      if (persistedTimeline.length) {
+        this.timeline = [...persistedTimeline, ...this.timeline];
+      }
     }
   }
 }
