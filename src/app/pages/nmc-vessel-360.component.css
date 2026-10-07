@@ -1922,3 +1922,140 @@ button, a { font: inherit; }
   justify-content: center;
   text-decoration: none;
 }
+
+
+/* Bilingual / RTL support */
+.language-btn {
+  min-width: 74px;
+  height: 36px;
+  padding: 0 11px;
+  border-radius: 10px;
+  border: 1px solid #cfe5e2;
+  background: #f2fbf9;
+  color: #0f766e;
+  font-size: 9px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: .18s ease;
+}
+.language-btn:hover {
+  background: #0f766e;
+  border-color: #0f766e;
+  color: #fff;
+}
+
+.v360-shell.rtl {
+  direction: rtl;
+  font-family: "Segoe UI", Tahoma, Arial, sans-serif;
+}
+.v360-shell.rtl .v360-topbar,
+.v360-shell.rtl .hero-card,
+.v360-shell.rtl .critical-banner,
+.v360-shell.rtl .panel-header,
+.v360-shell.rtl .evidence-heading,
+.v360-shell.rtl .source-provenance-head,
+.v360-shell.rtl .source-comparison-head,
+.v360-shell.rtl .factor-title-row,
+.v360-shell.rtl .deficiency-id-row {
+  direction: rtl;
+}
+.v360-shell.rtl .top-actions {
+  justify-content: flex-start;
+}
+.v360-shell.rtl .identity-block,
+.v360-shell.rtl .brand-block,
+.v360-shell.rtl .hero-kicker,
+.v360-shell.rtl .panel-header,
+.v360-shell.rtl .data-grid,
+.v360-shell.rtl .registry-context,
+.v360-shell.rtl .source-table,
+.v360-shell.rtl .factor-list,
+.v360-shell.rtl .timeline,
+.v360-shell.rtl .certificate-list,
+.v360-shell.rtl .inspection-list,
+.v360-shell.rtl .deficiency-detail,
+.v360-shell.rtl .source-provenance-grid,
+.v360-shell.rtl .provenance-drawer {
+  text-align: right;
+}
+.v360-shell.rtl .tabs {
+  direction: rtl;
+}
+.v360-shell.rtl .back-btn {
+  direction: rtl;
+}
+.v360-shell.rtl .field-label,
+.v360-shell.rtl .certificate-title-row,
+.v360-shell.rtl .source-comparison-head,
+.v360-shell.rtl .source-provenance-head,
+.v360-shell.rtl .confidence-metric > div:first-child {
+  direction: rtl;
+}
+.v360-shell.rtl .map-wrap,
+.v360-shell.rtl .vessel-map,
+.v360-shell.rtl .leaflet-container {
+  direction: ltr !important;
+}
+.v360-shell.rtl .map-callout {
+  direction: rtl;
+  text-align: right;
+}
+.v360-shell.rtl .provenance-drawer {
+  right: auto;
+  left: 0;
+  border-left: 0;
+  border-right: 1px solid #dde6ec;
+  box-shadow: 18px 0 45px rgba(23,50,77,.14);
+  animation: provenanceSlideRtl .22s ease-out;
+}
+.v360-shell.rtl .provenance-value-card > .source-class {
+  right: auto;
+  left: 13px;
+}
+.v360-shell.rtl .provenance-value-card > strong {
+  padding-right: 0;
+  padding-left: 120px;
+}
+.v360-shell.rtl .registry-source {
+  right: auto;
+  left: 11px;
+}
+.v360-shell.rtl .authority-chip {
+  left: auto;
+  right: 14px;
+}
+.v360-shell.rtl .source-row,
+.v360-shell.rtl .inspection-card,
+.v360-shell.rtl .closed-deficiency-row {
+  direction: rtl;
+}
+.v360-shell.rtl .inspection-result {
+  text-align: left;
+}
+.v360-shell.rtl .source-compare-grid {
+  direction: rtl;
+}
+.v360-shell.rtl .compare-symbol {
+  transform: scaleX(-1);
+}
+.v360-shell.rtl .drawer-actions {
+  justify-content: flex-start;
+}
+.v360-shell.rtl .provenance-source-block > div {
+  border-right: 0;
+  border-left: 1px solid #edf2f5;
+}
+.v360-shell.rtl .provenance-source-block > div:nth-child(2n) {
+  border-left: 0;
+}
+
+@keyframes provenanceSlideRtl {
+  from { transform: translateX(-24px); opacity: .4; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+@media (max-width: 620px) {
+  .v360-shell.rtl .provenance-value-card > strong {
+    padding-left: 0;
+  }
+}

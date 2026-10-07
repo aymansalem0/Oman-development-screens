@@ -9,6 +9,7 @@ import {
   riskLevel,
   SEA_ROUTES
 } from '../data/nmc-vessel-catalog';
+import { LanguageService } from '../services/language.service';
 
 interface SourceStatus {
   name: string;
@@ -132,7 +133,128 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
 
   private map?: L.Map;
 
-  constructor(private route: ActivatedRoute) {}
+  constructor(private route: ActivatedRoute, public lang: LanguageService) {}
+
+  copy(en: string, ar: string): string {
+    return this.lang.pick(en, ar);
+  }
+
+  toggleLanguage(): void {
+    this.lang.toggle();
+    this.buildOperationalData();
+
+    if (this.map) {
+      this.map.remove();
+      this.map = undefined;
+      setTimeout(() => this.initMap());
+    }
+  }
+
+  riskLabel(level: string = this.vessel?.riskLevel): string {
+    const labels: Record<string, string> = {
+      Critical: this.copy('Critical', 'حرج'),
+      High: this.copy('High', 'مرتفع'),
+      Watch: this.copy('Watch', 'مراقبة'),
+      Normal: this.copy('Normal', 'طبيعي')
+    };
+    return labels[level] || level;
+  }
+
+  sourceClassLabel(value: string): string {
+    const labels: Record<string, string> = {
+      'MOEI Authoritative': 'مصدر معتمد من الوزارة',
+      'Internal Master': 'السجل الداخلي الرئيسي',
+      'External Authoritative': 'مصدر خارجي معتمد',
+      'External Trusted': 'مصدر خارجي موثوق',
+      'Operational Feed': 'تغذية تشغيلية'
+    };
+    return this.lang.isArabic ? (labels[value] || value) : value;
+  }
+
+  sourceStatusLabel(value: string): string {
+    const labels: Record<string, string> = {
+      Matched: 'متطابق',
+      Conflict: 'تعارض',
+      Available: 'متاح'
+    };
+    return this.lang.isArabic ? (labels[value] || value) : value;
+  }
+
+  certificateStatusLabel(value: string): string {
+    const labels: Record<string, string> = {
+      Valid: 'سارية',
+      Conditional: 'سارية بشروط',
+      Expiring: 'قرب الانتهاء'
+    };
+    return this.lang.isArabic ? (labels[value] || value) : value;
+  }
+
+  inspectionResultLabel(value: string): string {
+    const labels: Record<string, string> = {
+      Passed: 'مستوفاة',
+      'Deficiencies Found': 'تم رصد ملاحظات',
+      'Follow-up Required': 'تتطلب متابعة'
+    };
+    return this.lang.isArabic ? (labels[value] || value) : value;
+  }
+
+  deficiencyStatusLabel(value: string): string {
+    const labels: Record<string, string> = { Open: 'مفتوحة', Closed: 'مغلقة' };
+    return this.lang.isArabic ? (labels[value] || value) : value;
+  }
+
+  factorLabel(label: string): string {
+    const labels: Record<string, string> = {
+      'Unresolved critical inspection deficiency': 'ملاحظة معاينة حرجة غير مغلقة',
+      'Open inspection deficiency': 'ملاحظة معاينة مفتوحة',
+      'Inspection history exposure': 'مخاطر مرتبطة بسجل المعاينات',
+      'Movement anomaly / route deviation': 'نمط حركة غير اعتيادي / انحراف عن المسار',
+      'Voyage and movement exposure': 'مخاطر مرتبطة بالرحلة والحركة',
+      'Conditional certificate state': 'حالة شهادة مشروطة',
+      'Certificate expiry proximity': 'اقتراب انتهاء صلاحية الشهادة',
+      'Certificate profile exposure': 'مخاطر مرتبطة بملف الشهادات',
+      'Conflict between authoritative data sources': 'تعارض بين مصادر بيانات معتمدة',
+      'Data-quality / external-source factor': 'عامل جودة البيانات / المصدر الخارجي',
+      'Historical vessel / operator risk pattern': 'نمط مخاطر تاريخي للسفينة / المشغل'
+    };
+    return this.lang.isArabic ? (labels[label] || label) : label;
+  }
+
+  sourceLabel(source: string): string {
+    const labels: Record<string, string> = {
+      Inspection: 'المعاينة',
+      'AIS / Movement': 'AIS / الحركة',
+      'Certificate Registry': 'سجل الشهادات',
+      'Data Quality': 'جودة البيانات',
+      'Inspection History': 'سجل المعاينات'
+    };
+    return this.lang.isArabic ? (labels[source] || source) : source;
+  }
+
+  timelineTitle(item: TimelineItem): string {
+    const title = item.title;
+    if (!this.lang.isArabic) return title;
+    if (title.startsWith('Risk assessed as ')) return `تم تقييم مستوى المخاطر على أنه ${this.riskLabel(title.replace('Risk assessed as ', ''))}`;
+    const labels: Record<string, string> = {
+      'Certificate data conflict detected': 'تم اكتشاف تعارض في بيانات الشهادة',
+      'Movement exception detected': 'تم اكتشاف حالة استثنائية في الحركة',
+      'Open inspection finding loaded': 'تم تحميل ملاحظة معاينة مفتوحة',
+      'Vessel entered monitoring area': 'دخلت السفينة منطقة المراقبة'
+    };
+    return labels[title] || title;
+  }
+
+  timelineDetail(item: TimelineItem): string {
+    if (!this.lang.isArabic) return item.detail;
+    if (item.detail.startsWith('Composite vessel score is ')) return `درجة المخاطر المركبة للسفينة هي ${this.vessel.risk} بعد ربط مصادر البيانات الحالية.`;
+    const labels: Record<string, string> = {
+      'MOEI registry and external classification source disagree.': 'يوجد اختلاف بين سجل الوزارة ومصدر التصنيف الخارجي.',
+      'Observed movement differs from the monitored route pattern.': 'الحركة المرصودة تختلف عن نمط المسار المراقب.',
+      'Outstanding deficiency included in the vessel risk picture.': 'تم تضمين الملاحظة غير المغلقة ضمن صورة مخاطر السفينة.',
+      'AIS identity matched to MOEI vessel master using IMO number.': 'تمت مطابقة هوية AIS مع سجل السفينة باستخدام رقم IMO.'
+    };
+    return labels[item.detail] || item.detail;
+  }
 
   ngOnInit(): void {
     this.imo = this.route.snapshot.paramMap.get('imo') || NMC_VESSELS[0].imo;
@@ -292,11 +414,13 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
   }
 
   get registrationTitle(): string {
-    return this.isUaeFlag ? 'UAE Vessel Registration' : 'Flag Registration';
+    return this.isUaeFlag
+      ? this.copy('UAE Vessel Registration', 'تسجيل السفينة في دولة الإمارات')
+      : this.copy('Flag Registration', 'التسجيل لدى دولة العلم');
   }
 
   get registrationStatus(): string {
-    return 'Active';
+    return this.copy('Active', 'ساري');
   }
 
   get registrationSource(): string {
@@ -304,22 +428,28 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
   }
 
   get registrationAuthorityLabel(): string {
-    return this.isUaeFlag ? 'MOEI Authoritative' : 'External Authoritative';
+    return this.isUaeFlag
+      ? this.copy('MOEI Authoritative', 'مصدر معتمد من الوزارة')
+      : this.copy('External Authoritative', 'مصدر خارجي معتمد');
   }
 
   get vesselMasterRole(): string {
     return this.isUaeFlag
-      ? 'Authoritative internal vessel context linked to the UAE registry'
-      : 'Internal correlation record for a foreign-flag vessel operating in the NMC context';
+      ? this.copy('Authoritative internal vessel context linked to the UAE registry', 'سياق داخلي معتمد للسفينة ومرتبط بسجل دولة الإمارات')
+      : this.copy('Internal correlation record for a foreign-flag vessel operating in the NMC context', 'سجل داخلي لربط بيانات سفينة أجنبية ضمن سياق المركز البحري الوطني');
   }
 
   get moeiRelationshipTitle(): string {
-    return this.isUaeFlag ? 'MOEI Flag-State Relationship' : 'MOEI Regulatory Relationship';
+    return this.isUaeFlag
+      ? this.copy('MOEI Flag-State Relationship', 'علاقة الوزارة بصفتها دولة العلم')
+      : this.copy('MOEI Regulatory Relationship', 'العلاقة التنظيمية مع الوزارة');
   }
 
   get moeiRelationshipStatus(): string {
-    if (this.isUaeFlag) return 'Registered UAE Vessel';
-    return this.vessel.risk >= 65 ? 'Active · Under Operational Review' : 'Active · Monitored';
+    if (this.isUaeFlag) return this.copy('Registered UAE Vessel', 'سفينة مسجلة في دولة الإمارات');
+    return this.vessel.risk >= 65
+      ? this.copy('Active · Under Operational Review', 'نشطة · قيد المراجعة التشغيلية')
+      : this.copy('Active · Monitored', 'نشطة · تحت المراقبة');
   }
 
   get primaryCertificateSourceLabel(): string {
@@ -346,30 +476,42 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
 
   get attentionMessage(): string {
     const level = this.vessel.riskLevel;
-    if (level === 'Critical') return 'Immediate operational review required';
-    if (level === 'High') return 'Priority monitoring and review required';
-    if (level === 'Watch') return 'Enhanced monitoring recommended';
-    return 'Normal monitoring status';
+    if (level === 'Critical') return this.copy('Immediate operational review required', 'مراجعة تشغيلية فورية مطلوبة');
+    if (level === 'High') return this.copy('Priority monitoring and review required', 'مراقبة ومراجعة ذات أولوية مطلوبة');
+    if (level === 'Watch') return this.copy('Enhanced monitoring recommended', 'يوصى بالمراقبة المعززة');
+    return this.copy('Normal monitoring status', 'حالة مراقبة طبيعية');
   }
 
   get attentionDescription(): string {
     if (this.vessel.risk >= 85) {
-      return 'Multiple movement, inspection, certificate and data-quality indicators have been correlated into a critical vessel risk picture.';
+      return this.copy(
+        'Multiple movement, inspection, certificate and data-quality indicators have been correlated into a critical vessel risk picture.',
+        'تم ربط عدة مؤشرات للحركة والمعاينة والشهادات وجودة البيانات لتكوين صورة مخاطر حرجة للسفينة.'
+      );
     }
     if (this.vessel.risk >= 65) {
-      return 'The vessel has multiple active risk indicators requiring coordinated operational review.';
+      return this.copy(
+        'The vessel has multiple active risk indicators requiring coordinated operational review.',
+        'لدى السفينة عدة مؤشرات مخاطر نشطة تتطلب مراجعة تشغيلية منسقة.'
+      );
     }
     if (this.vessel.risk >= 45) {
-      return 'Monitoring indicators require attention, but no immediate critical intervention is currently indicated.';
+      return this.copy(
+        'Monitoring indicators require attention, but no immediate critical intervention is currently indicated.',
+        'تتطلب مؤشرات المراقبة الانتباه، دون وجود تدخل حرج فوري مطلوب حالياً.'
+      );
     }
-    return 'No critical compliance, inspection or movement exceptions are currently open for this vessel.';
+    return this.copy(
+      'No critical compliance, inspection or movement exceptions are currently open for this vessel.',
+      'لا توجد حالياً حالات حرجة مفتوحة مرتبطة بالامتثال أو المعاينة أو الحركة لهذه السفينة.'
+    );
   }
 
   get complianceStatus(): string {
-    if (this.vessel.risk >= 85) return 'Action Required';
-    if (this.vessel.risk >= 65) return 'Under Review';
-    if (this.vessel.risk >= 45) return 'Watch';
-    return 'Compliant';
+    if (this.vessel.risk >= 85) return this.copy('Action Required', 'إجراء مطلوب');
+    if (this.vessel.risk >= 65) return this.copy('Under Review', 'قيد المراجعة');
+    if (this.vessel.risk >= 45) return this.copy('Watch', 'مراقبة');
+    return this.copy('Compliant', 'مستوفٍ');
   }
 
   get riskCssClass(): string {
