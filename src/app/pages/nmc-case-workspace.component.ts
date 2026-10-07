@@ -311,10 +311,11 @@ export class NmcCaseWorkspaceComponent implements OnInit {
       previous.set(id, status as TaskStatus);
     });
 
-    const critical = this.vessel.risk >= 85;
-    const high = this.vessel.risk >= 65;
-    const watch = this.vessel.risk >= 45;
-    const conflict = this.vessel.risk >= 80;
+    const level = this.riskEngine.levelForScore(this.vessel.risk);
+    const critical = level === 'Critical';
+    const high = level === 'Critical' || level === 'High';
+    const watch = level !== 'Normal';
+    const conflict = this.riskEngine.evaluate(this.vessel).baseScore >= 80;
 
     const tasks: CaseTask[] = [];
 
@@ -460,7 +461,7 @@ export class NmcCaseWorkspaceComponent implements OnInit {
         {
           time: '22:42',
           type: 'Risk',
-          title: this.copy(`Risk assessed as ${riskLevel(this.vessel.risk)}`, `تم تقييم المخاطر عند المستوى ${this.riskLevelLabel}`),
+          title: this.copy(`Risk assessed as ${this.riskEngine.levelForScore(this.vessel.risk)}`, `تم تقييم المخاطر عند المستوى ${this.riskLevelLabel}`),
           detail: this.copy(`Composite vessel score reached ${this.vessel.risk}/100.`, `وصلت الدرجة المركبة لمخاطر السفينة إلى ${this.vessel.risk}/100.`),
           actor: this.copy('NMC Risk Engine', 'محرك مخاطر المركز البحري')
         }
