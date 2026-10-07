@@ -11,13 +11,13 @@ import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import * as L from 'leaflet';
 import {
-  NMC_VESSELS,
   NmcVesselProfile,
   riskLevel,
   RiskLevel,
   RouteDirection,
   SEA_ROUTES
 } from '../data/nmc-vessel-catalog';
+import { NMC_OPERATIONAL_VESSELS } from '../data/nmc-expanded-vessel-catalog';
 import { LanguageService } from '../services/language.service';
 
 interface MaritimeEvent {
@@ -45,13 +45,15 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
   selectedVessel?: NmcVesselProfile;
   now = new Date();
 
-  vessels: NmcVesselProfile[] = NMC_VESSELS.map(vessel => ({ ...vessel }));
+  vessels: NmcVesselProfile[] = NMC_OPERATIONAL_VESSELS.map(vessel => ({ ...vessel }));
+  attentionPage = 1;
+  readonly attentionPageSize = 6;
 
   readonly trafficSnapshot = {
     totalContacts: 420,
     insideUaeMonitoredArea: 265,
     approachingUaeArea: 155,
-    correlatedProfiles: NMC_VESSELS.length,
+    correlatedProfiles: NMC_OPERATIONAL_VESSELS.length,
     source: 'AIS / LRIT traffic layer',
     snapshotTime: '22:42:18'
   };
@@ -300,11 +302,56 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
     });
   }
 
-  get attentionVessels(): NmcVesselProfile[] {
+  get allAttentionVessels(): NmcVesselProfile[] {
     return [...this.vessels]
       .filter(vessel => vessel.risk >= 45)
-      .sort((a,b) => b.risk - a.risk)
-      .slice(0, 6);
+      .sort((a,b) => b.risk - a.risk);
+  }
+
+  get attentionVessels(): NmcVesselProfile[] {
+    const start = (this.attentionPage - 1) * this.attentionPageSize;
+    return this.allAttentionVessels.slice(start, start + this.attentionPageSize);
+  }
+
+  get attentionPageCount(): number {
+    return Math.max(1, Math.ceil(this.allAttentionVessels.length / this.attentionPageSize));
+  }
+
+  get attentionPageNumbers(): number[] {
+    const total = this.attentionPageCount;
+    const start = Math.max(1, Math.min(this.attentionPage - 2, total - 4));
+    const end = Math.min(total, start + 4);
+    return Array.from({ length: end - start + 1 }, (_, index) => start + index);
+  }
+
+  get attentionRangeStart(): number {
+    return this.allAttentionVessels.length === 0 ? 0 : (this.attentionPage - 1) * this.attentionPageSize + 1;
+  }
+
+  get attentionRangeEnd(): number {
+    return Math.min(this.attentionPage * this.attentionPageSize, this.allAttentionVessels.length);
+  }
+
+  attentionRank(indexOnPage: number): number {
+    return (this.attentionPage - 1) * this.attentionPageSize + indexOnPage + 1;
+  }
+
+  setAttentionPage(page: number): void {
+    this.attentionPage = Math.min(Math.max(page, 1), this.attentionPageCount);
+  }
+
+  previousAttentionPage(): void {
+    this.setAttentionPage(this.attentionPage - 1);
+  }
+
+  nextAttentionPage(): void {
+    this.setAttentionPage(this.attentionPage + 1);
+  }
+
+  private syncAttentionPageForVessel(vessel: NmcVesselProfile): void {
+    if (vessel.risk < 45) return;
+    const index = this.allAttentionVessels.findIndex(item => item.id === vessel.id);
+    if (index >= 0) this.attentionPage = Math.floor(index / this.attentionPageSize) + 1;
   }
 
   get vesselTypes(): string[] {
@@ -327,6 +374,7 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
 
   selectVessel(vessel: NmcVesselProfile, fly = true): void {
     this.selectedVessel = vessel;
+    this.syncAttentionPageForVessel(vessel);
     this.refreshMapMarkers();
     this.drawSelectedTrack();
 
@@ -412,8 +460,11 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
   private createVesselIcon(vessel: NmcVesselProfile): L.DivIcon {
     const level = this.riskClass(vessel.risk);
     const selected = this.selectedVessel?.id === vessel.id ? 'selected' : '';
-    const shipSize = Math.round(Math.max(15, Math.min(27, 14 + vessel.lengthM / 25)));
-    const ringSize = shipSize + 14;
+    const isSelected = this.selectedVessel?.id === vessel.id;
+    const shipSize = isSelected
+      ? Math.round(Math.max(17, Math.min(28, 14 + vessel.lengthM / 25)))
+      : Math.round(Math.max(10, Math.min(18, 9 + vessel.lengthM / 42)));
+    const ringSize = shipSize + (isSelected ? 14 : 8);
 
     return L.divIcon({
       className: 'nmc-map-marker-wrap',
@@ -426,7 +477,7 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
             <path class="ship-deck" d="M9.2 10.6h5.6v8.2H9.2z"></path>
             <path class="ship-centerline" d="M12 3.5v24.3"></path>
           </svg>
-          ${vessel.risk >= 65 ? `<span class="ship-label">${vessel.name}<b>${vessel.risk}</b></span>` : ''}
+          ${isSelected || vessel.risk >= 85 ? `<span class="ship-label">${vessel.name}<b>${vessel.risk}</b></span>` : ''}
         </div>
       `,
       iconSize:[52,52],
