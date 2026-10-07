@@ -296,13 +296,13 @@
     <section class="evidence-tab" *ngIf="activeTab === 'certificates'">
       <div class="evidence-heading">
         <div>
-          <span class="section-kicker">CERTIFICATES</span>
-          <h3>Certificates & Validity Conditions</h3>
-          <p>Authoritative certificate records, conditions, source provenance and external-source conflicts for {{ vessel.name }}.</p>
+          <span class="section-kicker">{{ copy('CERTIFICATES', 'الشهادات') }}</span>
+          <h3>{{ copy('Certificates & Validity Conditions', 'الشهادات وشروط الصلاحية') }}</h3>
+          <p>{{ copy('Authoritative certificate records, conditions, source provenance and external-source conflicts for', 'سجلات الشهادات المعتمدة وشروطها ومصادرها والتعارضات مع المصادر الخارجية للسفينة') }} {{ vessel.name }}.</p>
         </div>
         <div class="evidence-heading-actions">
-          <span class="attention-pill" *ngIf="hasCertificateConflict">1 conflict requires verification</span>
-          <button type="button" class="secondary-btn" (click)="setTab('overview')">Return to overview</button>
+          <span class="attention-pill" *ngIf="hasCertificateConflict">{{ copy('1 conflict requires verification', 'تعارض واحد يتطلب التحقق') }}</span>
+          <button type="button" class="secondary-btn" (click)="setTab('overview')">{{ copy('Return to overview', 'العودة إلى النظرة العامة') }}</button>
         </div>
       </div>
 
@@ -310,10 +310,10 @@
         <article class="panel certificate-list-panel">
           <div class="panel-header">
             <div>
-              <h3>Certificate Portfolio</h3>
-              <p>4 active records linked to IMO {{ vessel.imo }}</p>
+              <h3>{{ copy('Certificate Portfolio', 'ملف الشهادات') }}</h3>
+              <p>4 {{ copy('active records linked to IMO', 'سجلات نشطة مرتبطة برقم IMO') }} {{ vessel.imo }}</p>
             </div>
-            <span class="source-summary">MOEI + external records</span>
+            <span class="source-summary">{{ copy('MOEI + external records', 'سجلات الوزارة + مصادر خارجية') }}</span>
           </div>
 
           <div class="certificate-list">
@@ -331,16 +331,16 @@
               <div class="certificate-main">
                 <div class="certificate-title-row">
                   <strong>{{ certificate.type }}</strong>
-                  <span class="certificate-status" [ngClass]="certificate.status.toLowerCase()">{{ certificate.status }}</span>
+                  <span class="certificate-status" [ngClass]="certificate.status.toLowerCase()">{{ certificateStatusLabel(certificate.status) }}</span>
                 </div>
                 <p>{{ certificate.number }} · {{ certificate.issuer }}</p>
                 <div class="certificate-meta">
-                  <span>Issued {{ certificate.issued }}</span>
-                  <span>Expires {{ certificate.expiry }}</span>
+                  <span>{{ copy('Issued', 'إصدار') }} {{ certificate.issued }}</span>
+                  <span>{{ copy('Expires', 'انتهاء') }} {{ certificate.expiry }}</span>
                   <span>{{ certificate.source }}</span>
                 </div>
               </div>
-              <span class="conflict-indicator" *ngIf="certificate.conflict">CONFLICT</span>
+              <span class="conflict-indicator" *ngIf="certificate.conflict">{{ copy('CONFLICT', 'تعارض') }}</span>
             </button>
           </div>
         </article>
@@ -348,34 +348,34 @@
         <aside class="panel certificate-detail-panel" *ngIf="selectedCertificate() as certificate">
           <div class="panel-header">
             <div>
-              <h3>Certificate Evidence</h3>
+              <h3>{{ copy('Certificate Evidence', 'دليل الشهادة') }}</h3>
               <p>{{ certificate.id }}</p>
             </div>
             <span class="certificate-status large" [ngClass]="certificate.status.toLowerCase()">{{ certificate.status }}</span>
           </div>
 
           <div class="evidence-detail-grid">
-            <div><small>Certificate</small><strong>{{ certificate.type }}</strong></div>
-            <div><small>Certificate No.</small><strong>{{ certificate.number }}</strong></div>
-            <div><small>Issuer</small><strong>{{ certificate.issuer }}</strong></div>
+            <div><small>{{ copy('Certificate', 'الشهادة') }}</small><strong>{{ certificate.type }}</strong></div>
+            <div><small>{{ copy('Certificate No.', 'رقم الشهادة') }}</small><strong>{{ certificate.number }}</strong></div>
+            <div><small>{{ copy('Issuer', 'الجهة المصدرة') }}</small><strong>{{ certificate.issuer }}</strong></div>
             <div><div class="field-label"><small>{{ copy('Source', 'المصدر') }}</small><button type="button" class="source-info" (click)="openCertificateProvenance(certificate)" title="Certificate provenance">i</button></div><strong>{{ certificate.source }}</strong></div>
-            <div><small>Issue date</small><strong>{{ certificate.issued }}</strong></div>
-            <div><small>Expiry date</small><strong>{{ certificate.expiry }}</strong></div>
+            <div><small>{{ copy('Issue date', 'تاريخ الإصدار') }}</small><strong>{{ certificate.issued }}</strong></div>
+            <div><small>{{ copy('Expiry date', 'تاريخ الانتهاء') }}</small><strong>{{ certificate.expiry }}</strong></div>
           </div>
 
           <div class="certificate-condition" *ngIf="certificate.condition">
             <span>!</span>
             <div>
-              <strong>Validity condition</strong>
+              <strong>{{ copy('Validity condition', 'شرط الصلاحية') }}</strong>
               <p>{{ certificate.condition }}</p>
             </div>
           </div>
 
           <div class="risk-evidence-link" *ngIf="certificate.conflict">
             <div>
-              <small>RISK CONTRIBUTION</small>
+              <small>{{ copy('RISK CONTRIBUTION', 'المساهمة في المخاطر') }}</small>
               <strong>{{ certificate.status }} certificate +{{ certificateRiskImpact }}</strong>
-              <p>This record directly contributes to the current {{ vessel.riskLevel }} vessel risk.</p>
+              <p>{{ copy('This record directly contributes to the current vessel risk level.', 'يسهم هذا السجل مباشرة في مستوى المخاطر الحالي للسفينة.') }}</p>
             </div>
             <span>+{{ certificateRiskImpact }}</span>
           </div>
@@ -383,36 +383,38 @@
           <div class="source-comparison" *ngIf="certificate.conflict">
             <div class="source-comparison-head">
               <div>
-                <strong>Source Conflict Verification</strong>
-                <p>The same certificate is reported differently by two sources.</p>
+                <strong>{{ copy('Source Conflict Verification', 'التحقق من تعارض المصادر') }}</strong>
+                <p>{{ copy('The same certificate is reported differently by two sources.', 'تم الإبلاغ عن الشهادة نفسها بحالتين مختلفتين من مصدرين.') }}</p>
               </div>
-              <span class="conflict-badge">{{ certificateVerificationStarted ? 'TASK CREATED' : 'UNRESOLVED' }}</span>
+              <span class="conflict-badge">{{ certificateVerificationStarted ? copy('TASK CREATED', 'تم إنشاء المهمة') : copy('UNRESOLVED', 'غير محلول') }}</span>
             </div>
 
             <div class="source-compare-grid">
               <div class="authority-source">
                 <small>{{ primaryCertificateSourceLabel }}</small>
-                <strong>Conditionally Valid</strong>
-                <span>22:41:56 · Confidence 100%</span>
+                <strong>{{ copy('Conditionally Valid', 'سارية بشروط') }}</strong>
+                <span>22:41:56 · {{ copy('Confidence', 'الثقة') }} 100%</span>
               </div>
               <div class="compare-symbol">≠</div>
               <div>
                 <small>{{ vessel.classSociety }}</small>
                 <strong>Valid</strong>
-                <span>22:41:57 · Confidence 68%</span>
+                <span>22:41:57 · {{ copy('Confidence', 'الثقة') }} 68%</span>
               </div>
             </div>
 
             <div class="verification-task" *ngIf="certificateVerificationStarted">
               <span>✓</span>
               <div>
-                <strong>Verification task VER-2026-00872 created</strong>
-                <p>Assigned to {{ isUaeFlag ? 'Certificate Compliance Officer' : 'Foreign Vessel Compliance Officer' }} · Priority High · Due in 15 minutes.</p>
+                <strong>{{ copy('Verification task VER-2026-00872 created', 'تم إنشاء مهمة التحقق VER-2026-00872') }}</strong>
+                <p>{{ copy('Assigned to', 'تم الإسناد إلى') }}
+{{ isUaeFlag ? copy('Certificate Compliance Officer', 'مسؤول امتثال الشهادات') : copy('Foreign Vessel Compliance Officer', 'مسؤول امتثال السفن الأجنبية') }}
+· {{ copy('Priority High', 'أولوية مرتفعة') }} · {{ copy('Due in 15 minutes', 'الاستحقاق خلال 15 دقيقة') }}.</p>
               </div>
             </div>
 
             <button type="button" class="primary-btn wide" (click)="startCertificateVerification()" [disabled]="certificateVerificationStarted">
-              {{ certificateVerificationStarted ? 'Verification in progress' : 'Create verification task' }}
+              {{ certificateVerificationStarted ? copy('Verification in progress', 'التحقق جارٍ') : copy('Create verification task', 'إنشاء مهمة تحقق') }}
             </button>
           </div>
         </aside>
@@ -422,31 +424,31 @@
     <section class="evidence-tab" *ngIf="activeTab === 'inspection'">
       <div class="evidence-heading">
         <div>
-          <span class="section-kicker">INSPECTION</span>
-          <h3>Inspection History & Deficiency Evidence</h3>
-          <p>Inspection findings linked directly to vessel risk, follow-up status and operational response.</p>
+          <span class="section-kicker">{{ copy('INSPECTION', 'المعاينة') }}</span>
+          <h3>{{ copy('Inspection History & Deficiency Evidence', 'سجل المعاينات وأدلة الملاحظات') }}</h3>
+          <p>{{ copy('Inspection findings linked directly to vessel risk, follow-up status and operational response.', 'نتائج المعاينة مرتبطة مباشرة بمخاطر السفينة وحالة المتابعة والاستجابة التشغيلية.') }}</p>
         </div>
         <div class="evidence-heading-actions">
-          <span class="critical-pill" *ngIf="openDeficiencyCount > 0">{{ openDeficiencyCount }} open deficiency</span>
-          <button type="button" class="secondary-btn" (click)="setTab('overview')">Return to overview</button>
+          <span class="critical-pill" *ngIf="openDeficiencyCount > 0">{{ openDeficiencyCount }} {{ copy('open deficiency', 'ملاحظة مفتوحة') }}</span>
+          <button type="button" class="secondary-btn" (click)="setTab('overview')">{{ copy('Return to overview', 'العودة إلى النظرة العامة') }}</button>
         </div>
       </div>
 
       <div class="inspection-kpis">
-        <div><small>Inspections / 12 months</small><strong>3</strong><span>2 with findings</span></div>
-        <div><small>Open deficiencies</small><strong [class.critical-text]="openDeficiencyCount > 0">{{ openDeficiencyCount }}</strong><span>{{ openDeficiencyCount > 0 ? 'requires follow-up' : 'no open findings' }}</span></div>
-        <div><small>Compliance status</small><strong [class.critical-text]="vessel.risk >= 65">{{ complianceStatus }}</strong><span>current inspection posture</span></div>
-        <div><small>Risk contribution</small><strong [class.critical-text]="inspectionRiskImpact > 10">+{{ inspectionRiskImpact }}</strong><span>current composite score</span></div>
+        <div><small>{{ copy('Inspections / 12 months', 'المعاينات / 12 شهراً') }}</small><strong>3</strong><span>{{ copy('2 with findings', '2 بها ملاحظات') }}</span></div>
+        <div><small>{{ copy('Open deficiencies', 'الملاحظات المفتوحة') }}</small><strong [class.critical-text]="openDeficiencyCount > 0">{{ openDeficiencyCount }}</strong><span>{{ openDeficiencyCount > 0 ? copy('requires follow-up', 'تتطلب متابعة') : copy('no open findings', 'لا توجد ملاحظات مفتوحة') }}</span></div>
+        <div><small>{{ copy('Compliance status', 'حالة الامتثال') }}</small><strong [class.critical-text]="vessel.risk >= 65">{{ complianceStatus }}</strong><span>{{ copy('current inspection posture', 'الوضع الحالي للمعاينة') }}</span></div>
+        <div><small>{{ copy('Risk contribution', 'المساهمة في المخاطر') }}</small><strong [class.critical-text]="inspectionRiskImpact > 10">+{{ inspectionRiskImpact }}</strong><span>{{ copy('current composite score', 'الدرجة المركبة الحالية') }}</span></div>
       </div>
 
       <div class="inspection-layout">
         <article class="panel inspection-history-panel">
           <div class="panel-header">
             <div>
-              <h3>Inspection History</h3>
-              <p>Most recent first</p>
+              <h3>{{ copy('Inspection History', 'سجل المعاينات') }}</h3>
+              <p>{{ copy('Most recent first', 'الأحدث أولاً') }}</p>
             </div>
-            <span class="source-summary">Smart Inspection</span>
+            <span class="source-summary">{{ copy('Smart Inspection', 'المعاينة الذكية') }}</span>
           </div>
 
           <div class="inspection-list">
@@ -456,12 +458,12 @@
                 <span>{{ inspection.port }}</span>
               </div>
               <div class="inspection-main">
-                <strong>{{ inspection.type }} <button type="button" class="inline-source table-source" (click)="openInspectionProvenance(inspection)" title="Inspection provenance">i</button></strong>
+                <strong>{{ inspection.type }} <button type="button" class="inline-source table-source" (click)="openInspectionProvenance(inspection)" [attr.title]="copy('Inspection provenance', 'مصدر المعاينة')">i</button></strong>
                 <p>{{ inspection.id }} · {{ inspection.inspector }}</p>
               </div>
               <div class="inspection-result">
-                <span [ngClass]="inspection.result === 'Passed' ? 'passed' : 'finding'">{{ inspection.result }}</span>
-                <small *ngIf="inspection.openDeficiencies">{{ inspection.openDeficiencies }} open deficiency</small>
+                <span [ngClass]="inspection.result === 'Passed' ? 'passed' : 'finding'">{{ inspectionResultLabel(inspection.result) }}</span>
+                <small *ngIf="inspection.openDeficiencies">{{ inspection.openDeficiencies }} {{ copy('open deficiency', 'ملاحظة مفتوحة') }}</small>
               </div>
             </div>
           </div>
@@ -470,10 +472,10 @@
         <aside class="panel deficiency-panel">
           <div class="panel-header">
             <div>
-              <h3>Open Deficiency</h3>
-              <p>Evidence driving vessel prioritization</p>
+              <h3>{{ copy('Open Deficiency', 'ملاحظة مفتوحة') }}</h3>
+              <p>{{ copy('Evidence driving vessel prioritization', 'الدليل المؤثر في تحديد أولوية السفينة') }}</p>
             </div>
-            <span class="critical-badge" *ngIf="openDeficiencyCount > 0">{{ vessel.risk >= 80 ? 'CRITICAL' : 'OPEN' }}</span>
+            <span class="critical-badge" *ngIf="openDeficiencyCount > 0">{{ vessel.risk >= 80 ? copy('CRITICAL', 'حرجة') : copy('OPEN', 'مفتوحة') }}</span>
           </div>
 
           <ng-container *ngFor="let deficiency of deficiencies">
@@ -487,23 +489,23 @@
               <p class="deficiency-description">{{ deficiency.description }}</p>
 
               <div class="deficiency-facts">
-                <div><small>Raised</small><strong>{{ deficiency.raised }}</strong></div>
-                <div><small>Due date</small><strong>{{ deficiency.due }}</strong></div>
-                <div><small>{{ copy('Status', 'الحالة') }}</small><strong class="critical-text">{{ deficiency.status }}</strong></div>
-                <div><small>Risk impact</small><strong class="critical-text">+{{ deficiency.riskImpact }}</strong></div>
+                <div><small>{{ copy('Raised', 'تاريخ الرصد') }}</small><strong>{{ deficiency.raised }}</strong></div>
+                <div><small>{{ copy('Due date', 'تاريخ الاستحقاق') }}</small><strong>{{ deficiency.due }}</strong></div>
+                <div><small>{{ copy('Status', 'الحالة') }}</small><strong class="critical-text">{{ deficiencyStatusLabel(deficiency.status) }}</strong></div>
+                <div><small>{{ copy('Risk impact', 'تأثير المخاطر') }}</small><strong class="critical-text">+{{ deficiency.riskImpact }}</strong></div>
               </div>
 
               <div class="evidence-box">
-                <small>SUPPORTING EVIDENCE</small>
+                <small>{{ copy('SUPPORTING EVIDENCE', 'الأدلة الداعمة') }}</small>
                 <strong>{{ deficiency.evidence }}</strong>
-                <button type="button" (click)="openDeficiencyProvenance(deficiency)">View source & evidence</button>
+                <button type="button" (click)="openDeficiencyProvenance(deficiency)">{{ copy('View source & evidence', 'عرض المصدر والدليل') }}</button>
               </div>
 
               <div class="risk-evidence-link critical-evidence">
                 <div>
-                  <small>WHY THIS MATTERS TO NMC</small>
-                  <strong>Open inspection deficiency +{{ deficiency.riskImpact }}</strong>
-                  <p>This finding contributes directly to the vessel's {{ vessel.riskLevel }} risk classification.</p>
+                  <small>{{ copy('WHY THIS MATTERS TO NMC', 'لماذا يهم هذا المركز البحري الوطني') }}</small>
+                  <strong>{{ copy('Open inspection deficiency', 'ملاحظة معاينة مفتوحة') }} +{{ deficiency.riskImpact }}</strong>
+                  <p>{{ copy('This finding contributes directly to the vessel risk classification.', 'تسهم هذه الملاحظة مباشرة في تصنيف مخاطر السفينة.') }}</p>
                 </div>
                 <span>+{{ deficiency.riskImpact }}</span>
               </div>
@@ -511,14 +513,14 @@
               <div class="inspection-action" [class.created]="priorityInspectionCreated">
                 <span>{{ priorityInspectionCreated ? '✓' : '↗' }}</span>
                 <div>
-                  <strong>{{ priorityInspectionCreated ? 'Priority inspection case created' : 'Recommended operational action' }}</strong>
-                  <p *ngIf="!priorityInspectionCreated">Create a priority follow-up inspection and carry forward this deficiency and supporting evidence.</p>
-                  <p *ngIf="priorityInspectionCreated">Priority inspection created for {{ vessel.name }} · Evidence inherited from the latest inspection record.</p>
+                  <strong>{{ priorityInspectionCreated ? copy('Priority inspection case created', 'تم إنشاء حالة معاينة ذات أولوية') : copy('Recommended operational action', 'الإجراء التشغيلي الموصى به') }}</strong>
+                  <p *ngIf="!priorityInspectionCreated">{{ copy('Create a priority follow-up inspection and carry forward this deficiency and supporting evidence.', 'إنشاء معاينة متابعة ذات أولوية مع نقل الملاحظة والأدلة الداعمة.') }}</p>
+                  <p *ngIf="priorityInspectionCreated">{{ copy('Priority inspection created for', 'تم إنشاء معاينة ذات أولوية للسفينة') }} {{ vessel.name }} · {{ copy('Evidence inherited from the latest inspection record.', 'تم توريث الأدلة من أحدث سجل معاينة.') }}</p>
                 </div>
               </div>
 
               <button type="button" class="primary-btn wide" (click)="createPriorityInspection()" [disabled]="priorityInspectionCreated">
-                {{ priorityInspectionCreated ? 'Priority inspection created' : 'Create priority inspection' }}
+                {{ priorityInspectionCreated ? copy('Priority inspection created', 'تم إنشاء المعاينة ذات الأولوية') : copy('Create priority inspection', 'إنشاء معاينة ذات أولوية') }}
               </button>
             </div>
           </ng-container>
@@ -526,8 +528,8 @@
           <div class="no-open-deficiency" *ngIf="openDeficiencyCount === 0">
             <span>✓</span>
             <div>
-              <strong>No open inspection deficiencies</strong>
-              <p>The latest inspection record contains no outstanding corrective action requiring NMC intervention.</p>
+              <strong>{{ copy('No open inspection deficiencies', 'لا توجد ملاحظات معاينة مفتوحة') }}</strong>
+              <p>{{ copy('The latest inspection record contains no outstanding corrective action requiring NMC intervention.', 'لا يحتوي أحدث سجل معاينة على إجراء تصحيحي معلق يتطلب تدخل المركز البحري الوطني.') }}</p>
             </div>
           </div>
         </aside>
@@ -536,10 +538,10 @@
       <article class="panel closed-findings-panel">
         <div class="panel-header">
           <div>
-            <h3>Deficiency History</h3>
-            <p>Closed findings retained for historical risk pattern analysis</p>
+            <h3>{{ copy('Deficiency History', 'سجل الملاحظات') }}</h3>
+            <p>{{ copy('Closed findings retained for historical risk pattern analysis', 'يتم الاحتفاظ بالملاحظات المغلقة لتحليل أنماط المخاطر التاريخية') }}</p>
           </div>
-          <span class="risk-confidence">Historical evidence +{{ historicalRiskImpact }}</span>
+          <span class="risk-confidence">{{ copy('Historical evidence', 'أدلة تاريخية') }} +{{ historicalRiskImpact }}</span>
         </div>
 
         <div class="closed-deficiency-row" *ngFor="let deficiency of deficiencies">
@@ -547,7 +549,7 @@
             <span class="closed-check">✓</span>
             <div><strong>{{ deficiency.category }}</strong><p>{{ deficiency.description }}</p></div>
             <span>{{ deficiency.raised }}</span>
-            <span class="closed-status">Closed</span>
+            <span class="closed-status">{{ copy('Closed', 'مغلقة') }}</span>
           </ng-container>
         </div>
       </article>
@@ -557,63 +559,63 @@
     <section class="evidence-tab" *ngIf="activeTab === 'compliance'">
       <div class="evidence-heading">
         <div>
-          <span class="section-kicker">COMPLIANCE</span>
-          <h3>Compliance Picture</h3>
-          <p>Current registration, certificate, inspection and operational compliance posture for {{ vessel.name }}.</p>
+          <span class="section-kicker">{{ copy('COMPLIANCE', 'الامتثال') }}</span>
+          <h3>{{ copy('Compliance Picture', 'صورة الامتثال') }}</h3>
+          <p>{{ copy('Current registration, certificate, inspection and operational compliance posture for', 'الوضع الحالي للتسجيل والشهادات والمعاينة والامتثال التشغيلي للسفينة') }} {{ vessel.name }}.</p>
         </div>
         <div class="evidence-heading-actions">
           <span class="matched-badge">{{ complianceStatus }}</span>
-          <button type="button" class="secondary-btn" (click)="setTab('overview')">Return to overview</button>
+          <button type="button" class="secondary-btn" (click)="setTab('overview')">{{ copy('Return to overview', 'العودة إلى النظرة العامة') }}</button>
         </div>
       </div>
 
       <div class="inspection-kpis">
         <div><small>{{ registrationTitle }}</small><strong>{{ registrationStatus }}</strong><span>{{ registrationSource }} · {{ registrationAuthorityLabel }}</span></div>
-        <div><small>Certificates</small><strong [class.critical-text]="hasCertificateConflict">{{ hasCertificateConflict ? 'Verification Required' : 'In Order' }}</strong><span>{{ hasCertificateConflict ? 'source conflict open' : 'no critical conflict' }}</span></div>
-        <div><small>Inspection</small><strong [class.critical-text]="openDeficiencyCount > 0">{{ openDeficiencyCount > 0 ? 'Follow-up Required' : 'Clear' }}</strong><span>{{ openDeficiencyCount }} open deficiency</span></div>
-        <div><small>Overall compliance</small><strong [class.critical-text]="vessel.risk >= 65">{{ complianceStatus }}</strong><span>risk score {{ vessel.riskScore }}/100</span></div>
+        <div><small>{{ copy('Certificates', 'الشهادات') }}</small><strong [class.critical-text]="hasCertificateConflict">{{ hasCertificateConflict ? copy('Verification Required', 'يتطلب التحقق') : copy('In Order', 'سليم') }}</strong><span>{{ hasCertificateConflict ? copy('source conflict open', 'يوجد تعارض مفتوح بالمصادر') : copy('no critical conflict', 'لا يوجد تعارض حرج') }}</span></div>
+        <div><small>{{ copy('Inspection', 'المعاينة') }}</small><strong [class.critical-text]="openDeficiencyCount > 0">{{ openDeficiencyCount > 0 ? copy('Follow-up Required', 'تتطلب متابعة') : copy('Clear', 'سليم') }}</strong><span>{{ openDeficiencyCount }} {{ copy('open', 'مفتوحة') }} deficiency</span></div>
+        <div><small>{{ copy('Overall compliance', 'الامتثال العام') }}</small><strong [class.critical-text]="vessel.risk >= 65">{{ complianceStatus }}</strong><span>{{ copy('risk score', 'درجة المخاطر') }} {{ vessel.riskScore }}/100</span></div>
       </div>
 
       <div class="certificate-layout">
         <article class="panel">
           <div class="panel-header">
-            <div><h3>Compliance Controls</h3><p>Current cross-domain compliance checks</p></div>
-            <span class="source-summary">Live correlated status</span>
+            <div><h3>{{ copy('Compliance Controls', 'ضوابط الامتثال') }}</h3><p>{{ copy('Current cross-domain compliance checks', 'فحوص الامتثال الحالية عبر المجالات') }}</p></div>
+            <span class="source-summary">{{ copy('Live correlated status', 'حالة مترابطة مباشرة') }}</span>
           </div>
           <div class="source-table">
-            <div class="source-row header"><span>Control</span><span>Current state</span><span>{{ copy('Source', 'المصدر') }}</span><span>Risk</span><span>{{ copy('Status', 'الحالة') }}</span></div>
+            <div class="source-row header"><span>{{ copy('Control', 'الضابط') }}</span><span>{{ copy('Current state', 'الحالة الحالية') }}</span><span>{{ copy('Source', 'المصدر') }}</span><span>{{ copy('Risk', 'المخاطر') }}</span><span>{{ copy('Status', 'الحالة') }}</span></div>
             <div class="source-row">
-              <div><strong>{{ registrationTitle }}</strong><small>{{ isUaeFlag ? 'UAE legal registration state' : 'Foreign flag registration state' }}</small></div>
-              <span>{{ registrationStatus }}</span><span>{{ registrationSource }}</span><span>Low</span><span class="status-chip matched">{{ isUaeFlag ? 'Authoritative' : 'Verified' }}</span>
+              <div><strong>{{ registrationTitle }}</strong><small>{{ isUaeFlag ? copy('UAE legal registration state', 'حالة التسجيل القانوني في دولة الإمارات') : copy('Foreign flag registration state', 'حالة التسجيل لدى دولة العلم الأجنبية') }}</small></div>
+              <span>{{ registrationStatus }}</span><span>{{ registrationSource }}</span><span>{{ copy('Low', 'منخفض') }}</span><span class="status-chip matched">{{ isUaeFlag ? copy('Authoritative', 'معتمد') : copy('Verified', 'تم التحقق') }}</span>
             </div>
             <div class="source-row">
-              <div><strong>Certificate validity</strong><small>Safety and statutory certificates</small></div>
-              <span>{{ hasCertificateConflict ? 'Verification required' : 'Valid / monitored' }}</span><span>{{ primaryCertificateSourceLabel }}</span><span>{{ certificateRiskImpact }}</span><span class="status-chip" [ngClass]="hasCertificateConflict ? 'conflict' : 'matched'">{{ hasCertificateConflict ? 'Conflict' : 'Matched' }}</span>
+              <div><strong>{{ copy('Certificate validity', 'صلاحية الشهادة') }}</strong><small>{{ copy('Safety and statutory certificates', 'شهادات السلامة والشهادات النظامية') }}</small></div>
+              <span>{{ hasCertificateConflict ? copy('Verification required', 'يتطلب التحقق') : copy('Valid / monitored', 'ساري / تحت المراقبة') }}</span><span>{{ primaryCertificateSourceLabel }}</span><span>{{ certificateRiskImpact }}</span><span class="status-chip" [ngClass]="hasCertificateConflict ? 'conflict' : 'matched'">{{ hasCertificateConflict ? copy('Conflict', 'تعارض') : copy('Matched', 'متطابق') }}</span>
             </div>
             <div class="source-row">
-              <div><strong>Inspection findings</strong><small>Open deficiencies and corrective actions</small></div>
-              <span>{{ openDeficiencyCount }} open</span><span>Smart Inspection</span><span>{{ inspectionRiskImpact }}</span><span class="status-chip" [ngClass]="openDeficiencyCount ? 'conflict' : 'matched'">{{ openDeficiencyCount ? 'Action' : 'Clear' }}</span>
+              <div><strong>{{ copy('Inspection findings', 'نتائج المعاينة') }}</strong><small>{{ copy('Open deficiencies and corrective actions', 'الملاحظات المفتوحة والإجراءات التصحيحية') }}</small></div>
+              <span>{{ openDeficiencyCount }} open</span><span>{{ copy('Smart Inspection', 'المعاينة الذكية') }}</span><span>{{ inspectionRiskImpact }}</span><span class="status-chip" [ngClass]="openDeficiencyCount ? 'conflict' : 'matched'">{{ openDeficiencyCount ? copy('Action', 'إجراء') : copy('Clear', 'سليم') }}</span>
             </div>
             <div class="source-row">
-              <div><strong>Movement monitoring</strong><small>Route and behavioral indicators</small></div>
-              <span>{{ vessel.risk >= 65 ? 'Exception detected' : 'Within monitored pattern' }}</span><span>AIS / LRIT</span><span>{{ movementRiskImpact }}</span><span class="status-chip" [ngClass]="vessel.risk >= 65 ? 'conflict' : 'available'">{{ vessel.risk >= 65 ? 'Review' : 'Available' }}</span>
+              <div><strong>{{ copy('Movement monitoring', 'مراقبة الحركة') }}</strong><small>{{ copy('Route and behavioral indicators', 'مؤشرات المسار والسلوك') }}</small></div>
+              <span>{{ vessel.risk >= 65 ? copy('Exception detected', 'تم رصد حالة استثنائية') : copy('Within monitored pattern', 'ضمن النمط المراقب') }}</span><span>AIS / LRIT</span><span>{{ movementRiskImpact }}</span><span class="status-chip" [ngClass]="vessel.risk >= 65 ? 'conflict' : 'available'">{{ vessel.risk >= 65 ? copy('Review', 'مراجعة') : copy('Available', 'متاح') }}</span>
             </div>
           </div>
         </article>
 
         <aside class="panel">
           <div class="panel-header">
-            <div><h3>Compliance Decision</h3><p>Current operational interpretation</p></div>
+            <div><h3>{{ copy('Compliance Decision', 'قرار الامتثال') }}</h3><p>{{ copy('Current operational interpretation', 'التفسير التشغيلي الحالي') }}</p></div>
             <span class="risk-confidence">{{ vessel.riskLevel }}</span>
           </div>
           <div class="deficiency-detail">
             <h4>{{ complianceStatus }}</h4>
             <p class="deficiency-description">{{ attentionDescription }}</p>
             <div class="deficiency-facts">
-              <div><small>Risk score</small><strong>{{ vessel.riskScore }}/100</strong></div>
+              <div><small>{{ copy('Risk score', 'درجة المخاطر') }}</small><strong>{{ vessel.riskScore }}/100</strong></div>
               <div><small>Data confidence</small><strong>{{ vessel.dataConfidence }}%</strong></div>
-              <div><small>Open deficiencies</small><strong>{{ openDeficiencyCount }}</strong></div>
-              <div><small>Source conflicts</small><strong>{{ conflictCount }}</strong></div>
+              <div><small>{{ copy('Open deficiencies', 'الملاحظات المفتوحة') }}</small><strong>{{ openDeficiencyCount }}</strong></div>
+              <div><small>{{ copy('Source conflicts', 'تعارضات المصادر') }}</small><strong>{{ conflictCount }}</strong></div>
             </div>
           </div>
         </aside>
@@ -623,13 +625,13 @@
     <section class="evidence-tab" *ngIf="activeTab === 'sources'">
       <div class="evidence-heading">
         <div>
-          <span class="section-kicker">DATA SOURCES</span>
-          <h3>Source Provenance & Authority</h3>
-          <p>Each vessel fact is linked to its originating system, authority class, synchronization time and confidence.</p>
+          <span class="section-kicker">{{ copy('DATA SOURCES', 'مصادر البيانات') }}</span>
+          <h3>{{ copy('Source Provenance & Authority', 'مصدر البيانات والجهة المعتمدة') }}</h3>
+          <p>{{ copy('Each vessel fact is linked to its originating system, authority class, synchronization time and confidence.', 'كل معلومة عن السفينة مرتبطة بالنظام المصدر ونوع الجهة ووقت المزامنة ودرجة الثقة.') }}</p>
         </div>
         <div class="evidence-heading-actions">
-          <span class="matched-badge">{{ sources.length }} connected sources</span>
-          <button type="button" class="secondary-btn" (click)="setTab('overview')">Return to overview</button>
+          <span class="matched-badge">{{ sources.length }} {{ copy('connected sources', 'مصادر متصلة') }}</span>
+          <button type="button" class="secondary-btn" (click)="setTab('overview')">{{ copy('Return to overview', 'العودة إلى النظرة العامة') }}</button>
         </div>
       </div>
 
@@ -637,33 +639,33 @@
         <article class="authority-summary-card">
           <span class="authority-symbol internal">◈</span>
           <div>
-            <small>INTERNAL MASTER</small>
-            <strong>MOEI Unified Vessel Master</strong>
-            <p>Correlation context for both UAE and foreign vessels.</p>
+            <small>{{ copy('INTERNAL MASTER', 'السجل الداخلي الرئيسي') }}</small>
+            <strong>{{ copy('MOEI Unified Vessel Master', 'السجل الموحد للسفن بالوزارة') }}</strong>
+            <p>{{ copy('Correlation context for both UAE and foreign vessels.', 'سياق موحد لربط بيانات السفن الإماراتية والأجنبية.') }}</p>
           </div>
         </article>
         <article class="authority-summary-card">
           <span class="authority-symbol moei">◆</span>
           <div>
-            <small>MOEI AUTHORITATIVE</small>
-            <strong>{{ isUaeFlag ? 'UAE Registration + MOEI regulatory records' : 'MOEI inspections, restrictions and UAE regulatory actions' }}</strong>
-            <p>MOEI is authoritative only for records under its regulatory authority.</p>
+            <small>{{ copy('MOEI AUTHORITATIVE', 'مصدر معتمد من الوزارة') }}</small>
+            <strong>{{ isUaeFlag ? copy('UAE Registration + MOEI regulatory records', 'تسجيل الإمارات + السجلات التنظيمية للوزارة') : copy('MOEI inspections, restrictions and UAE regulatory actions', 'معاينات الوزارة والقيود والإجراءات التنظيمية الإماراتية') }}</strong>
+            <p>{{ copy('MOEI is authoritative only for records under its regulatory authority.', 'تكون الوزارة المصدر المعتمد فقط للسجلات الواقعة ضمن سلطتها التنظيمية.') }}</p>
           </div>
         </article>
         <article class="authority-summary-card">
           <span class="authority-symbol external">◇</span>
           <div>
-            <small>EXTERNAL AUTHORITATIVE</small>
-            <strong>{{ isUaeFlag ? 'External maritime confirmations where applicable' : registrationSource }}</strong>
-            <p>{{ isUaeFlag ? 'Used for external validation and international context.' : 'Authoritative source for the vessel flag registration.' }}</p>
+            <small>{{ copy('EXTERNAL AUTHORITATIVE', 'مصدر خارجي معتمد') }}</small>
+            <strong>{{ isUaeFlag ? copy('External maritime confirmations where applicable', 'تأكيدات بحرية خارجية عند الحاجة') : registrationSource }}</strong>
+            <p>{{ isUaeFlag ? copy('Used for external validation and international context.', 'تستخدم للتحقق الخارجي والسياق الدولي.') : copy('Authoritative source for the vessel flag registration.', 'المصدر المعتمد لتسجيل السفينة لدى دولة العلم.') }}</p>
           </div>
         </article>
         <article class="authority-summary-card">
           <span class="authority-symbol feed">⌁</span>
           <div>
-            <small>OPERATIONAL FEED</small>
+            <small>{{ copy('OPERATIONAL FEED', 'تغذية تشغيلية') }}</small>
             <strong>AIS / LRIT</strong>
-            <p>Live vessel presence, position, speed, course and voyage context.</p>
+            <p>{{ copy('Live vessel presence, position, speed, course and voyage context.', 'وجود السفينة وموقعها وسرعتها ومسارها وسياق الرحلة بصورة مباشرة.') }}</p>
           </div>
         </article>
       </div>
@@ -671,25 +673,25 @@
       <article class="panel source-provenance-panel">
         <div class="panel-header">
           <div>
-            <h3>Connected Vessel Sources</h3>
+            <h3>{{ copy('Connected Vessel Sources', 'مصادر السفينة المتصلة') }}</h3>
             <p>{{ vessel.name }} · IMO {{ vessel.imo }}</p>
           </div>
-          <span class="source-summary">{{ conflictCount }} unresolved conflict{{ conflictCount === 1 ? '' : 's' }}</span>
+          <span class="source-summary">{{ conflictCount }} {{ copy('unresolved conflicts', 'تعارضات غير محلولة') }}</span>
         </div>
 
         <div class="source-provenance-grid">
           <article class="source-provenance-card" *ngFor="let source of sources">
             <div class="source-provenance-head">
               <div>
-                <small>{{ source.sourceClass | uppercase }}</small>
+                <small>{{ sourceClassLabel(source.sourceClass) }}</small>
                 <h4>{{ source.name }}</h4>
                 <p>{{ source.system }}</p>
               </div>
-              <span class="status-chip" [ngClass]="source.status.toLowerCase()">{{ source.status }}</span>
+              <span class="status-chip" [ngClass]="source.status.toLowerCase()">{{ sourceStatusLabel(source.status) }}</span>
             </div>
 
             <div class="source-record">
-              <small>CURRENT RECORD</small>
+              <small>{{ copy('CURRENT RECORD', 'السجل الحالي') }}</small>
               <strong>{{ source.record }}</strong>
             </div>
 
@@ -712,26 +714,26 @@
                  activeTab === 'inspection' ? 'Inspection History & Deficiencies' :
                  activeTab === 'certificates' ? 'Certificates & Validity Conditions' :
                  'Source Provenance & Data Quality' }}</h3>
-          <p>This view is connected to the same correlated vessel record and retains identity, source provenance, risk and operational context.</p>
+          <p>{{ copy('This view is connected to the same correlated vessel record and retains identity, source provenance, risk and operational context.', 'هذه الشاشة مرتبطة بنفس سجل السفينة المترابط وتحتفظ بالهوية ومصدر البيانات والمخاطر والسياق التشغيلي.') }}</p>
         </div>
-        <button type="button" class="secondary-btn" (click)="setTab('overview')">Return to overview</button>
+        <button type="button" class="secondary-btn" (click)="setTab('overview')">{{ copy('Return to overview', 'العودة إلى النظرة العامة') }}</button>
       </div>
 
       <div class="placeholder-grid">
         <div>
           <span class="placeholder-icon">✓</span>
-          <strong>Correlated vessel context retained</strong>
-          <p>IMO {{ vessel.imo }} remains the common identity key across the NMC record.</p>
+          <strong>{{ copy('Correlated vessel context retained', 'تم الاحتفاظ بسياق السفينة المترابط') }}</strong>
+          <p>{{ copy('IMO', 'رقم IMO') }} {{ vessel.imo }} {{ copy('remains the common identity key across the NMC record.', 'يظل مفتاح الهوية المشترك عبر سجل المركز البحري الوطني.') }}</p>
         </div>
         <div>
           <span class="placeholder-icon">↗</span>
-          <strong>Source provenance available</strong>
-          <p>Every displayed item keeps the originating system and last synchronization timestamp.</p>
+          <strong>{{ copy('Source provenance available', 'مصدر البيانات متاح') }}</strong>
+          <p>{{ copy('Every displayed item keeps the originating system and last synchronization timestamp.', 'كل عنصر معروض يحتفظ بالنظام المصدر ووقت آخر مزامنة.') }}</p>
         </div>
         <div>
           <span class="placeholder-icon">!</span>
-          <strong>Exceptions remain visible</strong>
-          <p>Data conflicts and incomplete information are shown explicitly instead of being hidden.</p>
+          <strong>{{ copy('Exceptions remain visible', 'الحالات الاستثنائية تظل ظاهرة') }}</strong>
+          <p>{{ copy('Data conflicts and incomplete information are shown explicitly instead of being hidden.', 'يتم إظهار تعارضات البيانات والمعلومات غير المكتملة بوضوح بدلاً من إخفائها.') }}</p>
         </div>
       </div>
     </section>
@@ -739,15 +741,15 @@
     <aside class="provenance-drawer" *ngIf="selectedProvenance as provenance" (click)="$event.stopPropagation()">
       <div class="provenance-drawer-head">
         <div>
-          <span class="section-kicker">FIELD PROVENANCE</span>
+          <span class="section-kicker">{{ copy('FIELD PROVENANCE', 'مصدر الحقل') }}</span>
           <h3>{{ provenance.label }}</h3>
           <p>{{ vessel.name }} · IMO {{ vessel.imo }}</p>
         </div>
-        <button type="button" class="drawer-close" (click)="closeProvenance()" aria-label="Close">×</button>
+        <button type="button" class="drawer-close" (click)="closeProvenance()" [attr.aria-label]="copy('Close', 'إغلاق')">×</button>
       </div>
 
       <div class="provenance-value-card">
-        <small>CURRENT VALUE</small>
+        <small>{{ copy('CURRENT VALUE', 'القيمة الحالية') }}</small>
         <strong>{{ provenance.value }}</strong>
         <span class="source-class" [ngClass]="{
           'moei-authority': provenance.sourceClass === 'MOEI Authoritative',
@@ -755,59 +757,59 @@
           'external-authority': provenance.sourceClass === 'External Authoritative',
           'trusted-authority': provenance.sourceClass === 'External Trusted',
           'operational-authority': provenance.sourceClass === 'Operational Feed'
-        }">{{ provenance.sourceClass }}</span>
+        }">{{ sourceClassLabel(provenance.sourceClass) }}</span>
       </div>
 
       <div class="provenance-source-block">
         <div><small>{{ copy('Source', 'المصدر') }}</small><strong>{{ provenance.source }}</strong></div>
-        <div><small>System / Feed</small><strong>{{ provenance.system }}</strong></div>
+        <div><small>{{ copy('System / Feed', 'النظام / التغذية') }}</small><strong>{{ provenance.system }}</strong></div>
         <div><small>{{ copy('Authority', 'الجهة المعتمدة') }}</small><strong>{{ provenance.authority }}</strong></div>
-        <div><small>Record ID</small><strong>{{ provenance.recordId }}</strong></div>
-        <div><small>Last updated</small><strong>{{ provenance.lastUpdated }}</strong></div>
-        <div><small>Conflict</small><strong [class.conflict-text]="provenance.conflict === 'Unresolved'">{{ provenance.conflict }}</strong></div>
+        <div><small>{{ copy('Record ID', 'معرف السجل') }}</small><strong>{{ provenance.recordId }}</strong></div>
+        <div><small>{{ copy('Last updated', 'آخر تحديث') }}</small><strong>{{ provenance.lastUpdated }}</strong></div>
+        <div><small>{{ copy('Conflict', 'التعارض') }}</small><strong [class.conflict-text]="provenance.conflict === 'Unresolved'">{{ provenance.conflict === 'Unresolved' ? copy('Unresolved', 'غير محلول') : provenance.conflict === 'Verified' ? copy('Verified', 'تم التحقق') : copy('None', 'لا يوجد') }}</strong></div>
       </div>
 
       <div class="confidence-section">
         <div class="confidence-title">
           <div>
-            <h4>Confidence Breakdown</h4>
-            <p>Independent measures — not one combined source score.</p>
+            <h4>{{ copy('Confidence Breakdown', 'تفاصيل الثقة') }}</h4>
+            <p>{{ copy('Independent measures — not one combined source score.', 'مقاييس مستقلة وليست درجة واحدة مجمعة للمصدر.') }}</p>
           </div>
         </div>
 
         <div class="confidence-metric">
-          <div><span>Source trust</span><strong>{{ provenance.sourceTrust }}%</strong></div>
+          <div><span>{{ copy('Source trust', 'الثقة في المصدر') }}</span><strong>{{ provenance.sourceTrust }}%</strong></div>
           <div class="metric-bar"><i [style.width.%]="provenance.sourceTrust"></i></div>
-          <small>Reliability and authority of the originating source.</small>
+          <small>{{ copy('Reliability and authority of the originating source.', 'موثوقية وسلطة المصدر الأصلي.') }}</small>
         </div>
 
         <div class="confidence-metric">
           <div><span>Data confidence</span><strong>{{ provenance.dataConfidence }}%</strong></div>
           <div class="metric-bar"><i [style.width.%]="provenance.dataConfidence"></i></div>
-          <small>Quality and validation confidence for this specific record.</small>
+          <small>{{ copy('Quality and validation confidence for this specific record.', 'درجة جودة والتحقق لهذا السجل تحديداً.') }}</small>
         </div>
 
         <div class="confidence-metric">
-          <div><span>Identity match</span><strong>{{ provenance.identityMatch }}%</strong></div>
+          <div><span>{{ copy('Identity match', 'تطابق الهوية') }}</span><strong>{{ provenance.identityMatch }}%</strong></div>
           <div class="metric-bar"><i [style.width.%]="provenance.identityMatch"></i></div>
-          <small>Confidence that this record belongs to the same vessel.</small>
+          <small>{{ copy('Confidence that this record belongs to the same vessel.', 'درجة الثقة في أن هذا السجل يخص نفس السفينة.') }}</small>
         </div>
 
         <div class="confidence-metric">
-          <div><span>Freshness</span><strong>{{ provenance.freshness }}%</strong></div>
+          <div><span>{{ copy('Freshness', 'حداثة البيانات') }}</span><strong>{{ provenance.freshness }}%</strong></div>
           <div class="metric-bar"><i [style.width.%]="provenance.freshness"></i></div>
-          <small>How current the information is for operational use.</small>
+          <small>{{ copy('How current the information is for operational use.', 'مدى حداثة المعلومات للاستخدام التشغيلي.') }}</small>
         </div>
       </div>
 
       <div class="provenance-note" [class.warning]="provenance.conflict === 'Unresolved'">
-        <strong>{{ provenance.conflict === 'Unresolved' ? 'Attention required' : 'Traceability note' }}</strong>
+        <strong>{{ provenance.conflict === 'Unresolved' ? copy('Attention required', 'يتطلب الانتباه') : copy('Traceability note', 'ملاحظة التتبع') }}</strong>
         <p>{{ provenance.note }}</p>
       </div>
 
       <div class="drawer-actions">
-        <button type="button" class="secondary-btn" (click)="setTab('sources'); closeProvenance()">Open Data Sources</button>
-        <button type="button" class="primary-btn" (click)="closeProvenance()">Done</button>
+        <button type="button" class="secondary-btn" (click)="setTab('sources'); closeProvenance()">{{ copy('Open Data Sources', 'فتح مصادر البيانات') }}</button>
+        <button type="button" class="primary-btn" (click)="closeProvenance()">{{ copy('Done', 'تم') }}</button>
       </div>
     </aside>
   </main>
