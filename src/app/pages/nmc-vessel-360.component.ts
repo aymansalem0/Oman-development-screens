@@ -2,6 +2,13 @@ import { CommonModule } from '@angular/common';
 import { AfterViewInit, Component, ElementRef, OnDestroy, OnInit, ViewChild } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import * as L from 'leaflet';
+import {
+  getVesselByImo,
+  NMC_VESSELS,
+  NmcVesselProfile,
+  riskLevel,
+  SEA_ROUTES
+} from '../data/nmc-vessel-catalog';
 
 interface SourceStatus {
   name: string;
@@ -55,6 +62,19 @@ interface DeficiencyRecord {
   riskImpact: number;
 }
 
+interface RiskFactor {
+  label: string;
+  value: number;
+  source: string;
+}
+
+interface Vessel360View extends NmcVesselProfile {
+  age: number;
+  riskScore: number;
+  riskLevel: string;
+  position: string;
+}
+
 @Component({
   selector: 'app-nmc-vessel-360',
   standalone: true,
@@ -65,173 +85,46 @@ interface DeficiencyRecord {
 export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('vesselMap', { static: false }) vesselMap?: ElementRef<HTMLDivElement>;
 
-  imo = '9328471';
+  imo = '';
   activeTab = 'overview';
   certificateVerificationStarted = false;
   priorityInspectionCreated = false;
-  selectedCertificateId = 'CERT-SC-2026-0417';
+  selectedCertificateId = '';
+
+  vessel!: Vessel360View;
+  sources: SourceStatus[] = [];
+  certificates: CertificateRecord[] = [];
+  inspections: InspectionRecord[] = [];
+  deficiencies: DeficiencyRecord[] = [];
+  riskFactors: RiskFactor[] = [];
+  timeline: TimelineItem[] = [];
+
+  hasCertificateConflict = false;
+  hasOpenDeficiency = false;
+  openDeficiencyCount = 0;
+  certificateRiskImpact = 0;
+  inspectionRiskImpact = 0;
+  historicalRiskImpact = 0;
+  movementRiskImpact = 0;
+  dataConflictRiskImpact = 0;
+
   private map?: L.Map;
-
-  vessel = {
-    name: 'MV Gulf Horizon',
-    imo: '9328471',
-    mmsi: '636019872',
-    callSign: 'D5GH7',
-    flag: 'Liberia',
-    type: 'General Cargo',
-    lengthM: 184,
-    built: 2002,
-    age: 24,
-    grossTonnage: '28,450 GT',
-    deadweight: '46,820 DWT',
-    owner: 'Gulf Horizon Shipping Ltd.',
-    operator: 'Blue Meridian Marine',
-    classSociety: 'Global Marine Classification',
-    destination: 'Jebel Ali',
-    eta: '07 Oct 2026 · 03:30',
-    speed: '3.1 kn',
-    course: '169°',
-    navStatus: 'Under way using engine',
-    position: '25.2200° N, 55.0000° E',
-    riskScore: 87,
-    riskLevel: 'Critical',
-    dataConfidence: 76,
-    riskConfidence: 92
-  };
-
-  sources: SourceStatus[] = [
-    { name: 'Vessel Registry', system: 'MOEI Vessel Master', status: 'Matched', lastSync: '22:42:09', record: 'IMO 9328471 · Active', confidence: 100 },
-    { name: 'Movement Feed', system: 'AIS / LRIT Simulator', status: 'Matched', lastSync: '22:42:18', record: 'Position / speed / course', confidence: 96 },
-    { name: 'Inspection', system: 'Smart Inspection', status: 'Matched', lastSync: '22:41:55', record: '1 critical deficiency open', confidence: 100 },
-    { name: 'Certificates', system: 'MOEI Certificate Registry', status: 'Conflict', lastSync: '22:41:56', record: 'Safety certificate: Conditional', confidence: 100 },
-    { name: 'External Classification', system: 'Simulated Class Feed', status: 'Conflict', lastSync: '22:41:57', record: 'Safety certificate: Valid', confidence: 68 },
-    { name: 'Company Profile', system: 'Company Master', status: 'Available', lastSync: '22:40:12', record: 'Operator profile available', confidence: 98 }
-  ];
-
-  riskFactors = [
-    { label: 'Unresolved critical fire-safety deficiency', value: 25, source: 'Inspection' },
-    { label: 'Abnormal speed reduction & route deviation', value: 22, source: 'AIS / LRIT' },
-    { label: 'Conditional certificate state', value: 18, source: 'Certificate Registry' },
-    { label: 'Conflict between authoritative data sources', value: 12, source: 'Data Quality' },
-    { label: 'Historical inspection pattern', value: 10, source: 'Inspection History' }
-  ];
-
-  certificates: CertificateRecord[] = [
-    {
-      id: 'CERT-SC-2026-0417',
-      type: 'Cargo Ship Safety Construction Certificate',
-      number: 'CSC-9328471-2026',
-      issuer: 'MOEI Maritime Affairs',
-      issued: '12 Feb 2026',
-      expiry: '11 Feb 2031',
-      status: 'Conditional',
-      source: 'MOEI Certificate Registry',
-      condition: 'Subject to closure of outstanding fire-safety deficiency before unrestricted operation.',
-      conflict: true
-    },
-    {
-      id: 'CERT-SR-2025-1182',
-      type: 'Cargo Ship Safety Radio Certificate',
-      number: 'CSR-9328471-2025',
-      issuer: 'Recognized Organization',
-      issued: '18 Nov 2025',
-      expiry: '17 Nov 2026',
-      status: 'Valid',
-      source: 'MOEI Certificate Registry'
-    },
-    {
-      id: 'CERT-SE-2025-0914',
-      type: 'Cargo Ship Safety Equipment Certificate',
-      number: 'CSE-9328471-2025',
-      issuer: 'Recognized Organization',
-      issued: '02 Sep 2025',
-      expiry: '01 Dec 2026',
-      status: 'Expiring',
-      source: 'MOEI Certificate Registry'
-    },
-    {
-      id: 'CERT-ISSC-2024-3310',
-      type: 'International Ship Security Certificate',
-      number: 'ISSC-9328471-2024',
-      issuer: 'Flag Administration',
-      issued: '04 Apr 2024',
-      expiry: '03 Apr 2029',
-      status: 'Valid',
-      source: 'External Flag Record'
-    }
-  ];
-
-  inspections: InspectionRecord[] = [
-    {
-      id: 'INS-2026-01341',
-      date: '19 Aug 2026',
-      port: 'Jebel Ali',
-      type: 'Port State / Safety Inspection',
-      result: 'Follow-up Required',
-      inspector: 'MOEI Smart Inspection',
-      source: 'Smart Inspection',
-      openDeficiencies: 1
-    },
-    {
-      id: 'INS-2026-00418',
-      date: '13 Mar 2026',
-      port: 'Fujairah',
-      type: 'Safety Compliance Inspection',
-      result: 'Deficiencies Found',
-      inspector: 'MOEI Smart Inspection',
-      source: 'Smart Inspection',
-      openDeficiencies: 0
-    },
-    {
-      id: 'INS-2025-02981',
-      date: '22 Nov 2025',
-      port: 'Khalifa Port',
-      type: 'Routine Inspection',
-      result: 'Passed',
-      inspector: 'MOEI Smart Inspection',
-      source: 'Smart Inspection',
-      openDeficiencies: 0
-    }
-  ];
-
-  deficiencies: DeficiencyRecord[] = [
-    {
-      id: 'DEF-2026-441',
-      category: 'Fire Safety',
-      description: 'Fixed fire detection and alarm system in cargo-space zone failed functional verification during inspection.',
-      severity: 'Critical',
-      status: 'Open',
-      raised: '19 Aug 2026',
-      due: '02 Sep 2026',
-      evidence: 'Inspection report INS-2026-01341 · Photo evidence set FS-12 to FS-18',
-      riskImpact: 25
-    },
-    {
-      id: 'DEF-2026-118',
-      category: 'Life Saving Appliances',
-      description: 'Emergency lighting signage required corrective labeling.',
-      severity: 'Minor',
-      status: 'Closed',
-      raised: '13 Mar 2026',
-      due: '20 Mar 2026',
-      evidence: 'Closure evidence accepted 17 Mar 2026',
-      riskImpact: 0
-    }
-  ];
-
-  timeline: TimelineItem[] = [
-    { time: '22:42', title: 'Risk escalated to Critical', detail: 'Composite score reached 87 after data correlation.', kind: 'critical' },
-    { time: '22:41', title: 'Certificate data conflict detected', detail: 'MOEI registry and external classification feed disagree.', kind: 'warning' },
-    { time: '22:41', title: 'Movement anomaly detected', detail: 'Observed course differs from expected arrival corridor.', kind: 'warning' },
-    { time: '20:15', title: 'Historical deficiency loaded', detail: 'Fire-safety deficiency remains unresolved from prior inspection.', kind: 'normal' },
-    { time: '18:04', title: 'Vessel entered monitoring area', detail: 'AIS identity matched to MOEI vessel master using IMO number.', kind: 'normal' }
-  ];
 
   constructor(private route: ActivatedRoute) {}
 
   ngOnInit(): void {
-    this.imo = this.route.snapshot.paramMap.get('imo') || this.vessel.imo;
-    this.vessel.imo = this.imo;
+    this.imo = this.route.snapshot.paramMap.get('imo') || NMC_VESSELS[0].imo;
+    const profile = getVesselByImo(this.imo) || NMC_VESSELS[0];
+
+    this.vessel = {
+      ...profile,
+      age: 2026 - profile.built,
+      riskScore: profile.risk,
+      riskLevel: riskLevel(profile.risk),
+      position: `${profile.lat.toFixed(4)}° N, ${profile.lng.toFixed(4)}° E`
+    };
+
+    this.buildOperationalData();
   }
 
   ngAfterViewInit(): void {
@@ -251,13 +144,11 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
       this.activeTab = 'certificates';
       return;
     }
-
     if (source.includes('Inspection')) {
       this.activeTab = 'inspection';
       return;
     }
-
-    if (source.includes('AIS')) {
+    if (source.includes('AIS') || source.includes('Movement')) {
       this.activeTab = 'movement';
     }
   }
@@ -276,100 +167,356 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
     return this.certificates.find(certificate => certificate.id === this.selectedCertificateId);
   }
 
+  get vesselInitials(): string {
+    return this.vessel.name
+      .replace(/^MV\s+/i, '')
+      .split(/\s+/)
+      .slice(0, 2)
+      .map(part => part.charAt(0))
+      .join('')
+      .toUpperCase();
+  }
+
+  get conflictCount(): number {
+    return this.sources.filter(source => source.status === 'Conflict').length;
+  }
+
+  get attentionMessage(): string {
+    const level = this.vessel.riskLevel;
+    if (level === 'Critical') return 'Immediate operational review required';
+    if (level === 'High') return 'Priority monitoring and review required';
+    if (level === 'Watch') return 'Enhanced monitoring recommended';
+    return 'Normal monitoring status';
+  }
+
+  get attentionDescription(): string {
+    if (this.vessel.risk >= 85) {
+      return 'Multiple movement, inspection, certificate and data-quality indicators have been correlated into a critical vessel risk picture.';
+    }
+    if (this.vessel.risk >= 65) {
+      return 'The vessel has multiple active risk indicators requiring coordinated operational review.';
+    }
+    if (this.vessel.risk >= 45) {
+      return 'Monitoring indicators require attention, but no immediate critical intervention is currently indicated.';
+    }
+    return 'No critical compliance, inspection or movement exceptions are currently open for this vessel.';
+  }
+
+  get complianceStatus(): string {
+    if (this.vessel.risk >= 85) return 'Action Required';
+    if (this.vessel.risk >= 65) return 'Under Review';
+    if (this.vessel.risk >= 45) return 'Watch';
+    return 'Compliant';
+  }
+
+  get riskCssClass(): string {
+    return this.vessel.riskLevel.toLowerCase();
+  }
+
+  get riskGaugeBackground(): string {
+    const color =
+      this.vessel.risk >= 85 ? '#e65353' :
+      this.vessel.risk >= 65 ? '#ef8b43' :
+      this.vessel.risk >= 45 ? '#d7a738' : '#4da7a0';
+    return `radial-gradient(circle at center, white 58%, transparent 59%), conic-gradient(${color} 0 ${this.vessel.risk}%, #edf1f3 ${this.vessel.risk}% 100%)`;
+  }
+
+  private buildOperationalData(): void {
+    const risk = this.vessel.risk;
+    this.hasCertificateConflict = risk >= 80;
+    this.hasOpenDeficiency = risk >= 45;
+    this.openDeficiencyCount = this.hasOpenDeficiency ? 1 : 0;
+
+    this.movementRiskImpact = Math.max(3, Math.round(risk * 0.25));
+    this.inspectionRiskImpact = this.hasOpenDeficiency ? Math.max(6, Math.round(risk * 0.28)) : Math.max(2, Math.round(risk * 0.12));
+    this.certificateRiskImpact = risk >= 55 ? Math.max(5, Math.round(risk * 0.20)) : Math.max(2, Math.round(risk * 0.10));
+    this.dataConflictRiskImpact = this.hasCertificateConflict ? Math.max(5, Math.round(risk * 0.14)) : Math.max(1, Math.round(risk * 0.06));
+    this.historicalRiskImpact = Math.max(1, risk - this.movementRiskImpact - this.inspectionRiskImpact - this.certificateRiskImpact - this.dataConflictRiskImpact);
+
+    this.sources = this.buildSources();
+    this.certificates = this.buildCertificates();
+    this.inspections = this.buildInspections();
+    this.deficiencies = this.buildDeficiencies();
+    this.riskFactors = this.buildRiskFactors();
+    this.timeline = this.buildTimeline();
+    this.selectedCertificateId = this.certificates[0].id;
+  }
+
+  private buildSources(): SourceStatus[] {
+    return [
+      { name:'Vessel Registry', system:'MOEI Vessel Master', status:'Matched', lastSync:'22:42:09', record:`IMO ${this.vessel.imo} · Active`, confidence:100 },
+      { name:'Movement Feed', system:'AIS / LRIT', status:'Matched', lastSync:'22:42:18', record:'Position / speed / course', confidence:Math.max(91, this.vessel.dataConfidence) },
+      { name:'Inspection', system:'Smart Inspection', status:'Matched', lastSync:'22:41:55', record:this.hasOpenDeficiency ? '1 open deficiency' : 'No open critical deficiencies', confidence:100 },
+      { name:'Certificates', system:'MOEI Certificate Registry', status:this.hasCertificateConflict ? 'Conflict' : 'Matched', lastSync:'22:41:56', record:this.hasCertificateConflict ? 'Certificate condition requires verification' : 'Certificate portfolio matched', confidence:100 },
+      { name:'External Classification', system:'Classification Data Feed', status:this.hasCertificateConflict ? 'Conflict' : 'Available', lastSync:'22:41:57', record:this.hasCertificateConflict ? 'External status differs from MOEI record' : 'External record available', confidence:this.hasCertificateConflict ? 68 : 94 },
+      { name:'Company Profile', system:'Company Master', status:'Available', lastSync:'22:40:12', record:this.vessel.operator, confidence:98 }
+    ];
+  }
+
+  private buildCertificates(): CertificateRecord[] {
+    const firstStatus: CertificateRecord['status'] =
+      this.hasCertificateConflict ? 'Conditional' : this.vessel.risk >= 55 ? 'Expiring' : 'Valid';
+
+    return [
+      {
+        id:`CERT-SC-${this.vessel.imo}`,
+        type:'Cargo Ship Safety Construction Certificate',
+        number:`CSC-${this.vessel.imo}-2026`,
+        issuer:'MOEI Maritime Affairs',
+        issued:'12 Feb 2026',
+        expiry:this.vessel.risk >= 55 ? '19 Dec 2026' : '11 Feb 2031',
+        status:firstStatus,
+        source:'MOEI Certificate Registry',
+        condition:this.hasCertificateConflict ? 'Subject to verification of an outstanding safety condition before unrestricted operation.' : undefined,
+        conflict:this.hasCertificateConflict
+      },
+      {
+        id:`CERT-SR-${this.vessel.imo}`,
+        type:'Ship Safety Radio Certificate',
+        number:`CSR-${this.vessel.imo}-2025`,
+        issuer:'Recognized Organization',
+        issued:'18 Nov 2025',
+        expiry:'17 Nov 2027',
+        status:'Valid',
+        source:'MOEI Certificate Registry'
+      },
+      {
+        id:`CERT-SE-${this.vessel.imo}`,
+        type:'Ship Safety Equipment Certificate',
+        number:`CSE-${this.vessel.imo}-2025`,
+        issuer:'Recognized Organization',
+        issued:'02 Sep 2025',
+        expiry:this.vessel.risk >= 65 ? '01 Dec 2026' : '01 Sep 2028',
+        status:this.vessel.risk >= 65 ? 'Expiring' : 'Valid',
+        source:'MOEI Certificate Registry'
+      },
+      {
+        id:`CERT-ISSC-${this.vessel.imo}`,
+        type:'International Ship Security Certificate',
+        number:`ISSC-${this.vessel.imo}-2024`,
+        issuer:'Flag Administration',
+        issued:'04 Apr 2024',
+        expiry:'03 Apr 2029',
+        status:'Valid',
+        source:'External Flag Record'
+      }
+    ];
+  }
+
+  private buildInspections(): InspectionRecord[] {
+    const latestResult: InspectionRecord['result'] =
+      this.vessel.risk >= 65 ? 'Follow-up Required' :
+      this.vessel.risk >= 45 ? 'Deficiencies Found' : 'Passed';
+
+    return [
+      {
+        id:`INS-2026-${String(1300 + this.vessel.id).padStart(5,'0')}`,
+        date:'19 Aug 2026',
+        port:this.vessel.destination,
+        type:'Port State / Safety Inspection',
+        result:latestResult,
+        inspector:'MOEI Smart Inspection',
+        source:'Smart Inspection',
+        openDeficiencies:this.openDeficiencyCount
+      },
+      {
+        id:`INS-2026-${String(400 + this.vessel.id).padStart(5,'0')}`,
+        date:'13 Mar 2026',
+        port:this.vessel.zone,
+        type:'Safety Compliance Inspection',
+        result:this.vessel.risk >= 50 ? 'Deficiencies Found' : 'Passed',
+        inspector:'MOEI Smart Inspection',
+        source:'Smart Inspection',
+        openDeficiencies:0
+      },
+      {
+        id:`INS-2025-${String(2900 + this.vessel.id).padStart(5,'0')}`,
+        date:'22 Nov 2025',
+        port:'UAE',
+        type:'Routine Inspection',
+        result:'Passed',
+        inspector:'MOEI Smart Inspection',
+        source:'Smart Inspection',
+        openDeficiencies:0
+      }
+    ];
+  }
+
+  private buildDeficiencies(): DeficiencyRecord[] {
+    const records: DeficiencyRecord[] = [];
+
+    if (this.hasOpenDeficiency) {
+      const critical = this.vessel.risk >= 80;
+      records.push({
+        id:`DEF-2026-${400 + this.vessel.id}`,
+        category:critical ? 'Fire Safety' : 'Safety Equipment',
+        description:critical
+          ? 'Fixed fire detection and alarm system failed functional verification during the latest inspection.'
+          : 'Safety equipment finding remains open pending corrective-action evidence.',
+        severity:critical ? 'Critical' : 'Major',
+        status:'Open',
+        raised:'19 Aug 2026',
+        due:'02 Sep 2026',
+        evidence:`Inspection report INS-2026-${String(1300 + this.vessel.id).padStart(5,'0')} · supporting evidence attached`,
+        riskImpact:this.inspectionRiskImpact
+      });
+    }
+
+    records.push({
+      id:`DEF-2026-${100 + this.vessel.id}`,
+      category:'Life Saving Appliances',
+      description:'Historical inspection finding closed after corrective evidence was accepted.',
+      severity:'Minor',
+      status:'Closed',
+      raised:'13 Mar 2026',
+      due:'20 Mar 2026',
+      evidence:'Closure evidence accepted',
+      riskImpact:0
+    });
+
+    return records;
+  }
+
+  private buildRiskFactors(): RiskFactor[] {
+    const critical = this.vessel.risk >= 80;
+    const high = this.vessel.risk >= 65;
+
+    return [
+      {
+        label:critical ? 'Unresolved critical inspection deficiency' : this.hasOpenDeficiency ? 'Open inspection deficiency' : 'Inspection history exposure',
+        value:this.inspectionRiskImpact,
+        source:'Inspection'
+      },
+      {
+        label:high ? 'Movement anomaly / route deviation' : 'Voyage and movement exposure',
+        value:this.movementRiskImpact,
+        source:'AIS / Movement'
+      },
+      {
+        label:this.hasCertificateConflict ? 'Conditional certificate state' : this.vessel.risk >= 55 ? 'Certificate expiry proximity' : 'Certificate profile exposure',
+        value:this.certificateRiskImpact,
+        source:'Certificate Registry'
+      },
+      {
+        label:this.hasCertificateConflict ? 'Conflict between authoritative data sources' : 'Data-quality / external-source factor',
+        value:this.dataConflictRiskImpact,
+        source:'Data Quality'
+      },
+      {
+        label:'Historical vessel / operator risk pattern',
+        value:this.historicalRiskImpact,
+        source:'Inspection History'
+      }
+    ];
+  }
+
+  private buildTimeline(): TimelineItem[] {
+    const level = this.vessel.riskLevel;
+    const items: TimelineItem[] = [
+      { time:'22:42', title:`Risk assessed as ${level}`, detail:`Composite vessel score is ${this.vessel.risk} after current data correlation.`, kind:this.vessel.risk >= 85 ? 'critical' : this.vessel.risk >= 45 ? 'warning' : 'normal' }
+    ];
+
+    if (this.hasCertificateConflict) {
+      items.push({ time:'22:41', title:'Certificate data conflict detected', detail:'MOEI registry and external classification source disagree.', kind:'warning' });
+    }
+    if (this.vessel.risk >= 65) {
+      items.push({ time:'22:40', title:'Movement exception detected', detail:'Observed movement differs from the monitored route pattern.', kind:'warning' });
+    }
+    if (this.hasOpenDeficiency) {
+      items.push({ time:'20:15', title:'Open inspection finding loaded', detail:'Outstanding deficiency included in the vessel risk picture.', kind:'warning' });
+    }
+    items.push({ time:'18:04', title:'Vessel entered monitoring area', detail:'AIS identity matched to MOEI vessel master using IMO number.', kind:'normal' });
+    return items;
+  }
+
   private initMap(): void {
     if (!this.vesselMap || this.map) return;
 
     this.map = L.map(this.vesselMap.nativeElement, {
-      zoomControl: false,
-      attributionControl: true,
-      minZoom: 6,
-      maxZoom: 15
+      zoomControl:false,
+      attributionControl:true,
+      minZoom:6,
+      maxZoom:15
     });
 
     L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19,
-      crossOrigin: true,
-      attribution: '&copy; OpenStreetMap contributors'
+      maxZoom:19,
+      crossOrigin:true,
+      attribution:'&copy; OpenStreetMap contributors'
     }).addTo(this.map);
 
-    L.control.zoom({ position: 'bottomright' }).addTo(this.map);
+    L.control.zoom({ position:'bottomright' }).addTo(this.map);
 
-    const expected: L.LatLngExpression[] = [
-      [25.52, 54.88],
-      [25.42, 54.92],
-      [25.32, 54.96],
-      [25.22, 55.00],
-      [25.12, 55.02],
-      [25.04, 55.02],
-      [24.99, 55.03]
-    ];
-
-    const observed: L.LatLngExpression[] = [
-      [25.52, 54.88],
-      [25.42, 54.92],
-      [25.34, 54.89],
-      [25.28, 54.84],
-      [25.23, 54.90],
-      [25.22, 55.00]
-    ];
+    const route = SEA_ROUTES[this.vessel.routeKey] || SEA_ROUTES['jebelAli'];
+    const expected = route.map(point => [point[0], point[1]] as L.LatLngExpression);
+    const anomalyIndex = Math.min(2, route.length - 2);
+    const observed = route.map((point, index) => {
+      if (this.vessel.risk >= 65 && index === anomalyIndex) {
+        return [point[0] + 0.025, point[1] - 0.025] as L.LatLngExpression;
+      }
+      return [point[0], point[1]] as L.LatLngExpression;
+    });
 
     L.polyline(expected, {
-      color: '#0284c7',
-      weight: 3,
-      opacity: 0.64,
-      dashArray: '7 7'
-    }).bindTooltip('Expected offshore arrival corridor to Jebel Ali').addTo(this.map);
+      color:'#0284c7',
+      weight:3,
+      opacity:0.62,
+      dashArray:'7 7'
+    }).bindTooltip(`Expected route to ${this.vessel.destination}`).addTo(this.map);
 
     L.polyline(observed, {
-      color: '#0f766e',
-      weight: 4,
-      opacity: 0.92
-    }).bindTooltip('Observed offshore movement').addTo(this.map);
+      color:'#0f766e',
+      weight:4,
+      opacity:0.9
+    }).bindTooltip('Observed movement').addTo(this.map);
 
-    L.circleMarker([25.34, 54.89], {
-      radius: 8,
-      color: '#fff',
-      weight: 3,
-      fillColor: '#f59e0b',
-      fillOpacity: 1
-    }).bindTooltip('Anomaly detected · route deviation begins').addTo(this.map);
+    if (this.vessel.risk >= 65) {
+      const anomaly = observed[anomalyIndex] as [number, number];
+      L.circleMarker(anomaly, {
+        radius:8,
+        color:'#fff',
+        weight:3,
+        fillColor:'#f59e0b',
+        fillOpacity:1
+      }).bindTooltip('Movement anomaly detected').addTo(this.map);
+    }
 
     const shipSize = Math.round(Math.max(18, Math.min(30, 14 + this.vessel.lengthM / 25)));
     const ringSize = shipSize + 16;
     const currentShipIcon = L.divIcon({
-      className: 'v360-map-ship-wrap',
-      html: `
-        <div class="v360-map-ship critical" style="--ship-size:${shipSize}px;--ring-size:${ringSize}px">
+      className:'v360-map-ship-wrap',
+      html:`
+        <div class="v360-map-ship ${this.riskCssClass}" style="--ship-size:${shipSize}px;--ring-size:${ringSize}px">
           <span class="v360-risk-ring"></span>
-          <span class="v360-risk-pulse"></span>
-          <svg class="v360-ship-symbol" viewBox="0 0 24 34" aria-hidden="true" style="transform:rotate(169deg)">
+          ${this.vessel.risk >= 65 ? '<span class="v360-risk-pulse"></span>' : ''}
+          <svg class="v360-ship-symbol" viewBox="0 0 24 34" aria-hidden="true" style="transform:rotate(${this.vessel.course}deg)">
             <path d="M12 1.4c1.5 2.1 4.7 4.6 6.5 8.2v15.7L12 32.6 5.5 25.3V9.6C7.3 6 10.5 3.5 12 1.4Z"></path>
             <path class="ship-deck" d="M9.2 10.6h5.6v8.2H9.2z"></path>
             <path class="ship-centerline" d="M12 3.5v24.3"></path>
           </svg>
-          <span class="v360-ship-label">MV Gulf Horizon <b>87</b></span>
+          <span class="v360-ship-label">${this.vessel.name} <b>${this.vessel.risk}</b></span>
         </div>
       `,
-      iconSize: [58, 58],
-      iconAnchor: [29, 29]
+      iconSize:[58,58],
+      iconAnchor:[29,29]
     });
 
-    L.marker([25.22, 55.00], {
-      icon: currentShipIcon,
-      keyboard: true,
-      riseOnHover: true
-    })
-      .bindTooltip(
-        `<div class="v360-map-tooltip">
-          <strong>MV Gulf Horizon</strong>
-          <span>IMO ${this.vessel.imo} · ${this.vessel.lengthM} m</span>
-          <span>3.1 kn · Course 169° · Jebel Ali</span>
-          <b>Risk 87 · Critical</b>
-        </div>`,
-        { direction: 'top', offset: [0, -22], opacity: 1 }
-      )
-      .addTo(this.map);
+    L.marker([this.vessel.lat, this.vessel.lng], {
+      icon:currentShipIcon,
+      keyboard:true,
+      riseOnHover:true
+    }).bindTooltip(
+      `<div class="v360-map-tooltip">
+        <strong>${this.vessel.name}</strong>
+        <span>IMO ${this.vessel.imo} · ${this.vessel.lengthM} m</span>
+        <span>${this.vessel.speed.toFixed(1)} kn · Course ${this.vessel.course}° · ${this.vessel.destination}</span>
+        <b>Risk ${this.vessel.risk} · ${this.vessel.riskLevel}</b>
+      </div>`,
+      { direction:'top', offset:[0,-22], opacity:1 }
+    ).addTo(this.map);
 
-    this.map.fitBounds(L.latLngBounds([[24.92, 54.72], [25.60, 55.16]]), { padding: [18, 18] });
+    const routeBounds = L.latLngBounds(route);
+    routeBounds.extend([this.vessel.lat, this.vessel.lng]);
+    this.map.fitBounds(routeBounds, { padding:[28,28] });
   }
 }

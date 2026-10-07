@@ -19,7 +19,7 @@
   <main class="v360-main">
     <section class="hero-card">
       <div class="identity-block">
-        <div class="vessel-avatar">GH</div>
+        <div class="vessel-avatar">{{ vesselInitials }}</div>
         <div>
           <div class="hero-kicker">UNIFIED VESSEL IDENTITY</div>
           <h2>{{ vessel.name }}</h2>
@@ -37,9 +37,9 @@
         <div class="confidence-card">
           <small>Data confidence</small>
           <strong>{{ vessel.dataConfidence }}%</strong>
-          <span>1 source conflict</span>
+          <span>{{ conflictCount }} source conflict{{ conflictCount === 1 ? '': 's' }}</span>
         </div>
-        <div class="risk-card critical">
+        <div class="risk-card" [ngClass]="riskCssClass">
           <small>Composite risk</small>
           <strong>{{ vessel.riskScore }}</strong>
           <span>{{ vessel.riskLevel }}</span>
@@ -47,13 +47,11 @@
       </div>
     </section>
 
-    <section class="critical-banner">
+    <section class="critical-banner" [ngClass]="riskCssClass">
       <div class="critical-icon">!</div>
       <div>
-        <strong>Critical operational attention required</strong>
-        <p>
-          Movement anomaly, unresolved fire-safety deficiency and a certificate data conflict have been correlated into one vessel risk picture.
-        </p>
+        <strong>{{ attentionMessage }}</strong>
+        <p>{{ attentionDescription }}</p>
       </div>
       <button type="button">Review recommendation</button>
     </section>
@@ -104,14 +102,14 @@
               <span><i class="line expected"></i> Expected</span>
               <span><i class="line observed"></i> Observed</span>
               <span><i class="dot anomaly"></i> Anomaly</span>
-              <span><i class="dot critical-vessel"></i> Current vessel / Critical</span>
+              <span><i class="dot critical-vessel" [ngClass]="riskCssClass"></i> Current vessel / {{ vessel.riskLevel }}</span>
             </div>
           </div>
           <div class="map-wrap">
             <div #vesselMap class="vessel-map"></div>
-            <div class="map-callout">
+            <div class="map-callout" *ngIf="vessel.risk >= 65">
               <strong>Movement anomaly detected</strong>
-              <span>Route deviation started offshore near 25.34°N, 54.89°E</span>
+              <span>Observed movement differs from the monitored route pattern.</span>
             </div>
           </div>
         </article>
@@ -122,7 +120,7 @@
               <h3>Correlated Data Sources</h3>
               <p>Every business fact retains source, timestamp and confidence</p>
             </div>
-            <span class="source-summary">6 sources · 1 conflict</span>
+            <span class="source-summary">{{ sources.length }} sources · {{ conflictCount }} conflict{{ conflictCount === 1 ? '': 's' }}</span>
           </div>
 
           <div class="source-table">
@@ -152,19 +150,19 @@
         <article class="panel risk-panel">
           <div class="panel-header">
             <div>
-              <h3>Why is this vessel Critical?</h3>
+              <h3>Why is this vessel {{ vessel.riskLevel }}?</h3>
               <p>Transparent composite risk contribution</p>
             </div>
             <span class="risk-confidence">{{ vessel.riskConfidence }}% confidence</span>
           </div>
 
           <div class="risk-score-row">
-            <div class="risk-gauge">
+            <div class="risk-gauge" [style.background]="riskGaugeBackground">
               <span>{{ vessel.riskScore }}</span>
               <small>/100</small>
             </div>
             <div>
-              <strong>Critical risk</strong>
+              <strong>{{ vessel.riskLevel }} risk</strong>
               <p>5 correlated indicators contributing to current prioritization.</p>
             </div>
           </div>
@@ -182,7 +180,7 @@
           <button type="button" class="outline-btn">Open full explainability view</button>
         </article>
 
-        <article class="panel conflict-panel">
+        <article class="panel conflict-panel" *ngIf="hasCertificateConflict">
           <div class="panel-header">
             <div>
               <h3>Data Conflict</h3>
@@ -251,7 +249,7 @@
           <p>Authoritative certificate records, conditions, source provenance and external-source conflicts for {{ vessel.name }}.</p>
         </div>
         <div class="evidence-heading-actions">
-          <span class="attention-pill">1 conflict requires verification</span>
+          <span class="attention-pill" *ngIf="hasCertificateConflict">1 conflict requires verification</span>
           <button type="button" class="secondary-btn" (click)="setTab('overview')">Return to overview</button>
         </div>
       </div>
@@ -324,10 +322,10 @@
           <div class="risk-evidence-link" *ngIf="certificate.conflict">
             <div>
               <small>RISK CONTRIBUTION</small>
-              <strong>Conditional certificate +18</strong>
-              <p>This record directly contributes to the current Critical vessel risk.</p>
+              <strong>{{ certificate.status }} certificate +{{ certificateRiskImpact }}</strong>
+              <p>This record directly contributes to the current {{ vessel.riskLevel }} vessel risk.</p>
             </div>
-            <span>+18</span>
+            <span>+{{ certificateRiskImpact }}</span>
           </div>
 
           <div class="source-comparison" *ngIf="certificate.conflict">
@@ -377,16 +375,16 @@
           <p>Inspection findings linked directly to vessel risk, follow-up status and operational response.</p>
         </div>
         <div class="evidence-heading-actions">
-          <span class="critical-pill">1 critical deficiency open</span>
+          <span class="critical-pill" *ngIf="openDeficiencyCount > 0">{{ openDeficiencyCount }} open deficiency</span>
           <button type="button" class="secondary-btn" (click)="setTab('overview')">Return to overview</button>
         </div>
       </div>
 
       <div class="inspection-kpis">
         <div><small>Inspections / 12 months</small><strong>3</strong><span>2 with findings</span></div>
-        <div><small>Open deficiencies</small><strong class="critical-text">1</strong><span>requires immediate follow-up</span></div>
-        <div><small>Overdue corrective action</small><strong class="critical-text">35 days</strong><span>fire-safety deficiency</span></div>
-        <div><small>Risk contribution</small><strong class="critical-text">+25</strong><span>current composite score</span></div>
+        <div><small>Open deficiencies</small><strong [class.critical-text]="openDeficiencyCount > 0">{{ openDeficiencyCount }}</strong><span>{{ openDeficiencyCount > 0 ? 'requires follow-up' : 'no open findings' }}</span></div>
+        <div><small>Compliance status</small><strong [class.critical-text]="vessel.risk >= 65">{{ complianceStatus }}</strong><span>current inspection posture</span></div>
+        <div><small>Risk contribution</small><strong [class.critical-text]="inspectionRiskImpact > 10">+{{ inspectionRiskImpact }}</strong><span>current composite score</span></div>
       </div>
 
       <div class="inspection-layout">
@@ -420,10 +418,10 @@
         <aside class="panel deficiency-panel">
           <div class="panel-header">
             <div>
-              <h3>Open Critical Deficiency</h3>
+              <h3>Open Deficiency</h3>
               <p>Evidence driving vessel prioritization</p>
             </div>
-            <span class="critical-badge">CRITICAL</span>
+            <span class="critical-badge" *ngIf="openDeficiencyCount > 0">{{ vessel.risk >= 80 ? 'CRITICAL' : 'OPEN' }}</span>
           </div>
 
           <ng-container *ngFor="let deficiency of deficiencies">
@@ -452,10 +450,10 @@
               <div class="risk-evidence-link critical-evidence">
                 <div>
                   <small>WHY THIS MATTERS TO NMC</small>
-                  <strong>Unresolved critical fire-safety deficiency +25</strong>
-                  <p>Combined with movement anomaly and certificate condition, this finding pushes the vessel into the Critical attention queue.</p>
+                  <strong>Open inspection deficiency +{{ deficiency.riskImpact }}</strong>
+                  <p>This finding contributes directly to the vessel's {{ vessel.riskLevel }} risk classification.</p>
                 </div>
-                <span>+25</span>
+                <span>+{{ deficiency.riskImpact }}</span>
               </div>
 
               <div class="inspection-action" [class.created]="priorityInspectionCreated">
@@ -463,7 +461,7 @@
                 <div>
                   <strong>{{ priorityInspectionCreated ? 'Priority inspection case created' : 'Recommended operational action' }}</strong>
                   <p *ngIf="!priorityInspectionCreated">Create a priority follow-up inspection and carry forward this deficiency and supporting evidence.</p>
-                  <p *ngIf="priorityInspectionCreated">INS-2026-02088 · Priority Critical · Focus area: Fire Safety · Evidence inherited from INS-2026-01341.</p>
+                  <p *ngIf="priorityInspectionCreated">Priority inspection created for {{ vessel.name }} · Evidence inherited from the latest inspection record.</p>
                 </div>
               </div>
 
@@ -472,6 +470,14 @@
               </button>
             </div>
           </ng-container>
+
+          <div class="no-open-deficiency" *ngIf="openDeficiencyCount === 0">
+            <span>✓</span>
+            <div>
+              <strong>No open inspection deficiencies</strong>
+              <p>The latest inspection record contains no outstanding corrective action requiring NMC intervention.</p>
+            </div>
+          </div>
         </aside>
       </div>
 
@@ -481,7 +487,7 @@
             <h3>Deficiency History</h3>
             <p>Closed findings retained for historical risk pattern analysis</p>
           </div>
-          <span class="risk-confidence">Historical evidence +10</span>
+          <span class="risk-confidence">Historical evidence +{{ historicalRiskImpact }}</span>
         </div>
 
         <div class="closed-deficiency-row" *ngFor="let deficiency of deficiencies">
@@ -495,7 +501,74 @@
       </article>
     </section>
 
-    <section class="single-tab panel" *ngIf="activeTab !== 'overview' && activeTab !== 'certificates' && activeTab !== 'inspection'">
+
+    <section class="evidence-tab" *ngIf="activeTab === 'compliance'">
+      <div class="evidence-heading">
+        <div>
+          <span class="section-kicker">COMPLIANCE</span>
+          <h3>Compliance Picture</h3>
+          <p>Current registration, certificate, inspection and operational compliance posture for {{ vessel.name }}.</p>
+        </div>
+        <div class="evidence-heading-actions">
+          <span class="matched-badge">{{ complianceStatus }}</span>
+          <button type="button" class="secondary-btn" (click)="setTab('overview')">Return to overview</button>
+        </div>
+      </div>
+
+      <div class="inspection-kpis">
+        <div><small>Registration</small><strong>Active</strong><span>MOEI Vessel Master</span></div>
+        <div><small>Certificates</small><strong [class.critical-text]="hasCertificateConflict">{{ hasCertificateConflict ? 'Verification Required' : 'In Order' }}</strong><span>{{ hasCertificateConflict ? 'source conflict open' : 'no critical conflict' }}</span></div>
+        <div><small>Inspection</small><strong [class.critical-text]="openDeficiencyCount > 0">{{ openDeficiencyCount > 0 ? 'Follow-up Required' : 'Clear' }}</strong><span>{{ openDeficiencyCount }} open deficiency</span></div>
+        <div><small>Overall compliance</small><strong [class.critical-text]="vessel.risk >= 65">{{ complianceStatus }}</strong><span>risk score {{ vessel.riskScore }}/100</span></div>
+      </div>
+
+      <div class="certificate-layout">
+        <article class="panel">
+          <div class="panel-header">
+            <div><h3>Compliance Controls</h3><p>Current cross-domain compliance checks</p></div>
+            <span class="source-summary">Live correlated status</span>
+          </div>
+          <div class="source-table">
+            <div class="source-row header"><span>Control</span><span>Current state</span><span>Source</span><span>Risk</span><span>Status</span></div>
+            <div class="source-row">
+              <div><strong>Vessel registration</strong><small>Identity and registration state</small></div>
+              <span>Active</span><span>Vessel Master</span><span>Low</span><span class="status-chip matched">Matched</span>
+            </div>
+            <div class="source-row">
+              <div><strong>Certificate validity</strong><small>Safety and statutory certificates</small></div>
+              <span>{{ hasCertificateConflict ? 'Verification required' : 'Valid / monitored' }}</span><span>Certificate Registry</span><span>{{ certificateRiskImpact }}</span><span class="status-chip" [ngClass]="hasCertificateConflict ? 'conflict' : 'matched'">{{ hasCertificateConflict ? 'Conflict' : 'Matched' }}</span>
+            </div>
+            <div class="source-row">
+              <div><strong>Inspection findings</strong><small>Open deficiencies and corrective actions</small></div>
+              <span>{{ openDeficiencyCount }} open</span><span>Smart Inspection</span><span>{{ inspectionRiskImpact }}</span><span class="status-chip" [ngClass]="openDeficiencyCount ? 'conflict' : 'matched'">{{ openDeficiencyCount ? 'Action' : 'Clear' }}</span>
+            </div>
+            <div class="source-row">
+              <div><strong>Movement monitoring</strong><small>Route and behavioral indicators</small></div>
+              <span>{{ vessel.risk >= 65 ? 'Exception detected' : 'Within monitored pattern' }}</span><span>AIS / LRIT</span><span>{{ movementRiskImpact }}</span><span class="status-chip" [ngClass]="vessel.risk >= 65 ? 'conflict' : 'available'">{{ vessel.risk >= 65 ? 'Review' : 'Available' }}</span>
+            </div>
+          </div>
+        </article>
+
+        <aside class="panel">
+          <div class="panel-header">
+            <div><h3>Compliance Decision</h3><p>Current operational interpretation</p></div>
+            <span class="risk-confidence">{{ vessel.riskLevel }}</span>
+          </div>
+          <div class="deficiency-detail">
+            <h4>{{ complianceStatus }}</h4>
+            <p class="deficiency-description">{{ attentionDescription }}</p>
+            <div class="deficiency-facts">
+              <div><small>Risk score</small><strong>{{ vessel.riskScore }}/100</strong></div>
+              <div><small>Data confidence</small><strong>{{ vessel.dataConfidence }}%</strong></div>
+              <div><small>Open deficiencies</small><strong>{{ openDeficiencyCount }}</strong></div>
+              <div><small>Source conflicts</small><strong>{{ conflictCount }}</strong></div>
+            </div>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <section class="single-tab panel" *ngIf="activeTab !== 'overview' && activeTab !== 'certificates' && activeTab !== 'inspection' && activeTab !== 'compliance'">
       <div class="single-tab-head">
         <div>
           <span class="section-kicker">{{ activeTab | uppercase }}</span>
@@ -504,7 +577,7 @@
                  activeTab === 'inspection' ? 'Inspection History & Deficiencies' :
                  activeTab === 'certificates' ? 'Certificates & Validity Conditions' :
                  'Source Provenance & Data Quality' }}</h3>
-          <p>This POC view is connected to the same correlated vessel record. Detailed business functions will be expanded in the next build blocks.</p>
+          <p>This view is connected to the same correlated vessel record and retains identity, source provenance, risk and operational context.</p>
         </div>
         <button type="button" class="secondary-btn" (click)="setTab('overview')">Return to overview</button>
       </div>
