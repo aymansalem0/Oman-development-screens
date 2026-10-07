@@ -2059,3 +2059,122 @@ button, a { font: inherit; }
     padding-left: 0;
   }
 }
+
+
+/* --- Vessel 360 readability pass: larger typography --- */
+.v360-shell .eyebrow,
+.v360-shell .hero-kicker,
+.v360-shell .section-kicker {
+  font-size: 10px !important;
+}
+.v360-shell .brand-block h1 {
+  font-size: 20px !important;
+}
+.v360-shell .brand-block p {
+  font-size: 11px !important;
+}
+.v360-shell .identity-block h2 {
+  font-size: 28px !important;
+}
+.v360-shell .identity-row span {
+  font-size: 10px !important;
+}
+.v360-shell .back-btn,
+.v360-shell .secondary-btn,
+.v360-shell .primary-btn,
+.v360-shell .outline-btn,
+.v360-shell .language-btn,
+.v360-shell .tabs button {
+  font-size: 11px !important;
+}
+.v360-shell .confidence-card small,
+.v360-shell .risk-card small {
+  font-size: 9px !important;
+}
+.v360-shell .confidence-card span,
+.v360-shell .risk-card span {
+  font-size: 10px !important;
+}
+.v360-shell .critical-banner strong {
+  font-size: 11px !important;
+}
+.v360-shell .critical-banner p {
+  font-size: 10px !important;
+  line-height: 1.55;
+}
+.v360-shell .critical-banner button {
+  font-size: 10px !important;
+}
+.v360-shell .panel-header h3 {
+  font-size: 13px !important;
+}
+.v360-shell .panel-header p {
+  font-size: 9.5px !important;
+  line-height: 1.45;
+}
+.v360-shell .matched-badge,
+.v360-shell .source-summary,
+.v360-shell .risk-confidence,
+.v360-shell .conflict-badge,
+.v360-shell .authority-chip,
+.v360-shell .status-chip {
+  font-size: 9px !important;
+}
+.v360-shell .data-grid small,
+.v360-shell .field-label small {
+  font-size: 9px !important;
+}
+.v360-shell .data-grid strong {
+  font-size: 10px !important;
+}
+.v360-shell .registry-context-card small,
+.v360-shell .registry-context-card p,
+.v360-shell .legend,
+.v360-shell .source-row,
+.v360-shell .timeline p,
+.v360-shell .certificate-meta,
+.v360-shell .inspection-result small,
+.v360-shell .deficiency-description,
+.v360-shell .provenance-source-block small,
+.v360-shell .confidence-metric small,
+.v360-shell .provenance-note p {
+  font-size: 9px !important;
+  line-height: 1.5;
+}
+.v360-shell .registry-context-card strong,
+.v360-shell .source-row strong,
+.v360-shell .timeline strong,
+.v360-shell .certificate-title-row strong,
+.v360-shell .inspection-main strong,
+.v360-shell .deficiency-facts strong,
+.v360-shell .source-provenance-card h4,
+.v360-shell .provenance-source-block strong,
+.v360-shell .confidence-metric span,
+.v360-shell .confidence-metric strong {
+  font-size: 10px !important;
+}
+.v360-shell .provenance-drawer-head h3 {
+  font-size: 20px !important;
+}
+.v360-shell .provenance-drawer-head p {
+  font-size: 9px !important;
+}
+.v360-shell .provenance-value-card > small {
+  font-size: 8px !important;
+}
+.v360-shell .provenance-value-card > strong {
+  font-size: 16px !important;
+}
+.v360-shell .confidence-title h4 {
+  font-size: 12px !important;
+}
+.v360-shell .confidence-title p {
+  font-size: 9px !important;
+}
+.v360-shell.rtl .brand-block p,
+.v360-shell.rtl .critical-banner p,
+.v360-shell.rtl .panel-header p,
+.v360-shell.rtl .deficiency-description,
+.v360-shell.rtl .provenance-note p {
+  line-height: 1.75;
+}
