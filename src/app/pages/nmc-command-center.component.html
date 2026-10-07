@@ -102,9 +102,13 @@
       <article class="kpi-card">
         <div class="kpi-icon teal">⌖</div>
         <div>
-          <span class="kpi-label">{{ copy('Vessels monitored', 'السفن تحت المراقبة') }}</span>
-          <strong>{{ monitoredCount }}</strong>
-          <small>{{ copy('in / approaching UAE area', 'داخل / تقترب من مناطق الإمارات') }}</small>
+          <span class="kpi-label">{{ copy('AIS / LRIT traffic contacts', 'أهداف AIS / LRIT البحرية') }}</span>
+          <strong>≈{{ monitoredCount }}</strong>
+          <small>{{ copy('in / approaching UAE operational area', 'داخل / تقترب من النطاق التشغيلي للإمارات') }}</small>
+          <div class="traffic-breakdown">
+            <span>{{ trafficSnapshot.insideUaeMonitoredArea }} {{ copy('inside', 'داخل النطاق') }}</span>
+            <span>{{ trafficSnapshot.approachingUaeArea }} {{ copy('approaching', 'تقترب') }}</span>
+          </div>
         </div>
       </article>
 
@@ -143,8 +147,16 @@
             <div class="panel-title-row">
               <h3>{{ copy('Live Maritime Picture', 'الصورة البحرية الحية') }}</h3>
               <span class="real-map-badge">{{ copy('LIVE MAP', 'خريطة حية') }}</span>
+              <span class="traffic-profile-badge">
+                {{ correlatedProfileCount }} {{ copy('correlated vessel profiles', 'ملف سفينة مترابط') }}
+              </span>
             </div>
-            <p>{{ copy('OpenStreetMap live basemap · UAE waters and approach areas', 'خريطة OpenStreetMap حية · مياه الإمارات ومناطق الاقتراب') }}</p>
+            <p>
+              {{ copy(
+                'OpenStreetMap live basemap · UAE waters and approach areas · detailed profiles shown from the wider AIS/LRIT traffic picture',
+                'خريطة OpenStreetMap حية · مياه الإمارات ومناطق الاقتراب · الملفات التفصيلية المعروضة جزء من الصورة الأوسع لحركة AIS/LRIT'
+              ) }}
+            </p>
           </div>
 
           <div class="map-filters">

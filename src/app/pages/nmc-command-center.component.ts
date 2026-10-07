@@ -47,6 +47,15 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
 
   vessels: NmcVesselProfile[] = NMC_VESSELS.map(vessel => ({ ...vessel }));
 
+  readonly trafficSnapshot = {
+    totalContacts: 420,
+    insideUaeMonitoredArea: 265,
+    approachingUaeArea: 155,
+    correlatedProfiles: NMC_VESSELS.length,
+    source: 'AIS / LRIT traffic layer',
+    snapshotTime: '22:42:18'
+  };
+
   events: MaritimeEvent[] = [
     { time: '22:42:18', vessel: 'MV Gulf Horizon', title: 'Risk escalated to Critical', detail: 'Movement anomaly correlated with unresolved inspection deficiency and certificate condition.', severity: 'critical' },
     { time: '22:41:56', vessel: 'MV Gulf Horizon', title: 'Certificate data conflict', detail: 'MOEI record and external classification source require verification.', severity: 'high' },
@@ -302,7 +311,8 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
     return ['All', ...Array.from(new Set(this.vessels.map(vessel => vessel.type))).sort()];
   }
 
-  get monitoredCount(): number { return this.vessels.length; }
+  get monitoredCount(): number { return this.trafficSnapshot.totalContacts; }
+  get correlatedProfileCount(): number { return this.trafficSnapshot.correlatedProfiles; }
   get attentionCount(): number { return this.vessels.filter(vessel => vessel.risk >= 45).length; }
   get highRiskCount(): number { return this.vessels.filter(vessel => vessel.risk >= 65).length; }
   get criticalCount(): number { return this.vessels.filter(vessel => vessel.risk >= 85).length; }

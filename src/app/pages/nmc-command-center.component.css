@@ -853,3 +853,35 @@ button, input, select { font: inherit; }
   font-size: 9px;
   font-weight: 900;
 }
+
+
+/* UAE operational traffic volume */
+.traffic-breakdown {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 5px;
+}
+.traffic-breakdown span {
+  padding: 3px 6px;
+  border-radius: 999px;
+  background: #f4f8fa;
+  border: 1px solid #e3ebf0;
+  color: #738594;
+  font-size: 8px;
+  font-weight: 700;
+}
+.traffic-profile-badge {
+  padding: 4px 7px;
+  border-radius: 999px;
+  background: #eef7ff;
+  border: 1px solid #d9e9f5;
+  color: #2e769c;
+  font-size: 8px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.nmc-shell.rtl .traffic-breakdown,
+.nmc-shell.rtl .panel-title-row {
+  direction: rtl;
+}
