@@ -157,7 +157,7 @@
           </div>
 
           <div class="risk-score-row">
-            <div class="risk-gauge">
+            <div class="risk-gauge" [style.background]="riskGaugeBackground">
               <span>{{ vessel.riskScore }}</span>
               <small>/100</small>
             </div>
@@ -470,6 +470,14 @@
               </button>
             </div>
           </ng-container>
+
+          <div class="no-open-deficiency" *ngIf="openDeficiencyCount === 0">
+            <span>✓</span>
+            <div>
+              <strong>No open inspection deficiencies</strong>
+              <p>The latest inspection record contains no outstanding corrective action requiring NMC intervention.</p>
+            </div>
+          </div>
         </aside>
       </div>
 
