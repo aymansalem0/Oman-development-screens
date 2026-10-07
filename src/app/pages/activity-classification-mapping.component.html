@@ -1,0 +1,375 @@
+<section class="mapping-page" [class.rtl]="lang.isArabic">
+  <div class="mapping-hero">
+    <div>
+      <span class="eyebrow">{{ lang.pick('Master Data Configuration', 'إعدادات البيانات المرجعية') }}</span>
+      <h1>{{ lang.pick('Marine Classification & Activity Mapping', 'إدارة تصنيفات وربط الأنشطة البحرية') }}</h1>
+      <p>
+        {{ lang.pick(
+          'Create vessel classifications, connect each classification to marine activities, then map every marine activity to an Oman Business commercial activity by ISEC / activity code.',
+          'أضف تصنيفات الوحدات البحرية، واربط كل تصنيف بالأنشطة البحرية، ثم اربط كل نشاط بحري بالنشاط التجاري المقابل في منصة عُمان للأعمال باستخدام كود ISEC / كود النشاط.'
+        ) }}
+      </p>
+    </div>
+    <div class="source-badge">
+      <span>DB</span>
+      <div>
+        <strong>CORE_MD</strong>
+        <small>{{ lang.pick('Master data mapping', 'ربط البيانات المرجعية') }}</small>
+      </div>
+    </div>
+  </div>
+
+  <div class="flow-strip">
+    <div class="flow-step">
+      <span class="step-number">1</span>
+      <div>
+        <strong>{{ lang.pick('Classification', 'التصنيف') }}</strong>
+        <small>CORE_MD_SHIP_CATEGORY</small>
+      </div>
+    </div>
+    <span class="flow-arrow">→</span>
+    <div class="flow-step">
+      <span class="step-number">2</span>
+      <div>
+        <strong>{{ lang.pick('Marine Activity', 'النشاط البحري') }}</strong>
+        <small>CORE_MD_MARINE_ACTIVITY</small>
+      </div>
+    </div>
+    <span class="flow-arrow">→</span>
+    <div class="flow-step">
+      <span class="step-number">3</span>
+      <div>
+        <strong>{{ lang.pick('Oman Business Activity', 'نشاط عُمان للأعمال') }}</strong>
+        <small>CORE_MD_ACTIVITIES · ISEC</small>
+      </div>
+    </div>
+  </div>
+
+  <div class="stats-row">
+    <div class="mini-stat">
+      <span>{{ categories.length }}</span>
+      <small>{{ lang.pick('Classifications', 'تصنيفات') }}</small>
+    </div>
+    <div class="mini-stat">
+      <span>{{ marineActivities.length }}</span>
+      <small>{{ lang.pick('Marine Activities', 'أنشطة بحرية') }}</small>
+    </div>
+    <div class="mini-stat">
+      <span>{{ businessActivities.length }}</span>
+      <small>{{ lang.pick('Oman Business Activities', 'أنشطة عُمان للأعمال') }}</small>
+    </div>
+    <div class="mini-stat accent">
+      <span>{{ mappings.length }}</span>
+      <small>{{ lang.pick('Current Mappings', 'الربط الحالي') }}</small>
+    </div>
+  </div>
+
+  <div class="configuration-grid">
+    <article class="config-card">
+      <header class="card-header">
+        <div class="header-icon">▦</div>
+        <div>
+          <span class="card-kicker">{{ lang.pick('Step 1', 'الخطوة 1') }}</span>
+          <h2>{{ lang.pick('Manage Classifications', 'إدارة التصنيفات') }}</h2>
+          <p>CORE_MD_SHIP_CATEGORY</p>
+        </div>
+      </header>
+
+      <div class="form-grid two-columns">
+        <label>
+          <span>{{ lang.pick('Arabic Name', 'الاسم بالعربية') }} <b>*</b></span>
+          <input [(ngModel)]="categoryForm.nameAr" placeholder="مثال: السفن التجارية">
+        </label>
+        <label>
+          <span>{{ lang.pick('English Name', 'الاسم بالإنجليزية') }} <b>*</b></span>
+          <input [(ngModel)]="categoryForm.nameEn" placeholder="Example: Commercial Vessels">
+        </label>
+      </div>
+
+      <div class="switch-row">
+        <label class="switch-field">
+          <input type="checkbox" [(ngModel)]="categoryForm.allowedAll">
+          <span class="switch"></span>
+          <span>{{ lang.pick('Allowed for all', 'مسموح للجميع') }}</span>
+        </label>
+        <label class="switch-field">
+          <input type="checkbox" [(ngModel)]="categoryForm.isFishing">
+          <span class="switch"></span>
+          <span>{{ lang.pick('Fishing category', 'تصنيف صيد') }}</span>
+        </label>
+        <label class="switch-field">
+          <input type="checkbox" [(ngModel)]="categoryForm.active">
+          <span class="switch"></span>
+          <span>{{ lang.pick('Active', 'فعال') }}</span>
+        </label>
+      </div>
+
+      <div class="card-actions">
+        <button class="btn ghost" type="button" (click)="resetCategoryForm()">
+          {{ lang.pick('Clear', 'مسح') }}
+        </button>
+        <button class="btn primary" type="button" (click)="saveCategory()">
+          {{ categoryForm.id === null ? lang.pick('Add Classification', 'إضافة التصنيف') : lang.pick('Update Classification', 'تحديث التصنيف') }}
+        </button>
+      </div>
+
+      <div class="compact-list">
+        <div class="compact-list-title">
+          <strong>{{ lang.pick('Existing Classifications', 'التصنيفات الحالية') }}</strong>
+          <span>{{ categories.length }}</span>
+        </div>
+        <button class="compact-item" type="button" *ngFor="let item of categories; trackBy: trackById" (click)="editCategory(item)">
+          <div>
+            <strong>{{ categoryName(item) }}</strong>
+            <small>#{{ item.id }} · {{ item.nameEn }}</small>
+          </div>
+          <span class="tag" [class.off]="!item.active">{{ item.active ? lang.pick('Active', 'فعال') : lang.pick('Inactive', 'غير فعال') }}</span>
+        </button>
+      </div>
+    </article>
+
+    <article class="config-card">
+      <header class="card-header">
+        <div class="header-icon">⚓</div>
+        <div>
+          <span class="card-kicker">{{ lang.pick('Step 2', 'الخطوة 2') }}</span>
+          <h2>{{ lang.pick('Marine Activity', 'النشاط البحري') }}</h2>
+          <p>CORE_MD_MARINE_ACTIVITY</p>
+        </div>
+      </header>
+
+      <div class="form-grid">
+        <label>
+          <span>{{ lang.pick('Classification', 'التصنيف') }} <b>*</b></span>
+          <select [(ngModel)]="marineActivityForm.shipCategoryId">
+            <option [ngValue]="null">{{ lang.pick('Select classification', 'اختر التصنيف') }}</option>
+            <option *ngFor="let category of categories; trackBy: trackById" [ngValue]="category.id">
+              {{ categoryName(category) }}
+            </option>
+          </select>
+        </label>
+      </div>
+
+      <div class="form-grid two-columns">
+        <label>
+          <span>{{ lang.pick('Arabic Activity Name', 'اسم النشاط بالعربية') }} <b>*</b></span>
+          <input [(ngModel)]="marineActivityForm.nameAr" placeholder="مثال: نقل البضائع بحراً">
+        </label>
+        <label>
+          <span>{{ lang.pick('English Activity Name', 'اسم النشاط بالإنجليزية') }} <b>*</b></span>
+          <input [(ngModel)]="marineActivityForm.nameEn" placeholder="Example: Sea Freight Transport">
+        </label>
+      </div>
+
+      <div class="switch-row">
+        <label class="switch-field">
+          <input type="checkbox" [(ngModel)]="marineActivityForm.allowIndividuals">
+          <span class="switch"></span>
+          <span>{{ lang.pick('Allow individuals', 'السماح للأفراد') }}</span>
+        </label>
+        <label class="switch-field">
+          <input type="checkbox" [(ngModel)]="marineActivityForm.active">
+          <span class="switch"></span>
+          <span>{{ lang.pick('Active', 'فعال') }}</span>
+        </label>
+      </div>
+
+      <div class="card-actions">
+        <button class="btn ghost" type="button" (click)="resetMarineActivityForm()">
+          {{ lang.pick('Clear', 'مسح') }}
+        </button>
+        <button class="btn primary" type="button" (click)="saveMarineActivity()">
+          {{ marineActivityForm.id === null ? lang.pick('Add Marine Activity', 'إضافة النشاط البحري') : lang.pick('Update Marine Activity', 'تحديث النشاط البحري') }}
+        </button>
+      </div>
+
+      <div class="compact-list marine-list">
+        <div class="compact-list-title">
+          <strong>{{ lang.pick('Existing Marine Activities', 'الأنشطة البحرية الحالية') }}</strong>
+          <span>{{ marineActivities.length }}</span>
+        </div>
+        <button class="compact-item" type="button" *ngFor="let item of marineActivities; trackBy: trackById" (click)="editMarineActivity(item)">
+          <div>
+            <strong>{{ marineActivityName(item) }}</strong>
+            <small>{{ categoryName(getCategory(item.shipCategoryId)) }} · #{{ item.id }}</small>
+          </div>
+          <span class="edit-mark">✎</span>
+        </button>
+      </div>
+    </article>
+  </div>
+
+  <article class="mapping-card">
+    <header class="mapping-card-header">
+      <div>
+        <span class="card-kicker">{{ lang.pick('Step 3', 'الخطوة 3') }}</span>
+        <h2>{{ lang.pick('Map Marine Activity to Oman Business', 'ربط النشاط البحري بنشاط عُمان للأعمال') }}</h2>
+        <p>
+          {{ lang.pick(
+            'The selected commercial activity is referenced by CORE_MD_ACTIVITIES activity / ISEC code and stored against the marine activity.',
+            'يتم اختيار النشاط التجاري من CORE_MD_ACTIVITIES باستخدام كود النشاط / ISEC ثم حفظه مقابل النشاط البحري.'
+          ) }}
+        </p>
+      </div>
+      <span class="relation-chip">CORE_MD_MARINE_ACTIVITY_COMPANIES</span>
+    </header>
+
+    <div class="mapping-builder">
+      <div class="builder-column">
+        <label class="builder-label">{{ lang.pick('Marine Activity', 'النشاط البحري') }}</label>
+        <select class="builder-select" [(ngModel)]="selectedMarineActivityId">
+          <option [ngValue]="null">{{ lang.pick('Select marine activity', 'اختر النشاط البحري') }}</option>
+          <option *ngFor="let activity of marineActivities; trackBy: trackById" [ngValue]="activity.id">
+            {{ marineActivityName(activity) }} — {{ categoryName(getCategory(activity.shipCategoryId)) }}
+          </option>
+        </select>
+
+        <div class="selection-preview" *ngIf="selectedMarineActivity as marine">
+          <span class="preview-icon">⚓</span>
+          <div>
+            <small>{{ categoryName(getCategory(marine.shipCategoryId)) }}</small>
+            <strong>{{ marineActivityName(marine) }}</strong>
+          </div>
+        </div>
+      </div>
+
+      <div class="builder-connector">
+        <span>⇄</span>
+        <small>{{ lang.pick('Map', 'ربط') }}</small>
+      </div>
+
+      <div class="builder-column">
+        <label class="builder-label">{{ lang.pick('Oman Business Activity / ISEC', 'نشاط عُمان للأعمال / ISEC') }}</label>
+        <div class="search-input">
+          <span>⌕</span>
+          <input
+            [(ngModel)]="businessActivitySearch"
+            [placeholder]="lang.pick('Search by ISEC code or activity name', 'ابحث بكود ISEC أو اسم النشاط')">
+        </div>
+
+        <div class="business-results">
+          <button
+            type="button"
+            class="business-option"
+            *ngFor="let activity of filteredBusinessActivities; trackBy: trackById"
+            [class.selected]="selectedBusinessActivityId === activity.id"
+            (click)="selectBusinessActivity(activity)">
+            <span class="code">{{ activity.activityCode }}</span>
+            <span class="business-name">
+              <strong>{{ businessActivityName(activity) }}</strong>
+              <small>{{ lang.isArabic ? activity.nameEn : activity.nameAr }}</small>
+            </span>
+            <span class="check">{{ selectedBusinessActivityId === activity.id ? '✓' : '›' }}</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <ng-container *ngIf="selectedMarineActivity as selectedMarine">
+      <div class="selected-link" *ngIf="selectedBusinessActivity as selectedBusiness">
+        <div>
+          <small>{{ lang.pick('Selected mapping', 'الربط المختار') }}</small>
+          <strong>{{ marineActivityName(selectedMarine) }}</strong>
+        </div>
+        <span class="selected-link-arrow">→</span>
+        <div class="selected-link-business">
+          <span class="code">{{ selectedBusiness.activityCode }}</span>
+          <strong>{{ businessActivityName(selectedBusiness) }}</strong>
+        </div>
+        <button class="btn primary" type="button" (click)="saveMapping()">
+          {{ lang.pick('Save Mapping', 'حفظ الربط') }}
+        </button>
+      </div>
+    </ng-container>
+  </article>
+
+  <article class="current-mappings">
+    <header class="table-header">
+      <div>
+        <span class="card-kicker">{{ lang.pick('Current Configuration', 'الإعداد الحالي') }}</span>
+        <h2>{{ lang.pick('Existing Classification & Activity Mappings', 'التصنيفات والأنشطة والربط الحالي') }}</h2>
+        <p>{{ lang.pick('Review the complete chain from vessel classification to Oman Business activity.', 'اعرض سلسلة الربط كاملة من تصنيف الوحدة البحرية حتى نشاط عُمان للأعمال.') }}</p>
+      </div>
+      <span class="mapping-count">{{ filteredMappings.length }} {{ lang.pick('mapping(s)', 'ربط') }}</span>
+    </header>
+
+    <div class="table-filters">
+      <div class="search-input wide">
+        <span>⌕</span>
+        <input [(ngModel)]="mappingFilter" [placeholder]="lang.pick('Search classification, marine activity or ISEC code', 'بحث بالتصنيف أو النشاط البحري أو كود ISEC')">
+      </div>
+      <select [(ngModel)]="categoryFilter">
+        <option [ngValue]="null">{{ lang.pick('All classifications', 'كل التصنيفات') }}</option>
+        <option *ngFor="let category of categories; trackBy: trackById" [ngValue]="category.id">
+          {{ categoryName(category) }}
+        </option>
+      </select>
+    </div>
+
+    <div class="mapping-table-wrap">
+      <table class="mapping-table">
+        <thead>
+          <tr>
+            <th>{{ lang.pick('Classification', 'التصنيف') }}</th>
+            <th>{{ lang.pick('Marine Activity', 'النشاط البحري') }}</th>
+            <th>{{ lang.pick('ISEC / Activity Code', 'كود ISEC / النشاط') }}</th>
+            <th>{{ lang.pick('Oman Business Activity', 'نشاط عُمان للأعمال') }}</th>
+            <th>{{ lang.pick('Individuals', 'الأفراد') }}</th>
+            <th>{{ lang.pick('Status', 'الحالة') }}</th>
+            <th>{{ lang.pick('Actions', 'الإجراءات') }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let mapping of filteredMappings; trackBy: trackById">
+            <ng-container *ngIf="getMarineActivity(mapping.marineActivityId) as marine">
+              <td>
+                <span class="category-cell">{{ categoryName(getCategory(marine.shipCategoryId)) }}</span>
+              </td>
+              <td>
+                <strong>{{ marineActivityName(marine) }}</strong>
+                <small>#{{ marine.id }}</small>
+              </td>
+              <td>
+                <span class="code">{{ getBusinessActivity(mapping.companyActivityId)?.activityCode }}</span>
+              </td>
+              <td>{{ businessActivityName(getBusinessActivity(mapping.companyActivityId)) }}</td>
+              <td>
+                <span class="boolean-pill" [class.yes]="marine.allowIndividuals">
+                  {{ marine.allowIndividuals ? lang.pick('Yes', 'نعم') : lang.pick('No', 'لا') }}
+                </span>
+              </td>
+              <td>
+                <span class="status-dot" [class.off]="!marine.active"></span>
+                {{ marine.active ? lang.pick('Active', 'فعال') : lang.pick('Inactive', 'غير فعال') }}
+              </td>
+              <td>
+                <div class="row-actions">
+                  <button type="button" (click)="editMapping(mapping)">{{ lang.pick('Edit', 'تعديل') }}</button>
+                  <button class="danger" type="button" (click)="removeMapping(mapping)">{{ lang.pick('Unlink', 'إلغاء الربط') }}</button>
+                </div>
+              </td>
+            </ng-container>
+          </tr>
+          <tr *ngIf="filteredMappings.length === 0">
+            <td class="empty-state" colspan="7">{{ lang.pick('No mappings match the selected filters.', 'لا توجد ربطات مطابقة للفلاتر المختارة.') }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </article>
+
+  <div class="integration-note">
+    <span class="note-icon">i</span>
+    <div>
+      <strong>{{ lang.pick('Backend integration note', 'ملاحظة التكامل مع الـ Backend') }}</strong>
+      <p>
+        {{ lang.pick(
+          'This prototype keeps data in-memory. Connect classifications to CORE_MD_SHIP_CATEGORY, marine activities to CORE_MD_MARINE_ACTIVITY, Oman Business activities to CORE_MD_ACTIVITIES, and persist the relation in CORE_MD_MARINE_ACTIVITY_COMPANIES.',
+          'هذه الشاشة حالياً Prototype ببيانات داخلية. عند الربط الفعلي استخدم CORE_MD_SHIP_CATEGORY للتصنيفات، وCORE_MD_MARINE_ACTIVITY للأنشطة البحرية، وCORE_MD_ACTIVITIES لأنشطة عُمان للأعمال، واحفظ الربط في CORE_MD_MARINE_ACTIVITY_COMPANIES.'
+        ) }}
+      </p>
+    </div>
+  </div>
+
+  <div class="toast-message" *ngIf="toast">{{ toast }}</div>
+</section>
