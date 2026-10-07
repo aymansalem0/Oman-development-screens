@@ -1622,19 +1622,19 @@ button, a { font: inherit; }
 }
 
 .provenance-backdrop {
-  position: fixed;
+  position: fixed !important;
   inset: 0;
-  z-index: 5000;
+  z-index: 2147483646 !important;
   background: rgba(18,39,54,.22);
   backdrop-filter: blur(2px);
   animation: provenanceFade .16s ease-out;
 }
 .provenance-drawer {
-  position: fixed;
+  position: fixed !important;
   top: 0;
   right: 0;
   bottom: 0;
-  z-index: 5010;
+  z-index: 2147483647 !important;
   width: min(460px, 94vw);
   overflow-y: auto;
   padding: 18px;
@@ -1642,6 +1642,10 @@ button, a { font: inherit; }
   border-left: 1px solid #dde6ec;
   box-shadow: -18px 0 45px rgba(23,50,77,.14);
   animation: provenanceSlide .22s ease-out;
+  transform: translate3d(0,0,0);
+  isolation: isolate;
+  contain: paint;
+  will-change: transform;
 }
 .provenance-drawer-head {
   display: flex;
@@ -1883,4 +1887,21 @@ button, a { font: inherit; }
   z-index: 0;
 }.map-callout {
   z-index: 30 !important;
+}
+
+
+/* Chrome/Leaflet compositing safeguard:
+   while provenance is open, do not allow the GPU-composited Leaflet layer
+   to paint above the focused drawer. The map card remains in place so
+   the layout does not jump. */
+.provenance-open .vessel-map,
+.provenance-open .map-callout {
+  visibility: hidden !important;
+}
+.provenance-open .map-wrap {
+  background:
+    linear-gradient(135deg, rgba(239,246,249,.96), rgba(229,240,244,.96));
+}
+.provenance-open .movement-panel .legend {
+  opacity: .35;
 }
