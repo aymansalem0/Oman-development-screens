@@ -10,8 +10,7 @@ import {
 import { LanguageService } from '../services/language.service';
 import {
   NmcCaseStateService,
-  NmcInspectionOutcome,
-  NmcPersistedTaskStatus
+  NmcInspectionOutcome
 } from '../services/nmc-case-state.service';
 
 type CaseStatus = 'Open' | 'In Progress' | 'Pending Verification' | 'Resolved';
@@ -396,6 +395,14 @@ export class NmcCaseWorkspaceComponent implements OnInit {
     }
 
     this.tasks = tasks;
+
+    if (this.mandatoryComplete) {
+      this.caseStatus = 'Pending Verification';
+    } else if (this.completedTasks > 0 || this.tasks.some(task => task.status === 'In Progress' || task.status === 'Escalated')) {
+      this.caseStatus = 'In Progress';
+    } else {
+      this.caseStatus = 'Open';
+    }
 
     this.stakeholders = [
       {
