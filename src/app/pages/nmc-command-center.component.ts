@@ -447,7 +447,7 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
     const vessel = this.vessels.find(v => v.id === 1);
     if (!vessel) return;
 
-    const route = this.seaRoutes.jebelAli;
+    const route = this.seaRoutes['jebelAli'];
     vessel.risk = 87;
     vessel.speed = 3.1;
     vessel.lat = route[2][0];
