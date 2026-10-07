@@ -199,7 +199,10 @@
             *ngFor="let vessel of attentionVessels; let i = index"
             class="attention-item"
             [class.active]="selectedVessel?.id === vessel.id"
-            (click)="openVessel(vessel)"
+            [attr.title]="selectedVessel?.id === vessel.id
+              ? copy('Click again to open Vessel 360', 'اضغط مرة أخرى لفتح Vessel 360')
+              : copy('Focus vessel on map', 'عرض السفينة على الخريطة')"
+            (click)="handleVesselInteraction(vessel)"
           >
             <div class="rank" [ngClass]="riskClass(vessel.risk)">{{ i + 1 }}</div>
 
@@ -220,7 +223,9 @@
               </div>
             </div>
 
-            <span class="open-arrow">›</span>
+            <span class="open-arrow" [class.open-360]="selectedVessel?.id === vessel.id">
+              {{ selectedVessel?.id === vessel.id ? '360' : '›' }}
+            </span>
           </button>
         </div>
 
@@ -319,7 +324,10 @@
         </div>
 
         <div class="vessel-actions">
-          <a class="secondary-btn action-link" [routerLink]="['/moei/nmc/vessel', v.imo]">{{ copy('Open Vessel 360', 'فتح Vessel 360') }}</a>
+          <a class="secondary-btn action-link open-360-btn" [routerLink]="['/moei/nmc/vessel', v.imo]">
+            <span>360</span>
+            {{ copy('Open Vessel 360', 'فتح Vessel 360') }}
+          </a>
           <button type="button" class="primary-btn">{{ copy('Review Maritime Event', 'مراجعة الحدث البحري') }}</button>
         </div>
       </div>
