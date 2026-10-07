@@ -40,6 +40,7 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
     callSign: 'D5GH7',
     flag: 'Liberia',
     type: 'General Cargo',
+    lengthM: 184,
     built: 2002,
     age: 24,
     grossTonnage: '28,450 GT',
@@ -50,9 +51,9 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
     destination: 'Jebel Ali',
     eta: '07 Oct 2026 · 03:30',
     speed: '3.1 kn',
-    course: '287°',
+    course: '169°',
     navStatus: 'Under way using engine',
-    position: '25.2150° N, 55.5900° E',
+    position: '25.2200° N, 55.0000° E',
     riskScore: 87,
     riskLevel: 'Critical',
     dataConfidence: 76,
@@ -122,35 +123,38 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
     L.control.zoom({ position: 'bottomright' }).addTo(this.map);
 
     const expected: L.LatLngExpression[] = [
-      [24.94, 56.15],
-      [25.03, 55.98],
-      [25.10, 55.80],
-      [25.17, 55.63],
-      [25.22, 55.45]
+      [25.52, 54.88],
+      [25.42, 54.92],
+      [25.32, 54.96],
+      [25.22, 55.00],
+      [25.12, 55.02],
+      [25.04, 55.02],
+      [24.99, 55.03]
     ];
 
     const observed: L.LatLngExpression[] = [
-      [24.94, 56.15],
-      [25.03, 55.98],
-      [25.10, 55.84],
-      [25.18, 55.78],
-      [25.215, 55.59]
+      [25.52, 54.88],
+      [25.42, 54.92],
+      [25.34, 54.89],
+      [25.28, 54.84],
+      [25.23, 54.90],
+      [25.22, 55.00]
     ];
 
     L.polyline(expected, {
       color: '#0284c7',
       weight: 3,
-      opacity: 0.62,
+      opacity: 0.64,
       dashArray: '7 7'
-    }).bindTooltip('Expected arrival corridor').addTo(this.map);
+    }).bindTooltip('Expected offshore arrival corridor to Jebel Ali').addTo(this.map);
 
     L.polyline(observed, {
       color: '#0f766e',
       weight: 4,
-      opacity: 0.9
-    }).bindTooltip('Observed movement').addTo(this.map);
+      opacity: 0.92
+    }).bindTooltip('Observed offshore movement').addTo(this.map);
 
-    L.circleMarker([25.18, 55.78], {
+    L.circleMarker([25.34, 54.89], {
       radius: 8,
       color: '#fff',
       weight: 3,
@@ -158,14 +162,42 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
       fillOpacity: 1
     }).bindTooltip('Anomaly detected · route deviation begins').addTo(this.map);
 
-    L.circleMarker([25.215, 55.59], {
-      radius: 9,
-      color: '#fff',
-      weight: 3,
-      fillColor: '#ef4444',
-      fillOpacity: 1
-    }).bindTooltip('MV Gulf Horizon · Current position').addTo(this.map);
+    const shipSize = Math.round(Math.max(18, Math.min(30, 14 + this.vessel.lengthM / 25)));
+    const ringSize = shipSize + 16;
+    const currentShipIcon = L.divIcon({
+      className: 'v360-map-ship-wrap',
+      html: `
+        <div class="v360-map-ship critical" style="--ship-size:${shipSize}px;--ring-size:${ringSize}px">
+          <span class="v360-risk-ring"></span>
+          <span class="v360-risk-pulse"></span>
+          <svg class="v360-ship-symbol" viewBox="0 0 24 34" aria-hidden="true" style="transform:rotate(169deg)">
+            <path d="M12 1.4c1.5 2.1 4.7 4.6 6.5 8.2v15.7L12 32.6 5.5 25.3V9.6C7.3 6 10.5 3.5 12 1.4Z"></path>
+            <path class="ship-deck" d="M9.2 10.6h5.6v8.2H9.2z"></path>
+            <path class="ship-centerline" d="M12 3.5v24.3"></path>
+          </svg>
+          <span class="v360-ship-label">MV Gulf Horizon <b>87</b></span>
+        </div>
+      `,
+      iconSize: [58, 58],
+      iconAnchor: [29, 29]
+    });
 
-    this.map.fitBounds(L.latLngBounds([[24.84, 55.35], [25.34, 56.25]]), { padding: [18, 18] });
+    L.marker([25.22, 55.00], {
+      icon: currentShipIcon,
+      keyboard: true,
+      riseOnHover: true
+    })
+      .bindTooltip(
+        `<div class="v360-map-tooltip">
+          <strong>MV Gulf Horizon</strong>
+          <span>IMO ${this.vessel.imo} · ${this.vessel.lengthM} m</span>
+          <span>3.1 kn · Course 169° · Jebel Ali</span>
+          <b>Risk 87 · Critical</b>
+        </div>`,
+        { direction: 'top', offset: [0, -22], opacity: 1 }
+      )
+      .addTo(this.map);
+
+    this.map.fitBounds(L.latLngBounds([[24.92, 54.72], [25.60, 55.16]]), { padding: [18, 18] });
   }
 }
