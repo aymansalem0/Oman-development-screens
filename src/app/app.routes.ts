@@ -7,6 +7,7 @@ import { NmcVessel360Component } from './pages/nmc-vessel-360.component';
 import { NmcRiskExplainabilityComponent } from './pages/nmc-risk-explainability.component';
 import { NmcAiSituationAssessmentComponent } from './pages/nmc-ai-situation-assessment.component';
 import { NmcCaseWorkspaceComponent } from './pages/nmc-case-workspace.component';
+import { NmcSmartInspectionComponent } from './pages/nmc-smart-inspection.component';
 
 const base = 'dashboard/maritime-navigation/navigation-aids-installation-approval';
 
