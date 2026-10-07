@@ -265,20 +265,22 @@
       </div>
     </div>
 
-    <div class="selected-link" *ngIf="selectedMarineActivity && selectedBusinessActivity">
-      <div>
-        <small>{{ lang.pick('Selected mapping', 'الربط المختار') }}</small>
-        <strong>{{ marineActivityName(selectedMarineActivity) }}</strong>
+    <ng-container *ngIf="selectedMarineActivity as selectedMarine">
+      <div class="selected-link" *ngIf="selectedBusinessActivity as selectedBusiness">
+        <div>
+          <small>{{ lang.pick('Selected mapping', 'الربط المختار') }}</small>
+          <strong>{{ marineActivityName(selectedMarine) }}</strong>
+        </div>
+        <span class="selected-link-arrow">→</span>
+        <div class="selected-link-business">
+          <span class="code">{{ selectedBusiness.activityCode }}</span>
+          <strong>{{ businessActivityName(selectedBusiness) }}</strong>
+        </div>
+        <button class="btn primary" type="button" (click)="saveMapping()">
+          {{ lang.pick('Save Mapping', 'حفظ الربط') }}
+        </button>
       </div>
-      <span class="selected-link-arrow">→</span>
-      <div class="selected-link-business">
-        <span class="code">{{ selectedBusinessActivity.activityCode }}</span>
-        <strong>{{ businessActivityName(selectedBusinessActivity) }}</strong>
-      </div>
-      <button class="btn primary" type="button" (click)="saveMapping()">
-        {{ lang.pick('Save Mapping', 'حفظ الربط') }}
-      </button>
-    </div>
+    </ng-container>
   </article>
 
   <article class="current-mappings">
