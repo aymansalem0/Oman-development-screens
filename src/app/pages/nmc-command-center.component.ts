@@ -59,6 +59,7 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
   private map?: L.Map;
   private markers = new Map<number, L.Marker>();
   private selectedTrack?: L.Polyline;
+  private lastInteractiveVesselId?: number;
 
   constructor(private router: Router, public lang: LanguageService) {}
 
@@ -320,8 +321,23 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
     this.drawSelectedTrack();
 
     if (fly && this.map) {
-      this.map.flyTo([vessel.lat, vessel.lng], Math.max(this.map.getZoom(), 8), { duration: 0.7 });
+      this.map.flyTo([vessel.lat, vessel.lng], Math.max(this.map.getZoom(), 9), { duration: 0.7 });
     }
+  }
+
+  handleVesselInteraction(vessel: NmcVesselProfile): void {
+    const current = this.vessels.find(item => item.id === vessel.id) ?? vessel;
+    const isSecondClickOnFocusedVessel =
+      this.lastInteractiveVesselId === current.id &&
+      this.selectedVessel?.id === current.id;
+
+    if (isSecondClickOnFocusedVessel) {
+      this.openVessel(current);
+      return;
+    }
+
+    this.lastInteractiveVesselId = current.id;
+    this.selectVessel(current, true);
   }
 
   openVessel(vessel: NmcVesselProfile): void {
@@ -377,7 +393,7 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
         { direction:'top', offset:[0,-18], opacity:1 }
       );
 
-      marker.on('click', () => this.openVessel(vessel));
+      marker.on('click', () => this.handleVesselInteraction(vessel));
       marker.addTo(this.map);
       this.markers.set(vessel.id, marker);
     }

@@ -810,3 +810,46 @@ button, input, select { font: inherit; }
 .nmc-shell.rtl .panel-header p {
   line-height: 1.7;
 }
+
+
+/* Select-first vessel interaction */
+.open-arrow {
+  min-width: 18px;
+  min-height: 18px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 7px;
+  transition: .16s ease;
+}
+.open-arrow.open-360 {
+  min-width: 32px;
+  padding: 4px 6px;
+  background: #eaf8f5;
+  border: 1px solid #cfeae4;
+  color: #0f766e;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .25px;
+}
+.attention-item.active {
+  box-shadow: inset 3px 0 0 #0f766e;
+}
+.nmc-shell.rtl .attention-item.active {
+  box-shadow: inset -3px 0 0 #0f766e;
+}
+.open-360-btn {
+  gap: 6px;
+}
+.open-360-btn > span {
+  min-width: 29px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 7px;
+  display: inline-grid;
+  place-items: center;
+  background: #eaf8f5;
+  color: #0f766e;
+  border: 1px solid #d0ebe5;
+  font-size: 9px;
+  font-weight: 900;
+}
