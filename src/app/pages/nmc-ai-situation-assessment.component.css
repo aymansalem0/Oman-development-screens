@@ -1,5 +1,9 @@
 :host {
   display: block;
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  overflow: auto;
   min-height: 100vh;
   background: #f4f8fb;
   color: #17324d;
@@ -18,7 +22,8 @@ a, button, textarea { font: inherit; }
 }
 
 .ai-topbar {
-  position: sticky;
+  position: fixed;
+  inset: 0 0 auto 0;
   top: 0;
   z-index: 30;
   min-height: 82px;
@@ -111,9 +116,9 @@ a, button, textarea { font: inherit; }
 }
 
 .ai-main {
-  max-width: 1680px;
-  margin: 0 auto;
-  padding: 20px 24px 34px;
+  max-width: none;
+  margin: 0 0 0 216px;
+  padding: 106px 24px 34px;
 }
 
 .vessel-hero,
@@ -883,4 +888,126 @@ a, button, textarea { font: inherit; }
     border-bottom:0 !important;
   }
   .evidence-row { grid-template-columns:75px 1fr 45px; }
+}
+
+
+/* NMC module shell — keeps this screen inside the National Maritime Center,
+   not inside the Oman service menu inherited from the parent demo project. */
+.nmc-context-sidebar {
+  position: fixed;
+  left: 0;
+  top: 82px;
+  bottom: 0;
+  width: 216px;
+  z-index: 20;
+  padding: 20px 12px 16px;
+  background: #fff;
+  border-right: 1px solid #e6edf3;
+  overflow-y: auto;
+}
+.sidebar-section-label {
+  padding: 0 12px 9px;
+  color: #a0adba;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+}
+.sidebar-section-label.second {
+  margin-top: 20px;
+}
+.nav-item {
+  width: 100%;
+  min-height: 43px;
+  display: grid;
+  grid-template-columns: 24px 1fr auto;
+  gap: 8px;
+  align-items: center;
+  margin: 3px 0;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: 11px;
+  background: transparent;
+  color: #687d90;
+  text-align: left;
+  text-decoration: none;
+  font-size: 10px;
+  cursor: pointer;
+}
+.nav-item:hover {
+  background: #f5f9fb;
+  color: #29465e;
+}
+.nav-item.active {
+  color: #0f766e;
+  background: linear-gradient(90deg,#eaf9f6,#f5fcfb);
+  border-color: #d7f0eb;
+  font-weight: 700;
+}
+.nav-icon {
+  color: #3da49a;
+  text-align: center;
+  font-size: 12px;
+}
+.system-health {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 16px;
+  padding: 12px;
+  border: 1px solid #e8eef3;
+  border-radius: 12px;
+  background: #fbfdfe;
+}
+.system-health > div {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.system-health strong {
+  color: #3b5a71;
+  font-size: 9px;
+}
+.system-health small {
+  display: block;
+  margin-top: 5px;
+  color: #9aa7b3;
+  font-size: 8px;
+}
+.health-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #22c55e;
+  box-shadow: 0 0 0 4px #eaf9ef;
+}
+
+.ai-shell.rtl .nmc-context-sidebar {
+  left: auto;
+  right: 0;
+  border-right: 0;
+  border-left: 1px solid #e6edf3;
+}
+.ai-shell.rtl .ai-main {
+  margin-left: 0;
+  margin-right: 216px;
+}
+.ai-shell.rtl .nav-item {
+  text-align: right;
+}
+.ai-shell.rtl .nav-item.active {
+  background: linear-gradient(270deg,#eaf9f6,#f5fcfb);
+}
+.ai-shell.rtl .system-health {
+  text-align: right;
+}
+
+@media (max-width: 900px) {
+  .nmc-context-sidebar {
+    display: none;
+  }
+  .ai-main,
+  .ai-shell.rtl .ai-main {
+    margin-left: 0;
+    margin-right: 0;
+  }
 }
