@@ -1,24 +1,25 @@
-<div class="rx-shell">
+<div class="rx-shell" [class.rtl]="lang.isArabic" [attr.dir]="lang.dir">
   <header class="rx-topbar">
     <div class="brand-block">
       <div class="brand-mark">⚓</div>
       <div>
-        <div class="eyebrow">MOEI · National Maritime Center</div>
-        <h1>Risk Explainability</h1>
-        <p>Rule-to-evidence traceability for vessel prioritization</p>
+        <div class="eyebrow">{{ copy('MOEI · National Maritime Center', 'وزارة الطاقة والبنية التحتية · المركز البحري الوطني') }}</div>
+        <h1>{{ copy('Risk Explainability', 'تفسير المخاطر') }}</h1>
+        <p>{{ copy('Rule-to-evidence traceability for vessel prioritization', 'تتبع القواعد حتى الأدلة المستخدمة في تحديد أولوية السفينة') }}</p>
       </div>
     </div>
 
     <div class="top-actions">
-      <a class="back-link" [routerLink]="['/moei/nmc/vessel', vessel.imo]">← Back to Vessel 360</a>
-      <a class="secondary-btn" routerLink="/moei/nmc">Command Center</a>
+      <button type="button" class="language-btn" (click)="toggleLanguage()">{{ lang.isArabic ? 'English' : 'العربية' }}</button>
+      <a class="back-link" [routerLink]="['/moei/nmc/vessel', vessel.imo]">{{ lang.isArabic ? 'العودة إلى ملف السفينة →' : '← Back to Vessel 360' }}</a>
+      <a class="secondary-btn" routerLink="/moei/nmc">{{ copy('Command Center', 'مركز القيادة') }}</a>
     </div>
   </header>
 
   <main class="rx-main">
     <section class="hero-card">
       <div class="vessel-summary">
-        <div class="vessel-kicker">EXPLAINING CURRENT RISK</div>
+        <div class="vessel-kicker">{{ copy('EXPLAINING CURRENT RISK', 'تفسير المخاطر الحالية') }}</div>
         <h2>{{ vessel.name }}</h2>
         <div class="identity-row">
           <span>IMO {{ vessel.imo }}</span>
@@ -30,19 +31,19 @@
 
       <div class="hero-metrics">
         <div class="metric-card risk" [ngClass]="riskClass">
-          <small>Risk score</small>
+          <small>{{ copy('Risk score', 'درجة المخاطر') }}</small>
           <strong>{{ vessel.risk }}</strong>
-          <span>{{ riskLevel }}</span>
+          <span>{{ riskLabel() }}</span>
         </div>
         <div class="metric-card">
-          <small>Risk confidence</small>
+          <small>{{ copy('Risk confidence', 'الثقة في المخاطر') }}</small>
           <strong>{{ vessel.riskConfidence }}%</strong>
-          <span>Evidence-supported calculation</span>
+          <span>{{ copy('Evidence-supported calculation', 'احتساب مدعوم بالأدلة') }}</span>
         </div>
         <div class="metric-card">
-          <small>Data confidence</small>
+          <small>{{ copy('Data confidence', 'الثقة في البيانات') }}</small>
           <strong>{{ vessel.dataConfidence }}%</strong>
-          <span>{{ conflictCount }} unresolved conflict{{ conflictCount === 1 ? '' : 's' }}</span>
+          <span>{{ conflictCount }} {{ copy('unresolved conflicts', 'تعارضات غير محلولة') }}</span>
         </div>
       </div>
     </section>
@@ -50,20 +51,20 @@
     <section class="threshold-card">
       <div class="threshold-head">
         <div>
-          <h3>Risk Classification Thresholds</h3>
-          <p>Current score is evaluated against configured operational thresholds.</p>
+          <h3>{{ copy('Risk Classification Thresholds', 'حدود تصنيف المخاطر') }}</h3>
+          <p>{{ copy('Current score is evaluated against configured operational thresholds.', 'يتم تقييم الدرجة الحالية مقابل الحدود التشغيلية المهيأة.') }}</p>
         </div>
         <div class="engine-meta">
           <span>{{ engineVersion }}</span>
-          <span>Evaluated {{ evaluatedAt }}</span>
+          <span>{{ copy('Evaluated', 'تم التقييم') }} {{ evaluatedAt }}</span>
         </div>
       </div>
 
       <div class="threshold-track">
-        <div class="band normal" style="width:45%"><span>Normal · 0–44</span></div>
-        <div class="band watch" style="width:20%"><span>Watch · 45–64</span></div>
-        <div class="band high" style="width:20%"><span>High · 65–84</span></div>
-        <div class="band critical" style="width:15%"><span>Critical · 85–100</span></div>
+        <div class="band normal" style="width:45%"><span>{{ thresholdLabel('Normal') }} · 0–44</span></div>
+        <div class="band watch" style="width:20%"><span>{{ thresholdLabel('Watch') }} · 45–64</span></div>
+        <div class="band high" style="width:20%"><span>{{ thresholdLabel('High') }} · 65–84</span></div>
+        <div class="band critical" style="width:15%"><span>{{ thresholdLabel('Critical') }} · 85–100</span></div>
         <div class="score-marker" [style.left.%]="scoreMarkerPosition">
           <b>{{ vessel.risk }}</b>
           <i></i>
@@ -75,10 +76,10 @@
       <div class="factor-panel panel">
         <div class="panel-header">
           <div>
-            <h3>How the score was built</h3>
-            <p>{{ factors.length }} correlated factors · total contribution {{ totalContribution }}</p>
+            <h3>{{ copy('How the score was built', 'كيف تم احتساب الدرجة') }}</h3>
+            <p>{{ factors.length }} {{ copy('correlated factors', 'عوامل مترابطة') }} · {{ copy('total contribution', 'إجمالي المساهمة') }} {{ totalContribution }}</p>
           </div>
-          <span class="count-pill">{{ triggeredCount }} active triggers</span>
+          <span class="count-pill">{{ triggeredCount }} {{ copy('active triggers', 'عوامل نشطة') }}</span>
         </div>
 
         <div class="factor-list">
@@ -93,13 +94,13 @@
             <div class="factor-content">
               <div class="factor-title-row">
                 <strong>{{ factor.label }}</strong>
-                <span class="status-chip" [ngClass]="factor.status.toLowerCase()">{{ factor.status }}</span>
+                <span class="status-chip" [ngClass]="factor.status.toLowerCase()">{{ factorStatusLabel(factor.status) }}</span>
               </div>
               <p>{{ factor.ruleId }} · {{ factor.source }}</p>
               <div class="factor-meta">
-                <span>{{ factor.sourceClass }}</span>
-                <span>{{ factor.dataConfidence }}% data confidence</span>
-                <span *ngIf="factor.conflict" class="conflict">Conflict</span>
+                <span>{{ sourceClassLabel(factor.sourceClass) }}</span>
+                <span>{{ factor.dataConfidence }}% {{ copy('data confidence', 'ثقة في البيانات') }}</span>
+                <span *ngIf="factor.conflict" class="conflict">{{ copy('Conflict', 'التعارض') }}</span>
               </div>
             </div>
             <span class="chevron">›</span>
@@ -107,7 +108,7 @@
         </div>
 
         <div class="calculation-ledger">
-          <span>Calculation</span>
+          <span>{{ copy('Calculation', 'الاحتساب') }}</span>
           <strong>
             <ng-container *ngFor="let factor of factors; let last = last">
               {{ factor.contribution }}<ng-container *ngIf="!last"> + </ng-container>
@@ -120,7 +121,7 @@
       <aside class="evidence-panel panel" *ngIf="selectedFactor as factor">
         <div class="panel-header">
           <div>
-            <h3>Rule & Evidence Trace</h3>
+            <h3>{{ copy('Rule & Evidence Trace', 'تتبع القاعدة والدليل') }}</h3>
             <p>{{ factor.ruleId }}</p>
           </div>
           <span class="source-class" [ngClass]="{
@@ -134,61 +135,61 @@
 
         <div class="selected-factor-hero">
           <div>
-            <small>RISK CONTRIBUTION</small>
+            <small>{{ copy('RISK CONTRIBUTION', 'المساهمة في المخاطر') }}</small>
             <strong>+{{ factor.contribution }}</strong>
           </div>
           <div>
-            <small>FACTOR</small>
+            <small>{{ copy('FACTOR', 'العامل') }}</small>
             <strong>{{ factor.label }}</strong>
           </div>
         </div>
 
         <div class="trace-section">
-          <span class="section-label">1 · RULE</span>
+          <span class="section-label">1 · {{ copy('RULE', 'القاعدة') }}</span>
           <div class="trace-card">
-            <div><small>Rule ID</small><strong>{{ factor.ruleId }}</strong></div>
-            <div><small>Rule logic</small><strong>{{ factor.ruleLogic }}</strong></div>
+            <div><small>{{ copy('Rule ID', 'معرف القاعدة') }}</small><strong>{{ factor.ruleId }}</strong></div>
+            <div><small>{{ copy('Rule logic', 'منطق القاعدة') }}</small><strong>{{ factor.ruleLogic }}</strong></div>
           </div>
         </div>
 
         <div class="trace-section">
-          <span class="section-label">2 · TRIGGER</span>
+          <span class="section-label">2 · {{ copy('TRIGGER', 'المُحفز') }}</span>
           <div class="trace-note">
-            <strong>Why the rule fired</strong>
+            <strong>{{ copy('Why the rule fired', 'سبب تفعيل القاعدة') }}</strong>
             <p>{{ factor.trigger }}</p>
           </div>
         </div>
 
         <div class="trace-section">
-          <span class="section-label">3 · SOURCE & EVIDENCE</span>
+          <span class="section-label">3 · {{ copy('SOURCE & EVIDENCE', 'المصدر والدليل') }}</span>
           <div class="trace-card two-col">
-            <div><small>Source</small><strong>{{ factor.source }}</strong></div>
-            <div><small>Authority</small><strong>{{ factor.authority }}</strong></div>
-            <div><small>Evidence record</small><strong>{{ factor.evidenceRecord }}</strong></div>
-            <div><small>Conflict</small><strong [class.warning-text]="factor.conflict">{{ factor.conflict ? 'Unresolved' : 'None' }}</strong></div>
+            <div><small>{{ copy('Source', 'المصدر') }}</small><strong>{{ factor.source }}</strong></div>
+            <div><small>{{ copy('Authority', 'الجهة المعتمدة') }}</small><strong>{{ factor.authority }}</strong></div>
+            <div><small>{{ copy('Evidence record', 'سجل الدليل') }}</small><strong>{{ factor.evidenceRecord }}</strong></div>
+            <div><small>{{ copy('Conflict', 'التعارض') }}</small><strong [class.warning-text]="factor.conflict">{{ factor.conflict ? copy('Unresolved', 'غير محلول') : copy('None', 'لا يوجد') }}</strong></div>
           </div>
         </div>
 
         <div class="trace-section">
-          <span class="section-label">4 · CONFIDENCE</span>
+          <span class="section-label">4 · {{ copy('CONFIDENCE', 'الثقة') }}</span>
           <div class="confidence-grid">
             <div>
-              <small>Source trust</small>
+              <small>{{ copy('Source trust', 'الثقة في المصدر') }}</small>
               <strong>{{ factor.sourceTrust }}%</strong>
               <span><i [style.width.%]="factor.sourceTrust"></i></span>
             </div>
             <div>
-              <small>Data confidence</small>
+              <small>{{ copy('Data confidence', 'الثقة في البيانات') }}</small>
               <strong>{{ factor.dataConfidence }}%</strong>
               <span><i [style.width.%]="factor.dataConfidence"></i></span>
             </div>
             <div>
-              <small>Identity match</small>
+              <small>{{ copy('Identity match', 'تطابق الهوية') }}</small>
               <strong>{{ factor.identityMatch }}%</strong>
               <span><i [style.width.%]="factor.identityMatch"></i></span>
             </div>
             <div>
-              <small>Freshness</small>
+              <small>{{ copy('Freshness', 'حداثة البيانات') }}</small>
               <strong>{{ factor.freshness }}%</strong>
               <span><i [style.width.%]="factor.freshness"></i></span>
             </div>
@@ -196,7 +197,7 @@
         </div>
 
         <div class="explanation-note" [class.warning]="factor.conflict">
-          <strong>{{ factor.conflict ? 'Human verification required' : 'Explainability note' }}</strong>
+          <strong>{{ factor.conflict ? copy('Human verification required', 'يتطلب تحققاً بشرياً') : copy('Explainability note', 'ملاحظة التفسير') }}</strong>
           <p>{{ factor.explanation }}</p>
         </div>
 
@@ -205,7 +206,7 @@
             class="secondary-btn"
             [routerLink]="['/moei/nmc/vessel', vessel.imo]"
             [queryParams]="{tab: factor.id === 'inspection' || factor.id === 'history' ? 'inspection' : factor.id === 'certificate' || factor.id === 'data-quality' ? 'certificates' : 'movement'}"
-          >Open source context</a>
+          >{{ copy('Open source context', 'فتح سياق المصدر') }}</a>
         </div>
       </aside>
     </section>
@@ -213,32 +214,32 @@
     <section class="decision-card panel">
       <div class="panel-header">
         <div>
-          <h3>Decision Readiness</h3>
-          <p>The score is explainable, evidence-linked and separated from AI advice.</p>
+          <h3>{{ copy('Decision Readiness', 'جاهزية القرار') }}</h3>
+          <p>{{ copy('The score is explainable, evidence-linked and separated from AI advice.', 'درجة المخاطر قابلة للتفسير ومرتبطة بالأدلة ومنفصلة عن توصيات الذكاء الاصطناعي.') }}</p>
         </div>
-        <span class="readiness-pill">Human decision remains authoritative</span>
+        <span class="readiness-pill">{{ copy('Human decision remains authoritative', 'القرار البشري يظل صاحب السلطة') }}</span>
       </div>
 
       <div class="decision-grid">
         <div>
-          <small>Risk engine output</small>
-          <strong>{{ vessel.risk }} · {{ riskLevel }}</strong>
-          <p>Deterministic rule contributions shown above.</p>
+          <small>{{ copy('Risk engine output', 'ناتج محرك المخاطر') }}</small>
+          <strong>{{ vessel.risk }} · {{ riskLabel() }}</strong>
+          <p>{{ copy('Deterministic rule contributions shown above.', 'مساهمات القواعد المحددة موضحة أعلاه.') }}</p>
         </div>
         <div>
-          <small>Risk confidence</small>
+          <small>{{ copy('Risk confidence', 'الثقة في المخاطر') }}</small>
           <strong>{{ vessel.riskConfidence }}%</strong>
-          <p>Confidence that the current evidence supports this calculated prioritization.</p>
+          <p>{{ copy('Confidence that the current evidence supports this calculated prioritization.', 'درجة الثقة في أن الأدلة الحالية تدعم أولوية المخاطر المحتسبة.') }}</p>
         </div>
         <div>
-          <small>Data confidence</small>
+          <small>{{ copy('Data confidence', 'الثقة في البيانات') }}</small>
           <strong>{{ vessel.dataConfidence }}%</strong>
-          <p>Quality of the correlated data used by the risk engine.</p>
+          <p>{{ copy('Quality of the correlated data used by the risk engine.', 'جودة البيانات المترابطة المستخدمة بواسطة محرك المخاطر.') }}</p>
         </div>
         <div>
-          <small>AI recommendation</small>
-          <strong>Not applied yet</strong>
-          <p>AI situation assessment is a separate next-stage advisory capability.</p>
+          <small>{{ copy('AI recommendation', 'توصية الذكاء الاصطناعي') }}</small>
+          <strong>{{ copy('Not applied yet', 'لم يتم تطبيقها بعد') }}</strong>
+          <p>{{ copy('AI situation assessment is a separate next-stage advisory capability.', 'تقييم الموقف بالذكاء الاصطناعي قدرة استشارية مستقلة في المرحلة التالية.') }}</p>
         </div>
       </div>
     </section>
