@@ -206,17 +206,20 @@
         </div>
 
         <div class="attention-list">
-          <button
-            type="button"
+          <div
             *ngFor="let vessel of attentionVessels; let i = index"
             class="attention-item"
             [class.active]="selectedVessel?.id === vessel.id"
+            role="button"
+            tabindex="0"
             [attr.title]="selectedVessel?.id === vessel.id
               ? copy('Click again to open Vessel 360', 'اضغط مرة أخرى لفتح Vessel 360')
               : copy('Focus vessel on map', 'عرض السفينة على الخريطة')"
             (click)="handleVesselInteraction(vessel)"
+            (keydown.enter)="handleVesselInteraction(vessel)"
+            (keydown.space)="$event.preventDefault(); handleVesselInteraction(vessel)"
           >
-            <div class="rank" [ngClass]="riskClass(vessel.risk)">{{ i + 1 }}</div>
+            <div class="rank" [ngClass]="riskClass(vessel.risk)">{{ attentionRank(i) }}</div>
 
             <div class="attention-main">
               <div class="attention-title">
@@ -235,10 +238,45 @@
               </div>
             </div>
 
-            <span class="open-arrow" [class.open-360]="selectedVessel?.id === vessel.id">
-              {{ selectedVessel?.id === vessel.id ? '360' : '›' }}
-            </span>
-          </button>
+            <button
+              type="button"
+              class="attention-360-btn"
+              [class.selected]="selectedVessel?.id === vessel.id"
+              (click)="$event.stopPropagation(); openVessel(vessel)"
+              [attr.aria-label]="copy('Open Vessel 360', 'فتح Vessel 360')"
+              [attr.title]="copy('Open Vessel 360', 'فتح Vessel 360')"
+            >
+              <strong>360°</strong>
+              <small>{{ copy('Open', 'فتح') }}</small>
+            </button>
+          </div>
+        </div>
+
+        <div class="attention-pagination" *ngIf="attentionPageCount > 1">
+          <div class="pagination-summary">
+            <strong>{{ attentionRangeStart }}–{{ attentionRangeEnd }}</strong>
+            <span>{{ copy('of', 'من') }} {{ attentionCount }}</span>
+          </div>
+
+          <div class="pagination-controls">
+            <button type="button" (click)="setAttentionPage(1)" [disabled]="attentionPage === 1" [attr.aria-label]="copy('First page', 'الصفحة الأولى')">«</button>
+            <button type="button" (click)="previousAttentionPage()" [disabled]="attentionPage === 1" [attr.aria-label]="copy('Previous page', 'الصفحة السابقة')">‹</button>
+
+            <button
+              type="button"
+              *ngFor="let page of attentionPageNumbers"
+              class="page-number"
+              [class.active]="page === attentionPage"
+              (click)="setAttentionPage(page)"
+            >{{ page }}</button>
+
+            <button type="button" (click)="nextAttentionPage()" [disabled]="attentionPage === attentionPageCount" [attr.aria-label]="copy('Next page', 'الصفحة التالية')">›</button>
+            <button type="button" (click)="setAttentionPage(attentionPageCount)" [disabled]="attentionPage === attentionPageCount" [attr.aria-label]="copy('Last page', 'الصفحة الأخيرة')">»</button>
+          </div>
+
+          <div class="page-label">
+            {{ copy('Page', 'صفحة') }} {{ attentionPage }} / {{ attentionPageCount }}
+          </div>
         </div>
 
         <div class="attention-footer">
