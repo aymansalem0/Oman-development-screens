@@ -19,6 +19,42 @@ interface TimelineItem {
   kind: 'critical' | 'warning' | 'normal';
 }
 
+interface CertificateRecord {
+  id: string;
+  type: string;
+  number: string;
+  issuer: string;
+  issued: string;
+  expiry: string;
+  status: 'Valid' | 'Conditional' | 'Expiring';
+  source: string;
+  condition?: string;
+  conflict?: boolean;
+}
+
+interface InspectionRecord {
+  id: string;
+  date: string;
+  port: string;
+  type: string;
+  result: 'Passed' | 'Deficiencies Found' | 'Follow-up Required';
+  inspector: string;
+  source: string;
+  openDeficiencies: number;
+}
+
+interface DeficiencyRecord {
+  id: string;
+  category: string;
+  description: string;
+  severity: 'Critical' | 'Major' | 'Minor';
+  status: 'Open' | 'Closed';
+  raised: string;
+  due: string;
+  evidence: string;
+  riskImpact: number;
+}
+
 @Component({
   selector: 'app-nmc-vessel-360',
   standalone: true,
@@ -31,6 +67,9 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
 
   imo = '9328471';
   activeTab = 'overview';
+  certificateVerificationStarted = false;
+  priorityInspectionCreated = false;
+  selectedCertificateId = 'CERT-SC-2026-0417';
   private map?: L.Map;
 
   vessel = {
@@ -77,6 +116,109 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
     { label: 'Historical inspection pattern', value: 10, source: 'Inspection History' }
   ];
 
+  certificates: CertificateRecord[] = [
+    {
+      id: 'CERT-SC-2026-0417',
+      type: 'Cargo Ship Safety Construction Certificate',
+      number: 'CSC-9328471-2026',
+      issuer: 'MOEI Maritime Affairs',
+      issued: '12 Feb 2026',
+      expiry: '11 Feb 2031',
+      status: 'Conditional',
+      source: 'MOEI Certificate Registry',
+      condition: 'Subject to closure of outstanding fire-safety deficiency before unrestricted operation.',
+      conflict: true
+    },
+    {
+      id: 'CERT-SR-2025-1182',
+      type: 'Cargo Ship Safety Radio Certificate',
+      number: 'CSR-9328471-2025',
+      issuer: 'Recognized Organization',
+      issued: '18 Nov 2025',
+      expiry: '17 Nov 2026',
+      status: 'Valid',
+      source: 'MOEI Certificate Registry'
+    },
+    {
+      id: 'CERT-SE-2025-0914',
+      type: 'Cargo Ship Safety Equipment Certificate',
+      number: 'CSE-9328471-2025',
+      issuer: 'Recognized Organization',
+      issued: '02 Sep 2025',
+      expiry: '01 Dec 2026',
+      status: 'Expiring',
+      source: 'MOEI Certificate Registry'
+    },
+    {
+      id: 'CERT-ISSC-2024-3310',
+      type: 'International Ship Security Certificate',
+      number: 'ISSC-9328471-2024',
+      issuer: 'Flag Administration',
+      issued: '04 Apr 2024',
+      expiry: '03 Apr 2029',
+      status: 'Valid',
+      source: 'External Flag Record'
+    }
+  ];
+
+  inspections: InspectionRecord[] = [
+    {
+      id: 'INS-2026-01341',
+      date: '19 Aug 2026',
+      port: 'Jebel Ali',
+      type: 'Port State / Safety Inspection',
+      result: 'Follow-up Required',
+      inspector: 'MOEI Smart Inspection',
+      source: 'Smart Inspection',
+      openDeficiencies: 1
+    },
+    {
+      id: 'INS-2026-00418',
+      date: '13 Mar 2026',
+      port: 'Fujairah',
+      type: 'Safety Compliance Inspection',
+      result: 'Deficiencies Found',
+      inspector: 'MOEI Smart Inspection',
+      source: 'Smart Inspection',
+      openDeficiencies: 0
+    },
+    {
+      id: 'INS-2025-02981',
+      date: '22 Nov 2025',
+      port: 'Khalifa Port',
+      type: 'Routine Inspection',
+      result: 'Passed',
+      inspector: 'MOEI Smart Inspection',
+      source: 'Smart Inspection',
+      openDeficiencies: 0
+    }
+  ];
+
+  deficiencies: DeficiencyRecord[] = [
+    {
+      id: 'DEF-2026-441',
+      category: 'Fire Safety',
+      description: 'Fixed fire detection and alarm system in cargo-space zone failed functional verification during inspection.',
+      severity: 'Critical',
+      status: 'Open',
+      raised: '19 Aug 2026',
+      due: '02 Sep 2026',
+      evidence: 'Inspection report INS-2026-01341 · Photo evidence set FS-12 to FS-18',
+      riskImpact: 25
+    },
+    {
+      id: 'DEF-2026-118',
+      category: 'Life Saving Appliances',
+      description: 'Emergency lighting signage required corrective labeling.',
+      severity: 'Minor',
+      status: 'Closed',
+      raised: '13 Mar 2026',
+      due: '20 Mar 2026',
+      evidence: 'Closure evidence accepted 17 Mar 2026',
+      riskImpact: 0
+    }
+  ];
+
   timeline: TimelineItem[] = [
     { time: '22:42', title: 'Risk escalated to Critical', detail: 'Composite score reached 87 after data correlation.', kind: 'critical' },
     { time: '22:41', title: 'Certificate data conflict detected', detail: 'MOEI registry and external classification feed disagree.', kind: 'warning' },
@@ -102,6 +244,36 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
 
   setTab(tab: string): void {
     this.activeTab = tab;
+  }
+
+  openRiskEvidence(source: string): void {
+    if (source.includes('Certificate') || source.includes('Data Quality')) {
+      this.activeTab = 'certificates';
+      return;
+    }
+
+    if (source.includes('Inspection')) {
+      this.activeTab = 'inspection';
+      return;
+    }
+
+    if (source.includes('AIS')) {
+      this.activeTab = 'movement';
+    }
+  }
+
+  startCertificateVerification(): void {
+    this.certificateVerificationStarted = true;
+    this.activeTab = 'certificates';
+  }
+
+  createPriorityInspection(): void {
+    this.priorityInspectionCreated = true;
+    this.activeTab = 'inspection';
+  }
+
+  selectedCertificate(): CertificateRecord | undefined {
+    return this.certificates.find(certificate => certificate.id === this.selectedCertificateId);
   }
 
   private initMap(): void {

@@ -170,13 +170,13 @@
           </div>
 
           <div class="factor-list">
-            <div class="factor-row" *ngFor="let factor of riskFactors">
+            <button type="button" class="factor-row factor-link" *ngFor="let factor of riskFactors" (click)="openRiskEvidence(factor.source)">
               <div class="factor-main">
                 <strong>{{ factor.label }}</strong>
-                <small>{{ factor.source }}</small>
+                <small>{{ factor.source }} · Open evidence</small>
               </div>
               <span>+{{ factor.value }}</span>
-            </div>
+            </button>
           </div>
 
           <button type="button" class="outline-btn">Open full explainability view</button>
@@ -212,7 +212,9 @@
             </p>
           </div>
 
-          <button type="button" class="primary-btn wide">Start verification task</button>
+          <button type="button" class="primary-btn wide" (click)="startCertificateVerification()">
+            {{ certificateVerificationStarted ? 'Verification task created' : 'Start verification task' }}
+          </button>
         </article>
 
         <article class="panel timeline-panel">
@@ -240,7 +242,260 @@
       </aside>
     </section>
 
-    <section class="single-tab panel" *ngIf="activeTab !== 'overview'">
+
+    <section class="evidence-tab" *ngIf="activeTab === 'certificates'">
+      <div class="evidence-heading">
+        <div>
+          <span class="section-kicker">CERTIFICATES</span>
+          <h3>Certificates & Validity Conditions</h3>
+          <p>Authoritative certificate records, conditions, source provenance and external-source conflicts for {{ vessel.name }}.</p>
+        </div>
+        <div class="evidence-heading-actions">
+          <span class="attention-pill">1 conflict requires verification</span>
+          <button type="button" class="secondary-btn" (click)="setTab('overview')">Return to overview</button>
+        </div>
+      </div>
+
+      <div class="certificate-layout">
+        <article class="panel certificate-list-panel">
+          <div class="panel-header">
+            <div>
+              <h3>Certificate Portfolio</h3>
+              <p>4 active records linked to IMO {{ vessel.imo }}</p>
+            </div>
+            <span class="source-summary">MOEI + external records</span>
+          </div>
+
+          <div class="certificate-list">
+            <button
+              type="button"
+              class="certificate-card"
+              *ngFor="let certificate of certificates"
+              [class.selected]="selectedCertificateId === certificate.id"
+              [class.conflict]="certificate.conflict"
+              (click)="selectedCertificateId = certificate.id"
+            >
+              <div class="certificate-status-icon" [ngClass]="certificate.status.toLowerCase()">
+                {{ certificate.status === 'Valid' ? '✓' : certificate.status === 'Conditional' ? '!' : '⌛' }}
+              </div>
+              <div class="certificate-main">
+                <div class="certificate-title-row">
+                  <strong>{{ certificate.type }}</strong>
+                  <span class="certificate-status" [ngClass]="certificate.status.toLowerCase()">{{ certificate.status }}</span>
+                </div>
+                <p>{{ certificate.number }} · {{ certificate.issuer }}</p>
+                <div class="certificate-meta">
+                  <span>Issued {{ certificate.issued }}</span>
+                  <span>Expires {{ certificate.expiry }}</span>
+                  <span>{{ certificate.source }}</span>
+                </div>
+              </div>
+              <span class="conflict-indicator" *ngIf="certificate.conflict">CONFLICT</span>
+            </button>
+          </div>
+        </article>
+
+        <aside class="panel certificate-detail-panel" *ngIf="selectedCertificate() as certificate">
+          <div class="panel-header">
+            <div>
+              <h3>Certificate Evidence</h3>
+              <p>{{ certificate.id }}</p>
+            </div>
+            <span class="certificate-status large" [ngClass]="certificate.status.toLowerCase()">{{ certificate.status }}</span>
+          </div>
+
+          <div class="evidence-detail-grid">
+            <div><small>Certificate</small><strong>{{ certificate.type }}</strong></div>
+            <div><small>Certificate No.</small><strong>{{ certificate.number }}</strong></div>
+            <div><small>Issuer</small><strong>{{ certificate.issuer }}</strong></div>
+            <div><small>Source</small><strong>{{ certificate.source }}</strong></div>
+            <div><small>Issue date</small><strong>{{ certificate.issued }}</strong></div>
+            <div><small>Expiry date</small><strong>{{ certificate.expiry }}</strong></div>
+          </div>
+
+          <div class="certificate-condition" *ngIf="certificate.condition">
+            <span>!</span>
+            <div>
+              <strong>Validity condition</strong>
+              <p>{{ certificate.condition }}</p>
+            </div>
+          </div>
+
+          <div class="risk-evidence-link" *ngIf="certificate.conflict">
+            <div>
+              <small>RISK CONTRIBUTION</small>
+              <strong>Conditional certificate +18</strong>
+              <p>This record directly contributes to the current Critical vessel risk.</p>
+            </div>
+            <span>+18</span>
+          </div>
+
+          <div class="source-comparison" *ngIf="certificate.conflict">
+            <div class="source-comparison-head">
+              <div>
+                <strong>Source Conflict Verification</strong>
+                <p>The same certificate is reported differently by two sources.</p>
+              </div>
+              <span class="conflict-badge">{{ certificateVerificationStarted ? 'TASK CREATED' : 'UNRESOLVED' }}</span>
+            </div>
+
+            <div class="source-compare-grid">
+              <div class="authority-source">
+                <small>MOEI Certificate Registry</small>
+                <strong>Conditionally Valid</strong>
+                <span>22:41:56 · Confidence 100%</span>
+              </div>
+              <div class="compare-symbol">≠</div>
+              <div>
+                <small>External Classification Feed</small>
+                <strong>Valid</strong>
+                <span>22:41:57 · Confidence 68%</span>
+              </div>
+            </div>
+
+            <div class="verification-task" *ngIf="certificateVerificationStarted">
+              <span>✓</span>
+              <div>
+                <strong>Verification task VER-2026-00872 created</strong>
+                <p>Assigned to Certificate Compliance Officer · Priority High · Due in 15 minutes.</p>
+              </div>
+            </div>
+
+            <button type="button" class="primary-btn wide" (click)="startCertificateVerification()" [disabled]="certificateVerificationStarted">
+              {{ certificateVerificationStarted ? 'Verification in progress' : 'Create verification task' }}
+            </button>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <section class="evidence-tab" *ngIf="activeTab === 'inspection'">
+      <div class="evidence-heading">
+        <div>
+          <span class="section-kicker">INSPECTION</span>
+          <h3>Inspection History & Deficiency Evidence</h3>
+          <p>Inspection findings linked directly to vessel risk, follow-up status and operational response.</p>
+        </div>
+        <div class="evidence-heading-actions">
+          <span class="critical-pill">1 critical deficiency open</span>
+          <button type="button" class="secondary-btn" (click)="setTab('overview')">Return to overview</button>
+        </div>
+      </div>
+
+      <div class="inspection-kpis">
+        <div><small>Inspections / 12 months</small><strong>3</strong><span>2 with findings</span></div>
+        <div><small>Open deficiencies</small><strong class="critical-text">1</strong><span>requires immediate follow-up</span></div>
+        <div><small>Overdue corrective action</small><strong class="critical-text">35 days</strong><span>fire-safety deficiency</span></div>
+        <div><small>Risk contribution</small><strong class="critical-text">+25</strong><span>current composite score</span></div>
+      </div>
+
+      <div class="inspection-layout">
+        <article class="panel inspection-history-panel">
+          <div class="panel-header">
+            <div>
+              <h3>Inspection History</h3>
+              <p>Most recent first</p>
+            </div>
+            <span class="source-summary">Smart Inspection</span>
+          </div>
+
+          <div class="inspection-list">
+            <div class="inspection-card" *ngFor="let inspection of inspections" [class.critical-inspection]="inspection.openDeficiencies > 0">
+              <div class="inspection-date">
+                <strong>{{ inspection.date }}</strong>
+                <span>{{ inspection.port }}</span>
+              </div>
+              <div class="inspection-main">
+                <strong>{{ inspection.type }}</strong>
+                <p>{{ inspection.id }} · {{ inspection.inspector }}</p>
+              </div>
+              <div class="inspection-result">
+                <span [ngClass]="inspection.result === 'Passed' ? 'passed' : 'finding'">{{ inspection.result }}</span>
+                <small *ngIf="inspection.openDeficiencies">{{ inspection.openDeficiencies }} open deficiency</small>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <aside class="panel deficiency-panel">
+          <div class="panel-header">
+            <div>
+              <h3>Open Critical Deficiency</h3>
+              <p>Evidence driving vessel prioritization</p>
+            </div>
+            <span class="critical-badge">CRITICAL</span>
+          </div>
+
+          <ng-container *ngFor="let deficiency of deficiencies">
+            <div class="deficiency-detail" *ngIf="deficiency.status === 'Open'">
+              <div class="deficiency-id-row">
+                <span>{{ deficiency.id }}</span>
+                <span class="open-status">OPEN · OVERDUE</span>
+              </div>
+
+              <h4>{{ deficiency.category }}</h4>
+              <p class="deficiency-description">{{ deficiency.description }}</p>
+
+              <div class="deficiency-facts">
+                <div><small>Raised</small><strong>{{ deficiency.raised }}</strong></div>
+                <div><small>Due date</small><strong>{{ deficiency.due }}</strong></div>
+                <div><small>Status</small><strong class="critical-text">{{ deficiency.status }}</strong></div>
+                <div><small>Risk impact</small><strong class="critical-text">+{{ deficiency.riskImpact }}</strong></div>
+              </div>
+
+              <div class="evidence-box">
+                <small>SUPPORTING EVIDENCE</small>
+                <strong>{{ deficiency.evidence }}</strong>
+                <button type="button">View inspection evidence</button>
+              </div>
+
+              <div class="risk-evidence-link critical-evidence">
+                <div>
+                  <small>WHY THIS MATTERS TO NMC</small>
+                  <strong>Unresolved critical fire-safety deficiency +25</strong>
+                  <p>Combined with movement anomaly and certificate condition, this finding pushes the vessel into the Critical attention queue.</p>
+                </div>
+                <span>+25</span>
+              </div>
+
+              <div class="inspection-action" [class.created]="priorityInspectionCreated">
+                <span>{{ priorityInspectionCreated ? '✓' : '↗' }}</span>
+                <div>
+                  <strong>{{ priorityInspectionCreated ? 'Priority inspection case created' : 'Recommended operational action' }}</strong>
+                  <p *ngIf="!priorityInspectionCreated">Create a priority follow-up inspection and carry forward this deficiency and supporting evidence.</p>
+                  <p *ngIf="priorityInspectionCreated">INS-2026-02088 · Priority Critical · Focus area: Fire Safety · Evidence inherited from INS-2026-01341.</p>
+                </div>
+              </div>
+
+              <button type="button" class="primary-btn wide" (click)="createPriorityInspection()" [disabled]="priorityInspectionCreated">
+                {{ priorityInspectionCreated ? 'Priority inspection created' : 'Create priority inspection' }}
+              </button>
+            </div>
+          </ng-container>
+        </aside>
+      </div>
+
+      <article class="panel closed-findings-panel">
+        <div class="panel-header">
+          <div>
+            <h3>Deficiency History</h3>
+            <p>Closed findings retained for historical risk pattern analysis</p>
+          </div>
+          <span class="risk-confidence">Historical evidence +10</span>
+        </div>
+
+        <div class="closed-deficiency-row" *ngFor="let deficiency of deficiencies">
+          <ng-container *ngIf="deficiency.status === 'Closed'">
+            <span class="closed-check">✓</span>
+            <div><strong>{{ deficiency.category }}</strong><p>{{ deficiency.description }}</p></div>
+            <span>{{ deficiency.raised }}</span>
+            <span class="closed-status">Closed</span>
+          </ng-container>
+        </div>
+      </article>
+    </section>
+
+    <section class="single-tab panel" *ngIf="activeTab !== 'overview' && activeTab !== 'certificates' && activeTab !== 'inspection'">
       <div class="single-tab-head">
         <div>
           <span class="section-kicker">{{ activeTab | uppercase }}</span>
