@@ -2217,3 +2217,8 @@ button, a { font: inherit; }
   color: #0f766e;
   border-color: #cde6e0;
 }
+
+
+.case-link-btn {
+  text-decoration: none;
+}
