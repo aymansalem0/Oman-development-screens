@@ -2,11 +2,10 @@ import { CommonModule } from '@angular/common';
 import { Component, OnInit } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import {
-  getVesselByImo,
-  NMC_VESSELS,
   NmcVesselProfile,
   riskLevel
 } from '../data/nmc-vessel-catalog';
+import { NMC_OPERATIONAL_VESSELS, getOperationalVesselByImo } from '../data/nmc-expanded-vessel-catalog';
 import { LanguageService } from '../services/language.service';
 
 type SourceClass =
@@ -119,8 +118,8 @@ export class NmcRiskExplainabilityComponent implements OnInit {
   }
 
   ngOnInit(): void {
-    const imo = this.route.snapshot.paramMap.get('imo') || NMC_VESSELS[0].imo;
-    this.vessel = getVesselByImo(imo) || NMC_VESSELS[0];
+    const imo = this.route.snapshot.paramMap.get('imo') || NMC_OPERATIONAL_VESSELS[0].imo;
+    this.vessel = getOperationalVesselByImo(imo) || NMC_OPERATIONAL_VESSELS[0];
     this.factors = this.buildFactors();
     this.selectedFactor = this.factors[0];
   }
