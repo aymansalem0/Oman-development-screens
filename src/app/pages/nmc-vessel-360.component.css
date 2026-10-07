@@ -513,3 +513,8 @@ button, a { font: inherit; }
   75% { transform: scale(1.65); opacity: 0; }
   100% { transform: scale(1.65); opacity: 0; }
 }
+
+.dot.critical-vessel {
+  background: #e65353;
+  box-shadow: 0 0 0 3px #ffe8e8;
+}
