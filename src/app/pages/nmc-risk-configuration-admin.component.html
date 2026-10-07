@@ -1,0 +1,371 @@
+<div class="risk-admin-shell" [class.rtl]="lang.isArabic" [attr.dir]="lang.dir">
+  <header class="admin-topbar">
+    <div class="brand-block">
+      <div class="brand-mark">⚙</div>
+      <div>
+        <div class="eyebrow">{{ copy('MOEI · National Maritime Center', 'وزارة الطاقة والبنية التحتية · المركز البحري الوطني') }}</div>
+        <h1>{{ copy('Risk Configuration Administration', 'إدارة إعدادات المخاطر') }}</h1>
+        <p>{{ copy('Configure scoring logic, weights and operational thresholds', 'تهيئة منطق احتساب المخاطر والأوزان والحدود التشغيلية') }}</p>
+      </div>
+    </div>
+
+    <div class="top-actions">
+      <button type="button" class="language-btn" (click)="toggleLanguage()">{{ lang.isArabic ? 'English' : 'العربية' }}</button>
+      <a class="secondary-btn" routerLink="/moei/nmc">{{ copy('Back to Command Center', 'العودة إلى مركز القيادة') }}</a>
+      <button type="button" class="publish-btn" (click)="publish()" [disabled]="!canPublish">
+        ✓ {{ copy('Publish & Apply', 'نشر وتطبيق') }}
+      </button>
+    </div>
+  </header>
+
+  <aside class="nmc-sidebar">
+    <div class="sidebar-section-label">{{ copy('OPERATIONS', 'العمليات') }}</div>
+    <a class="nav-item" routerLink="/moei/nmc">
+      <span class="nav-icon">◉</span>
+      <span>{{ copy('Command Center', 'مركز القيادة') }}</span>
+    </a>
+    <button type="button" class="nav-item">
+      <span class="nav-icon">⌖</span>
+      <span>{{ copy('Vessel Monitoring', 'مراقبة السفن') }}</span>
+    </button>
+    <button type="button" class="nav-item">
+      <span class="nav-icon">⚠</span>
+      <span>{{ copy('Alerts & Events', 'التنبيهات والأحداث') }}</span>
+    </button>
+    <button type="button" class="nav-item">
+      <span class="nav-icon">▣</span>
+      <span>{{ copy('Cases & Incidents', 'الحالات والحوادث') }}</span>
+    </button>
+    <button type="button" class="nav-item">
+      <span class="nav-icon">✓</span>
+      <span>{{ copy('Smart Inspection', 'المعاينة الذكية') }}</span>
+    </button>
+
+    <div class="sidebar-section-label second">{{ copy('INTELLIGENCE', 'الاستخبارات') }}</div>
+    <button type="button" class="nav-item">
+      <span class="nav-icon">✦</span>
+      <span>{{ copy('Maritime Intelligence', 'الاستخبارات البحرية') }}</span>
+    </button>
+    <button type="button" class="nav-item">
+      <span class="nav-icon">▥</span>
+      <span>{{ copy('Dashboards', 'لوحات المعلومات') }}</span>
+    </button>
+    <a class="nav-item active" routerLink="/moei/nmc/admin/risk-configuration">
+      <span class="nav-icon">⚙</span>
+      <span>{{ copy('Configuration', 'الإعدادات') }}</span>
+    </a>
+
+    <div class="system-health">
+      <div>
+        <span class="health-dot"></span>
+        <strong>{{ copy('Risk engine active', 'محرك المخاطر نشط') }}</strong>
+      </div>
+      <small>{{ published.version }}</small>
+    </div>
+  </aside>
+
+  <main class="admin-main">
+    <section class="page-heading">
+      <div>
+        <span class="section-kicker">{{ copy('BUSINESS-CONFIGURABLE RISK ENGINE', 'محرك مخاطر قابل للتهيئة بواسطة الأعمال') }}</span>
+        <h2>{{ copy('Maritime Risk Model Configuration', 'تهيئة نموذج المخاطر البحرية') }}</h2>
+        <p>{{ copy(
+          'Change how vessel risk is calculated and classified. Preview the impact across all 420 monitored vessels before publishing.',
+          'غيّر طريقة احتساب وتصنيف مخاطر السفن، وعاين التأثير على جميع السفن الـ420 قبل النشر.'
+        ) }}</p>
+      </div>
+
+      <div class="published-meta">
+        <span>{{ copy('Published ruleset', 'مجموعة القواعد المنشورة') }}</span>
+        <strong>{{ published.version }}</strong>
+        <small>{{ published.publishedAt }} · {{ published.publishedBy }}</small>
+      </div>
+    </section>
+
+    <div class="success-banner" *ngIf="publishedMessage">
+      <span>✓</span>
+      <strong>{{ publishedMessage }}</strong>
+      <a routerLink="/moei/nmc">{{ copy('View updated fleet', 'عرض السفن بعد التحديث') }}</a>
+    </div>
+
+    <div class="validation-banner" *ngIf="validationErrors.length">
+      <span>!</span>
+      <div>
+        <strong>{{ copy('Configuration needs attention', 'الإعدادات تحتاج إلى مراجعة') }}</strong>
+        <p *ngFor="let error of validationErrors">{{ error }}</p>
+      </div>
+    </div>
+
+    <section class="admin-grid">
+      <div class="configuration-column">
+        <article class="panel">
+          <div class="panel-header">
+            <div>
+              <span class="section-kicker">{{ copy('CALCULATION METHOD', 'طريقة الاحتساب') }}</span>
+              <h3>{{ copy('How should the composite risk score be calculated?', 'كيف يتم احتساب درجة المخاطر المجمعة؟') }}</h3>
+            </div>
+            <span class="current-value">{{ modeLabel(draft.mode) }}</span>
+          </div>
+
+          <div class="mode-grid">
+            <button
+              type="button"
+              class="mode-card"
+              *ngFor="let mode of modes"
+              [class.active]="draft.mode === mode.value"
+              (click)="draft.mode = mode.value; updateDraft()"
+            >
+              <span class="mode-radio"></span>
+              <strong>{{ copy(mode.en, mode.ar) }}</strong>
+              <p>{{ copy(mode.descriptionEn, mode.descriptionAr) }}</p>
+            </button>
+          </div>
+        </article>
+
+        <article class="panel">
+          <div class="panel-header">
+            <div>
+              <span class="section-kicker">{{ copy('RISK FACTOR WEIGHTS', 'أوزان عوامل المخاطر') }}</span>
+              <h3>{{ copy('Control the influence of each evidence domain', 'تحكم في تأثير كل مجال من مجالات الأدلة') }}</h3>
+              <p>{{ copy('Published configurations require the total weight to equal 100%.', 'يتطلب نشر الإعدادات أن يساوي مجموع الأوزان 100%.') }}</p>
+            </div>
+
+            <div class="weight-total" [class.invalid]="totalWeight !== 100">
+              <small>{{ copy('TOTAL', 'الإجمالي') }}</small>
+              <strong>{{ totalWeight }}%</strong>
+            </div>
+          </div>
+
+          <div class="factor-list">
+            <div class="factor-row" *ngFor="let key of factorKeys">
+              <div class="factor-info">
+                <span class="factor-icon" [attr.data-factor]="key"></span>
+                <div>
+                  <strong>{{ factorLabel(key) }}</strong>
+                  <p>{{ factorDescription(key) }}</p>
+                </div>
+              </div>
+
+              <div class="factor-control">
+                <input
+                  type="range"
+                  min="0"
+                  max="60"
+                  step="1"
+                  [(ngModel)]="draft.weights[key]"
+                  (ngModelChange)="updateDraft()"
+                />
+                <div class="number-input">
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    [(ngModel)]="draft.weights[key]"
+                    (ngModelChange)="updateDraft()"
+                  />
+                  <span>%</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="factor-footer">
+            <button type="button" class="text-btn" (click)="normalizeWeights()">
+              ↻ {{ copy('Normalize to 100%', 'ضبط الأوزان إلى 100%') }}
+            </button>
+          </div>
+        </article>
+
+        <article class="panel">
+          <div class="panel-header">
+            <div>
+              <span class="section-kicker">{{ copy('CLASSIFICATION THRESHOLDS', 'حدود تصنيف المخاطر') }}</span>
+              <h3>{{ copy('Define when a vessel becomes Watch, High or Critical', 'حدد متى تصبح السفينة تحت المراقبة أو مرتفعة أو حرجة') }}</h3>
+            </div>
+          </div>
+
+          <div class="threshold-editor">
+            <div class="threshold-input watch">
+              <span>{{ copy('Watch starts at', 'تبدأ المراقبة عند') }}</span>
+              <div><input type="number" min="1" max="98" [(ngModel)]="draft.thresholds.watch" (ngModelChange)="updateDraft()" /><b>/100</b></div>
+            </div>
+            <div class="threshold-input high">
+              <span>{{ copy('High starts at', 'تبدأ المرتفعة عند') }}</span>
+              <div><input type="number" min="2" max="99" [(ngModel)]="draft.thresholds.high" (ngModelChange)="updateDraft()" /><b>/100</b></div>
+            </div>
+            <div class="threshold-input critical">
+              <span>{{ copy('Critical starts at', 'تبدأ الحرجة عند') }}</span>
+              <div><input type="number" min="3" max="100" [(ngModel)]="draft.thresholds.critical" (ngModelChange)="updateDraft()" /><b>/100</b></div>
+            </div>
+          </div>
+
+          <div class="threshold-bar">
+            <div class="normal" [style.width.%]="draft.thresholds.watch">
+              <span>{{ copy('Normal', 'طبيعي') }} 0–{{ draft.thresholds.watch - 1 }}</span>
+            </div>
+            <div class="watch" [style.width.%]="draft.thresholds.high - draft.thresholds.watch">
+              <span>{{ copy('Watch', 'مراقبة') }} {{ draft.thresholds.watch }}–{{ draft.thresholds.high - 1 }}</span>
+            </div>
+            <div class="high" [style.width.%]="draft.thresholds.critical - draft.thresholds.high">
+              <span>{{ copy('High', 'مرتفع') }} {{ draft.thresholds.high }}–{{ draft.thresholds.critical - 1 }}</span>
+            </div>
+            <div class="critical" [style.width.%]="100 - draft.thresholds.critical">
+              <span>{{ copy('Critical', 'حرج') }} {{ draft.thresholds.critical }}–100</span>
+            </div>
+          </div>
+        </article>
+
+        <article class="panel governance-panel">
+          <div class="panel-header">
+            <div>
+              <span class="section-kicker">{{ copy('CHANGE GOVERNANCE', 'حوكمة التغيير') }}</span>
+              <h3>{{ copy('Publish with an auditable reason', 'انشر التغيير مع سبب قابل للتدقيق') }}</h3>
+            </div>
+          </div>
+
+          <div class="governance-grid">
+            <label>
+              <span>{{ copy('Ruleset name', 'اسم مجموعة القواعد') }}</span>
+              <input [(ngModel)]="draft.name" (ngModelChange)="updateDraft()" />
+            </label>
+            <label>
+              <span>{{ copy('Published by', 'تم النشر بواسطة') }}</span>
+              <input [(ngModel)]="draft.publishedBy" (ngModelChange)="updateDraft()" />
+            </label>
+            <label class="full">
+              <span>{{ copy('Change reason', 'سبب التغيير') }}</span>
+              <textarea [(ngModel)]="draft.changeReason" (ngModelChange)="updateDraft()" [placeholder]="copy('Describe why the scoring model or thresholds are being changed...', 'اكتب سبب تغيير نموذج الاحتساب أو الحدود...')"></textarea>
+            </label>
+          </div>
+
+          <div class="governance-actions">
+            <button type="button" class="secondary-action" (click)="discardChanges()">{{ copy('Discard Draft', 'إلغاء التعديلات') }}</button>
+            <button type="button" class="secondary-action" (click)="resetDraftToDefaults()">{{ copy('Load Defaults', 'تحميل الإعدادات الافتراضية') }}</button>
+            <button type="button" class="publish-action" (click)="publish()" [disabled]="!canPublish">
+              ✓ {{ copy('Publish & Recalculate 420 Vessels', 'نشر وإعادة احتساب مخاطر 420 سفينة') }}
+            </button>
+          </div>
+        </article>
+      </div>
+
+      <aside class="impact-column">
+        <article class="panel impact-panel">
+          <div class="panel-header">
+            <div>
+              <span class="section-kicker">{{ copy('IMPACT ANALYSIS', 'تحليل التأثير') }}</span>
+              <h3>{{ copy('Before publishing', 'قبل النشر') }}</h3>
+              <p>{{ copy('Live preview across the monitored fleet.', 'معاينة مباشرة على جميع السفن المراقبة.') }}</p>
+            </div>
+          </div>
+
+          <div class="impact-summary">
+            <div>
+              <small>{{ copy('Vessels re-scored', 'سفن ستتم إعادة تقييمها') }}</small>
+              <strong>{{ changedVesselCount }}</strong>
+              <span>/ 420</span>
+            </div>
+            <div>
+              <small>{{ copy('Classification changes', 'تغيرات في التصنيف') }}</small>
+              <strong>{{ changedLevelCount }}</strong>
+              <span>{{ copy('vessels', 'سفينة') }}</span>
+            </div>
+            <div>
+              <small>{{ copy('Avg. score movement', 'متوسط تغير الدرجة') }}</small>
+              <strong>{{ averageAbsoluteDelta }}</strong>
+              <span>{{ copy('points', 'نقطة') }}</span>
+            </div>
+          </div>
+
+          <div class="population-compare">
+            <div class="compare-head">
+              <span>{{ copy('Risk class', 'التصنيف') }}</span>
+              <span>{{ copy('Current', 'الحالي') }}</span>
+              <span>{{ copy('Projected', 'المتوقع') }}</span>
+              <span>Δ</span>
+            </div>
+
+            <div class="compare-row normal">
+              <span><i></i>{{ copy('Normal', 'طبيعي') }}</span>
+              <b>{{ currentStats.normal }}</b>
+              <b>{{ projectedStats.normal }}</b>
+              <strong>{{ projectedStats.normal - currentStats.normal > 0 ? '+' : '' }}{{ projectedStats.normal - currentStats.normal }}</strong>
+            </div>
+            <div class="compare-row watch">
+              <span><i></i>{{ copy('Watch', 'مراقبة') }}</span>
+              <b>{{ currentStats.watch }}</b>
+              <b>{{ projectedStats.watch }}</b>
+              <strong>{{ projectedStats.watch - currentStats.watch > 0 ? '+' : '' }}{{ projectedStats.watch - currentStats.watch }}</strong>
+            </div>
+            <div class="compare-row high">
+              <span><i></i>{{ copy('High', 'مرتفع') }}</span>
+              <b>{{ currentStats.high }}</b>
+              <b>{{ projectedStats.high }}</b>
+              <strong>{{ projectedStats.high - currentStats.high > 0 ? '+' : '' }}{{ projectedStats.high - currentStats.high }}</strong>
+            </div>
+            <div class="compare-row critical">
+              <span><i></i>{{ copy('Critical', 'حرج') }}</span>
+              <b>{{ currentStats.critical }}</b>
+              <b>{{ projectedStats.critical }}</b>
+              <strong>{{ projectedStats.critical - currentStats.critical > 0 ? '+' : '' }}{{ projectedStats.critical - currentStats.critical }}</strong>
+            </div>
+          </div>
+
+          <div class="attention-compare">
+            <span>{{ copy('Requires attention', 'تتطلب الانتباه') }}</span>
+            <div>
+              <b>{{ currentStats.attention }}</b>
+              <span>→</span>
+              <strong>{{ projectedStats.attention }}</strong>
+            </div>
+          </div>
+        </article>
+
+        <article class="panel vessel-impact-panel">
+          <div class="panel-header">
+            <div>
+              <span class="section-kicker">{{ copy('VESSEL IMPACT', 'تأثير التغيير على السفن') }}</span>
+              <h3>{{ copy('Most affected vessels', 'السفن الأكثر تأثراً') }}</h3>
+            </div>
+          </div>
+
+          <div class="impact-table">
+            <div class="impact-row header">
+              <span>{{ copy('Vessel', 'السفينة') }}</span>
+              <span>{{ copy('Current', 'الحالي') }}</span>
+              <span>{{ copy('Projected', 'المتوقع') }}</span>
+            </div>
+
+            <div class="impact-row" *ngFor="let row of impactRows">
+              <div>
+                <strong>{{ row.vessel.name }}</strong>
+                <small>IMO {{ row.vessel.imo }} · {{ row.vessel.flag }}</small>
+              </div>
+              <span class="risk-pill" [ngClass]="row.currentLevel.toLowerCase()">{{ row.currentScore }} · {{ levelLabel(row.currentLevel) }}</span>
+              <span class="risk-pill" [ngClass]="row.projectedLevel.toLowerCase()">
+                {{ row.projectedScore }} · {{ levelLabel(row.projectedLevel) }}
+                <b [class.down]="row.delta < 0">{{ row.delta > 0 ? '+' : '' }}{{ row.delta }}</b>
+              </span>
+            </div>
+          </div>
+        </article>
+
+        <article class="panel published-panel">
+          <div class="panel-header">
+            <div>
+              <span class="section-kicker">{{ copy('CURRENT PRODUCTION RULESET', 'مجموعة القواعد الحالية') }}</span>
+              <h3>{{ published.version }}</h3>
+            </div>
+            <span class="live-badge">{{ copy('ACTIVE', 'نشطة') }}</span>
+          </div>
+
+          <div class="published-body">
+            <div><small>{{ copy('Model', 'النموذج') }}</small><strong>{{ currentModeLabel }}</strong></div>
+            <div><small>{{ copy('Thresholds', 'الحدود') }}</small><strong>{{ published.thresholds.watch }} / {{ published.thresholds.high }} / {{ published.thresholds.critical }}</strong></div>
+            <div><small>{{ copy('Published', 'تاريخ النشر') }}</small><strong>{{ published.publishedAt }}</strong></div>
+            <div><small>{{ copy('Reason', 'السبب') }}</small><strong>{{ published.changeReason }}</strong></div>
+          </div>
+        </article>
+      </aside>
+    </section>
+  </main>
+</div>
