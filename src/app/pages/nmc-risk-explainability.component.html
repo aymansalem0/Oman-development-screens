@@ -12,6 +12,9 @@
     <div class="top-actions">
       <button type="button" class="language-btn" (click)="toggleLanguage()">{{ lang.isArabic ? 'English' : 'العربية' }}</button>
       <a class="back-link" [routerLink]="['/moei/nmc/vessel', vessel.imo]">{{ lang.isArabic ? 'العودة إلى ملف السفينة →' : '← Back to Vessel 360' }}</a>
+      <a class="secondary-btn" [routerLink]="['/moei/nmc/vessel', vessel.imo, 'ai-assessment']">
+        ✦ {{ copy('AI Situation Assessment', 'تقييم الموقف بالذكاء الاصطناعي') }}
+      </a>
       <a class="secondary-btn" routerLink="/moei/nmc">{{ copy('Command Center', 'مركز القيادة') }}</a>
     </div>
   </header>
@@ -236,10 +239,13 @@
           <strong>{{ vessel.dataConfidence }}%</strong>
           <p>{{ copy('Quality of the correlated data used by the risk engine.', 'جودة البيانات المترابطة المستخدمة بواسطة محرك المخاطر.') }}</p>
         </div>
-        <div>
+        <div class="ai-decision-cell">
           <small>{{ copy('AI recommendation', 'توصية الذكاء الاصطناعي') }}</small>
-          <strong>{{ copy('Not applied yet', 'لم يتم تطبيقها بعد') }}</strong>
-          <p>{{ copy('AI situation assessment is a separate next-stage advisory capability.', 'تقييم الموقف بالذكاء الاصطناعي قدرة استشارية مستقلة في المرحلة التالية.') }}</p>
+          <strong>{{ copy('Available for review', 'متاحة للمراجعة') }}</strong>
+          <p>{{ copy('Open the AI situation assessment to review evidence-grounded recommendations and record the officer decision.', 'افتح تقييم الموقف بالذكاء الاصطناعي لمراجعة التوصيات المبنية على الأدلة وتسجيل قرار المسؤول.') }}</p>
+          <a class="ai-open-link" [routerLink]="['/moei/nmc/vessel', vessel.imo, 'ai-assessment']">
+            ✦ {{ copy('Open AI assessment', 'فتح تقييم الذكاء الاصطناعي') }}
+          </a>
         </div>
       </div>
     </section>
