@@ -4,11 +4,11 @@ import { ActivatedRoute, RouterLink } from '@angular/router';
 import * as L from 'leaflet';
 import {
   NmcVesselProfile,
-  riskLevel,
   SEA_ROUTES
 } from '../data/nmc-vessel-catalog';
 import { NMC_OPERATIONAL_VESSELS, getOperationalVesselByImo } from '../data/nmc-expanded-vessel-catalog';
 import { LanguageService } from '../services/language.service';
+import { NmcRiskEngineService } from '../services/nmc-risk-engine.service';
 
 interface SourceStatus {
   name: string;
@@ -132,7 +132,11 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
 
   private map?: L.Map;
 
-  constructor(private route: ActivatedRoute, public lang: LanguageService) {}
+  constructor(
+    private route: ActivatedRoute,
+    public lang: LanguageService,
+    private riskEngine: NmcRiskEngineService
+  ) {}
 
   copy(en: string, ar: string): string {
     return this.lang.pick(en, ar);
@@ -257,13 +261,14 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
 
   ngOnInit(): void {
     this.imo = this.route.snapshot.paramMap.get('imo') || NMC_OPERATIONAL_VESSELS[0].imo;
-    const profile = getOperationalVesselByImo(this.imo) || NMC_OPERATIONAL_VESSELS[0];
+    const rawProfile = getOperationalVesselByImo(this.imo) || NMC_OPERATIONAL_VESSELS[0];
+    const profile = this.riskEngine.applyToVessel(rawProfile);
 
     this.vessel = {
       ...profile,
       age: 2026 - profile.built,
       riskScore: profile.risk,
-      riskLevel: riskLevel(profile.risk),
+      riskLevel: this.riskEngine.levelForScore(profile.risk),
       position: `${profile.lat.toFixed(4)}° N, ${profile.lng.toFixed(4)}° E`
     };
 
@@ -481,20 +486,31 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
     return this.copy('Normal monitoring status', 'حالة مراقبة طبيعية');
   }
 
+  get baseRisk(): number {
+    return this.riskEngine.evaluate(this.vessel).baseScore;
+  }
+
+  private isAtLeast(level: 'Watch' | 'High' | 'Critical'): boolean {
+    const thresholds = this.riskEngine.config.thresholds;
+    if (level === 'Critical') return this.vessel.risk >= thresholds.critical;
+    if (level === 'High') return this.vessel.risk >= thresholds.high;
+    return this.vessel.risk >= thresholds.watch;
+  }
+
   get attentionDescription(): string {
-    if (this.vessel.risk >= 85) {
+    if (this.isAtLeast('Critical')) {
       return this.copy(
         'Multiple movement, inspection, certificate and data-quality indicators have been correlated into a critical vessel risk picture.',
         'تم ربط عدة مؤشرات للحركة والمعاينة والشهادات وجودة البيانات لتكوين صورة مخاطر حرجة للسفينة.'
       );
     }
-    if (this.vessel.risk >= 65) {
+    if (this.isAtLeast('High')) {
       return this.copy(
         'The vessel has multiple active risk indicators requiring coordinated operational review.',
         'لدى السفينة عدة مؤشرات مخاطر نشطة تتطلب مراجعة تشغيلية منسقة.'
       );
     }
-    if (this.vessel.risk >= 45) {
+    if (this.isAtLeast('Watch')) {
       return this.copy(
         'Monitoring indicators require attention, but no immediate critical intervention is currently indicated.',
         'تتطلب مؤشرات المراقبة الانتباه، دون وجود تدخل حرج فوري مطلوب حالياً.'
@@ -507,9 +523,9 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
   }
 
   get complianceStatus(): string {
-    if (this.vessel.risk >= 85) return this.copy('Action Required', 'إجراء مطلوب');
-    if (this.vessel.risk >= 65) return this.copy('Under Review', 'قيد المراجعة');
-    if (this.vessel.risk >= 45) return this.copy('Watch', 'مراقبة');
+    if (this.isAtLeast('Critical')) return this.copy('Action Required', 'إجراء مطلوب');
+    if (this.isAtLeast('High')) return this.copy('Under Review', 'قيد المراجعة');
+    if (this.isAtLeast('Watch')) return this.copy('Watch', 'مراقبة');
     return this.copy('Compliant', 'مستوفٍ');
   }
 
@@ -519,23 +535,27 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
 
   get riskGaugeBackground(): string {
     const color =
-      this.vessel.risk >= 85 ? '#e65353' :
-      this.vessel.risk >= 65 ? '#ef8b43' :
-      this.vessel.risk >= 45 ? '#d7a738' : '#4da7a0';
+      this.vessel.riskLevel === 'Critical' ? '#e65353' :
+      this.vessel.riskLevel === 'High' ? '#ef8b43' :
+      this.vessel.riskLevel === 'Watch' ? '#d7a738' : '#4da7a0';
     return `radial-gradient(circle at center, white 58%, transparent 59%), conic-gradient(${color} 0 ${this.vessel.risk}%, #edf1f3 ${this.vessel.risk}% 100%)`;
   }
 
   private buildOperationalData(): void {
-    const risk = this.vessel.risk;
-    this.hasCertificateConflict = risk >= 80;
-    this.hasOpenDeficiency = risk >= 45;
+    const evaluation = this.riskEngine.evaluate(this.vessel);
+    const evidenceRisk = evaluation.baseScore;
+    const contribution = (key: string): number =>
+      evaluation.factors.find(factor => factor.key === key)?.contribution || 0;
+
+    this.hasCertificateConflict = evidenceRisk >= 80;
+    this.hasOpenDeficiency = evidenceRisk >= 45;
     this.openDeficiencyCount = this.hasOpenDeficiency ? 1 : 0;
 
-    this.movementRiskImpact = Math.max(3, Math.round(risk * 0.25));
-    this.inspectionRiskImpact = this.hasOpenDeficiency ? Math.max(6, Math.round(risk * 0.28)) : Math.max(2, Math.round(risk * 0.12));
-    this.certificateRiskImpact = risk >= 55 ? Math.max(5, Math.round(risk * 0.20)) : Math.max(2, Math.round(risk * 0.10));
-    this.dataConflictRiskImpact = this.hasCertificateConflict ? Math.max(5, Math.round(risk * 0.14)) : Math.max(1, Math.round(risk * 0.06));
-    this.historicalRiskImpact = Math.max(1, risk - this.movementRiskImpact - this.inspectionRiskImpact - this.certificateRiskImpact - this.dataConflictRiskImpact);
+    this.movementRiskImpact = contribution('movement');
+    this.inspectionRiskImpact = contribution('inspection');
+    this.certificateRiskImpact = contribution('certificate');
+    this.dataConflictRiskImpact = contribution('dataQuality');
+    this.historicalRiskImpact = contribution('history');
 
     this.sources = this.buildSources();
     this.certificates = this.buildCertificates();
