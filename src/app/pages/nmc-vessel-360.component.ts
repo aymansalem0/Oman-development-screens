@@ -167,6 +167,20 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
     return this.certificates.find(certificate => certificate.id === this.selectedCertificateId);
   }
 
+  get vesselInitials(): string {
+    return this.vessel.name
+      .replace(/^MV\s+/i, '')
+      .split(/\s+/)
+      .slice(0, 2)
+      .map(part => part.charAt(0))
+      .join('')
+      .toUpperCase();
+  }
+
+  get conflictCount(): number {
+    return this.sources.filter(source => source.status === 'Conflict').length;
+  }
+
   get attentionMessage(): string {
     const level = this.vessel.riskLevel;
     if (level === 'Critical') return 'Immediate operational review required';
