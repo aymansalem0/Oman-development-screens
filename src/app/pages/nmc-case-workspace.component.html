@@ -43,7 +43,7 @@
       <span>{{ copy('Cases & Incidents', 'الحالات والحوادث') }}</span>
     </a>
 
-    <a class="nav-item" [routerLink]="['/moei/nmc/vessel', vessel.imo]" [queryParams]="{tab:'inspection'}">
+    <a class="nav-item" [routerLink]="['/moei/nmc/vessel', vessel.imo, 'smart-inspection']">
       <span class="nav-icon">✓</span>
       <span>{{ copy('Smart Inspection', 'المعاينة الذكية') }}</span>
     </a>
@@ -170,12 +170,24 @@
               </button>
 
               <div class="task-actions">
-                <button type="button" class="start" (click)="startTask(task)" [disabled]="task.status === 'In Progress' || task.status === 'Completed' || task.status === 'Escalated'">
-                  ▶ {{ copy('Start', 'بدء') }}
+                <button
+                  *ngIf="task.id === 'priority-inspection'"
+                  type="button"
+                  class="inspection-action"
+                  (click)="openSmartInspection()"
+                >
+                  ✓ {{ task.status === 'Completed' ? copy('View Inspection', 'عرض المعاينة') : copy('Open Inspection', 'فتح المعاينة') }}
                 </button>
-                <button type="button" class="complete" (click)="completeTask(task)" [disabled]="task.status === 'Completed'">
-                  ✓ {{ copy('Complete', 'استكمال') }}
-                </button>
+
+                <ng-container *ngIf="task.id !== 'priority-inspection'">
+                  <button type="button" class="start" (click)="startTask(task)" [disabled]="task.status === 'In Progress' || task.status === 'Completed' || task.status === 'Escalated'">
+                    ▶ {{ copy('Start', 'بدء') }}
+                  </button>
+                  <button type="button" class="complete" (click)="completeTask(task)" [disabled]="task.status === 'Completed'">
+                    ✓ {{ copy('Complete', 'استكمال') }}
+                  </button>
+                </ng-container>
+
                 <button type="button" class="escalate" (click)="escalateTask(task)" [disabled]="task.status === 'Completed' || task.status === 'Escalated'">
                   ↑ {{ copy('Escalate', 'تصعيد') }}
                 </button>
@@ -318,12 +330,24 @@
     </div>
 
     <div class="drawer-actions">
-      <button type="button" (click)="startTask(task)" [disabled]="task.status === 'In Progress' || task.status === 'Completed' || task.status === 'Escalated'">
-        ▶ {{ copy('Start task', 'بدء المهمة') }}
+      <button
+        *ngIf="task.id === 'priority-inspection'"
+        type="button"
+        class="inspection-action"
+        (click)="closeTask(); openSmartInspection()"
+      >
+        ✓ {{ task.status === 'Completed' ? copy('View Smart Inspection', 'عرض المعاينة الذكية') : copy('Open Smart Inspection', 'فتح المعاينة الذكية') }}
       </button>
-      <button type="button" class="complete" (click)="completeTask(task)" [disabled]="task.status === 'Completed'">
-        ✓ {{ copy('Complete task', 'استكمال المهمة') }}
-      </button>
+
+      <ng-container *ngIf="task.id !== 'priority-inspection'">
+        <button type="button" (click)="startTask(task)" [disabled]="task.status === 'In Progress' || task.status === 'Completed' || task.status === 'Escalated'">
+          ▶ {{ copy('Start task', 'بدء المهمة') }}
+        </button>
+        <button type="button" class="complete" (click)="completeTask(task)" [disabled]="task.status === 'Completed'">
+          ✓ {{ copy('Complete task', 'استكمال المهمة') }}
+        </button>
+      </ng-container>
+
       <button type="button" class="escalate" (click)="escalateTask(task)" [disabled]="task.status === 'Completed' || task.status === 'Escalated'">
         ↑ {{ copy('Escalate', 'تصعيد') }}
       </button>
