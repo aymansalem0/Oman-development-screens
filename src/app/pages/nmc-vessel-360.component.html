@@ -144,7 +144,7 @@
             </div>
           </div>
           <div class="map-wrap">
-            <div #vesselMap class="vessel-map"></div>
+            <div #vesselMap class="vessel-map" dir="ltr"></div>
             <div class="map-callout" *ngIf="vessel.risk >= 65">
               <strong>{{ copy('Movement anomaly detected', 'تم اكتشاف حركة غير اعتيادية') }}</strong>
               <span>{{ copy('Observed movement differs from the monitored route pattern.', 'الحركة المرصودة تختلف عن نمط المسار المراقب.') }}</span>
