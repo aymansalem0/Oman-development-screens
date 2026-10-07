@@ -1186,3 +1186,68 @@ button, a { font: inherit; }
     grid-template-columns: 30px 1fr;
   }
 }
+
+
+/* Dynamic vessel risk states */
+.risk-card.high {
+  background: #fff5ec;
+  border: 1px solid #ffe0c2;
+}
+.risk-card.high strong,
+.risk-card.high span { color: #d97706; }
+
+.risk-card.watch {
+  background: #fff9e8;
+  border: 1px solid #f6e4ad;
+}
+.risk-card.watch strong,
+.risk-card.watch span { color: #a97916; }
+
+.risk-card.normal {
+  background: #edf9f6;
+  border: 1px solid #d2eee7;
+}
+.risk-card.normal strong,
+.risk-card.normal span { color: #0f766e; }
+
+.critical-banner.high {
+  background: linear-gradient(90deg, #fff6ed, #fffaf5);
+  border-color: #ffe0c5;
+}
+.critical-banner.high .critical-icon {
+  background: #ffead5;
+  color: #d97706;
+}
+.critical-banner.high strong { color: #b76713; }
+.critical-banner.high p { color: #94795f; }
+
+.critical-banner.watch {
+  background: linear-gradient(90deg, #fff9e8, #fffdf6);
+  border-color: #f6e5b5;
+}
+.critical-banner.watch .critical-icon {
+  background: #fff0c9;
+  color: #a97916;
+}
+.critical-banner.watch strong { color: #8c6716; }
+.critical-banner.watch p { color: #8d8160; }
+
+.critical-banner.normal {
+  background: linear-gradient(90deg, #effaf7, #fbfffe);
+  border-color: #d5eee8;
+}
+.critical-banner.normal .critical-icon {
+  background: #dff4ef;
+  color: #0f766e;
+}
+.critical-banner.normal strong { color: #356f68; }
+.critical-banner.normal p { color: #75918c; }
+
+:host ::ng-deep .v360-map-ship.normal { color: #4da7a0; }
+:host ::ng-deep .v360-map-ship.watch { color: #d7a738; }
+:host ::ng-deep .v360-map-ship.high { color: #ef8b43; }
+:host ::ng-deep .v360-map-ship.critical { color: #e65353; }
+
+.dot.critical-vessel.high { background: #ef8b43; box-shadow: 0 0 0 3px #fff1e6; }
+.dot.critical-vessel.watch { background: #d7a738; box-shadow: 0 0 0 3px #fff8e6; }
+.dot.critical-vessel.normal { background: #4da7a0; box-shadow: 0 0 0 3px #eaf8f5; }
