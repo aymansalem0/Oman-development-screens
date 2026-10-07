@@ -14,7 +14,13 @@ const suffixes = [
 ];
 const flags = ['UAE','Liberia','Panama','Marshall Is.','Singapore','Malta','Hong Kong','Bahamas'];
 const types = ['Cargo','Tanker','Container','Bulk Carrier','Passenger','Offshore','Tug'];
-const routeKeys = ['jebelAli','dubai','sharjah','khalifa','ruwais','das','fujairah'];
+const routeKeys = [
+  'gulfWest','gulfMidWest','gulfCentral','gulfNorthLane',
+  'jebelAliOuter','dubaiOuter','sharjahOuter','abuDhabiOuter',
+  'dasOuter','ruwaisOuter','hormuzWest','hormuzEast',
+  'fujairahOuter','gulfOfOmanNorth','gulfOfOmanSouth',
+  'jebelAli','dubai','sharjah','khalifa','ruwais','das','fujairah'
+];
 
 const routeMeta: Record<string, { destination: string; zone: string }> = {
   jebelAli:{destination:'Jebel Ali',zone:'UAE Approach'},
@@ -23,7 +29,22 @@ const routeMeta: Record<string, { destination: string; zone: string }> = {
   khalifa:{destination:'Khalifa Port',zone:'Abu Dhabi Approach'},
   ruwais:{destination:'Ruwais',zone:'Western Waters'},
   das:{destination:'Das Island',zone:'Offshore'},
-  fujairah:{destination:'Fujairah',zone:'East Coast'}
+  fujairah:{destination:'Fujairah',zone:'East Coast'},
+  gulfWest:{destination:'Ruwais',zone:'Western Waters'},
+  gulfMidWest:{destination:'Khalifa Port',zone:'Abu Dhabi Approach'},
+  gulfCentral:{destination:'Jebel Ali',zone:'UAE Approach'},
+  gulfNorthLane:{destination:'Dubai',zone:'UAE Approach'},
+  jebelAliOuter:{destination:'Jebel Ali',zone:'UAE Approach'},
+  dubaiOuter:{destination:'Dubai',zone:'Dubai Coastal'},
+  sharjahOuter:{destination:'Sharjah',zone:'Northern Emirates'},
+  abuDhabiOuter:{destination:'Khalifa Port',zone:'Abu Dhabi Approach'},
+  dasOuter:{destination:'Das Island',zone:'Offshore'},
+  ruwaisOuter:{destination:'Ruwais',zone:'Western Waters'},
+  hormuzWest:{destination:'Jebel Ali',zone:'UAE Approach'},
+  hormuzEast:{destination:'Fujairah',zone:'East Coast'},
+  fujairahOuter:{destination:'Fujairah',zone:'East Coast'},
+  gulfOfOmanNorth:{destination:'Fujairah',zone:'East Coast'},
+  gulfOfOmanSouth:{destination:'Fujairah',zone:'East Coast'}
 };
 
 const mmsiPrefixes: Record<string,string> = {
@@ -89,15 +110,24 @@ function makeVessel(id:number):NmcVesselProfile {
   const name=seedNames.has(candidate)?candidate+' II':candidate;
   const flag=flags[id%flags.length];
   const type=types[(id*3)%types.length];
-  const routeKey=routeKeys[(id*5)%routeKeys.length];
+  const routeKey=routeKeys[(id*17 + Math.floor(id/5))%routeKeys.length];
   const route=SEA_ROUTES[routeKey];
-  const segmentIndex=(id*3)%(route.length-1);
+  const segmentIndex=(id*11 + Math.floor(id/3))%(route.length-1);
   const start=route[segmentIndex];
   const end=route[segmentIndex+1];
-  const t=.18+((id*7)%58)/100;
-  const offset=((id%7)-3)*.0025;
-  const lat=start[0]+(end[0]-start[0])*t+offset;
-  const lng=start[1]+(end[1]-start[1])*t-offset;
+  const t=.08+((id*37)%84)/100;
+
+  /* Spread contacts across each maritime corridor instead of placing them
+     on one exact polyline. The offset is perpendicular to the route so
+     vessels remain visually associated with the same shipping lane. */
+  const dLat=end[0]-start[0];
+  const dLng=end[1]-start[1];
+  const length=Math.max(.0001,Math.hypot(dLat,dLng));
+  const laneOffset=(((id*29)%17)-8)*.0065;
+  const perpendicularLat=(-dLng/length)*laneOffset;
+  const perpendicularLng=(dLat/length)*laneOffset;
+  const lat=start[0]+dLat*t+perpendicularLat;
+  const lng=start[1]+dLng*t+perpendicularLng;
   const dm=dimensions(type,id);
   const isUae=flag==='UAE';
   const etaH=(id*3)%24;

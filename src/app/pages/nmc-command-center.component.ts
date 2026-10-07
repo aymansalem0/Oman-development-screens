@@ -242,8 +242,21 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
       }
 
       const target = route[nextIndex];
-      const latDiff = target[0] - vessel.lat;
-      const lngDiff = target[1] - vessel.lng;
+      let targetLat = target[0];
+      let targetLng = target[1];
+
+      if (vessel.id > 30) {
+        const segmentStart = route[segmentIndex];
+        const dLat = target[0] - segmentStart[0];
+        const dLng = target[1] - segmentStart[1];
+        const segmentLength = Math.max(0.0001, Math.hypot(dLat, dLng));
+        const laneOffset = (((vessel.id * 29) % 17) - 8) * 0.0065;
+        targetLat += (-dLng / segmentLength) * laneOffset;
+        targetLng += (dLat / segmentLength) * laneOffset;
+      }
+
+      const latDiff = targetLat - vessel.lat;
+      const lngDiff = targetLng - vessel.lng;
       const distance = Math.hypot(latDiff, lngDiff);
       const visualStep = Math.min(0.075, Math.max(0.022, vessel.speed / 330));
 
@@ -251,8 +264,8 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
       let lng = vessel.lng + lngDiff * visualStep;
 
       if (distance < 0.012) {
-        lat = target[0];
-        lng = target[1];
+        lat = targetLat;
+        lng = targetLng;
         segmentIndex = nextIndex;
         if (segmentIndex === route.length - 1 || segmentIndex === 0) {
           direction = direction === 1 ? -1 : 1;
@@ -412,7 +425,7 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
   }
 
   resetMapView(): void {
-    this.map?.fitBounds(L.latLngBounds([[23.35,51.55],[26.75,57.05]]), { padding:[16,16] });
+    this.map?.fitBounds(L.latLngBounds([[23.35,51.55],[26.75,57.75]]), { padding:[16,16] });
   }
 
   private refreshMapMarkers(): void {
