@@ -5,20 +5,19 @@
       <div>
         <div class="eyebrow">MOEI · Maritime Transformation</div>
         <h1>National Maritime Center</h1>
-        <p>Operational picture · Business POC</p>
+        <p>Operational picture · Maritime situational awareness</p>
       </div>
     </div>
 
     <div class="topbar-status">
       <div class="live-pill" [class.paused]="!feedLive">
         <span class="pulse-dot"></span>
-        {{ feedLive ? 'AIS / LRIT SIMULATION LIVE' : 'FEED PAUSED' }}
+        {{ feedLive ? 'AIS / LRIT FEED LIVE' : 'FEED PAUSED' }}
       </div>
       <span class="clock">{{ now | date:'dd MMM yyyy · HH:mm:ss' }}</span>
     </div>
 
     <div class="topbar-actions">
-      <button type="button" class="ghost-btn" (click)="replayScenario()">↻ Replay scenario</button>
       <button type="button" class="icon-btn" aria-label="Notifications">🔔<b>3</b></button>
       <div class="user-chip">
         <span class="user-avatar">NO</span>
@@ -42,11 +41,6 @@
       <span>Vessel Monitoring</span>
       <span class="count-badge">{{ monitoredCount }}</span>
     </button>
-    <a class="nav-item nav-link-item" routerLink="/moei/nmc/vessel/9328471">
-      <span class="nav-icon">◎</span>
-      <span>Vessel 360 Demo</span>
-      <span class="demo-badge">NEW</span>
-    </a>
     <button type="button" class="nav-item">
       <span class="nav-icon">⚠</span>
       <span>Alerts & Events</span>
@@ -91,11 +85,10 @@
       <div>
         <div class="breadcrumb">National Maritime Center / <b>Operational Picture</b></div>
         <h2>UAE Maritime Operational Picture</h2>
-        <p>Real geography, simulated vessel traffic, and prioritized operational attention in one national view.</p>
+        <p>Real-time vessel traffic, maritime risk and prioritized operational attention in one national view.</p>
       </div>
 
       <div class="heading-actions">
-        <a class="secondary-btn action-link vessel360-entry" routerLink="/moei/nmc/vessel/9328471">◎ Open Vessel 360 Demo</a>
         <button type="button" class="secondary-btn" (click)="resetMapView()">⌂ Reset map</button>
         <button type="button" class="primary-btn" (click)="toggleFeed()">
           <span>{{ feedLive ? '❚❚' : '▶' }}</span>
@@ -148,7 +141,7 @@
           <div>
             <div class="panel-title-row">
               <h3>Live Maritime Picture</h3>
-              <span class="real-map-badge">REAL MAP</span>
+              <span class="real-map-badge">LIVE MAP</span>
             </div>
             <p>OpenStreetMap live basemap · UAE waters and approach areas</p>
           </div>
@@ -187,11 +180,6 @@
             <span><i class="dot normal"></i> Normal</span>
             <span><i class="route-key"></i> Selected sea route</span>
           </div>
-
-          <div class="map-overlay source-note">
-            <strong>POC mode</strong>
-            <span>Full OpenStreetMap basemap · Synthetic vessel positions constrained to offshore maritime routes</span>
-          </div>
         </div>
       </div>
 
@@ -210,7 +198,7 @@
             *ngFor="let vessel of attentionVessels; let i = index"
             class="attention-item"
             [class.active]="selectedVessel?.id === vessel.id"
-            (click)="selectVessel(vessel)"
+            (click)="openVessel(vessel)"
           >
             <div class="rank" [ngClass]="riskClass(vessel.risk)">{{ i + 1 }}</div>
 
@@ -222,8 +210,7 @@
                 </span>
               </div>
 
-              <p *ngIf="vessel.id === 1">Movement anomaly + open deficiency + certificate conflict</p>
-              <p *ngIf="vessel.id !== 1">{{ vessel.type }} · {{ vessel.flag }} · {{ vessel.zone }}</p>
+              <p>{{ vessel.type }} · {{ vessel.flag }} · {{ vessel.zone }}</p>
 
               <div class="attention-meta">
                 <span>IMO {{ vessel.imo }}</span>
@@ -322,11 +309,11 @@
           </div>
         </div>
 
-        <div class="scenario-alert" *ngIf="v.id === 1">
+        <div class="scenario-alert" *ngIf="v.risk >= 65">
           <span class="scenario-icon">!</span>
           <div>
-            <strong>Critical attention required</strong>
-            <p>Unusual movement correlated with an unresolved historical inspection deficiency and a conflicting certificate condition.</p>
+            <strong>{{ riskLevel(v.risk) }} attention level</strong>
+            <p>Open Vessel 360 to review the vessel's correlated movement, compliance, certificates, inspections and risk evidence.</p>
           </div>
         </div>
 
