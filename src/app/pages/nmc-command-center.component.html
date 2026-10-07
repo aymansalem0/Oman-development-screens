@@ -1,98 +1,99 @@
-<div class="nmc-shell">
+<div class="nmc-shell" [class.rtl]="lang.isArabic" [attr.dir]="lang.dir">
   <header class="nmc-topbar">
     <div class="brand-block">
       <div class="brand-mark">⚓</div>
       <div>
-        <div class="eyebrow">MOEI · Maritime Transformation</div>
-        <h1>National Maritime Center</h1>
-        <p>Operational picture · Maritime situational awareness</p>
+        <div class="eyebrow">{{ copy('MOEI · Maritime Transformation', 'وزارة الطاقة والبنية التحتية · التحول البحري') }}</div>
+        <h1>{{ copy('National Maritime Center', 'المركز البحري الوطني') }}</h1>
+        <p>{{ copy('Operational picture · Maritime situational awareness', 'الصورة التشغيلية · الوعي البحري بالموقف') }}</p>
       </div>
     </div>
 
     <div class="topbar-status">
       <div class="live-pill" [class.paused]="!feedLive">
         <span class="pulse-dot"></span>
-        {{ feedLive ? 'AIS / LRIT FEED LIVE' : 'FEED PAUSED' }}
+        {{ feedLive ? copy('AIS / LRIT FEED LIVE', 'تغذية AIS / LRIT مباشرة') : copy('FEED PAUSED', 'التغذية متوقفة') }}
       </div>
-      <span class="clock">{{ now | date:'dd MMM yyyy · HH:mm:ss' }}</span>
+      <span class="clock">{{ formattedNow }}</span>
     </div>
 
     <div class="topbar-actions">
-      <button type="button" class="icon-btn" aria-label="Notifications">🔔<b>3</b></button>
+      <button type="button" class="language-btn" (click)="toggleLanguage()">{{ lang.isArabic ? 'English' : 'العربية' }}</button>
+      <button type="button" class="icon-btn" [attr.aria-label]="copy('Notifications', 'الإشعارات')">🔔<b>3</b></button>
       <div class="user-chip">
         <span class="user-avatar">NO</span>
         <span>
-          <strong>NMC Officer</strong>
-          <small>Duty Operations</small>
+          <strong>{{ copy('NMC Officer', 'ضابط المركز البحري الوطني') }}</strong>
+          <small>{{ copy('Duty Operations', 'العمليات المناوبة') }}</small>
         </span>
       </div>
     </div>
   </header>
 
   <aside class="nmc-sidebar">
-    <div class="sidebar-section-label">OPERATIONS</div>
+    <div class="sidebar-section-label">{{ copy('OPERATIONS', 'العمليات') }}</div>
 
     <button type="button" class="nav-item active">
       <span class="nav-icon">◉</span>
-      <span>Command Center</span>
+      <span>{{ copy('Command Center', 'مركز القيادة') }}</span>
     </button>
     <button type="button" class="nav-item">
       <span class="nav-icon">⌖</span>
-      <span>Vessel Monitoring</span>
+      <span>{{ copy('Vessel Monitoring', 'مراقبة السفن') }}</span>
       <span class="count-badge">{{ monitoredCount }}</span>
     </button>
     <button type="button" class="nav-item">
       <span class="nav-icon">⚠</span>
-      <span>Alerts & Events</span>
+      <span>{{ copy('Alerts & Events', 'التنبيهات والأحداث') }}</span>
       <span class="count-badge warning">{{ attentionCount }}</span>
     </button>
     <button type="button" class="nav-item">
       <span class="nav-icon">▣</span>
-      <span>Cases & Incidents</span>
+      <span>{{ copy('Cases & Incidents', 'الحالات والحوادث') }}</span>
       <span class="count-badge">4</span>
     </button>
     <button type="button" class="nav-item">
       <span class="nav-icon">✓</span>
-      <span>Smart Inspection</span>
+      <span>{{ copy('Smart Inspection', 'المعاينة الذكية') }}</span>
     </button>
 
-    <div class="sidebar-section-label second">INTELLIGENCE</div>
+    <div class="sidebar-section-label second">{{ copy('INTELLIGENCE', 'الاستخبارات') }}</div>
 
     <button type="button" class="nav-item">
       <span class="nav-icon">✦</span>
-      <span>Maritime Intelligence</span>
+      <span>{{ copy('Maritime Intelligence', 'الاستخبارات البحرية') }}</span>
     </button>
     <button type="button" class="nav-item">
       <span class="nav-icon">▥</span>
-      <span>Dashboards</span>
+      <span>{{ copy('Dashboards', 'لوحات المعلومات') }}</span>
     </button>
     <button type="button" class="nav-item">
       <span class="nav-icon">⚙</span>
-      <span>Configuration</span>
+      <span>{{ copy('Configuration', 'الإعدادات') }}</span>
     </button>
 
     <div class="system-health">
       <div>
         <span class="health-dot"></span>
-        <strong>Systems operational</strong>
+        <strong>{{ copy('Systems operational', 'الأنظمة تعمل بصورة طبيعية') }}</strong>
       </div>
-      <small>5 / 5 data sources available</small>
+      <small>{{ copy('5 / 5 data sources available', '5 / 5 مصادر بيانات متاحة') }}</small>
     </div>
   </aside>
 
   <main class="nmc-main">
     <section class="page-heading">
       <div>
-        <div class="breadcrumb">National Maritime Center / <b>Operational Picture</b></div>
-        <h2>UAE Maritime Operational Picture</h2>
-        <p>Real-time vessel traffic, maritime risk and prioritized operational attention in one national view.</p>
+        <div class="breadcrumb">{{ copy('National Maritime Center', 'المركز البحري الوطني') }} / <b>{{ copy('Operational Picture', 'الصورة التشغيلية') }}</b></div>
+        <h2>{{ copy('UAE Maritime Operational Picture', 'الصورة التشغيلية البحرية لدولة الإمارات') }}</h2>
+        <p>{{ copy('Real-time vessel traffic, maritime risk and prioritized operational attention in one national view.', 'حركة السفن والمخاطر البحرية والأولويات التشغيلية لحظياً ضمن رؤية وطنية موحدة.') }}</p>
       </div>
 
       <div class="heading-actions">
-        <button type="button" class="secondary-btn" (click)="resetMapView()">⌂ Reset map</button>
+        <button type="button" class="secondary-btn" (click)="resetMapView()">⌂ {{ copy('Reset map', 'إعادة ضبط الخريطة') }}</button>
         <button type="button" class="primary-btn" (click)="toggleFeed()">
           <span>{{ feedLive ? '❚❚' : '▶' }}</span>
-          {{ feedLive ? 'Pause live feed' : 'Resume live feed' }}
+          {{ feedLive ? copy('Pause live feed', 'إيقاف التغذية المباشرة') : copy('Resume live feed', 'استئناف التغذية المباشرة') }}
         </button>
       </div>
     </section>
@@ -101,36 +102,36 @@
       <article class="kpi-card">
         <div class="kpi-icon teal">⌖</div>
         <div>
-          <span class="kpi-label">Vessels monitored</span>
+          <span class="kpi-label">{{ copy('Vessels monitored', 'السفن تحت المراقبة') }}</span>
           <strong>{{ monitoredCount }}</strong>
-          <small>in / approaching UAE area</small>
+          <small>{{ copy('in / approaching UAE area', 'داخل / تقترب من مناطق الإمارات') }}</small>
         </div>
       </article>
 
       <article class="kpi-card">
         <div class="kpi-icon sky">◎</div>
         <div>
-          <span class="kpi-label">Require attention</span>
+          <span class="kpi-label">{{ copy('Require attention', 'تتطلب الانتباه') }}</span>
           <strong>{{ attentionCount }}</strong>
-          <small>risk score ≥ 45</small>
+          <small>{{ copy('risk score ≥ 45', 'درجة المخاطر ≥ 45') }}</small>
         </div>
       </article>
 
       <article class="kpi-card">
         <div class="kpi-icon amber">▲</div>
         <div>
-          <span class="kpi-label">High risk</span>
+          <span class="kpi-label">{{ copy('High risk', 'مخاطر مرتفعة') }}</span>
           <strong>{{ highRiskCount }}</strong>
-          <small>priority monitoring</small>
+          <small>{{ copy('priority monitoring', 'مراقبة ذات أولوية') }}</small>
         </div>
       </article>
 
       <article class="kpi-card critical-card">
         <div class="kpi-icon coral">!</div>
         <div>
-          <span class="kpi-label">Critical events</span>
+          <span class="kpi-label">{{ copy('Critical events', 'أحداث حرجة') }}</span>
           <strong>{{ criticalCount }}</strong>
-          <small>immediate action required</small>
+          <small>{{ copy('immediate action required', 'إجراء فوري مطلوب') }}</small>
         </div>
       </article>
     </section>
@@ -140,10 +141,10 @@
         <div class="panel-header map-header">
           <div>
             <div class="panel-title-row">
-              <h3>Live Maritime Picture</h3>
-              <span class="real-map-badge">LIVE MAP</span>
+              <h3>{{ copy('Live Maritime Picture', 'الصورة البحرية الحية') }}</h3>
+              <span class="real-map-badge">{{ copy('LIVE MAP', 'خريطة حية') }}</span>
             </div>
-            <p>OpenStreetMap live basemap · UAE waters and approach areas</p>
+            <p>{{ copy('OpenStreetMap live basemap · UAE waters and approach areas', 'خريطة OpenStreetMap حية · مياه الإمارات ومناطق الاقتراب') }}</p>
           </div>
 
           <div class="map-filters">
@@ -152,33 +153,33 @@
               <input
                 [(ngModel)]="searchTerm"
                 (ngModelChange)="onFilterChange()"
-                placeholder="Search vessel / IMO / destination"
+                [placeholder]="copy('Search vessel / IMO / destination', 'ابحث باسم السفينة / IMO / الوجهة')"
               />
             </label>
 
-            <select [(ngModel)]="riskFilter" (ngModelChange)="onFilterChange()" aria-label="Filter by risk">
-              <option>All</option>
-              <option>Critical</option>
-              <option>High</option>
-              <option>Watch</option>
-              <option>Normal</option>
+            <select [(ngModel)]="riskFilter" (ngModelChange)="onFilterChange()" [attr.aria-label]="copy('Filter by risk', 'تصفية حسب المخاطر')">
+              <option value="All">{{ copy('All', 'الكل') }}</option>
+              <option value="Critical">{{ copy('Critical', 'حرج') }}</option>
+              <option value="High">{{ copy('High', 'مرتفع') }}</option>
+              <option value="Watch">{{ copy('Watch', 'مراقبة') }}</option>
+              <option value="Normal">{{ copy('Normal', 'طبيعي') }}</option>
             </select>
 
-            <select [(ngModel)]="typeFilter" (ngModelChange)="onFilterChange()" aria-label="Filter by vessel type">
-              <option *ngFor="let type of vesselTypes" [value]="type">{{ type }}</option>
+            <select [(ngModel)]="typeFilter" (ngModelChange)="onFilterChange()" [attr.aria-label]="copy('Filter by vessel type', 'تصفية حسب نوع السفينة')">
+              <option *ngFor="let type of vesselTypes" [value]="type">{{ type === 'All' ? copy('All', 'الكل') : vesselTypeLabel(type) }}</option>
             </select>
           </div>
         </div>
 
         <div class="map-stage">
-          <div #mapContainer class="real-map"></div>
+          <div #mapContainer class="real-map" dir="ltr"></div>
 
           <div class="map-overlay map-legend">
-            <span><i class="dot critical"></i> Critical</span>
-            <span><i class="dot high"></i> High</span>
-            <span><i class="dot watch"></i> Watch</span>
-            <span><i class="dot normal"></i> Normal</span>
-            <span><i class="route-key"></i> Selected sea route</span>
+            <span><i class="dot critical"></i> {{ copy('Critical', 'حرج') }}</span>
+            <span><i class="dot high"></i> {{ copy('High', 'مرتفع') }}</span>
+            <span><i class="dot watch"></i> {{ copy('Watch', 'مراقبة') }}</span>
+            <span><i class="dot normal"></i> {{ copy('Normal', 'طبيعي') }}</span>
+            <span><i class="route-key"></i> {{ copy('Selected sea route', 'المسار البحري المحدد') }}</span>
           </div>
         </div>
       </div>
@@ -186,8 +187,8 @@
       <aside class="attention-panel panel">
         <div class="panel-header">
           <div>
-            <h3>Requires Attention Now</h3>
-            <p>Prioritized by operational risk</p>
+            <h3>{{ copy('Requires Attention Now', 'تتطلب الانتباه الآن') }}</h3>
+            <p>{{ copy('Prioritized by operational risk', 'مرتبة حسب المخاطر التشغيلية') }}</p>
           </div>
           <span class="priority-count">{{ attentionCount }}</span>
         </div>
@@ -206,15 +207,15 @@
               <div class="attention-title">
                 <strong>{{ vessel.name }}</strong>
                 <span class="risk-chip" [ngClass]="riskClass(vessel.risk)">
-                  {{ riskLevel(vessel.risk) }} · {{ vessel.risk }}
+                  {{ riskLabel(vessel.risk) }} · {{ vessel.risk }}
                 </span>
               </div>
 
-              <p>{{ vessel.type }} · {{ vessel.flag }} · {{ vessel.zone }}</p>
+              <p>{{ vesselTypeLabel(vessel.type) }} · {{ flagLabel(vessel.flag) }} · {{ zoneLabel(vessel.zone) }}</p>
 
               <div class="attention-meta">
                 <span>IMO {{ vessel.imo }}</span>
-                <span>{{ vessel.speed | number:'1.1-1' }} kn</span>
+                <span>{{ vessel.speed | number:'1.1-1' }} {{ copy('kn', 'عقدة') }}</span>
                 <span>→ {{ vessel.destination }}</span>
               </div>
             </div>
@@ -227,8 +228,8 @@
           <div class="ai-mini">
             <span class="ai-icon">✦</span>
             <div>
-              <strong>Continuous prioritization</strong>
-              <p>All monitored vessels are continuously evaluated as movement and risk signals change.</p>
+              <strong>{{ copy('Continuous prioritization', 'تحديد الأولويات بصورة مستمرة') }}</strong>
+              <p>{{ copy('All monitored vessels are continuously evaluated as movement and risk signals change.', 'يتم تقييم جميع السفن تحت المراقبة باستمرار مع تغير مؤشرات الحركة والمخاطر.') }}</p>
             </div>
           </div>
         </div>
@@ -239,8 +240,8 @@
       <div class="events-panel panel">
         <div class="panel-header">
           <div>
-            <h3>Live Event Stream</h3>
-            <p>Movement, monitoring and correlated maritime events</p>
+            <h3>{{ copy('Live Event Stream', 'تدفق الأحداث المباشر') }}</h3>
+            <p>{{ copy('Movement, monitoring and correlated maritime events', 'أحداث الحركة والمراقبة والأحداث البحرية المترابطة') }}</p>
           </div>
           <span class="stream-indicator"><i></i> streaming</span>
         </div>
@@ -254,10 +255,10 @@
             </div>
             <div class="event-content">
               <div>
-                <strong>{{ event.title }}</strong>
+                <strong>{{ eventTitle(event) }}</strong>
                 <span>{{ event.vessel }}</span>
               </div>
-              <p>{{ event.detail }}</p>
+              <p>{{ eventDetail(event) }}</p>
             </div>
           </div>
         </div>
@@ -266,60 +267,60 @@
       <div class="vessel-panel panel" *ngIf="selectedVessel as v">
         <div class="vessel-panel-head">
           <div>
-            <div class="vessel-kicker">SELECTED VESSEL</div>
+            <div class="vessel-kicker">{{ copy('SELECTED VESSEL', 'السفينة المختارة') }}</div>
             <h3>{{ v.name }}</h3>
             <p>IMO {{ v.imo }} · MMSI {{ v.mmsi }}</p>
           </div>
 
           <div class="big-risk" [ngClass]="riskClass(v.risk)">
-            <small>RISK</small>
+            <small>{{ copy('RISK', 'المخاطر') }}</small>
             <strong>{{ v.risk }}</strong>
-            <span>{{ riskLevel(v.risk) }}</span>
+            <span>{{ riskLabel(v.risk) }}</span>
           </div>
         </div>
 
         <div class="vessel-data-grid">
           <div>
-            <small>Flag / Type</small>
-            <strong>{{ v.flag }} · {{ v.type }}</strong>
+            <small>{{ copy('Flag / Type', 'العلم / النوع') }}</small>
+            <strong>{{ flagLabel(v.flag) }} · {{ vesselTypeLabel(v.type) }}</strong>
           </div>
           <div>
-            <small>Length</small>
+            <small>{{ copy('Length', 'الطول') }}</small>
             <strong>{{ v.lengthM }} m</strong>
           </div>
           <div>
-            <small>Current speed</small>
-            <strong>{{ v.speed | number:'1.1-1' }} kn</strong>
+            <small>{{ copy('Current speed', 'السرعة الحالية') }}</small>
+            <strong>{{ v.speed | number:'1.1-1' }} {{ copy('kn', 'عقدة') }}</strong>
           </div>
           <div>
-            <small>Course</small>
+            <small>{{ copy('Course', 'المسار') }}</small>
             <strong>{{ v.course }}°</strong>
           </div>
           <div>
-            <small>Destination / ETA</small>
+            <small>{{ copy('Destination / ETA', 'الوجهة / الوقت المتوقع للوصول') }}</small>
             <strong>{{ v.destination }} · {{ v.eta }}</strong>
           </div>
           <div>
-            <small>Monitoring zone</small>
+            <small>{{ copy('Monitoring zone', 'منطقة المراقبة') }}</small>
             <strong>{{ v.zone }}</strong>
           </div>
           <div>
-            <small>Last AIS update</small>
-            <strong>{{ v.lastUpdate }} sec ago</strong>
+            <small>{{ copy('Last AIS update', 'آخر تحديث AIS') }}</small>
+            <strong>{{ v.lastUpdate }} {{ copy('sec ago', 'ثانية مضت') }}</strong>
           </div>
         </div>
 
         <div class="scenario-alert" *ngIf="v.risk >= 65">
           <span class="scenario-icon">!</span>
           <div>
-            <strong>{{ riskLevel(v.risk) }} attention level</strong>
-            <p>Open Vessel 360 to review the vessel's correlated movement, compliance, certificates, inspections and risk evidence.</p>
+            <strong>{{ riskLabel(v.risk) }} {{ copy('attention level', 'مستوى الانتباه') }}</strong>
+            <p>{{ copy("Open Vessel 360 to review the vessel's correlated movement, compliance, certificates, inspections and risk evidence.", 'افتح Vessel 360 لمراجعة الحركة المترابطة والامتثال والشهادات والمعاينات وأدلة المخاطر الخاصة بالسفينة.') }}</p>
           </div>
         </div>
 
         <div class="vessel-actions">
-          <a class="secondary-btn action-link" [routerLink]="['/moei/nmc/vessel', v.imo]">Open Vessel 360</a>
-          <button type="button" class="primary-btn">Review Maritime Event</button>
+          <a class="secondary-btn action-link" [routerLink]="['/moei/nmc/vessel', v.imo]">{{ copy('Open Vessel 360', 'فتح Vessel 360') }}</a>
+          <button type="button" class="primary-btn">{{ copy('Review Maritime Event', 'مراجعة الحدث البحري') }}</button>
         </div>
       </div>
     </section>
