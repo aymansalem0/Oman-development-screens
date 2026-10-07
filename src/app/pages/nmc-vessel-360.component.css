@@ -1251,3 +1251,33 @@ button, a { font: inherit; }
 .dot.critical-vessel.high { background: #ef8b43; box-shadow: 0 0 0 3px #fff1e6; }
 .dot.critical-vessel.watch { background: #d7a738; box-shadow: 0 0 0 3px #fff8e6; }
 .dot.critical-vessel.normal { background: #4da7a0; box-shadow: 0 0 0 3px #eaf8f5; }
+
+
+.no-open-deficiency {
+  display: grid;
+  grid-template-columns: 32px 1fr;
+  gap: 10px;
+  align-items: start;
+  padding: 16px;
+}
+.no-open-deficiency > span {
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  display: grid;
+  place-items: center;
+  background: #eaf8f5;
+  color: #0f766e;
+  font-weight: 900;
+}
+.no-open-deficiency strong {
+  display: block;
+  color: #3f625d;
+  font-size: 9px;
+}
+.no-open-deficiency p {
+  margin: 4px 0 0;
+  color: #8ca19d;
+  font-size: 7px;
+  line-height: 1.5;
+}
