@@ -39,11 +39,11 @@
           <strong>{{ vessel.dataConfidence }}%</strong>
           <span>{{ conflictCount }} source conflict{{ conflictCount === 1 ? '': 's' }} · view basis</span>
         </button>
-        <div class="risk-card" [ngClass]="riskCssClass">
+        <a class="risk-card risk-link" [ngClass]="riskCssClass" [routerLink]="['/moei/nmc/vessel', vessel.imo, 'risk']" title="Open full risk explainability">
           <small>Composite risk</small>
           <strong>{{ vessel.riskScore }}</strong>
-          <span>{{ vessel.riskLevel }}</span>
-        </div>
+          <span>{{ vessel.riskLevel }} · Explain</span>
+        </a>
       </div>
     </section>
 
@@ -223,7 +223,7 @@
             </button>
           </div>
 
-          <button type="button" class="outline-btn">Open full explainability view</button>
+          <a class="outline-btn explainability-link" [routerLink]="['/moei/nmc/vessel', vessel.imo, 'risk']">Open full explainability view</a>
         </article>
 
         <article class="panel conflict-panel" *ngIf="hasCertificateConflict">

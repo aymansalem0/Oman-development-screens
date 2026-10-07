@@ -1,0 +1,246 @@
+<div class="rx-shell">
+  <header class="rx-topbar">
+    <div class="brand-block">
+      <div class="brand-mark">⚓</div>
+      <div>
+        <div class="eyebrow">MOEI · National Maritime Center</div>
+        <h1>Risk Explainability</h1>
+        <p>Rule-to-evidence traceability for vessel prioritization</p>
+      </div>
+    </div>
+
+    <div class="top-actions">
+      <a class="back-link" [routerLink]="['/moei/nmc/vessel', vessel.imo]">← Back to Vessel 360</a>
+      <a class="secondary-btn" routerLink="/moei/nmc">Command Center</a>
+    </div>
+  </header>
+
+  <main class="rx-main">
+    <section class="hero-card">
+      <div class="vessel-summary">
+        <div class="vessel-kicker">EXPLAINING CURRENT RISK</div>
+        <h2>{{ vessel.name }}</h2>
+        <div class="identity-row">
+          <span>IMO {{ vessel.imo }}</span>
+          <span>{{ vessel.flag }}</span>
+          <span>{{ vessel.type }}</span>
+          <span>{{ vessel.destination }}</span>
+        </div>
+      </div>
+
+      <div class="hero-metrics">
+        <div class="metric-card risk" [ngClass]="riskClass">
+          <small>Risk score</small>
+          <strong>{{ vessel.risk }}</strong>
+          <span>{{ riskLevel }}</span>
+        </div>
+        <div class="metric-card">
+          <small>Risk confidence</small>
+          <strong>{{ vessel.riskConfidence }}%</strong>
+          <span>Evidence-supported calculation</span>
+        </div>
+        <div class="metric-card">
+          <small>Data confidence</small>
+          <strong>{{ vessel.dataConfidence }}%</strong>
+          <span>{{ conflictCount }} unresolved conflict{{ conflictCount === 1 ? '' : 's' }}</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="threshold-card">
+      <div class="threshold-head">
+        <div>
+          <h3>Risk Classification Thresholds</h3>
+          <p>Current score is evaluated against configured operational thresholds.</p>
+        </div>
+        <div class="engine-meta">
+          <span>{{ engineVersion }}</span>
+          <span>Evaluated {{ evaluatedAt }}</span>
+        </div>
+      </div>
+
+      <div class="threshold-track">
+        <div class="band normal" style="width:45%"><span>Normal · 0–44</span></div>
+        <div class="band watch" style="width:20%"><span>Watch · 45–64</span></div>
+        <div class="band high" style="width:20%"><span>High · 65–84</span></div>
+        <div class="band critical" style="width:15%"><span>Critical · 85–100</span></div>
+        <div class="score-marker" [style.left.%]="scoreMarkerPosition">
+          <b>{{ vessel.risk }}</b>
+          <i></i>
+        </div>
+      </div>
+    </section>
+
+    <section class="explain-grid">
+      <div class="factor-panel panel">
+        <div class="panel-header">
+          <div>
+            <h3>How the score was built</h3>
+            <p>{{ factors.length }} correlated factors · total contribution {{ totalContribution }}</p>
+          </div>
+          <span class="count-pill">{{ triggeredCount }} active triggers</span>
+        </div>
+
+        <div class="factor-list">
+          <button
+            type="button"
+            class="factor-card"
+            *ngFor="let factor of factors"
+            [class.active]="selectedFactor?.id === factor.id"
+            (click)="selectFactor(factor)"
+          >
+            <div class="factor-score">+{{ factor.contribution }}</div>
+            <div class="factor-content">
+              <div class="factor-title-row">
+                <strong>{{ factor.label }}</strong>
+                <span class="status-chip" [ngClass]="factor.status.toLowerCase()">{{ factor.status }}</span>
+              </div>
+              <p>{{ factor.ruleId }} · {{ factor.source }}</p>
+              <div class="factor-meta">
+                <span>{{ factor.sourceClass }}</span>
+                <span>{{ factor.dataConfidence }}% data confidence</span>
+                <span *ngIf="factor.conflict" class="conflict">Conflict</span>
+              </div>
+            </div>
+            <span class="chevron">›</span>
+          </button>
+        </div>
+
+        <div class="calculation-ledger">
+          <span>Calculation</span>
+          <strong>
+            <ng-container *ngFor="let factor of factors; let last = last">
+              {{ factor.contribution }}<ng-container *ngIf="!last"> + </ng-container>
+            </ng-container>
+            = {{ totalContribution }}
+          </strong>
+        </div>
+      </div>
+
+      <aside class="evidence-panel panel" *ngIf="selectedFactor as factor">
+        <div class="panel-header">
+          <div>
+            <h3>Rule & Evidence Trace</h3>
+            <p>{{ factor.ruleId }}</p>
+          </div>
+          <span class="source-class" [ngClass]="{
+            'moei': factor.sourceClass === 'MOEI Authoritative',
+            'external': factor.sourceClass === 'External Authoritative',
+            'trusted': factor.sourceClass === 'External Trusted',
+            'feed': factor.sourceClass === 'Operational Feed',
+            'derived': factor.sourceClass === 'Internal Derived'
+          }">{{ factor.sourceClass }}</span>
+        </div>
+
+        <div class="selected-factor-hero">
+          <div>
+            <small>RISK CONTRIBUTION</small>
+            <strong>+{{ factor.contribution }}</strong>
+          </div>
+          <div>
+            <small>FACTOR</small>
+            <strong>{{ factor.label }}</strong>
+          </div>
+        </div>
+
+        <div class="trace-section">
+          <span class="section-label">1 · RULE</span>
+          <div class="trace-card">
+            <div><small>Rule ID</small><strong>{{ factor.ruleId }}</strong></div>
+            <div><small>Rule logic</small><strong>{{ factor.ruleLogic }}</strong></div>
+          </div>
+        </div>
+
+        <div class="trace-section">
+          <span class="section-label">2 · TRIGGER</span>
+          <div class="trace-note">
+            <strong>Why the rule fired</strong>
+            <p>{{ factor.trigger }}</p>
+          </div>
+        </div>
+
+        <div class="trace-section">
+          <span class="section-label">3 · SOURCE & EVIDENCE</span>
+          <div class="trace-card two-col">
+            <div><small>Source</small><strong>{{ factor.source }}</strong></div>
+            <div><small>Authority</small><strong>{{ factor.authority }}</strong></div>
+            <div><small>Evidence record</small><strong>{{ factor.evidenceRecord }}</strong></div>
+            <div><small>Conflict</small><strong [class.warning-text]="factor.conflict">{{ factor.conflict ? 'Unresolved' : 'None' }}</strong></div>
+          </div>
+        </div>
+
+        <div class="trace-section">
+          <span class="section-label">4 · CONFIDENCE</span>
+          <div class="confidence-grid">
+            <div>
+              <small>Source trust</small>
+              <strong>{{ factor.sourceTrust }}%</strong>
+              <span><i [style.width.%]="factor.sourceTrust"></i></span>
+            </div>
+            <div>
+              <small>Data confidence</small>
+              <strong>{{ factor.dataConfidence }}%</strong>
+              <span><i [style.width.%]="factor.dataConfidence"></i></span>
+            </div>
+            <div>
+              <small>Identity match</small>
+              <strong>{{ factor.identityMatch }}%</strong>
+              <span><i [style.width.%]="factor.identityMatch"></i></span>
+            </div>
+            <div>
+              <small>Freshness</small>
+              <strong>{{ factor.freshness }}%</strong>
+              <span><i [style.width.%]="factor.freshness"></i></span>
+            </div>
+          </div>
+        </div>
+
+        <div class="explanation-note" [class.warning]="factor.conflict">
+          <strong>{{ factor.conflict ? 'Human verification required' : 'Explainability note' }}</strong>
+          <p>{{ factor.explanation }}</p>
+        </div>
+
+        <div class="evidence-actions">
+          <a
+            class="secondary-btn"
+            [routerLink]="['/moei/nmc/vessel', vessel.imo]"
+            [queryParams]="{tab: factor.id === 'inspection' || factor.id === 'history' ? 'inspection' : factor.id === 'certificate' || factor.id === 'data-quality' ? 'certificates' : 'movement'}"
+          >Open source context</a>
+        </div>
+      </aside>
+    </section>
+
+    <section class="decision-card panel">
+      <div class="panel-header">
+        <div>
+          <h3>Decision Readiness</h3>
+          <p>The score is explainable, evidence-linked and separated from AI advice.</p>
+        </div>
+        <span class="readiness-pill">Human decision remains authoritative</span>
+      </div>
+
+      <div class="decision-grid">
+        <div>
+          <small>Risk engine output</small>
+          <strong>{{ vessel.risk }} · {{ riskLevel }}</strong>
+          <p>Deterministic rule contributions shown above.</p>
+        </div>
+        <div>
+          <small>Risk confidence</small>
+          <strong>{{ vessel.riskConfidence }}%</strong>
+          <p>Confidence that the current evidence supports this calculated prioritization.</p>
+        </div>
+        <div>
+          <small>Data confidence</small>
+          <strong>{{ vessel.dataConfidence }}%</strong>
+          <p>Quality of the correlated data used by the risk engine.</p>
+        </div>
+        <div>
+          <small>AI recommendation</small>
+          <strong>Not applied yet</strong>
+          <p>AI situation assessment is a separate next-stage advisory capability.</p>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>

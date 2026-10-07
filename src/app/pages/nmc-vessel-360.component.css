@@ -1905,3 +1905,20 @@ button, a { font: inherit; }
 .provenance-open .movement-panel .legend {
   opacity: .35;
 }
+
+
+.risk-link {
+  text-decoration: none;
+  cursor: pointer;
+  transition: .16s ease;
+}
+.risk-link:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 7px 18px rgba(23,50,77,.08);
+}
+.explainability-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+}
