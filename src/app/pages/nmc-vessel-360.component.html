@@ -102,7 +102,7 @@
               <span><i class="line expected"></i> Expected</span>
               <span><i class="line observed"></i> Observed</span>
               <span><i class="dot anomaly"></i> Anomaly</span>
-              <span><i class="dot critical-vessel"></i> Current vessel / {{ vessel.riskLevel }}</span>
+              <span><i class="dot critical-vessel" [ngClass]="riskCssClass"></i> Current vessel / {{ vessel.riskLevel }}</span>
             </div>
           </div>
           <div class="map-wrap">
