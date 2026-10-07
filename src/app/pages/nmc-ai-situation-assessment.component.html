@@ -1,0 +1,278 @@
+<div class="ai-shell" [class.rtl]="lang.isArabic" [attr.dir]="lang.dir">
+  <header class="ai-topbar">
+    <div class="brand-block">
+      <div class="brand-mark">✦</div>
+      <div>
+        <div class="eyebrow">{{ copy('MOEI · National Maritime Center', 'وزارة الطاقة والبنية التحتية · المركز البحري الوطني') }}</div>
+        <h1>{{ copy('AI Maritime Situation Assessment', 'تقييم الموقف البحري بالذكاء الاصطناعي') }}</h1>
+        <p>{{ copy('Evidence-grounded operational decision support', 'دعم القرار التشغيلي المبني على الأدلة') }}</p>
+      </div>
+    </div>
+
+    <div class="top-actions">
+      <button type="button" class="language-btn" (click)="toggleLanguage()">{{ lang.isArabic ? 'English' : 'العربية' }}</button>
+      <a class="back-link" [routerLink]="['/moei/nmc/vessel', vessel.imo]">
+        {{ lang.isArabic ? 'العودة إلى ملف السفينة →' : '← Back to Vessel 360' }}
+      </a>
+      <a class="secondary-btn" [routerLink]="['/moei/nmc/vessel', vessel.imo, 'risk']">
+        {{ copy('Risk Explainability', 'تفسير المخاطر') }}
+      </a>
+    </div>
+  </header>
+
+  <main class="ai-main">
+    <section class="vessel-hero">
+      <div class="vessel-block">
+        <span class="hero-kicker">{{ copy('CURRENT MARITIME SITUATION', 'الموقف البحري الحالي') }}</span>
+        <h2>{{ vessel.name }}</h2>
+        <div class="identity-row">
+          <span>IMO {{ vessel.imo }}</span>
+          <span>{{ vessel.flag }}</span>
+          <span>{{ vessel.type }}</span>
+          <span>{{ vessel.destination }}</span>
+          <span>{{ vessel.speed | number:'1.1-1' }} {{ copy('kn', 'عقدة') }}</span>
+        </div>
+      </div>
+
+      <div class="hero-metrics">
+        <div class="metric-card risk" [ngClass]="riskClass">
+          <small>{{ copy('Risk', 'المخاطر') }}</small>
+          <strong>{{ vessel.risk }}</strong>
+          <span>{{ riskLevelLabel }}</span>
+        </div>
+        <div class="metric-card">
+          <small>{{ copy('Data confidence', 'الثقة في البيانات') }}</small>
+          <strong>{{ vessel.dataConfidence }}%</strong>
+          <span>{{ copy('Correlated data quality', 'جودة البيانات المترابطة') }}</span>
+        </div>
+        <div class="metric-card ai">
+          <small>{{ copy('AI assessment confidence', 'الثقة في تقييم الذكاء الاصطناعي') }}</small>
+          <strong>{{ aiConfidence }}%</strong>
+          <span>{{ copy('Advisory confidence', 'ثقة استشارية') }}</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="advisory-banner">
+      <div class="advisory-icon">AI</div>
+      <div>
+        <strong>{{ copy('AI Advisory · Human Decision Required', 'توصية بالذكاء الاصطناعي · القرار البشري مطلوب') }}</strong>
+        <p>{{ copy(
+          'The assessment correlates available vessel evidence and recommends operational attention. It does not replace regulatory authority or automatically impose restrictions.',
+          'يربط التقييم الأدلة المتاحة عن السفينة ويقترح مستوى الانتباه التشغيلي. ولا يحل محل السلطة التنظيمية ولا يفرض قيوداً تلقائياً.'
+        ) }}</p>
+      </div>
+      <div class="generated-meta">
+        <span>{{ modelLabel }}</span>
+        <small>{{ copy('Generated', 'تم الإنشاء') }} {{ generatedAt }}</small>
+      </div>
+    </section>
+
+    <section class="situation-grid">
+      <article class="panel situation-summary">
+        <div class="panel-header">
+          <div>
+            <span class="section-kicker">{{ copy('AI SITUATION SUMMARY', 'ملخص الموقف بالذكاء الاصطناعي') }}</span>
+            <h3>{{ copy('What is happening now?', 'ما الذي يحدث الآن؟') }}</h3>
+          </div>
+          <span class="priority-pill" [ngClass]="riskClass">{{ situationPriority }}</span>
+        </div>
+
+        <div class="summary-body">
+          <p>{{ situationSummary }}</p>
+        </div>
+
+        <div class="why-card">
+          <span class="why-icon">?</span>
+          <div>
+            <strong>{{ copy('Why this matters', 'لماذا يهم هذا؟') }}</strong>
+            <p>{{ whyItMatters }}</p>
+          </div>
+        </div>
+      </article>
+
+      <aside class="panel evidence-overview">
+        <div class="panel-header">
+          <div>
+            <span class="section-kicker">{{ copy('EVIDENCE USED', 'الأدلة المستخدمة') }}</span>
+            <h3>{{ copy('Assessment evidence', 'أدلة التقييم') }}</h3>
+          </div>
+          <span class="evidence-count">{{ evidence.length }}</span>
+        </div>
+
+        <div class="evidence-list">
+          <button type="button" class="evidence-row" *ngFor="let item of evidence" (click)="selectEvidence(item)">
+            <div class="evidence-type">{{ evidenceTypeLabel(item.type) }}</div>
+            <div class="evidence-main">
+              <strong>{{ item.title }}</strong>
+              <p>{{ item.source }} · {{ item.record }}</p>
+            </div>
+            <div class="evidence-score">
+              <b>+{{ item.contribution }}</b>
+              <span>{{ item.confidence }}%</span>
+            </div>
+          </button>
+        </div>
+      </aside>
+    </section>
+
+    <section class="panel recommendation-panel">
+      <div class="panel-header recommendation-header">
+        <div>
+          <span class="section-kicker">{{ copy('AI RECOMMENDED ACTIONS', 'الإجراءات الموصى بها بالذكاء الاصطناعي') }}</span>
+          <h3>{{ copy('Recommended operational response', 'الاستجابة التشغيلية الموصى بها') }}</h3>
+          <p>{{ copy(
+            'Each recommendation retains its evidence, confidence, responsible function and human decision.',
+            'تحتفظ كل توصية بالأدلة ودرجة الثقة والجهة المسؤولة والقرار البشري.'
+          ) }}</p>
+        </div>
+
+        <div class="decision-summary">
+          <span class="accepted">{{ acceptedCount }} {{ copy('accepted', 'مقبولة') }}</span>
+          <span class="modified">{{ modifiedCount }} {{ copy('modified', 'معدلة') }}</span>
+          <span class="rejected">{{ rejectedCount }} {{ copy('rejected', 'مرفوضة') }}</span>
+          <span class="pending">{{ pendingCount }} {{ copy('pending', 'بانتظار القرار') }}</span>
+        </div>
+      </div>
+
+      <div class="recommendation-list">
+        <article class="recommendation-card" *ngFor="let item of recommendations" [class.decided]="item.decision !== 'Pending'">
+          <div class="rec-priority" [attr.data-priority]="item.priority.toLowerCase()">
+            <span>{{ priorityLabel(item.priority) }}</span>
+          </div>
+
+          <div class="rec-content">
+            <div class="rec-title-row">
+              <div>
+                <h4>{{ item.title }}</h4>
+                <p>{{ item.reason }}</p>
+              </div>
+              <span class="decision-state" [ngClass]="item.decision.toLowerCase()">{{ decisionLabel(item.decision) }}</span>
+            </div>
+
+            <div class="rec-facts">
+              <div>
+                <small>{{ copy('Responsible function', 'الجهة المسؤولة') }}</small>
+                <strong>{{ item.owner }}</strong>
+              </div>
+              <div>
+                <small>{{ copy('Target', 'الموعد المستهدف') }}</small>
+                <strong>{{ item.target }}</strong>
+              </div>
+              <div>
+                <small>{{ copy('AI confidence', 'ثقة الذكاء الاصطناعي') }}</small>
+                <strong>{{ item.confidence }}%</strong>
+              </div>
+              <div>
+                <small>{{ copy('Authority', 'السلطة') }}</small>
+                <strong>{{ item.authority }}</strong>
+              </div>
+            </div>
+
+            <div class="rec-evidence">
+              <span>{{ copy('Evidence', 'الأدلة') }}</span>
+              <button type="button" *ngFor="let evidenceItem of evidenceFor(item)" (click)="selectEvidence(evidenceItem)">
+                {{ evidenceTypeLabel(evidenceItem.type) }} · +{{ evidenceItem.contribution }}
+              </button>
+            </div>
+
+            <div class="decision-actions">
+              <button type="button" class="accept" [class.active]="item.decision === 'Accepted'" (click)="setDecision(item, 'Accepted')">
+                ✓ {{ copy('Accept', 'قبول') }}
+              </button>
+              <button type="button" class="modify" [class.active]="item.decision === 'Modified'" (click)="setDecision(item, 'Modified')">
+                ✎ {{ copy('Modify', 'تعديل') }}
+              </button>
+              <button type="button" class="reject" [class.active]="item.decision === 'Rejected'" (click)="setDecision(item, 'Rejected')">
+                × {{ copy('Reject', 'رفض') }}
+              </button>
+            </div>
+
+            <div class="officer-note" *ngIf="item.decision === 'Modified' || item.decision === 'Rejected'">
+              <label>
+                {{ item.decision === 'Rejected'
+                  ? copy('Reason for rejection', 'سبب الرفض')
+                  : copy('Officer modification / instruction', 'تعديل / توجيه المسؤول') }}
+              </label>
+              <textarea
+                [(ngModel)]="item.officerNote"
+                [placeholder]="item.decision === 'Rejected'
+                  ? copy('Enter reason before finalizing the rejection...', 'أدخل سبب الرفض قبل اعتماده...')
+                  : copy('Enter the modified instruction...', 'أدخل التوجيه المعدل...')"
+              ></textarea>
+            </div>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="panel human-oversight">
+      <div class="panel-header">
+        <div>
+          <span class="section-kicker">{{ copy('HUMAN OVERSIGHT', 'الإشراف البشري') }}</span>
+          <h3>{{ copy('Decision control remains with MOEI', 'التحكم في القرار يظل لدى الوزارة') }}</h3>
+        </div>
+        <span class="human-badge">{{ copy('Officer decision authoritative', 'قرار المسؤول هو المعتمد') }}</span>
+      </div>
+
+      <div class="oversight-grid">
+        <div>
+          <small>{{ copy('AI can', 'يمكن للذكاء الاصطناعي') }}</small>
+          <strong>{{ copy('Correlate · Explain · Recommend', 'الربط · التفسير · التوصية') }}</strong>
+          <p>{{ copy('Surface evidence, identify significance and propose actions.', 'إظهار الأدلة وتحديد الأهمية واقتراح الإجراءات.') }}</p>
+        </div>
+        <div>
+          <small>{{ copy('AI cannot', 'لا يمكن للذكاء الاصطناعي') }}</small>
+          <strong>{{ copy('Approve · Restrict · Enforce', 'الاعتماد · فرض القيود · التنفيذ') }}</strong>
+          <p>{{ copy('Regulatory actions require an authorized human decision.', 'الإجراءات التنظيمية تتطلب قراراً بشرياً معتمداً.') }}</p>
+        </div>
+        <div>
+          <small>{{ copy('Audit record', 'سجل التدقيق') }}</small>
+          <strong>{{ copy('Recommendation + human response retained', 'الاحتفاظ بالتوصية والاستجابة البشرية') }}</strong>
+          <p>{{ copy('Accept, modify and reject decisions remain traceable.', 'تظل قرارات القبول والتعديل والرفض قابلة للتتبع.') }}</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div class="evidence-backdrop" *ngIf="selectedEvidence" (click)="closeEvidence()"></div>
+  <aside class="evidence-drawer" *ngIf="selectedEvidence as item">
+    <div class="drawer-head">
+      <div>
+        <span class="section-kicker">{{ copy('EVIDENCE TRACE', 'تتبع الدليل') }}</span>
+        <h3>{{ item.title }}</h3>
+        <p>{{ vessel.name }} · IMO {{ vessel.imo }}</p>
+      </div>
+      <button type="button" (click)="closeEvidence()" [attr.aria-label]="copy('Close', 'إغلاق')">×</button>
+    </div>
+
+    <div class="evidence-detail-hero">
+      <div>
+        <small>{{ copy('Risk contribution', 'المساهمة في المخاطر') }}</small>
+        <strong>+{{ item.contribution }}</strong>
+      </div>
+      <div>
+        <small>{{ copy('Evidence confidence', 'الثقة في الدليل') }}</small>
+        <strong>{{ item.confidence }}%</strong>
+      </div>
+    </div>
+
+    <div class="drawer-facts">
+      <div><small>{{ copy('Type', 'النوع') }}</small><strong>{{ evidenceTypeLabel(item.type) }}</strong></div>
+      <div><small>{{ copy('Source', 'المصدر') }}</small><strong>{{ item.source }}</strong></div>
+      <div><small>{{ copy('Record', 'السجل') }}</small><strong>{{ item.record }}</strong></div>
+      <div><small>{{ copy('Linked vessel', 'السفينة المرتبطة') }}</small><strong>IMO {{ vessel.imo }}</strong></div>
+    </div>
+
+    <div class="drawer-explanation">
+      <strong>{{ copy('Why this evidence was used', 'لماذا تم استخدام هذا الدليل') }}</strong>
+      <p>{{ item.detail }}</p>
+    </div>
+
+    <a
+      class="source-link"
+      [routerLink]="['/moei/nmc/vessel', vessel.imo]"
+      [queryParams]="{tab: item.tab}"
+    >{{ copy('Open source context in Vessel 360', 'فتح سياق المصدر في ملف السفينة') }}</a>
+  </aside>
+</div>

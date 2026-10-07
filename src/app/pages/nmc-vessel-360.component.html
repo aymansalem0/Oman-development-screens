@@ -13,6 +13,9 @@
       <button type="button" class="language-btn" (click)="toggleLanguage()">{{ lang.isArabic ? 'English' : 'العربية' }}</button>
       <a class="back-btn" routerLink="/moei/nmc">{{ lang.isArabic ? 'العودة إلى مركز القيادة →' : '← Back to Command Center' }}</a>
       <button type="button" class="secondary-btn">{{ copy('Export vessel brief', 'تصدير ملخص السفينة') }}</button>
+      <a class="secondary-btn ai-assessment-btn" [routerLink]="['/moei/nmc/vessel', vessel.imo, 'ai-assessment']">
+        ✦ {{ copy('AI Situation Assessment', 'تقييم الموقف بالذكاء الاصطناعي') }}
+      </a>
       <button type="button" class="primary-btn">{{ copy('Open NMC Case', 'فتح حالة بالمركز البحري') }}</button>
     </div>
   </header>
@@ -54,7 +57,9 @@
         <strong>{{ attentionMessage }}</strong>
         <p>{{ attentionDescription }}</p>
       </div>
-      <button type="button">{{ copy('Review recommendation', 'مراجعة التوصية') }}</button>
+      <a class="critical-recommendation-link" [routerLink]="['/moei/nmc/vessel', vessel.imo, 'ai-assessment']">
+        ✦ {{ copy('Review AI assessment', 'مراجعة تقييم الذكاء الاصطناعي') }}
+      </a>
     </section>
 
     <nav class="tabs" [attr.aria-label]="copy('Vessel 360 sections', 'أقسام الملف الشامل للسفينة')">

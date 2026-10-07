@@ -874,3 +874,27 @@ a, button { font: inherit; }
 .rx-shell.rtl .decision-grid p {
   line-height: 1.75;
 }
+
+
+.ai-decision-cell {
+  position: relative;
+}
+.ai-open-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 31px;
+  margin-top: 9px;
+  padding: 0 10px;
+  border-radius: 8px;
+  background: #effaf8;
+  border: 1px solid #cde8e2;
+  color: #0f766e;
+  text-decoration: none;
+  font-size: 9px;
+  font-weight: 900;
+}
+.ai-open-link:hover {
+  background: #e5f6f2;
+  border-color: #9fd2c9;
+}
