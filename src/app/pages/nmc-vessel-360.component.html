@@ -90,6 +90,38 @@
             <div><small>Course</small><strong>{{ vessel.course }}</strong></div>
             <div><small>Navigation status</small><strong>{{ vessel.navStatus }}</strong></div>
           </div>
+
+          <div class="registry-context">
+            <div class="registry-context-card">
+              <span class="registry-icon">◈</span>
+              <div>
+                <small>MOEI VESSEL MASTER</small>
+                <strong>Active Internal Record</strong>
+                <p>{{ vesselMasterRole }}</p>
+              </div>
+              <span class="authority-chip internal">Internal Master</span>
+            </div>
+
+            <div class="registry-context-card">
+              <span class="registry-icon flag">⚑</span>
+              <div>
+                <small>{{ registrationTitle | uppercase }}</small>
+                <strong>{{ registrationStatus }} · {{ vessel.flag }}</strong>
+                <p>{{ registrationSource }}</p>
+              </div>
+              <span class="authority-chip" [class.moei]="isUaeFlag" [class.external]="!isUaeFlag">{{ registrationAuthorityLabel }}</span>
+            </div>
+
+            <div class="registry-context-card">
+              <span class="registry-icon relationship">◎</span>
+              <div>
+                <small>{{ moeiRelationshipTitle | uppercase }}</small>
+                <strong>{{ moeiRelationshipStatus }}</strong>
+                <p>{{ isUaeFlag ? 'MOEI acts as the flag-state administration for this vessel.' : 'MOEI maintains the UAE regulatory and operational context without becoming the vessel registry authority.' }}</p>
+              </div>
+              <span class="authority-chip moei">MOEI Context</span>
+            </div>
+          </div>
         </article>
 
         <article class="panel movement-panel">
@@ -127,6 +159,7 @@
             <div class="source-row header">
               <span>Source</span>
               <span>Record</span>
+              <span>Authority</span>
               <span>Last sync</span>
               <span>Confidence</span>
               <span>Status</span>
@@ -138,6 +171,16 @@
                 <small>{{ source.system }}</small>
               </div>
               <span>{{ source.record }}</span>
+              <span class="authority-cell">
+                <b class="source-class" [ngClass]="{
+                  'moei-authority': source.sourceClass === 'MOEI Authoritative',
+                  'internal-authority': source.sourceClass === 'Internal Master',
+                  'external-authority': source.sourceClass === 'External Authoritative',
+                  'trusted-authority': source.sourceClass === 'External Trusted',
+                  'operational-authority': source.sourceClass === 'Operational Feed'
+                }">{{ source.sourceClass }}</b>
+                <small>{{ source.authority }}</small>
+              </span>
               <span>{{ source.lastSync }}</span>
               <span>{{ source.confidence }}%</span>
               <span class="status-chip" [ngClass]="source.status.toLowerCase()">{{ source.status }}</span>
@@ -339,13 +382,13 @@
 
             <div class="source-compare-grid">
               <div class="authority-source">
-                <small>MOEI Certificate Registry</small>
+                <small>{{ primaryCertificateSourceLabel }}</small>
                 <strong>Conditionally Valid</strong>
                 <span>22:41:56 · Confidence 100%</span>
               </div>
               <div class="compare-symbol">≠</div>
               <div>
-                <small>External Classification Feed</small>
+                <small>{{ vessel.classSociety }}</small>
                 <strong>Valid</strong>
                 <span>22:41:57 · Confidence 68%</span>
               </div>
@@ -355,7 +398,7 @@
               <span>✓</span>
               <div>
                 <strong>Verification task VER-2026-00872 created</strong>
-                <p>Assigned to Certificate Compliance Officer · Priority High · Due in 15 minutes.</p>
+                <p>Assigned to {{ isUaeFlag ? 'Certificate Compliance Officer' : 'Foreign Vessel Compliance Officer' }} · Priority High · Due in 15 minutes.</p>
               </div>
             </div>
 
@@ -516,7 +559,7 @@
       </div>
 
       <div class="inspection-kpis">
-        <div><small>Registration</small><strong>Active</strong><span>MOEI Vessel Master</span></div>
+        <div><small>{{ registrationTitle }}</small><strong>{{ registrationStatus }}</strong><span>{{ registrationSource }} · {{ registrationAuthorityLabel }}</span></div>
         <div><small>Certificates</small><strong [class.critical-text]="hasCertificateConflict">{{ hasCertificateConflict ? 'Verification Required' : 'In Order' }}</strong><span>{{ hasCertificateConflict ? 'source conflict open' : 'no critical conflict' }}</span></div>
         <div><small>Inspection</small><strong [class.critical-text]="openDeficiencyCount > 0">{{ openDeficiencyCount > 0 ? 'Follow-up Required' : 'Clear' }}</strong><span>{{ openDeficiencyCount }} open deficiency</span></div>
         <div><small>Overall compliance</small><strong [class.critical-text]="vessel.risk >= 65">{{ complianceStatus }}</strong><span>risk score {{ vessel.riskScore }}/100</span></div>
@@ -531,12 +574,12 @@
           <div class="source-table">
             <div class="source-row header"><span>Control</span><span>Current state</span><span>Source</span><span>Risk</span><span>Status</span></div>
             <div class="source-row">
-              <div><strong>Vessel registration</strong><small>Identity and registration state</small></div>
-              <span>Active</span><span>Vessel Master</span><span>Low</span><span class="status-chip matched">Matched</span>
+              <div><strong>{{ registrationTitle }}</strong><small>{{ isUaeFlag ? 'UAE legal registration state' : 'Foreign flag registration state' }}</small></div>
+              <span>{{ registrationStatus }}</span><span>{{ registrationSource }}</span><span>Low</span><span class="status-chip matched">{{ isUaeFlag ? 'Authoritative' : 'Verified' }}</span>
             </div>
             <div class="source-row">
               <div><strong>Certificate validity</strong><small>Safety and statutory certificates</small></div>
-              <span>{{ hasCertificateConflict ? 'Verification required' : 'Valid / monitored' }}</span><span>Certificate Registry</span><span>{{ certificateRiskImpact }}</span><span class="status-chip" [ngClass]="hasCertificateConflict ? 'conflict' : 'matched'">{{ hasCertificateConflict ? 'Conflict' : 'Matched' }}</span>
+              <span>{{ hasCertificateConflict ? 'Verification required' : 'Valid / monitored' }}</span><span>{{ primaryCertificateSourceLabel }}</span><span>{{ certificateRiskImpact }}</span><span class="status-chip" [ngClass]="hasCertificateConflict ? 'conflict' : 'matched'">{{ hasCertificateConflict ? 'Conflict' : 'Matched' }}</span>
             </div>
             <div class="source-row">
               <div><strong>Inspection findings</strong><small>Open deficiencies and corrective actions</small></div>
@@ -568,7 +611,90 @@
       </div>
     </section>
 
-    <section class="single-tab panel" *ngIf="activeTab !== 'overview' && activeTab !== 'certificates' && activeTab !== 'inspection' && activeTab !== 'compliance'">
+    <section class="evidence-tab" *ngIf="activeTab === 'sources'">
+      <div class="evidence-heading">
+        <div>
+          <span class="section-kicker">DATA SOURCES</span>
+          <h3>Source Provenance & Authority</h3>
+          <p>Each vessel fact is linked to its originating system, authority class, synchronization time and confidence.</p>
+        </div>
+        <div class="evidence-heading-actions">
+          <span class="matched-badge">{{ sources.length }} connected sources</span>
+          <button type="button" class="secondary-btn" (click)="setTab('overview')">Return to overview</button>
+        </div>
+      </div>
+
+      <div class="source-authority-summary">
+        <article class="authority-summary-card">
+          <span class="authority-symbol internal">◈</span>
+          <div>
+            <small>INTERNAL MASTER</small>
+            <strong>MOEI Unified Vessel Master</strong>
+            <p>Correlation context for both UAE and foreign vessels.</p>
+          </div>
+        </article>
+        <article class="authority-summary-card">
+          <span class="authority-symbol moei">◆</span>
+          <div>
+            <small>MOEI AUTHORITATIVE</small>
+            <strong>{{ isUaeFlag ? 'UAE Registration + MOEI regulatory records' : 'MOEI inspections, restrictions and UAE regulatory actions' }}</strong>
+            <p>MOEI is authoritative only for records under its regulatory authority.</p>
+          </div>
+        </article>
+        <article class="authority-summary-card">
+          <span class="authority-symbol external">◇</span>
+          <div>
+            <small>EXTERNAL AUTHORITATIVE</small>
+            <strong>{{ isUaeFlag ? 'External maritime confirmations where applicable' : registrationSource }}</strong>
+            <p>{{ isUaeFlag ? 'Used for external validation and international context.' : 'Authoritative source for the vessel flag registration.' }}</p>
+          </div>
+        </article>
+        <article class="authority-summary-card">
+          <span class="authority-symbol feed">⌁</span>
+          <div>
+            <small>OPERATIONAL FEED</small>
+            <strong>AIS / LRIT</strong>
+            <p>Live vessel presence, position, speed, course and voyage context.</p>
+          </div>
+        </article>
+      </div>
+
+      <article class="panel source-provenance-panel">
+        <div class="panel-header">
+          <div>
+            <h3>Connected Vessel Sources</h3>
+            <p>{{ vessel.name }} · IMO {{ vessel.imo }}</p>
+          </div>
+          <span class="source-summary">{{ conflictCount }} unresolved conflict{{ conflictCount === 1 ? '' : 's' }}</span>
+        </div>
+
+        <div class="source-provenance-grid">
+          <article class="source-provenance-card" *ngFor="let source of sources">
+            <div class="source-provenance-head">
+              <div>
+                <small>{{ source.sourceClass | uppercase }}</small>
+                <h4>{{ source.name }}</h4>
+                <p>{{ source.system }}</p>
+              </div>
+              <span class="status-chip" [ngClass]="source.status.toLowerCase()">{{ source.status }}</span>
+            </div>
+
+            <div class="source-record">
+              <small>CURRENT RECORD</small>
+              <strong>{{ source.record }}</strong>
+            </div>
+
+            <div class="source-metrics">
+              <div><small>Authority</small><strong>{{ source.authority }}</strong></div>
+              <div><small>Confidence</small><strong>{{ source.confidence }}%</strong></div>
+              <div><small>Last sync</small><strong>{{ source.lastSync }}</strong></div>
+            </div>
+          </article>
+        </div>
+      </article>
+    </section>
+
+    <section class="single-tab panel" *ngIf="activeTab !== 'overview' && activeTab !== 'certificates' && activeTab !== 'inspection' && activeTab !== 'compliance' && activeTab !== 'sources'">
       <div class="single-tab-head">
         <div>
           <span class="section-kicker">{{ activeTab | uppercase }}</span>
