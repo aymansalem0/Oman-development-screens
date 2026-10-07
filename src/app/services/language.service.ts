@@ -211,6 +211,10 @@ export class LanguageService {
     return this.messages[key]?.[this.language] ?? key;
   }
 
+  pick(en: string, ar: string): string {
+    return this.isArabic ? ar : en;
+  }
+
   term(code: string | null | undefined): string {
     if (!code) return '--';
     return this.terms[code]?.[this.language] ?? code;
