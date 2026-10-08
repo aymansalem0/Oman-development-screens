@@ -4,3 +4,7 @@
 /.vscode
 .DS_Store
 npm-debug.log*
+.env
+.env.*
+!.env.example
+/ai-proxy/node_modules
