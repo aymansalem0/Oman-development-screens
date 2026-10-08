@@ -62,7 +62,7 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
     insideUaeMonitoredArea: 265,
     approachingUaeArea: 155,
     correlatedProfiles: NMC_OPERATIONAL_VESSELS.length,
-    source: 'AIS / LRIT traffic layer',
+    source: 'Synthetic AIS / LRIT fixture',
     snapshotTime: '22:42:18'
   };
 

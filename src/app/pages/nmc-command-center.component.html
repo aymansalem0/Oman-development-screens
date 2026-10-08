@@ -12,7 +12,7 @@
     <div class="topbar-status">
       <div class="live-pill" [class.paused]="!feedLive">
         <span class="pulse-dot"></span>
-        {{ feedLive ? copy('AIS / LRIT FEED LIVE', 'تغذية AIS / LRIT مباشرة') : copy('FEED PAUSED', 'التغذية متوقفة') }}
+        {{ feedLive ? copy('SIMULATED AIS / LRIT FEED', 'تغذية AIS / LRIT تجريبية') : copy('FEED PAUSED', 'التغذية متوقفة') }}
       </div>
       <span class="clock">{{ formattedNow }}</span>
     </div>
@@ -77,7 +77,7 @@
         <span class="health-dot"></span>
         <strong>{{ copy('Systems operational', 'الأنظمة تعمل بصورة طبيعية') }}</strong>
       </div>
-      <small>{{ copy('5 / 5 data sources available', '5 / 5 مصادر بيانات متاحة') }}</small>
+      <small>{{ copy('Synthetic sources · live PSC only when configured', 'مصادر تجريبية · PSC متصل عند تهيئته') }}</small>
     </div>
   </aside>
 
@@ -86,7 +86,7 @@
       <div>
         <div class="breadcrumb">{{ copy('National Maritime Center', 'المركز البحري الوطني') }} / <b>{{ copy('Operational Picture', 'الصورة التشغيلية') }}</b></div>
         <h2>{{ copy('UAE Maritime Operational Picture', 'الصورة التشغيلية البحرية لدولة الإمارات') }}</h2>
-        <p>{{ copy('Real-time vessel traffic, maritime risk and prioritized operational attention in one national view.', 'حركة السفن والمخاطر البحرية والأولويات التشغيلية لحظياً ضمن رؤية وطنية موحدة.') }}</p>
+        <p>{{ copy('Synthetic traffic simulation and evidence-driven AI vessel assessment. Not a live national traffic or enforcement system.', 'محاكاة حركة السفن وتقييم مخاطرها بالذكاء الاصطناعي بناءً على الأدلة التجريبية. ليست منظومة إنفاذ أو حركة بحرية رسمية.') }}</p>
       </div>
 
       <div class="heading-actions">
@@ -144,7 +144,7 @@
       <article class="kpi-card">
         <div class="kpi-icon teal">⌖</div>
         <div>
-          <span class="kpi-label">{{ copy('AIS / LRIT traffic contacts', 'أهداف AIS / LRIT البحرية') }}</span>
+          <span class="kpi-label">{{ copy('Simulated AIS / LRIT vessel contacts', 'أهداف AIS / LRIT التجريبية') }}</span>
           <strong>≈{{ monitoredCount }}</strong>
           <small>{{ copy('in / approaching UAE operational area', 'داخل / تقترب من النطاق التشغيلي للإمارات') }}</small>
           <div class="traffic-breakdown">
@@ -188,7 +188,7 @@
           <div>
             <div class="panel-title-row">
               <h3>{{ copy('Live Maritime Picture', 'الصورة البحرية الحية') }}</h3>
-              <span class="real-map-badge">{{ copy('LIVE MAP', 'خريطة حية') }}</span>
+              <span class="real-map-badge">{{ copy('POC MAP', 'خريطة تجريبية') }}</span>
               <span class="traffic-profile-badge">
                 {{ correlatedProfileCount }} {{ copy('correlated vessel profiles', 'ملف سفينة مترابط') }}
               </span>

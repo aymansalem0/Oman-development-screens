@@ -19,7 +19,7 @@ const AGENT_FACTORS={a01:['movement','history'],a02:['inspection','certificate',
 const DEFAULT_WEIGHTS={movement:25,inspection:28,certificate:20,dataQuality:14,history:13};
 const DEFAULT_THRESHOLDS={watch:45,high:65,critical:85};
 const MAX_INPUTS=420;
-const MAX_CONCURRENCY=2;
+const MAX_CONCURRENCY=1; // One vessel = A01 + A02 concurrently; <=2 Airia requests in flight.
 const REASON_RE=/^[A-Z][A-Z0-9_]{1,95}$/;
 const file=process.env.NMC_FLEET_STORE_PATH || '/data/fleet-assessments.json';
 
