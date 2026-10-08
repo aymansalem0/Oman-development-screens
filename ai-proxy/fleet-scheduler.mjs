@@ -14,6 +14,7 @@ const HOUR=60*60*1000;
 const RETRY_DELAY=15*60*1000;
 const LOOP_INTERVAL=15000;
 const MAX_BATCH=12;
+const capVessels=value=>Math.max(1,Math.min(420,Number.isFinite(Number(value))?Math.floor(Number(value)):420));
 export const DEFAULT_FLEET_RULESET=Object.freeze({
   version:'NMC Risk Ruleset 1.0',mode:'weighted',
   weights:{movement:25,inspection:28,certificate:20,dataQuality:14,history:13},
@@ -21,11 +22,14 @@ export const DEFAULT_FLEET_RULESET=Object.freeze({
 });
 
 export class FleetAutoScheduler {
-  constructor({fleet,getPscVessel,enabled=false,bundles=null,intervalMs=HOUR,config=DEFAULT_FLEET_RULESET}){
+  constructor({fleet,getPscVessel,enabled=false,bundles=null,intervalMs=HOUR,config=DEFAULT_FLEET_RULESET,maxVessels=420,retryFailed=false}){
     this.fleet=fleet;this.getPscVessel=getPscVessel;
     this.enabled=enabled;
     this.intervalMs=Math.max(60000,Number(intervalMs)||HOUR);
     this.config=config;
+    // For safe first deployment set maxVessels=1. No browser UI trigger.
+    this.maxVessels=capVessels(maxVessels);
+    this.retryFailed=Boolean(retryFailed);
     this.bundles=bundles||JSON.parse(readFileSync(new URL('./fleet-bundles.json',import.meta.url),'utf8'));
     if(this.bundles.length!==420||new Set(this.bundles.map(v=>v.imo)).size!==420)
       throw new Error('INVALID_AUTONOMOUS_FLEET_BUNDLES');
@@ -37,6 +41,7 @@ export class FleetAutoScheduler {
     return {
       mode:'AUTONOMOUS_PER_VESSEL',enabled:this.enabled,
       checkIntervalSeconds:Math.round(this.intervalMs/1000),
+      enabledVessels:this.maxVessels,retryFailed:this.retryFailed,
       startupMode:'SERVER_SIDE_BACKGROUND',noDashboardAgentExecution:true,
       lastTickAt:this.lastTickAt,lastError:this.lastError,
       lastSelected:this.lastSelected,lastUnchanged:this.lastUnchanged,
@@ -60,8 +65,11 @@ export class FleetAutoScheduler {
     try{
       const now=Date.now();
       // Complete missing/failing vessels before refreshing previously completed ones.
-      const candidates=this.bundles.filter(v=>{
+      const candidates=this.bundles.slice(0,this.maxVessels).filter(v=>{
         const row=this.fleet.results[v.imo];
+        // Failed AI calls must not incur repeated charges every 15 minutes by default.
+        // Rollout must opt into retries explicitly and evaluate real Airia response contracts first.
+        if(!this.retryFailed&&(row?.status==='FAILED'||row?.refreshFailure))return false;
         const due=Date.parse(row?.nextCheckAt||row?.lastCheckedAt||row?.assessedAt||'')||0;
         if(row?.status==='FAILED')return now>=Math.max(due,Date.parse(row.attemptedAt||'')+RETRY_DELAY||0);
         return now>=due;
