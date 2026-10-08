@@ -50,6 +50,12 @@ const A02_FACTORS: RiskFactorKey[] = ['inspection', 'certificate', 'dataQuality'
       </div>
 
       <p class="status-message" *ngIf="message">{{ message }}</p>
+      <div class="signal-issues" *ngIf="issues.length">
+        <div class="signal-issue" *ngFor="let issue of issues">
+          <strong>{{ issue.agent }} · {{ issue.factor }} — {{ issue.status }}</strong>
+          <span>{{ issue.details }}</span>
+        </div>
+      </div>
 
       <div *ngIf="signals.length" class="signal-table-wrap">
         <table class="signal-table">
@@ -105,6 +111,10 @@ const A02_FACTORS: RiskFactorKey[] = ['inspection', 'certificate', 'dataQuality'
     .agent-states .failure { background:#fff0f0; color:#c43838; }
     .agent-states .context-note { background:#e7f5f5; color:#0d7878; }
     .status-message { margin:12px 0 0; padding:9px 11px; border-radius:8px; background:#fff7eb; color:#915b14; font-size:11px; line-height:1.6; }
+    .signal-issues { display:grid; gap:6px; margin-top:8px; }
+    .signal-issue { border:1px solid #f0d6a9; background:#fffaf1; padding:9px 11px; border-radius:8px; font-size:10px; line-height:1.5; }
+    .signal-issue strong { display:block; color:#93631a; margin-bottom:3px; }
+    .signal-issue span { color:#755e40; overflow-wrap:anywhere; }
     .signal-table-wrap { overflow-x:auto; margin-top:12px; }
     .signal-table { width:100%; border-collapse:collapse; text-align:start; font-size:10px; }
     .signal-table th,.signal-table td { padding:9px 8px; vertical-align:top; border-bottom:1px solid #e2ebe8; }
@@ -133,6 +143,7 @@ export class NmcLiveAiPanelComponent {
   signals: AiSignal[] = [];
   risk: RiskEvaluation | null = null;
   message = '';
+  issues: Array<{ agent: string; factor: string; status: string; details: string }> = [];
 
   constructor(
     private readonly ai: NmcAiIntegrationService,
@@ -159,6 +170,7 @@ export class NmcLiveAiPanelComponent {
     this.a01Raw = '';
     this.a02Raw = '';
     this.message = '';
+    this.issues = [];
     this.a01Status = 'running';
     this.a02Status = 'running';
 
@@ -244,15 +256,30 @@ export class NmcLiveAiPanelComponent {
         const s = candidate as Record<string, unknown>;
         if (!expected.includes(s['factor'] as RiskFactorKey)) continue;
         const ids = s['evidenceIds'];
-        if (
-          typeof s['severity'] !== 'number' || !Number.isFinite(s['severity']) ||
-          s['severity'] < 0 || s['severity'] > 100 ||
-          typeof s['confidence'] !== 'number' || s['confidence'] < 0 || s['confidence'] > 1 ||
-          s['sourceAgent'] !== key.toUpperCase() ||
-          !Array.isArray(ids) || ids.length === 0 ||
-          !ids.every(id => typeof id === 'string' && knownEvidence.includes(id))
-        ) {
-          diagnostic.push(`${key.toUpperCase()}: Invalid or ungrounded ${String(s['factor'])} signal; not scored.`);
+        const evidenceIds = Array.isArray(ids) ? ids : [];
+        const unknownIds = evidenceIds.filter(id => typeof id !== 'string' || !knownEvidence.includes(id));
+        const reasons: string[] = [];
+        const agentStatus = String(s['status'] || '').toUpperCase();
+        const unavailable = agentStatus === 'UNKNOWN' || agentStatus === 'INSUFFICIENT_EVIDENCE' ||
+          s['severity'] === null || s['severity'] === undefined;
+        if (unavailable) reasons.push('UNKNOWN / INSUFFICIENT_EVIDENCE — do not invent a severity');
+        if (typeof s['severity'] !== 'number' || !Number.isFinite(s['severity']) ||
+            s['severity'] < 0 || s['severity'] > 100) reasons.push('Severity must be a number from 0 to 100');
+        if (typeof s['confidence'] !== 'number' || !Number.isFinite(s['confidence']) ||
+            s['confidence'] < 0 || s['confidence'] > 1) reasons.push('Confidence must be a number from 0 to 1');
+        if (s['sourceAgent'] !== key.toUpperCase()) reasons.push('sourceAgent must equal ' + key.toUpperCase());
+        if (!evidenceIds.length) reasons.push('No evidenceIds returned');
+        if (unknownIds.length) reasons.push('IDs not present in supplied synthetic manifest: ' + unknownIds.map(String).join(', '));
+        if (reasons.length) {
+          const detail = typeof s['reason'] === 'string' ? s['reason'].slice(0, 400) : '';
+          const missing = Array.isArray(s['missingEvidence']) ? s['missingEvidence'].map(String).join(', ') : '';
+          this.issues.push({
+            agent: key.toUpperCase(),
+            factor: String(s['factor']),
+            status: unavailable ? 'INSUFFICIENT EVIDENCE' : 'CONTRACT VALIDATION FAILED',
+            details: [reasons.join('; '), detail, missing ? 'Missing: ' + missing : ''].filter(Boolean).join(' | ')
+          });
+          diagnostic.push(`${key.toUpperCase()}: ${String(s['factor'])} not scored; inspect validation details.`);
           continue;
         }
         valid.push({
