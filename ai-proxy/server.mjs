@@ -1,4 +1,5 @@
 import { createServer } from 'node:http';
+import { getPscVessel, getPscHealth } from './psc-reader.mjs';
 
 const port = Number(process.env.PORT || 3000);
 const apiKey = (process.env.AIRIA_MENA_KEY || '').trim();
@@ -59,7 +60,24 @@ const server = createServer(async (req, res) => {
     return respond(res, 200, { status: 'ok', aiConfigured: Boolean(apiKey), adapter: 'nmc-airia-proxy' });
   }
 
-  const match = /^\/api\/ai\/execute\/(a01|a02|a03|a04)$/i.exec(path);
+  if (req.method === 'GET' && path === '/api/ai/psc/health') {
+    return respond(res, 200, getPscHealth());
+  }
+  const pscMatch = /^\\/api\\/ai\\/psc\\/vessels\\/(\\d{7})$/.exec(path);
+  if (req.method === 'GET' && pscMatch) {
+    try { return respond(res, 200, await getPscVessel(pscMatch[1])); }
+    catch (error) {
+      const reason = error?.message || 'PSC_BACKEND_ERROR';
+      const safeReason = /^[A-Z][A-Z0-9_]{1,90}$/.test(reason) ? reason : 'PSC_BACKEND_ERROR';
+      console.error('[psc-reader] '+safeReason); // No Google credentials, records or stack traces logged.
+      return respond(res, error?.status === 404 ? 404 : 503, {
+        error: error?.status === 404 ? 'PSC_VESSEL_NOT_FOUND' : 'PSC_DATA_UNAVAILABLE',
+        reasonCode: safeReason, sourceMode:getPscHealth().sourceMode
+      });
+    }
+  }
+
+  const match = /^\\/api\\/ai\\/execute\\/(a01|a02|a03|a04)$/i.exec(path);
   if (!match) return respond(res, 404, { error: 'NOT_FOUND' });
   if (req.method !== 'POST') return respond(res, 405, { error: 'METHOD_NOT_ALLOWED' });
   if (!apiKey) return respond(res, 503, { error: 'AIRIA_NOT_CONFIGURED', message: 'Set AIRIA_MENA_KEY in the local .env file.' });

@@ -12,3 +12,6 @@
 Dockerfile*
 compose*.yaml
 docs
+
+# Do not send Google service-account secrets into Docker build context.
+secrets

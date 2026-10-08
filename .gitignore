@@ -8,3 +8,6 @@ npm-debug.log*
 .env.*
 !.env.example
 /ai-proxy/node_modules
+
+# Local read-only Google service account secret. NEVER push credentials.
+/secrets/

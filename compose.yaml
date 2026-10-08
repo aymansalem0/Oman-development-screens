@@ -3,12 +3,18 @@ name: moei-nmc-poc
 services:
   ai-proxy:
     build:
-      context: ./ai-proxy
+      context: .
+      dockerfile: ai-proxy/Dockerfile
     environment:
       PORT: "3000"
       AIRIA_MENA_KEY: ${AIRIA_MENA_KEY:-}
       AIRIA_BASE_URL: ${AIRIA_BASE_URL:-https://mena.api.airia.ai}
       AIRIA_TIMEOUT_MS: "120000"
+      # Default: deterministic offline copy of the same 420-vessel Google Sheet fixture.
+      # Explicit 'google_sheets' requires a read-only service account mounted by compose.google-psc.yaml.
+      PSC_SOURCE_MODE: ${PSC_SOURCE_MODE:-snapshot}
+      PSC_GOOGLE_SHEET_ID: ${PSC_GOOGLE_SHEET_ID:-1sefQv6E-Avvgmklv4WQbpFBEc7MmlCAcOc0c-rI_Wmg}
+      PSC_GOOGLE_CREDENTIALS_PATH: /run/secrets/nmc-psc-google.json
     expose:
       - "3000"
     restart: unless-stopped
