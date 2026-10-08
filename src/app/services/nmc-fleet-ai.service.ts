@@ -1,8 +1,6 @@
 import {Injectable} from '@angular/core';
-import {HttpClient, HttpHeaders} from '@angular/common/http';
+import {HttpClient} from '@angular/common/http';
 import {Observable} from 'rxjs';
-import {RiskEngineConfig} from './nmc-risk-engine.service';
-import {NmcVesselEvidenceBundle} from './nmc-vessel-evidence.service';
 
 export interface FleetAiVessel {
   imo: string;
@@ -15,6 +13,9 @@ export interface FleetAiVessel {
   sourceMode?: 'GOOGLE_SHEETS_LIVE' | 'LOCAL_FIXTURE_SNAPSHOT';
   configVersion?: string;
   reasonCode?: string;
+  lastCheckedAt?: string;
+  nextCheckAt?: string;
+  refreshFailure?: string|null;
 }
 export interface FleetAiSnapshot {
   status: 'ok';
@@ -30,6 +31,11 @@ export interface FleetAiSnapshot {
     critical: number;
     priorityReview: number;
     failed: number;
+  };
+  scheduler?: {
+    mode:string;enabled:boolean;checkIntervalSeconds:number;
+    lastTickAt:string|null;lastError:string|null;
+    lastSelected:number;lastUnchanged:number;batchRunning:boolean;
   };
   job: null | {
     id:string;status:'RUNNING'|'COMPLETED'|'CANCELLED';
@@ -53,19 +59,5 @@ export class NmcFleetAiService {
   assessment(imo:string):Observable<FleetAiAssessment>{
     return this.http.get<FleetAiAssessment>('/api/ai/fleet/results/'+encodeURIComponent(imo));
   }
-  start(bundles:NmcVesselEvidenceBundle[], config:RiskEngineConfig, token:string):Observable<{id:string;status:string;total:number;estimatedAiriaCalls:number}>{
-    const vessels=bundles.map(b=>({
-      imo:b.vessel.imo,
-      evidenceIds:b.evidenceIds,
-      inlineContext:b.inlineContext
-    }));
-    return this.http.post<{id:string;status:string;total:number;estimatedAiriaCalls:number}>(
-      '/api/ai/fleet/start',{vessels,config},
-      {headers:new HttpHeaders({'X-NMC-FLEET-ADMIN-TOKEN':token})}
-    );
-  }
-  cancel(token:string):Observable<{status:string}>{
-    return this.http.post<{status:string}>('/api/ai/fleet/cancel',{},
-      {headers:new HttpHeaders({'X-NMC-FLEET-ADMIN-TOKEN':token})});
-  }
+
 }

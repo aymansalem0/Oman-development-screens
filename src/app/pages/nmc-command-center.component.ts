@@ -10,7 +10,6 @@ import {
 import { FormsModule } from '@angular/forms';
 import { Subscription } from 'rxjs';
 import { NmcFleetAiService, FleetAiSnapshot, FleetAiVessel } from '../services/nmc-fleet-ai.service';
-import { NmcVesselEvidenceService } from '../services/nmc-vessel-evidence.service';
 import { Router, RouterLink } from '@angular/router';
 import * as L from 'leaflet';
 import {
@@ -51,9 +50,7 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
   vessels: NmcVesselProfile[] = NMC_OPERATIONAL_VESSELS.map(vessel => ({ ...vessel, risk: -1 }));
   fleetSnapshot: FleetAiSnapshot | null = null;
   fleetError = '';
-  fleetInfo = '';
-  fleetToken = '';
-  fleetSubmitting = false;
+
   attentionPage = 1;
   readonly attentionPageSize = 6;
 
@@ -80,8 +77,7 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
     private router: Router,
     public lang: LanguageService,
     private riskEngine: NmcRiskEngineService,
-    private readonly fleetAi: NmcFleetAiService,
-    private readonly vesselEvidence: NmcVesselEvidenceService
+    private readonly fleetAi: NmcFleetAiService
   ) {}
 
   copy(en: string, ar: string): string {
@@ -207,7 +203,6 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
     if (this.timer) clearInterval(this.timer);
     this.riskSubscription?.unsubscribe();
     if(this.fleetPoller)clearInterval(this.fleetPoller);
-    this.fleetToken='';
     this.map?.remove();
   }
 
@@ -361,40 +356,6 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
         this.refreshMapMarkers();
       },
       error:err=>{this.fleetError=err?.error?.error||'Fleet AI API unavailable';}
-    });
-  }
-  runFleetBatch(size:10|420,pendingOnly=false):void{
-    if(this.fleetSubmitting||this.fleetJobRunning)return;
-    if(this.fleetToken.trim().length<24){
-      this.fleetError=this.copy('Enter the local admin token (at least 24 characters).',
-        'أدخل رمز الإدارة المحلي (24 حرفًا على الأقل).');return;
-    }
-    const selected=size===10 ? NMC_OPERATIONAL_VESSELS.slice(0,10) :
-      (pendingOnly ? NMC_OPERATIONAL_VESSELS.filter(v=>
-        !this.vessels.some(row=>row.imo===v.imo&&row.risk>=0)) : NMC_OPERATIONAL_VESSELS);
-    if(!selected.length){
-      this.fleetInfo=this.copy('All 420 vessels already have current AI assessments.',
-        'جميع السفن الـ420 لديها تقييم AI حالي.'); return;
-    }
-    const count=selected.length;
-    if(!window.confirm(this.copy(
-      'Analyze '+count+' synthetic vessels? Up to '+count*2+' paid Airia agent calls. No regulatory action.',
-      'تحليل '+count+' سفينة تجريبية؟ حتى '+count*2+' استدعاء مدفوع لوكلاء Airia. دون إجراء تنظيمي.'
-    )))return;
-    this.fleetSubmitting=true;this.fleetError='';this.fleetInfo='';
-    const bundles=selected.map(v=>this.vesselEvidence.create(v));
-    this.fleetAi.start(bundles,this.riskEngine.config,this.fleetToken.trim()).subscribe({
-      next:r=>{this.fleetSubmitting=false;
-        this.fleetInfo=this.copy('Batch queued: ','تم بدء الدفعة: ')+r.total+' / '+r.estimatedAiriaCalls+' calls max';
-        this.loadFleet();},
-      error:err=>{this.fleetSubmitting=false;this.fleetError=err?.error?.error||'FLEET_BATCH_START_FAILED';}
-    });
-  }
-  cancelFleetBatch():void{
-    if(!this.fleetJobRunning||!this.fleetToken.trim())return;
-    this.fleetAi.cancel(this.fleetToken.trim()).subscribe({
-      next:()=>{this.fleetInfo='Cancellation requested';this.loadFleet();},
-      error:err=>this.fleetError=err?.error?.error||'FLEET_BATCH_CANCEL_FAILED'
     });
   }
   riskDisplay(v:NmcVesselProfile):string{return v.risk<0?'—':String(v.risk);}

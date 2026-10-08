@@ -105,8 +105,8 @@
           <span class="fleet-ai-kicker">{{ copy('AI-DRIVEN FLEET RISK · SYNTHETIC POC', 'مخاطر الأسطول بالذكاء الاصطناعي · تجربة محاكاة') }}</span>
           <h3>{{ copy('Fleet AI Risk Assessment', 'تقييم مخاطر الأسطول بالذكاء الاصطناعي') }}</h3>
           <p>{{ copy(
-            'A01/A02 analyze evidence; the deterministic Risk Engine calculates the risk score. Pending or outdated vessels remain unscored, not Normal. All records are simulated, not official.',
-            'يحلل A01/A02 الأدلة ويحسِب محرك المخاطر الدرجة النهائية. السفن المعلقة أو ذات التقييم القديم لا تحمل درجة، ولا تعتبر طبيعية. جميع السجلات تجريبية وليست رسمية.'
+            'Risk analysis runs automatically in the backend. Every hour, each vessel is checked for new evidence; changed vessels are reassessed by A01/A02 and the deterministic Risk Engine. The dashboard loads saved scores immediately. Synthetic POC, not official.',
+            'يعمل تقييم المخاطر تلقائياً في الخلفية. يتم فحص أدلة كل سفينة كل ساعة، وإعادة تقييم السفن التي تغيرت بياناتها بواسطة A01/A02 ومحرك المخاطر الحتمي. تعرض الشاشة النتائج المحفوظة فوراً. جميع البيانات تجريبية.'
           ) }}</p>
         </div>
         <span class="fleet-ai-status">{{ assessedCount }} / 420 {{ copy('AI assessed', 'تم تحليلها') }}</span>
@@ -118,31 +118,21 @@
         <div><strong>{{ highRiskCount }}</strong><span>{{ copy('High + Critical', 'مرتفعة + حرجة') }}</span></div>
         <div><strong>{{ priorityReviewCount }}</strong><span>{{ copy('Priority Review', 'مراجعة ذات أولوية') }}</span></div>
       </div>
-      <div class="fleet-ai-controls">
-        <label>{{ copy('Fleet admin token (local only)', 'رمز إدارة الأسطول (محلي فقط)') }}
-          <input type="password" [(ngModel)]="fleetToken" autocomplete="off"
-                 [placeholder]="copy('Enter token from local .env', 'ضع الرمز من ملف .env المحلي')" />
-        </label>
-        <button type="button" (click)="runFleetBatch(10)" [disabled]="fleetSubmitting || fleetJobRunning">
-          {{ copy('Test 10 vessels', 'اختبار 10 سفن') }}
-        </button>
-        <button type="button" class="fleet-batch-all" (click)="runFleetBatch(420, true)"
-                [disabled]="fleetSubmitting || fleetJobRunning || pendingCount === 0">
-          {{ copy('Assess pending', 'تحليل السفن المعلقة') }} · {{ pendingCount }}
-        </button>
-        <button type="button" (click)="runFleetBatch(420)"
-                [disabled]="fleetSubmitting || fleetJobRunning">
-          {{ copy('Reassess all 420', 'إعادة تحليل 420 سفينة') }}
-        </button>
-        <button type="button" *ngIf="fleetJobRunning" (click)="cancelFleetBatch()">
-          {{ copy('Cancel queued work', 'إلغاء المهام المنتظرة') }}
-        </button>
+      <div class="fleet-auto-health">
+        <span [class.fleet-auto-live]="fleetSnapshot?.scheduler?.enabled">
+          {{ fleetSnapshot?.scheduler?.enabled
+            ? copy('● Automatic hourly vessel refresh ACTIVE', '● تحديث السفن التلقائي كل ساعة نشط')
+            : copy('◌ Automatic assessment not enabled on server', '◌ التقييم التلقائي غير مفعّل على الخادم') }}
+        </span>
+        <span>{{ copy('Background assessments run without opening this screen.', 'يعمل تحليل السفن في الخلفية دون الحاجة لفتح هذه الشاشة.') }}</span>
+        <span *ngIf="fleetSnapshot?.job as job">
+          {{ copy('Background job', 'مهمة الخلفية') }} {{ job.status }} · {{ fleetProgress }}
+        </span>
+        <span *ngIf="fleetSnapshot?.scheduler?.lastTickAt as checked">
+          {{ copy('Last scheduler cycle', 'آخر دورة للجدولة') }}: {{ checked | date:'medium' }}
+        </span>
       </div>
-      <p *ngIf="fleetSnapshot?.job as job" class="fleet-progress">
-        {{ copy('Batch', 'دفعة') }} {{ job.id }} · {{ job.status }} · {{ fleetProgress }}
-      </p>
       <p *ngIf="fleetError" class="fleet-error">{{ fleetError }}</p>
-      <p *ngIf="fleetInfo" class="fleet-progress">{{ fleetInfo }}</p>
     </section>
 
     <section class="kpi-grid">
