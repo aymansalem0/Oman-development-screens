@@ -69,6 +69,7 @@
       <button type="button" [class.active]="activeTab === 'movement'" (click)="setTab('movement')">{{ copy('Movement', 'الحركة') }}</button>
       <button type="button" [class.active]="activeTab === 'compliance'" (click)="setTab('compliance')">{{ copy('Compliance', 'الامتثال') }}</button>
       <button type="button" [class.active]="activeTab === 'inspection'" (click)="setTab('inspection')">{{ copy('Inspection', 'المعاينة') }}</button>
+      <button type="button" [class.active]="activeTab === 'external-psc'" (click)="setTab('external-psc')">{{ copy('External PSC', 'التفتيش الإقليمي التجريبي') }}</button>
       <button type="button" [class.active]="activeTab === 'certificates'" (click)="setTab('certificates')">{{ copy('Certificates', 'الشهادات') }}</button>
       <button type="button" [class.active]="activeTab === 'sources'" (click)="setTab('sources')">{{ copy('Data Sources', 'مصادر البيانات') }}</button>
     </nav>
@@ -562,6 +563,125 @@
       </article>
     </section>
 
+
+
+    <section class="evidence-tab psc-section" *ngIf="activeTab === 'external-psc'">
+      <div class="evidence-heading">
+        <div>
+          <span class="section-kicker">{{ copy('EXTERNAL MARITIME INTELLIGENCE · SIMULATED', 'المعلومات البحرية الخارجية · محاكاة') }}</span>
+          <h3>{{ copy('External Port State Control History', 'سجل رقابة دولة الميناء الخارجي') }}</h3>
+          <p>{{ copy('Independent fictional PSC records linked by the selected IMO. Not Riyadh MoU data and not verified regulatory findings.',
+                     'سجلات PSC افتراضية مستقلة مرتبطة برقم IMO المختار. ليست بيانات Riyadh MoU ولا نتائج رقابية معتمدة.') }}</p>
+        </div>
+        <div class="evidence-heading-actions">
+          <button type="button" class="secondary-btn" (click)="loadExternalPsc()">{{ copy('Refresh external source', 'تحديث المصدر الخارجي') }}</button>
+        </div>
+      </div>
+
+      <div *ngIf="pscLoading" class="psc-state">{{ copy('Loading selected-vessel PSC records...', 'جاري تحميل سجلات PSC الخاصة بالسفينة...') }}</div>
+      <div *ngIf="pscError" class="psc-state psc-error">{{ pscError }}</div>
+
+      <ng-container *ngIf="externalPsc as psc">
+        <div class="psc-provenance">
+          <span class="psc-badge">{{ psc.googleSheetsConnected
+            ? copy('Google Sheets · live connector', 'Google Sheets · اتصال مباشر')
+            : copy('Offline dataset snapshot · Google not connected', 'نسخة بيانات محلية · Google غير متصل') }}</span>
+          <strong>{{ copy('SIMULATED PSC — NOT REAL RIYADH MOU DATA', 'بيانات PSC تجريبية — ليست بيانات الرياض الحقيقية') }}</strong>
+          <small>{{ psc.sourceSystem }} · {{ psc.datasetVersion }} · {{ copy('As of', 'بتاريخ') }} {{ psc.asOf }}</small>
+        </div>
+
+        <div class="inspection-kpis">
+          <div><small>{{ copy('External inspections', 'المعاينات الخارجية') }}</small><strong>{{ psc.summary.inspections }}</strong></div>
+          <div><small>{{ copy('Deficiencies', 'المخالفات') }}</small><strong>{{ psc.summary.deficiencies }}</strong></div>
+          <div><small>{{ copy('Open findings', 'ملاحظات مفتوحة') }}</small><strong>{{ psc.summary.openDeficiencies }}</strong></div>
+          <div><small>{{ copy('Historical detentions', 'الاحتجازات السابقة') }}</small><strong>{{ psc.summary.detentions }}</strong></div>
+        </div>
+
+        <div *ngIf="psc.coverage === 'NO_RECORD_IN_FIXTURE'" class="psc-state">
+          {{ copy('No record in this simulation. This does NOT mean the vessel has no real PSC inspection or detention history.',
+                   'لا يوجد سجل في هذه المحاكاة، وهذا لا يعني خلو السفينة من سجلات معاينات أو احتجازات حقيقية.') }}
+        </div>
+
+        <article class="panel psc-card" *ngIf="psc.inspections.length">
+          <div class="panel-header">
+            <div><h3>{{ copy('External Inspection History', 'تاريخ المعاينات الخارجية') }}</h3>
+              <p>{{ copy('Synthetic port state control inspections · most recent first', 'معاينات رقابة دولة الميناء التجريبية · الأحدث أولًا') }}</p></div>
+          </div>
+          <div class="psc-table-wrap">
+            <table class="psc-table">
+              <thead><tr>
+                <th>{{ copy('Inspection ID', 'رقم المعاينة') }}</th>
+                <th>{{ copy('Date', 'التاريخ') }}</th>
+                <th>{{ copy('Port / country', 'الميناء / الدولة') }}</th>
+                <th>{{ copy('Result', 'النتيجة') }}</th>
+                <th>{{ copy('Deficiencies', 'الملاحظات') }}</th>
+                <th>{{ copy('Detention', 'احتجاز') }}</th>
+              </tr></thead>
+              <tbody>
+                <tr *ngFor="let item of psc.inspections">
+                  <td><strong>{{ item.inspectionId }}</strong></td>
+                  <td>{{ item.inspectionDate }}</td>
+                  <td>{{ item.port }} · {{ item.country }}</td>
+                  <td>{{ item.result }}</td>
+                  <td>{{ item.deficiencyCount }} ({{ item.openDeficiencies }} {{ copy('open', 'مفتوحة') }})</td>
+                  <td>{{ item.detained ? copy('Yes · fictional', 'نعم · افتراضي') : copy('No', 'لا') }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+
+        <article class="panel psc-card" *ngIf="psc.deficiencies.length">
+          <div class="panel-header">
+            <div><h3>{{ copy('External PSC Deficiencies', 'ملاحظات التفتيش الخارجي') }}</h3>
+              <p>{{ copy('These are distinct from MOEI Smart Inspection records', 'هذه السجلات منفصلة عن بيانات المعاينات الداخلية لدى الوزارة') }}</p></div>
+          </div>
+          <div class="psc-table-wrap">
+            <table class="psc-table">
+              <thead><tr>
+                <th>{{ copy('Deficiency ID', 'رقم الملاحظة') }}</th>
+                <th>{{ copy('Category', 'التصنيف') }}</th>
+                <th>{{ copy('Severity', 'الخطورة') }}</th>
+                <th>{{ copy('Status', 'الحالة') }}</th>
+                <th>{{ copy('Description', 'الوصف') }}</th>
+              </tr></thead>
+              <tbody>
+                <tr *ngFor="let item of psc.deficiencies">
+                  <td><strong>{{ item.deficiencyId }}</strong></td>
+                  <td>{{ item.category }}</td>
+                  <td>{{ item.severity }}</td>
+                  <td>{{ item.status }}</td>
+                  <td>{{ item.description }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+
+        <article class="panel psc-card" *ngIf="psc.detentions.length">
+          <div class="panel-header"><div><h3>{{ copy('Simulated Detention History', 'سجل الاحتجاز الافتراضي') }}</h3></div></div>
+          <div class="psc-table-wrap">
+            <table class="psc-table">
+              <thead><tr>
+                <th>{{ copy('Reference', 'المرجع') }}</th>
+                <th>{{ copy('Date', 'التاريخ') }}</th>
+                <th>{{ copy('Release', 'الإفراج') }}</th>
+                <th>{{ copy('Reason', 'السبب') }}</th>
+                <th>{{ copy('Status', 'الحالة') }}</th>
+              </tr></thead>
+              <tbody><tr *ngFor="let item of psc.detentions">
+                <td>{{ item.detentionId }}</td>
+                <td>{{ item.detentionDate }}</td>
+                <td>{{ item.releaseDate }}</td>
+                <td>{{ item.reason }}</td>
+                <td>{{ item.status }}</td>
+              </tr></tbody>
+            </table>
+          </div>
+        </article>
+        <p class="psc-disclaimer">{{ psc.disclaimer }}</p>
+      </ng-container>
+    </section>
 
     <section class="evidence-tab" *ngIf="activeTab === 'compliance'">
       <div class="evidence-heading">

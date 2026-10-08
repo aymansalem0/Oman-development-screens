@@ -1015,3 +1015,40 @@ button, input, select { font: inherit; }
     flex-wrap: wrap;
   }
 }
+
+/* AI Fleet v1 - pending vessels intentionally have neutral presentation. */
+.fleet-ai-overview {
+  background:linear-gradient(122deg,#ebfbf6,#fff);
+  border:1px solid #b9e4d5;border-radius:16px;
+  padding:17px 20px;margin-bottom:18px;
+  box-shadow:0 8px 20px rgba(17,88,77,.05);
+}
+.fleet-ai-heading {display:flex;align-items:center;justify-content:space-between;gap:16px;}
+.fleet-ai-kicker {font-size:10px;font-weight:800;color:#07836d;letter-spacing:1px;}
+.fleet-ai-overview h3 {font-size:20px;margin:5px 0;color:#194c56;}
+.fleet-ai-overview p {font-size:11px;line-height:1.6;color:#5a7883;margin:5px 0;}
+.fleet-ai-status {font-weight:900;font-size:13px;border-radius:24px;padding:10px 15px;background:#d6f8e8;white-space:nowrap;}
+.fleet-ai-stats {display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin-top:13px;}
+.fleet-ai-stats div {background:#fff;border:1px solid #dcedea;border-radius:12px;padding:10px;display:flex;flex-direction:column;gap:2px;}
+.fleet-ai-stats strong {font-size:22px;color:#0c6d62;}
+.fleet-ai-stats span {font-size:10px;color:#55747c;}
+.fleet-ai-controls {display:flex;flex-wrap:wrap;align-items:end;gap:8px;margin-top:12px;}
+.fleet-ai-controls label {display:flex;flex-direction:column;gap:5px;font-size:10px;font-weight:700;color:#396574;}
+.fleet-ai-controls input {border:1px solid #bad7d1;border-radius:8px;background:#fff;padding:9px;min-width:210px;font-size:11px;}
+.fleet-ai-controls button {padding:10px 13px;background:#0f766e;border:none;color:#fff;border-radius:9px;font-size:11px;font-weight:800;cursor:pointer;}
+.fleet-ai-controls button.fleet-batch-all {background:#224c6a;}
+.fleet-ai-controls button:disabled {cursor:not-allowed;opacity:.45;}
+.fleet-ai-overview p.fleet-error {color:#ad283b;font-weight:800;}
+.fleet-ai-overview p.fleet-progress {color:#11695d;font-weight:700;}
+.fleet-empty {font-size:12px;padding:18px;color:#73859b;}
+.nmc-map-marker.pending .ship-symbol {fill:#96a3ae!important;color:#96a3ae!important;opacity:.7;}
+.nmc-map-marker.pending .risk-ring {border-color:#bcc5cb!important;opacity:.45;}
+.risk-chip.pending,.big-risk.pending {background:#edf0f4!important;color:#657789!important;border-color:#ccd5df!important;}
+@media(max-width:900px) {
+  .fleet-ai-stats{grid-template-columns:repeat(2,minmax(0,1fr));}
+  .fleet-ai-heading{flex-direction:column;align-items:flex-start;}
+}
+
+.fleet-auto-health{margin-top:14px;padding:11px 14px;border:1px solid #cae5de;border-radius:11px;display:flex;flex-wrap:wrap;align-items:center;gap:9px 16px;background:rgba(255,255,255,.75)}
+.fleet-auto-health span{font-size:11px;font-weight:650;color:#657781}
+.fleet-auto-health span.fleet-auto-live{color:#067756;font-weight:900}
