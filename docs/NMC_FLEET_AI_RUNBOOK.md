@@ -11,7 +11,7 @@
 - Node validates factor identity, severity, confidence, evidence identifiers, and PSC references for inspection/history when external PSC history exists.
 - The server computes the weighted score with the configured rules (no baseline score calibration) and separately flags open Critical deficiencies as **Priority Review**.
 - The main Command Center reads persisted **completed** results; missing, failed, or different-ruleset results are **Pending AI**, never quietly displayed as Normal.
-- No batch starts on page load, server restart, or schedule. An officer explicitly starts a batch of 10 or 420 vessels and confirms the potential cost. The server does not automatically retry failures.
+- No batch starts on page load, server restart, or schedule. An officer explicitly starts a 10-vessel test, pending-only batch, or complete 420-vessel re-assessment and confirms the potential cost. The server does not automatically retry failures.
 - Max concurrently executing Airia pipeline calls: two (A01 and A02 for one vessel). Full fleet costs up to **840 Airia executions** per selected full pass, depending on vendor pricing/rate limits.
 - Persistent results live in the local Docker named volume `nmc-fleet-results`, **not** browser storage or Git. Assessments survive normal `docker compose down` but **not** `docker compose down --volumes` or volume deletion.
 - Results from A01/A02 are POC decision support, not official scores; cases, regulatory restrictions and enforcement are never auto-created.
@@ -60,7 +60,7 @@ Invoke-RestMethod http://localhost:4200/api/ai/fleet/status |
   Select-Object status, fleetSize, counts, job
 ```
 
-Open `http://localhost:4200/#/moei/nmc`. Paste the token from your local `.env` into the password field (not into chat). Click **Test 10 vessels**. Wait for all 10 to finish and review any FAIL statuses and evidence before clicking **Assess 420 (up to 840 calls)**. The full run repeats the first 10; it is *not* just the remaining 410. The UI must never report 420 AI-assessed before all individual results complete.
+Open `http://localhost:4200/#/moei/nmc`. Paste the token from your local `.env` into the password field (not into chat). Click **Test 10 vessels**. Wait for all 10 to finish and review failures and evidence. Next choose **Assess pending**: this will include only vessels without a completed assessment for the current ruleset (typically 410 after the first 10). **Reassess all 420** intentionally repeats every vessel and can use all 840 calls. The UI must never report 420 AI-assessed before all individual results complete.
 
 Follow batch progress:
 

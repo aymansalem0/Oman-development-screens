@@ -363,18 +363,26 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
       error:err=>{this.fleetError=err?.error?.error||'Fleet AI API unavailable';}
     });
   }
-  runFleetBatch(size:10|420):void{
+  runFleetBatch(size:10|420,pendingOnly=false):void{
     if(this.fleetSubmitting||this.fleetJobRunning)return;
     if(this.fleetToken.trim().length<24){
       this.fleetError=this.copy('Enter the local admin token (at least 24 characters).',
         'أدخل رمز الإدارة المحلي (24 حرفًا على الأقل).');return;
     }
+    const selected=size===10 ? NMC_OPERATIONAL_VESSELS.slice(0,10) :
+      (pendingOnly ? NMC_OPERATIONAL_VESSELS.filter(v=>
+        !this.vessels.some(row=>row.imo===v.imo&&row.risk>=0)) : NMC_OPERATIONAL_VESSELS);
+    if(!selected.length){
+      this.fleetInfo=this.copy('All 420 vessels already have current AI assessments.',
+        'جميع السفن الـ420 لديها تقييم AI حالي.'); return;
+    }
+    const count=selected.length;
     if(!window.confirm(this.copy(
-      'Analyze '+size+' synthetic vessels? Up to '+size*2+' paid Airia agent calls. No regulatory action.',
-      'تحليل '+size+' سفينة تجريبية؟ حتى '+size*2+' استدعاء مدفوع لوكلاء Airia. دون إجراء تنظيمي.'
+      'Analyze '+count+' synthetic vessels? Up to '+count*2+' paid Airia agent calls. No regulatory action.',
+      'تحليل '+count+' سفينة تجريبية؟ حتى '+count*2+' استدعاء مدفوع لوكلاء Airia. دون إجراء تنظيمي.'
     )))return;
     this.fleetSubmitting=true;this.fleetError='';this.fleetInfo='';
-    const bundles=NMC_OPERATIONAL_VESSELS.slice(0,size).map(v=>this.vesselEvidence.create(v));
+    const bundles=selected.map(v=>this.vesselEvidence.create(v));
     this.fleetAi.start(bundles,this.riskEngine.config,this.fleetToken.trim()).subscribe({
       next:r=>{this.fleetSubmitting=false;
         this.fleetInfo=this.copy('Batch queued: ','تم بدء الدفعة: ')+r.total+' / '+r.estimatedAiriaCalls+' calls max';

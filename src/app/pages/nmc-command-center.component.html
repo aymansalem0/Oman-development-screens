@@ -126,8 +126,13 @@
         <button type="button" (click)="runFleetBatch(10)" [disabled]="fleetSubmitting || fleetJobRunning">
           {{ copy('Test 10 vessels', 'اختبار 10 سفن') }}
         </button>
-        <button type="button" class="fleet-batch-all" (click)="runFleetBatch(420)" [disabled]="fleetSubmitting || fleetJobRunning">
-          {{ copy('Assess 420 (up to 840 calls)', 'تحليل 420 (حتى 840 استدعاء)') }}
+        <button type="button" class="fleet-batch-all" (click)="runFleetBatch(420, true)"
+                [disabled]="fleetSubmitting || fleetJobRunning || pendingCount === 0">
+          {{ copy('Assess pending', 'تحليل السفن المعلقة') }} · {{ pendingCount }}
+        </button>
+        <button type="button" (click)="runFleetBatch(420)"
+                [disabled]="fleetSubmitting || fleetJobRunning">
+          {{ copy('Reassess all 420', 'إعادة تحليل 420 سفينة') }}
         </button>
         <button type="button" *ngIf="fleetJobRunning" (click)="cancelFleetBatch()">
           {{ copy('Cancel queued work', 'إلغاء المهام المنتظرة') }}
