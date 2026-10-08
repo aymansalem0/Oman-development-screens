@@ -16,6 +16,8 @@ jobs:
         run: docker compose build nmc ai-proxy
       - name: Unit-test PSC proxy and schemas
         run: |
+          node --check ai-proxy/server.mjs
+          node --check ai-proxy/psc-reader.mjs
           mkdir -p /tmp/psc-adapter
           cp ai-proxy/psc-reader.mjs tools/psc/psc-fixtures.mjs src/app/data/nmc-vessel-catalog.ts src/app/data/nmc-expanded-vessel-catalog.ts /tmp/psc-adapter/
           cp ai-proxy/test/psc-reader.test.mjs /tmp/psc-adapter/test-psc.mjs
