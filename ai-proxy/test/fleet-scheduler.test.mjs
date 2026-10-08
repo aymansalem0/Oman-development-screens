@@ -87,3 +87,25 @@ test('PSC outage is fail-closed and retains previously completed assessment',asy
   assert.equal(fleet.results[vessel.imo].refreshFailure,'GOOGLE_SHEETS_UNAVAILABLE');
   assert.ok(Date.parse(fleet.results[vessel.imo].nextCheckAt)>Date.now());
 });
+
+
+test('staged automatic deployment checks only first vessel, never sends a paid retry after failure',async()=>{
+  const fleet=mockFleet();
+  let lookups=0;
+  const scheduler=new FleetAutoScheduler({
+    fleet,enabled:true,bundles,maxVessels:1,retryFailed:false,
+    getPscVessel:async imo=>{lookups++;return getPsc(imo);}
+  });
+  await scheduler.tick();
+  assert.equal(fleet.batches.length,1);
+  assert.equal(fleet.batches[0].vessels.length,1);
+  assert.equal(lookups,1);
+  fleet.results[bundles[0].imo]={imo:bundles[0].imo,status:'FAILED',
+    reasonCode:'FLEET_AI_RESPONSE_INVALID',
+    nextCheckAt:new Date(Date.now()-1000).toISOString()};
+  await scheduler.tick();
+  assert.equal(fleet.batches.length,1);
+  assert.equal(lookups,1);
+  assert.equal(scheduler.status().enabledVessels,1);
+  assert.equal(scheduler.status().retryFailed,false);
+});
