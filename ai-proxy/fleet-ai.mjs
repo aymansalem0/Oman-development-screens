@@ -113,13 +113,26 @@ function loadStore(){
   return {};
 }
 export class FleetAssessmentManager {
-  constructor({executeAgent,getPscVessel}){
+  constructor({executeAgent,getPscVessel,repository=null}){
     this.executeAgent=executeAgent;
     this.getPscVessel=getPscVessel;
-    this.results=loadStore();
+    this.repository=repository;
+    this.results=repository?{}:loadStore();
+    this.persistenceHealthy=true;
     this.job=null;
   }
-  persist(){
+  async initialize(bundles){
+    if(!this.repository)return;
+    await this.repository.init();
+    await this.repository.seedVessels(bundles);
+    this.results=await this.repository.loadLatest();
+  }
+  async persist(){
+    if(this.repository){
+      try {await this.repository.saveStateBatch(Object.values(this.results));}
+      catch(error){this.persistenceHealthy=false;throw error;}
+      return;
+    }
     mkdirSync(dirname(file),{recursive:true});
     const tmp=file+'.tmp';
     writeFileSync(tmp,JSON.stringify({schema:1,updatedAt:new Date().toISOString(),results:this.results}),{encoding:'utf8',mode:0o600});
@@ -167,6 +180,7 @@ export class FleetAssessmentManager {
       completed:0,failed:0,startedAt:new Date().toISOString(),finishedAt:null,
       cancelled:false
     };
+    if(!this.persistenceHealthy)throw new Error('FLEET_PERSISTENCE_UNAVAILABLE');
     this.job=job;
     const queue=[...input.vessels];
     // Queued only by the server-side scheduler. No browser-triggered agent execution.
@@ -181,36 +195,69 @@ export class FleetAssessmentManager {
   }
   async runQueue(job,queue,cfg){
     const worker=async()=>{
-      while(queue.length&&!job.cancelled){
+      while(queue.length&&!job.cancelled&&this.persistenceHealthy){
         const v=queue.shift();
         try{
           const output=await this.assess(v,cfg);
-          this.results[v.imo]={...output,status:'COMPLETED',
+          const current={...output,status:'COMPLETED',
             inputHash:v._inputHash||null,lastCheckedAt:output.assessedAt,
             nextCheckAt:new Date(Date.now()+(v._refreshIntervalMs||3600000)).toISOString(),
             refreshFailure:null};
+          const previous=this.results[v.imo];
+          if(this.repository){
+            const assessmentId=await this.repository.saveAssessment(current,{previous,jobId:job.id});
+            current.assessmentId=assessmentId;
+          }
+          this.results[v.imo]=current;
           job.completed++;
-        }catch(err){
-          const reasonCode=serializeError(err);
+        }catch(error){
+          const reasonCode=serializeError(error);
           console.error('[fleet] imo='+v.imo+' reasonCode='+reasonCode);
+          if(this.repository&&reasonCode.startsWith('ORACLE_')){
+            this.persistenceHealthy=false;
+            job.failed++;
+            queue.length=0; // Do not spend additional Airia calls when Oracle is unavailable.
+            break;
+          }
           const previous=this.results[v.imo];
           const failedAt=new Date().toISOString();
-          this.results[v.imo]=previous?.status==='COMPLETED'
+          const failed=previous?.status==='COMPLETED'
             ? {...previous,refreshFailure:reasonCode,lastCheckedAt:failedAt,
               nextCheckAt:new Date(Date.now()+900000).toISOString()}
             : {imo:v.imo,status:'FAILED',reasonCode,attemptedAt:failedAt,
               lastCheckedAt:failedAt,nextCheckAt:new Date(Date.now()+900000).toISOString(),
               authoritative:false};
+          if(this.repository){
+            try{await this.repository.saveStateBatch([failed]);}
+            catch{this.persistenceHealthy=false;queue.length=0;job.failed++;break;}
+          }
+          this.results[v.imo]=failed;
           job.failed++;
         }
-        try{this.persist();}catch{console.error('[fleet] STORE_WRITE_FAILED');}
+        if(!this.repository){
+          try{await this.persist();}catch{console.error('[fleet] STORE_WRITE_FAILED');}
+        }
       }
     };
-    try{await Promise.all(Array.from({length:Math.min(MAX_CONCURRENCY,queue.length)},()=>worker()));}
-    finally{
-      job.status=job.cancelled?'CANCELLED':'COMPLETED';
+    try{
+      if(this.repository)await this.repository.saveJob(job);
+      await Promise.all(Array.from({length:Math.min(MAX_CONCURRENCY,queue.length)},()=>worker()));
+    }catch(error){
+      this.persistenceHealthy=false;
+      console.error('[fleet] ORACLE_JOB_WRITE_FAILED');
+    }finally{
+      job.status=!this.persistenceHealthy?'FAILED':job.cancelled?'CANCELLED':'COMPLETED';
       job.finishedAt=new Date().toISOString();
+      if(this.repository&&this.persistenceHealthy){
+        try{await this.repository.saveJob(job);}
+        catch{this.persistenceHealthy=false;console.error('[fleet] ORACLE_JOB_WRITE_FAILED');}
+      }
     }
+  }
+  async history(imo){
+    if(!VALID_IMOS.has(imo))return null;
+    if(!this.repository)return {imo,assessments:[],events:[],storage:'JSON_NO_HISTORY'};
+    return this.repository.history(imo);
   }
   async assess(v,cfg){
     const psc=await this.getPscVessel(v.imo); // errors fail closed, never fall back from live to fixture.
