@@ -9,6 +9,8 @@ import {
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Subscription } from 'rxjs';
+import { NmcFleetAiService, FleetAiSnapshot, FleetAiVessel } from '../services/nmc-fleet-ai.service';
+import { NmcVesselEvidenceService } from '../services/nmc-vessel-evidence.service';
 import { Router, RouterLink } from '@angular/router';
 import * as L from 'leaflet';
 import {
@@ -46,7 +48,12 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
   selectedVessel?: NmcVesselProfile;
   now = new Date();
 
-  vessels: NmcVesselProfile[] = NMC_OPERATIONAL_VESSELS.map(vessel => ({ ...vessel }));
+  vessels: NmcVesselProfile[] = NMC_OPERATIONAL_VESSELS.map(vessel => ({ ...vessel, risk: -1 }));
+  fleetSnapshot: FleetAiSnapshot | null = null;
+  fleetError = '';
+  fleetInfo = '';
+  fleetToken = '';
+  fleetSubmitting = false;
   attentionPage = 1;
   readonly attentionPageSize = 6;
 
@@ -59,13 +66,7 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
     snapshotTime: '22:42:18'
   };
 
-  events: MaritimeEvent[] = [
-    { time: '22:42:18', vessel: 'MV Gulf Horizon', title: 'Risk escalated to Critical', detail: 'Movement anomaly correlated with unresolved inspection deficiency and certificate condition.', severity: 'critical' },
-    { time: '22:41:56', vessel: 'MV Gulf Horizon', title: 'Certificate data conflict', detail: 'MOEI record and external classification source require verification.', severity: 'high' },
-    { time: '22:40:14', vessel: 'Ocean Star', title: 'Enhanced monitoring started', detail: 'Risk threshold exceeded due to inspection and certificate indicators.', severity: 'high' },
-    { time: '22:38:09', vessel: 'Northern Light', title: 'Route deviation detected', detail: 'Observed route differs from expected arrival corridor.', severity: 'info' },
-    { time: '22:36:31', vessel: 'Arabian Crest', title: 'Certificate expiry threshold reached', detail: 'Certificate validity window entered the configured monitoring threshold.', severity: 'info' }
-  ];
+  events: MaritimeEvent[] = [];
 
   private timer?: ReturnType<typeof setInterval>;
   private map?: L.Map;
@@ -73,11 +74,14 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
   private selectedTrack?: L.Polyline;
   private lastInteractiveVesselId?: number;
   private riskSubscription?: Subscription;
+  private fleetPoller?: ReturnType<typeof setInterval>;
 
   constructor(
     private router: Router,
     public lang: LanguageService,
-    private riskEngine: NmcRiskEngineService
+    private riskEngine: NmcRiskEngineService,
+    private readonly fleetAi: NmcFleetAiService,
+    private readonly vesselEvidence: NmcVesselEvidenceService
   ) {}
 
   copy(en: string, ar: string): string {
@@ -109,7 +113,8 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
   }
 
   riskLabel(score: number): string {
-    const level = this.riskLevel(score);
+    if(score<0)return this.copy('Pending AI','بانتظار AI');
+    const level = this.riskLevel(score) as RiskLevel;
     const labels: Record<RiskLevel, string> = {
       Critical: this.copy('Critical', 'حرج'),
       High: this.copy('High', 'مرتفع'),
@@ -162,6 +167,8 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
 
   eventTitle(event: MaritimeEvent): string {
     const ar: Record<string, string> = {
+      'Critical open finding in POC': 'مخالفة حرجة مفتوحة في السيناريو التجريبي',
+      'AI fleet risk evaluated': 'اكتمل تقييم مخاطر السفينة بواسطة AI',
       'Risk escalated to Critical': 'تصاعد مستوى المخاطر إلى حرج',
       'Certificate data conflict': 'تعارض في بيانات الشهادة',
       'Enhanced monitoring started': 'بدء المراقبة المعززة',
@@ -183,13 +190,8 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
   }
 
   ngOnInit(): void {
-    this.riskSubscription = this.riskEngine.config$.subscribe(() => {
-      const selectedId = this.selectedVessel?.id;
-      this.vessels = this.vessels.map(vessel => this.riskEngine.applyToVessel(vessel));
-      this.selectedVessel = this.vessels.find(vessel => vessel.id === selectedId) || this.vessels[0];
-      this.attentionPage = Math.min(this.attentionPage, this.attentionPageCount);
-      this.refreshMapMarkers();
-    });
+    this.riskSubscription = this.riskEngine.config$.subscribe(() => this.loadFleet());
+    this.fleetPoller = setInterval(() => this.loadFleet(), 7000);
 
     this.timer = setInterval(() => {
       this.now = new Date();
@@ -204,6 +206,8 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
   ngOnDestroy(): void {
     if (this.timer) clearInterval(this.timer);
     this.riskSubscription?.unsubscribe();
+    if(this.fleetPoller)clearInterval(this.fleetPoller);
+    this.fleetToken='';
     this.map?.remove();
   }
 
@@ -317,6 +321,76 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
     return Math.round((toDeg(Math.atan2(y, x)) + 360) % 360);
   }
 
+  private fleetResult(v: NmcVesselProfile): FleetAiVessel | undefined {
+    return this.fleetSnapshot?.results[v.imo];
+  }
+  get assessedCount():number{return this.vessels.filter(v=>v.risk>=0).length;}
+  get pendingCount():number{return 420-this.assessedCount;}
+  get priorityReviewCount():number{
+    return this.vessels.filter(v=>v.risk>=0&&this.fleetResult(v)?.operationalPriority==='Priority Review').length;
+  }
+  get fleetJobRunning():boolean{return this.fleetSnapshot?.job?.status==='RUNNING';}
+  get fleetProgress():string{
+    const j=this.fleetSnapshot?.job;
+    return j?j.completed+' completed · '+j.failed+' failed / '+j.total:'';
+  }
+  private loadFleet():void{
+    this.fleetAi.snapshot().subscribe({
+      next:snapshot=>{
+        this.fleetSnapshot=snapshot;this.fleetError='';
+        const currentVersion=this.riskEngine.config.version;
+        const selectedId=this.selectedVessel?.id;
+        this.vessels=this.vessels.map(v=>{
+          const row=snapshot.results[v.imo];
+          const risk=row?.status==='COMPLETED'&&row.configVersion===currentVersion&&Number.isFinite(row.score)
+            ?Number(row.score):-1;
+          return {...v,risk};
+        });
+        this.selectedVessel=this.vessels.find(v=>v.id===selectedId)||this.vessels[0];
+        this.attentionPage=Math.min(this.attentionPage,this.attentionPageCount);
+        this.events=Object.values(snapshot.results)
+          .filter(r=>r.status==='COMPLETED'&&r.configVersion===currentVersion&&r.assessedAt)
+          .sort((a,b)=>String(b.assessedAt).localeCompare(String(a.assessedAt)))
+          .slice(0,5).map(r=>({
+            time:new Date(r.assessedAt!).toLocaleTimeString('en-GB',{hour12:false}),
+            vessel:this.vessels.find(v=>v.imo===r.imo)?.name||r.imo,
+            title:r.criticalOpenFinding?'Critical open finding in POC':'AI fleet risk evaluated',
+            detail:(r.operationalPriority||'Routine')+' · '+r.level+' '+r.score+'/100 · synthetic evidence',
+            severity:r.criticalOpenFinding?'critical':r.level==='Critical'?'critical':r.level==='High'?'high':'info'
+          }));
+        this.refreshMapMarkers();
+      },
+      error:err=>{this.fleetError=err?.error?.error||'Fleet AI API unavailable';}
+    });
+  }
+  runFleetBatch(size:10|420):void{
+    if(this.fleetSubmitting||this.fleetJobRunning)return;
+    if(this.fleetToken.trim().length<24){
+      this.fleetError=this.copy('Enter the local admin token (at least 24 characters).',
+        'أدخل رمز الإدارة المحلي (24 حرفًا على الأقل).');return;
+    }
+    if(!window.confirm(this.copy(
+      'Analyze '+size+' synthetic vessels? Up to '+size*2+' paid Airia agent calls. No regulatory action.',
+      'تحليل '+size+' سفينة تجريبية؟ حتى '+size*2+' استدعاء مدفوع لوكلاء Airia. دون إجراء تنظيمي.'
+    )))return;
+    this.fleetSubmitting=true;this.fleetError='';this.fleetInfo='';
+    const bundles=NMC_OPERATIONAL_VESSELS.slice(0,size).map(v=>this.vesselEvidence.create(v));
+    this.fleetAi.start(bundles,this.riskEngine.config,this.fleetToken.trim()).subscribe({
+      next:r=>{this.fleetSubmitting=false;
+        this.fleetInfo=this.copy('Batch queued: ','تم بدء الدفعة: ')+r.total+' / '+r.estimatedAiriaCalls+' calls max';
+        this.loadFleet();},
+      error:err=>{this.fleetSubmitting=false;this.fleetError=err?.error?.error||'FLEET_BATCH_START_FAILED';}
+    });
+  }
+  cancelFleetBatch():void{
+    if(!this.fleetJobRunning||!this.fleetToken.trim())return;
+    this.fleetAi.cancel(this.fleetToken.trim()).subscribe({
+      next:()=>{this.fleetInfo='Cancellation requested';this.loadFleet();},
+      error:err=>this.fleetError=err?.error?.error||'FLEET_BATCH_CANCEL_FAILED'
+    });
+  }
+  riskDisplay(v:NmcVesselProfile):string{return v.risk<0?'—':String(v.risk);}
+
   get filteredVessels(): NmcVesselProfile[] {
     const query = this.searchTerm.trim().toLowerCase();
     return this.vessels.filter(vessel => {
@@ -330,8 +404,9 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
 
   get allAttentionVessels(): NmcVesselProfile[] {
     return [...this.vessels]
-      .filter(vessel => this.riskEngine.levelForScore(vessel.risk) !== 'Normal')
-      .sort((a,b) => b.risk - a.risk);
+      .filter(v=>v.risk>=0&&(this.riskLevel(v.risk)!=='Normal'||this.fleetResult(v)?.operationalPriority==='Priority Review'))
+      .sort((a,b)=>Number(this.fleetResult(b)?.operationalPriority==='Priority Review')-
+        Number(this.fleetResult(a)?.operationalPriority==='Priority Review')||b.risk-a.risk);
   }
 
   get attentionVessels(): NmcVesselProfile[] {
@@ -375,7 +450,7 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
   }
 
   private syncAttentionPageForVessel(vessel: NmcVesselProfile): void {
-    if (this.riskEngine.levelForScore(vessel.risk) === 'Normal') return;
+    if(vessel.risk<0||this.riskLevel(vessel.risk)==='Normal')return;
     const index = this.allAttentionVessels.findIndex(item => item.id === vessel.id);
     if (index >= 0) this.attentionPage = Math.floor(index / this.attentionPageSize) + 1;
   }
@@ -386,17 +461,11 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
 
   get monitoredCount(): number { return this.trafficSnapshot.totalContacts; }
   get correlatedProfileCount(): number { return this.trafficSnapshot.correlatedProfiles; }
-  get attentionCount(): number { return this.vessels.filter(vessel => this.riskEngine.levelForScore(vessel.risk) !== 'Normal').length; }
-  get highRiskCount(): number { return this.vessels.filter(vessel => ['High','Critical'].includes(this.riskEngine.levelForScore(vessel.risk))).length; }
-  get criticalCount(): number { return this.vessels.filter(vessel => this.riskEngine.levelForScore(vessel.risk) === 'Critical').length; }
-
-  riskLevel(score: number): RiskLevel {
-    return this.riskEngine.levelForScore(score);
-  }
-
-  riskClass(score: number): string {
-    return this.riskEngine.levelForScore(score).toLowerCase();
-  }
+  get attentionCount():number{return this.allAttentionVessels.length;}
+  get highRiskCount():number{return this.vessels.filter(v=>v.risk>=0&&['High','Critical'].includes(this.riskLevel(v.risk))).length;}
+  get criticalCount():number{return this.vessels.filter(v=>v.risk>=0&&this.riskLevel(v.risk)==='Critical').length;}
+  riskLevel(score:number):RiskLevel|'Pending'{return score<0?'Pending':this.riskEngine.levelForScore(score);}
+  riskClass(score:number):string{return score<0?'pending':this.riskEngine.levelForScore(score).toLowerCase();}
 
   selectVessel(vessel: NmcVesselProfile, fly = true): void {
     this.selectedVessel = vessel;
@@ -458,6 +527,7 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
       if (existing) {
         existing.setLatLng([vessel.lat, vessel.lng]);
         existing.setIcon(this.createVesselIcon(vessel));
+        existing.setTooltipContent(this.tooltipFor(vessel));
         continue;
       }
 
@@ -467,15 +537,7 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
         riseOnHover: true
       });
 
-      marker.bindTooltip(
-        `<div class="map-vessel-tooltip">
-          <strong>${vessel.name}</strong>
-          <span>IMO ${vessel.imo} · ${this.flagLabel(vessel.flag)} · ${this.vesselTypeLabel(vessel.type)}</span>
-          <span>${vessel.speed.toFixed(1)} ${this.copy('kn', 'عقدة')} · ${vessel.destination}</span>
-          <b>${this.copy('Risk', 'المخاطر')} ${vessel.risk} · ${this.riskLabel(vessel.risk)}</b>
-        </div>`,
-        { direction:'top', offset:[0,-18], opacity:1 }
-      );
+      marker.bindTooltip(this.tooltipFor(vessel), {direction:'top',offset:[0,-18],opacity:1});
 
       marker.on('click', () => this.handleVesselInteraction(vessel));
       marker.addTo(this.map);
@@ -483,6 +545,12 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
     }
   }
 
+  private tooltipFor(v:NmcVesselProfile):string{
+    return '<div class="map-vessel-tooltip"><strong>'+v.name+'</strong>'+
+      '<span>IMO '+v.imo+' · '+this.flagLabel(v.flag)+' · '+this.vesselTypeLabel(v.type)+'</span>'+
+      '<span>'+v.speed.toFixed(1)+' kn · '+v.destination+'</span>'+
+      '<b>'+this.copy('AI Risk','مخاطر AI')+' '+this.riskDisplay(v)+' · '+this.riskLabel(v.risk)+'</b></div>';
+  }
   private createVesselIcon(vessel: NmcVesselProfile): L.DivIcon {
     const level = this.riskClass(vessel.risk);
     const selected = this.selectedVessel?.id === vessel.id ? 'selected' : '';
@@ -503,7 +571,7 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
             <path class="ship-deck" d="M9.2 10.6h5.6v8.2H9.2z"></path>
             <path class="ship-centerline" d="M12 3.5v24.3"></path>
           </svg>
-          ${isSelected || this.riskEngine.levelForScore(vessel.risk) === 'Critical' ? `<span class="ship-label">${vessel.name}<b>${vessel.risk}</b></span>` : ''}
+          ${isSelected || this.riskLevel(vessel.risk) === 'Critical' ? `<span class="ship-label">${vessel.name}<b>${this.riskDisplay(vessel)}</b></span>` : ''}
         </div>
       `,
       iconSize:[52,52],
