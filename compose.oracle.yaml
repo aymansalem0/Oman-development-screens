@@ -1,0 +1,13 @@
+# Optional Oracle integration for the local NMC POC.
+# Requires an EXISTING external Docker network named nmc-oracle-link.
+# The existing oracle-free-23 container must be attached manually once.
+services:
+  ai-proxy:
+    networks:
+      - nmc
+      - nmc-oracle-link
+
+networks:
+  nmc-oracle-link:
+    external: true
+    name: nmc-oracle-link
