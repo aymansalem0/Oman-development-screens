@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, Input } from '@angular/core';
+import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 
 import { NmcVesselProfile } from '../data/nmc-vessel-catalog';
@@ -7,13 +7,18 @@ import { NmcAiIntegrationService, NmcAiriaAgent } from '../services/nmc-ai-integ
 import { NmcRiskEngineService, RiskEvaluation, RiskFactorKey } from '../services/nmc-risk-engine.service';
 import { NmcVesselEvidenceService } from '../services/nmc-vessel-evidence.service';
 
-interface AiSignal {
+export interface AiSignal {
   factor: RiskFactorKey;
   severity: number;
   confidence: number;
   sourceAgent: 'A01' | 'A02';
   evidenceIds: string[];
   reason: string;
+}
+
+export interface NmcLiveRiskResult {
+  risk: RiskEvaluation;
+  signals: AiSignal[];
 }
 
 type AgentStatus = 'idle' | 'running' | 'ok' | 'error';
@@ -141,6 +146,7 @@ const A02_FACTORS: RiskFactorKey[] = ['inspection', 'certificate', 'dataQuality'
 export class NmcLiveAiPanelComponent {
   @Input({ required: true }) vessel!: NmcVesselProfile;
   @Input() isArabic = false;
+  @Output() liveRiskChange = new EventEmitter<NmcLiveRiskResult | null>();
 
   running = false;
   a01Status: AgentStatus = 'idle';
@@ -174,6 +180,7 @@ export class NmcLiveAiPanelComponent {
   async run(): Promise<void> {
     if (this.running) return;
     this.running = true;
+    this.liveRiskChange.emit(null);
     this.risk = null;
     this.signals = [];
     this.a01Raw = '';
@@ -285,6 +292,7 @@ export class NmcLiveAiPanelComponent {
         FACTORS.map(factor => [factor, grouped.get(factor)![0].severity])
       ) as Record<RiskFactorKey, number>;
       this.risk = this.engine.evaluateFromAiSignals(this.vessel, severities);
+      this.liveRiskChange.emit({ risk: this.risk, signals: [...this.signals] });
       this.message = this.copy(
         'All five signals validated. Calculated risk is provisional and does not replace the existing synthetic assessment until reviewed.',
         'تم التحقق من العوامل الخمسة. حساب المخاطر مبدئي ولا يحل محل التقييم التجريبي المعروض إلا بعد المراجعة.'
