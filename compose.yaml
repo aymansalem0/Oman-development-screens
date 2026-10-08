@@ -7,7 +7,7 @@ services:
     environment:
       PORT: "3000"
       AIRIA_MENA_KEY: ${AIRIA_MENA_KEY:-}
-      AIRIA_BASE_URL: ${AIRIA_BASE_URL:-https://api.mena.airia.ai}
+      AIRIA_BASE_URL: ${AIRIA_BASE_URL:-https://mena.api.airia.ai}
       AIRIA_TIMEOUT_MS: "120000"
     expose:
       - "3000"

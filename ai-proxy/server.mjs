@@ -2,7 +2,7 @@ import { createServer } from 'node:http';
 
 const port = Number(process.env.PORT || 3000);
 const apiKey = (process.env.AIRIA_MENA_KEY || '').trim();
-const baseUrl = (process.env.AIRIA_BASE_URL || 'https://api.mena.airia.ai').replace(/\/$/, '');
+const baseUrl = (process.env.AIRIA_BASE_URL || 'https://mena.api.airia.ai').replace(/\/$/, '');
 const timeoutMs = Math.min(180000, Math.max(1000, Number(process.env.AIRIA_TIMEOUT_MS || 120000)));
 const maxBytes = 1024 * 1024; // Structured JSON only; PDF/image support will be added separately.
 
