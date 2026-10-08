@@ -63,3 +63,28 @@ Confirm `persistence.mode=oracle` and `ready=true`, then choose whether to enabl
 
 ## Known V1 boundaries
 Data Confidence and cross-source conflict detection still require analysis logic: V1 schema can store their results but deliberately sets quality to `NOT_CALCULATED` and does not invent conflicts. All current fleet records and PSC examples are synthetic, not official. No standalone production high availability, full transactional inbox/outbox, cost controls or RBAC yet. Azure SQL remains the target production database for MOEI; this Oracle adapter is scoped to the local POC.
+
+
+## Safe first live Airia test (after Oracle health + 420 vessel seed)
+
+For a **single-vessel automatic smoke test** only, configure local `.env`:
+
+```dotenv
+NMC_FLEET_AUTO_ENABLED=true
+NMC_FLEET_AUTO_MAX_VESSELS=1
+NMC_FLEET_AUTO_RETRY_FAILED=false
+NMC_FLEET_REFRESH_SECONDS=3600
+```
+
+Use the three compose files to rebuild AI proxy:
+
+```powershell
+docker compose -f compose.yaml -f compose.google-psc.yaml -f compose.oracle.yaml up -d --build --force-recreate
+$r=Invoke-RestMethod http://localhost:4200/api/ai/fleet/status
+$r.scheduler
+$r.counts
+```
+
+Only the first synthetic vessel in the catalog is eligible while MAX_VESSELS=1. A01/A02 make **up to two paid calls** for that vessel, if its PSC evidence passes provenance validation. If validation fails or the result is invalid, the failed vessel is not automatically retried. Examine status/results and `SELECT COUNT(*) FROM NMC_AI_ASSESSMENT` in Toad. This safeguard does **not** throttle additional source changes on the same vessel forever; keep the smoke test short.
+
+To stop all automatic calls, set `NMC_FLEET_AUTO_ENABLED=false` and recreate the proxy (do not remove volumes). To expand after successful verification set `NMC_FLEET_AUTO_MAX_VESSELS=420` and confirm the expected potential cost. The UI has no token or action button.
