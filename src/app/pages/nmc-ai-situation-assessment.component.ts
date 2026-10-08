@@ -12,6 +12,7 @@ import {
 import { LanguageService } from '../services/language.service';
 import { NmcLiveAiPanelComponent, NmcLiveRiskResult } from './nmc-live-ai-panel.component';
 import { NmcRiskEngineService } from '../services/nmc-risk-engine.service';
+import { NmcVesselEvidenceService } from '../services/nmc-vessel-evidence.service';
 
 type DecisionStatus = 'Pending' | 'Accepted' | 'Modified' | 'Rejected';
 type EvidenceType = 'Movement' | 'Inspection' | 'Certificate' | 'Data Quality' | 'History';
@@ -63,7 +64,8 @@ export class NmcAiSituationAssessmentComponent implements OnInit {
   constructor(
     private route: ActivatedRoute,
     public lang: LanguageService,
-    private riskEngine: NmcRiskEngineService
+    private riskEngine: NmcRiskEngineService,
+    private readonly vesselEvidence: NmcVesselEvidenceService
   ) {}
 
   ngOnInit(): void {
@@ -101,6 +103,13 @@ export class NmcAiSituationAssessmentComponent implements OnInit {
 
   get displayedRisk(): number {
     return this.liveResult?.risk.score ?? this.vessel.risk;
+  }
+
+  get criticalFinding(): string | null {
+    if (!this.liveResult || !this.vessel) return null;
+    const finding = this.vesselEvidence.create(this.vessel).deficiencies
+      .find(item => item.status === 'Open' && item.severity === 'Critical');
+    return finding?.description || null;
   }
 
   get displayedRiskKind(): string {
