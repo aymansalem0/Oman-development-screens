@@ -10,8 +10,10 @@ services:
       AIRIA_MENA_KEY: ${AIRIA_MENA_KEY:-}
       AIRIA_BASE_URL: ${AIRIA_BASE_URL:-https://mena.api.airia.ai}
       AIRIA_TIMEOUT_MS: "120000"
-      # Required only for operator-triggered fleet batches. Never committed to git.
-      NMC_FLEET_ADMIN_TOKEN: ${NMC_FLEET_ADMIN_TOKEN:-}
+      # Autonomous fleet assessment is opt-in at server deployment, never a UI action.
+      # Set NMC_FLEET_AUTO_ENABLED=true once after reviewing potential Airia costs.
+      NMC_FLEET_AUTO_ENABLED: ${NMC_FLEET_AUTO_ENABLED:-false}
+      NMC_FLEET_REFRESH_SECONDS: ${NMC_FLEET_REFRESH_SECONDS:-3600}
       NMC_FLEET_STORE_PATH: /data/fleet-assessments.json
       # Default: deterministic offline copy of the same 420-vessel Google Sheet fixture.
       # Explicit 'google_sheets' requires a read-only service account mounted by compose.google-psc.yaml.

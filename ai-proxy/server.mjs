@@ -1,13 +1,15 @@
 import { createServer } from 'node:http';
 import { getPscVessel, getPscHealth } from './psc-reader.mjs';
-import { FleetAssessmentManager, fleetAdminAuthorized } from './fleet-ai.mjs';
+import { FleetAssessmentManager } from './fleet-ai.mjs';
+import { FleetAutoScheduler } from './fleet-scheduler.mjs';
 
 const port = Number(process.env.PORT || 3000);
 const apiKey = (process.env.AIRIA_MENA_KEY || '').trim();
 const baseUrl = (process.env.AIRIA_BASE_URL || 'https://mena.api.airia.ai').replace(/\/$/, '');
 const timeoutMs = Math.min(180000, Math.max(1000, Number(process.env.AIRIA_TIMEOUT_MS || 120000)));
 const maxBytes = 1024 * 1024; // Single agent call body.
-const fleetAdminToken = (process.env.NMC_FLEET_ADMIN_TOKEN || '').trim();
+const autoEnabled = process.env.NMC_FLEET_AUTO_ENABLED === 'true';
+const autoInterval = Number(process.env.NMC_FLEET_REFRESH_SECONDS || 3600) * 1000;
 
 // Partner API guide, 08 Oct 2026, A01-A04 v3.1.
 const pipelines = Object.freeze({
@@ -30,6 +32,8 @@ async function fleetAgentCall(agent,input) {
   try {return JSON.parse(raw);} catch {throw new Error('AIRIA_RESPONSE_INVALID_JSON');}
 }
 const fleet=new FleetAssessmentManager({executeAgent:fleetAgentCall,getPscVessel});
+const scheduler=new FleetAutoScheduler({fleet,getPscVessel,
+  enabled:autoEnabled && Boolean(apiKey),intervalMs:autoInterval});
 
 function respond(res, status, payload) {
   const body = JSON.stringify(payload);
@@ -73,38 +77,23 @@ const server = createServer(async (req, res) => {
   const path = new URL(req.url || '/', 'http://localhost').pathname;
 
   if (req.method === 'GET' && path === '/api/ai/health') {
-    return respond(res, 200, { status: 'ok', aiConfigured: Boolean(apiKey), adapter: 'nmc-airia-proxy' });
+    return respond(res, 200, { status: 'ok', aiConfigured: Boolean(apiKey), adapter: 'nmc-airia-proxy', fleetAutoEnabled:scheduler.enabled });
   }
 
   if (req.method === 'GET' && path === '/api/ai/psc/health') {
     return respond(res, 200, getPscHealth());
   }
   if (req.method === 'GET' && path === '/api/ai/fleet/status') {
-    return respond(res,200,fleet.snapshot());
+    return respond(res,200,{...fleet.snapshot(),scheduler:scheduler.status()});
   }
   const fleetResultMatch = /^\/api\/ai\/fleet\/results\/(\d{7})$/.exec(path);
   if (req.method === 'GET' && fleetResultMatch) {
     const record=fleet.getVesselResult(fleetResultMatch[1]);
     return respond(res,record?200:404,record||{error:'FLEET_ASSESSMENT_NOT_FOUND'});
   }
+  // Fleet mutation is internal to the Node scheduler; the dashboard is read-only.
   if (path === '/api/ai/fleet/start' || path === '/api/ai/fleet/cancel') {
-    if (req.method !== 'POST') return respond(res,405,{error:'METHOD_NOT_ALLOWED'});
-    if (fleetAdminToken.length < 24) {
-      return respond(res,503,{error:'FLEET_ADMIN_TOKEN_NOT_CONFIGURED'});
-    }
-    const provided=String(req.headers['x-nmc-fleet-admin-token'] || '');
-    if (!fleetAdminAuthorized(provided,fleetAdminToken)) {
-      return respond(res,403,{error:'FLEET_ADMIN_UNAUTHORIZED'});
-    }
-    try {
-      if (path.endsWith('/cancel')) return respond(res,200,fleet.cancel());
-      const input=await requestJson(req,12*1024*1024);
-      return respond(res,202,fleet.start(input));
-    } catch(err) {
-      const reason=String(err?.message||'FLEET_START_FAILED');
-      const safe=/^[A-Z][A-Z0-9_]{1,95}$/.test(reason)?reason:'FLEET_START_FAILED';
-      return respond(res, safe==='FLEET_JOB_ALREADY_RUNNING'?409:400, {error:safe});
-    }
+    return respond(res,405,{error:'AUTONOMOUS_FLEET_ONLY'});
   }
 
   const pscMatch = /^\/api\/ai\/psc\/vessels\/(\d{7})$/.exec(path);
@@ -177,5 +166,6 @@ const server = createServer(async (req, res) => {
 });
 
 server.listen(port, '0.0.0.0', () => {
-  console.log(`NMC AI local proxy listening on port ${port}; Airia configured: ${Boolean(apiKey)}`);
+  console.log(`NMC AI proxy listening on ${port}; Airia configured: ${Boolean(apiKey)}; fleet-auto enabled: ${scheduler.enabled}`);
+  if(scheduler.enabled)scheduler.start();
 });
