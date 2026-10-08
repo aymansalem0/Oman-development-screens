@@ -294,8 +294,8 @@ export class NmcLiveAiPanelComponent {
       this.risk = this.engine.evaluateFromAiSignals(this.vessel, severities);
       this.liveRiskChange.emit({ risk: this.risk, signals: [...this.signals] });
       this.message = this.copy(
-        'All five signals validated. Calculated risk is provisional and does not replace the existing synthetic assessment until reviewed.',
-        'تم التحقق من العوامل الخمسة. حساب المخاطر مبدئي ولا يحل محل التقييم التجريبي المعروض إلا بعد المراجعة.'
+        'Five signals passed schema and supplied-ID checks, not independent evidence authentication. The score is provisional; other screens still use the synthetic baseline.',
+        'اجتازت العوامل الخمسة فحص البنية وأرقام الأدلة المقدمة، وليس التحقق من صحة الأدلة الخارجية. الدرجة مبدئية، وتستمر الشاشات الأخرى باستخدام السيناريو التجريبي.'
       );
     } else {
       diagnostic.push('Incomplete five-factor evidence bundle: no risk recalculation or automatic case action.');
