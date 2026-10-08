@@ -10,7 +10,7 @@ import {
   getOperationalVesselByImo
 } from '../data/nmc-expanded-vessel-catalog';
 import { LanguageService } from '../services/language.service';
-import { NmcLiveAiPanelComponent } from './nmc-live-ai-panel.component';
+import { NmcLiveAiPanelComponent, NmcLiveRiskResult } from './nmc-live-ai-panel.component';
 import { NmcRiskEngineService } from '../services/nmc-risk-engine.service';
 
 type DecisionStatus = 'Pending' | 'Accepted' | 'Modified' | 'Rejected';
@@ -54,6 +54,8 @@ export class NmcAiSituationAssessmentComponent implements OnInit {
   evidence: AiEvidence[] = [];
   recommendations: AiRecommendation[] = [];
   selectedEvidence?: AiEvidence;
+  liveResult: NmcLiveRiskResult | null = null;
+  showSampleAssessment = false;
 
   readonly generatedAt = '07 Oct 2026 · 22:43:06';
   readonly modelLabel = 'Maritime Situation Intelligence';
@@ -91,8 +93,23 @@ export class NmcAiSituationAssessmentComponent implements OnInit {
     });
   }
 
+  onLiveRiskChange(result: NmcLiveRiskResult | null): void {
+    this.liveResult = result;
+    this.showSampleAssessment = false;
+    this.selectedEvidence = undefined;
+  }
+
+  get displayedRisk(): number {
+    return this.liveResult?.risk.score ?? this.vessel.risk;
+  }
+
+  get displayedRiskKind(): string {
+    return this.liveResult ? this.copy('Provisional AI signals', 'مؤشرات ذكاء اصطناعي مبدئية')
+      : this.copy('Synthetic baseline', 'السيناريو التجريبي');
+  }
+
   get riskLevelLabel(): string {
-    const level = this.riskEngine.levelForScore(this.vessel.risk);
+    const level = this.riskEngine.levelForScore(this.displayedRisk);
     const labels: Record<string, string> = {
       Critical: this.copy('Critical', 'حرج'),
       High: this.copy('High', 'مرتفع'),
@@ -103,7 +120,7 @@ export class NmcAiSituationAssessmentComponent implements OnInit {
   }
 
   get riskClass(): string {
-    return this.riskEngine.levelForScore(this.vessel.risk).toLowerCase();
+    return this.riskEngine.levelForScore(this.displayedRisk).toLowerCase();
   }
 
   get baseRisk(): number {
