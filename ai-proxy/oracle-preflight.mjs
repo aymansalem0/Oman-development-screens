@@ -39,7 +39,20 @@ try{
   console.log('[preflight] Oracle schema connected, stored states: '+Object.keys(existing).length);
   if(existing[imo]?.status==='COMPLETED')
     console.log('[preflight] Existing completed score remains untouched');
-  await repo.saveAssessment(row,{dryRun:true});
+  const con=await repo.pool.getConnection();
+  let jobId=null;
+  try{
+    const vessel=await con.execute('SELECT COUNT(*) FROM NMC_VESSEL WHERE IMO=:imo',{imo});
+    const sources=await con.execute('SELECT COUNT(*) FROM NMC_DATA_SOURCE WHERE SOURCE_ID IN (:a,:b)',
+      {a:'PSC_GOOGLE_SIM',b:'NMC_INTERNAL_SIM'});
+    const jobs=await con.execute('SELECT JOB_ID FROM NMC_AI_JOB ORDER BY STARTED_AT DESC FETCH FIRST 1 ROWS ONLY');
+    jobId=jobs.rows?.[0]?.[0]||null;
+    console.log('[preflight] Required vessel present: '+(vessel.rows[0][0]===1));
+    console.log('[preflight] Evidence source definitions: '+sources.rows[0][0]+'/2');
+    console.log('[preflight] Existing scheduler job available for FK test: '+Boolean(jobId));
+    if(vessel.rows[0][0]!==1||sources.rows[0][0]!==2)throw new Error('ORACLE_PREFLIGHT_REFERENCE_DATA_MISSING');
+  }finally{await con.close();}
+  await repo.saveAssessment(row,{dryRun:true,jobId});
   console.log('[preflight] Assessment, five factors, evidence, findings, data quality, state and event SQL: PASSED');
   console.log('[preflight] Transaction ROLLED BACK. Airia calls: 0. No rows inserted.');
 }catch(error){
