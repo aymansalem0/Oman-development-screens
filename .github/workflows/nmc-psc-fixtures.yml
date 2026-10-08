@@ -2,7 +2,7 @@ name: NMC External PSC fixture quality
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, feature/smart-inspection-poc]
   workflow_dispatch:
 
 jobs:
