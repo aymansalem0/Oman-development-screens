@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "start": "node server.mjs",
-    "check": "node --check server.mjs && node --check psc-reader.mjs"
+    "check": "node --check server.mjs && node --check psc-reader.mjs && node --check fleet-ai.mjs"
   },
   "engines": {
     "node": ">=20"
