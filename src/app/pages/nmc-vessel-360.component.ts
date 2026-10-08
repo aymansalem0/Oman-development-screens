@@ -9,6 +9,7 @@ import {
 import { NMC_OPERATIONAL_VESSELS, getOperationalVesselByImo } from '../data/nmc-expanded-vessel-catalog';
 import { LanguageService } from '../services/language.service';
 import { NmcRiskEngineService } from '../services/nmc-risk-engine.service';
+import { NmcVesselEvidenceService } from '../services/nmc-vessel-evidence.service';
 
 interface SourceStatus {
   name: string;
@@ -135,7 +136,8 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
   constructor(
     private route: ActivatedRoute,
     public lang: LanguageService,
-    private riskEngine: NmcRiskEngineService
+    private riskEngine: NmcRiskEngineService,
+    private vesselEvidence: NmcVesselEvidenceService
   ) {}
 
   copy(en: string, ar: string): string {
@@ -558,9 +560,11 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
     this.historicalRiskImpact = contribution('history');
 
     this.sources = this.buildSources();
-    this.certificates = this.buildCertificates();
-    this.inspections = this.buildInspections();
-    this.deficiencies = this.buildDeficiencies();
+    // The exact same deterministic fixture now drives Vessel 360 and A01/A02.
+    const bundle = this.vesselEvidence.create(this.vessel);
+    this.certificates = bundle.certificates;
+    this.inspections = bundle.inspections;
+    this.deficiencies = bundle.deficiencies;
     this.riskFactors = this.buildRiskFactors();
     this.timeline = this.buildTimeline();
     this.selectedCertificateId = this.certificates[0].id;
@@ -718,130 +722,6 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
         sourceClass:'MOEI Authoritative'
       }
     ];
-  }
-
-  private buildCertificates(): CertificateRecord[] {
-    const firstStatus: CertificateRecord['status'] =
-      this.hasCertificateConflict ? 'Conditional' : this.vessel.risk >= 55 ? 'Expiring' : 'Valid';
-
-    return [
-      {
-        id:`CERT-SC-${this.vessel.imo}`,
-        type:'Cargo Ship Safety Construction Certificate',
-        number:`CSC-${this.vessel.imo}-2026`,
-        issuer:this.isUaeFlag ? 'MOEI Maritime Affairs' : this.flagRegistryAuthority,
-        issued:'12 Feb 2026',
-        expiry:this.vessel.risk >= 55 ? '19 Dec 2026' : '11 Feb 2031',
-        status:firstStatus,
-        source:this.isUaeFlag ? 'MOEI Certificate Registry' : 'Verified Flag / RO Certificate Record',
-        condition:this.hasCertificateConflict ? 'Subject to verification of an outstanding safety condition before unrestricted operation.' : undefined,
-        conflict:this.hasCertificateConflict
-      },
-      {
-        id:`CERT-SR-${this.vessel.imo}`,
-        type:'Ship Safety Radio Certificate',
-        number:`CSR-${this.vessel.imo}-2025`,
-        issuer:this.isUaeFlag ? 'MOEI Recognized Organization' : this.vessel.classSociety,
-        issued:'18 Nov 2025',
-        expiry:'17 Nov 2027',
-        status:'Valid',
-        source:this.isUaeFlag ? 'MOEI Certificate Registry' : 'Recognized Organization Record'
-      },
-      {
-        id:`CERT-SE-${this.vessel.imo}`,
-        type:'Ship Safety Equipment Certificate',
-        number:`CSE-${this.vessel.imo}-2025`,
-        issuer:this.isUaeFlag ? 'MOEI Recognized Organization' : this.vessel.classSociety,
-        issued:'02 Sep 2025',
-        expiry:this.vessel.risk >= 65 ? '01 Dec 2026' : '01 Sep 2028',
-        status:this.vessel.risk >= 65 ? 'Expiring' : 'Valid',
-        source:this.isUaeFlag ? 'MOEI Certificate Registry' : 'Recognized Organization Record'
-      },
-      {
-        id:`CERT-ISSC-${this.vessel.imo}`,
-        type:'International Ship Security Certificate',
-        number:`ISSC-${this.vessel.imo}-2024`,
-        issuer:this.flagRegistryAuthority,
-        issued:'04 Apr 2024',
-        expiry:'03 Apr 2029',
-        status:'Valid',
-        source:this.isUaeFlag ? 'MOEI / Flag-State Record' : 'External Flag Record'
-      }
-    ];
-  }
-
-  private buildInspections(): InspectionRecord[] {
-    const latestResult: InspectionRecord['result'] =
-      this.vessel.risk >= 65 ? 'Follow-up Required' :
-      this.vessel.risk >= 45 ? 'Deficiencies Found' : 'Passed';
-
-    return [
-      {
-        id:`INS-2026-${String(1300 + this.vessel.id).padStart(5,'0')}`,
-        date:'19 Aug 2026',
-        port:this.vessel.destination,
-        type:'Port State / Safety Inspection',
-        result:latestResult,
-        inspector:'MOEI Smart Inspection',
-        source:'Smart Inspection',
-        openDeficiencies:this.openDeficiencyCount
-      },
-      {
-        id:`INS-2026-${String(400 + this.vessel.id).padStart(5,'0')}`,
-        date:'13 Mar 2026',
-        port:this.vessel.zone,
-        type:'Safety Compliance Inspection',
-        result:this.vessel.risk >= 50 ? 'Deficiencies Found' : 'Passed',
-        inspector:'MOEI Smart Inspection',
-        source:'Smart Inspection',
-        openDeficiencies:0
-      },
-      {
-        id:`INS-2025-${String(2900 + this.vessel.id).padStart(5,'0')}`,
-        date:'22 Nov 2025',
-        port:'UAE',
-        type:'Routine Inspection',
-        result:'Passed',
-        inspector:'MOEI Smart Inspection',
-        source:'Smart Inspection',
-        openDeficiencies:0
-      }
-    ];
-  }
-
-  private buildDeficiencies(): DeficiencyRecord[] {
-    const records: DeficiencyRecord[] = [];
-
-    if (this.hasOpenDeficiency) {
-      const critical = this.vessel.risk >= 80;
-      records.push({
-        id:`DEF-2026-${400 + this.vessel.id}`,
-        category:critical ? 'Fire Safety' : 'Safety Equipment',
-        description:critical
-          ? 'Fixed fire detection and alarm system failed functional verification during the latest inspection.'
-          : 'Safety equipment finding remains open pending corrective-action evidence.',
-        severity:critical ? 'Critical' : 'Major',
-        status:'Open',
-        raised:'19 Aug 2026',
-        due:'02 Sep 2026',
-        evidence:`Inspection report INS-2026-${String(1300 + this.vessel.id).padStart(5,'0')} · supporting evidence attached`,
-        riskImpact:this.inspectionRiskImpact
-      });
-    }
-
-    records.push({
-      id:`DEF-2026-${100 + this.vessel.id}`,
-      category:'Life Saving Appliances',
-      description:'Historical inspection finding closed after corrective evidence was accepted.',
-      severity:'Minor',
-      status:'Closed',
-      raised:'13 Mar 2026',
-      due:'20 Mar 2026',
-      evidence:'Closure evidence accepted',
-      riskImpact:0
-    });
-
-    return records;
   }
 
   private buildRiskFactors(): RiskFactor[] {
