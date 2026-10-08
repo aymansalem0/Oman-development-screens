@@ -18,7 +18,9 @@
         {{ copy('Risk Explainability', 'تفسير المخاطر') }}
       </a>
       <a class="case-action-btn" [routerLink]="['/moei/nmc/vessel', vessel.imo, 'case']">
-        ▣ {{ copy('Open NMC Case', 'فتح حالة بالمركز البحري') }}
+        ▣ {{ liveAttempted
+          ? copy('View demo case workspace (not live AI)', 'عرض الحالة التجريبية (ليست AI مباشرة)')
+          : copy('Open NMC Case', 'فتح حالة بالمركز البحري') }}
       </a>
     </div>
   </header>
@@ -73,7 +75,7 @@
         <span class="health-dot"></span>
         <strong>{{ copy('Systems operational', 'الأنظمة تعمل بصورة طبيعية') }}</strong>
       </div>
-      <small>{{ copy('5 / 5 data sources available', '5 / 5 مصادر بيانات متاحة') }}</small>
+      <small>{{ copy('Synthetic POC · external registries not connected', 'بيانات تجريبية · السجلات الخارجية غير متصلة') }}</small>
     </div>
   </aside>
 
@@ -93,8 +95,8 @@
 
       <div class="hero-metrics">
         <div class="metric-card risk" [ngClass]="riskClass">
-          <small>{{ copy('Risk', 'المخاطر') }}</small>
-          <strong>{{ vessel.risk }}</strong>
+          <small>{{ copy('Risk', 'المخاطر') }} · {{ displayedRiskKind }}</small>
+          <strong>{{ displayedRisk }}</strong>
           <span>{{ riskLevelLabel }}</span>
         </div>
         <div class="metric-card">
@@ -104,8 +106,9 @@
         </div>
         <div class="metric-card ai">
           <small>{{ copy('AI assessment confidence', 'الثقة في تقييم الذكاء الاصطناعي') }}</small>
-          <strong>{{ aiConfidence }}%</strong>
-          <span>{{ copy('Advisory confidence', 'ثقة استشارية') }}</span>
+          <strong>{{ liveAttempted ? '—' : aiConfidence + '%' }}</strong>
+          <span>{{ liveAttempted ? copy('No verified AI situation assessment available yet', 'لا يوجد تقييم موقف AI مُتحقق منه حتى الآن')
+                              : copy('Synthetic sample confidence', 'ثقة السيناريو التجريبي') }}</span>
         </div>
       </div>
     </section>
@@ -113,18 +116,77 @@
     <section class="advisory-banner">
       <div class="advisory-icon">AI</div>
       <div>
-        <strong>{{ copy('AI Advisory · Human Decision Required', 'توصية بالذكاء الاصطناعي · القرار البشري مطلوب') }}</strong>
+        <strong>{{ liveResult ? copy('Live AI factor signals · Human verification required', 'مؤشرات AI مباشرة · تتطلب التحقق البشري')
+          : liveAttempted ? copy('Live validation incomplete · No official risk score', 'التحقق المباشر غير مكتمل · لا توجد درجة مخاطر رسمية')
+          : copy('Synthetic demonstration assessment', 'تقييم سيناريو تجريبي') }}</strong>
         <p>{{ copy(
           'The assessment correlates available vessel evidence and recommends operational attention. It does not replace regulatory authority or automatically impose restrictions.',
           'يربط التقييم الأدلة المتاحة عن السفينة ويقترح مستوى الانتباه التشغيلي. ولا يحل محل السلطة التنظيمية ولا يفرض قيوداً تلقائياً.'
         ) }}</p>
       </div>
       <div class="generated-meta">
-        <span>{{ modelLabel }}</span>
-        <small>{{ copy('Generated', 'تم الإنشاء') }} {{ generatedAt }}</small>
+        <span>{{ liveResult ? copy('Live factor analysis (A01 + A02)', 'تحليل مباشر للعوامل (A01 + A02)')
+          : liveAttempted ? copy('A01/A02 validation attempted', 'تمت محاولة التحقق من A01/A02') : modelLabel }}</span>
+        <small *ngIf="!liveAttempted">{{ copy('Sample generated', 'تاريخ العينة') }} {{ generatedAt }}</small>
       </div>
     </section>
 
+    <app-nmc-live-ai-panel [vessel]="vessel" [isArabic]="lang.isArabic"
+      (liveRiskChange)="onLiveRiskChange($event)"
+      (liveRunStarted)="onLiveRunStarted()"></app-nmc-live-ai-panel>
+
+    <section class="panel live-risk-interpretation" *ngIf="liveResult as live">
+      <div class="panel-header">
+        <div>
+          <span class="section-kicker">{{ copy('LIVE AI FACTOR ANALYSIS', 'تحليل عوامل المخاطر بالذكاء الاصطناعي') }}</span>
+          <h3>{{ copy('Provisional risk: ', 'المخاطر المبدئية: ') }}{{ live.risk.score }} / 100 · {{ live.risk.level }}</h3>
+        </div>
+        <span class="priority-pill" [ngClass]="riskClass">{{ riskLevelLabel }}</span>
+      </div>
+      <p>{{ copy(
+        'This score uses the five A01/A02 signals and the published deterministic weights. The underlying vessel records are synthetic and not independently authenticated. It is not the official operational risk score.',
+        'تستخدم هذه الدرجة العوامل الخمسة من A01/A02 وأوزان المحرك الحتمي. سجلات السفينة تجريبية وغير معتمدة من مصادر خارجية. هذه ليست درجة مخاطر تشغيلية رسمية.'
+      ) }}</p>
+      <p *ngIf="criticalFinding as finding"><strong>{{ copy('Critical safety finding in the synthetic evidence:', 'ملاحظة سلامة حرجة في الأدلة التجريبية:') }}</strong>
+        {{ finding }}
+        {{ copy('A composite risk classification does not cancel this finding; any risk override must follow an approved deterministic business rule.',
+                 'تصنيف المخاطر المركب لا يلغي هذه الملاحظة؛ وأي قاعدة استثناء تحتاج اعتمادًا صريحًا في محرك المخاطر.') }}
+      </p>
+      <p><strong>{{ copy('Next stage:', 'المرحلة التالية:') }}</strong>
+        {{ copy(
+          'A01 Situation Assessment (summary, explanations, recommendations) has not been called using this score yet. Sample recommendations are hidden to avoid presenting them as live AI output.',
+          'لم يتم استدعاء A01 لتقييم الموقف وكتابة التوصيات باستخدام هذه الدرجة. تم إخفاء التوصيات التجريبية حتى لا تظهر كأنها نتائج AI مباشرة.'
+        ) }}
+      </p>
+      <button type="button" class="sample-toggle" (click)="showSampleAssessment = !showSampleAssessment">
+        {{ showSampleAssessment
+          ? copy('Hide synthetic example', 'إخفاء المثال التجريبي')
+          : copy('Show original synthetic example (not live AI)', 'عرض المثال التجريبي الأصلي (ليس AI مباشرًا)') }}
+      </button>
+    </section>
+
+    <section class="panel live-risk-interpretation" *ngIf="liveAttempted && !liveResult">
+      <div class="panel-header">
+        <div>
+          <span class="section-kicker">{{ copy('LIVE AI ANALYSIS INCOMPLETE', 'تحليل الذكاء الاصطناعي المباشر غير مكتمل') }}</span>
+          <h3>{{ copy('No five-factor risk evaluation available', 'لا يوجد تقييم مخاطر مكتمل للعوامل الخمسة') }}</h3>
+        </div>
+      </div>
+      <p>{{ copy(
+        'Some Airia signals were not validated or the external evidence was unavailable. The Risk Engine has not recalculated the vessel score. The number above is the separate fictional baseline, not a live AI result.',
+        'لم يتم التحقق من بعض إشارات Airia أو لم تتوفر الأدلة الخارجية. لم يُعِد محرك المخاطر حساب الدرجة. الرقم المعروض بالأعلى هو السيناريو الافتراضي المنفصل، وليس نتيجة ذكاء اصطناعي مباشرة.'
+      ) }}</p>
+      <p>{{ copy(
+        'No situation assessment, operational recommendations, inspection task or enforcement action has been generated from this run. Check the agent validation issues and re-run after fixing the evidence input.',
+        'لم ينتج عن هذه المحاولة تقييم موقف أو توصيات تشغيلية أو مهمة معاينة أو إجراء تنظيمي. راجع أسباب رفض المؤشرات وأعد التشغيل بعد تصحيح إدخال الأدلة.'
+      ) }}</p>
+    </section>
+
+    <ng-container *ngIf="!liveAttempted || showSampleAssessment">
+      <div class="sample-warning">
+        {{ copy('SYNTHETIC SCENARIO · The situation narrative, evidence contributions and actions below do not come from the live A01/A02 run.',
+                 'سيناريو تجريبي · الملخص والمساهمات والتوصيات أدناه ليست ناتجة من تشغيل A01/A02 المباشر.') }}
+      </div>
     <section class="situation-grid">
       <article class="panel situation-summary">
         <div class="panel-header">
@@ -263,6 +325,8 @@
       </div>
     </section>
 
+    </ng-container>
+
     <section class="panel human-oversight">
       <div class="panel-header">
         <div>
@@ -291,7 +355,7 @@
       </div>
     </section>
 
-    <section class="case-creation-cta">
+    <section class="case-creation-cta" *ngIf="!liveAttempted || showSampleAssessment">
       <div>
         <span class="section-kicker">{{ copy('NEXT OPERATIONAL STEP', 'الخطوة التشغيلية التالية') }}</span>
         <h3>{{ copy('Create a coordinated NMC case from the reviewed recommendations', 'إنشاء حالة منسقة بالمركز البحري من التوصيات التي تمت مراجعتها') }}</h3>

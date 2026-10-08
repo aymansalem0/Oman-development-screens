@@ -10,7 +10,9 @@ import {
   getOperationalVesselByImo
 } from '../data/nmc-expanded-vessel-catalog';
 import { LanguageService } from '../services/language.service';
+import { NmcLiveAiPanelComponent, NmcLiveRiskResult } from './nmc-live-ai-panel.component';
 import { NmcRiskEngineService } from '../services/nmc-risk-engine.service';
+import { NmcVesselEvidenceService } from '../services/nmc-vessel-evidence.service';
 
 type DecisionStatus = 'Pending' | 'Accepted' | 'Modified' | 'Rejected';
 type EvidenceType = 'Movement' | 'Inspection' | 'Certificate' | 'Data Quality' | 'History';
@@ -44,7 +46,7 @@ interface AiRecommendation {
 @Component({
   selector: 'app-nmc-ai-situation-assessment',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink],
+  imports: [CommonModule, FormsModule, RouterLink, NmcLiveAiPanelComponent],
   templateUrl: './nmc-ai-situation-assessment.component.html',
   styleUrl: './nmc-ai-situation-assessment.component.css'
 })
@@ -53,6 +55,10 @@ export class NmcAiSituationAssessmentComponent implements OnInit {
   evidence: AiEvidence[] = [];
   recommendations: AiRecommendation[] = [];
   selectedEvidence?: AiEvidence;
+  liveResult: NmcLiveRiskResult | null = null;
+  /** Tracks any attempted live run, including partial/unsupported agent responses. */
+  liveAttempted = false;
+  showSampleAssessment = false;
 
   readonly generatedAt = '07 Oct 2026 · 22:43:06';
   readonly modelLabel = 'Maritime Situation Intelligence';
@@ -60,7 +66,8 @@ export class NmcAiSituationAssessmentComponent implements OnInit {
   constructor(
     private route: ActivatedRoute,
     public lang: LanguageService,
-    private riskEngine: NmcRiskEngineService
+    private riskEngine: NmcRiskEngineService,
+    private readonly vesselEvidence: NmcVesselEvidenceService
   ) {}
 
   ngOnInit(): void {
@@ -90,8 +97,36 @@ export class NmcAiSituationAssessmentComponent implements OnInit {
     });
   }
 
+  onLiveRunStarted(): void {
+    this.liveAttempted = true;
+    this.showSampleAssessment = false;
+    this.selectedEvidence = undefined;
+  }
+
+  onLiveRiskChange(result: NmcLiveRiskResult | null): void {
+    this.liveResult = result;
+    this.showSampleAssessment = false;
+    this.selectedEvidence = undefined;
+  }
+
+  get displayedRisk(): number {
+    return this.liveResult?.risk.score ?? this.vessel.risk;
+  }
+
+  get criticalFinding(): string | null {
+    if (!this.liveResult || !this.vessel) return null;
+    const finding = this.vesselEvidence.create(this.vessel).deficiencies
+      .find(item => item.status === 'Open' && item.severity === 'Critical');
+    return finding?.description || null;
+  }
+
+  get displayedRiskKind(): string {
+    return this.liveResult ? this.copy('Provisional AI signals', 'مؤشرات ذكاء اصطناعي مبدئية')
+      : this.copy('Synthetic baseline', 'السيناريو التجريبي');
+  }
+
   get riskLevelLabel(): string {
-    const level = this.riskEngine.levelForScore(this.vessel.risk);
+    const level = this.riskEngine.levelForScore(this.displayedRisk);
     const labels: Record<string, string> = {
       Critical: this.copy('Critical', 'حرج'),
       High: this.copy('High', 'مرتفع'),
@@ -102,7 +137,7 @@ export class NmcAiSituationAssessmentComponent implements OnInit {
   }
 
   get riskClass(): string {
-    return this.riskEngine.levelForScore(this.vessel.risk).toLowerCase();
+    return this.riskEngine.levelForScore(this.displayedRisk).toLowerCase();
   }
 
   get baseRisk(): number {

@@ -1,0 +1,42 @@
+name: NMC Docker POC validation
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  docker-baseline:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate compose configuration
+        run: docker compose config --quiet
+      - name: Build Angular and AI proxy images
+        run: docker compose build nmc ai-proxy
+      - name: Unit-test PSC proxy and schemas
+        run: |
+          node --check ai-proxy/server.mjs
+          node --check ai-proxy/psc-reader.mjs
+          mkdir -p /tmp/psc-adapter
+          cp ai-proxy/psc-reader.mjs tools/psc/psc-fixtures.mjs src/app/data/nmc-vessel-catalog.ts src/app/data/nmc-expanded-vessel-catalog.ts /tmp/psc-adapter/
+          cp ai-proxy/test/psc-reader.test.mjs /tmp/psc-adapter/test-psc.mjs
+          sed -i "s@'../psc-reader.mjs'@'./psc-reader.mjs'@" /tmp/psc-adapter/test-psc.mjs
+          node --test /tmp/psc-adapter/test-psc.mjs
+      - name: Start local POC
+        run: docker compose up -d --wait
+      - name: Smoke test Angular and proxy
+        run: |
+          curl --fail --silent --show-error http://127.0.0.1:4200/ | grep -qi '<html'
+          curl --fail --silent --show-error http://127.0.0.1:4200/api/ai/health | grep -q '"aiConfigured":false'
+          curl --fail --silent --show-error http://127.0.0.1:4200/api/ai/psc/health | grep -q '"sourceMode":"snapshot"'
+          curl --fail --silent --show-error http://127.0.0.1:4200/api/ai/psc/vessels/9328471 | grep -q '"sourceMode":"LOCAL_FIXTURE_SNAPSHOT"'
+          curl --fail --silent --show-error http://127.0.0.1:4200/api/ai/psc/vessels/9328471 | grep -q '"inspections":4'
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:4200/api/ai/psc/vessels/1234567)" = "404"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:4200/api/ai/execute/a01)" = "503"
+      - name: Logs if failing
+        if: failure()
+        run: docker compose logs --tail=100
+      - name: Shutdown
+        if: always()
+        run: docker compose down --volumes
