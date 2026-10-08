@@ -302,8 +302,8 @@ export class NmcLiveAiPanelComponent {
 
   private safeError(error: unknown): string {
     if (error && typeof error === 'object') {
-      const e = error as { status?: number; error?: { error?: string; message?: string } };
-      return `HTTP ${e.status ?? 'error'} ${e.error?.error || ''} ${e.error?.message || ''}`.trim();
+      const e = error as { status?: number; error?: { error?: string; message?: string; reasonCode?: string } };
+      return `HTTP ${e.status ?? 'error'} ${e.error?.error || ''} ${e.error?.reasonCode || ''} ${e.error?.message || ''}`.trim();
     }
     return 'Request failed';
   }
