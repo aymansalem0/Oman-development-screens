@@ -63,7 +63,7 @@ const server = createServer(async (req, res) => {
   if (req.method === 'GET' && path === '/api/ai/psc/health') {
     return respond(res, 200, getPscHealth());
   }
-  const pscMatch = /^\\/api\\/ai\\/psc\\/vessels\\/(\\d{7})$/.exec(path);
+  const pscMatch = /^\/api\/ai\/psc\/vessels\/(\d{7})$/.exec(path);
   if (req.method === 'GET' && pscMatch) {
     try { return respond(res, 200, await getPscVessel(pscMatch[1])); }
     catch (error) {
