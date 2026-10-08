@@ -54,7 +54,7 @@ export class FleetAutoScheduler {
     this.timer=null;
   }
   async tick(){
-    if(!this.enabled||!this.fleet.persistenceHealthy||this.runningTick||this.fleet.job?.status==='RUNNING')return;
+    if(!this.enabled||this.fleet.persistenceHealthy===false||this.runningTick||this.fleet.job?.status==='RUNNING')return;
     this.runningTick=true;
     this.lastTickAt=new Date().toISOString();this.lastSelected=0;this.lastUnchanged=0;
     try{
