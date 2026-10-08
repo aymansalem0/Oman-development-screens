@@ -2222,3 +2222,17 @@ button, a { font: inherit; }
 .case-link-btn {
   text-decoration: none;
 }
+
+/* Separate external PSC source tab: never blend simulated regional records into MOEI inspections. */
+.psc-section .psc-provenance { display:flex;flex-wrap:wrap;align-items:center;gap:10px; padding:12px 15px; margin:12px 0; border:1px solid #c5dfda;border-radius:12px;background:#ecf9f5;font-size:11px;color:#285e54; }
+.psc-section .psc-provenance small { flex-basis:100%; color:#66847b;font-size:10px; }
+.psc-section .psc-badge { font-weight:800; padding:6px 10px;background:#d9efe9;border-radius:8px; }
+.psc-section .psc-card { margin-top:14px; padding:14px 16px; }
+.psc-section .psc-table-wrap { overflow-x:auto; margin-top:12px; }
+.psc-section .psc-table { border-collapse:collapse;width:100%;text-align:start;font-size:11px; }
+.psc-section .psc-table th,.psc-section .psc-table td { border-bottom:1px solid #dbe8e7; padding:11px 9px; vertical-align:top; }
+.psc-section .psc-table th { background:#f1f8f7;color:#3f7369;font-weight:800; }
+.psc-section .psc-table td { color:#355c62; }
+.psc-section .psc-state { margin:13px 0;padding:16px;border-radius:10px;background:#f0f7fa;color:#345c6b;font-size:12px; }
+.psc-section .psc-error { background:#fff0ed;color:#9b3c3c; }
+.psc-section .psc-disclaimer { margin:15px 0 0;font-size:11px;font-weight:700;color:#965c27; }

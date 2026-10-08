@@ -1,0 +1,17 @@
+.git
+.github
+.gitignore
+**/node_modules
+**/dist
+**/.angular
+**/.vscode
+.env
+.env.*
+!.env.example
+*.log
+Dockerfile*
+compose*.yaml
+docs
+
+# Do not send Google service-account secrets into Docker build context.
+secrets
