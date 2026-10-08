@@ -284,8 +284,8 @@ export class NmcLiveAiPanelComponent {
         }
         valid.push({
           factor: s['factor'] as RiskFactorKey,
-          severity: s['severity'],
-          confidence: s['confidence'],
+          severity: s['severity'] as number,
+          confidence: s['confidence'] as number,
           sourceAgent: s['sourceAgent'] as 'A01' | 'A02',
           evidenceIds: ids as string[],
           reason: typeof s['reason'] === 'string' ? s['reason'] : ''
