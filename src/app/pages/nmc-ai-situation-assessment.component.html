@@ -135,6 +135,21 @@
       (liveRiskChange)="onLiveRiskChange($event)"
       (liveRunStarted)="onLiveRunStarted()"></app-nmc-live-ai-panel>
 
+    <section class="panel live-risk-interpretation" *ngIf="fleetAssessment as saved">
+      <div class="panel-header">
+        <div>
+          <span class="section-kicker">{{ copy('SAVED AI FLEET RISK · SYNTHETIC POC', 'مخاطر الأسطول المحفوظة · محاكاة') }}</span>
+          <h3>{{ saved.score }} / 100 · {{ saved.level }} · {{ saved.operationalPriority }}</h3>
+        </div>
+      </div>
+      <p>{{ copy(
+        'This is the last completed batch score from A01/A02 and the deterministic Risk Engine. It is not an official regulatory assessment, and no AI-generated situation summary or action has been approved.',
+        'هذه آخر درجة من دفعة A01/A02 ومحرك المخاطر الحتمي. ليست تقييمًا تنظيميًا رسميًا، ولم يعتمد المسؤول أي ملخص موقف أو إجراء.'
+      ) }}</p>
+      <p>IMO {{ saved.imo }} · {{ saved.assessedAt }} · {{ saved.configVersion }}</p>
+      <p *ngIf="saved.criticalOpenFinding">{{ copy('Critical open finding: priority officer review required independently of composite risk score.', 'ملاحظة حرجة مفتوحة: تتطلب مراجعة بشرية ذات أولوية بغض النظر عن الدرجة المركبة.') }}</p>
+    </section>
+
     <section class="panel live-risk-interpretation" *ngIf="liveResult as live">
       <div class="panel-header">
         <div>
@@ -182,7 +197,7 @@
       ) }}</p>
     </section>
 
-    <ng-container *ngIf="!liveAttempted || showSampleAssessment">
+    <ng-container *ngIf="(!liveAttempted && !fleetAssessment) || showSampleAssessment">
       <div class="sample-warning">
         {{ copy('SYNTHETIC SCENARIO · The situation narrative, evidence contributions and actions below do not come from the live A01/A02 run.',
                  'سيناريو تجريبي · الملخص والمساهمات والتوصيات أدناه ليست ناتجة من تشغيل A01/A02 المباشر.') }}
@@ -355,7 +370,7 @@
       </div>
     </section>
 
-    <section class="case-creation-cta" *ngIf="!liveAttempted || showSampleAssessment">
+    <section class="case-creation-cta" *ngIf="(!liveAttempted && !fleetAssessment) || showSampleAssessment">
       <div>
         <span class="section-kicker">{{ copy('NEXT OPERATIONAL STEP', 'الخطوة التشغيلية التالية') }}</span>
         <h3>{{ copy('Create a coordinated NMC case from the reviewed recommendations', 'إنشاء حالة منسقة بالمركز البحري من التوصيات التي تمت مراجعتها') }}</h3>
