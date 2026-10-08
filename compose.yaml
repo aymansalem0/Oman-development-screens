@@ -1,0 +1,58 @@
+name: moei-nmc-poc
+
+services:
+  ai-proxy:
+    build:
+      context: ./ai-proxy
+    environment:
+      PORT: "3000"
+      AIRIA_MENA_KEY: ${AIRIA_MENA_KEY:-}
+      AIRIA_BASE_URL: ${AIRIA_BASE_URL:-https://mena.api.airia.ai}
+      AIRIA_TIMEOUT_MS: "120000"
+    expose:
+      - "3000"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/ai/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+    networks:
+      - nmc
+
+  nmc:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "127.0.0.1:${NMC_HOST_PORT:-4200}:80"
+    depends_on:
+      ai-proxy:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - nmc
+
+  nmc-dev:
+    profiles: ["dev"]
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    ports:
+      - "127.0.0.1:${NMC_DEV_HOST_PORT:-4201}:4200"
+    volumes:
+      - ./:/workspace
+      - nmc-dev-node-modules:/workspace/node_modules
+    depends_on:
+      ai-proxy:
+        condition: service_healthy
+    networks:
+      - nmc
+
+networks:
+  nmc:
+    driver: bridge
+
+volumes:
+  nmc-dev-node-modules:

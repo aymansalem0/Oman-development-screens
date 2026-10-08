@@ -1,0 +1,9 @@
+{
+  "/api/ai": {
+    "target": "http://ai-proxy:3000",
+    "secure": false,
+    "changeOrigin": true,
+    "timeout": 130000,
+    "proxyTimeout": 130000
+  }
+}

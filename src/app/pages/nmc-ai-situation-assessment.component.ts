@@ -10,6 +10,7 @@ import {
   getOperationalVesselByImo
 } from '../data/nmc-expanded-vessel-catalog';
 import { LanguageService } from '../services/language.service';
+import { NmcLiveAiPanelComponent } from './nmc-live-ai-panel.component';
 import { NmcRiskEngineService } from '../services/nmc-risk-engine.service';
 
 type DecisionStatus = 'Pending' | 'Accepted' | 'Modified' | 'Rejected';
@@ -44,7 +45,7 @@ interface AiRecommendation {
 @Component({
   selector: 'app-nmc-ai-situation-assessment',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink],
+  imports: [CommonModule, FormsModule, RouterLink, NmcLiveAiPanelComponent],
   templateUrl: './nmc-ai-situation-assessment.component.html',
   styleUrl: './nmc-ai-situation-assessment.component.css'
 })

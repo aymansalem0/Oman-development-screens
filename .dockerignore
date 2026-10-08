@@ -1,0 +1,14 @@
+.git
+.github
+.gitignore
+**/node_modules
+**/dist
+**/.angular
+**/.vscode
+.env
+.env.*
+!.env.example
+*.log
+Dockerfile*
+compose*.yaml
+docs
