@@ -18,7 +18,9 @@
         {{ copy('Risk Explainability', 'تفسير المخاطر') }}
       </a>
       <a class="case-action-btn" [routerLink]="['/moei/nmc/vessel', vessel.imo, 'case']">
-        ▣ {{ copy('Open NMC Case', 'فتح حالة بالمركز البحري') }}
+        ▣ {{ liveResult
+          ? copy('View demo case workspace (not live AI)', 'عرض الحالة التجريبية (ليست AI مباشرة)')
+          : copy('Open NMC Case', 'فتح حالة بالمركز البحري') }}
       </a>
     </div>
   </header>
@@ -142,11 +144,10 @@
         'This score uses the five A01/A02 signals and the published deterministic weights. The underlying vessel records are synthetic and not independently authenticated. It is not the official operational risk score.',
         'تستخدم هذه الدرجة العوامل الخمسة من A01/A02 وأوزان المحرك الحتمي. سجلات السفينة تجريبية وغير معتمدة من مصادر خارجية. هذه ليست درجة مخاطر تشغيلية رسمية.'
       ) }}</p>
-      <p><strong>{{ copy('Safety exception:', 'ملاحظة سلامة:') }}</strong>
-        {{ copy(
-          'The inspection factor reports a critical fire-safety deficiency. A composite Watch classification must not hide an unresolved safety finding; policy-based override rules require separate approval.',
-          'عامل التفتيش يشير إلى ملاحظة حرجة تتعلق بالسلامة من الحريق. تصنيف المراقبة المركب لا يلغي الملاحظة الحرجة؛ وتحتاج قواعد الاستثناء موافقة مستقلة.'
-        ) }}
+      <p *ngIf="criticalFinding as finding"><strong>{{ copy('Critical safety finding in the synthetic evidence:', 'ملاحظة سلامة حرجة في الأدلة التجريبية:') }}</strong>
+        {{ finding }}
+        {{ copy('A composite risk classification does not cancel this finding; any risk override must follow an approved deterministic business rule.',
+                 'تصنيف المخاطر المركب لا يلغي هذه الملاحظة؛ وأي قاعدة استثناء تحتاج اعتمادًا صريحًا في محرك المخاطر.') }}
       </p>
       <p><strong>{{ copy('Next stage:', 'المرحلة التالية:') }}</strong>
         {{ copy(
