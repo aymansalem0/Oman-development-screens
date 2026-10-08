@@ -1048,3 +1048,7 @@ button, input, select { font: inherit; }
   .fleet-ai-stats{grid-template-columns:repeat(2,minmax(0,1fr));}
   .fleet-ai-heading{flex-direction:column;align-items:flex-start;}
 }
+
+.fleet-auto-health{margin-top:14px;padding:11px 14px;border:1px solid #cae5de;border-radius:11px;display:flex;flex-wrap:wrap;align-items:center;gap:9px 16px;background:rgba(255,255,255,.75)}
+.fleet-auto-health span{font-size:11px;font-weight:650;color:#657781}
+.fleet-auto-health span.fleet-auto-live{color:#067756;font-weight:900}

@@ -19,6 +19,9 @@ jobs:
           node --check ai-proxy/server.mjs
           node --check ai-proxy/psc-reader.mjs
           node --check ai-proxy/fleet-ai.mjs
+          node --check ai-proxy/fleet-scheduler.mjs
+          node --check ai-proxy/build-fleet-evidence.mjs
+          node --test ai-proxy/test/fleet-scheduler.test.mjs
           mkdir -p /tmp/psc-adapter
           cp ai-proxy/psc-reader.mjs ai-proxy/fleet-ai.mjs tools/psc/psc-fixtures.mjs src/app/data/nmc-vessel-catalog.ts src/app/data/nmc-expanded-vessel-catalog.ts /tmp/psc-adapter/
           cp ai-proxy/test/psc-reader.test.mjs /tmp/psc-adapter/test-psc.mjs
@@ -34,7 +37,7 @@ jobs:
           curl --fail --silent --show-error http://127.0.0.1:4200/ | grep -qi '<html'
           curl --fail --silent --show-error http://127.0.0.1:4200/api/ai/health | grep -q '"aiConfigured":false'
           curl --fail --silent --show-error http://127.0.0.1:4200/api/ai/fleet/status | grep -q '"fleetSize":420'
-          test "$(curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:4200/api/ai/fleet/start)" = "503"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:4200/api/ai/fleet/start)" = "405"
           curl --fail --silent --show-error http://127.0.0.1:4200/api/ai/psc/health | grep -q '"sourceMode":"snapshot"'
           curl --fail --silent --show-error http://127.0.0.1:4200/api/ai/psc/vessels/9328471 | grep -q '"sourceMode":"LOCAL_FIXTURE_SNAPSHOT"'
           curl --fail --silent --show-error http://127.0.0.1:4200/api/ai/psc/vessels/9328471 | grep -q '"inspections":4'
