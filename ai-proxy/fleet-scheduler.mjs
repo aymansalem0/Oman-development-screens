@@ -54,7 +54,7 @@ export class FleetAutoScheduler {
     this.timer=null;
   }
   async tick(){
-    if(!this.enabled||this.runningTick||this.fleet.job?.status==='RUNNING')return;
+    if(!this.enabled||!this.fleet.persistenceHealthy||this.runningTick||this.fleet.job?.status==='RUNNING')return;
     this.runningTick=true;
     this.lastTickAt=new Date().toISOString();this.lastSelected=0;this.lastUnchanged=0;
     try{
@@ -79,12 +79,12 @@ export class FleetAutoScheduler {
         catch(e){
           const code=String(e?.message||'PSC_SOURCE_UNAVAILABLE');
           const safe=/^[A-Z][A-Z0-9_]{1,95}$/.test(code)?code:'PSC_SOURCE_UNAVAILABLE';
-          this.noteFailure(v.imo,safe);
+          await this.noteFailure(v.imo,safe);
           continue;
         }
         if(psc.imo!==v.imo||psc.authoritative!==false||
            psc.dataNature!=='SYNTHETIC_NOT_RIYADH_MOU')
-          {this.noteFailure(v.imo,'PSC_PROVENANCE_INVALID');continue;}
+          {await this.noteFailure(v.imo,'PSC_PROVENANCE_INVALID');continue;}
         const hash=createHash('sha256').update(JSON.stringify({
           internal:v.inlineContext,
           evidenceIds:v.evidenceIds,
@@ -101,7 +101,7 @@ export class FleetAutoScheduler {
         }
         selected.push({...v,_inputHash:hash,_refreshIntervalMs:this.intervalMs});
       }
-      if(this.lastUnchanged)this.fleet.persist();
+      if(this.lastUnchanged)await this.fleet.persist();
       this.lastSelected=selected.length;
       if(selected.length){
         this.fleet.start({vessels:selected,config:this.config});
@@ -113,7 +113,7 @@ export class FleetAutoScheduler {
       console.error('[fleet-auto] '+this.lastError);
     }finally{this.runningTick=false;}
   }
-  noteFailure(imo,code){
+  async noteFailure(imo,code){
     const prev=this.fleet.results[imo];
     const now=new Date();
     const next=new Date(now.getTime()+RETRY_DELAY).toISOString();
@@ -125,6 +125,6 @@ export class FleetAutoScheduler {
         attemptedAt:now.toISOString(),lastCheckedAt:now.toISOString(),
         nextCheckAt:next,authoritative:false};
     }
-    this.fleet.persist();
+    await this.fleet.persist();
   }
 }

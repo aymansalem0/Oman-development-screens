@@ -5,9 +5,12 @@
   "type": "module",
   "scripts": {
     "start": "node server.mjs",
-    "check": "node --check server.mjs && node --check psc-reader.mjs && node --check fleet-ai.mjs"
+    "check": "node --check server.mjs && node --check psc-reader.mjs && node --check fleet-ai.mjs && node --check fleet-scheduler.mjs && node --check oracle-store.mjs"
   },
   "engines": {
     "node": ">=20"
+  },
+  "dependencies": {
+    "oracledb": "^6.9.0"
   }
 }

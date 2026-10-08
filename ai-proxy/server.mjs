@@ -31,7 +31,12 @@ async function fleetAgentCall(agent,input) {
   const raw=await upstream.text();
   try {return JSON.parse(raw);} catch {throw new Error('AIRIA_RESPONSE_INVALID_JSON');}
 }
-const fleet=new FleetAssessmentManager({executeAgent:fleetAgentCall,getPscVessel});
+const dbMode=(process.env.NMC_DB_MODE || 'json').toLowerCase();
+if(!['json','oracle'].includes(dbMode))throw new Error('NMC_DB_MODE_UNSUPPORTED');
+const repository=dbMode==='oracle'
+  ? new (await import('./oracle-store.mjs')).OracleIntelligenceStore()
+  : null;
+const fleet=new FleetAssessmentManager({executeAgent:fleetAgentCall,getPscVessel,repository});
 const scheduler=new FleetAutoScheduler({fleet,getPscVessel,
   enabled:autoEnabled && Boolean(apiKey),intervalMs:autoInterval});
 
@@ -77,19 +82,31 @@ const server = createServer(async (req, res) => {
   const path = new URL(req.url || '/', 'http://localhost').pathname;
 
   if (req.method === 'GET' && path === '/api/ai/health') {
-    return respond(res, 200, { status: 'ok', aiConfigured: Boolean(apiKey), adapter: 'nmc-airia-proxy', fleetAutoEnabled:scheduler.enabled });
+    const db=repository?await repository.health():{mode:'json',ready:true};
+    return respond(res, db.ready?200:503, {
+      status:db.ready?'ok':'degraded',aiConfigured:Boolean(apiKey),
+      adapter:'nmc-airia-proxy',fleetAutoEnabled:scheduler.enabled,
+      persistence:db,persistenceHealthy:fleet.persistenceHealthy
+    });
   }
 
   if (req.method === 'GET' && path === '/api/ai/psc/health') {
     return respond(res, 200, getPscHealth());
   }
   if (req.method === 'GET' && path === '/api/ai/fleet/status') {
-    return respond(res,200,{...fleet.snapshot(),scheduler:scheduler.status()});
+    return respond(res,200,{...fleet.snapshot(),storageMode:dbMode,persistenceHealthy:fleet.persistenceHealthy,scheduler:scheduler.status()});
   }
   const fleetResultMatch = /^\/api\/ai\/fleet\/results\/(\d{7})$/.exec(path);
   if (req.method === 'GET' && fleetResultMatch) {
     const record=fleet.getVesselResult(fleetResultMatch[1]);
     return respond(res,record?200:404,record||{error:'FLEET_ASSESSMENT_NOT_FOUND'});
+  }
+  const historyMatch = /^\/api\/ai\/fleet\/history\/(\d{7})$/.exec(path);
+  if(req.method==='GET' && historyMatch){
+    try{
+      const data=await fleet.history(historyMatch[1]);
+      return respond(res,data?200:404,data||{error:'UNKNOWN_VESSEL'});
+    }catch{return respond(res,503,{error:'FLEET_HISTORY_UNAVAILABLE'});}
   }
   // Fleet mutation is internal to the Node scheduler; the dashboard is read-only.
   if (path === '/api/ai/fleet/start' || path === '/api/ai/fleet/cancel') {
@@ -165,7 +182,16 @@ const server = createServer(async (req, res) => {
   }
 });
 
-server.listen(port, '0.0.0.0', () => {
-  console.log(`NMC AI proxy listening on ${port}; Airia configured: ${Boolean(apiKey)}; fleet-auto enabled: ${scheduler.enabled}`);
-  if(scheduler.enabled)scheduler.start();
-});
+try{
+  await fleet.initialize(scheduler.bundles);
+  server.listen(port,'0.0.0.0',()=>{
+    console.log(`NMC AI proxy listening on ${port}; mode=${dbMode}; fleet-auto=${scheduler.enabled}`);
+    if(scheduler.enabled)scheduler.start();
+  });
+}catch(error){
+  // Fail closed: no AI requests if Oracle schema / credentials are not ready.
+  const code=/^[A-Z][A-Z0-9_]{1,95}$/.test(String(error?.message||''))
+    ?error.message:'ORACLE_STARTUP_FAILED';
+  console.error('[nmc-db] '+code);
+  process.exitCode=1;
+}

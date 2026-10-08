@@ -15,6 +15,11 @@ services:
       NMC_FLEET_AUTO_ENABLED: ${NMC_FLEET_AUTO_ENABLED:-false}
       NMC_FLEET_REFRESH_SECONDS: ${NMC_FLEET_REFRESH_SECONDS:-3600}
       NMC_FLEET_STORE_PATH: /data/fleet-assessments.json
+      # 'oracle' requires compose.oracle.yaml, NMC_AI user and V1 migration.
+      NMC_DB_MODE: ${NMC_DB_MODE:-json}
+      NMC_DB_CONNECT_STRING: ${NMC_DB_CONNECT_STRING:-oracle-free-23:1521/freepdb1}
+      NMC_DB_USER: ${NMC_DB_USER:-NMC_AI}
+      NMC_DB_PASSWORD: ${NMC_DB_PASSWORD:-}
       # Default: deterministic offline copy of the same 420-vessel Google Sheet fixture.
       # Explicit 'google_sheets' requires a read-only service account mounted by compose.google-psc.yaml.
       PSC_SOURCE_MODE: ${PSC_SOURCE_MODE:-snapshot}
