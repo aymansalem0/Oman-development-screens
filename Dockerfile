@@ -2,7 +2,16 @@
 FROM node:20-alpine AS build
 WORKDIR /app
 COPY package*.json ./
-RUN npm install --no-audit --no-fund
+# Persist npm tarballs across Docker builds and retry transient registry failures.
+# The debug log is displayed if a registry/network request ultimately fails.
+RUN --mount=type=cache,target=/root/.npm \
+    npm install --no-audit --no-fund --prefer-offline --loglevel=error \
+      --fetch-retries=3 --fetch-retry-mintimeout=10000 \
+      --fetch-retry-maxtimeout=60000 --fetch-timeout=180000 \
+    || { echo '=== npm installation failed; latest debug log ==='; \
+         log=$(ls -t /root/.npm/_logs/*debug-0.log 2>/dev/null | head -n 1); \
+         if [ -n "$log" ]; then tail -n 100 "$log"; fi; \
+         exit 1; }
 COPY . .
 RUN npm run build -- --configuration production --base-href /
 
