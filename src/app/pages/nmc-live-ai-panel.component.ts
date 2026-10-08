@@ -156,6 +156,8 @@ export class NmcLiveAiPanelComponent {
   @Input({ required: true }) vessel!: NmcVesselProfile;
   @Input() isArabic = false;
   @Output() liveRiskChange = new EventEmitter<NmcLiveRiskResult | null>();
+  /** Tells the parent that live validation was attempted, even if evidence is incomplete. */
+  @Output() liveRunStarted = new EventEmitter<void>();
 
   running = false;
   a01Status: AgentStatus = 'idle';
@@ -191,6 +193,7 @@ export class NmcLiveAiPanelComponent {
   async run(): Promise<void> {
     if (this.running) return;
     this.running = true;
+    this.liveRunStarted.emit();
     this.liveRiskChange.emit(null);
     this.risk = null;
     this.signals = [];
@@ -198,6 +201,7 @@ export class NmcLiveAiPanelComponent {
     this.a02Raw = '';
     this.message = '';
     this.issues = [];
+    this.bundleSummary = '';
     this.pscInfo = null;
     this.a01Status = 'running';
     this.a02Status = 'running';

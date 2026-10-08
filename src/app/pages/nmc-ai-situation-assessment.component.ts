@@ -56,6 +56,8 @@ export class NmcAiSituationAssessmentComponent implements OnInit {
   recommendations: AiRecommendation[] = [];
   selectedEvidence?: AiEvidence;
   liveResult: NmcLiveRiskResult | null = null;
+  /** Tracks any attempted live run, including partial/unsupported agent responses. */
+  liveAttempted = false;
   showSampleAssessment = false;
 
   readonly generatedAt = '07 Oct 2026 · 22:43:06';
@@ -93,6 +95,12 @@ export class NmcAiSituationAssessmentComponent implements OnInit {
         item.officerNote = previous.note;
       }
     });
+  }
+
+  onLiveRunStarted(): void {
+    this.liveAttempted = true;
+    this.showSampleAssessment = false;
+    this.selectedEvidence = undefined;
   }
 
   onLiveRiskChange(result: NmcLiveRiskResult | null): void {
