@@ -82,6 +82,11 @@ const server = createServer(async (req, res) => {
   if (req.method === 'GET' && path === '/api/ai/fleet/status') {
     return respond(res,200,fleet.snapshot());
   }
+  const fleetResultMatch = /^\/api\/ai\/fleet\/results\/(\d{7})$/.exec(path);
+  if (req.method === 'GET' && fleetResultMatch) {
+    const record=fleet.getVesselResult(fleetResultMatch[1]);
+    return respond(res,record?200:404,record||{error:'FLEET_ASSESSMENT_NOT_FOUND'});
+  }
   if (path === '/api/ai/fleet/start' || path === '/api/ai/fleet/cancel') {
     if (req.method !== 'POST') return respond(res,405,{error:'METHOD_NOT_ALLOWED'});
     if (fleetAdminToken.length < 24) {
