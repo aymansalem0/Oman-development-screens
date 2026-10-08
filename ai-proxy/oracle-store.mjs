@@ -154,18 +154,24 @@ export class OracleIntelligenceStore {
     const id=randomUUID();
     let stage='ASSESSMENT';
     try{
+      // Use explicit non-reserved bind placeholders: Oracle treats :level as
+      // an invalid identifier (ORA-01745), even when it is a valid JS key.
       await con.execute(`INSERT INTO NMC_AI_ASSESSMENT(
         ASSESSMENT_ID,IMO,JOB_ID,RISK_SCORE,RISK_LEVEL,OPERATIONAL_PRIORITY,
         CRITICAL_OPEN_FINDING,RULESET_VERSION,INPUT_HASH,SOURCE_MODE,
         RULESET_JSON,PSC_SUMMARY_JSON,SOURCE_NATURE,VERIFIED_BY_AUTHORITY)
-        VALUES(:id,:imo,:jobId,:score,:level,:priority,:critical,:version,
-          :hash,:sourceMode,:ruleset,:pscSummary,:sourceNature,'N')`,
-        {id,imo:row.imo,jobId,score:row.score,level:row.level,
-          priority:row.operationalPriority,critical:row.criticalOpenFinding?'Y':'N',
-          version:row.configVersion,hash:row.inputHash||null,
-          sourceMode:row.sourceMode,ruleset:jsonClob(row.ruleset),
-          pscSummary:jsonClob(row.pscSummary),
-          sourceNature:row.sourceNature||'SYNTHETIC_NOT_RIYADH_MOU'});
+        VALUES(:b_assessment_id,:b_imo,:b_job_id,:b_risk_score,:b_risk_level,
+          :b_operational_priority,:b_critical_open_finding,:b_ruleset_version,
+          :b_input_hash,:b_source_mode,:b_ruleset_json,:b_psc_summary_json,
+          :b_source_nature,'N')`,
+        {b_assessment_id:id,b_imo:row.imo,b_job_id:jobId,
+          b_risk_score:row.score,b_risk_level:row.level,
+          b_operational_priority:row.operationalPriority,
+          b_critical_open_finding:row.criticalOpenFinding?'Y':'N',
+          b_ruleset_version:row.configVersion,b_input_hash:row.inputHash||null,
+          b_source_mode:row.sourceMode,b_ruleset_json:jsonClob(row.ruleset),
+          b_psc_summary_json:jsonClob(row.pscSummary),
+          b_source_nature:row.sourceNature||'SYNTHETIC_NOT_RIYADH_MOU'});
       stage='RISK_FACTORS_AND_FINDINGS';
       const evidence=new Set();
       for(const signal of row.signals){
