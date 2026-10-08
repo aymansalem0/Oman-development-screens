@@ -149,9 +149,10 @@ export class OracleIntelligenceStore {
     finally{await con.close();}
   }
 
-  async saveAssessment(row,{previous=null,jobId=null}={}){
+  async saveAssessment(row,{previous=null,jobId=null,dryRun=false}={}){
     const con=await this.pool.getConnection();
     const id=randomUUID();
+    let stage='ASSESSMENT';
     try{
       await con.execute(`INSERT INTO NMC_AI_ASSESSMENT(
         ASSESSMENT_ID,IMO,JOB_ID,RISK_SCORE,RISK_LEVEL,OPERATIONAL_PRIORITY,
@@ -165,6 +166,7 @@ export class OracleIntelligenceStore {
           sourceMode:row.sourceMode,ruleset:jsonClob(row.ruleset),
           pscSummary:jsonClob(row.pscSummary),
           sourceNature:row.sourceNature||'SYNTHETIC_NOT_RIYADH_MOU'});
+      stage='RISK_FACTORS_AND_FINDINGS';
       const evidence=new Set();
       for(const signal of row.signals){
         await con.execute(`INSERT INTO NMC_AI_RISK_FACTOR(
@@ -186,21 +188,25 @@ export class OracleIntelligenceStore {
             severity:signal.severity,confidence:signal.confidence,
             evidence:jsonClob(signal.evidenceIds)});
       }
+      stage='EVIDENCE';
       for(const evidenceId of evidence){
         await con.execute(`INSERT INTO NMC_EVIDENCE(
           ASSESSMENT_ID,EVIDENCE_ID,SOURCE_ID,VERIFIED_BY_AUTHORITY)
           VALUES(:id,:evidenceId,:source,'N')`,
           {id,evidenceId,source:sourceId(evidenceId)});
       }
+      stage='AI_EXECUTION';
       for(const agent of ['A01','A02']){
         await con.execute(`INSERT INTO NMC_AI_EXECUTION(
           EXECUTION_ID,ASSESSMENT_ID,AGENT_CODE,EXECUTION_STATUS)
           VALUES(:executionId,:assessmentId,:agent,'SIGNALS_VALIDATED')`,
           {executionId:randomUUID(),assessmentId:id,agent});
       }
+      stage='DATA_QUALITY';
       await con.execute(`INSERT INTO NMC_DATA_QUALITY(
         ASSESSMENT_ID,CALCULATION_STATUS)
         VALUES(:id,'NOT_CALCULATED')`,{id});
+      stage='CURRENT_STATE';
       const nextAt=utc(row.nextCheckAt);
       await con.execute(`MERGE INTO NMC_VESSEL_CURRENT_STATE dst
         USING(SELECT :imo IMO FROM DUAL) s ON(dst.IMO=s.IMO)
@@ -214,6 +220,7 @@ export class OracleIntelligenceStore {
           VALUES(:imo,:assessmentId,'COMPLETED',SYSTIMESTAMP,
             TO_TIMESTAMP_TZ(:nextAt,'${mask}'))`,
           {imo:row.imo,assessmentId:id,nextAt});
+      stage='INTELLIGENCE_EVENT';
       const changed=previous?.status==='COMPLETED'&&
         (previous.score!==row.score||previous.level!==row.level);
       await con.execute(`INSERT INTO NMC_INTELLIGENCE_EVENT(
@@ -225,9 +232,20 @@ export class OracleIntelligenceStore {
           description:changed?'Synthetic AI risk assessment changed':
             'A01/A02 synthetic vessel risk assessment completed',
           oldScore:previous?.score??null,newScore:row.score});
-      await con.commit();
+      stage='COMMIT';
+      if(dryRun)await con.rollback();
+      else await con.commit();
       return id;
-    }catch{await con.rollback();throw new Error('ORACLE_ASSESSMENT_WRITE_FAILED');}
+    }catch(error){
+      try{await con.rollback();}catch{}
+      // Safe diagnostic: only Oracle's official error code and our SQL stage.
+      // Never emit SQL binds, credential details, request bodies or upstream results.
+      const code=String(error?.code||'UNKNOWN');
+      const safeCode=/^(ORA|NJS|DPI)-[0-9]{3,6}$/.test(code)?code.replace('-','_'):'UNKNOWN';
+      const safeStage=/^[A-Z_]{3,40}$/.test(stage)?stage:'UNKNOWN';
+      console.error('[nmc-oracle] stage='+safeStage+' code='+safeCode);
+      throw new Error('ORACLE_ASSESSMENT_WRITE_FAILED');
+    }
     finally{await con.close();}
   }
 
