@@ -38,7 +38,9 @@ const repository=dbMode==='oracle'
   : null;
 const fleet=new FleetAssessmentManager({executeAgent:fleetAgentCall,getPscVessel,repository});
 const scheduler=new FleetAutoScheduler({fleet,getPscVessel,
-  enabled:autoEnabled && Boolean(apiKey),intervalMs:autoInterval});
+  enabled:autoEnabled && Boolean(apiKey),intervalMs:autoInterval,
+  maxVessels:process.env.NMC_FLEET_AUTO_MAX_VESSELS || 420,
+  retryFailed:process.env.NMC_FLEET_AUTO_RETRY_FAILED === 'true'});
 
 function respond(res, status, payload) {
   const body = JSON.stringify(payload);
