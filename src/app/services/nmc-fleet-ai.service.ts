@@ -1,3 +1,4 @@
+import type {RiskEngineConfig} from './nmc-risk-engine.service';
 import {Injectable} from '@angular/core';
 import {HttpClient} from '@angular/common/http';
 import {Observable} from 'rxjs';
