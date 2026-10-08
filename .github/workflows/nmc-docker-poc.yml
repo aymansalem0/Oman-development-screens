@@ -22,6 +22,7 @@ jobs:
           node --check ai-proxy/fleet-scheduler.mjs
           node --check ai-proxy/build-fleet-evidence.mjs
           node --test ai-proxy/test/fleet-scheduler.test.mjs
+          node --test ai-proxy/test/oracle-bind-names.test.mjs
           mkdir -p /tmp/psc-adapter
           cp ai-proxy/psc-reader.mjs ai-proxy/fleet-ai.mjs tools/psc/psc-fixtures.mjs src/app/data/nmc-vessel-catalog.ts src/app/data/nmc-expanded-vessel-catalog.ts /tmp/psc-adapter/
           cp ai-proxy/test/psc-reader.test.mjs /tmp/psc-adapter/test-psc.mjs
