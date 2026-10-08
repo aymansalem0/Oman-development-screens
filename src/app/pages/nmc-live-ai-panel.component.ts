@@ -273,8 +273,9 @@ export class NmcLiveAiPanelComponent {
     this.signals = FACTORS.flatMap(factor => grouped.get(factor) || []);
     const complete = FACTORS.every(factor => grouped.get(factor)?.length === 1);
     if (complete) {
-      const severities = Object.fromEntries(FACTORS.map(factor => [factor, grouped.get(factor)![0].severity]))
-        as Record<RiskFactorKey, number>;
+      const severities = Object.fromEntries(
+        FACTORS.map(factor => [factor, grouped.get(factor)![0].severity])
+      ) as Record<RiskFactorKey, number>;
       this.risk = this.engine.evaluateFromAiSignals(this.vessel, severities);
       this.message = this.copy(
         'All five signals validated. Calculated risk is provisional and does not replace the existing synthetic assessment until reviewed.',
