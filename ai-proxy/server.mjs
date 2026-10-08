@@ -100,8 +100,15 @@ const server = createServer(async (req, res) => {
     return respond(res, 200, { agent, result });
   } catch (error) {
     const timeout = error?.name === 'TimeoutError' || error?.name === 'AbortError';
+    // Report an allowlisted transport code only: never log headers, API key,
+    // request body or the upstream error message (which may contain secrets).
+    const rawCode = String(error?.cause?.code || error?.code || 'UNKNOWN');
+    const reasonCode = /^[A-Z][A-Z0-9_]{0,63}$/.test(rawCode) ? rawCode : 'UNKNOWN';
+    const errorName = String(error?.name || 'Error');
+    console.error(`[airia-proxy] agent=${agent} errorName=${errorName} reasonCode=${reasonCode}`);
     return respond(res, timeout ? 504 : 502, {
       error: timeout ? 'AIRIA_TIMEOUT' : 'AIRIA_UNAVAILABLE',
+      reasonCode,
       agent
     });
   }
