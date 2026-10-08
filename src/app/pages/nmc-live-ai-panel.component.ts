@@ -6,6 +6,7 @@ import { NmcVesselProfile } from '../data/nmc-vessel-catalog';
 import { NmcAiIntegrationService, NmcAiriaAgent } from '../services/nmc-ai-integration.service';
 import { NmcRiskEngineService, RiskEvaluation, RiskFactorKey } from '../services/nmc-risk-engine.service';
 import { NmcVesselEvidenceService } from '../services/nmc-vessel-evidence.service';
+import { NmcExternalPscService, NmcExternalPscRecord } from '../services/nmc-external-psc.service';
 
 export interface AiSignal {
   factor: RiskFactorKey;
@@ -58,6 +59,14 @@ const A02_FACTORS: RiskFactorKey[] = ['inspection', 'certificate', 'dataQuality'
       <div class="bundle-summary" *ngIf="bundleSummary">
         <strong>{{ copy('Vessel 360 evidence bundle prepared', 'تم إعداد حزمة أدلة Vessel 360') }}</strong>
         <span>{{ bundleSummary }} · {{ copy('Fictional POC records; no verified registry feeds or PDF content', 'سجلات تجريبية وليست بيانات معتمدة أو ملفات PDF') }}</span>
+      </div>
+      <div *ngIf="pscInfo" class="bundle-summary">
+        <strong>{{ copy('External PSC evidence · ', 'بيانات PSC الخارجية · ') }}{{ pscInfo.summary.inspections }} {{ copy('inspections', 'معاينات') }}</strong>
+        <span>{{ pscInfo.sourceMode === 'GOOGLE_SHEETS_LIVE'
+          ? copy('Google Sheet read confirmed', 'تمت قراءة Google Sheet مباشرة')
+          : copy('Matching offline fixture · Google Sheets not connected', 'بيانات محلية مطابقة · Google Sheets غير متصل') }}</span>
+        <span>· {{ pscInfo.summary.deficiencies }} {{ copy('deficiencies', 'ملاحظات') }} · {{ pscInfo.summary.detentions }} {{ copy('detentions', 'احتجازات') }}</span>
+        <span>· {{ copy('ALL PSC FINDINGS FICTIONAL', 'جميع نتائج PSC افتراضية') }}</span>
       </div>
       <p class="status-message" *ngIf="message">{{ message }}</p>
       <div class="signal-issues" *ngIf="issues.length">
@@ -157,12 +166,14 @@ export class NmcLiveAiPanelComponent {
   risk: RiskEvaluation | null = null;
   message = '';
   bundleSummary = '';
+  pscInfo: NmcExternalPscRecord | null = null;
   issues: Array<{ agent: string; factor: string; status: string; details: string }> = [];
 
   constructor(
     private readonly ai: NmcAiIntegrationService,
     private readonly engine: NmcRiskEngineService,
-    private readonly vesselEvidence: NmcVesselEvidenceService
+    private readonly vesselEvidence: NmcVesselEvidenceService,
+    private readonly externalPsc: NmcExternalPscService
   ) {}
 
   copy(en: string, ar: string): string { return this.isArabic ? ar : en; }
@@ -187,12 +198,30 @@ export class NmcLiveAiPanelComponent {
     this.a02Raw = '';
     this.message = '';
     this.issues = [];
+    this.pscInfo = null;
     this.a01Status = 'running';
     this.a02Status = 'running';
 
     const correlationId = `NMC-${this.vessel.imo}-${Date.now()}`;
     const bundle = this.vesselEvidence.create(this.vessel);
-    const knownEvidence = bundle.evidenceIds;
+    let psc: NmcExternalPscRecord;
+    try {
+      psc = await firstValueFrom(this.externalPsc.getVessel(this.vessel.imo));
+      if (psc.imo !== this.vessel.imo || psc.authoritative !== false ||
+          psc.dataNature !== 'SYNTHETIC_NOT_RIYADH_MOU' ||
+          !Array.isArray(psc.evidenceIds)) throw new Error('PSC provenance/IMO mismatch');
+      this.pscInfo = psc;
+    } catch (error) {
+      this.message = this.copy(
+        'External PSC source unavailable (' + this.safeError(error) + '). No A01/A02 run was sent with incomplete external context.',
+        'مصدر PSC الخارجي غير متاح (' + this.safeError(error) + '). لم يتم إرسال تحليل AI بدون السياق الخارجي.'
+      );
+      this.a01Status = 'idle';
+      this.a02Status = 'idle';
+      this.running = false;
+      return;
+    }
+    const knownEvidence = [...bundle.evidenceIds,...psc.evidenceIds];
     this.bundleSummary = this.copy(
       `${bundle.certificates.length} certificates · ${bundle.inspections.length} inspections · ${bundle.deficiencies.length} deficiencies · ${bundle.evidence.length} evidence records`,
       `${bundle.certificates.length} شهادات · ${bundle.inspections.length} معاينات · ${bundle.deficiencies.length} ملاحظات · ${bundle.evidence.length} سجلات أدلة`
@@ -203,7 +232,18 @@ export class NmcLiveAiPanelComponent {
       bundleRef: bundle.bundleRef,
       contextMode: 'INLINE',
       officialScoringRequested: false,
-      inlineContext: bundle.inlineContext
+      inlineContext: {
+        ...bundle.inlineContext,
+        externalPsc: {
+          sourceSystem: psc.sourceSystem, sourceMode: psc.sourceMode,
+          dataNature: psc.dataNature, authoritative: false, verifiedByAuthority: false,
+          coverage: psc.coverage, retrievedAt: psc.retrievedAt,
+          inspections: psc.inspections, deficiencies: psc.deficiencies,
+          detentions: psc.detentions, evidenceIds: psc.evidenceIds,
+          missingEvidence: psc.pdfContentAvailable ? [] : ['EXTERNAL_PSC_REPORT_PDFS'],
+          note: 'SIMULATED external PSC data, NOT real Riyadh MoU or regulatory records. Absence means unknown, not clear record.'
+        }
+      }
     };
 
     const a01 = { ...base, requestedSignals: A01_FACTORS };
@@ -257,7 +297,7 @@ export class NmcLiveAiPanelComponent {
             s['confidence'] < 0 || s['confidence'] > 1) reasons.push('Confidence must be a number from 0 to 1');
         if (s['sourceAgent'] !== key.toUpperCase()) reasons.push('sourceAgent must equal ' + key.toUpperCase());
         if (!evidenceIds.length) reasons.push('No evidenceIds returned');
-        if (unknownIds.length) reasons.push('IDs not present in supplied synthetic manifest: ' + unknownIds.map(String).join(', '));
+        if (unknownIds.length) reasons.push('IDs not present in supplied internal or PSC manifest: ' + unknownIds.map(String).join(', '));
         if (reasons.length) {
           const detail = typeof s['reason'] === 'string' ? s['reason'].slice(0, 400) : '';
           const missing = Array.isArray(s['missingEvidence']) ? s['missingEvidence'].map(String).join(', ') : '';

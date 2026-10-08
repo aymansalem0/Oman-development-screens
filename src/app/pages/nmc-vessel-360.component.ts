@@ -10,6 +10,7 @@ import { NMC_OPERATIONAL_VESSELS, getOperationalVesselByImo } from '../data/nmc-
 import { LanguageService } from '../services/language.service';
 import { NmcRiskEngineService } from '../services/nmc-risk-engine.service';
 import { NmcVesselEvidenceService } from '../services/nmc-vessel-evidence.service';
+import { NmcExternalPscService, NmcExternalPscRecord } from '../services/nmc-external-psc.service';
 
 interface SourceStatus {
   name: string;
@@ -121,6 +122,9 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
   timeline: TimelineItem[] = [];
   fieldProvenance: Record<string, FieldProvenance> = {};
   selectedProvenance?: FieldProvenance;
+  externalPsc: NmcExternalPscRecord | null = null;
+  pscLoading = false;
+  pscError = '';
 
   hasCertificateConflict = false;
   hasOpenDeficiency = false;
@@ -137,7 +141,8 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
     private route: ActivatedRoute,
     public lang: LanguageService,
     private riskEngine: NmcRiskEngineService,
-    private vesselEvidence: NmcVesselEvidenceService
+    private vesselEvidence: NmcVesselEvidenceService,
+    private externalPscService: NmcExternalPscService
   ) {}
 
   copy(en: string, ar: string): string {
@@ -275,9 +280,10 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
     };
 
     this.buildOperationalData();
+    this.loadExternalPsc();
 
     const requestedTab = this.route.snapshot.queryParamMap.get('tab');
-    if (requestedTab && ['overview','movement','compliance','inspection','certificates','sources'].includes(requestedTab)) {
+    if (requestedTab && ['overview','movement','compliance','inspection','external-psc','certificates','sources'].includes(requestedTab)) {
       this.activeTab = requestedTab;
     }
   }
@@ -292,6 +298,30 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
 
   setTab(tab: string): void {
     this.activeTab = tab;
+  }
+
+  loadExternalPsc(): void {
+    this.pscLoading = true;
+    this.pscError = '';
+    this.externalPsc = null;
+    this.externalPscService.getVessel(this.vessel.imo).subscribe({
+      next: payload => {
+        if (payload.imo !== this.vessel.imo || payload.authoritative !== false ||
+            payload.dataNature !== 'SYNTHETIC_NOT_RIYADH_MOU') {
+          this.pscError = this.copy('External PSC provenance failed validation.', 'تعذر التحقق من مصدر بيانات PSC الخارجية.');
+        } else {
+          this.externalPsc = payload;
+        }
+        this.pscLoading = false;
+      },
+      error: () => {
+        this.pscLoading = false;
+        this.pscError = this.copy(
+          'External PSC data unavailable. No simulated inspection records have been inferred.',
+          'بيانات PSC الخارجية غير متاحة. لم يتم افتراض أي سجلات تفتيش بديلة.'
+        );
+      }
+    });
   }
 
   openRiskEvidence(source: string): void {
