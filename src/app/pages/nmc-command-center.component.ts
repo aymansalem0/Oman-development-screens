@@ -351,7 +351,7 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
         this.events=Object.values(snapshot.results)
           .filter(r=>r.status==='COMPLETED'&&r.configVersion===currentVersion&&r.assessedAt)
           .sort((a,b)=>String(b.assessedAt).localeCompare(String(a.assessedAt)))
-          .slice(0,5).map(r=>({
+          .slice(0,5).map((r):MaritimeEvent=>({
             time:new Date(r.assessedAt!).toLocaleTimeString('en-GB',{hour12:false}),
             vessel:this.vessels.find(v=>v.imo===r.imo)?.name||r.imo,
             title:r.criticalOpenFinding?'Critical open finding in POC':'AI fleet risk evaluated',
