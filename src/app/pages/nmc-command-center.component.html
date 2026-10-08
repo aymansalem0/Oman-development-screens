@@ -98,6 +98,48 @@
       </div>
     </section>
 
+
+    <section class="fleet-ai-overview" aria-label="AI fleet assessment status">
+      <div class="fleet-ai-heading">
+        <div>
+          <span class="fleet-ai-kicker">{{ copy('AI-DRIVEN FLEET RISK · SYNTHETIC POC', 'مخاطر الأسطول بالذكاء الاصطناعي · تجربة محاكاة') }}</span>
+          <h3>{{ copy('Fleet AI Risk Assessment', 'تقييم مخاطر الأسطول بالذكاء الاصطناعي') }}</h3>
+          <p>{{ copy(
+            'A01/A02 analyze evidence; the deterministic Risk Engine calculates the risk score. Pending or outdated vessels remain unscored, not Normal. All records are simulated, not official.',
+            'يحلل A01/A02 الأدلة ويحسِب محرك المخاطر الدرجة النهائية. السفن المعلقة أو ذات التقييم القديم لا تحمل درجة، ولا تعتبر طبيعية. جميع السجلات تجريبية وليست رسمية.'
+          ) }}</p>
+        </div>
+        <span class="fleet-ai-status">{{ assessedCount }} / 420 {{ copy('AI assessed', 'تم تحليلها') }}</span>
+      </div>
+      <div class="fleet-ai-stats">
+        <div><strong>{{ assessedCount }}</strong><span>{{ copy('Assessed', 'مكتمل') }}</span></div>
+        <div><strong>{{ pendingCount }}</strong><span>{{ copy('Pending or stale', 'معلق أو قديم') }}</span></div>
+        <div><strong>{{ criticalCount }}</strong><span>{{ copy('Critical AI Risk', 'مخاطر حرجة') }}</span></div>
+        <div><strong>{{ highRiskCount }}</strong><span>{{ copy('High + Critical', 'مرتفعة + حرجة') }}</span></div>
+        <div><strong>{{ priorityReviewCount }}</strong><span>{{ copy('Priority Review', 'مراجعة ذات أولوية') }}</span></div>
+      </div>
+      <div class="fleet-ai-controls">
+        <label>{{ copy('Fleet admin token (local only)', 'رمز إدارة الأسطول (محلي فقط)') }}
+          <input type="password" [(ngModel)]="fleetToken" autocomplete="off"
+                 [placeholder]="copy('Enter token from local .env', 'ضع الرمز من ملف .env المحلي')" />
+        </label>
+        <button type="button" (click)="runFleetBatch(10)" [disabled]="fleetSubmitting || fleetJobRunning">
+          {{ copy('Test 10 vessels', 'اختبار 10 سفن') }}
+        </button>
+        <button type="button" class="fleet-batch-all" (click)="runFleetBatch(420)" [disabled]="fleetSubmitting || fleetJobRunning">
+          {{ copy('Assess 420 (up to 840 calls)', 'تحليل 420 (حتى 840 استدعاء)') }}
+        </button>
+        <button type="button" *ngIf="fleetJobRunning" (click)="cancelFleetBatch()">
+          {{ copy('Cancel queued work', 'إلغاء المهام المنتظرة') }}
+        </button>
+      </div>
+      <p *ngIf="fleetSnapshot?.job as job" class="fleet-progress">
+        {{ copy('Batch', 'دفعة') }} {{ job.id }} · {{ job.status }} · {{ fleetProgress }}
+      </p>
+      <p *ngIf="fleetError" class="fleet-error">{{ fleetError }}</p>
+      <p *ngIf="fleetInfo" class="fleet-progress">{{ fleetInfo }}</p>
+    </section>
+
     <section class="kpi-grid">
       <article class="kpi-card">
         <div class="kpi-icon teal">⌖</div>
@@ -117,7 +159,7 @@
         <div>
           <span class="kpi-label">{{ copy('Require attention', 'تتطلب الانتباه') }}</span>
           <strong>{{ attentionCount }}</strong>
-          <small>{{ copy('risk score ≥ 45', 'درجة المخاطر ≥ 45') }}</small>
+          <small>{{ copy('AI risk or critical finding flag', 'مخاطر AI أو مخالفة حرجة') }}</small>
         </div>
       </article>
 
@@ -133,9 +175,9 @@
       <article class="kpi-card critical-card">
         <div class="kpi-icon coral">!</div>
         <div>
-          <span class="kpi-label">{{ copy('Critical events', 'أحداث حرجة') }}</span>
+          <span class="kpi-label">{{ copy('Critical AI risk', 'مخاطر AI حرجة') }}</span>
           <strong>{{ criticalCount }}</strong>
-          <small>{{ copy('immediate action required', 'إجراء فوري مطلوب') }}</small>
+          <small>{{ copy('Human review of simulated results', 'مراجعة بشرية لنتائج المحاكاة') }}</small>
         </div>
       </article>
     </section>
@@ -175,6 +217,7 @@
               <option value="High">{{ copy('High', 'مرتفع') }}</option>
               <option value="Watch">{{ copy('Watch', 'مراقبة') }}</option>
               <option value="Normal">{{ copy('Normal', 'طبيعي') }}</option>
+              <option value="Pending">{{ copy('Pending AI', 'بانتظار AI') }}</option>
             </select>
 
             <select [(ngModel)]="typeFilter" (ngModelChange)="onFilterChange()" [attr.aria-label]="copy('Filter by vessel type', 'تصفية حسب نوع السفينة')">
@@ -225,7 +268,7 @@
               <div class="attention-title">
                 <strong>{{ vessel.name }}</strong>
                 <span class="risk-chip" [ngClass]="riskClass(vessel.risk)">
-                  {{ riskLabel(vessel.risk) }} · {{ vessel.risk }}
+                  {{ riskLabel(vessel.risk) }} · {{ riskDisplay(vessel) }}
                 </span>
               </div>
 
@@ -284,7 +327,7 @@
             <span class="ai-icon">✦</span>
             <div>
               <strong>{{ copy('Continuous prioritization', 'تحديد الأولويات بصورة مستمرة') }}</strong>
-              <p>{{ copy('All monitored vessels are continuously evaluated as movement and risk signals change.', 'يتم تقييم جميع السفن تحت المراقبة باستمرار مع تغير مؤشرات الحركة والمخاطر.') }}</p>
+              <p>{{ copy('Only completed A01/A02 assessments enter the attention queue. Pending vessels never inherit synthetic baseline scores.', 'لا تدخل قائمة الأولويات إلا السفن التي اكتمل تحليلها بواسطة A01/A02. السفن المعلقة لا ترث درجات المخاطر الافتراضية.') }}</p>
             </div>
           </div>
         </div>
@@ -296,11 +339,12 @@
         <div class="panel-header">
           <div>
             <h3>{{ copy('Live Event Stream', 'تدفق الأحداث المباشر') }}</h3>
-            <p>{{ copy('Movement, monitoring and correlated maritime events', 'أحداث الحركة والمراقبة والأحداث البحرية المترابطة') }}</p>
+            <p>{{ copy('Latest completed synthetic AI risk assessments', 'أحدث تقييمات مخاطر AI التجريبية المكتملة') }}</p>
           </div>
           <span class="stream-indicator"><i></i> streaming</span>
         </div>
 
+        <div *ngIf="events.length === 0" class="fleet-empty">{{ copy("No completed AI events yet", "لا توجد أحداث AI مكتملة بعد") }}</div>
         <div class="event-list">
           <div class="event-row" *ngFor="let event of events.slice(0,5)">
             <div class="event-time">{{ event.time }}</div>
@@ -329,7 +373,7 @@
 
           <div class="big-risk" [ngClass]="riskClass(v.risk)">
             <small>{{ copy('RISK', 'المخاطر') }}</small>
-            <strong>{{ v.risk }}</strong>
+            <strong>{{ riskDisplay(v) }}</strong>
             <span>{{ riskLabel(v.risk) }}</span>
           </div>
         </div>
