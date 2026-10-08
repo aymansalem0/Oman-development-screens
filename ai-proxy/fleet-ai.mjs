@@ -1,7 +1,7 @@
 /**
  * NMC Fleet AI assessment - local synthetic POC, NOT a regulatory decision engine.
- * Requests require an explicit operator action + local admin token. No auto-run at startup.
- * The Angular client supplies the SAME synthetic Vessel 360 inline bundle used in the single-vessel pilot.
+ * Autonomous scheduler supplies immutable evidence bundles derived at build-time
+ * from the SAME TypeScript Vessel 360 synthetic fixture logic used by Angular.
  * External PSC is fetched per IMO on the server and fails closed when Google Sheets is unavailable.
  * Only validated A01/A02 factors are persisted; neither secrets nor unvalidated agent output are stored.
  */
@@ -128,9 +128,10 @@ export class FleetAssessmentManager {
   snapshot(){
     const values=Object.values(this.results).filter(x=>VALID_IMOS.has(x.imo));
     const counts={total:420,assessed:0,pending:420,normal:0,watch:0,high:0,critical:0,
-      priorityReview:0,failed:0};
+      priorityReview:0,failed:0,refreshFailed:0};
     for(const r of values){
       if(r.status==='COMPLETED'){
+        if(r.refreshFailure)counts.refreshFailed++;
         counts.assessed++;
         const key=r.level.toLowerCase();
         if(Object.hasOwn(counts,key))counts[key]++;
@@ -142,7 +143,8 @@ export class FleetAssessmentManager {
       fleetSize:420,counts,job:this.job&&{
         id:this.job.id,status:this.job.status,total:this.job.total,completed:this.job.completed,
         failed:this.job.failed,startedAt:this.job.startedAt,finishedAt:this.job.finishedAt||null
-      },results:Object.fromEntries(values.map(v=>[v.imo,{imo:v.imo,status:v.status,score:v.score,level:v.level,operationalPriority:v.operationalPriority,criticalOpenFinding:v.criticalOpenFinding,assessedAt:v.assessedAt,reasonCode:v.reasonCode,configVersion:v.configVersion,sourceMode:v.sourceMode}]))};
+      },results:Object.fromEntries(values.map(v=>[v.imo,{imo:v.imo,status:v.status,score:v.score,level:v.level,operationalPriority:v.operationalPriority,criticalOpenFinding:v.criticalOpenFinding,assessedAt:v.assessedAt,reasonCode:v.reasonCode,configVersion:v.configVersion,sourceMode:v.sourceMode,
+        lastCheckedAt:v.lastCheckedAt,nextCheckAt:v.nextCheckAt,refreshFailure:v.refreshFailure||null}]))};
   }
   getVesselResult(imo){return VALID_IMOS.has(imo)?(this.results[imo]||null):null;}
   start(input){
@@ -167,7 +169,7 @@ export class FleetAssessmentManager {
     };
     this.job=job;
     const queue=[...input.vessels];
-    // Explicitly queued only on operator action. Limit upstream Airia parallel requests.
+    // Queued only by the server-side scheduler. No browser-triggered agent execution.
     void this.runQueue(job,queue,cfg);
     return {id:job.id,status:job.status,total:job.total,estimatedAiriaCalls:job.total*2};
   }
@@ -183,13 +185,22 @@ export class FleetAssessmentManager {
         const v=queue.shift();
         try{
           const output=await this.assess(v,cfg);
-          this.results[v.imo]={...output,status:'COMPLETED'};
+          this.results[v.imo]={...output,status:'COMPLETED',
+            inputHash:v._inputHash||null,lastCheckedAt:output.assessedAt,
+            nextCheckAt:new Date(Date.now()+(v._refreshIntervalMs||3600000)).toISOString(),
+            refreshFailure:null};
           job.completed++;
         }catch(err){
           const reasonCode=serializeError(err);
           console.error('[fleet] imo='+v.imo+' reasonCode='+reasonCode);
-          this.results[v.imo]={imo:v.imo,status:'FAILED',reasonCode,
-            attemptedAt:new Date().toISOString(),authoritative:false};
+          const previous=this.results[v.imo];
+          const failedAt=new Date().toISOString();
+          this.results[v.imo]=previous?.status==='COMPLETED'
+            ? {...previous,refreshFailure:reasonCode,lastCheckedAt:failedAt,
+              nextCheckAt:new Date(Date.now()+900000).toISOString()}
+            : {imo:v.imo,status:'FAILED',reasonCode,attemptedAt:failedAt,
+              lastCheckedAt:failedAt,nextCheckAt:new Date(Date.now()+900000).toISOString(),
+              authoritative:false};
           job.failed++;
         }
         try{this.persist();}catch{console.error('[fleet] STORE_WRITE_FAILED');}
