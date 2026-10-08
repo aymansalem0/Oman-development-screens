@@ -5,6 +5,7 @@ import { firstValueFrom } from 'rxjs';
 import { NmcVesselProfile } from '../data/nmc-vessel-catalog';
 import { NmcAiIntegrationService, NmcAiriaAgent } from '../services/nmc-ai-integration.service';
 import { NmcRiskEngineService, RiskEvaluation, RiskFactorKey } from '../services/nmc-risk-engine.service';
+import { NmcVesselEvidenceService } from '../services/nmc-vessel-evidence.service';
 
 interface AiSignal {
   factor: RiskFactorKey;
@@ -49,6 +50,10 @@ const A02_FACTORS: RiskFactorKey[] = ['inspection', 'certificate', 'dataQuality'
         <span class="context-note">IMO {{ vessel.imo }} · {{ copy('SYNTHETIC / INLINE context', 'بيانات تجريبية / مباشرة') }}</span>
       </div>
 
+      <div class="bundle-summary" *ngIf="bundleSummary">
+        <strong>{{ copy('Vessel 360 evidence bundle prepared', 'تم إعداد حزمة أدلة Vessel 360') }}</strong>
+        <span>{{ bundleSummary }} · {{ copy('Fictional POC records; no verified registry feeds or PDF content', 'سجلات تجريبية وليست بيانات معتمدة أو ملفات PDF') }}</span>
+      </div>
       <p class="status-message" *ngIf="message">{{ message }}</p>
       <div class="signal-issues" *ngIf="issues.length">
         <div class="signal-issue" *ngFor="let issue of issues">
@@ -111,6 +116,8 @@ const A02_FACTORS: RiskFactorKey[] = ['inspection', 'certificate', 'dataQuality'
     .agent-states .failure { background:#fff0f0; color:#c43838; }
     .agent-states .context-note { background:#e7f5f5; color:#0d7878; }
     .status-message { margin:12px 0 0; padding:9px 11px; border-radius:8px; background:#fff7eb; color:#915b14; font-size:11px; line-height:1.6; }
+    .bundle-summary { margin-top:10px; display:flex; flex-wrap:wrap; gap:8px; align-items:center; background:#edf7fe; border:1px solid #cde4f8; border-radius:8px; padding:9px 11px; color:#295776; font-size:10px; line-height:1.5; }
+    .bundle-summary strong { font-weight:900; }
     .signal-issues { display:grid; gap:6px; margin-top:8px; }
     .signal-issue { border:1px solid #f0d6a9; background:#fffaf1; padding:9px 11px; border-radius:8px; font-size:10px; line-height:1.5; }
     .signal-issue strong { display:block; color:#93631a; margin-bottom:3px; }
@@ -143,11 +150,13 @@ export class NmcLiveAiPanelComponent {
   signals: AiSignal[] = [];
   risk: RiskEvaluation | null = null;
   message = '';
+  bundleSummary = '';
   issues: Array<{ agent: string; factor: string; status: string; details: string }> = [];
 
   constructor(
     private readonly ai: NmcAiIntegrationService,
-    private readonly engine: NmcRiskEngineService
+    private readonly engine: NmcRiskEngineService,
+    private readonly vesselEvidence: NmcVesselEvidenceService
   ) {}
 
   copy(en: string, ar: string): string { return this.isArabic ? ar : en; }
@@ -175,47 +184,19 @@ export class NmcLiveAiPanelComponent {
     this.a02Status = 'running';
 
     const correlationId = `NMC-${this.vessel.imo}-${Date.now()}`;
-    const knownEvidence = this.evidenceIds();
+    const bundle = this.vesselEvidence.create(this.vessel);
+    const knownEvidence = bundle.evidenceIds;
+    this.bundleSummary = this.copy(
+      `${bundle.certificates.length} certificates · ${bundle.inspections.length} inspections · ${bundle.deficiencies.length} deficiencies · ${bundle.evidence.length} evidence records`,
+      `${bundle.certificates.length} شهادات · ${bundle.inspections.length} معاينات · ${bundle.deficiencies.length} ملاحظات · ${bundle.evidence.length} سجلات أدلة`
+    );
     const base = {
       requestMeta: { correlationId, language: this.isArabic ? 'ar' : 'en' },
       subject: { type: 'VESSEL', imo: this.vessel.imo },
-      bundleRef: `VBL-${this.vessel.imo}`,
+      bundleRef: bundle.bundleRef,
       contextMode: 'INLINE',
       officialScoringRequested: false,
-      inlineContext: {
-        vessel: {
-          imo: this.vessel.imo,
-          name: this.vessel.name,
-          mmsi: this.vessel.mmsi,
-          callSign: this.vessel.callSign,
-          flag: this.vessel.flag,
-          vesselType: this.vessel.type,
-          owner: this.vessel.owner,
-          operator: this.vessel.operator,
-          classSociety: this.vessel.classSociety,
-          built: this.vessel.built
-        },
-        tracking: {
-          speed: this.vessel.speed,
-          course: this.vessel.course,
-          destination: this.vessel.destination,
-          eta: this.vessel.eta,
-          navStatus: this.vessel.navStatus,
-          latitude: this.vessel.lat,
-          longitude: this.vessel.lng,
-          zone: this.vessel.zone,
-          routeKey: this.vessel.routeKey,
-          lastUpdateMinutes: this.vessel.lastUpdate
-        },
-        dataConfidence: this.vessel.dataConfidence / 100,
-        riskConfidence: this.vessel.riskConfidence / 100,
-        provenance: {
-          environment: 'SYNTHETIC_POC',
-          source: 'NMC_OPERATIONAL_VESSELS',
-          notice: 'Catalog and evidence IDs are synthetic. No live AIS, certificate registry, inspection record or PDF is connected in this request.',
-          evidenceIds: knownEvidence
-        }
-      }
+      inlineContext: bundle.inlineContext
     };
 
     const a01 = { ...base, requestedSignals: A01_FACTORS };
@@ -314,17 +295,6 @@ export class NmcLiveAiPanelComponent {
     }
     if (complete && diagnostic.length) this.message += ' ' + diagnostic.join(' | ');
     this.running = false;
-  }
-
-  private evidenceIds(): string[] {
-    const imo = this.vessel.imo;
-    const ins = `INS-2026-${String(1300 + this.vessel.id).padStart(5, '0')}`;
-    return [
-      `AIS-${this.vessel.mmsi}`, `ROUTE-${imo}`,
-      ins, `DEF-${ins}-01`,
-      `CERT-SC-${imo}`, `CLASS-${imo}`,
-      `DQC-${imo}`, `HIST-${imo}`
-    ];
   }
 
   private safeError(error: unknown): string {
