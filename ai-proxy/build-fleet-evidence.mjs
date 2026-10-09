@@ -31,18 +31,31 @@ function load(modulePath){
   const fakeRequire=(request)=>{
     if(request==='@angular/core')return {Injectable:()=>cls=>cls};
     if(request==='rxjs')return {BehaviorSubject};
+    // The browser Risk Engine now imports Angular HTTP and RxJS operators
+    // to load central policy. Evidence generation must NEVER contact Oracle
+    // or localhost, nor load an HTTP client. The pure fixture evaluation path
+    // only requires its deterministic default calculation.
+    if(request==='@angular/common/http')return {HttpHeaders:class HttpHeaders{}};
+    if(request==='rxjs/operators')return {
+      map:()=>source=>source,
+      tap:()=>source=>source
+    };
     if(request.startsWith('.'))return load(resolve(dirname(filename),request));
     throw new Error('Disallowed import for synthetic evidence build: '+request);
   };
   const compiled=new vm.Script('(function(require,module,exports){'+js+'\n})',{filename,timeout:5000});
   compiled.runInNewContext({console,Date,JSON,Map,Set,Math,Number,String,Array,Object,
-    Intl,RegExp,Error,localStorage:undefined},{timeout:5000})(fakeRequire,mod,mod.exports);
+    Intl,RegExp,Error,localStorage:undefined,
+    // Never run a browser policy poll in a build-time fixture generator.
+    setInterval:()=>0,clearInterval:()=>{}},{timeout:5000})(fakeRequire,mod,mod.exports);
   return mod.exports;
 }
 const expanded=load(root+'/src/app/data/nmc-expanded-vessel-catalog.ts');
 const risk=load(root+'/src/app/services/nmc-risk-engine.service.ts');
 const evidence=load(root+'/src/app/services/nmc-vessel-evidence.service.ts');
-const riskEngine=new risk.NmcRiskEngineService();
+// Simulated offline HttpClient: no networking, timers or database reads.
+const offlineHttpClient={get:()=>({subscribe:()=>({unsubscribe(){}})})};
+const riskEngine=new risk.NmcRiskEngineService(offlineHttpClient);
 const evidenceService=new evidence.NmcVesselEvidenceService(riskEngine);
 const vessels=expanded.NMC_OPERATIONAL_VESSELS;
 if(!Array.isArray(vessels)||vessels.length!==420||new Set(vessels.map(v=>v.imo)).size!==420)
