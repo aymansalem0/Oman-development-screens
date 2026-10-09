@@ -80,7 +80,7 @@ export class NmcAlertWorkspace {
       if(a.status==='OPEN'){summary.open++;summary.unread++;}
       if(a.status==='ACKNOWLEDGED')summary.acknowledged++;
       if(a.status==='IN_PROGRESS')summary.inProgress++;
-      if(a.status==='ESCALATED')summary.escalated++;
+      if(a.status==='ESCALATED'){summary.escalated++;summary.unread++;}
       if(a.severity==='CRITICAL')summary.critical++;
       if(a.severity==='HIGH')summary.high++;
     }
