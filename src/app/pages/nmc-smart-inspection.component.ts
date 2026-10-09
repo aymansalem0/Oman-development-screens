@@ -45,13 +45,18 @@ export class NmcSmartInspectionComponent implements OnInit {
   generalNote = '';
   submitted = false;
   existingOutcome?: NmcInspectionOutcome;
+  centralCase:NmcCentralCase|null=null;
+  centralLoading=true;
+  centralBusy=false;
+  centralError='';
 
   constructor(
     private route: ActivatedRoute,
     private router: Router,
     public lang: LanguageService,
     private caseState: NmcCaseStateService,
-    private riskEngine: NmcRiskEngineService
+    private riskEngine: NmcRiskEngineService,
+    private readonly cases:NmcCasesService
   ) {}
 
   ngOnInit(): void {
