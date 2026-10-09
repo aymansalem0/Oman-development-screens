@@ -15,6 +15,7 @@ import { NmcLiveAiPanelComponent, NmcLiveRiskResult } from './nmc-live-ai-panel.
 import { NmcRiskEngineService } from '../services/nmc-risk-engine.service';
 import { NmcVesselEvidenceService } from '../services/nmc-vessel-evidence.service';
 import { NmcFleetAiService, FleetAiAssessment } from '../services/nmc-fleet-ai.service';
+import {NmcCasesService,NmcCentralCase} from '../services/nmc-cases.service';
 
 type DecisionStatus = 'Pending' | 'Accepted' | 'Modified' | 'Rejected';
 type EvidenceType = 'Movement' | 'Inspection' | 'Certificate' | 'Data Quality' | 'History';
