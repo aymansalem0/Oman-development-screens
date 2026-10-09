@@ -64,13 +64,14 @@
         </article>
         <article class="metric-card">
           <small>{{ copy('Post-inspection risk reassessment', 'إعادة تقييم المخاطر بعد المعاينة') }}</small>
-          <strong>{{ riskReassessmentPending ? copy('Pending', 'مطلوبة') : copy('Not performed', 'لم تُجرَ') }}</strong>
+          <strong>{{ riskReassessmentPending ? copy('Pending', 'مطلوبة') : copy('Not applicable yet', 'غير مطلوبة حاليًا') }}</strong>
           <span>{{ copy('No assumed risk reduction', 'لا يوجد تخفيض افتراضي للمخاطر') }}</span>
         </article>
         <article class="metric-card">
-          <small>{{ copy('Case progress', 'تقدم الحالة') }}</small>
+          <small>{{ copy('Task completion · not case readiness', 'إنجاز المهام · ليس جاهزية الإغلاق') }}</small>
           <strong>{{ progressPercent }}%</strong>
-          <span>{{ completedTasks }}/{{ tasks.length }} {{ copy('tasks complete', 'مهام مكتملة') }}</span>
+          <span>{{ completedTasks }}/{{ tasks.length }} {{ copy('tasks complete', 'مهام مكتملة') }} ·
+            {{legacyTaskCount}} {{copy('historical','سابقة')}}</span>
         </article>
         <article class="metric-card">
           <small>{{ copy('Open / escalated', 'مفتوحة / مصعدة') }}</small>
@@ -83,8 +84,9 @@
     <section class="case-progress-strip">
       <div class="progress-head">
         <div>
-          <strong>{{ copy('Case progress', 'تقدم الحالة') }}</strong>
-          <p>{{ copy('Mandatory tasks must be completed before case resolution.', 'يجب استكمال المهام الإلزامية قبل إغلاق الحالة.') }}</p>
+          <strong>{{ copy('Task completion (historical + A01-approved)', 'إنجاز المهام (سابقة + معتمدة من A01)') }}</strong>
+          <p>{{ copy('Task percentage does not include pending AI decisions or post-inspection risk verification.',
+              'نسبة إنجاز المهام لا تشمل قرارات AI المعلقة أو إعادة تقييم المخاطر بعد المعاينة.') }}</p>
         </div>
         <span>{{ progressPercent }}%</span>
       </div>
@@ -157,6 +159,15 @@
             <span class="task-count">{{ tasks.length }} {{ copy('tasks', 'مهام') }}</span>
           </div>
 
+          <div class="case-legacy-notice" *ngIf="legacyTaskCount>0">
+            <strong>{{copy('Historical case tasks', 'مهام الحالة السابقة')}}: {{legacyTaskCount}}</strong>
+            <span>{{copy(
+              'These tasks were saved before the current Airia A01 plan. They are retained for audit; their completion does not approve the new AI proposals.',
+              'هذه المهام محفوظة من قبل خطة Airia A01 الحالية ولم تُحذف من سجل التدقيق. اكتمالها لا يعني اعتماد توصيات AI الجديدة.')}}
+            </span>
+            <span>{{copy('New A01-approved tasks','المهام الجديدة المعتمدة من A01')}}: {{approvedAiTaskCount}} ·
+              {{copy('Pending proposals','توصيات تنتظر القرار')}}: {{pendingAiActionCount}}</span>
+          </div>
           <div class="task-list">
             <article class="task-card" *ngFor="let task of tasks" [class.selected]="selectedTask?.id === task.id">
               <button type="button" class="task-main" (click)="openTask(task)">
@@ -264,8 +275,10 @@
               <span class="section-kicker">{{ copy('RESOLUTION CONTROL', 'التحكم في الإغلاق') }}</span>
               <h3>{{ copy('Close case with evidence', 'إغلاق الحالة بالأدلة') }}</h3>
             </div>
-            <span class="ready-badge" [class.ready]="mandatoryComplete">
-              {{ mandatoryComplete ? copy('Ready', 'جاهزة') : copy('Not ready', 'غير جاهزة') }}
+            <span class="ready-badge" [class.ready]="readyForResolution||caseStatus==='Resolved'">
+              {{caseStatus==='Resolved'
+                ? copy('Closed','مغلقة')
+                : readyForResolution ? copy('Ready','جاهزة') : copy('Not ready','غير جاهزة')}}
             </span>
           </div>
 
@@ -278,11 +291,24 @@
                   <small>{{ completedTasks }}/{{ tasks.length }} {{ copy('tasks complete', 'مهام مكتملة') }}</small>
                 </p>
               </div>
-              <div>
-                <span>○</span>
+              <div [class.complete]="!!centralCase?.actionPlan&&pendingAiActionCount===0">
+                <span>{{centralCase?.actionPlan&&pendingAiActionCount===0?'✓':'○'}}</span>
                 <p>
-                  <strong>{{ copy('Post-inspection risk reassessment not recorded', 'لم يتم تسجيل إعادة تقييم المخاطر بعد المعاينة') }}</strong>
-                  <small>{{ copy('The original saved AI assessment remains unchanged; a new evidence-based evaluation is required.', 'يبقى تقييم AI الأصلي كما هو؛ ويلزم تقييم جديد بناءً على الأدلة.') }}</small>
+                  <strong>{{ copy('A01 proposals reviewed by an officer', 'اعتماد أو رفض جميع توصيات A01 بواسطة الموظف') }}</strong>
+                  <small>{{pendingAiActionCount}} {{ copy('decisions still pending', 'قرارات ما زالت معلقة') }}</small>
+                </p>
+              </div>
+              <div [class.complete]="!riskReassessmentPending">
+                <span>{{riskReassessmentPending?'○':'✓'}}</span>
+                <p>
+                  <strong>{{riskReassessmentPending
+                    ?copy('Post-inspection risk reassessment pending','إعادة تقييم المخاطر بعد المعاينة معلقة')
+                    :copy('No unreassessed inspection outcome','لا توجد معاينة مكتملة تنتظر إعادة التقييم')}}</strong>
+                  <small>{{riskReassessmentPending
+                    ?copy('The original saved risk remains unchanged. A verified A02 refresh and a new saved assessment are required before closure.',
+                       'المخاطر المحفوظة لم تتغير. يلزم تحديث A02 وتقييم مخاطر جديد ومحفوظ قبل الإغلاق.')
+                    :copy('Any future inspection outcome must undergo separate evidence-based reassessment.',
+                       'أي نتيجة معاينة مستقبلية تحتاج إلى إعادة تقييم مستقلة قائمة على الأدلة.')}}</small>
                 </p>
               </div>
             </div>
@@ -293,7 +319,7 @@
               'لخص نتيجة التحقق والإجراءات المكتملة وأي متطلبات مراقبة متبقية...'
             )"></textarea>
 
-            <button type="button" class="resolve-btn" (click)="resolveCase()" [disabled]="centralBusy || !mandatoryComplete || caseStatus === 'Resolved'">
+            <button type="button" class="resolve-btn" (click)="resolveCase()" [disabled]="centralBusy || !readyForResolution || caseStatus === 'Resolved'">
               ✓ {{ caseStatus === 'Resolved' ? copy('Case resolved', 'تم إغلاق الحالة') : copy('Resolve NMC Case', 'إغلاق الحالة بالمركز البحري') }}
             </button>
           </div>
