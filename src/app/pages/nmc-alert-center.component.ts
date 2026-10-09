@@ -166,6 +166,27 @@ export class NmcAlertCenterComponent implements OnInit,OnDestroy{
   policyFor(item:NmcOperationalAlert){
     return this.policyResults.get(item.imo);
   }
+  displaySeverity(item:NmcOperationalAlert):AlertSeverity{
+    const band=this.policyFor(item)?.level;
+    if(band==='Critical')return 'CRITICAL';
+    if(band==='High')return 'HIGH';
+    return item.severity;
+  }
+  triggerDescription(item:NmcOperationalAlert):string{
+    const policy=this.policyFor(item);
+    if(policy?.reason==='CRITICAL_OPEN_FINDING')return this.copy(
+      'Critical open finding — requires human follow-up regardless of the composite risk threshold.',
+      'ملاحظة حرجة مفتوحة — تستلزم متابعة بشرية بغض النظر عن حدود تصنيف درجة المخاطر.'
+    );
+    if(policy)return this.copy(
+      'Current Risk Settings project '+policy.score+'/100 · '+policy.level+
+        '. The original source assessment remains saved in Oracle.',
+      'تنتج إعدادات المخاطر الحالية درجة '+policy.score+'/100 · '+policy.level+
+        '. التقييم الأصلي محفوظ في Oracle دون تغيير.'
+    );
+    return this.copy('Saved risk alert; projected policy eligibility is not independently verified.',
+      'تنبيه مخاطر محفوظ؛ لم يتم التحقق من مطابقته للإعدادات الحالية بشكل مستقل.');
+  }
   isPolicySuperseded(item:NmcOperationalAlert):boolean{
     return item.status!=='RESOLVED'&&this.policyResults.get(item.imo)?.eligible===false;
   }
