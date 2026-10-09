@@ -103,6 +103,13 @@ const server = createServer(async (req, res) => {
     const record=fleet.getVesselResult(fleetResultMatch[1]);
     return respond(res,record?200:404,record||{error:'FLEET_ASSESSMENT_NOT_FOUND'});
   }
+  const intelligenceMatch = /^\/api\/ai\/fleet\/intelligence\/(\d{7})$/.exec(path);
+  if(req.method==='GET' && intelligenceMatch){
+    try {
+      const data=await fleet.intelligence(intelligenceMatch[1]);
+      return respond(res,data?200:404,data||{error:'FLEET_INTELLIGENCE_NOT_FOUND'});
+    }catch{return respond(res,503,{error:'FLEET_INTELLIGENCE_UNAVAILABLE'});}
+  }
   const historyMatch = /^\/api\/ai\/fleet\/history\/(\d{7})$/.exec(path);
   if(req.method==='GET' && historyMatch){
     try{
