@@ -461,6 +461,13 @@ export class NmcCaseWorkspaceComponent implements OnInit {
       this.caseStatus = 'Open';
     }
 
+    if(this.centralCase){
+      const states:Record<string,CaseStatus>={
+        OPEN:'Open',IN_PROGRESS:'In Progress',
+        PENDING_VERIFICATION:'Pending Verification',RESOLVED:'Resolved'
+      };
+      this.caseStatus=states[this.centralCase.status]||'Open';
+    }
     this.stakeholders = [
       {
         role: this.copy('Case Owner', 'مالك الحالة'),
