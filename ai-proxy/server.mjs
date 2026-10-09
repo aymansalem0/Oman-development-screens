@@ -167,8 +167,7 @@ async function prepareCaseA01Actions(caseId,version){
             // the immutable legacy case field that may have been null.
             plan.evidenceAssessmentId=source.assessmentId;
             plan.legacySourceReconciled=legacyReconciled;
-            const item=await cases.saveActionPlan(caseId,version,plan);
-            return respond(res,200,{status:'ok',case:item});
+            return await cases.saveActionPlan(caseId,version,plan);
           }finally{actionPlanRuns.delete(caseId);}
 }
 
