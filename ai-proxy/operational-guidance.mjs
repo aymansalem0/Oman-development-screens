@@ -200,12 +200,19 @@ export class OperationalGuidance{
           typeof c.SOURCE_A_EVIDENCE_ID==='string'&&typeof c.SOURCE_B_EVIDENCE_ID==='string');
       }
     }
+    // Current centrally published risk-policy projection drives score-dependent
+    // business guidance. Original validated AI factors and evidence stay immutable.
+    const policyProjection=this.riskPolicy?.ready?await this.riskPolicy.vessel(imo):null;
+    const current=policyProjection?.sourceAssessmentId===record.assessmentId?
+      policyProjection:null;
     const facts={
       criticalOpenFinding:record.criticalOpenFinding===true,
       inspectionSeverity:byFactor.inspection.severity,certificateSeverity:byFactor.certificate.severity,
       historySeverity:byFactor.history.severity,movementSeverity:byFactor.movement.severity,
-      dataQualitySeverity:byFactor.dataQuality.severity,riskScore:record.score,
-      riskLevel:record.level,operationalPriority:record.operationalPriority,
+      dataQualitySeverity:byFactor.dataQuality.severity,
+      riskScore:current?.riskScore??record.score,
+      riskLevel:current?.riskLevel??record.level,
+      operationalPriority:current?.operationalPriority??record.operationalPriority,
       dataConflictDetected:conflicts.length>0
     };
     const items=[];
@@ -245,7 +252,11 @@ export class OperationalGuidance{
       });
     }
     return {status:'ok',imo,assessmentId:record.assessmentId,assessedAt:record.assessedAt,
-      riskScore:record.score,riskLevel:record.level,operationalPriority:record.operationalPriority,
+      riskScore:facts.riskScore,riskLevel:facts.riskLevel,
+      operationalPriority:facts.operationalPriority,
+      riskPolicyRevision:current?.policyRevision||null,
+      riskPolicyRef:current?.policyVersion||record.configVersion,
+      originalRiskScore:record.score,originalRiskLevel:record.level,
       source:'SYNTHETIC_POC_NOT_REGULATORY',policyCount:rules.filter(r=>r.published?.enabled).length,
       rules:items};
   }
