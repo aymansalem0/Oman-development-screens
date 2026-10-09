@@ -257,6 +257,15 @@ export class NmcAlertCenterComponent implements OnInit,OnDestroy{
     if(band==='High')return 'HIGH';
     return item.severity;
   }
+  alertHeadline(item:NmcOperationalAlert):string{
+    if(this.policyFor(item)?.reason==='CRITICAL_OPEN_FINDING')return this.copy(
+      'Critical open maritime finding requires review',
+      'ملاحظة بحرية حرجة مفتوحة تستلزم المراجعة'
+    );
+    return this.displaySeverity(item)==='CRITICAL'
+      ?this.copy('Critical maritime risk requires review','مخاطر بحرية حرجة تستلزم المراجعة')
+      :this.copy('High maritime risk requires review','مخاطر بحرية مرتفعة تستلزم المراجعة');
+  }
   triggerDescription(item:NmcOperationalAlert):string{
     const policy=this.policyFor(item);
     if(policy?.reason==='CRITICAL_OPEN_FINDING')return this.copy(
