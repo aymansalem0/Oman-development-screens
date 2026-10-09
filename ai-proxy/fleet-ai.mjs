@@ -114,8 +114,9 @@ function loadStore(){
   return {};
 }
 export class FleetAssessmentManager {
-  constructor({executeAgent,getPscVessel,repository=null}){
+  constructor({executeAgent,getPscVessel,repository=null,onAssessmentSaved=null}){
     this.executeAgent=executeAgent;
+    this.onAssessmentSaved=onAssessmentSaved;
     this.getPscVessel=getPscVessel;
     this.repository=repository;
     this.results=repository?{}:loadStore();
@@ -243,6 +244,13 @@ export class FleetAssessmentManager {
           }
           this.results[v.imo]=current;
           job.completed++;
+          // Guidance is derived ONLY after a saved assessment; an optional
+          // guidance subsystem outage must not invalidate the already committed AI score.
+          if(this.onAssessmentSaved){
+            try{await this.onAssessmentSaved(current);}catch{
+              console.error('[nmc-guidance] RESULT_MATERIALIZATION_FAILED');
+            }
+          }
         }catch(error){
           const reasonCode=serializeError(error);
           console.error('[fleet] imo='+v.imo+' reasonCode='+reasonCode);
