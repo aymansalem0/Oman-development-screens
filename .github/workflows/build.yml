@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main, feature/smart-inspection-poc]
+    branches: [main, feature/smart-inspection-poc, feature/nmc-published-dashboard-view-v3]
 
 jobs:
   build:
@@ -23,3 +23,23 @@ jobs:
 
       - name: Build
         run: npm run build
+
+  dashboard-backend:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install backend dependencies
+        run: npm --prefix ai-proxy install --no-audit --no-fund
+
+      - name: Check backend JavaScript syntax
+        run: npm --prefix ai-proxy run check
+
+      - name: Dashboard workspace regression tests
+        run: npm --prefix ai-proxy test
