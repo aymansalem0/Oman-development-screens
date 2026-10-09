@@ -1,3 +1,4 @@
+import { NmcNavigationComponent } from '../components/nmc-navigation.component';
 import { CommonModule } from '@angular/common';
 import { Component, OnInit } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
@@ -45,7 +46,7 @@ interface ThresholdBand {
 @Component({
   selector: 'app-nmc-risk-explainability',
   standalone: true,
-  imports: [CommonModule, RouterLink],
+  imports: [CommonModule, RouterLink, NmcNavigationComponent],
   templateUrl: './nmc-risk-explainability.component.html',
   styleUrl: './nmc-risk-explainability.component.css'
 })
