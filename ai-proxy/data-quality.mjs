@@ -57,7 +57,9 @@ export function evaluateDataQuality({bundle,psc,signals}){
   // cap at 75, avoiding a misleading 100% confidence claim.
   const uncapped=insufficient?null:Math.round(
     completeness*.35+consistency*.30+evidenceCoverage*.20+provenance*.15);
-  const score=uncapped===null?null:Math.min(75,uncapped);
+  // Proportional uncertainty discount: even one inconsistency lowers the score.
+  // A simple cap would hide discrepancies until uncapped quality fell below 75.
+  const score=uncapped===null?null:Math.min(75,Math.round(uncapped*.75));
   return {
     calculationStatus:insufficient?'INSUFFICIENT_EVIDENCE':'CALCULATED',
     calculationVersion:'NMC Structural Quality 1.0',
