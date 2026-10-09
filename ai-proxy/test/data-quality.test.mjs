@@ -22,6 +22,19 @@ test('fully structurally consistent synthetic evidence caps at 75; NEVER claims 
  assert.equal(out.qualityScore,75);
  assert.equal(out.disagreements.length,0);
  assert.equal(out.breakdown.comparedFields,4);
+ assert.equal(out.breakdown.identityValueSidesPresent,8);
+ assert.equal(out.breakdown.identityValueSidesExpected,8);
+ assert.equal(out.breakdown.evidenceReferencesLinked,2);
+ assert.equal(out.breakdown.evidenceReferencesTotal,2);
+ assert.deepEqual(out.breakdown.calculationSteps.map(step=>step.rawContribution),[35,30,20,15]);
+ assert.equal(out.breakdown.rawScoreBeforeSyntheticCap,100);
+ assert.equal(out.breakdown.syntheticDiscountFactor,.75);
+ assert.deepEqual(out.breakdown.fieldComparisons.map(f=>f.status),
+   ['MATCHED','MATCHED','MATCHED','MATCHED']);
+ assert.equal(out.breakdown.fieldComparisons[0].internalValue,'MV Gulf Horizon');
+ assert.equal(out.breakdown.fieldComparisons[0].externalValue,'MV Gulf Horizon');
+ assert.equal(out.breakdown.evidenceLinkages.length,2);
+ assert.ok(out.breakdown.evidenceLinkages.every(link=>link.matched));
  assert.equal(out.breakdown.independentlyVerifiedDataConfidence,null);
  assert.equal(out.breakdown.verifiedByAuthority,false);
 });
@@ -32,6 +45,11 @@ test('different populated PSC flag generates one data conflict using only actual
  const out=evaluateDataQuality(data);
  assert.equal(out.disagreements.length,1);
  assert.equal(out.disagreements[0].fieldName,'FLAG');
+ const compared=out.breakdown.fieldComparisons.find(row=>row.field==='FLAG');
+ assert.equal(compared.internalValue,'Liberia');
+ assert.equal(compared.externalValue,'Panama');
+ assert.equal(compared.status,'MISMATCH');
+ assert.equal(out.breakdown.matchingIdentityFields,3);
  assert.equal(out.disagreements[0].sourceAEvidenceId,'VES-9328471');
  assert.equal(out.disagreements[0].sourceBEvidenceId,null);
  assert.ok(out.qualityScore<75);
@@ -44,6 +62,8 @@ test('missing PSC field is a completeness gap, not a fabricated conflict',()=>{
  assert.equal(out.disagreements.length,0);
  assert.equal(out.breakdown.missingFieldSides,1);
  assert.equal(out.breakdown.comparedFields,3);
+ assert.equal(out.breakdown.fieldComparisons.find(row=>row.field==='FLAG').status,'MISSING');
+ assert.equal(out.breakdown.identityValueSidesPresent,7);
 });
 
 test('rejects wrong IMO or incorrectly claimed authoritative provenance',()=>{
@@ -65,4 +85,25 @@ test('unknown evidence linkage lowers structural score without inventing source 
  const out=evaluateDataQuality(data);
  assert.equal(out.breakdown.evidenceLinkagePercent,50);
  assert.equal(out.calculationStatus,'CALCULATED');
+});
+
+test('retains exact metadata presence versus the 60% fallback heuristic',()=>{
+ const data=base();data.psc.datasetVersion='';
+ const out=evaluateDataQuality(data);
+ assert.equal(out.breakdown.provenanceMetadataPercent,60);
+ assert.equal(out.breakdown.provenanceChecks.filter(x=>x.present).length,2);
+ const row=out.breakdown.calculationSteps.find(x=>x.key==='provenance');
+ assert.equal(row.percent,60);
+ assert.equal(row.rawContribution,9);
+ assert.equal(row.numerator,2);
+ assert.equal(row.denominator,3);
+});
+
+test('the evidence trace records unknown IDs without pretending they are verified',()=>{
+ const data=base();data.signals[0].evidenceIds=['MISSING-EVIDENCE'];
+ const out=evaluateDataQuality(data);
+ assert.equal(out.breakdown.evidenceLinkages[0].matched,false);
+ assert.equal(out.breakdown.evidenceLinkages[0].source,'UNKNOWN');
+ assert.equal(out.breakdown.evidenceReferencesLinked,1);
+ assert.equal(out.breakdown.evidenceReferencesTotal,2);
 });
