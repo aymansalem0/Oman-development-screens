@@ -2,6 +2,12 @@ import { Injectable } from '@angular/core';
 import { BehaviorSubject } from 'rxjs';
 
 export type DashboardWidgetKind = 'kpi' | 'bar' | 'table' | 'position';
+export type DashboardMenuPlacement = 'NMC_CENTER' | 'SMART_INSPECTION' | 'SETTINGS';
+export const DASHBOARD_MENU_PLACEMENTS: Array<{value:DashboardMenuPlacement;en:string;ar:string}> = [
+  {value:'NMC_CENTER',en:'NMC Center',ar:'المركز البحري الوطني'},
+  {value:'SMART_INSPECTION',en:'Smart Inspection',ar:'المعاينة الذكية'},
+  {value:'SETTINGS',en:'Settings',ar:'الإعدادات'}
+];
 export type DashboardMetric =
   | 'vesselCount' | 'assessedCount' | 'attentionCount' | 'highCriticalCount'
   | 'priorityCount' | 'averageRisk' | 'byRisk' | 'byFlag'
@@ -27,6 +33,8 @@ export interface DashboardDefinition {
   title: string;
   description: string;
   status: 'DRAFT' | 'PUBLISHED';
+  /** Legacy dashboards without this field default to NMC Center. */
+  menuPlacement?: DashboardMenuPlacement;
   updatedAt: string;
   version: number;
   widgets: DashboardWidget[];
@@ -60,6 +68,7 @@ export function dashboardDefaults(): DashboardDefinition {
     title:'Maritime Risk Monitoring',
     description:'Operational vessel activity and risk management overview',
     status:'DRAFT',
+    menuPlacement:'NMC_CENTER',
     version:1,
     updatedAt:new Date().toISOString(),
     filters:{risk:'All',type:'All',flag:'All',search:''},
@@ -212,6 +221,9 @@ export class NmcDashboardStoreService {
   }
 
   private validate(d:DashboardDefinition):void {
+    if(d.menuPlacement!==undefined &&
+       !DASHBOARD_MENU_PLACEMENTS.some(option=>option.value===d.menuPlacement))
+      throw new Error('INVALID_DASHBOARD_MENU_PLACEMENT');
     if(!d.id||!d.title.trim()||d.title.length>100||d.description.length>500||
        !Array.isArray(d.widgets)||d.widgets.length>30)throw new Error('INVALID_DASHBOARD');
     const ids=new Set<string>();

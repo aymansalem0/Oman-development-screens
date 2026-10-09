@@ -42,3 +42,18 @@
 .db-view-filters input,.db-view-filters select{border:1px solid #dae7eb;border-radius:8px;height:35px;padding:6px 9px;color:#345c6d;background:#fff;font-size:11px;max-width:195px}
 .db-view-filters input:focus,.db-view-filters select:focus{outline:2px solid #92d9cc}
 @media(max-width:650px){.db-view-layout .db-widgets{grid-template-columns:1fr}.db-view-filters>strong{width:100%}.db-view-filters label{flex:1;min-width:130px}.db-view-filters input,.db-view-filters select{max-width:none;width:100%}}
+
+
+/* Business-selected placement for the published navigation shortcut. */
+.db-placement-help{margin:7px 0 0!important;color:#7d98a5!important;line-height:1.65}
+.db-placement-indicator{font-size:10px;color:#0b8677;font-weight:750;
+  background:#effbf7;border:1px solid #d9efe8;padding:6px 8px;border-radius:8px;
+  margin:0 0 12px}
+
+
+.db-placement-control{display:flex;align-items:end;gap:8px;flex-wrap:wrap;
+  padding:9px 0 13px;margin-bottom:9px;border-bottom:1px solid #eaf1f2}
+.db-placement-control label{width:100%;font-size:10px;color:#6f8797;font-weight:750}
+.db-placement-control select{flex:1;min-width:120px;max-width:100%;
+  border:1px solid #d2e6e5;border-radius:8px;background:#fff;
+  padding:8px;font-size:11px;color:#205768}

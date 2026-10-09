@@ -122,6 +122,14 @@ const server = createServer(async (req, res) => {
       return respond(res,data?200:404,data||{error:'UNKNOWN_VESSEL'});
     }catch{return respond(res,503,{error:'FLEET_HISTORY_UNAVAILABLE'});}
   }
+  // Read-only, published-only sidebar navigation: never return drafts or templates.
+  if(path==='/api/ai/dashboards/published'&&req.method==='GET'){
+    try{return respond(res,200,{status:'ok',dashboards:await dashboards.publishedMenu()});}
+    catch(error){
+      if(error instanceof DashboardError)return respond(res,error.status,{error:error.code});
+      return respond(res,503,{error:'DASHBOARD_STORE_UNAVAILABLE'});
+    }
+  }
   // Published dashboard sharing is read-only and intentionally excludes drafts.
   const publishedMatch = /^\/api\/ai\/dashboards\/published\/([a-zA-Z0-9_-]{1,100})$/.exec(path);
   if (publishedMatch) {
@@ -142,7 +150,7 @@ const server = createServer(async (req, res) => {
   // Writes require a server-managed access key. Role labels are shared-key
   // permissions, not end-user identity. Integrate real IAM before production.
   if (path === '/api/ai/dashboards' || path.startsWith('/api/ai/dashboards/')) {
-    const match=/^\/api\/ai\/dashboards(?:\/([a-zA-Z0-9_-]{1,100})(?:\/(publish|revisions))?)?$/.exec(path);
+    const match=/^\/api\/ai\/dashboards(?:\/([a-zA-Z0-9_-]{1,100})(?:\/(publish|revisions|placement))?)?$/.exec(path);
     if(!match)return respond(res,404,{error:'NOT_FOUND'});
     const [,id,action]=match;
     try{
@@ -167,6 +175,12 @@ const server = createServer(async (req, res) => {
         dashboards.assertRole(req,'PUBLISHER');
         const body=await requestJson(req,1024*16);
         return respond(res,200,{status:'ok',dashboard:await dashboards.publish(id,body.version)});
+      }
+      if(req.method==='PATCH'&&id&&action==='placement'){
+        dashboards.assertRole(req,'PUBLISHER');
+        const body=await requestJson(req,1024*8);
+        return respond(res,200,{status:'ok',
+          dashboard:await dashboards.movePublished(id,body.menuPlacement,body.version)});
       }
       if(req.method==='DELETE'&&id&&!action){
         dashboards.assertRole(req,'EDITOR');
