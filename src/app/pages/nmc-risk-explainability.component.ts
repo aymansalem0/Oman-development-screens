@@ -7,6 +7,7 @@ import {NmcVesselProfile} from '../data/nmc-vessel-catalog';
 import {getOperationalVesselByImo} from '../data/nmc-expanded-vessel-catalog';
 import {LanguageService} from '../services/language.service';
 import {NmcFleetAiService,FleetAiAssessment} from '../services/nmc-fleet-ai.service';
+import {NmcRiskEngineService,RiskEngineConfig,RiskEvaluation,RiskFactorKey} from '../services/nmc-risk-engine.service';
 import {NmcOperationalGuidanceService,GuidanceResult} from '../services/nmc-operational-guidance.service';
 import {NmcCasesService,NmcCentralCase} from '../services/nmc-cases.service';
 
@@ -29,6 +30,10 @@ export class NmcRiskExplainabilityComponent implements OnInit,OnDestroy {
   private readonly subscriptions=new Subscription();
   vessel?:NmcVesselProfile;
   assessment:FleetAiAssessment|null=null;
+  // The local Risk Management settings apply only to this browser's policy projection;
+  // immutable Oracle assessment and audit history must NEVER be relabeled as recalculated.
+  activeRiskConfig:RiskEngineConfig|null=null;
+  projectedRisk:RiskEvaluation|null=null;
   factors:RiskFactor[]=[];
   selectedFactor?:RiskFactor;
   guidanceItems:GuidanceResult[]=[];
@@ -48,20 +53,33 @@ export class NmcRiskExplainabilityComponent implements OnInit,OnDestroy {
 
   constructor(private route:ActivatedRoute,public lang:LanguageService,
     private readonly fleet:NmcFleetAiService,
+    private readonly riskEngine:NmcRiskEngineService,
     private readonly guidance:NmcOperationalGuidanceService,
     private readonly cases:NmcCasesService){}
 
   ngOnInit():void{
+    this.subscriptions.add(this.riskEngine.config$.subscribe(policy=>{
+      this.activeRiskConfig=policy;
+      this.updatePolicyProjection();
+    }));
+    window.addEventListener('storage',this.onPolicyStorageChange);
     this.subscriptions.add(this.route.paramMap.subscribe(params=>{
       const imo=params.get('imo')||'';
       this.vessel=getOperationalVesselByImo(imo);
-      this.assessment=null;this.factors=[];this.selectedFactor=undefined;
+      this.assessment=null;this.projectedRisk=null;
+      this.factors=[];this.selectedFactor=undefined;
       this.guidanceItems=[];this.linkedCase=null;
       if(!this.vessel){this.assessmentError='Unknown vessel IMO';this.busy=false;return;}
       this.refresh();
     }));
   }
-  ngOnDestroy():void{this.subscriptions.unsubscribe();}
+  ngOnDestroy():void{
+    this.subscriptions.unsubscribe();
+    window.removeEventListener('storage',this.onPolicyStorageChange);
+  }
+  private readonly onPolicyStorageChange=(event:StorageEvent):void=>{
+    if(event.key==='moei-nmc-risk-engine-config:v1')this.riskEngine.syncPublishedFromStorage();
+  };
   copy(en:string,ar:string):string{return this.lang.pick(en,ar);}
   toggleLanguage():void{this.lang.toggle();}
   refresh():void{
@@ -78,26 +96,14 @@ export class NmcRiskExplainabilityComponent implements OnInit,OnDestroy {
           this.assessmentError=this.copy('A valid saved A01/A02 assessment is not available.','لا يوجد تقييم A01/A02 صالح ومحفوظ.');
           return;
         }
+        // Rebuild from the five SAVED A01/A02 severities using the currently
+        // configured risk model; the source Oracle score remains unchanged.
         this.assessment=row;
-        const prior=this.selectedFactor?.id;
-        this.factors=this.factorOrder.flatMap(id=>{
-          const signal=row.signals.find(x=>x.factor===id);
-          const weight=Number(row.ruleset?.weights?.[id]??NaN);
-          if(!signal||!Number.isFinite(weight))return [];
-          return [{
-            id,label:this.factorLabels[id][0],labelAr:this.factorLabels[id][1],
-            severity:signal.severity,weight,
-            contribution:signal.severity*weight/100,
-            confidence:signal.confidence,
-            evidenceIds:signal.evidenceIds||[],reason:signal.reason||'',sourceAgent:signal.sourceAgent
-          }];
-        });
-        if(this.factors.length!==5)this.assessmentError=this.copy(
-          'Some saved risk factors are missing.','بعض عوامل المخاطر المحفوظة غير موجودة.');
-        this.selectedFactor=this.factors.find(x=>x.id===prior)||this.factors[0];
+        this.updatePolicyProjection();
       },
       error:()=>{if(this.vessel?.imo!==imo)return;
-        this.busy=false;this.assessment=null;this.factors=[];this.assessmentError=
+        this.busy=false;this.assessment=null;this.projectedRisk=null;
+        this.factors=[];this.assessmentError=
         this.copy('No saved validated assessment; no simulated score will be substituted.',
                   'لا يوجد تقييم محفوظ ومتحقق منه؛ لن يتم عرض درجة مخاطر تجريبية كبديل.');}
     }));
@@ -117,8 +123,55 @@ export class NmcRiskExplainabilityComponent implements OnInit,OnDestroy {
         this.guidanceError=this.guidance.message(e,this.lang.isArabic);}
     }));
   }
-  get riskScore():number|null{return this.assessment?.score??null;}
-  get riskLevel():string{return this.assessment?.level||'Pending';}
+  /** Scoring policy projection is recomputed from persisted AI evidence, NEVER fixture calibration. */
+  private updatePolicyProjection():void{
+    const row=this.assessment,config=this.activeRiskConfig,vessel=this.vessel;
+    if(!row||!config||!vessel)return;
+    const valid=this.factorOrder.every(key=>
+      row.signals.filter(signal=>signal.factor===key&&
+        Number.isFinite(signal.severity)&&signal.severity>=0&&signal.severity<=100).length===1);
+    if(!valid||this.riskEngine.validate(config).length){
+      this.projectedRisk=null;this.factors=[];
+      this.assessmentError=this.copy(
+        'Cannot project risk: saved factor evidence or the published browser policy is invalid.',
+        'لا يمكن حساب المخاطر: أدلة العوامل المحفوظة أو قواعد المتصفح غير صالحة.');
+      return;
+    }
+    const severities=Object.fromEntries(this.factorOrder.map(key=>
+      [key,row.signals.find(signal=>signal.factor===key)!.severity])) as Record<RiskFactorKey,number>;
+    this.projectedRisk=this.riskEngine.evaluateFromAiSignals(vessel,severities,config);
+    const previous=this.selectedFactor?.id;
+    this.factors=this.factorOrder.map(id=>{
+      const signal=row.signals.find(x=>x.factor===id)!;
+      const weight=config.weights[id];
+      return {
+        id,label:this.factorLabels[id][0],labelAr:this.factorLabels[id][1],
+        severity:signal.severity,weight,
+        contribution:signal.severity*weight/100,
+        confidence:signal.confidence,evidenceIds:signal.evidenceIds||[],
+        reason:signal.reason||'',sourceAgent:signal.sourceAgent
+      };
+    });
+    this.selectedFactor=this.factors.find(x=>x.id===previous)||this.factors[0];
+  }
+  get riskScore():number|null{return this.projectedRisk?.score??null;}
+  get riskLevel():string{return this.projectedRisk?.level||'Pending';}
+  get sourceRiskScore():number|null{return this.assessment?.score??null;}
+  get sourceRiskLevel():string{return this.assessment?.level||'Pending';}
+  get policyChanged():boolean{
+    const original=this.assessment?.ruleset,current=this.activeRiskConfig;
+    if(!original||!current)return false;
+    return original.mode!==current.mode||
+      this.factorOrder.some(key=>original.weights[key]!==current.weights[key])||
+      original.thresholds.watch!==current.thresholds.watch||
+      original.thresholds.high!==current.thresholds.high||
+      original.thresholds.critical!==current.thresholds.critical;
+  }
+  get projectedPriority():string{
+    if(!this.assessment||!this.projectedRisk)return '—';
+    return this.assessment.criticalOpenFinding||this.riskLevel==='Critical'
+      ?'Priority Review':this.riskLevel==='High'?'Enhanced Monitoring':'Routine';
+  }
   get riskClass():string{return this.riskLevel.toLowerCase();}
   get riskLabel():string{
     const values:Record<string,[string,string]>={
@@ -130,7 +183,7 @@ export class NmcRiskExplainabilityComponent implements OnInit,OnDestroy {
   }
   get scoreMarkerPosition():number{return this.riskScore===null?0:Math.min(99,Math.max(1,this.riskScore));}
   get thresholds():Threshold[]{
-    const t=this.assessment?.ruleset?.thresholds??{watch:45,high:65,critical:85};
+    const t=this.activeRiskConfig?.thresholds??{watch:45,high:65,critical:85};
     return [
       {key:'Normal',min:0,max:t.watch-1,width:t.watch},
       {key:'Watch',min:t.watch,max:t.high-1,width:t.high-t.watch},
@@ -147,7 +200,7 @@ export class NmcRiskExplainabilityComponent implements OnInit,OnDestroy {
     return this.copy(pair[0],pair[1]);
   }
   get totalContribution():number{return this.factors.reduce((n,f)=>n+f.contribution,0);}
-  get calculationMode():string{return this.assessment?.ruleset?.mode||'weighted';}
+  get calculationMode():string{return this.activeRiskConfig?.mode||'weighted';}
   get modeAdjustment():number{
     if(!this.factors.length)return 0;
     const weighted=this.totalContribution;
@@ -170,12 +223,12 @@ export class NmcRiskExplainabilityComponent implements OnInit,OnDestroy {
     const names=top.map(f=>this.copy(f.label,f.labelAr)).join(' / ');
     return this.lang.isArabic
       ?'تُظهر مؤشرات A01/A02 المحفوظة ارتفاعًا نسبيًا في '+names+
-        '. تصنيف المخاطر '+this.riskLabel+'، وأولوية التشغيل '+this.assessment.operationalPriority+
-        '. هذا ملخص حتمي من النتائج المحفوظة وليس توصية مولدة من Agent جديد.'
+        '. التصنيف المتوقع من قواعد المتصفح المنشورة '+this.riskLabel+'، والأولوية المتوقعة '+this.projectedPriority+
+        '. الدرجة الأصلية المحفوظة مستقلة، ولا يمثل هذا قرارًا تشغيليًا معتمدًا.'
       :'Saved A01/A02 signals identify '+names+' as the strongest observed severities. '+
-        'Risk classification is '+this.riskLevel+'; operational priority is '+
-        this.assessment.operationalPriority+
-        '. This is a platform-assembled summary of saved AI signals, not a new agent recommendation.';
+        'The browser-published policy projects '+this.riskLevel+' risk and '+
+        this.projectedPriority+' priority. The original Oracle assessment is unchanged. '+
+        'This is a platform-calculated projection, not an agent recommendation or approved operational decision.';
   }
   guidanceName(g:GuidanceResult):string{return this.copy(g.title,g.titleAr);}
   selectFactor(f:RiskFactor):void{this.selectedFactor=f;}
