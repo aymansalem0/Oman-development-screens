@@ -7,7 +7,7 @@ import {catchError,map} from 'rxjs/operators';
 import {NmcNavigationComponent} from '../components/nmc-navigation.component';
 import {LanguageService} from '../services/language.service';
 import {getOperationalVesselByImo} from '../data/nmc-expanded-vessel-catalog';
-import {NmcFleetAiService,FleetAiAssessment} from '../services/nmc-fleet-ai.service';
+import {NmcFleetAiService,FleetAiAssessment,FleetAiSnapshot} from '../services/nmc-fleet-ai.service';
 import {NmcRiskEngineService,RiskEngineConfig} from '../services/nmc-risk-engine.service';
 import {
   NmcAlertsService,NmcOperationalAlert,NmcAlertAudit,
@@ -16,6 +16,12 @@ import {
 import {NmcCasesService,NmcCentralCase} from '../services/nmc-cases.service';
 
 type StatusFilter='ACTIVE'|'ALL'|'OPEN'|'ESCALATED'|'RESOLVED';
+type RiskLevel='Normal'|'Watch'|'High'|'Critical';
+interface RiskCandidate {
+  imo:string;assessmentId:string;score:number;level:'High'|'Critical';
+  sourceRiskScore:number;sourceRiskLevel:string;
+  reason:'CRITICAL_OPEN_FINDING'|'PROJECTED_RISK_CLASS';
+}
 @Component({
   selector:'app-nmc-alert-center',
   standalone:true,
@@ -42,6 +48,11 @@ export class NmcAlertCenterComponent implements OnInit,OnDestroy{
   policyLoading=false;
   policyError='';
   readonly policyCoverageLabel='BROWSER_LOCAL_PROJECTION_ONLY';
+  riskPopulation={monitored:420,assessed:0,projected:0,pending:420,
+    normal:0,watch:0,high:0,critical:0,scoreSum:0,averageScore:0};
+  readonly projectedCandidates:RiskCandidate[]=[];
+  fleetSourceError='';
+  projectionReady=false;
   policyConfig:RiskEngineConfig|null=null;
   readonly policyResults=new Map<string,{
     eligible:boolean;level:string;score:number;reason:string;
@@ -104,32 +115,77 @@ export class NmcAlertCenterComponent implements OnInit,OnDestroy{
     const source=this.overview;
     const config=this.policyConfig;
     const request=++this.requestVersion;
+    this.projectionReady=false;
+    this.projectedCandidates.splice(0);
     if(!source||!config)return;
     if(this.riskEngine.validate(config).length){
       this.policyLoading=false;
-      this.policyError=this.copy('Invalid local risk policy. Saved alerts remain visible.',
-        'قواعد المخاطر المحلية غير صالحة؛ ستظل التنبيهات المحفوظة ظاهرة.');
+      this.policyError=this.copy('Invalid Risk Settings. Original saved alerts remain visible.',
+        'إعدادات المخاطر غير صالحة؛ تظل التنبيهات المحفوظة ظاهرة.');
       return;
     }
-    const candidateImos=[...new Set(source.alerts.filter(a=>a.status!=='RESOLVED')
-      .map(a=>a.imo))];
-    if(!candidateImos.length){this.policyResults.clear();this.policyLoading=false;this.policyError='';return;}
-    this.policyLoading=true;this.policyError='';
-    this.subs.add(forkJoin(candidateImos.map(imo=>
+    this.policyLoading=true;this.policyError='';this.fleetSourceError='';
+    // Fetch the WHOLE saved risk population, not just vessels that already have alerts.
+    // This is essential to display new High/Critical projected candidates.
+    this.subs.add(this.fleet.fetchSaved().subscribe({
+      next:snapshot=>{
+        if(request!==this.requestVersion)return;
+        this.projectFleet(source,snapshot,config,request);
+      },
+      error:()=>{
+        if(request!==this.requestVersion)return;
+        this.policyLoading=false;
+        this.fleetSourceError=this.copy(
+          'Could not retrieve saved fleet risks from Oracle. Projected totals unavailable. Existing alerts are not hidden.',
+          'تعذر استرجاع تقييمات الأسطول من Oracle؛ إجماليات المخاطر المتوقعة غير متاحة ولن تُخفى التنبيهات الأصلية.'
+        );
+        this.policyError=this.fleetSourceError;
+        this.projectionReady=false;
+        this.projectedCandidates.splice(0);
+        this.policyResults.clear();
+      }
+    }));
+  }
+  private projectFleet(source:NmcAlertsOverview,snapshot:FleetAiSnapshot,
+    config:RiskEngineConfig,request:number):void{
+    const assessed=Object.values(snapshot.results||{}).filter(row=>
+      row.status==='COMPLETED'&&typeof row.assessmentId==='string'&&
+      /^[0-9]{7}$/.test(row.imo));
+    const imos=[...new Set([
+      ...assessed.map(row=>row.imo),
+      ...source.alerts.filter(a=>a.status!=='RESOLVED').map(a=>a.imo)
+    ])];
+    this.riskPopulation={monitored:snapshot.counts.total,assessed:assessed.length,
+      projected:0,pending:snapshot.counts.total-assessed.length,
+      normal:0,watch:0,high:0,critical:0,scoreSum:0,averageScore:0};
+    if(!imos.length){
+      this.policyResults.clear();this.policyLoading=false;this.projectionReady=true;
+      return;
+    }
+    const latestByImo=new Map(assessed.map(r=>[r.imo,r]));
+    this.subs.add(forkJoin(imos.map(imo=>
       this.fleet.assessment(imo).pipe(
         map(assessment=>({imo,assessment})),
         catchError(()=>of({imo,assessment:null as FleetAiAssessment|null}))
       )
     )).subscribe({
       next:rows=>{
-        if(this.requestVersion!==request)return;
+        if(request!==this.requestVersion)return;
         this.policyLoading=false;
-        this.policyResults.clear();
-        let missing=0;
+        const nextResults=new Map<string,{
+          eligible:boolean;level:string;score:number;reason:string;
+          originalLevel:string;originalScore:number;assessmentId:string;
+        }>();
+        const levels:Record<RiskLevel,number>={Normal:0,Watch:0,High:0,Critical:0};
+        let missing=0,sum=0,matched=0;
         for(const {imo,assessment} of rows){
+          const expected=latestByImo.get(imo);
           const vessel=getOperationalVesselByImo(imo);
           const ready=assessment&&vessel&&assessment.status==='COMPLETED'&&
-            assessment.assessmentId&&Array.isArray(assessment.signals)&&
+            assessment.assessmentId&&
+            // Fail closed for new projections if Oracle source changed mid-read.
+            (!expected||assessment.assessmentId===expected.assessmentId)&&
+            Array.isArray(assessment.signals)&&
             ['movement','inspection','certificate','dataQuality','history'].every(
               factor=>assessment.signals.filter(s=>s.factor===factor&&
                 Number.isFinite(s.severity)&&s.severity>=0&&s.severity<=100).length===1);
@@ -138,31 +194,60 @@ export class NmcAlertCenterComponent implements OnInit,OnDestroy{
           const projection=this.riskEngine.evaluateFromAiSignals(vessel!,sev as {
             movement:number;inspection:number;certificate:number;dataQuality:number;history:number;
           },config);
-          const independentFinding=assessment!.criticalOpenFinding===true;
-          this.policyResults.set(imo,{
-            eligible:independentFinding||projection.level==='High'||projection.level==='Critical',
-            level:independentFinding?'Critical':projection.level,
+          const criticalFinding=assessment!.criticalOpenFinding===true;
+          nextResults.set(imo,{
+            eligible:criticalFinding||projection.level==='High'||projection.level==='Critical',
+            // Independent critical open finding determines alert urgency, NOT the score band.
+            level:criticalFinding?'Critical':projection.level,
             score:projection.score,
-            reason:independentFinding?'CRITICAL_OPEN_FINDING':'PROJECTED_RISK_CLASS',
+            reason:criticalFinding?'CRITICAL_OPEN_FINDING':'PROJECTED_RISK_CLASS',
             originalLevel:assessment!.level||'Pending',
             originalScore:assessment!.score??0,
             assessmentId:assessment!.assessmentId!
           });
+          if(expected){
+            matched++;sum+=projection.score;
+            levels[projection.level]++;
+          }
         }
-        if(missing)this.policyError=this.copy(
-          'Some saved assessments could not be verified. Their existing alerts remain visible until verified.',
-          'تعذر التحقق من بعض التقييمات المحفوظة؛ تبقى تنبيهاتها ظاهرة لحين التحقق.'
-        );
+        this.policyResults.clear();
+        for(const [imo,item] of nextResults)this.policyResults.set(imo,item);
+        this.riskPopulation={
+          monitored:snapshot.counts.total,assessed:assessed.length,
+          projected:matched,pending:snapshot.counts.total-assessed.length,
+          normal:levels.Normal,watch:levels.Watch,high:levels.High,
+          critical:levels.Critical,scoreSum:sum,
+          averageScore:matched?Math.round(sum/matched*10)/10:0
+        };
+        const activeImos=new Set(source.alerts.filter(a=>a.status!=='RESOLVED').map(a=>a.imo));
+        this.projectedCandidates.splice(0);
+        for(const [imo,p] of nextResults){
+          if(!p.eligible||activeImos.has(imo)||!latestByImo.has(imo))continue;
+          this.projectedCandidates.push({
+            imo,assessmentId:p.assessmentId,score:p.score,
+            level:p.level==='Critical'?'Critical':'High',
+            sourceRiskScore:p.originalScore,sourceRiskLevel:p.originalLevel,
+            reason:p.reason==='CRITICAL_OPEN_FINDING'?'CRITICAL_OPEN_FINDING':'PROJECTED_RISK_CLASS'
+          });
+        }
+        this.projectedCandidates.sort((a,b)=>
+          (b.level==='Critical'?1:0)-(a.level==='Critical'?1:0)||b.score-a.score);
+        this.projectionReady=true;
+        if(missing){
+          this.policyError=this.copy(
+            'Some saved assessments could not be verified. Original alerts remain visible for those vessels.',
+            'تعذر التحقق من بعض تقييمات السفن؛ تبقى تنبيهاتها الأصلية ظاهرة.');
+        }
       },
       error:()=>{
-        if(this.requestVersion!==request)return;
+        if(request!==this.requestVersion)return;
         this.policyLoading=false;this.policyError=this.copy(
-          'Local risk review unavailable; persisted alerts remain visible.',
-          'تعذرت مراجعة المخاطر محليًا؛ تبقى التنبيهات المحفوظة ظاهرة.'
-        );
+          'Risk projection unavailable; persisted alerts remain unchanged and visible.',
+          'تعذرت إعادة حساب المخاطر؛ تظل التنبيهات الأصلية دون تعديل وظاهرة.');
       }
     }));
   }
+
   policyFor(item:NmcOperationalAlert){
     return this.policyResults.get(item.imo);
   }
@@ -196,10 +281,13 @@ export class NmcAlertCenterComponent implements OnInit,OnDestroy{
   get policySummary(){
     const source=this.overview?.alerts||[];
     const matching=source.filter(a=>a.status!=='RESOLVED'&&!this.isPolicySuperseded(a));
+    const critical=matching.filter(a=>this.displaySeverity(a)==='CRITICAL').length;
     return {
       active:matching.length,
-      critical:matching.filter(a=>(this.policyFor(a)?.level||a.severity)==='Critical'||
-        (!this.policyFor(a)&&a.severity==='CRITICAL')).length,
+      critical,
+      projectedNew:this.projectedCandidates.length,
+      projectedCritical:this.projectedCandidates.filter(a=>a.level==='Critical').length,
+      eligibleTotal:matching.length+this.projectedCandidates.length,
       unread:matching.filter(a=>a.status==='OPEN'||a.status==='ESCALATED').length,
       escalated:matching.filter(a=>a.status==='ESCALATED').length
     };
