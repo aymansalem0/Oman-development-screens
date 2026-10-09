@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component } from '@angular/core';
+import { Component,OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 
@@ -10,6 +10,7 @@ import {
 } from '../models/smart-inspection-candidate.models';
 import { LanguageService } from '../services/language.service';
 import { SmartInspectionCandidateService } from '../services/smart-inspection-candidate.service';
+import {NmcCasesService,NmcInspectionReferral} from '../services/nmc-cases.service';
 
 type CandidateFilter = 'ALL' | 'SERVICE_REQUEST' | 'PSC_PORT_CALL' | 'NMC_CASE';
 type EligibilityFilter = 'ALL' | SmartInspectionEligibilityStatus;
@@ -22,7 +23,7 @@ type TargetingBand = 'Critical' | 'High' | 'Watch' | 'Routine';
   templateUrl: './smart-inspection-candidate-center.component.html',
   styleUrl: './smart-inspection-candidate-center.component.css'
 })
-export class SmartInspectionCandidateCenterComponent {
+export class SmartInspectionCandidateCenterComponent implements OnInit {
   searchTerm = '';
   sourceFilter: CandidateFilter = 'ALL';
   eligibilityFilter: EligibilityFilter = 'ALL';
@@ -30,11 +31,78 @@ export class SmartInspectionCandidateCenterComponent {
   selectedCandidate?: SmartInspectionCandidate;
   page = 1;
   readonly pageSize = 18;
+  inboundReferrals:NmcInspectionReferral[]=[];
+  inboundLoading=true;
+  inboundError='';
+  scheduleBusy='';
+  scheduleSuccess='';
+  dates:Record<string,string>={};
+  inspectors:Record<string,string>={};
+  schedulingPorts:Record<string,string>={};
 
   constructor(
     public readonly lang: LanguageService,
-    public readonly candidatesService: SmartInspectionCandidateService
+    public readonly candidatesService: SmartInspectionCandidateService,
+    private readonly cases:NmcCasesService
   ) {}
+
+  ngOnInit():void{this.loadReferrals();}
+  loadReferrals():void{
+    this.inboundLoading=true;this.inboundError='';
+    this.cases.inspectionReferrals().subscribe({
+      next:res=>{
+        this.inboundReferrals=res.requests||[];
+        this.inboundLoading=false;
+      },
+      error:()=>{
+        this.inboundLoading=false;
+        this.inboundError=this.copy('Unable to load centrally saved NMC referrals.',
+          'تعذر تحميل إحالات NMC المحفوظة مركزيًا.');
+      }
+    });
+  }
+  get pendingReferrals():NmcInspectionReferral[]{
+    return this.inboundReferrals.filter(r=>r.status==='PENDING_SCHEDULING'&&r.caseStatus!=='RESOLVED');
+  }
+  scheduleReferral(item:NmcInspectionReferral):void{
+    if(this.scheduleBusy)return;
+    const raw=this.dates[item.id],port=(this.schedulingPorts[item.id]||'').trim();
+    const inspector=(this.inspectors[item.id]||'').trim();
+    const when=raw?new Date(raw):null;
+    if(!when||!Number.isFinite(when.getTime())||when.getTime()<=Date.now()||
+      !port||!inspector){
+      this.inboundError=this.copy('Enter a future date/time, port and inspector.',
+        'حدد تاريخًا ووقتًا مستقبليًا وميناءً ومعاينًا.');
+      return;
+    }
+    this.scheduleBusy=item.id;this.inboundError='';this.scheduleSuccess='';
+    this.cases.byId(item.caseId).subscribe({
+      next:res=>{
+        if(!res.case){
+          this.scheduleBusy='';this.inboundError=this.copy('Case not found','الحالة غير موجودة');
+          return;
+        }
+        this.cases.scheduleInspection(res.case,item.id,when.toISOString(),port,inspector).subscribe({
+          next:()=>{
+            this.scheduleBusy='';
+            this.scheduleSuccess=this.copy(
+              'Inspection request scheduled and saved. Open the NMC Case to conduct the inspection.',
+              'تمت جدولة المعاينة وحفظها. افتح حالة NMC لتنفيذ المعاينة.');
+            this.loadReferrals();
+          },
+          error:e=>{
+            this.scheduleBusy='';
+            this.inboundError=this.cases.readableError(e,this.lang.isArabic);
+            if(e?.status===409)this.loadReferrals();
+          }
+        });
+      },
+      error:()=>{
+        this.scheduleBusy='';
+        this.inboundError=this.copy('Unable to load the latest case version.','تعذر تحميل آخر نسخة من الحالة.');
+      }
+    });
+  }
 
   copy(en: string, ar: string): string {
     return this.lang.pick(en, ar);
