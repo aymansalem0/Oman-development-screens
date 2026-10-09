@@ -4,6 +4,7 @@ import { FleetAssessmentManager } from './fleet-ai.mjs';
 import { FleetAutoScheduler } from './fleet-scheduler.mjs';
 import { DashboardWorkspace, DashboardError } from './dashboard-workspace.mjs';
 import { NmcAlertWorkspace, NmcAlertError } from './alert-workspace.mjs';
+import { NmcCaseWorkspace, NmcCaseError } from './case-workspace.mjs';
 
 const port = Number(process.env.PORT || 3000);
 const apiKey = (process.env.AIRIA_MENA_KEY || '').trim();
@@ -41,6 +42,7 @@ const repository=dbMode==='oracle'
 const fleet=new FleetAssessmentManager({executeAgent:fleetAgentCall,getPscVessel,repository});
 const dashboards=new DashboardWorkspace({mode:dbMode,oracleRepository:repository});
 const alerts=new NmcAlertWorkspace({mode:dbMode,oracleRepository:repository});
+const cases=new NmcCaseWorkspace({mode:dbMode,oracleRepository:repository,alerts});
 const alertScanEnabled=process.env.NMC_ALERT_SCAN_ENABLED!=='false';
 const alertScanIntervalMs=Math.max(15000,Number(process.env.NMC_ALERT_SCAN_SECONDS||30)*1000);
 async function scanExistingFleetForAlerts(){
@@ -137,6 +139,75 @@ const server = createServer(async (req, res) => {
       return respond(res,data?200:404,data||{error:'UNKNOWN_VESSEL'});
     }catch{return respond(res,503,{error:'FLEET_HISTORY_UNAVAILABLE'});}
   }
+  // A case is opened only after a human acknowledges a saved alert.
+  // Audit and task changes are server-side, never browser-local session state.
+  if(path==='/api/ai/cases'||path.startsWith('/api/ai/cases/')){
+    const segments=path.split('/').filter(Boolean);
+    const [, , resource, first, action, second]=segments;
+    if(resource!=='cases')return respond(res,404,{error:'CASE_NOT_FOUND'});
+    try{
+      if(req.method==='GET'){
+        if(!first)return respond(res,200,{status:'ok',cases:await cases.list()});
+        if(first==='by-imo'&&/^\d{7}$/.test(action)&&!second){
+          const item=await cases.byImo(action);
+          return respond(res,200,{status:'ok',case:item});
+        }
+        if(/^[a-f\d-]{36}$/i.test(first)&&!second){
+          if(action==='history')
+            return respond(res,200,{status:'ok',history:await cases.history(first)});
+          if(!action){
+            const item=await cases.get(first);
+            return respond(res,item?200:404,item?{status:'ok',case:item}:{error:'CASE_NOT_FOUND'});
+          }
+        }
+        return respond(res,404,{error:'CASE_NOT_FOUND'});
+      }
+      if(req.method==='POST'){
+        if(first==='from-alert'&&!action){
+          dashboards.assertRole(req,'EDITOR');
+          const body=await requestJson(req,4096);
+          const item=await cases.fromAlert(body.alertId);
+          return respond(res,200,{status:'ok',case:item});
+        }
+        if(!/^[a-f\d-]{36}$/i.test(first))return respond(res,404,{error:'CASE_NOT_FOUND'});
+        if(action==='task'&&!second){
+          dashboards.assertRole(req,'EDITOR');
+          const body=await requestJson(req,4096);
+          const item=await cases.task(first,body.version,body.taskId,
+            body.action,body.note||'');
+          return respond(res,200,{status:'ok',case:item});
+        }
+        if(action==='decision'&&!second){
+          dashboards.assertRole(req,'EDITOR');
+          const body=await requestJson(req,16384);
+          const item=await cases.decision(first,body.version,body);
+          return respond(res,200,{status:'ok',case:item});
+        }
+        if(action==='inspection'&&!second){
+          dashboards.assertRole(req,'EDITOR');
+          const body=await requestJson(req,8192);
+          const item=await cases.inspection(first,body.version,body.outcome);
+          return respond(res,200,{status:'ok',case:item});
+        }
+        if(action==='resolve'&&!second){
+          dashboards.assertRole(req,'PUBLISHER');
+          const body=await requestJson(req,4096);
+          const item=await cases.resolve(first,body.version,body.note);
+          return respond(res,200,{status:'ok',case:item});
+        }
+      }
+      return respond(res,405,{error:'METHOD_NOT_ALLOWED'});
+    }catch(error){
+      if(error instanceof NmcCaseError||error instanceof NmcAlertError||
+         error instanceof DashboardError)
+        return respond(res,error.status,{error:error.code});
+      if(Number.isInteger(error?.status)&&error.status>=400&&error.status<500)
+        return respond(res,error.status,{error:'INVALID_REQUEST'});
+      console.error('[nmc-cases] API_FAILURE');
+      return respond(res,503,{error:'CASE_STORE_UNAVAILABLE'});
+    }
+  }
+
   // In-app notifications and business alert workflow. Risk source is SAVED AI.
   // Shared POC editor/publisher secrets stand in for operator/supervisor
   // authorization until an authenticated IAM solution is installed.
