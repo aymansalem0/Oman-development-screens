@@ -2,12 +2,11 @@ import {CommonModule} from '@angular/common';
 import {Component,OnDestroy,OnInit} from '@angular/core';
 import {FormsModule} from '@angular/forms';
 import {Router,RouterLink} from '@angular/router';
-import {Subscription,forkJoin,of} from 'rxjs';
-import {catchError,map} from 'rxjs/operators';
+import {Subscription} from 'rxjs';
 import {NmcNavigationComponent} from '../components/nmc-navigation.component';
 import {LanguageService} from '../services/language.service';
 import {getOperationalVesselByImo} from '../data/nmc-expanded-vessel-catalog';
-import {NmcFleetAiService,FleetAiAssessment,FleetAiSnapshot} from '../services/nmc-fleet-ai.service';
+import {NmcFleetAiService,FleetAiSnapshot} from '../services/nmc-fleet-ai.service';
 import {NmcRiskEngineService,RiskEngineConfig} from '../services/nmc-risk-engine.service';
 import {
   NmcAlertsService,NmcOperationalAlert,NmcAlertAudit,
@@ -163,13 +162,11 @@ export class NmcAlertCenterComponent implements OnInit,OnDestroy{
       return;
     }
     const latestByImo=new Map(assessed.map(r=>[r.imo,r]));
-    this.subs.add(forkJoin(imos.map(imo=>
-      this.fleet.assessment(imo).pipe(
-        map(assessment=>({imo,assessment})),
-        catchError(()=>of({imo,assessment:null as FleetAiAssessment|null}))
-      )
-    )).subscribe({
-      next:rows=>{
+    // The pre-existing batch analytics endpoint returns all 5 validated
+    // severities in ONE call, instead of issuing up to 420 vessel requests.
+    // Match every row back to the freshly read Oracle assessment ID.
+    this.subs.add(this.fleet.analytics().subscribe({
+      next:analytics=>{
         if(request!==this.requestVersion)return;
         this.policyLoading=false;
         const nextResults=new Map<string,{
@@ -178,32 +175,32 @@ export class NmcAlertCenterComponent implements OnInit,OnDestroy{
         }>();
         const levels:Record<RiskLevel,number>={Normal:0,Watch:0,High:0,Critical:0};
         let missing=0,sum=0,matched=0;
-        for(const {imo,assessment} of rows){
+        const analyticsByImo=new Map(analytics.assessments.map(a=>[a.imo,a]));
+        for(const imo of imos){
           const expected=latestByImo.get(imo);
+          const assessment=analyticsByImo.get(imo);
           const vessel=getOperationalVesselByImo(imo);
-          const ready=assessment&&vessel&&assessment.status==='COMPLETED'&&
-            assessment.assessmentId&&
-            // Fail closed for new projections if Oracle source changed mid-read.
-            (!expected||assessment.assessmentId===expected.assessmentId)&&
-            Array.isArray(assessment.signals)&&
+          const sev=assessment?.factorSeverities;
+          const ready=expected&&assessment&&vessel&&sev&&
+            // Fail open for stale saved alerts: do not hide until matching
+            // current Oracle source and complete saved A01/A02 evidence exist.
+            assessment.assessmentId===expected.assessmentId&&
             ['movement','inspection','certificate','dataQuality','history'].every(
-              factor=>assessment.signals.filter(s=>s.factor===factor&&
-                Number.isFinite(s.severity)&&s.severity>=0&&s.severity<=100).length===1);
+              factor=>Number.isFinite(sev[factor as keyof typeof sev])&&
+                sev[factor as keyof typeof sev]>=0&&
+                sev[factor as keyof typeof sev]<=100);
           if(!ready){missing++;continue;}
-          const sev=Object.fromEntries(assessment!.signals.map(s=>[s.factor,s.severity]));
-          const projection=this.riskEngine.evaluateFromAiSignals(vessel!,sev as {
-            movement:number;inspection:number;certificate:number;dataQuality:number;history:number;
-          },config);
-          const criticalFinding=assessment!.criticalOpenFinding===true;
+          const projection=this.riskEngine.evaluateFromAiSignals(vessel!,sev!,config);
+          const criticalFinding=expected.criticalOpenFinding===true;
           nextResults.set(imo,{
             eligible:criticalFinding||projection.level==='High'||projection.level==='Critical',
             // Independent critical open finding determines alert urgency, NOT the score band.
             level:criticalFinding?'Critical':projection.level,
             score:projection.score,
             reason:criticalFinding?'CRITICAL_OPEN_FINDING':'PROJECTED_RISK_CLASS',
-            originalLevel:assessment!.level||'Pending',
-            originalScore:assessment!.score??0,
-            assessmentId:assessment!.assessmentId!
+            originalLevel:expected.level||'Pending',
+            originalScore:expected.score??0,
+            assessmentId:expected.assessmentId!
           });
           if(expected){
             matched++;sum+=projection.score;
