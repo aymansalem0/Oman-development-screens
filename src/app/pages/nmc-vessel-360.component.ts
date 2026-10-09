@@ -178,6 +178,66 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
     }
   }
 
+  qualityMetricLabel(key: string): string {
+    const labels: Record<string, [string, string]> = {
+      completeness: ['Data completeness', 'اكتمال البيانات'],
+      consistency: ['Cross-source consistency', 'اتساق المصادر'],
+      evidenceLinkage: ['Evidence linkage', 'ربط الأدلة'],
+      provenance: ['Source metadata coverage', 'اكتمال بيانات تعريف المصدر']
+    };
+    const v = labels[key];
+    return v ? this.copy(v[0], v[1]) : key;
+  }
+
+  qualityMetricExplanation(key: string): string {
+    switch (key) {
+      case 'completeness':
+        return this.copy(
+          'Number of populated values out of the 8 expected sides (4 identity fields × internal and PSC). Missing is not a conflict.',
+          'عدد القيم الموجودة من أصل 8 قيم متوقعة (4 حقول هوية × مصدر داخلي وخارجي). القيمة الناقصة ليست تعارضاً.');
+      case 'consistency':
+        return this.copy(
+          'Matching field pairs ÷ identity field pairs where both values exist. Text is normalized by case, spacing and punctuation; a match is not independent truth verification.',
+          'عدد أزواج الحقول المتطابقة ÷ أزواج الحقول التي تتوافر لها قيمتان. تتم تسوية حالة الأحرف والمسافات وعلامات الترقيم؛ التطابق ليس تحققاً مستقلاً من الصحة.');
+      case 'evidenceLinkage':
+        return this.copy(
+          'AI factor evidence references found in the supplied internal or synthetic PSC evidence ID sets ÷ all AI evidence references. A linked ID does not mean the underlying document was authenticated.',
+          'معرّفات الأدلة المرتبطة بعوامل AI الموجودة في قوائم الأدلة الداخلية أو PSC التجريبية ÷ إجمالي المراجع. وجود المعرّف لا يعني اعتماد المستند.');
+      case 'provenance':
+        return this.copy(
+          'Current V1 rule: score 100 when sourceSystem, datasetVersion and retrievedAt all exist; otherwise score 60. This checks metadata availability, not the source authority.',
+          'قاعدة النسخة الحالية: 100 عند توافر sourceSystem وdatasetVersion وretrievedAt جميعاً؛ وإلا 60. هذا فحص لتوافر بيانات تعريف المصدر وليس اعتماد المصدر.');
+      default: return '';
+    }
+  }
+
+  qualityFieldLabel(field: string): string {
+    const labels: Record<string, [string, string]> = {
+      VESSEL_NAME: ['Vessel name', 'اسم السفينة'],
+      FLAG: ['Flag state', 'دولة العلم'],
+      VESSEL_TYPE: ['Vessel type', 'نوع السفينة'],
+      OPERATOR_NAME: ['Operator name', 'اسم المشغل']
+    };
+    const v = labels[field];
+    return v ? this.copy(v[0], v[1]) : field;
+  }
+
+  qualityComparisonLabel(status: string): string {
+    const labels: Record<string, [string, string]> = {
+      MATCHED: ['Matched', 'متطابق'],
+      MISMATCH: ['Disagreement', 'اختلاف'],
+      MISSING: ['Missing value', 'قيمة ناقصة']
+    };
+    const v = labels[status];
+    return v ? this.copy(v[0], v[1]) : status;
+  }
+
+  qualitySourceLabel(source: string): string {
+    if (source === 'NMC_INTERNAL_SIM') return this.copy('Internal synthetic fixture', 'البيانات الداخلية التجريبية');
+    if (source === 'PSC_GOOGLE_SIM') return this.copy('Synthetic PSC registry', 'سجل PSC التجريبي');
+    return this.copy('Unknown ID', 'معرّف غير معروف');
+  }
+
   riskLabel(level: string = this.vessel?.riskLevel): string {
     const labels: Record<string, string> = {
       Critical: this.copy('Critical', 'حرج'),
