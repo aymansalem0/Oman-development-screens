@@ -24,6 +24,13 @@ export class NmcDashboardWorkspaceService {
     return this.http.get<DashboardOneResponse>(this.root+'/'+encodeURIComponent(id));
   }
 
+  /** Public read-only representation; draft/archived dashboards return 404. */
+  published(id:string):Observable<DashboardOneResponse>{
+    return this.http.get<DashboardOneResponse>(
+      this.root+'/published/'+encodeURIComponent(id)
+    );
+  }
+
   revisions(id:string):Observable<DashboardRevisionsResponse>{
     return this.http.get<DashboardRevisionsResponse>(this.root+'/'+encodeURIComponent(id)+'/revisions');
   }

@@ -25,6 +25,7 @@ export const routes: Routes = [
   { path: 'moei/smart-inspection/candidates', component: SmartInspectionCandidateCenterComponent },
   { path: 'moei/nmc', component: NmcCommandCenterComponent },
   { path: 'moei/nmc/dashboards', component: NmcDashboardBuilderComponent },
+  { path: 'moei/nmc/dashboards/view/:id', component: NmcDashboardBuilderComponent },
   { path: 'moei/nmc/dashboards/:id', component: NmcDashboardBuilderComponent },
   { path: 'moei/nmc/admin/risk-configuration', component: NmcRiskConfigurationAdminComponent },
   { path: 'moei/nmc/admin/data-quality', component: NmcDataQualityConfigurationComponent },
