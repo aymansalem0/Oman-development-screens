@@ -5,134 +5,162 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {NmcAlertWorkspace} from '../alert-workspace.mjs';
 import {NmcCaseWorkspace} from '../case-workspace.mjs';
+import {normalizeA01Actions} from '../nmc-action-plan.mjs';
 
 const imo='9328471';
+const signals=[
+ {factor:'movement',evidenceIds:['AIS-636019872']},
+ {factor:'inspection',evidenceIds:['INS-2026-01301']},
+ {factor:'certificate',evidenceIds:['CERT-SC-9328471']},
+ {factor:'history',evidenceIds:['HIST-9328471']},
+ {factor:'dataQuality',evidenceIds:['DQC-9328471']}
+];
 function setup(){
-  const dir=mkdtempSync(join(tmpdir(),'nmc-case-v1-'));
-  const alertFile=join(dir,'alerts.json'),caseFile=join(dir,'cases.json');
-  const alerts=new NmcAlertWorkspace({mode:'json',file:alertFile,escalationMinutes:20});
-  const opts={mode:'json',file:caseFile,alerts};
-  const cases=new NmcCaseWorkspace(opts);
-  return {alerts,cases,opts,close:()=>rmSync(dir,{recursive:true,force:true})};
+ const dir=mkdtempSync(join(tmpdir(),'nmc-case-a01-'));
+ const alerts=new NmcAlertWorkspace({mode:'json',file:join(dir,'alerts.json'),escalationMinutes:20});
+ const opts={mode:'json',file:join(dir,'cases.json'),alerts};
+ return {alerts,opts,cases:new NmcCaseWorkspace(opts),
+   close:()=>rmSync(dir,{recursive:true,force:true})};
 }
-async function assessed(alerts,imo='9328471',severity='Critical'){
-  await alerts.scanFleet({results:{[imo]:{
-    imo,status:'COMPLETED',score:severity==='Critical'?91:75,
-    level:severity,criticalOpenFinding:severity==='Critical',
-    assessmentId:'AI-TEST-C',
-    configVersion:'v1'
-  }}});
-  return (await alerts.list()).find(row=>row.imo===imo);
+async function opened({alerts,cases},severity='Critical'){
+ await alerts.scanFleet({results:{[imo]:{
+   imo,status:'COMPLETED',score:severity==='Critical'?91:75,
+   level:severity,criticalOpenFinding:severity==='Critical',
+   assessmentId:'AI-VALIDATED-1001',configVersion:'v1'}}});
+ let alert=(await alerts.list())[0];
+ alert=await alerts.transition(alert.id,'ACKNOWLEDGE',alert.version,'Officer accepted alert');
+ return await cases.fromAlert(alert.id);
 }
-test('requires real acknowledged alert before human-triggered case creation',async()=>{
-  const {alerts,cases,close}=setup();
-  try{
-    const alert=await assessed(alerts);
-    await assert.rejects(()=>cases.fromAlert(alert.id),/CASE_ALERT_ACK_REQUIRED/);
-    assert.deepEqual(await cases.list(),[]);
-    const acknowledged=await alerts.transition(alert.id,'ACKNOWLEDGE',alert.version,
-      'Officer review','OPERATOR');
-    const opened=await cases.fromAlert(acknowledged.id);
-    assert.equal(opened.imo,imo);
-    assert.equal(opened.sourceScore,91);
-    assert.equal(opened.status,'OPEN');
-    assert.equal(opened.tasks.length,4);
-    assert.equal((await cases.history(opened.id))[0].action,'CREATED');
-    assert.equal((await cases.fromAlert(acknowledged.id)).id,opened.id);
-  }finally{close();}
+function plan(row){
+ const raw={assessmentId:'AISIT-9328471-0004',summary:'Evidence correlated',
+   whyItMatters:'Compliance and movement indicators',
+   evidence:[{type:'INSPECTION',evidenceIds:['INS-2026-01301']},
+     {type:'CERTIFICATE',evidenceIds:['CERT-SC-9328471']},
+     {type:'MOVEMENT',evidenceIds:['AIS-636019872']}],
+   proposedActions:[
+     {actionId:'priority-inspection',actionType:'PRIORITY_INSPECTION',
+       priority:'HIGH',confidence:0.91,requiresHumanApproval:true},
+     {actionId:'verify-certificate',actionType:'VERIFY_CERTIFICATE',
+       priority:'IMMEDIATE',confidence:0.94,requiresHumanApproval:true},
+     {actionId:'enhanced-monitoring',actionType:'ENHANCED_MONITORING',
+       priority:'MONITOR',confidence:0.96,requiresHumanApproval:false}
+   ]};
+ return normalizeA01Actions(raw,{
+   imo,assessmentId:row.sourceAssessmentId,score:row.sourceScore,
+   level:row.sourceLevel,configVersion:'v1',signals});
+}
+test('Case starts with no fake tasks and requires an acknowledged saved-AI alert',async()=>{
+ const db=setup();
+ try{
+   await db.alerts.scanFleet({results:{[imo]:{
+     imo,status:'COMPLETED',score:91,level:'Critical',criticalOpenFinding:true,
+     assessmentId:'AI-VALIDATED-1001',configVersion:'v1'}}});
+   const event=(await db.alerts.list())[0];
+   await assert.rejects(()=>db.cases.fromAlert(event.id),/CASE_ALERT_ACK_REQUIRED/);
+   const ack=await db.alerts.transition(event.id,'ACKNOWLEDGE',event.version,'Ack');
+   const row=await db.cases.fromAlert(ack.id);
+   assert.equal(row.sourceScore,91);
+   assert.equal(row.sourceAssessmentId,'AI-VALIDATED-1001');
+   assert.deepEqual(row.tasks,[]);
+   assert.equal(row.actionPlan,null);
+   assert.deepEqual(row.inspectionRequests,[]);
+   assert.equal((await db.cases.fromAlert(ack.id)).id,row.id);
+ }finally{db.close();}
 });
-test('deduplicates active cases by IMO and links additional acknowledged alerts',async()=>{
-  const {alerts,cases,close}=setup();
-  try{
-    let alert=await assessed(alerts,imo,'High');
-    alert=await alerts.transition(alert.id,'ACKNOWLEDGE',alert.version,'Noted');
-    const first=await cases.fromAlert(alert.id);
-    let nextAlert=await assessed(alerts,imo,'Critical');
-    nextAlert=(await alerts.list()).find(a=>a.severity==='CRITICAL');
-    nextAlert=await alerts.transition(nextAlert.id,'ACKNOWLEDGE',nextAlert.version,'Critical escalation');
-    const same=await cases.fromAlert(nextAlert.id);
-    assert.equal(same.id,first.id);
-    assert.equal(same.alertIds.length,2);
-    assert.equal((await cases.list()).length,1);
-    assert.equal((await cases.history(first.id))[0].action,'ALERT_LINKED');
-  }finally{close();}
+test('Actual A01 actions are validated against stored evidence, not inferred risk',()=>{
+ const r=normalizeA01Actions({
+   assessmentId:'A01-RUN-1',
+   evidence:[{type:'INSPECTION',evidenceIds:['INS-2026-01301','UNKNOWN-REF']}],
+   proposedActions:[{actionId:'priority-inspection',actionType:'PRIORITY_INSPECTION',
+     priority:'HIGH',confidence:.91,requiresHumanApproval:true}]
+ },{imo,assessmentId:'A-1',score:60,level:'Watch',configVersion:'v1',signals});
+ assert.deepEqual(r.proposedActions[0].evidenceIds,['INS-2026-01301']);
+ assert.equal(r.sourceScore,60);
+ assert.throws(()=>normalizeA01Actions({
+   proposedActions:[{actionId:'bad-id',actionType:'PRIORITY_INSPECTION',
+     confidence:.85,requiresHumanApproval:true,evidenceIds:['FAKE-1']}]
+ },{imo,assessmentId:'A-1',score:60,level:'Watch',signals}),/A01_ACTION_EVIDENCE_MISSING/);
+ assert.throws(()=>normalizeA01Actions({signals:[]},
+   {imo,assessmentId:'A-1',score:60,level:'Watch',signals}),/A01_ACTIONS_NOT_AVAILABLE/);
 });
-test('task actions persist centrally with optimistic locking and immutable history',async()=>{
-  const {alerts,cases,opts,close}=setup();
-  try{
-    let alert=await assessed(alerts);
-    alert=await alerts.transition(alert.id,'ACKNOWLEDGE',alert.version,'Noted');
-    let row=await cases.fromAlert(alert.id);
-    row=await cases.task(row.id,row.version,'verify-certificate','START','Verifying certificate');
-    assert.equal(row.status,'IN_PROGRESS');
-    await assert.rejects(()=>cases.task(row.id,row.version-1,'verify-certificate','COMPLETE'),
-      /CASE_VERSION_CONFLICT/);
-    row=await cases.task(row.id,row.version,'verify-certificate','COMPLETE','Checked source evidence');
-    const reopened=new NmcCaseWorkspace(opts);
-    assert.equal((await reopened.get(row.id)).tasks.find(t=>t.id==='verify-certificate').status,'Completed');
-    assert.equal((await reopened.history(row.id))[0].action,'TASK_COMPLETE');
-    await assert.rejects(()=>reopened.task(row.id,row.version,'priority-inspection','COMPLETE'),
-      /CASE_INSPECTION_EVIDENCE_REQUIRED/);
-  }finally{close();}
+test('A01 plan cannot be published twice and does not create tasks before human approval',async()=>{
+ const db=setup();
+ try{
+   let row=await opened(db);
+   const original=row.sourceScore;
+   row=await db.cases.saveActionPlan(row.id,row.version,plan(row));
+   assert.equal(row.tasks.length,0);
+   assert.equal(row.actionPlan.proposedActions.length,3);
+   assert.equal(row.sourceScore,original);
+   await assert.rejects(()=>db.cases.saveActionPlan(row.id,row.version,plan(row)),/CASE_ACTION_PLAN_EXISTS/);
+   const reopened=new NmcCaseWorkspace(db.opts);
+   assert.equal((await reopened.get(row.id)).actionPlan.proposedActions.length,3);
+   assert.equal((await reopened.history(row.id))[0].action,'A01_ACTION_PLAN_RECORDED');
+ }finally{db.close();}
 });
-test('human AI recommendation decision is evidence-linked and can be audited',async()=>{
-  const {alerts,cases,opts,close}=setup();
-  try{
-    let alert=await assessed(alerts);
-    alert=await alerts.transition(alert.id,'ACKNOWLEDGE',alert.version,'Noted');
-    let row=await cases.fromAlert(alert.id);
-    await assert.rejects(()=>cases.decision(row.id,row.version,{
-      recommendationId:'verify-document',decision:'MODIFY',evidenceIds:['CERT-TEST']
-    }),/CASE_DECISION_REASON_REQUIRED/);
-    row=await cases.decision(row.id,row.version,{
-      recommendationId:'verify-document',decision:'MODIFY',
-      note:'Check certificate source first',evidenceIds:['CERT-SC-9328471']
-    });
-    assert.equal(row.decisions[0].decision,'MODIFY');
-    assert.deepEqual(row.decisions[0].evidenceIds,['CERT-SC-9328471']);
-    assert.equal((await new NmcCaseWorkspace(opts).history(row.id))[0].action,'DECISION_RECORDED');
-  }finally{close();}
+test('Approved inspection action creates one scheduled-queue candidate; reject creates none',async()=>{
+ const db=setup();
+ try{
+   let row=await opened(db);
+   row=await db.cases.saveActionPlan(row.id,row.version,plan(row));
+   await assert.rejects(()=>db.cases.decideAction(row.id,row.version,'unknown','ACCEPT'),/CASE_ACTION_NOT_FOUND/);
+   row=await db.cases.decideAction(row.id,row.version,'enhanced-monitoring','REJECT','Not necessary now');
+   assert.deepEqual(row.tasks,[]);
+   row=await db.cases.decideAction(row.id,row.version,'priority-inspection','ACCEPT');
+   assert.equal(row.tasks.length,1);
+   assert.equal(row.tasks[0].provenance,'AIRIA_A01_HUMAN_APPROVED');
+   assert.equal(row.inspectionRequests.length,1);
+   assert.equal(row.inspectionRequests[0].status,'PENDING_SCHEDULING');
+   assert.equal((await db.cases.listInspectionRequests()).length,1);
+   await assert.rejects(()=>db.cases.decideAction(row.id,row.version,'priority-inspection','ACCEPT'),
+     /CASE_ACTION_ALREADY_DECIDED/);
+   assert.equal((await db.cases.byImo(imo)).inspectionRequests.length,1);
+ }finally{db.close();}
 });
-test('inspection outcome is mandatory evidence before priority task can be completed',async()=>{
-  const {alerts,cases,close}=setup();
-  try{
-    let alert=await assessed(alerts);
-    alert=await alerts.transition(alert.id,'ACKNOWLEDGE',alert.version,'Noted');
-    let row=await cases.fromAlert(alert.id);
-    row=await cases.inspection(row.id,row.version,{
-      inspectionId:'NMC-INS-2026-8471',findingsCount:1,criticalFindings:0,
-      result:'Completed with Findings',summary:'Finding recorded'
-    });
-    assert.equal(row.inspectionOutcome.findingsCount,1);
-    assert.equal(row.tasks.find(t=>t.id==='priority-inspection').status,'Completed');
-    await assert.rejects(()=>cases.inspection(row.id,row.version,{
-      inspectionId:'NMC-INS-2026-8471',findingsCount:1,criticalFindings:0,
-      result:'Completed with Findings',summary:'Duplicate'
-    }),/CASE_INSPECTION_ALREADY_RECORDED/);
-  }finally{close();}
+test('Scheduling is explicit, role-side and optimistic version-locked; inspection requires scheduled request',async()=>{
+ const db=setup();
+ try{
+   let row=await opened(db);
+   row=await db.cases.saveActionPlan(row.id,row.version,plan(row));
+   row=await db.cases.decideAction(row.id,row.version,'priority-inspection','ACCEPT');
+   const req=row.inspectionRequests[0];
+   await assert.rejects(()=>db.cases.inspection(row.id,row.version,{
+     inspectionId:'NMC-INS-2026-8471',findingsCount:0,criticalFindings:0,
+     result:'Cleared',summary:'All pass'}),/CASE_INSPECTION_NOT_SCHEDULED/);
+   const scheduledAt=new Date(Date.now()+48*3600*1000).toISOString();
+   await assert.rejects(()=>db.cases.scheduleInspection(row.id,row.version,req.id,{
+     scheduledAt:'2020-01-01T00:00:00Z',port:'Jebel Ali',inspector:'Inspector A'
+   }),/CASE_SCHEDULE_INVALID/);
+   const stale=row.version;
+   row=await db.cases.scheduleInspection(row.id,row.version,req.id,{
+     scheduledAt,port:'Jebel Ali',inspector:'Inspector A'});
+   assert.equal(row.inspectionRequests[0].status,'SCHEDULED');
+   await assert.rejects(()=>db.cases.scheduleInspection(row.id,stale,req.id,{
+     scheduledAt,port:'Jebel Ali',inspector:'Inspector A'}),/CASE_VERSION_CONFLICT/);
+   await assert.rejects(()=>db.cases.scheduleInspection(row.id,row.version,req.id,{
+     scheduledAt,port:'Jebel Ali',inspector:'Inspector A'}),/CASE_INSPECTION_SCHEDULE_CONFLICT/);
+   row=await db.cases.inspection(row.id,row.version,{
+     inspectionId:'NMC-INS-2026-8471',findingsCount:0,criticalFindings:0,
+     result:'Cleared',summary:'All pass'});
+   assert.equal(row.inspectionRequests[0].status,'COMPLETED');
+   assert.equal(row.tasks.find(t=>t.id==='priority-inspection').status,'Completed');
+   assert.equal(row.sourceScore,91);
+   assert.equal((await db.cases.history(row.id))[0].action,'INSPECTION_RECORDED');
+ }finally{db.close();}
 });
-test('supervisor must approve closure after all mandatory tasks and a reason',async()=>{
-  const {alerts,cases,close}=setup();
-  try{
-    let alert=await assessed(alerts);
-    alert=await alerts.transition(alert.id,'ACKNOWLEDGE',alert.version,'Noted');
-    let row=await cases.fromAlert(alert.id);
-    await assert.rejects(()=>cases.resolve(row.id,row.version,'Closed','OPERATOR'),
-      /CASE_SUPERVISOR_REQUIRED/);
-    await assert.rejects(()=>cases.resolve(row.id,row.version,'Closed','SUPERVISOR'),
-      /CASE_MANDATORY_TASKS_INCOMPLETE/);
-    row=await cases.task(row.id,row.version,'verify-certificate','COMPLETE','Verified');
-    row=await cases.task(row.id,row.version,'enhanced-monitoring','COMPLETE','Monitored');
-    row=await cases.inspection(row.id,row.version,{
-      inspectionId:'NMC-INS-2026-8471',findingsCount:0,criticalFindings:0,
-      result:'Cleared',summary:'No deficiencies'
-    });
-    assert.equal(row.status,'PENDING_VERIFICATION');
-    await assert.rejects(()=>cases.resolve(row.id,row.version,'','SUPERVISOR'),
-      /CASE_RESOLUTION_NOTE_REQUIRED/);
-    row=await cases.resolve(row.id,row.version,'All evidence verified','SUPERVISOR');
-    assert.equal(row.status,'RESOLVED');
-    assert.equal((await cases.byImo(imo)).id,row.id);
-    assert.equal((await cases.history(row.id))[0].action,'RESOLVED');
-  }finally{close();}
+test('Human supervisor closes only when mandatory actions are completed',async()=>{
+ const db=setup();
+ try{
+   let row=await opened(db);
+   row=await db.cases.saveActionPlan(row.id,row.version,plan(row));
+   row=await db.cases.decideAction(row.id,row.version,'verify-certificate','ACCEPT');
+   await assert.rejects(()=>db.cases.resolve(row.id,row.version,'Completed','OPERATOR'),
+     /CASE_SUPERVISOR_REQUIRED/);
+   await assert.rejects(()=>db.cases.resolve(row.id,row.version,'Completed','SUPERVISOR'),
+     /CASE_MANDATORY_TASKS_INCOMPLETE/);
+   row=await db.cases.task(row.id,row.version,'verify-certificate','COMPLETE','Evidence verified');
+   row=await db.cases.resolve(row.id,row.version,'Verified and closed','SUPERVISOR');
+   assert.equal(row.status,'RESOLVED');
+   assert.equal((await db.cases.byImo(imo)).id,row.id);
+ }finally{db.close();}
 });
