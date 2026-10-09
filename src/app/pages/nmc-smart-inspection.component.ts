@@ -65,6 +65,22 @@ export class NmcSmartInspectionComponent implements OnInit {
     this.vessel = this.riskEngine.applyToVessel(profile);
     this.existingOutcome = this.caseState.getInspectionOutcome(this.vessel.imo);
     this.buildChecklist();
+    this.cases.byImo(this.vessel.imo).subscribe({
+      next:result=>{
+        this.centralLoading=false;
+        this.centralCase=result.case?.status==='RESOLVED'?null:result.case;
+        if(this.centralCase?.inspectionOutcome){
+          const o=this.centralCase.inspectionOutcome;
+          this.existingOutcome={...o,riskReduction:0,inspector:'Smart Inspection',
+            result:o.result as NmcInspectionOutcome['result']};
+          this.submitted=true;
+        }
+      },
+      error:error=>{
+        this.centralLoading=false;
+        this.centralError=this.cases.readableError(error,this.lang.isArabic);
+      }
+    });
   }
 
   copy(en: string, ar: string): string {
