@@ -299,6 +299,8 @@ export class NmcCaseWorkspace{
       if(row.status==='RESOLVED')throw new NmcCaseError('CASE_ALREADY_RESOLVED',409);
       if(!row.actionPlan && !row.tasks.length)
         throw new NmcCaseError('CASE_ACTION_PLAN_REQUIRED',409);
+      if(row.actionPlan?.proposedActions?.some(a=>a.decision==='PENDING'))
+        throw new NmcCaseError('CASE_ACTION_DECISIONS_PENDING',409);
       if(row.tasks.some(t=>t.mandatory&&t.status!=='Completed'))
         throw new NmcCaseError('CASE_MANDATORY_TASKS_INCOMPLETE',409);
       return {...row,status:'RESOLVED',resolutionNote:reason};
