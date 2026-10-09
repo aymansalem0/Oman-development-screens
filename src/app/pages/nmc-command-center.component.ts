@@ -23,6 +23,7 @@ import { NMC_OPERATIONAL_VESSELS } from '../data/nmc-expanded-vessel-catalog';
 import { LanguageService } from '../services/language.service';
 import { NmcRiskEngineService } from '../services/nmc-risk-engine.service';
 import { NmcAlertsService } from '../services/nmc-alerts.service';
+import { NmcCasesService } from '../services/nmc-cases.service';
 
 interface MaritimeEvent {
   time: string;
@@ -53,6 +54,8 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
   fleetSnapshot: FleetAiSnapshot | null = null;
   fleetError = '';
   unreadAlertCount = 0;
+  activeAlertCount: number | null = null;
+  openCaseCount: number | null = null;
 
   attentionPage = 1;
   readonly attentionPageSize = 6;
@@ -85,7 +88,8 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
     public lang: LanguageService,
     private riskEngine: NmcRiskEngineService,
     private readonly fleetAi: NmcFleetAiService,
-    private readonly alertsService: NmcAlertsService
+    private readonly alertsService: NmcAlertsService,
+    private readonly casesService: NmcCasesService
   ) {}
 
   copy(en: string, ar: string): string {
@@ -196,8 +200,8 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
   ngOnInit(): void {
     this.riskSubscription = this.riskEngine.config$.subscribe(() => this.loadFleet());
     this.fleetPoller = setInterval(() => this.loadFleet(), 7000);
-    this.loadAlertCount();
-    this.alertPoller=setInterval(()=>this.loadAlertCount(),30000);
+    this.loadOperations();
+    this.alertPoller=setInterval(()=>this.loadOperations(),30000);
 
     this.timer = setInterval(() => {
       this.now = new Date();
@@ -339,10 +343,17 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
     const j=this.fleetSnapshot?.job;
     return j?j.completed+' completed · '+j.failed+' failed / '+j.total:'';
   }
-  private loadAlertCount():void{
+  private loadOperations():void{
     this.alertsService.overview().subscribe({
-      next:response=>{this.unreadAlertCount=response.summary.unread;},
-      error:()=>{this.unreadAlertCount=0;}
+      next:response=>{
+        this.unreadAlertCount=response.summary.unread;
+        this.activeAlertCount=response.summary.active;
+      },
+      error:()=>{this.unreadAlertCount=0;this.activeAlertCount=null;}
+    });
+    this.casesService.list().subscribe({
+      next:response=>this.openCaseCount=response.cases.filter(c=>c.status!=='RESOLVED').length,
+      error:()=>this.openCaseCount=null
     });
   }
   /** Saved Oracle-backed assessments are displayed using the ruleset that actually produced them.
@@ -391,7 +402,7 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
       }
     });
   }
-  fetchAgain():void{this.loadFleet(true);}
+  fetchAgain():void{this.loadFleet(true);this.loadOperations();}
   riskDisplay(v:NmcVesselProfile):string{return v.risk<0?'—':String(v.risk);}
 
   get filteredVessels(): NmcVesselProfile[] {
