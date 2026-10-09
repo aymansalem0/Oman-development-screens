@@ -248,6 +248,7 @@ const server = createServer(async (req, res) => {
           const body=await requestJson(req,4096);
           if(body.withAiActionPlan!==true)
             throw new NmcCaseError('CASE_CREATION_AI_REQUIRED',400);
+          if(!apiKey)throw new NmcCaseError('AIRIA_NOT_CONFIGURED',503);
           const item=await cases.fromAlert(body.alertId);
           if(item.actionPlan)
             return respond(res,200,{status:'ok',case:item,aiActionPlanStatus:'READY'});
