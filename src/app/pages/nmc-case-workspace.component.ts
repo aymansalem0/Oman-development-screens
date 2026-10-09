@@ -96,8 +96,7 @@ export class NmcCaseWorkspaceComponent implements OnInit {
   }
 
   get caseId(): string {
-    const tail = this.vessel.imo.slice(-4);
-    return `NMC-CASE-2026-${tail}`;
+    return this.centralCase?'NMC-'+this.centralCase.id.slice(0,8).toUpperCase():this.copy('Not opened','لم تُفتح');
   }
 
   get riskLevelLabel(): string {
