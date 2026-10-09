@@ -343,35 +343,7 @@ export class NmcDashboardBuilderComponent implements OnInit,OnDestroy {
     }));
   }
 
-  /**
-   * Republish from the designer after the central revision was saved.
-   * Never publish unsaved local changes or an out-of-date shared revision.
-   */
-  /** Compare the actual published content, not unrelated browser draft version. */
-  private sameDashboardDesign(a:DashboardDefinition,b:DashboardDefinition):boolean {
-    if(a.title!==b.title||a.description!==b.description||
-       (a.menuPlacement||'NMC_CENTER')!==(b.menuPlacement||'NMC_CENTER')||
-       a.widgets.length!==b.widgets.length)return false;
-    for(const key of ['risk','type','flag','search'] as const){
-      if(a.filters[key]!==b.filters[key])return false;
-    }
-    return a.widgets.every((widget,index)=>{
-      const other=b.widgets[index];
-      return widget.id===other.id&&widget.type===other.type&&
-        widget.metric===other.metric&&widget.title===other.title&&
-        widget.span===other.span&&
-        (widget.type!=='bar'||(
-          (widget.chartType||'horizontalBar')===(other.chartType||'horizontalBar')&&
-          (widget.palette||'maritime')===(other.palette||'maritime')
-        ));
-    });
-  }
-
-  /**
-   * The editor is authoritative for this revision. Save its latest content
-   * centrally first, THEN publish that exact server-returned version.
-   * Never publish a version based only on a browser-local save.
-   */
+  /** Commit the current designer version to the server before approval. */
   republishCurrent():void {
     if(this.viewOnly||!this.dashboard?.publishedParentId||this.sharedBusy)return;
     if(!window.confirm(this.copy(
