@@ -20,7 +20,8 @@
   <main class="rx-main">
     <section class="hero-card">
       <div class="vessel-summary">
-        <div class="vessel-kicker">{{copy('SAVED RISK ASSESSMENT · SYNTHETIC POC','تقييم مخاطر محفوظ · بيانات تجريبية')}}</div>
+        <div class="vessel-kicker">{{copy('SAVED A01/A02 EVIDENCE · LOCAL POLICY PROJECTION · SYNTHETIC POC',
+         'أدلة A01/A02 المحفوظة · حساب وفق إعدادات المتصفح · نموذج تجريبي')}}</div>
         <h2>{{vessel?.name || copy('Vessel not found','السفينة غير موجودة')}}</h2>
         <div class="identity-row" *ngIf="vessel as v">
           <span>IMO {{v.imo}}</span><span>{{v.flag}}</span><span>{{v.type}}</span><span>{{v.destination}}</span>
@@ -32,15 +33,21 @@
         </p>
       </div>
       <div class="hero-metrics">
-        <div class="metric-card risk" [ngClass]="riskClass">
-          <small>{{copy('Saved Risk Score','درجة المخاطر المحفوظة')}}</small>
+        <div class="metric-card risk projected-risk-card" [ngClass]="riskClass">
+          <small>{{copy('Score under Risk Settings · browser preview',
+                       'الدرجة وفق إعدادات المخاطر · معاينة المتصفح')}}</small>
           <strong>{{riskScore===null?'—':riskScore}}</strong>
-          <span>{{riskLabel}}</span>
+          <span>{{riskLabel}} · {{activeRiskConfig?.version||'—'}}</span>
+        </div>
+        <div class="metric-card source-risk-card">
+          <small>{{copy('Original Oracle AI assessment','تقييم AI الأصلي المحفوظ في Oracle')}}</small>
+          <strong>{{sourceRiskScore===null?'—':sourceRiskScore}}</strong>
+          <span>{{sourceRiskLevel}} · {{assessment?.configVersion||'—'}}</span>
         </div>
         <div class="metric-card">
-          <small>{{copy('Operational Priority','الأولوية التشغيلية')}}</small>
-          <strong class="rx-priority">{{assessment?.operationalPriority || '—'}}</strong>
-          <span *ngIf="assessment?.criticalOpenFinding">{{copy('Critical open finding','ملاحظة حرجة مفتوحة')}}</span>
+          <small>{{copy('Projected priority · advisory','الأولوية المتوقعة · استرشادية')}}</small>
+          <strong class="rx-priority">{{projectedPriority}}</strong>
+          <span>{{copy('Saved priority','الأولوية المحفوظة')}}: {{assessment?.operationalPriority || '—'}}</span>
         </div>
         <div class="metric-card">
           <small>{{copy('Mean agent signal confidence','متوسط ثقة مؤشرات AI')}}</small>
@@ -58,25 +65,39 @@
     </div>
 
     <ng-container *ngIf="assessment as a">
+      <div class="rx-policy-banner" role="note">
+        <div>
+          <strong>{{copy('Risk Settings applied to saved AI signals',
+                        'تطبيق إعدادات المخاطر الحالية على مؤشرات AI المحفوظة')}}</strong>
+          <p>{{copy('The displayed projection is recalculated when Risk Settings are published in this browser. It is NOT written to Oracle, and does not change fleet counts, alerts, cases, or guidance decisions.',
+                     'يُعاد حساب الدرجة المعروضة عند نشر إعدادات المخاطر في هذا المتصفح فقط. لا يتم حفظها في Oracle ولا تغير العدادات أو التنبيهات أو الحالات أو قرارات الإرشاد.')}}</p>
+          <small>{{copy('Original saved risk','المخاطر الأصلية المحفوظة')}}: {{a.score}} · {{a.level}} · {{a.configVersion}}
+             → {{copy('Current settings projection','المتوقع وفق الإعدادات الحالية')}}: {{riskScore}} · {{riskLevel}} · {{activeRiskConfig?.version||'—'}}
+             <b *ngIf="policyChanged" class="rx-policy-delta">{{copy('CONFIGURATION CHANGED','الإعدادات مختلفة')}}</b>
+          </small>
+        </div>
+        <a class="secondary-btn" routerLink="/moei/nmc/admin/risk-configuration">{{copy('Manage Risk Settings','إدارة إعدادات المخاطر')}}</a>
+      </div>
       <section class="threshold-card">
         <div class="threshold-head">
           <div>
             <h3>{{copy('Risk Classification Thresholds','حدود تصنيف المخاطر')}}</h3>
-            <p>{{copy('Thresholds from the exact saved risk assessment ruleset, not a browser-local draft.',
-                      'حدود التصنيف من نفس إصدار قواعد التقييم المحفوظ، وليست من مسودة المتصفح.')}}</p>
+            <p>{{copy('Current published browser Risk Settings; original Oracle thresholds remain in the historical assessment.',
+                      'حدود تصنيف إعدادات المتصفح المنشورة؛ حدود Oracle الأصلية محفوظة داخل التقييم التاريخي.')}}</p>
           </div>
-          <div class="engine-meta"><span>{{a.configVersion}}</span><span>{{a.assessedAt | date:'short'}}</span></div>
+          <div class="engine-meta"><span>{{activeRiskConfig?.version||'—'}}</span><span>{{copy('Saved','محفوظ')}}: {{a.configVersion}}</span></div>
         </div>
         <div class="threshold-track">
           <div *ngFor="let band of thresholds" class="band" [ngClass]="band.key.toLowerCase()" [style.width.%]="band.width">
             <span>{{thresholdName(band.key)}} · {{band.min}}–{{band.max}}</span>
           </div>
-          <div class="score-marker" [style.left.%]="scoreMarkerPosition"><b>{{a.score}}</b><i></i></div>
+          <div class="score-marker" [style.left.%]="scoreMarkerPosition"><b>{{riskScore}}</b><i></i></div>
         </div>
         <div class="rx-notice rx-inline" *ngIf="a.criticalOpenFinding">
-          ⚠ {{copy('Priority Review: an open critical finding remains relevant even though the composite risk level is',
-                     'مراجعة ذات أولوية: لا تزال هناك ملاحظة حرجة مفتوحة رغم أن تصنيف الدرجة المركبة هو')}}
-          {{riskLabel}}.
+          ⚠ {{copy('A critical open finding requires Priority Review independently of the calculated risk classification.',
+                     'الملاحظة الحرجة المفتوحة تتطلب مراجعة ذات أولوية بغض النظر عن تصنيف المخاطر المحسوب.')}}
+          {{copy('Current policy class','التصنيف الحالي')}}: {{riskLabel}}.
+          {{copy('Saved assessment class','تصنيف التقييم الأصلي')}}: {{sourceRiskLevel}}.
         </div>
       </section>
 
@@ -85,8 +106,8 @@
           <div class="panel-header">
             <div>
               <h3>{{copy('How the Score Was Built','كيف تم احتساب درجة المخاطر')}}</h3>
-              <p>{{copy('Five validated A01/A02 signals · published assessment weights',
-                        'خمسة مؤشرات من A01/A02 · أوزان التقييم المحفوظ')}}</p>
+              <p>{{copy('Five saved A01/A02 severities × current browser-published weights (never fixture baselines)',
+                        'خمسة مؤشرات محفوظة من A01/A02 × الأوزان المنشورة في إعدادات المتصفح (دون خطوط أساس افتراضية)')}}</p>
             </div>
             <span class="count-pill">{{factors.length}} {{copy('factors','عوامل')}}</span>
           </div>
@@ -122,7 +143,8 @@
             {{copy('Calculation mode','طريقة الحساب')}}: <b>{{calculationMode}}</b> ·
             {{copy('Mode adjustment','تعديل نمط الحساب')}}: <b>{{modeAdjustment | number:'1.2-2'}}</b> ·
             {{copy('Reconstructed','الحساب المُعاد')}}: <b>{{reconstructedScore}}/100</b> ·
-            {{copy('Saved final result','النتيجة النهائية المحفوظة')}}: <b>{{a.score}}/100</b>.
+            {{copy('Current settings score','درجة الإعدادات الحالية')}}: <b>{{riskScore}}/100</b> ·
+            {{copy('Original saved score','الدرجة الأصلية المحفوظة')}}: <b>{{a.score}}/100</b>.
             {{copy('No synthetic baseline calibration or AI rerun occurs here.',
                    'لا تتم إضافة خط أساس تجريبي أو استدعاء AI جديد عند فتح الشاشة.')}}
           </div>
@@ -169,8 +191,8 @@
       <section class="rx-insight-card panel">
         <div class="panel-header"><div>
           <h3>{{copy('Maritime Situation Summary','ملخص الموقف البحري')}}</h3>
-          <p>{{copy('Platform-assembled from saved A01/A02 signals; not a new AI generation',
-                   'ملخص أنشأته المنصة من إشارات A01/A02 المحفوظة دون استدعاء جديد')}}</p>
+          <p>{{copy('Platform projection from saved A01/A02 evidence under current browser-published Risk Settings',
+                   'إسقاط حسابي من أدلة A01/A02 المحفوظة وفق إعدادات المخاطر المنشورة في المتصفح')}}</p>
         </div></div>
         <p>{{situationSummary}}</p>
       </section>
@@ -178,8 +200,8 @@
       <section class="rx-insight-card panel">
         <div class="panel-header">
           <div><h3>{{copy('Recommended Operational Response','الاستجابة التشغيلية الموصى بها')}}</h3>
-            <p>{{copy('Platform business rules based on saved AI findings · advisory only · no tasks',
-                      'قواعد أعمال المنصة بناءً على نتائج AI · إرشادات فقط · لا تُنشئ مهامًا')}}</p>
+            <p>{{copy('Server-published platform guidance uses the ORIGINAL Oracle AI assessment, not this browser-only risk projection. Advisory only; no tasks.',
+                      'إرشادات المنصة المنشورة على الخادم تعتمد على تقييم Oracle الأصلي، وليس توقع المخاطر المحلي بالمتصفح. إرشادية فقط؛ دون إنشاء مهام.')}}</p>
           </div>
           <span class="readiness-pill">{{copy('PLATFORM GUIDANCE','إرشادات المنصة')}}</span>
         </div>
