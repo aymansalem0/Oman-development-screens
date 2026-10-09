@@ -239,6 +239,19 @@ export class NmcDashboardBuilderComponent implements OnInit,OnDestroy {
     this.openShared(revision);
   }
 
+  republishPending(board:DashboardDefinition):void {
+    const revision=this.linkedRevisionFor(board);
+    if(!revision)return;
+    if(revision.version<=1){
+      this.sharedError=this.copy(
+        'Open the linked revision and save your changes to the workspace before republishing.',
+        'افتح نسخة التعديل واحفظ التغييرات في المساحة المشتركة قبل إعادة النشر.'
+      );
+      return;
+    }
+    this.publishShared(revision);
+  }
+
   getShared(id:string):DashboardDefinition|null {
     return this.sharedDashboards.find(d=>d.id===id)||null;
   }
