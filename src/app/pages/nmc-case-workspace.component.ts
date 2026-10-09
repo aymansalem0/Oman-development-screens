@@ -214,84 +214,84 @@ export class NmcCaseWorkspaceComponent implements OnInit {
     this.selectedTask = undefined;
   }
 
-  startTask(task: CaseTask): void {
-    if (task.id === 'priority-inspection') {
-      this.openSmartInspection();
-      return;
-    }
-
-    if (task.status === 'Pending' || task.status === 'Assigned') {
-      task.status = 'In Progress';
-      this.caseStatus = 'In Progress';
-      this.caseState.setTaskStatus(this.vessel.imo, task.id, task.status);
-      this.addTimeline('Task',
-        this.copy('Task started', 'بدء تنفيذ المهمة'),
-        `${task.title} · ${task.owner}`,
-        task.owner
-      );
-      this.persistTimelineEvent('Task', task, this.copy('Task started', 'بدء تنفيذ المهمة'));
-    }
+  private applyCase(value:NmcCentralCase):void{
+    this.centralCase=value;
+    this.buildCase(true);
+    this.selectedTask=this.selectedTask?
+      this.tasks.find(item=>item.id===this.selectedTask?.id):undefined;
+    this.loadCentralHistory();
   }
-
-  completeTask(task: CaseTask): void {
-    if (task.status === 'Completed') return;
-
-    if (task.id === 'priority-inspection' && !this.inspectionOutcome) {
-      this.openSmartInspection();
-      return;
-    }
-
-    task.status = 'Completed';
-    this.caseState.setTaskStatus(this.vessel.imo, task.id, task.status);
-    this.caseStatus = this.mandatoryComplete ? 'Pending Verification' : 'In Progress';
-    this.addTimeline('Task',
-      this.copy('Task completed', 'تم استكمال المهمة'),
-      `${task.title} · ${this.copy('risk recalculated to', 'أعيد احتساب المخاطر إلى')} ${this.currentRisk}`,
-      task.owner
-    );
-    this.persistTimelineEvent('Task', task, this.copy('Task completed', 'تم استكمال المهمة'));
-  }
-
-  escalateTask(task: CaseTask): void {
-    task.status = 'Escalated';
-    this.caseState.setTaskStatus(this.vessel.imo, task.id, task.status);
-    this.caseStatus = 'In Progress';
-    this.addTimeline('Escalation',
-      this.copy('Task escalated', 'تم تصعيد المهمة'),
-      `${task.title} · ${this.copy('supervisor attention required', 'يتطلب تدخل المشرف')}`,
-      this.copy('NMC Duty Officer', 'ضابط مناوبة المركز البحري')
-    );
-    this.persistTimelineEvent('Escalation', task, this.copy('Task escalated', 'تم تصعيد المهمة'));
-  }
-
-  resolveCase(): void {
-    if (!this.mandatoryComplete) return;
-    this.caseStatus = 'Resolved';
-    this.addTimeline('Resolution',
-      this.copy('Case resolved', 'تم إغلاق الحالة'),
-      this.resolutionNote || this.copy(
-        'Mandatory actions completed, evidence verified and vessel risk reduced to an acceptable monitored level.',
-        'تم استكمال الإجراءات الإلزامية والتحقق من الأدلة وخفض مخاطر السفينة إلى مستوى مقبول للمراقبة.'
-      ),
-      this.copy('NMC Supervisor', 'مشرف المركز البحري الوطني')
-    );
-
-    this.caseState.appendTimeline(this.vessel.imo, {
-      id: `resolution-${this.vessel.imo}`,
-      time: this.copy('Now', 'الآن'),
-      type: 'Resolution',
-      title: this.copy('Case resolved', 'تم إغلاق الحالة'),
-      detail: this.resolutionNote || this.copy(
-        'Mandatory actions completed and the case was resolved.',
-        'تم استكمال الإجراءات الإلزامية وإغلاق الحالة.'
-      ),
-      actor: this.copy('NMC Supervisor', 'مشرف المركز البحري الوطني')
+  private updateTask(task:CaseTask,action:'START'|'COMPLETE'|'ESCALATE',openInspection=false):void{
+    if(!this.centralCase||this.centralBusy||this.centralCase.status==='RESOLVED')return;
+    this.centralBusy=true;this.centralError='';this.centralSuccess='';
+    this.cases.task(this.centralCase,task.id,action).subscribe({
+      next:response=>{
+        this.centralBusy=false;
+        if(response.case)this.applyCase(response.case);
+        this.centralSuccess=this.copy('Action saved to case history.','تم حفظ الإجراء في سجل الحالة.');
+        if(openInspection)this.navigateInspection();
+      },
+      error:error=>{
+        this.centralBusy=false;
+        this.centralError=this.cases.readableError(error,this.lang.isArabic);
+        if(error?.status===409)this.loadCentralCase();
+      }
     });
   }
 
-  openSmartInspection(): void {
-    this.caseState.setTaskStatus(this.vessel.imo, 'priority-inspection', 'In Progress');
-    this.router.navigate(['/moei/nmc/vessel', this.vessel.imo, 'smart-inspection']);
+  startTask(task:CaseTask):void{
+    if(task.id==='priority-inspection'){this.openSmartInspection();return;}
+    this.updateTask(task,'START');
+  }
+  completeTask(task:CaseTask):void{
+    if(task.id==='priority-inspection'){
+      this.centralError=this.copy(
+        'Inspection completion must be recorded from Smart Inspection.',
+        'يجب تسجيل نتيجة المعاينة داخل المعاينة الذكية.');
+      return;
+    }
+    this.updateTask(task,'COMPLETE');
+  }
+  escalateTask(task:CaseTask):void{
+    if(!window.confirm(this.copy(
+      'Escalate this task to the NMC Supervisor?',
+      'هل تريد تصعيد هذه المهمة إلى مشرف المركز البحري؟')))return;
+    this.updateTask(task,'ESCALATE');
+  }
+  resolveCase():void{
+    if(!this.centralCase||!this.mandatoryComplete||this.centralBusy)return;
+    if(!this.resolutionNote.trim()){
+      this.centralError=this.copy('Resolution reason is required.','يجب إدخال سبب الإغلاق.');
+      return;
+    }
+    if(!window.confirm(this.copy(
+      'Submit this maritime case for supervisor-approved resolution?',
+      'هل تريد اعتماد إغلاق هذه الحالة بواسطة المشرف؟')))return;
+    this.centralBusy=true;this.centralError='';
+    this.cases.resolve(this.centralCase,this.resolutionNote.trim()).subscribe({
+      next:response=>{
+        this.centralBusy=false;
+        if(response.case)this.applyCase(response.case);
+        this.centralSuccess=this.copy('Case resolved and audited.','تم إغلاق الحالة وتسجيل قرار الاعتماد.');
+      },
+      error:error=>{
+        this.centralBusy=false;
+        this.centralError=this.cases.readableError(error,this.lang.isArabic);
+        if(error?.status===409)this.loadCentralCase();
+      }
+    });
+  }
+  private navigateInspection():void{
+    void this.router.navigate(['/moei/nmc/vessel',this.vessel.imo,'smart-inspection']);
+  }
+  openSmartInspection():void{
+    if(!this.centralCase||this.centralBusy)return;
+    const inspection=this.centralCase.tasks.find(task=>task.id==='priority-inspection');
+    if(inspection?.status==='Assigned'){
+      this.updateTask(this.tasks.find(task=>task.id==='priority-inspection')!, 'START',true);
+      return;
+    }
+    this.navigateInspection();
   }
 
   statusLabel(status: CaseStatus | TaskStatus): string {
