@@ -1,0 +1,77 @@
+<button class="mobile-nav-toggle" type="button"
+        (click)="mobileOpen = !mobileOpen"
+        [attr.aria-expanded]="mobileOpen"
+        [attr.aria-label]="copy('Toggle main navigation', 'فتح أو إغلاق القائمة الرئيسية')">☰</button>
+<aside class="nmc-unified-sidebar" [class.mobile-open]="mobileOpen">
+  <div class="nav-header">
+    <div class="nav-mark">⚓</div>
+    <div class="nav-identity">
+      <strong>{{ copy('Maritime Services', 'الخدمات البحرية') }}</strong>
+      <span>{{ copy('Main Navigation', 'القائمة الرئيسية') }}</span>
+    </div>
+  </div>
+
+  <nav [attr.aria-label]="copy('Main maritime navigation', 'القائمة الرئيسية للخدمات البحرية')">
+    <section class="nav-section">
+      <button class="nav-group" type="button" (click)="nmcExpanded = !nmcExpanded"
+              [attr.aria-expanded]="nmcExpanded" aria-controls="nmc-main-submenu">
+        <span class="nav-icon">◉</span>
+        <span class="nav-label">{{ copy('NMC Center', 'المركز البحري الوطني') }}</span>
+        <span class="nav-chevron">{{ nmcExpanded ? '⌄' : '›' }}</span>
+      </button>
+      <div class="nav-children" id="nmc-main-submenu" [hidden]="!nmcExpanded">
+        <a class="nav-link" routerLink="/moei/nmc" [class.active]="isCommandCenter"
+           [attr.aria-current]="isCommandCenter ? 'page' : null" [title]="copy('Command Center', 'مركز القيادة')">
+          <span class="nav-icon">▦</span>
+          <span class="nav-label">{{ copy('Command Center', 'مركز القيادة') }}</span>
+        </a>
+        <a class="nav-link" [routerLink]="vesselRoute" [class.active]="isVessel360"
+           [attr.aria-current]="isVessel360 ? 'page' : null" [title]="vesselHint">
+          <span class="nav-icon">⌖</span>
+          <span class="nav-label">{{ copy('Vessel 360', 'الملف الشامل للسفينة') }}</span>
+        </a>
+        <a class="nav-link" [routerLink]="intelligenceRoute" [class.active]="isIntelligence"
+           [attr.aria-current]="isIntelligence ? 'page' : null" [title]="vesselHint">
+          <span class="nav-icon">✦</span>
+          <span class="nav-label">{{ copy('Maritime Intelligence', 'الاستخبارات البحرية') }}</span>
+        </a>
+        <a class="nav-link" [routerLink]="caseRoute" [class.active]="isCase"
+           [attr.aria-current]="isCase ? 'page' : null" [title]="vesselHint">
+          <span class="nav-icon">▣</span>
+          <span class="nav-label">{{ copy('Case Workspace', 'إدارة الحالات') }}</span>
+        </a>
+      </div>
+    </section>
+
+    <section class="nav-section">
+      <div class="nav-group nav-future" [class.active]="isSmartInspection"
+           [attr.aria-label]="copy('Smart Inspection; modules to be added', 'المعاينة الذكية؛ ستضاف الخدمات لاحقاً')">
+        <span class="nav-icon">✓</span>
+        <span class="nav-label">{{ copy('Smart Inspection', 'المعاينة الذكية') }}</span>
+      </div>
+    </section>
+
+    <section class="nav-section">
+      <button class="nav-group" type="button" (click)="settingsExpanded = !settingsExpanded"
+              [attr.aria-expanded]="settingsExpanded" aria-controls="nmc-settings-submenu">
+        <span class="nav-icon">⚙</span>
+        <span class="nav-label">{{ copy('Settings', 'الإعدادات') }}</span>
+        <span class="nav-chevron">{{ settingsExpanded ? '⌄' : '›' }}</span>
+      </button>
+      <div class="nav-children" id="nmc-settings-submenu" [hidden]="!settingsExpanded">
+        <a class="nav-link" routerLink="/moei/nmc/admin/risk-configuration"
+           [class.active]="isRiskConfig" [attr.aria-current]="isRiskConfig ? 'page' : null"
+           [title]="copy('Risk Management', 'إدارة المخاطر')">
+          <span class="nav-icon">⚠</span>
+          <span class="nav-label">{{ copy('Risk Management', 'إدارة المخاطر') }}</span>
+        </a>
+        <a class="nav-link" routerLink="/moei/nmc/admin/data-quality"
+           [class.active]="isQualityConfig" [attr.aria-current]="isQualityConfig ? 'page' : null"
+           [title]="copy('Data Quality Management', 'إدارة جودة البيانات')">
+          <span class="nav-icon">▤</span>
+          <span class="nav-label">{{ copy('Data Quality Management', 'إدارة جودة البيانات') }}</span>
+        </a>
+      </div>
+    </section>
+  </nav>
+</aside>
