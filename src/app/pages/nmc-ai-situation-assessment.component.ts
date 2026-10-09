@@ -1,3 +1,4 @@
+import { NmcNavigationComponent } from '../components/nmc-navigation.component';
 import { CommonModule } from '@angular/common';
 import { Component, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
@@ -47,7 +48,7 @@ interface AiRecommendation {
 @Component({
   selector: 'app-nmc-ai-situation-assessment',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, NmcLiveAiPanelComponent],
+  imports: [CommonModule, FormsModule, RouterLink, NmcLiveAiPanelComponent, NmcNavigationComponent],
   templateUrl: './nmc-ai-situation-assessment.component.html',
   styleUrl: './nmc-ai-situation-assessment.component.css'
 })
