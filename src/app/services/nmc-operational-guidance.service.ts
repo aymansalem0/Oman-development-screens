@@ -19,7 +19,7 @@ export interface GuidancePolicy {
 export interface GuidanceRuleState {
   id:string;revision:number;status:'ACTIVE'|'INACTIVE'|'DRAFT';
   publishedRevision:number;updatedAt:string;
-  published:GuidancePolicy;draft:GuidancePolicy|null;
+  published:GuidancePolicy|null;draft:GuidancePolicy|null;
 }
 export interface GuidanceResult {
   id:string;ruleId:string;ruleRevision:number;title:string;titleAr:string;
@@ -47,6 +47,11 @@ export class NmcOperationalGuidanceService {
   history(ruleId:string):Observable<{status:'ok';history:Array<{revision:number;action:string;role:string;at:string}>}>{
     return this.http.get<{status:'ok';history:Array<{revision:number;action:string;role:string;at:string}>}>(
       this.base+'/rules/'+encodeURIComponent(ruleId)+'/history');
+  }
+  createDraft(rule:GuidancePolicy):Observable<{status:'ok';rule:GuidanceRuleState}>{
+    return this.http.post<{status:'ok';rule:GuidanceRuleState}>(
+      this.base+'/rules',{rule},{headers:this.auth('editor')})
+      .pipe(catchError(e=>this.resetOnAuth(e,'editor')));
   }
   saveDraft(rule:GuidanceRuleState,draft:GuidancePolicy):Observable<{status:'ok';rule:GuidanceRuleState}>{
     return this.http.put<{status:'ok';rule:GuidanceRuleState}>(
@@ -89,6 +94,7 @@ export class NmcOperationalGuidanceService {
       GUIDANCE_VERSION_CONFLICT:['Rule was changed in another session. Reload the rules.','تغيرت القاعدة في جلسة أخرى؛ حدّث القائمة.'],
       GUIDANCE_NO_DRAFT:['Save a draft before publishing.','احفظ المسودة قبل النشر.'],
       GUIDANCE_RULE_INVALID:['Check title, priority and rule condition.','راجع اسم القاعدة وأولويتها وشروطها.'],
+      GUIDANCE_RULE_EXISTS:['A guidance rule already exists with this ID.','توجد قاعدة إرشاد بالفعل بنفس المعرف.'],
       DASHBOARD_ACCESS_DENIED:['Management key was rejected.','مفتاح الإدارة غير صحيح.'],
       DASHBOARD_WRITE_NOT_CONFIGURED:['Management keys are not configured on the backend.','لم يتم ضبط مفاتيح الإدارة على الخادم.'],
       ACCESS_KEY_REQUIRED:['Action cancelled: an access key is required.','تم إلغاء العملية؛ يلزم مفتاح الوصول.'],
