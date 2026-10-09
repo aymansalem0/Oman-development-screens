@@ -157,7 +157,7 @@ export class FleetAssessmentManager {
       fleetSize:420,counts,job:this.job&&{
         id:this.job.id,status:this.job.status,total:this.job.total,completed:this.job.completed,
         failed:this.job.failed,startedAt:this.job.startedAt,finishedAt:this.job.finishedAt||null
-      },results:Object.fromEntries(values.map(v=>[v.imo,{imo:v.imo,status:v.status,score:v.score,level:v.level,operationalPriority:v.operationalPriority,criticalOpenFinding:v.criticalOpenFinding,assessedAt:v.assessedAt,reasonCode:v.reasonCode,configVersion:v.configVersion,sourceMode:v.sourceMode,
+      },results:Object.fromEntries(values.map(v=>[v.imo,{imo:v.imo,assessmentId:v.assessmentId||null,status:v.status,score:v.score,level:v.level,operationalPriority:v.operationalPriority,criticalOpenFinding:v.criticalOpenFinding,assessedAt:v.assessedAt,reasonCode:v.reasonCode,configVersion:v.configVersion,sourceMode:v.sourceMode,
         lastCheckedAt:v.lastCheckedAt,nextCheckAt:v.nextCheckAt,refreshFailure:v.refreshFailure||null}]))};
   }
   getVesselResult(imo){return VALID_IMOS.has(imo)?(this.results[imo]||null):null;}
