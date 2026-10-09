@@ -334,3 +334,19 @@ a,button,input,textarea { font:inherit; }
 .risk-admin-readiness .risk-admin-error{color:#a73535;font-weight:750}
 .risk-admin-readiness button{padding:10px 13px;border:1px solid #a6cada;background:#fff;border-radius:8px;white-space:nowrap;color:#27536b;cursor:pointer}
 @media(max-width:900px){.risk-admin-readiness{flex-direction:column;align-items:flex-start}}
+
+.central-policy-banner{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:12px 0 18px;padding:13px 17px;border:1px solid #b8d9de;border-radius:11px;background:#eaf8f7;color:#246270}
+.central-policy-banner strong{font-size:12px}.central-policy-banner p{font-size:11px;line-height:1.5;margin:3px 0}
+.central-policy-banner button{border:1px solid #9bc9cb;border-radius:8px;background:#fff;color:#156f77;padding:8px 11px;cursor:pointer;font-size:11px}
+.risk-version-history{margin-top:18px;overflow:hidden}
+.risk-version-history .panel-header{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.risk-version-history .panel-header h3{font-size:17px}
+.risk-version-row{display:grid;grid-template-columns:230px minmax(0,1fr);gap:18px;padding:16px 22px;border-top:1px solid #e6eff2;background:#fff}
+.risk-version-row:nth-child(even){background:#f7fbfc}
+.risk-version-identity{display:flex;flex-direction:column;align-items:flex-start;gap:7px}
+.risk-version-identity>strong{color:#175d6b;font-size:13px}
+.risk-version-identity small,.risk-version-detail small{color:#7897a6;font-size:10px}
+.risk-version-detail p{font-size:11px;color:#395d6f;margin:3px 0 8px;line-height:1.6}
+.risk-version-detail b{color:#234659}
+.risk-version-empty{padding:22px;color:#758b9d}
+@media(max-width:850px){.risk-version-row{grid-template-columns:1fr}.risk-version-history .panel-header{flex-direction:column;align-items:flex-start}}
