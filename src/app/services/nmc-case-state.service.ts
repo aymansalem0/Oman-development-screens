@@ -58,7 +58,7 @@ export class NmcCaseStateService {
         time: outcome.completedAt,
         type: 'Inspection',
         title: 'Priority inspection completed',
-        detail: `${outcome.result} · ${outcome.findingsCount} finding(s) · risk impact -${outcome.riskReduction}`,
+        detail: `${outcome.result} · ${outcome.findingsCount} finding(s) · risk reassessment pending`,
         actor: outcome.inspector
       });
     }
