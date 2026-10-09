@@ -168,7 +168,7 @@
             <label>{{ copy('General inspection note', 'ملاحظة عامة للمعاينة') }}</label>
             <textarea [(ngModel)]="generalNote" [placeholder]="copy('Summarize the inspection outcome...', 'لخص نتيجة المعاينة...')"></textarea>
 
-            <button type="button" class="submit-btn" (click)="submitInspection()" [disabled]="!canSubmit || submitted">
+            <button type="button" class="submit-btn" (click)="submitInspection()" [disabled]="!canSubmit || submitted || centralLoading || centralBusy || !!centralError">
               ✓ {{ submitted ? copy('Inspection submitted to NMC', 'تم إرسال نتيجة المعاينة إلى NMC') : copy('Complete & Return Result to NMC', 'استكمال وإرسال النتيجة إلى NMC') }}
             </button>
 
