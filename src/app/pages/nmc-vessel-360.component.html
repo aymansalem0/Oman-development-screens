@@ -41,9 +41,9 @@
 
       <div class="hero-right">
         <button type="button" class="confidence-card confidence-button" (click)="openProvenance('dataConfidence')" [attr.title]="copy('Open confidence details', 'عرض تفاصيل الثقة')">
-          <small>{{ copy('Fixture confidence indicator', 'مؤشر ثقة تجريبي') }}</small>
+          <small>{{ copy('Scenario preset · not calculated', 'قيمة سيناريو تجريبي · ليست محسوبة') }}</small>
           <strong>{{ vessel.dataConfidence }}%</strong>
-          <span>{{ conflictCount }} {{ copy('synthetic scenario alerts', 'تنبيهات سيناريو تجريبي') }} · {{ copy('view sample basis', 'عرض الأساس التجريبي') }}</span>
+          <span>{{ copy('Fixture preset, separate from quality score', 'قيمة مسبقة لا تدخل في حساب جودة البيانات') }} · {{ conflictCount }} {{ copy('sample scenario alerts', 'تنبيهات تجريبية') }}</span>
         </button>
         <a class="risk-card risk-link" [ngClass]="riskCssClass"
            [routerLink]="['/moei/nmc/vessel', vessel.imo, storedAi ? 'ai-assessment' : 'risk']"
