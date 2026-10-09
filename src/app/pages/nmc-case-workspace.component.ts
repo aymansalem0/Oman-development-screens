@@ -86,6 +86,23 @@ export class NmcCaseWorkspaceComponent implements OnInit {
     this.loadCentralCase();
   }
 
+  loadCentralCase():void {
+    this.centralLoading=true;
+    this.cases.byImo(this.vessel.imo).subscribe({
+      next:response=>{
+        this.centralCase=response.case;
+        this.centralLoading=false;
+        this.centralError='';
+        this.buildCase();
+        if(this.centralCase)this.loadCentralHistory();
+      },
+      error:error=>{
+        this.centralLoading=false;
+        this.centralError=this.cases.readableError(error,this.lang.isArabic);
+      }
+    });
+  }
+
   copy(en: string, ar: string): string {
     return this.lang.pick(en, ar);
   }
