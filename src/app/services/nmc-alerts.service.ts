@@ -62,7 +62,7 @@ export class NmcAlertsService {
     if(!key){
       const entered=window.prompt(isSupervisor
         ?'Supervisor approval key'
-        :'Operator action key (POC access)');
+        :'Operator action key');
       if(!entered)return throwError(()=>new Error('ACTION_CANCELLED'));
       key=entered.trim();
       if(isSupervisor)this.supervisorKey=key;
