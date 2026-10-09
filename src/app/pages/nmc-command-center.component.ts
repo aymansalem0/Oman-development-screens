@@ -199,7 +199,10 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
   }
 
   ngOnInit(): void {
-    this.riskSubscription = this.riskEngine.config$.subscribe(() => this.loadFleet());
+    this.riskSubscription = this.riskEngine.config$.subscribe(() => {
+      this.loadFleet();  // Saved fleet results remain the original Oracle snapshot.
+      this.loadOperations(); // Browser policy changes immediately refresh locally eligible alerts.
+    });
     this.fleetPoller = setInterval(() => this.loadFleet(), 7000);
     this.loadOperations();
     this.alertPoller=setInterval(()=>this.loadOperations(),30000);
