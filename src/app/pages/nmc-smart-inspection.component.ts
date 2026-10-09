@@ -69,6 +69,9 @@ export class NmcSmartInspectionComponent implements OnInit {
       next:result=>{
         this.centralLoading=false;
         this.centralCase=result.case?.status==='RESOLVED'?null:result.case;
+        // Rebuild after loading the central source assessment so severity isn't
+        // inferred from the unrelated 87-point catalog fixture.
+        this.buildChecklist();
         if(this.centralCase?.inspectionOutcome){
           const o=this.centralCase.inspectionOutcome;
           this.existingOutcome={...o,riskReduction:0,inspector:'Smart Inspection',
@@ -246,7 +249,7 @@ export class NmcSmartInspectionComponent implements OnInit {
   }
 
   private buildChecklist(): void {
-    const level = this.riskEngine.levelForScore(this.vessel.risk);
+    const level = this.riskEngine.levelForScore(this.incomingRisk);
     const critical = level === 'Critical';
     const high = level === 'Critical' || level === 'High';
 
