@@ -76,7 +76,7 @@ export class NmcNavigationComponent implements OnInit, OnDestroy {
 
   get isAlertCenter():boolean{return this.currentPath==='/moei/nmc/alerts';}
   private refreshAlertCount():void{
-    const req=this.alertsService.overview().subscribe({
+    const req=this.alertsService.overviewForBrowserPolicy().subscribe({
       next:result=>{this.unreadAlerts=result.summary.unread;},
       error:()=>{this.unreadAlerts=0;}
     });
