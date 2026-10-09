@@ -14,7 +14,7 @@ export interface GuidanceCondition {
 export interface GuidancePolicy {
   id:string;title:string;titleAr:string;
   enabled:boolean;priority:'ROUTINE'|'WATCH'|'HIGH'|'PRIORITY_REVIEW';
-  ownerRole:string;condition:GuidanceCondition;
+  ownerRole:string;condition:GuidanceCondition;additionalConditions?:GuidanceCondition[];
 }
 export interface GuidanceRuleState {
   id:string;revision:number;status:'ACTIVE'|'INACTIVE'|'DRAFT';
@@ -27,6 +27,7 @@ export interface GuidanceResult {
   status:'ADVISORY_ONLY';condition:GuidanceCondition;observedValue:boolean|number|string;
   evidenceIds:string[];assessmentId:string;factor:string;agent:string|null;
   generatedAt:string;
+  matchedConditions?:Array<{condition:GuidanceCondition;observedValue:boolean|number|string}>;
 }
 export interface GuidanceEvaluation {
   status:'ok';imo:string;assessmentId:string;assessedAt:string;
