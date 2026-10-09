@@ -122,6 +122,14 @@ const server = createServer(async (req, res) => {
       return respond(res,data?200:404,data||{error:'UNKNOWN_VESSEL'});
     }catch{return respond(res,503,{error:'FLEET_HISTORY_UNAVAILABLE'});}
   }
+  // Read-only, published-only sidebar navigation: never return drafts or templates.
+  if(path==='/api/ai/dashboards/published'&&req.method==='GET'){
+    try{return respond(res,200,{status:'ok',dashboards:await dashboards.publishedMenu()});}
+    catch(error){
+      if(error instanceof DashboardError)return respond(res,error.status,{error:error.code});
+      return respond(res,503,{error:'DASHBOARD_STORE_UNAVAILABLE'});
+    }
+  }
   // Published dashboard sharing is read-only and intentionally excludes drafts.
   const publishedMatch = /^\/api\/ai\/dashboards\/published\/([a-zA-Z0-9_-]{1,100})$/.exec(path);
   if (publishedMatch) {
