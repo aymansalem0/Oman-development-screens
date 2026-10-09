@@ -14,6 +14,7 @@ import {
   NmcCaseStateService,
   NmcInspectionOutcome
 } from '../services/nmc-case-state.service';
+import {NmcCasesService,NmcCentralCase} from '../services/nmc-cases.service';
 
 type CheckStatus = 'Pending' | 'Pass' | 'Deficiency' | 'N/A';
 type Severity = 'Minor' | 'Major' | 'Critical';
