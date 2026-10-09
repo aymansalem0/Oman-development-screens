@@ -74,6 +74,10 @@ export class NmcSmartInspectionComponent implements OnInit {
           this.existingOutcome={...o,riskReduction:0,inspector:'Smart Inspection',
             result:o.result as NmcInspectionOutcome['result']};
           this.submitted=true;
+        } else {
+          // Central case is the source of truth; ignore old browser-only data.
+          this.existingOutcome=undefined;
+          this.submitted=false;
         }
       },
       error:error=>{
