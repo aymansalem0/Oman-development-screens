@@ -31,14 +31,10 @@ const defaultInput=[
  {id:'NMC-GUIDE-004',title:'Review elevated certificate exposure',titleAr:'مراجعة ارتفاع مخاطر الشهادات',priority:'WATCH',ownerRole:'CERTIFICATE_REVIEW_OFFICER',enabled:false,
   condition:{field:'certificateSeverity',operator:'GTE',value:75}}
 ];
-function validateRule(input,id){
-  if(!input||typeof input!=='object'||Array.isArray(input))throw new GuidanceError('GUIDANCE_RULE_INVALID');
-  const title=String(input.title||'').trim(),titleAr=String(input.titleAr||'').trim();
-  const c=input.condition||{},allowed=fields[c.field];
-  if(!title||title.length>140||!titleAr||titleAr.length>140||
-     !priorities.includes(input.priority)||typeof input.enabled!=='boolean'||
-     !/^[A-Z][A-Z0-9_]{2,55}$/.test(String(input.ownerRole||''))||
-     !allowed||!allowed.includes(c.operator))throw new GuidanceError('GUIDANCE_RULE_INVALID');
+function validatedCondition(c){
+  if(!c||typeof c!=='object'||Array.isArray(c))throw new GuidanceError('GUIDANCE_RULE_INVALID');
+  const allowed=fields[c.field];
+  if(!allowed||!allowed.includes(c.operator))throw new GuidanceError('GUIDANCE_RULE_INVALID');
   if(c.field.endsWith('Severity')||c.field==='riskScore'){
     if(!Number.isInteger(c.value)||c.value<0||c.value>100)throw new GuidanceError('GUIDANCE_RULE_INVALID');
   }else if(c.field==='riskLevel'){
@@ -46,8 +42,20 @@ function validateRule(input,id){
   }else if(c.field==='operationalPriority'){
     if(!['Routine','Enhanced Monitoring','Priority Review'].includes(c.value))throw new GuidanceError('GUIDANCE_RULE_INVALID');
   }else if(typeof c.value!=='boolean')throw new GuidanceError('GUIDANCE_RULE_INVALID');
+  return {field:c.field,operator:c.operator,value:c.value};
+}
+function validateRule(input,id){
+  if(!input||typeof input!=='object'||Array.isArray(input))throw new GuidanceError('GUIDANCE_RULE_INVALID');
+  const title=String(input.title||'').trim(),titleAr=String(input.titleAr||'').trim();
+  const extra=input.additionalConditions??[];
+  if(!title||title.length>140||!titleAr||titleAr.length>140||
+     !priorities.includes(input.priority)||typeof input.enabled!=='boolean'||
+     !/^[A-Z][A-Z0-9_]{2,55}$/.test(String(input.ownerRole||''))||
+     !Array.isArray(extra)||extra.length>5)
+     throw new GuidanceError('GUIDANCE_RULE_INVALID');
   return {id,title,titleAr,priority:input.priority,ownerRole:input.ownerRole,
-    enabled:input.enabled,condition:{field:c.field,operator:c.operator,value:c.value}};
+    enabled:input.enabled,condition:validatedCondition(input.condition),
+    additionalConditions:extra.map(validatedCondition)};
 }
 const starter=defaultInput.map(input=>({id:input.id,revision:1,status:'ACTIVE',
   published:validateRule(input,input.id),draft:null,
@@ -204,23 +212,34 @@ export class OperationalGuidance{
     for(const s of rules){
       const policy=s.published;
       if(!policy?.enabled)continue;
-      const {field,operator,value}=policy.condition;
-      const actual=facts[field],matches=operator==='EQUALS'?actual===value:
-        operator==='GTE'?typeof actual==='number'&&actual>=value:false;
-      if(!matches)continue;
-      const factor=field.endsWith('Severity')?field.replace('Severity',''):
+      const conditions=[policy.condition,...(policy.additionalConditions||[])];
+      const observed=conditions.map(condition=>{
+        const actual=facts[condition.field];
+        const matches=condition.operator==='EQUALS'?actual===condition.value:
+          condition.operator==='GTE'?typeof actual==='number'&&actual>=condition.value:false;
+        return {condition,observedValue:actual,matches};
+      });
+      if(!observed.every(x=>x.matches))continue;
+      const factorOf=field=>field.endsWith('Severity')?field.replace('Severity',''):
         field==='criticalOpenFinding'?'inspection':
         field==='dataConflictDetected'?'dataQuality':null;
-      const evidence=factor?byFactor[factor]?.evidenceIds||[]:
-        [...new Set(record.signals.flatMap(sig=>sig.evidenceIds||[]))];
-      const ids=field==='dataConflictDetected'
-        ?conflicts.flatMap(c=>[c.SOURCE_A_EVIDENCE_ID,c.SOURCE_B_EVIDENCE_ID]):evidence;
+      const ids=conditions.flatMap(condition=>{
+        const field=condition.field;
+        if(field==='dataConflictDetected')
+          return conflicts.flatMap(c=>[c.SOURCE_A_EVIDENCE_ID,c.SOURCE_B_EVIDENCE_ID]);
+        const factor=factorOf(field);
+        return factor?byFactor[factor]?.evidenceIds||[]:
+          [...new Set(record.signals.flatMap(sig=>sig.evidenceIds||[]))];
+      }).filter(id=>typeof id==='string'&&id.length>0);
       if(!ids.length)continue;
+      const factor=factorOf(policy.condition.field);
+      const actual=observed[0].observedValue;
       items.push({
         id:record.assessmentId+':'+s.id+':'+s.publishedRevision,
         ruleId:s.id,ruleRevision:s.publishedRevision,title:policy.title,titleAr:policy.titleAr,
         priority:policy.priority,ownerRole:policy.ownerRole,source:'PLATFORM_BUSINESS_RULE',
         status:'ADVISORY_ONLY',condition:policy.condition,observedValue:actual,
+        matchedConditions:observed.map(x=>({condition:x.condition,observedValue:x.observedValue})),
         evidenceIds:[...new Set(ids)].slice(0,60),factor:factor||'assessment',agent:factor?byFactor[factor]?.sourceAgent:null,
         assessmentId:record.assessmentId,generatedAt:new Date().toISOString()
       });
