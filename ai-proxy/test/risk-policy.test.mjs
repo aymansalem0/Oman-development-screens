@@ -60,10 +60,10 @@ test('publishing creates immutable versions, active pointer, stale revision reje
 
 test('Oracle risk policy binds avoid reserved SQL keywords that block central seed',()=>{
   const source=readFileSync(new URL('../risk-policy.mjs',import.meta.url),'utf8');
-  const oracleValues=source.match(/VALUES\\([^)]*\\)/g)||[];
+  const oracleValues=source.match(/VALUES\([^)]*\)/g)||[];
   assert.ok(oracleValues.length>=4);
   for(const sql of oracleValues){
-    assert.doesNotMatch(sql,/:(?:level|by|ref)\\b/i);
+    assert.doesNotMatch(sql,/:(?:level|by|ref)\b/i);
   }
   assert.match(source,/:b_published_by/);
   assert.match(source,/:b_risk_level/);
