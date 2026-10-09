@@ -23,7 +23,11 @@
           <h2>{{copy('My Dashboards','لوحات المعلومات')}}</h2>
           <p>{{copy('Design and adapt maritime decision-support views using operational data.','صمم وعدّل لوحات معلومات لدعم القرار من البيانات التشغيلية.')}}</p>
         </div>
-        <button class="db-primary" type="button" (click)="create()">＋ {{copy('Create Dashboard','إنشاء لوحة معلومات')}}</button>
+        <div class="db-heading-actions">
+          <button class="db-outline" type="button" (click)="createFromTemplate('management')">▥ {{copy('Management View','لوحة الإدارة')}}</button>
+          <button class="db-outline" type="button" (click)="createFromTemplate('executive')">◆ {{copy('Executive View','لوحة الإدارة العليا')}}</button>
+          <button class="db-primary" type="button" (click)="create()">＋ {{copy('Create Dashboard','إنشاء لوحة معلومات')}}</button>
+        </div>
       </div>
       <p class="db-message" *ngIf="saveMessage">{{saveMessage}}</p>
       <div class="db-manage-grid">
