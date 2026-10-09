@@ -171,10 +171,34 @@ export class NmcCaseWorkspaceComponent implements OnInit {
   }
 
   get mandatoryComplete(): boolean {
-    if(!this.centralCase?.tasks.length)return false;
-    return this.centralCase
-      ?this.centralCase.tasks.filter(t=>t.mandatory).every(t=>t.status==='Completed')
-      :this.tasks.filter(task=>task.mandatory).every(task=>task.status==='Completed');
+    if(!this.centralCase)return false;
+    // A reviewed plan with every action rejected / NO_ACTION may have zero
+    // tasks. That is a deliberate human decision, not an empty-case default.
+    if(!this.centralCase.tasks.length)return !!this.centralCase.actionPlan &&
+      this.centralCase.actionPlan.proposedActions.every(a=>a.decision!=='PENDING');
+    return this.centralCase.tasks.filter(t=>t.mandatory)
+      .every(t=>t.status==='Completed');
+  }
+
+  get pendingAiActionCount():number{
+    return this.centralCase?.actionPlan?.proposedActions.filter(
+      a=>a.decision==='PENDING').length||0;
+  }
+
+  get approvedAiTaskCount():number{
+    return this.centralCase?.tasks.filter(
+      t=>t.provenance==='AIRIA_A01_HUMAN_APPROVED').length||0;
+  }
+
+  get legacyTaskCount():number{
+    return this.centralCase?.tasks.filter(
+      t=>t.provenance!=='AIRIA_A01_HUMAN_APPROVED').length||0;
+  }
+
+  get readyForResolution():boolean{
+    return !!this.centralCase&&this.centralCase.status!=='RESOLVED'&&
+      this.mandatoryComplete&&this.pendingAiActionCount===0&&
+      !this.riskReassessmentPending;
   }
 
   get inspectionOutcome(): NmcInspectionOutcome | undefined {
@@ -201,6 +225,9 @@ export class NmcCaseWorkspaceComponent implements OnInit {
     if(!this.centralCase?.actionPlan)return this.copy('Generate the A01 action plan', 'إنشاء خطة الإجراءات من A01');
     if(this.centralCase.actionPlan.proposedActions.some(a=>a.decision==='PENDING'))
       return this.copy('Review proposed AI actions', 'مراجعة الإجراءات المقترحة من AI');
+    if(this.riskReassessmentPending)
+      return this.copy('Await verified post-inspection risk reassessment',
+        'في انتظار إعادة تقييم المخاطر بأدلة المعاينة');
     if (!next) return this.copy('Ready for case resolution', 'جاهزة لإغلاق الحالة');
     return next.title;
   }
@@ -216,8 +243,8 @@ export class NmcCaseWorkspaceComponent implements OnInit {
         this.centralBusy=false;
         if(res.case)this.applyCase(res.case);
         this.centralSuccess=this.copy(
-          'A01 action proposals are ready for human approval. No tasks were created yet.',
-          'اقتراحات A01 جاهزة للاعتماد البشري؛ لم يتم إنشاء أي مهام بعد.');
+          'A01 proposals are ready for review. No NEW A01-approved tasks have been created; existing case tasks remain unchanged.',
+          'اقتراحات A01 جاهزة للمراجعة. لم تُنشأ مهام جديدة من A01 بعد؛ المهام السابقة ما زالت محفوظة دون تغيير.');
       },
       error:error=>{
         this.centralBusy=false;
@@ -331,7 +358,7 @@ export class NmcCaseWorkspaceComponent implements OnInit {
     this.updateTask(task,'ESCALATE');
   }
   resolveCase():void{
-    if(!this.centralCase||!this.mandatoryComplete||this.centralBusy)return;
+    if(!this.centralCase||!this.readyForResolution||this.centralBusy)return;
     if(!this.resolutionNote.trim()){
       this.centralError=this.copy('Resolution reason is required.','يجب إدخال سبب الإغلاق.');
       return;
@@ -530,7 +557,9 @@ export class NmcCaseWorkspaceComponent implements OnInit {
       return {
         id:stored.id,title:stored.title||draft?.title||stored.id.replaceAll('-',' '),
         owner:stored.assignedRole,source:stored.provenance==='AIRIA_A01_HUMAN_APPROVED'
-          ?'Airia A01 · officer approved':draft?.source||'Operational follow-up',
+          ?this.copy('Airia A01 · officer approved','Airia A01 · معتمد من الموظف')
+          :this.copy('Historical task · created before this A01 action plan',
+              'مهمة سابقة · أُنشئت قبل خطة A01 الحالية'),
         priority:stored.title?priority:(draft?.priority||priority),
         dueLabel:stored.title?'Follow-up':draft?.dueLabel||'Follow-up',
         status:stored.status as TaskStatus,mandatory:stored.mandatory,
@@ -553,6 +582,12 @@ export class NmcCaseWorkspaceComponent implements OnInit {
         PENDING_VERIFICATION:'Pending Verification',RESOLVED:'Resolved'
       };
       this.caseStatus=states[this.centralCase.status]||'Open';
+      // Legacy cases may have been saved as PENDING_VERIFICATION before
+      // adding a new A01 plan. The visible stage must reflect outstanding AI
+      // review or unverified post-inspection risk, never imply readiness.
+      if(this.caseStatus==='Pending Verification'&&
+        (this.pendingAiActionCount>0||this.riskReassessmentPending))
+        this.caseStatus='In Progress';
     }
     this.stakeholders = [
       {
