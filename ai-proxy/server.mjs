@@ -290,7 +290,9 @@ const server = createServer(async (req, res) => {
       }
       return respond(res,405,{error:'METHOD_NOT_ALLOWED'});
     }catch(error){
-      if(error instanceof ActionPlanError||error instanceof NmcCaseError||error instanceof NmcAlertError||
+      if(error instanceof ActionPlanError)
+        return respond(res,error.status,{error:error.code,details:error.details});
+      if(error instanceof NmcCaseError||error instanceof NmcAlertError||
          error instanceof DashboardError)
         return respond(res,error.status,{error:error.code});
       if(Number.isInteger(error?.status)&&error.status>=400&&error.status<500)
