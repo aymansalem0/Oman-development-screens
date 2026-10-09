@@ -702,7 +702,16 @@ try{
       if(row.status==='COMPLETED'&&row.assessmentId)
         await riskPolicy.materializeCurrent(row);
     }
-  }catch(error){console.error('[nmc-risk-policy] RISK_POLICY_SCHEMA_NOT_READY');}
+  }catch(error){
+    // Surface only an Oracle error CODE for DBA diagnostics; do not log SQL,
+    // connection strings, credentials, policy config or saved assessment data.
+    const causeCode=String(error?.cause?.code||'UNKNOWN');
+    const safeCode=/^(?:ORA-[0-9]{5}|NJS-[0-9]{3,5}|DPI-[0-9]{4}|UNKNOWN)$/.test(causeCode)
+      ?causeCode:'UNKNOWN';
+    const stage=riskPolicy.ready?'PROJECTION_BACKFILL':'POLICY_INITIALIZATION';
+    console.error('[nmc-risk-policy] RISK_POLICY_SCHEMA_NOT_READY stage='+stage+
+      ' reason='+String(error?.code||'UNKNOWN')+' oracleCode='+safeCode);
+  }
   try{await guidance.initialize();}
   catch(error){
     // Guidance requires migration 006, but an optional UI module must never
