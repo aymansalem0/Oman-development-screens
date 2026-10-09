@@ -361,7 +361,9 @@ export class NmcCaseWorkspaceComponent implements OnInit {
     const critical = level === 'Critical';
     const high = level === 'Critical' || level === 'High';
     const watch = level !== 'Normal';
-    const conflict = this.riskEngine.evaluate(this.vessel).baseScore >= 80;
+    // Synthetic catalog >=80 does not prove a certificate conflict in a saved-AI case.
+    // A future A02 evidence-backed case plan will carry authoritative conflict findings.
+    const conflict = this.centralCase ? false : this.riskEngine.evaluate(this.vessel).baseScore >= 80;
 
     const tasks: CaseTask[] = [];
 
