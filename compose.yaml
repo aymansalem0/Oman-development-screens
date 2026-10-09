@@ -29,6 +29,7 @@ services:
       NMC_ALERT_SCAN_SECONDS: ${NMC_ALERT_SCAN_SECONDS:-30}
       NMC_ALERT_ESCALATE_MINUTES: ${NMC_ALERT_ESCALATE_MINUTES:-15}
       NMC_ALERT_STORE_PATH: /data/nmc-alert-workspace.json
+      NMC_CASE_STORE_PATH: /data/nmc-case-workspace.json
       # 'oracle' requires compose.oracle.yaml, NMC_AI user and V1 migration.
       NMC_DB_MODE: ${NMC_DB_MODE:-json}
       NMC_DB_CONNECT_STRING: ${NMC_DB_CONNECT_STRING:-oracle-free-23:1521/freepdb1}

@@ -1,7 +1,7 @@
 import {CommonModule} from '@angular/common';
 import {Component,OnDestroy,OnInit} from '@angular/core';
 import {FormsModule} from '@angular/forms';
-import {RouterLink} from '@angular/router';
+import {Router,RouterLink} from '@angular/router';
 import {Subscription} from 'rxjs';
 import {NmcNavigationComponent} from '../components/nmc-navigation.component';
 import {LanguageService} from '../services/language.service';
@@ -9,6 +9,7 @@ import {
   NmcAlertsService,NmcOperationalAlert,NmcAlertAudit,
   NmcAlertsOverview,AlertAction,AlertSeverity,AlertStatus
 } from '../services/nmc-alerts.service';
+import {NmcCasesService,NmcCentralCase} from '../services/nmc-cases.service';
 
 type StatusFilter='ACTIVE'|'ALL'|'OPEN'|'ESCALATED'|'RESOLVED';
 @Component({
@@ -30,10 +31,13 @@ export class NmcAlertCenterComponent implements OnInit,OnDestroy{
   audit:NmcAlertAudit[]=[];
   auditLoading=false;
   notes:Record<string,string>={};
+  linkedCases:NmcCentralCase[]=[];
+  creatingCase='';
   private readonly subs=new Subscription();
   private poller?:ReturnType<typeof setInterval>;
 
-  constructor(public lang:LanguageService,private readonly alerts:NmcAlertsService){}
+  constructor(public lang:LanguageService,private readonly alerts:NmcAlertsService,
+    private readonly cases:NmcCasesService,private readonly router:Router){}
   ngOnInit():void{
     this.refresh();
     this.poller=setInterval(()=>{if(!this.busy)this.refresh(false);},30000);
@@ -49,12 +53,48 @@ export class NmcAlertCenterComponent implements OnInit,OnDestroy{
       next:data=>{
         this.overview=data;
         this.loading=false;
+        this.loadLinkedCases();
         this.error='';
         if(this.selectedId)this.loadHistory(this.selectedId);
       },
       error:err=>{
         this.error=this.alerts.readableError(err,this.lang.isArabic);
         this.loading=false;
+      }
+    }));
+  }
+  private loadLinkedCases():void{
+    this.subs.add(this.cases.list().subscribe({
+      next:result=>{this.linkedCases=result.cases||[];},
+      error:()=>{this.linkedCases=[];}
+    }));
+  }
+  linkedCase(alert:NmcOperationalAlert):NmcCentralCase|undefined{
+    return this.linkedCases.find(c=>c.alertIds.includes(alert.id)&&c.status!=='RESOLVED')
+      ||this.linkedCases.find(c=>c.imo===alert.imo&&c.status!=='RESOLVED');
+  }
+  createCase(alert:NmcOperationalAlert):void{
+    if(this.creatingCase||alert.status==='OPEN'||alert.status==='RESOLVED')return;
+    const linked=this.linkedCase(alert);
+    if(linked){
+      void this.router.navigate(['/moei/nmc/vessel',linked.imo,'case']);
+      return;
+    }
+    if(!window.confirm(this.copy(
+      'Open a central maritime case linked to this acknowledged alert?',
+      'فتح حالة بحرية مركزية مرتبطة بهذا التنبيه المستلم؟'
+    )))return;
+    this.creatingCase=alert.id;
+    this.subs.add(this.cases.createFromAlert(alert.id).subscribe({
+      next:result=>{
+        this.creatingCase='';
+        if(result.case)void this.router.navigate(['/moei/nmc/vessel',result.case.imo,'case']);
+        else this.error=this.copy('Case was not returned by the server.','لم يُرجع الخادم بيانات الحالة.');
+      },
+      error:error=>{
+        this.creatingCase='';
+        this.error=this.cases.readableError(error,this.lang.isArabic);
+        if(error?.status===409)this.refresh(false);
       }
     }));
   }

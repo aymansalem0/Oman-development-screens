@@ -14,6 +14,7 @@ import {
   NmcCaseStateService,
   NmcInspectionOutcome
 } from '../services/nmc-case-state.service';
+import {NmcCasesService,NmcCentralCase,NmcCentralCaseAudit} from '../services/nmc-cases.service';
 
 type CaseStatus = 'Open' | 'In Progress' | 'Pending Verification' | 'Resolved';
 type TaskStatus = 'Pending' | 'Assigned' | 'In Progress' | 'Completed' | 'Escalated';
@@ -60,6 +61,11 @@ export class NmcCaseWorkspaceComponent implements OnInit {
   caseStatus: CaseStatus = 'Open';
   selectedTask?: CaseTask;
   resolutionNote = '';
+  centralCase:NmcCentralCase|null=null;
+  centralLoading=true;
+  centralBusy=false;
+  centralError='';
+  centralSuccess='';
   tasks: CaseTask[] = [];
   timeline: CaseTimelineItem[] = [];
   stakeholders: Stakeholder[] = [];
@@ -69,14 +75,53 @@ export class NmcCaseWorkspaceComponent implements OnInit {
     private router: Router,
     public lang: LanguageService,
     private caseState: NmcCaseStateService,
-    private riskEngine: NmcRiskEngineService
+    private riskEngine: NmcRiskEngineService,
+    private readonly cases: NmcCasesService
   ) {}
 
   ngOnInit(): void {
     const imo = this.route.snapshot.paramMap.get('imo') || NMC_OPERATIONAL_VESSELS[0].imo;
     const profile = getOperationalVesselByImo(imo) || NMC_OPERATIONAL_VESSELS[0];
     this.vessel = this.riskEngine.applyToVessel(profile);
-    this.buildCase();
+    this.loadCentralCase();
+  }
+
+  loadCentralCase():void {
+    this.centralLoading=true;
+    this.cases.byImo(this.vessel.imo).subscribe({
+      next:response=>{
+        this.centralCase=response.case;
+        this.centralLoading=false;
+        this.centralError='';
+        this.buildCase();
+        if(this.centralCase)this.loadCentralHistory();
+      },
+      error:error=>{
+        this.centralLoading=false;
+        this.centralError=this.cases.readableError(error,this.lang.isArabic);
+      }
+    });
+  }
+
+  private loadCentralHistory():void{
+    if(!this.centralCase)return;
+    this.cases.history(this.centralCase.id).subscribe({
+      next:response=>{
+        this.timeline=response.history.map(event=>({
+          time:new Date(event.at).toLocaleString(),
+          type:event.action==='RESOLVED'?'Resolution':
+            event.action.includes('ESCALATE')?'Escalation':
+            event.action==='DECISION_RECORDED'?'Decision':
+            event.action==='INSPECTION_RECORDED'?'Inspection':'Task',
+          title:event.action.replaceAll('_',' '),
+          detail:event.note||this.copy('Action recorded','تم تسجيل الإجراء'),
+          actor:event.role
+        }));
+      },
+      error:()=>{
+        this.centralError=this.copy('Case history is unavailable.','سجل أنشطة الحالة غير متاح.');
+      }
+    });
   }
 
   copy(en: string, ar: string): string {
@@ -89,12 +134,11 @@ export class NmcCaseWorkspaceComponent implements OnInit {
   }
 
   get caseId(): string {
-    const tail = this.vessel.imo.slice(-4);
-    return `NMC-CASE-2026-${tail}`;
+    return this.centralCase?'NMC-'+this.centralCase.id.slice(0,8).toUpperCase():this.copy('Not opened','لم تُفتح');
   }
 
   get riskLevelLabel(): string {
-    const level = this.riskEngine.levelForScore(this.currentRisk);
+    const level = this.centralCase?.sourceLevel||this.riskEngine.levelForScore(this.currentRisk);
     const labels: Record<string,string> = {
       Critical: this.copy('Critical', 'حرج'),
       High: this.copy('High', 'مرتفع'),
@@ -105,7 +149,7 @@ export class NmcCaseWorkspaceComponent implements OnInit {
   }
 
   get riskClass(): string {
-    return this.riskEngine.levelForScore(this.currentRisk).toLowerCase();
+    return (this.centralCase?.sourceLevel||this.riskEngine.levelForScore(this.currentRisk)).toLowerCase();
   }
 
   get completedTasks(): number {
@@ -125,14 +169,22 @@ export class NmcCaseWorkspaceComponent implements OnInit {
   }
 
   get mandatoryComplete(): boolean {
-    return this.tasks.filter(task => task.mandatory).every(task => task.status === 'Completed');
+    return this.centralCase
+      ?this.centralCase.tasks.filter(t=>t.mandatory).every(t=>t.status==='Completed')
+      :this.tasks.filter(task=>task.mandatory).every(task=>task.status==='Completed');
   }
 
   get inspectionOutcome(): NmcInspectionOutcome | undefined {
+    if(this.centralCase){
+      const item=this.centralCase.inspectionOutcome;
+      return item?{...item,riskReduction:0,inspector:'Smart Inspection',
+        result:item.result as NmcInspectionOutcome['result']}:undefined;
+    }
     return this.caseState.getInspectionOutcome(this.vessel.imo);
   }
 
   get currentRisk(): number {
+    if(this.centralCase)return this.centralCase.sourceScore;
     let score = this.vessel.risk;
     if (this.isTaskCompleted('verify-certificate')) score -= this.vessel.risk >= 80 ? 12 : 6;
 
@@ -147,7 +199,7 @@ export class NmcCaseWorkspaceComponent implements OnInit {
   }
 
   get riskDelta(): number {
-    return this.currentRisk - this.vessel.risk;
+    return this.centralCase?0:this.currentRisk - this.vessel.risk;
   }
 
   get nextAction(): string {
@@ -164,84 +216,84 @@ export class NmcCaseWorkspaceComponent implements OnInit {
     this.selectedTask = undefined;
   }
 
-  startTask(task: CaseTask): void {
-    if (task.id === 'priority-inspection') {
-      this.openSmartInspection();
-      return;
-    }
-
-    if (task.status === 'Pending' || task.status === 'Assigned') {
-      task.status = 'In Progress';
-      this.caseStatus = 'In Progress';
-      this.caseState.setTaskStatus(this.vessel.imo, task.id, task.status);
-      this.addTimeline('Task',
-        this.copy('Task started', 'بدء تنفيذ المهمة'),
-        `${task.title} · ${task.owner}`,
-        task.owner
-      );
-      this.persistTimelineEvent('Task', task, this.copy('Task started', 'بدء تنفيذ المهمة'));
-    }
+  private applyCase(value:NmcCentralCase):void{
+    this.centralCase=value;
+    this.buildCase(true);
+    this.selectedTask=this.selectedTask?
+      this.tasks.find(item=>item.id===this.selectedTask?.id):undefined;
+    this.loadCentralHistory();
   }
-
-  completeTask(task: CaseTask): void {
-    if (task.status === 'Completed') return;
-
-    if (task.id === 'priority-inspection' && !this.inspectionOutcome) {
-      this.openSmartInspection();
-      return;
-    }
-
-    task.status = 'Completed';
-    this.caseState.setTaskStatus(this.vessel.imo, task.id, task.status);
-    this.caseStatus = this.mandatoryComplete ? 'Pending Verification' : 'In Progress';
-    this.addTimeline('Task',
-      this.copy('Task completed', 'تم استكمال المهمة'),
-      `${task.title} · ${this.copy('risk recalculated to', 'أعيد احتساب المخاطر إلى')} ${this.currentRisk}`,
-      task.owner
-    );
-    this.persistTimelineEvent('Task', task, this.copy('Task completed', 'تم استكمال المهمة'));
-  }
-
-  escalateTask(task: CaseTask): void {
-    task.status = 'Escalated';
-    this.caseState.setTaskStatus(this.vessel.imo, task.id, task.status);
-    this.caseStatus = 'In Progress';
-    this.addTimeline('Escalation',
-      this.copy('Task escalated', 'تم تصعيد المهمة'),
-      `${task.title} · ${this.copy('supervisor attention required', 'يتطلب تدخل المشرف')}`,
-      this.copy('NMC Duty Officer', 'ضابط مناوبة المركز البحري')
-    );
-    this.persistTimelineEvent('Escalation', task, this.copy('Task escalated', 'تم تصعيد المهمة'));
-  }
-
-  resolveCase(): void {
-    if (!this.mandatoryComplete) return;
-    this.caseStatus = 'Resolved';
-    this.addTimeline('Resolution',
-      this.copy('Case resolved', 'تم إغلاق الحالة'),
-      this.resolutionNote || this.copy(
-        'Mandatory actions completed, evidence verified and vessel risk reduced to an acceptable monitored level.',
-        'تم استكمال الإجراءات الإلزامية والتحقق من الأدلة وخفض مخاطر السفينة إلى مستوى مقبول للمراقبة.'
-      ),
-      this.copy('NMC Supervisor', 'مشرف المركز البحري الوطني')
-    );
-
-    this.caseState.appendTimeline(this.vessel.imo, {
-      id: `resolution-${this.vessel.imo}`,
-      time: this.copy('Now', 'الآن'),
-      type: 'Resolution',
-      title: this.copy('Case resolved', 'تم إغلاق الحالة'),
-      detail: this.resolutionNote || this.copy(
-        'Mandatory actions completed and the case was resolved.',
-        'تم استكمال الإجراءات الإلزامية وإغلاق الحالة.'
-      ),
-      actor: this.copy('NMC Supervisor', 'مشرف المركز البحري الوطني')
+  private updateTask(task:CaseTask,action:'START'|'COMPLETE'|'ESCALATE',openInspection=false):void{
+    if(!this.centralCase||this.centralBusy||this.centralCase.status==='RESOLVED')return;
+    this.centralBusy=true;this.centralError='';this.centralSuccess='';
+    this.cases.task(this.centralCase,task.id,action).subscribe({
+      next:response=>{
+        this.centralBusy=false;
+        if(response.case)this.applyCase(response.case);
+        this.centralSuccess=this.copy('Action saved to case history.','تم حفظ الإجراء في سجل الحالة.');
+        if(openInspection)this.navigateInspection();
+      },
+      error:error=>{
+        this.centralBusy=false;
+        this.centralError=this.cases.readableError(error,this.lang.isArabic);
+        if(error?.status===409)this.loadCentralCase();
+      }
     });
   }
 
-  openSmartInspection(): void {
-    this.caseState.setTaskStatus(this.vessel.imo, 'priority-inspection', 'In Progress');
-    this.router.navigate(['/moei/nmc/vessel', this.vessel.imo, 'smart-inspection']);
+  startTask(task:CaseTask):void{
+    if(task.id==='priority-inspection'){this.openSmartInspection();return;}
+    this.updateTask(task,'START');
+  }
+  completeTask(task:CaseTask):void{
+    if(task.id==='priority-inspection'){
+      this.centralError=this.copy(
+        'Inspection completion must be recorded from Smart Inspection.',
+        'يجب تسجيل نتيجة المعاينة داخل المعاينة الذكية.');
+      return;
+    }
+    this.updateTask(task,'COMPLETE');
+  }
+  escalateTask(task:CaseTask):void{
+    if(!window.confirm(this.copy(
+      'Escalate this task to the NMC Supervisor?',
+      'هل تريد تصعيد هذه المهمة إلى مشرف المركز البحري؟')))return;
+    this.updateTask(task,'ESCALATE');
+  }
+  resolveCase():void{
+    if(!this.centralCase||!this.mandatoryComplete||this.centralBusy)return;
+    if(!this.resolutionNote.trim()){
+      this.centralError=this.copy('Resolution reason is required.','يجب إدخال سبب الإغلاق.');
+      return;
+    }
+    if(!window.confirm(this.copy(
+      'Submit this maritime case for supervisor-approved resolution?',
+      'هل تريد اعتماد إغلاق هذه الحالة بواسطة المشرف؟')))return;
+    this.centralBusy=true;this.centralError='';
+    this.cases.resolve(this.centralCase,this.resolutionNote.trim()).subscribe({
+      next:response=>{
+        this.centralBusy=false;
+        if(response.case)this.applyCase(response.case);
+        this.centralSuccess=this.copy('Case resolved and audited.','تم إغلاق الحالة وتسجيل قرار الاعتماد.');
+      },
+      error:error=>{
+        this.centralBusy=false;
+        this.centralError=this.cases.readableError(error,this.lang.isArabic);
+        if(error?.status===409)this.loadCentralCase();
+      }
+    });
+  }
+  private navigateInspection():void{
+    void this.router.navigate(['/moei/nmc/vessel',this.vessel.imo,'smart-inspection']);
+  }
+  openSmartInspection():void{
+    if(!this.centralCase||this.centralBusy)return;
+    const inspection=this.centralCase.tasks.find(task=>task.id==='priority-inspection');
+    if(inspection?.status==='Assigned'){
+      this.updateTask(this.tasks.find(task=>task.id==='priority-inspection')!, 'START',true);
+      return;
+    }
+    this.navigateInspection();
   }
 
   statusLabel(status: CaseStatus | TaskStatus): string {
@@ -303,7 +355,9 @@ export class NmcCaseWorkspaceComponent implements OnInit {
   }
 
   private buildCase(preserveState = false): void {
-    const persistedStates = this.caseState.getTaskStates(this.vessel.imo);
+    const persistedStates = this.centralCase
+      ?Object.fromEntries(this.centralCase.tasks.map(t=>[t.id,t.status]))
+      :this.caseState.getTaskStates(this.vessel.imo);
     const previous = preserveState
       ? new Map(this.tasks.map(task => [task.id, task.status]))
       : new Map<string, TaskStatus>();
@@ -312,7 +366,7 @@ export class NmcCaseWorkspaceComponent implements OnInit {
       previous.set(id, status as TaskStatus);
     });
 
-    const level = this.riskEngine.levelForScore(this.vessel.risk);
+    const level = this.centralCase?.sourceLevel||this.riskEngine.levelForScore(this.vessel.risk);
     const critical = level === 'Critical';
     const high = level === 'Critical' || level === 'High';
     const watch = level !== 'Normal';
@@ -320,7 +374,7 @@ export class NmcCaseWorkspaceComponent implements OnInit {
 
     const tasks: CaseTask[] = [];
 
-    if (this.vessel.risk >= 55) {
+    if ((this.centralCase?.sourceScore??this.vessel.risk) >= 55) {
       tasks.push({
         id: 'verify-certificate',
         title: this.copy('Verify certificate status', 'التحقق من حالة الشهادة'),
@@ -399,7 +453,20 @@ export class NmcCaseWorkspaceComponent implements OnInit {
       });
     }
 
-    this.tasks = tasks;
+    this.tasks = this.centralCase ? this.centralCase.tasks.map(stored=>{
+      const draft=tasks.find(item=>item.id===stored.id);
+      return draft?{
+        ...draft,status:stored.status as TaskStatus,
+        mandatory:stored.mandatory,evidence:stored.evidenceIds,
+        owner:stored.assignedRole
+      }:{
+        id:stored.id,title:stored.id.replaceAll('-',' '),
+        owner:stored.assignedRole,source:'Operational follow-up',
+        priority:'High' as const,dueLabel:'Follow-up',
+        status:stored.status as TaskStatus,mandatory:stored.mandatory,
+        evidence:stored.evidenceIds,note:''
+      };
+    }):tasks;
 
     if (this.mandatoryComplete) {
       this.caseStatus = 'Pending Verification';
@@ -409,6 +476,13 @@ export class NmcCaseWorkspaceComponent implements OnInit {
       this.caseStatus = 'Open';
     }
 
+    if(this.centralCase){
+      const states:Record<string,CaseStatus>={
+        OPEN:'Open',IN_PROGRESS:'In Progress',
+        PENDING_VERIFICATION:'Pending Verification',RESOLVED:'Resolved'
+      };
+      this.caseStatus=states[this.centralCase.status]||'Open';
+    }
     this.stakeholders = [
       {
         role: this.copy('Case Owner', 'مالك الحالة'),

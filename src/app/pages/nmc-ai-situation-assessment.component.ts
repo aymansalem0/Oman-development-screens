@@ -15,6 +15,7 @@ import { NmcLiveAiPanelComponent, NmcLiveRiskResult } from './nmc-live-ai-panel.
 import { NmcRiskEngineService } from '../services/nmc-risk-engine.service';
 import { NmcVesselEvidenceService } from '../services/nmc-vessel-evidence.service';
 import { NmcFleetAiService, FleetAiAssessment } from '../services/nmc-fleet-ai.service';
+import {NmcCasesService,NmcCentralCase} from '../services/nmc-cases.service';
 
 type DecisionStatus = 'Pending' | 'Accepted' | 'Modified' | 'Rejected';
 type EvidenceType = 'Movement' | 'Inspection' | 'Certificate' | 'Data Quality' | 'History';
@@ -62,6 +63,10 @@ export class NmcAiSituationAssessmentComponent implements OnInit {
   /** Tracks any attempted live run, including partial/unsupported agent responses. */
   liveAttempted = false;
   showSampleAssessment = false;
+  centralCase:NmcCentralCase|null=null;
+  centralBusy=false;
+  centralError='';
+  centralMessage='';
 
   readonly generatedAt = '07 Oct 2026 · 22:43:06';
   readonly modelLabel = 'Maritime Situation Intelligence';
@@ -71,7 +76,8 @@ export class NmcAiSituationAssessmentComponent implements OnInit {
     public lang: LanguageService,
     private riskEngine: NmcRiskEngineService,
     private readonly vesselEvidence: NmcVesselEvidenceService,
-    private readonly fleetAi: NmcFleetAiService
+    private readonly fleetAi: NmcFleetAiService,
+    private readonly cases: NmcCasesService
   ) {}
 
   ngOnInit(): void {
@@ -79,6 +85,7 @@ export class NmcAiSituationAssessmentComponent implements OnInit {
     const profile = getOperationalVesselByImo(imo) || NMC_OPERATIONAL_VESSELS[0];
     this.vessel = this.riskEngine.applyToVessel(profile);
     this.rebuildAssessment();
+    this.loadCentralCase();
     this.fleetAi.assessment(profile.imo).subscribe({
       next:row=>{
         if(row.status==='COMPLETED' && Number.isFinite(row.score) &&
@@ -88,6 +95,53 @@ export class NmcAiSituationAssessmentComponent implements OnInit {
         }
       },
       error:()=>{this.fleetAssessment=null;}
+    });
+  }
+
+  private loadCentralCase():void {
+    this.cases.byImo(this.vessel.imo).subscribe({
+      next:response=>{
+        this.centralCase=response.case?.status==='RESOLVED'?null:response.case;
+        if(this.centralCase){
+          for(const item of this.recommendations){
+            const entry=this.centralCase.decisions.find(d=>d.recommendationId===item.id);
+            if(entry){
+              item.decision=entry.decision==='ACCEPT'?'Accepted':
+                entry.decision==='MODIFY'?'Modified':'Rejected';
+              item.officerNote=entry.note;
+            }
+          }
+        }
+      },
+      error:err=>{this.centralError=this.cases.readableError(err,this.lang.isArabic);}
+    });
+  }
+
+  saveDecision(item:AiRecommendation):void {
+    if(!this.centralCase||this.centralBusy||item.decision==='Pending')return;
+    if(item.decision!=='Accepted'&&!item.officerNote.trim()){
+      this.centralError=this.copy('Enter an explanation for this decision.',
+        'أدخل سبب هذا القرار.');
+      return;
+    }
+    const decision=item.decision==='Accepted'?'ACCEPT':
+      item.decision==='Modified'?'MODIFY':'REJECT';
+    this.centralBusy=true;this.centralError='';this.centralMessage='';
+    const current=this.centralCase;
+    this.cases.decision(current,item.id,decision,item.officerNote,
+      this.evidenceFor(item).map(e=>e.record)).subscribe({
+      next:response=>{
+        this.centralBusy=false;
+        this.centralCase=response.case;
+        this.centralMessage=this.copy(
+          'Decision saved to the maritime case audit trail.',
+          'تم حفظ القرار في سجل الحالة البحرية.');
+      },
+      error:err=>{
+        this.centralBusy=false;
+        this.centralError=this.cases.readableError(err,this.lang.isArabic);
+        if(err?.status===409)this.loadCentralCase();
+      }
     });
   }
 

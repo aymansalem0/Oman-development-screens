@@ -118,9 +118,15 @@
           <a [routerLink]="['/moei/nmc/vessel',alert.imo]" class="link secondary">
             {{copy('Vessel 360','الملف الشامل للسفينة')}} ↗
           </a>
-          <a [routerLink]="['/moei/nmc/vessel',alert.imo,'case']" class="link secondary">
-            {{copy('Open Case Workspace','فتح إدارة الحالة')}} ↗
+          <a *ngIf="linkedCase(alert)" [routerLink]="['/moei/nmc/vessel',alert.imo,'case']"
+             class="link secondary">
+            {{copy('Open Linked Case','فتح الحالة المرتبطة')}} ↗
           </a>
+          <button *ngIf="!linkedCase(alert)&&alert.status!=='RESOLVED'" type="button"
+                  class="link primary" [disabled]="alert.status==='OPEN'||!!creatingCase"
+                  (click)="createCase(alert)">
+            + {{copy('Create Maritime Case','إنشاء حالة بحرية')}}
+          </button>
           <button type="button" class="secondary" (click)="toggleDetails(alert)">
             {{selectedId===alert.id?copy('Hide History','إخفاء السجل'):copy('Activity History','سجل الأنشطة')}}
           </button>

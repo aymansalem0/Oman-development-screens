@@ -14,6 +14,7 @@ import {
   NmcCaseStateService,
   NmcInspectionOutcome
 } from '../services/nmc-case-state.service';
+import {NmcCasesService,NmcCentralCase} from '../services/nmc-cases.service';
 
 type CheckStatus = 'Pending' | 'Pass' | 'Deficiency' | 'N/A';
 type Severity = 'Minor' | 'Major' | 'Critical';
@@ -44,13 +45,18 @@ export class NmcSmartInspectionComponent implements OnInit {
   generalNote = '';
   submitted = false;
   existingOutcome?: NmcInspectionOutcome;
+  centralCase:NmcCentralCase|null=null;
+  centralLoading=true;
+  centralBusy=false;
+  centralError='';
 
   constructor(
     private route: ActivatedRoute,
     private router: Router,
     public lang: LanguageService,
     private caseState: NmcCaseStateService,
-    private riskEngine: NmcRiskEngineService
+    private riskEngine: NmcRiskEngineService,
+    private readonly cases:NmcCasesService
   ) {}
 
   ngOnInit(): void {
@@ -59,6 +65,26 @@ export class NmcSmartInspectionComponent implements OnInit {
     this.vessel = this.riskEngine.applyToVessel(profile);
     this.existingOutcome = this.caseState.getInspectionOutcome(this.vessel.imo);
     this.buildChecklist();
+    this.cases.byImo(this.vessel.imo).subscribe({
+      next:result=>{
+        this.centralLoading=false;
+        this.centralCase=result.case?.status==='RESOLVED'?null:result.case;
+        if(this.centralCase?.inspectionOutcome){
+          const o=this.centralCase.inspectionOutcome;
+          this.existingOutcome={...o,riskReduction:0,inspector:'Smart Inspection',
+            result:o.result as NmcInspectionOutcome['result']};
+          this.submitted=true;
+        } else {
+          // Central case is the source of truth; ignore old browser-only data.
+          this.existingOutcome=undefined;
+          this.submitted=false;
+        }
+      },
+      error:error=>{
+        this.centralLoading=false;
+        this.centralError=this.cases.readableError(error,this.lang.isArabic);
+      }
+    });
   }
 
   copy(en: string, ar: string): string {
@@ -82,7 +108,7 @@ export class NmcSmartInspectionComponent implements OnInit {
   }
 
   get caseId(): string {
-    return `NMC-CASE-2026-${this.vessel.imo.slice(-4)}`;
+    return this.centralCase?'NMC-'+this.centralCase.id.slice(0,8).toUpperCase():'—';
   }
 
   get inspectionId(): string {
@@ -184,9 +210,32 @@ export class NmcSmartInspectionComponent implements OnInit {
       inspector: this.inspectorName.trim()
     };
 
-    this.caseState.setInspectionOutcome(this.vessel.imo, outcome);
-    this.existingOutcome = outcome;
-    this.submitted = true;
+    if(this.centralLoading||this.centralBusy||this.centralError)return;
+    if(!this.centralCase){
+      this.centralError=this.copy(
+        'Open an acknowledged alert as a central maritime case before submitting this inspection.',
+        'افتح حالة مركزية من تنبيه مستلم قبل تسجيل نتيجة المعاينة.');
+      return;
+    }
+    this.centralBusy=true;
+    this.cases.inspection(this.centralCase,{
+      inspectionId:outcome.inspectionId,result:outcome.result,
+      findingsCount:outcome.findingsCount,criticalFindings:outcome.criticalFindings,
+      summary:outcome.summary
+    }).subscribe({
+      next:response=>{
+        this.centralBusy=false;
+        this.centralCase=response.case;
+        // Existing preview consumers remain compatible; Oracle is authoritative.
+        this.caseState.setInspectionOutcome(this.vessel.imo,outcome);
+        this.existingOutcome=outcome;
+        this.submitted=true;
+      },
+      error:error=>{
+        this.centralBusy=false;
+        this.centralError=this.cases.readableError(error,this.lang.isArabic);
+      }
+    });
   }
 
   returnToCase(): void {

@@ -505,3 +505,14 @@ a, button, textarea { font:inherit; }
 .task-actions .inspection-action {
   grid-row: span 2;
 }
+
+
+/* Central case status and empty state — only real, explicitly opened cases. */
+.central-case-banner{margin-bottom:14px;padding:12px 16px;background:#edf7fb;color:#225e75;border:1px solid #cae4ee;border-radius:11px;font-size:12px}
+.central-case-banner.error{background:#fff0f0;color:#ad3d48;border-color:#f3c6ca}
+.central-case-banner.success{background:#eaf8f1;color:#0a7b5f;border-color:#a8e3cf}
+.central-case-empty{background:#fff;border:1px solid #dce7ee;border-radius:16px;padding:50px 28px;text-align:center;box-shadow:0 10px 35px #2f4f600e}
+.central-case-empty>span{display:inline-flex;width:60px;height:60px;align-items:center;justify-content:center;border-radius:16px;background:#e9f7f4;color:#168273;font-size:29px}
+.central-case-empty h2{font-size:20px;color:#1d4859;margin:17px 0 12px}
+.central-case-empty p{font-size:12px;color:#6e8996;line-height:1.8;max-width:610px;margin:0 auto 22px}
+.central-case-empty a{display:inline-flex;background:#0d8c82;color:#fff;font-weight:750;padding:11px 17px;border-radius:9px;text-decoration:none;font-size:12px}

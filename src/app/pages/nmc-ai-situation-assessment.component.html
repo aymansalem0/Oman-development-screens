@@ -217,6 +217,13 @@
         </div>
       </div>
 
+      <div class="case-decision-alert" *ngIf="centralError" role="alert">{{centralError}}</div>
+      <div class="case-decision-alert success" *ngIf="centralMessage" role="status">{{centralMessage}}</div>
+      <div class="case-decision-alert" *ngIf="!centralCase">
+        {{copy('Decisions can be recorded when an acknowledged alert has been opened as a maritime case.',
+                'يمكن تسجيل القرارات عند فتح حالة بحرية من تنبيه تم استلامه.')}}
+        <a routerLink="/moei/nmc/alerts">{{copy('View Alerts','عرض التنبيهات')}}</a>
+      </div>
       <div class="recommendation-list">
         <article class="recommendation-card" *ngFor="let item of recommendations" [class.decided]="item.decision !== 'Pending'">
           <div class="rec-priority" [attr.data-priority]="item.priority.toLowerCase()">
@@ -270,6 +277,11 @@
               </button>
             </div>
 
+            <button *ngIf="centralCase && item.decision!=='Pending'" type="button"
+                    (click)="saveDecision(item)" [disabled]="centralBusy"
+                    class="case-decision-save">
+              ✓ {{copy('Save Decision to Case','حفظ القرار في الحالة')}}
+            </button>
             <div class="officer-note" *ngIf="item.decision === 'Modified' || item.decision === 'Rejected'">
               <label>
                 {{ item.decision === 'Rejected'

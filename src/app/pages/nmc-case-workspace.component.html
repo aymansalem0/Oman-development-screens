@@ -23,9 +23,24 @@
   <app-nmc-navigation></app-nmc-navigation>
 
   <main class="case-main">
+    <div *ngIf="centralLoading" class="central-case-banner">
+      {{copy('Loading centrally recorded maritime case…','جاري تحميل الحالة البحرية المحفوظة مركزيًا…')}}
+    </div>
+    <div *ngIf="centralError" class="central-case-banner error" role="alert">{{centralError}}</div>
+    <div *ngIf="centralSuccess" class="central-case-banner success" role="status">{{centralSuccess}}</div>
+    <section *ngIf="!centralCase&&!centralLoading" class="central-case-empty">
+      <span>▣</span>
+      <h2>{{copy('No central case has been opened for this vessel',
+                'لم يتم فتح حالة مركزية لهذه السفينة')}}</h2>
+      <p>{{copy('An NMC Officer must acknowledge a maritime alert and explicitly create or link a case. No operational case has been created automatically.',
+                'يجب أن يستلم ضابط المركز البحري التنبيه ثم يفتح حالة أو يربطها بحالة قائمة. لم يتم إنشاء حالة تلقائيًا.')}}</p>
+      <a routerLink="/moei/nmc/alerts">{{copy('Go to Alerts & Notifications','الانتقال إلى التنبيهات والإشعارات')}} →</a>
+    </section>
+    <ng-container *ngIf="centralCase">
+
     <section class="case-hero">
       <div class="case-identity">
-        <span class="case-kicker">{{ copy('ACTIVE MARITIME CASE', 'حالة بحرية نشطة') }}</span>
+        <span class="case-kicker">{{centralCase?.status==='RESOLVED'?copy('RESOLVED MARITIME CASE','حالة بحرية مغلقة'):copy('ACTIVE MARITIME CASE','حالة بحرية نشطة')}}</span>
         <div class="case-title-row">
           <div>
             <h2>{{ caseId }}</h2>
@@ -35,15 +50,15 @@
         </div>
 
         <div class="case-context">
-          <span>{{ copy('Case owner', 'مالك الحالة') }}: <strong>{{ copy('NMC Duty Officer', 'ضابط مناوبة المركز البحري') }}</strong></span>
-          <span>{{ copy('Opened', 'تاريخ الفتح') }}: <strong>07 Oct 2026 · 22:45</strong></span>
+          <span>{{ copy('Case owner', 'مالك الحالة') }}: <strong>{{copy('NMC Duty Officer', 'ضابط مناوبة المركز البحري')}}</strong></span>
+          <span>{{ copy('Opened', 'تاريخ الفتح') }}: <strong>{{centralCase?.createdAt|date:'medium'}}</strong></span>
           <span>{{ copy('Source', 'المصدر') }}: <strong>{{ copy('AI assessment + human approval', 'تقييم الذكاء الاصطناعي + اعتماد بشري') }}</strong></span>
         </div>
       </div>
 
       <div class="case-metrics">
         <article class="metric-card risk" [ngClass]="riskClass">
-          <small>{{ copy('Current risk', 'المخاطر الحالية') }}</small>
+          <small>{{copy('Saved AI Risk Score','درجة مخاطر AI المحفوظة')}}</small>
           <strong>{{ currentRisk }}</strong>
           <span>{{ riskLevelLabel }}</span>
         </article>
@@ -128,15 +143,15 @@
                 </button>
 
                 <ng-container *ngIf="task.id !== 'priority-inspection'">
-                  <button type="button" class="start" (click)="startTask(task)" [disabled]="task.status === 'In Progress' || task.status === 'Completed' || task.status === 'Escalated'">
+                  <button type="button" class="start" (click)="startTask(task)" [disabled]="centralBusy || caseStatus==='Resolved' || task.status === 'In Progress' || task.status === 'Completed' || task.status === 'Escalated'">
                     ▶ {{ copy('Start', 'بدء') }}
                   </button>
-                  <button type="button" class="complete" (click)="completeTask(task)" [disabled]="task.status === 'Completed'">
+                  <button type="button" class="complete" (click)="completeTask(task)" [disabled]="centralBusy || caseStatus==='Resolved' || task.status === 'Completed'">
                     ✓ {{ copy('Complete', 'استكمال') }}
                   </button>
                 </ng-container>
 
-                <button type="button" class="escalate" (click)="escalateTask(task)" [disabled]="task.status === 'Completed' || task.status === 'Escalated'">
+                <button type="button" class="escalate" (click)="escalateTask(task)" [disabled]="centralBusy || caseStatus==='Resolved' || task.status === 'Completed' || task.status === 'Escalated'">
                   ↑ {{ copy('Escalate', 'تصعيد') }}
                 </button>
               </div>
@@ -228,13 +243,14 @@
               'لخص نتيجة التحقق والإجراءات المكتملة وأي متطلبات مراقبة متبقية...'
             )"></textarea>
 
-            <button type="button" class="resolve-btn" (click)="resolveCase()" [disabled]="!mandatoryComplete || caseStatus === 'Resolved'">
+            <button type="button" class="resolve-btn" (click)="resolveCase()" [disabled]="centralBusy || !mandatoryComplete || caseStatus === 'Resolved'">
               ✓ {{ caseStatus === 'Resolved' ? copy('Case resolved', 'تم إغلاق الحالة') : copy('Resolve NMC Case', 'إغلاق الحالة بالمركز البحري') }}
             </button>
           </div>
         </article>
       </aside>
     </section>
+    </ng-container>
   </main>
 
   <div class="task-backdrop" *ngIf="selectedTask" (click)="closeTask()"></div>

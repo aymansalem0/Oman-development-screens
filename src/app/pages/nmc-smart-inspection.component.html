@@ -23,6 +23,12 @@
   <app-nmc-navigation></app-nmc-navigation>
 
   <main class="inspection-main">
+    <div *ngIf="centralLoading" role="status" class="inspection-central-note">
+      {{copy('Checking the linked maritime case…','جاري التحقق من الحالة البحرية المرتبطة…')}}
+    </div>
+    <div *ngIf="centralError" role="alert" class="inspection-central-note error">
+      {{centralError}}
+    </div>
     <section class="inspection-hero">
       <div class="hero-left">
         <span class="case-kicker">{{ copy('CASE-TRIGGERED INSPECTION', 'معاينة ناتجة عن الحالة') }}</span>
@@ -168,7 +174,7 @@
             <label>{{ copy('General inspection note', 'ملاحظة عامة للمعاينة') }}</label>
             <textarea [(ngModel)]="generalNote" [placeholder]="copy('Summarize the inspection outcome...', 'لخص نتيجة المعاينة...')"></textarea>
 
-            <button type="button" class="submit-btn" (click)="submitInspection()" [disabled]="!canSubmit || submitted">
+            <button type="button" class="submit-btn" (click)="submitInspection()" [disabled]="!canSubmit || submitted || centralLoading || centralBusy || !!centralError">
               ✓ {{ submitted ? copy('Inspection submitted to NMC', 'تم إرسال نتيجة المعاينة إلى NMC') : copy('Complete & Return Result to NMC', 'استكمال وإرسال النتيجة إلى NMC') }}
             </button>
 

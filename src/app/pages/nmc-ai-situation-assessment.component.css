@@ -1123,3 +1123,10 @@ a, button, textarea { font: inherit; }
   line-height: 1.6;
   font-weight: 700;
 }
+
+
+.case-decision-alert{border:1px solid #d6e8ed;background:#f7fbfc;color:#507081;border-radius:10px;padding:12px 15px;font-size:11px;line-height:1.65;margin:10px 0}
+.case-decision-alert a{color:#087f76;text-decoration:underline;margin-inline-start:8px}
+.case-decision-alert.success{border-color:#bde7d5;background:#f0fbf5;color:#167652}
+.case-decision-save{border:1px solid #087f76;background:#0d9385;color:#fff;border-radius:9px;padding:10px 13px;font-size:11px;font-weight:750;margin:10px 0;cursor:pointer}
+.case-decision-save:disabled{opacity:.55;cursor:wait}
