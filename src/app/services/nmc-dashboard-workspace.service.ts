@@ -67,6 +67,15 @@ export class NmcDashboardWorkspaceService {
     ).pipe(catchError(err=>this.catchCredentialFailure(err,'publisher')));
   }
 
+  /** Change a published dashboard's sidebar section without altering its widgets. */
+  movePublished(id:string,version:number,menuPlacement:DashboardMenuPlacement):Observable<DashboardOneResponse>{
+    const key=this.requireKey('publisher');
+    return this.http.patch<DashboardOneResponse>(
+      this.root+'/'+encodeURIComponent(id)+'/placement',
+      {version,menuPlacement},{headers:this.headers(key)}
+    ).pipe(catchError(err=>this.catchCredentialFailure(err,'publisher')));
+  }
+
   archive(id:string,version:number):Observable<{status:'ok'}>{
     const key=this.requireKey('editor');
     return this.http.request<{status:'ok'}>('DELETE',this.root+'/'+encodeURIComponent(id),{
