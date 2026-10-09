@@ -80,6 +80,10 @@
       </div>
     </section>
 
+    <div class="case-risk-reference" *ngIf="centralCase as linked">
+      <span>{{copy('Immutable source assessment','التقييم الأصلي غير القابل للتعديل')}}: {{linked.sourceAssessmentId || '—'}} · {{linked.sourceLevel}}</span>
+      <a [routerLink]="['/moei/nmc/vessel',linked.imo,'risk']">{{copy('View Full Risk Intelligence & Evidence →','عرض تفاصيل تحليل المخاطر والأدلة ←')}}</a>
+    </div>
     <section class="case-progress-strip">
       <div class="progress-head">
         <div>
