@@ -41,6 +41,9 @@ export class NmcDashboardBuilderComponent implements OnInit,OnDestroy {
   historyDashboardTitle='';
   private sharedVersions=new Map<string,number>();
   editing=false;
+  viewOnly=false;
+  viewLoading=false;
+  viewError='';
   dirty=false;
   isLoading=true;
   dataError='';
@@ -69,10 +72,33 @@ export class NmcDashboardBuilderComponent implements OnInit,OnDestroy {
     this.subs.add(this.store.dashboards$.subscribe(items=>this.dashboards=items));
     this.subs.add(this.route.paramMap.subscribe(params=>{
       const id=params.get('id');
-      this.dashboard=id?this.store.get(id):null;
-      this.editing=!!id;
+      this.viewOnly=this.route.snapshot.routeConfig?.path==='moei/nmc/dashboards/view/:id';
+      this.viewLoading=false;
+      this.viewError='';
+      this.dashboard=null;
+      this.editing=!!id&&!this.viewOnly;
       this.dirty=false;this.saveMessage='';this.tablePage=1;
-      if(id&&!this.dashboard)this.router.navigate(['/moei/nmc/dashboards']);
+      if (this.viewOnly && id) {
+        this.viewLoading=true;
+        const req=this.workspace.published(id).subscribe({
+          next:result=>{
+            if(this.viewOnly){
+              this.dashboard=JSON.parse(JSON.stringify(result.dashboard)) as DashboardDefinition;
+              this.viewLoading=false;
+            }
+          },
+          error:error=>{
+            this.viewLoading=false;
+            this.viewError=error?.status===404
+              ?this.copy('This dashboard is not published or is no longer available.','هذه اللوحة غير منشورة أو لم تعد متاحة.')
+              :this.workspace.readableError(error,this.lang.isArabic);
+          }
+        });
+        this.subs.add(req);
+      } else {
+        this.dashboard=id?this.store.get(id):null;
+        if(id&&!this.dashboard)void this.router.navigate(['/moei/nmc/dashboards']);
+      }
     }));
     this.subs.add(this.riskEngine.config$.subscribe(()=>{
       if(this.raw)this.fleet=this.data.compose(this.raw);
@@ -125,6 +151,11 @@ export class NmcDashboardBuilderComponent implements OnInit,OnDestroy {
     this.subs.add(sub);
   }
 
+  viewPublished(board:DashboardDefinition):void {
+    if(board.status!=='PUBLISHED')return;
+    void this.router.navigate(['/moei/nmc/dashboards/view',board.id]);
+  }
+
   getShared(id:string):DashboardDefinition|null {
     return this.sharedDashboards.find(d=>d.id===id)||null;
   }
@@ -149,7 +180,7 @@ export class NmcDashboardBuilderComponent implements OnInit,OnDestroy {
   }
 
   saveShared():void {
-    if(!this.dashboard||this.sharedBusy)return;
+    if(this.viewOnly||!this.dashboard||this.sharedBusy)return;
     if(this.dirty)this.save();
     if(!this.dashboard||this.dirty)return;
     const existing=this.getShared(this.dashboard.id);
@@ -265,7 +296,7 @@ export class NmcDashboardBuilderComponent implements OnInit,OnDestroy {
   }
 
   addWidget(type:DashboardWidgetKind):void {
-    if(!this.dashboard||this.dashboard.widgets.length>=30)return;
+    if(this.viewOnly||!this.dashboard||this.dashboard.widgets.length>=30)return;
     const first=this.catalog[type][0];
     this.dashboard.widgets.push({
       id:'widget-'+(globalThis.crypto?.randomUUID?.()||Date.now().toString(36)),
@@ -275,32 +306,35 @@ export class NmcDashboardBuilderComponent implements OnInit,OnDestroy {
   }
 
   changeMetric(widget:DashboardWidget):void {
+    if(this.viewOnly)return;
     const meta=this.catalog[widget.type].find(x=>x.value===widget.metric);
     if(meta)widget.title=meta.en;
     this.touch();
   }
 
   changeWidth(widget:DashboardWidget):void {
+    if(this.viewOnly)return;
     widget.span=widget.span==='half'?'full':'half';this.touch();
   }
 
   deleteWidget(id:string):void {
-    if(!this.dashboard)return;
+    if(this.viewOnly||!this.dashboard)return;
     this.dashboard.widgets=this.dashboard.widgets.filter(w=>w.id!==id);this.touch();
   }
 
   onDragStart(event:DragEvent,id:string):void {
-    if(!this.editing)return;
+    if(this.viewOnly||!this.editing)return;
     this.draggedId=id;
     event.dataTransfer?.setData('text/plain',id);
     if(event.dataTransfer)event.dataTransfer.effectAllowed='move';
   }
 
   onDragOver(event:DragEvent):void {
-    if(this.editing)event.preventDefault();
+    if(this.editing&&!this.viewOnly)event.preventDefault();
   }
 
   onDrop(event:DragEvent,targetId:string):void {
+    if(this.viewOnly)return;
     event.preventDefault();
     const origin=this.draggedId;
     this.draggedId=null;
@@ -314,7 +348,7 @@ export class NmcDashboardBuilderComponent implements OnInit,OnDestroy {
   }
 
   moveWidget(id:string,direction:-1|1):void {
-    if(!this.dashboard)return;
+    if(this.viewOnly||!this.dashboard)return;
     const i=this.dashboard.widgets.findIndex(w=>w.id===id);
     const to=i+direction;
     if(i<0||to<0||to>=this.dashboard.widgets.length)return;
@@ -323,10 +357,10 @@ export class NmcDashboardBuilderComponent implements OnInit,OnDestroy {
     this.touch();
   }
 
-  touch():void {this.dirty=true;this.saveMessage='';this.tablePage=1;}
+  touch():void {if(this.viewOnly)return;this.dirty=true;this.saveMessage='';this.tablePage=1;}
 
   save():void {
-    if(!this.dashboard)return;
+    if(this.viewOnly||!this.dashboard)return;
     try {
       this.dashboard=this.store.save(this.dashboard);
       this.dirty=false;this.savedAt=this.dashboard.updatedAt;
@@ -431,5 +465,5 @@ export class NmcDashboardBuilderComponent implements OnInit,OnDestroy {
     return key;
   }
 
-  get isManager():boolean{return !this.dashboard;}
+  get isManager():boolean{return !this.dashboard&&!this.viewOnly;}
 }
