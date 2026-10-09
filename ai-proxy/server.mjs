@@ -74,7 +74,7 @@ async function scanExistingFleetForAlerts(){
           ...row,score:p.riskScore,level:p.riskLevel,
           operationalPriority:p.operationalPriority,criticalOpenFinding:p.criticalOpenFinding,
           configVersion:projected.policyRef,riskPolicyRevision:projected.policyRevision,
-          sourceAiScore:row.score,sourceAiLevel:row.level
+          sourceAiScore:row.score,sourceAiLevel:row.level,aiRulesetVersion:row.configVersion
         }:row];
       }))};
     }
@@ -272,7 +272,11 @@ const server = createServer(async (req, res) => {
       if(req.method==='POST'&&path==='/api/ai/risk-policy/publish'){
         dashboards.assertRole(req,'PUBLISHER');
         const body=await requestJson(req,16384);
-        return respond(res,201,{status:'ok',published:await riskPolicy.publish(body)});
+        const published=await riskPolicy.publish(body);
+        // No external AI; risk version takes effect immediately on the server.
+        // Scanner does not duplicate any active vessel alert or mutate existing cases.
+        if(alertScanEnabled)await scanExistingFleetForAlerts();
+        return respond(res,201,{status:'ok',published});
       }
       return respond(res,405,{error:'METHOD_NOT_ALLOWED'});
     }catch(error){
@@ -462,7 +466,10 @@ const server = createServer(async (req, res) => {
     const [,id,action]=match;
     try{
       if(req.method==='GET'){
-        if(!id)return respond(res,200,await alerts.overview());
+        if(!id){
+          const projection=riskPolicy.ready?await riskPolicy.projectCurrent():null;
+          return respond(res,200,await alerts.overview(projection));
+        }
         if(action==='history')return respond(res,200,{status:'ok',history:await alerts.history(id)});
         if(action)return respond(res,404,{error:'ALERT_NOT_FOUND'});
         const item=await alerts.get(id);
@@ -650,8 +657,15 @@ const server = createServer(async (req, res) => {
 
 try{
   await fleet.initialize(scheduler.bundles);
-  try{await riskPolicy.initialize();}
-  catch(error){console.error('[nmc-risk-policy] RISK_POLICY_SCHEMA_NOT_READY');}
+  try{
+    await riskPolicy.initialize();
+    // Backfill only the new projection table for pre-existing saved assessments,
+    // without altering source assessments, cases or the alert audit.
+    for(const row of Object.values(fleet.results)){
+      if(row.status==='COMPLETED'&&row.assessmentId)
+        await riskPolicy.materializeCurrent(row);
+    }
+  }catch(error){console.error('[nmc-risk-policy] RISK_POLICY_SCHEMA_NOT_READY');}
   try{await guidance.initialize();}
   catch(error){
     // Guidance requires migration 006, but an optional UI module must never
