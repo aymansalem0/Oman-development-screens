@@ -639,6 +639,8 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
   }
 
   get attentionMessage(): string {
+    if (this.storedAi?.operationalPriority === 'Priority Review')
+      return this.copy('Priority human review of the saved AI assessment', 'مراجعة بشرية ذات أولوية للتقييم المحفوظ بالذكاء الاصطناعي');
     const level = this.vessel.riskLevel;
     if (level === 'Critical') return this.copy('Immediate operational review required', 'مراجعة تشغيلية فورية مطلوبة');
     if (level === 'High') return this.copy('Priority monitoring and review required', 'مراقبة ومراجعة ذات أولوية مطلوبة');
@@ -659,6 +661,12 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
   }
 
   get attentionDescription(): string {
+    if (this.storedAi?.criticalOpenFinding) {
+      return this.copy(
+        'A critical open finding in synthetic inspection evidence requires priority human review, even though the composite AI risk level is Watch. This is not a regulatory decision.',
+        'توجد ملاحظة حرجة مفتوحة في أدلة المعاينة التجريبية تستلزم مراجعة بشرية ذات أولوية رغم أن تصنيف المخاطر المركبة هو مراقبة. هذا ليس قرارًا تنظيميًا.'
+      );
+    }
     if (this.isAtLeast('Critical')) {
       return this.copy(
         'Multiple movement, inspection, certificate and data-quality indicators have been correlated into a critical vessel risk picture.',
