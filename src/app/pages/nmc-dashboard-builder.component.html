@@ -79,6 +79,18 @@
               {{copy('Menu','القائمة')}}:
               {{shared.menuPlacement==='SMART_INSPECTION'?copy('Smart Inspection','المعاينة الذكية'):shared.menuPlacement==='SETTINGS'?copy('Settings','الإعدادات'):copy('NMC Center','المركز البحري الوطني')}}
             </div>
+            <div class="db-placement-control" *ngIf="shared.status==='PUBLISHED'">
+              <label [attr.for]="'place-'+shared.id">{{copy('Show in menu','الظهور في القائمة')}}</label>
+              <select [id]="'place-'+shared.id" [(ngModel)]="selectedMenuPlacement[shared.id]">
+                <option *ngFor="let place of menuPlacements" [value]="place.value">
+                  {{copy(place.en,place.ar)}}
+                </option>
+              </select>
+              <button class="db-outline" type="button" (click)="moveSharedMenu(shared)"
+                      [disabled]="sharedBusy||selectedMenuPlacement[shared.id]===(shared.menuPlacement||'NMC_CENTER')">
+                {{copy('Update Menu','تحديث القائمة')}}
+              </button>
+            </div>
             <div class="db-board-actions">
               <button *ngIf="shared.status==='PUBLISHED'" class="db-primary" type="button"
                       (click)="viewPublished(shared)">{{copy('View Dashboard','عرض لوحة المعلومات')}} ↗</button>
