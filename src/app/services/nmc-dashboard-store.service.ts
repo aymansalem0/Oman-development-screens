@@ -90,6 +90,33 @@ export class NmcDashboardStoreService {
     return found?clone(found):null;
   }
 
+  /** Import a centrally stored definition without fabricating a version change. */
+  importShared(input:DashboardDefinition):DashboardDefinition {
+    this.validate(input);
+    const snapshot=clone(input);
+    this.commit([
+      ...this.subject.value.filter(item=>item.id!==snapshot.id),
+      snapshot
+    ]);
+    return clone(snapshot);
+  }
+
+  /** Editing a published dashboard starts as a new, independent draft. */
+  forkPublished(input:DashboardDefinition):DashboardDefinition {
+    this.validate(input);
+    const draft:DashboardDefinition={
+      ...clone(input),
+      id:'dashboard-'+(globalThis.crypto?.randomUUID?.()||Date.now().toString(36)),
+      title:input.title+' - Copy',
+      status:'DRAFT',version:1,updatedAt:new Date().toISOString(),
+      widgets:input.widgets.map(widget=>({
+        ...widget,id:'widget-'+(globalThis.crypto?.randomUUID?.()||Math.random().toString(36).slice(2))
+      }))
+    };
+    this.commit([...this.subject.value,draft]);
+    return clone(draft);
+  }
+
   create(): DashboardDefinition {
     const now=new Date().toISOString();
     const item: DashboardDefinition={
