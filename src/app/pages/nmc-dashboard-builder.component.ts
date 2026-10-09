@@ -215,6 +215,30 @@ export class NmcDashboardBuilderComponent implements OnInit,OnDestroy {
     }));
   }
 
+  /** Revision drafts belong to their published dashboard, not the main list. */
+  get personalDashboards():DashboardDefinition[] {
+    return this.dashboards.filter(board=>!board.publishedParentId);
+  }
+  get managedSharedDashboards():DashboardDefinition[] {
+    return this.sharedDashboards.filter(board=>
+      !board.publishedParentId || !this.sharedDashboards.some(parent=>
+        parent.id===board.publishedParentId&&
+        parent.status==='PUBLISHED'&&
+        parent.version===board.basePublishedVersion));
+  }
+  linkedRevisionFor(published:DashboardDefinition):DashboardDefinition|null {
+    if(published.status!=='PUBLISHED')return null;
+    return this.sharedDashboards.find(draft=>
+      draft.status==='DRAFT'&&
+      draft.publishedParentId===published.id&&
+      draft.basePublishedVersion===published.version)||null;
+  }
+  continuePublishedEdit(board:DashboardDefinition):void {
+    const revision=this.linkedRevisionFor(board);
+    if(!revision){this.editPublished(board);return;}
+    this.openShared(revision);
+  }
+
   getShared(id:string):DashboardDefinition|null {
     return this.sharedDashboards.find(d=>d.id===id)||null;
   }
@@ -264,7 +288,13 @@ export class NmcDashboardBuilderComponent implements OnInit,OnDestroy {
       next:r=>{
         this.sharedBusy=false;
         this.sharedVersions.set(r.dashboard.id,r.dashboard.version);
-        this.saveMessage=this.copy('Saved to the shared dashboard workspace.','تم الحفظ في مساحة لوحات المعلومات المشتركة.');
+        // Align the editor with the canonical server document/version.
+        try{this.dashboard=this.store.importShared(r.dashboard);}catch{/* central save succeeded */}
+        this.dirty=false;
+        this.saveMessage=this.copy(
+          'Changes saved centrally. You can now republish this revision.',
+          'تم حفظ التغييرات مركزيًا. يمكنك الآن إعادة نشر الإصدار.'
+        );
         this.loadShared();
       },
       error:error=>{
@@ -302,8 +332,8 @@ export class NmcDashboardBuilderComponent implements OnInit,OnDestroy {
         );
         if(isRevision){
           this.sharedError='';
-          // A second browser using the published URL always loads the same ID.
           this.sharedVersions.set(result.dashboard.id,result.dashboard.version);
+          try{this.store.remove(board.id);}catch{/* optional local cleanup */}
         }
       },
       error:error=>{
@@ -337,53 +367,73 @@ export class NmcDashboardBuilderComponent implements OnInit,OnDestroy {
     });
   }
 
+  /**
+   * The editor is authoritative for this revision. Save its latest content
+   * centrally first, THEN publish that exact server-returned version.
+   * Never publish a version based only on a browser-local save.
+   */
   republishCurrent():void {
-    const board=this.dashboard;
-    if(!board?.publishedParentId||this.viewOnly||this.sharedBusy)return;
-    if(this.dirty){
-      this.saveMessage=this.copy(
-        'Save your changes to the shared workspace before republishing.',
-        'احفظ تغييراتك في المساحة المشتركة قبل إعادة النشر.'
-      );
-      return;
-    }
-    const shared=this.getShared(board.id);
-    if(!shared||shared.status!=='DRAFT'||
-       this.sharedVersions.get(board.id)!==shared.version||
-       !this.sameDashboardDesign(board,shared)){
-      this.saveMessage=this.copy(
-        'The central revision differs from this editor. Review it and save changes to the shared workspace before republishing.',
-        'نسخة المساحة المشتركة مختلفة عن التعديلات الحالية. راجعها واحفظ التغييرات مركزيًا قبل إعادة النشر.'
-      );
-      this.loadShared();
-      return;
-    }
+    if(this.viewOnly||!this.dashboard?.publishedParentId||this.sharedBusy)return;
     if(!window.confirm(this.copy(
-      'Republish the updated dashboard? The current public link will show this revision.',
-      'إعادة نشر اللوحة بعد التعديل؟ سيعرض الرابط الأصلي الإصدار الجديد.'
+      'Save the current design to the shared workspace and republish it over the existing dashboard? The same link will be retained.',
+      'حفظ التصميم الحالي في المساحة المشتركة ثم إعادة نشره على نفس اللوحة؟ سيظل الرابط دون تغيير.'
     )))return;
+    if(this.dirty){
+      this.save();
+      if(this.dirty)return; // Local validation or storage failed.
+    }
+    const board=this.dashboard;
+    if(!board)return;
+    const expected=this.sharedVersions.get(board.id);
+    if(expected===undefined){
+      this.saveMessage=this.copy(
+        'Shared revision has not finished loading. Refresh the workspace and try again.',
+        'نسخة التعديل المشتركة لم تُحمّل بعد. حدّث البيانات وأعد المحاولة.'
+      );
+      return;
+    }
     this.sharedBusy=true;
-    let request;
-    try{request=this.workspace.publish(board.id,shared.version);}
+    let saveRequest;
+    try {saveRequest=this.workspace.save(board,expected);}
     catch(error){
       this.sharedBusy=false;
       this.saveMessage=this.workspace.readableError(error,this.lang.isArabic);
       return;
     }
-    this.subs.add(request.subscribe({
-      next:response=>{
-        this.sharedBusy=false;
-        this.dashboardNavigation.refresh();
-        this.loadShared();
-        this.saveMessage=this.copy(
-          'Dashboard republished successfully using its existing link.',
-          'تمت إعادة نشر لوحة المعلومات بنجاح على نفس الرابط.'
-        );
-        void this.router.navigate(['/moei/nmc/dashboards/view',response.dashboard.id]);
+    this.subs.add(saveRequest.subscribe({
+      next:saved=>{
+        this.sharedVersions.set(saved.dashboard.id,saved.dashboard.version);
+        this.dashboard=this.store.importShared(saved.dashboard);
+        let publishRequest;
+        try{publishRequest=this.workspace.publish(saved.dashboard.id,saved.dashboard.version);}
+        catch(error){
+          this.sharedBusy=false;
+          this.saveMessage=this.workspace.readableError(error,this.lang.isArabic);
+          this.loadShared();
+          return;
+        }
+        this.subs.add(publishRequest.subscribe({
+          next:published=>{
+            this.sharedBusy=false;
+            // Clean up the local working revision only after a successful
+            // server transaction; the published dashboard remains unchanged
+            // on failures and the central draft can be resumed.
+            try{this.store.remove(saved.dashboard.id);}catch{/* optional local cleanup */}
+            this.loadShared();
+            this.dashboardNavigation.refresh();
+            void this.router.navigate(['/moei/nmc/dashboards/view',published.dashboard.id]);
+          },
+          error:error=>{
+            this.sharedBusy=false;
+            this.saveMessage=this.workspace.readableError(error,this.lang.isArabic);
+            this.loadShared();
+          }
+        }));
       },
       error:error=>{
         this.sharedBusy=false;
         this.saveMessage=this.workspace.readableError(error,this.lang.isArabic);
+        this.loadShared();
       }
     }));
   }
