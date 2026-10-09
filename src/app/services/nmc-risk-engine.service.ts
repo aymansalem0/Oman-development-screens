@@ -95,6 +95,19 @@ export class NmcRiskEngineService {
     return this.cloneConfig(DEFAULT_CONFIG);
   }
 
+  /**
+   * Keep policy projections in sync across browser tabs without silently
+   * modifying any saved Oracle AI assessment or operational case.
+   * This is local Risk Management policy only, not a centrally approved policy.
+   */
+  syncPublishedFromStorage(): void {
+    const incoming = this.loadConfig();
+    if (this.validate(incoming).length) return;
+    if (JSON.stringify(incoming) !== JSON.stringify(this.configSubject.value)) {
+      this.configSubject.next(incoming);
+    }
+  }
+
   cloneConfig(config: RiskEngineConfig): RiskEngineConfig {
     return JSON.parse(JSON.stringify(config)) as RiskEngineConfig;
   }
