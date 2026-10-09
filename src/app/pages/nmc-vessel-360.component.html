@@ -172,6 +172,24 @@
               </tr></tbody>
             </table></div>
           </section>
+          <section class="v360-quality-detail-card" *ngIf="summary.provenanceChecks?.length">
+            <h4>{{ copy('PSC source metadata validation', 'فحص بيانات تعريف مصدر PSC') }}</h4>
+            <p>{{ copy('Current V1 rule: 100% if all three metadata fields exist, otherwise 60%. This does not verify any official source.', 'قاعدة الإصدار الحالي: 100% عند توافر الحقول الثلاثة وإلا 60%. هذا لا يثبت اعتماد المصدر.') }}</p>
+            <div class="v360-quality-source-meta">
+              <span><small>{{ copy('Internal record class', 'نوع السجل الداخلي') }}</small><b>{{ summary.sourceProvenance?.internalSystem || '—' }}</b></span>
+              <span><small>{{ copy('External record class', 'نوع السجل الخارجي') }}</small><b>{{ summary.sourceProvenance?.externalSystem || '—' }}</b></span>
+              <span><small>{{ copy('PSC retrieval mode', 'طريقة استرجاع PSC') }}</small><b>{{ summary.sourceProvenance?.pscMode || '—' }}</b></span>
+            </div>
+            <div class="v360-quality-source-check" *ngFor="let check of summary.provenanceChecks">
+              <code>{{ check.field }}</code>
+              <span>{{ check.value || copy('Missing', 'غير متاح') }}</span>
+              <b class="v360-compare-tag" [class.matched]="check.present" [class.missing]="!check.present">{{ check.present ? copy('Present', 'موجود') : copy('Missing', 'ناقص') }}</b>
+            </div>
+            <p class="v360-quality-history-note" *ngIf="summary.reconstructionNotice">{{ copy('Retrospective calculation: field values come from the current synthetic PSC workbook, not a preserved PSC snapshot at the original AI assessment time. The AI score remains unchanged.', 'احتساب لاحق: قيم الحقول مأخوذة من ملف PSC التجريبي الحالي وليس من نسخة محفوظة وقت تقييم AI الأصلي. درجة مخاطر AI لم تتغير.') }}</p>
+          </section>
+
+          <section class="v360-quality-detail-card">
+            <h4>{{ copy('Persisted cross-source disagreements', 'اختلافات المصادر المحفوظة') }}</h4>
         <div class="v360-quality-conflicts" *ngIf="qualityExpanded">
           <strong>{{ copy('Detected source disagreements', 'اختلافات المصادر المكتشفة') }}: {{ intelligence.conflicts.length }}</strong>
           <span *ngIf="intelligence.conflicts.length === 0">{{ copy('No disagreements stored for compared fields; this does not establish overall accuracy or authority verification.', 'لا توجد اختلافات مسجلة للحقول التي تمت مقارنتها؛ لا يعني ذلك إثبات الدقة العامة أو اعتماد الجهة.') }}</span>
@@ -182,9 +200,11 @@
               {{ copy('External row evidence', 'دليل السجل الخارجي') }}: {{ issue.SOURCE_B_EVIDENCE_ID || copy('No stable ID available', 'لا يوجد معرّف ثابت متاح') }}</small>
           </div>
         </div>
-        <p class="v360-quality-disclaimer" *ngIf="qualityExpanded">
-          {{ copy('Synthetic POC data. Independently verified data confidence: unavailable. A structural score is never proof of an authentic record.', 'بيانات تجريبية. الثقة المؤكدة بالتحقق المستقل غير متاحة. درجة الجودة الهيكلية ليست دليلًا على صحة أو اعتماد السجل.') }}
+        <p class="v360-quality-disclaimer">
+          {{ copy('Synthetic POC only. Independently verified data confidence remains unavailable. Data quality and risk are separate metrics.', 'بيانات نموذج تجريبي فقط. الثقة المعتمدة على تحقق مستقل غير متاحة. جودة البيانات ودرجة المخاطر مقياسان مختلفان.') }}
         </p>
+          </section>
+        </div>
       </ng-container>
     </section>
 
