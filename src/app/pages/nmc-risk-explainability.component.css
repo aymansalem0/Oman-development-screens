@@ -898,3 +898,17 @@ a, button { font: inherit; }
   background: #e5f6f2;
   border-color: #9fd2c9;
 }
+
+
+/* NMC navigation keeps contextual risk evidence available alongside other NMC screens. */
+@media (min-width: 1221px) {
+  .rx-shell .rx-main { margin-left: 216px; margin-right: 0; max-width: calc(100% - 216px); }
+  .rx-shell.rtl .rx-main { margin-left: 0; margin-right: 216px; }
+}
+@media (min-width: 961px) and (max-width: 1220px) {
+  .rx-shell .rx-main { margin-left: 66px; margin-right: 0; max-width: calc(100% - 66px); }
+  .rx-shell.rtl .rx-main { margin-left: 0; margin-right: 66px; }
+}
+@media (max-width: 960px) {
+  .rx-shell .rx-main, .rx-shell.rtl .rx-main { margin: 0; max-width: none; padding-top: 54px; }
+}
