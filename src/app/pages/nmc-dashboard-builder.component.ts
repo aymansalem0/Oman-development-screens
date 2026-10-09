@@ -13,6 +13,7 @@ import {
   DashboardAnalyticsResponse, DashboardVessel, NmcDashboardDataService
 } from '../services/nmc-dashboard-data.service';
 import { NmcRiskEngineService } from '../services/nmc-risk-engine.service';
+import { NmcDashboardWorkspaceService, DashboardRevision } from '../services/nmc-dashboard-workspace.service';
 
 type BarRow={name:string;count:number;percent:number};
 
@@ -33,6 +34,12 @@ export class NmcDashboardBuilderComponent implements OnInit,OnDestroy {
   ];
   dashboard:DashboardDefinition|null=null;
   dashboards:DashboardDefinition[]=[];
+  sharedDashboards:DashboardDefinition[]=[];
+  sharedError='';
+  sharedBusy=false;
+  sharedHistory:DashboardRevision[]=[];
+  historyDashboardTitle='';
+  private sharedVersions=new Map<string,number>();
   editing=false;
   dirty=false;
   isLoading=true;
@@ -54,7 +61,8 @@ export class NmcDashboardBuilderComponent implements OnInit,OnDestroy {
     private readonly router:Router,
     public readonly store:NmcDashboardStoreService,
     private readonly data:NmcDashboardDataService,
-    private readonly riskEngine:NmcRiskEngineService
+    private readonly riskEngine:NmcRiskEngineService,
+    private readonly workspace:NmcDashboardWorkspaceService
   ){}
 
   ngOnInit():void {
@@ -70,6 +78,7 @@ export class NmcDashboardBuilderComponent implements OnInit,OnDestroy {
       if(this.raw)this.fleet=this.data.compose(this.raw);
     }));
     this.refresh();
+    this.loadShared();
     this.poller=setInterval(()=>this.refresh(true),30000);
   }
 
@@ -100,6 +109,126 @@ export class NmcDashboardBuilderComponent implements OnInit,OnDestroy {
       }
     });
     this.subs.add(sub);
+  }
+
+  loadShared():void {
+    const sub=this.workspace.list().subscribe({
+      next:data=>{
+        this.sharedDashboards=data.dashboards;
+        this.sharedError='';
+        this.sharedVersions=new Map(data.dashboards.map(d=>[d.id,d.version]));
+      },
+      error:error=>{
+        this.sharedError=this.workspace.readableError(error,this.lang.isArabic);
+      }
+    });
+    this.subs.add(sub);
+  }
+
+  getShared(id:string):DashboardDefinition|null {
+    return this.sharedDashboards.find(d=>d.id===id)||null;
+  }
+
+  openShared(board:DashboardDefinition):void {
+    // Never mutate a published version. Work from a separate draft copy.
+    try{
+      if(board.status==='PUBLISHED'){
+        const draft=this.store.forkPublished(board);
+        this.open(draft.id);
+        return;
+      }
+      if(this.store.get(board.id) && !window.confirm(this.copy(
+        'Import this shared draft into the designer? Existing local changes for it will be replaced.',
+        'استيراد المسودة المشتركة إلى المصمم؟ سيتم استبدال أي تغييرات محلية على نفس اللوحة.'
+      )))return;
+      const draft=this.store.importShared(board);
+      this.open(draft.id);
+    }catch{
+      this.sharedError=this.copy('Could not open shared dashboard.','تعذر فتح لوحة المعلومات المشتركة.');
+    }
+  }
+
+  saveShared():void {
+    if(!this.dashboard||this.sharedBusy)return;
+    if(this.dirty)this.save();
+    if(!this.dashboard||this.dirty)return;
+    const existing=this.getShared(this.dashboard.id);
+    if(existing?.status==='PUBLISHED'){
+      this.saveMessage=this.copy(
+        'Published dashboards cannot be overwritten. Use Duplicate to create a new draft.',
+        'لا يمكن الكتابة فوق لوحة منشورة. أنشئ نسخة جديدة قابلة للتعديل.'
+      );return;
+    }
+    this.sharedBusy=true;
+    let action;
+    try{
+      const version=this.sharedVersions.get(this.dashboard.id);
+      action=existing&&version!==undefined
+        ?this.workspace.save(this.dashboard,version)
+        :this.workspace.create(this.dashboard);
+    }catch(error){
+      this.sharedBusy=false;this.saveMessage=this.workspace.readableError(error,this.lang.isArabic);
+      return;
+    }
+    this.subs.add(action.subscribe({
+      next:r=>{
+        this.sharedBusy=false;
+        this.sharedVersions.set(r.dashboard.id,r.dashboard.version);
+        this.saveMessage=this.copy('Saved to the shared dashboard workspace.','تم الحفظ في مساحة لوحات المعلومات المشتركة.');
+        this.loadShared();
+      },
+      error:error=>{
+        this.sharedBusy=false;
+        this.saveMessage=this.workspace.readableError(error,this.lang.isArabic);
+      }
+    }));
+  }
+
+  publishShared(board:DashboardDefinition):void {
+    if(board.status!=='DRAFT'||this.sharedBusy)return;
+    if(!window.confirm(this.copy(
+      'Publish '+board.title+' as a read-only dashboard for business users?',
+      'نشر '+board.title+' كلوحة معلومات للعرض للمستخدمين؟'
+    )))return;
+    this.sharedBusy=true;
+    let request;
+    try{request=this.workspace.publish(board.id,board.version);}
+    catch(error){this.sharedBusy=false;this.sharedError=this.workspace.readableError(error,this.lang.isArabic);return;}
+    this.subs.add(request.subscribe({
+      next:()=>{
+        this.sharedBusy=false;
+        this.loadShared();
+        this.sharedError=this.copy('Dashboard published successfully.','تم نشر لوحة المعلومات بنجاح.');
+      },
+      error:error=>{
+        this.sharedBusy=false;
+        this.sharedError=this.workspace.readableError(error,this.lang.isArabic);
+      }
+    }));
+  }
+
+  archiveShared(board:DashboardDefinition):void {
+    if(board.status!=='DRAFT'||this.sharedBusy)return;
+    if(!window.confirm(this.copy('Archive '+board.title+'?','أرشفة '+board.title+'؟')))return;
+    this.sharedBusy=true;
+    let request;
+    try{request=this.workspace.archive(board.id,board.version);}
+    catch(error){this.sharedBusy=false;this.sharedError=this.workspace.readableError(error,this.lang.isArabic);return;}
+    this.subs.add(request.subscribe({
+      next:()=>{this.sharedBusy=false;this.loadShared();},
+      error:error=>{
+        this.sharedBusy=false;this.sharedError=this.workspace.readableError(error,this.lang.isArabic);
+      }
+    }));
+  }
+
+  showHistory(board:DashboardDefinition):void {
+    this.historyDashboardTitle=board.title;
+    this.sharedHistory=[];
+    this.subs.add(this.workspace.revisions(board.id).subscribe({
+      next:r=>this.sharedHistory=r.revisions,
+      error:error=>this.sharedError=this.workspace.readableError(error,this.lang.isArabic)
+    }));
   }
 
   create():void {
