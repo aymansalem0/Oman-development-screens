@@ -264,8 +264,8 @@ export class NmcDashboardBuilderComponent implements OnInit,OnDestroy {
 
   saveShared():void {
     if(this.viewOnly||!this.dashboard||this.sharedBusy)return;
-    if(this.dirty)this.save();
-    if(!this.dashboard||this.dirty)return;
+    // The current editor document is the source of truth for central save.
+    // Do not rely on a separate browser-local save/version for this request.
     const existing=this.getShared(this.dashboard.id);
     if(existing?.status==='PUBLISHED'){
       this.saveMessage=this.copy(
@@ -350,10 +350,8 @@ export class NmcDashboardBuilderComponent implements OnInit,OnDestroy {
       'Save the current design to the shared workspace and republish it over the existing dashboard? The same link will be retained.',
       'حفظ التصميم الحالي في المساحة المشتركة ثم إعادة نشره على نفس اللوحة؟ سيظل الرابط دون تغيير.'
     )))return;
-    if(this.dirty){
-      this.save();
-      if(this.dirty)return; // Local validation or storage failed.
-    }
+    // Save the current editor model directly to the central revision,
+    // including any still-unsaved browser edits.
     const board=this.dashboard;
     if(!board)return;
     const expected=this.sharedVersions.get(board.id);
@@ -375,7 +373,9 @@ export class NmcDashboardBuilderComponent implements OnInit,OnDestroy {
     this.subs.add(saveRequest.subscribe({
       next:saved=>{
         this.sharedVersions.set(saved.dashboard.id,saved.dashboard.version);
-        this.dashboard=this.store.importShared(saved.dashboard);
+        this.dashboard=saved.dashboard;
+        this.dirty=false;
+        try{this.store.importShared(saved.dashboard);}catch{/* optional local cache */}
         let publishRequest;
         try{publishRequest=this.workspace.publish(saved.dashboard.id,saved.dashboard.version);}
         catch(error){
