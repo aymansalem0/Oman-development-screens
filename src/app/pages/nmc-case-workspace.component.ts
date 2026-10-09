@@ -453,7 +453,20 @@ export class NmcCaseWorkspaceComponent implements OnInit {
       });
     }
 
-    this.tasks = tasks;
+    this.tasks = this.centralCase ? this.centralCase.tasks.map(stored=>{
+      const draft=tasks.find(item=>item.id===stored.id);
+      return draft?{
+        ...draft,status:stored.status as TaskStatus,
+        mandatory:stored.mandatory,evidence:stored.evidenceIds,
+        owner:stored.assignedRole
+      }:{
+        id:stored.id,title:stored.id.replaceAll('-',' '),
+        owner:stored.assignedRole,source:'Operational follow-up',
+        priority:'High' as const,dueLabel:'Follow-up',
+        status:stored.status as TaskStatus,mandatory:stored.mandatory,
+        evidence:stored.evidenceIds,note:''
+      };
+    }):tasks;
 
     if (this.mandatoryComplete) {
       this.caseStatus = 'Pending Verification';
