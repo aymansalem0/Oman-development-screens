@@ -1,0 +1,51 @@
+<div class="qa-shell" [attr.dir]="lang.dir">
+<header class="qa-top"><div><small>MOEI • NATIONAL MARITIME CENTER</small><h1>{{copy('Data Quality Configuration','إعدادات جودة البيانات')}}</h1>
+<p>{{copy('Configurable POC calculation with live impact','احتساب تجريبي قابل للتعديل مع عرض الأثر فورًا')}}</p></div>
+<nav><button (click)="lang.toggle()">{{lang.isArabic?'English':'العربية'}}</button><a [routerLink]="['/moei/nmc/vessel',imo]">{{copy('Back to Vessel 360','العودة إلى ملف السفينة')}}</a></nav></header>
+<main>
+<section class="qa-alert"><strong>{{copy('Browser-only POC policy','إعدادات تجريبية محفوظة في المتصفح فقط')}}</strong>
+<p>{{copy('Changes here recalculate a transparent preview from saved source evidence, without changing the Oracle quality score, risk score or calling Airia. Server-wide publishing requires authenticated admin approval.','التعديلات تعيد حساب معاينة مباشرة من الأدلة المسجلة، دون تغيير جودة البيانات أو المخاطر في Oracle ودون استدعاء Airia. النشر على الخادم يتطلب توثيق مسؤول النظام والموافقة.')}}</p></section>
+<p class="qa-success" *ngIf="message">{{message}}</p><p class="qa-error" *ngIf="error">{{error}}</p>
+<div class="qa-grid"><div class="qa-editor">
+<section class="qa-card"><h2>{{copy('1. Quality metric weights','1. أوزان مقاييس الجودة')}}</h2>
+<p>{{copy('The four metric weights must total 100%.','يجب أن يكون مجموع الأوزان 100%.')}}</p>
+<div class="qa-weight" *ngFor="let key of metrics"><strong>{{metricLabel(key)}}</strong>
+<input type="range" min="0" max="100" step="5" [(ngModel)]="draft.weights[key]" (ngModelChange)="recalculate()"/>
+<label><input type="number" min="0" max="100" [(ngModel)]="draft.weights[key]" (ngModelChange)="recalculate()"/>%</label></div>
+<p class="qa-total" [class.bad]="totalWeight!==100">{{copy('Total','الإجمالي')}}: {{totalWeight}}%</p></section>
+<section class="qa-card"><h2>{{copy('2. Identity fields to compare','2. حقول الهوية المراد مقارنتها')}}</h2>
+<div class="qa-field-option" *ngFor="let key of fields"><label><input type="checkbox" [checked]="draft.enabledFields.includes(key)"
+(change)="toggleField(key,$any($event.target).checked)"/>{{fieldLabel(key)}} <small>({{key}})</small></label></div></section>
+<section class="qa-card"><h2>{{copy('3. Synthetic-source discount','3. معامل خصم المصادر التجريبية')}}</h2>
+<p>{{copy('Adjust between 40% and 75%. A synthetic score cannot imply verified source truth.','يمكن الضبط من 40% إلى 75%. لا يمكن اعتبار المصادر التجريبية موثقة.')}}</p>
+<input type="range" min="40" max="75" step="5" [(ngModel)]="draft.syntheticDiscountPercent" (ngModelChange)="recalculate()"/>
+<strong>{{draft.syntheticDiscountPercent}}%</strong></section>
+<section class="qa-card"><h2>{{copy('4. Change justification','4. سبب تعديل الإعدادات')}}</h2>
+<textarea rows="3" maxlength="450" [(ngModel)]="draft.changeReason" (ngModelChange)="recalculate()"></textarea>
+<div class="qa-error" *ngFor="let e of errors">{{e}}</div>
+<div class="qa-actions"><button (click)="reset()">{{copy('Defaults','الافتراضي')}}</button>
+<button (click)="reload()">{{copy('Discard','إلغاء')}}</button>
+<button class="qa-primary" [disabled]="errors.length>0||loading" (click)="publish()">{{copy('Apply locally','تطبيق محلي')}}</button></div></section>
+</div><aside class="qa-preview">
+<section class="qa-card"><h2>{{copy('Live impact preview','معاينة أثر التغييرات')}}</h2><small>IMO {{imo}} · {{published.version}}</small>
+<p *ngIf="loading">{{copy('Loading saved quality…','جارٍ تحميل بيانات الجودة…')}}</p>
+<div class="qa-scores"><div><small>{{copy('Saved Oracle score','درجة Oracle المحفوظة')}}</small>
+<strong>{{saved?.quality?.score ?? '—'}}</strong></div><span>→</span>
+<div><small>{{copy('Draft calculation','الحساب المقترح')}}</small>
+<strong>{{proposed?.score ?? '—'}}</strong><em>Δ {{delta ?? '—'}}</em></div></div>
+<p class="qa-note">{{copy('All current inputs are 100%. Changing weights alone does not change the score. Changing the discount will.','جميع المدخلات الحالية 100%. تغيير الأوزان وحده لا يغير الدرجة؛ لكن تغيير معامل الخصم يؤثر.')}}</p></section>
+<section class="qa-card" *ngIf="proposed as p"><h2>{{copy('Calculation breakdown','تفاصيل معادلة الحساب')}}</h2>
+<div class="qa-step" *ngFor="let step of p.steps"><span>{{metricLabel(step.key)}}</span>
+<span>{{step.numerator}}/{{step.denominator}}</span><span>{{step.percent ?? '—'}}%</span>
+<span>× {{step.weightPercent}}%</span><b>{{step.rawContribution ?? '—'}}</b></div>
+<div class="qa-formula">{{copy('Weighted sum','المجموع الموزون')}}: {{p.rawScore ?? '—'}}
+<br/>{{copy('Synthetic discount','خصم المصادر التجريبية')}}: {{p.syntheticDiscountPercent}}%
+<br/>{{copy('Hard cap','الحد الأعلى')}}: {{p.syntheticCap}}/100
+<br/><b>{{copy('Projected quality','الجودة المتوقعة')}}: {{p.score ?? '—'}}/100</b></div>
+</section>
+<section class="qa-card" *ngIf="proposed as p"><h2>{{copy('Field-level source comparison','مقارنة المصادر حسب الحقل')}}</h2>
+<div class="qa-step qa-fields" *ngFor="let field of p.selectedFields"><strong>{{field.field}}</strong>
+<span>{{field.internalValue||'—'}}</span><span>{{field.externalValue||'—'}}</span><b>{{field.status}}</b></div>
+<p class="qa-note">{{copy('A01/A02 source evidence is reused; no dedicated quality agent is called.','يُعاد استخدام أدلة A01/A02 دون استدعاء وكيل مستقل لجودة البيانات.')}}</p></section>
+</aside></div>
+</main></div>
