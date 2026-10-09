@@ -105,6 +105,14 @@ export class NmcDashboardBuilderComponent implements OnInit,OnDestroy {
       } else {
         this.dashboard=id?this.store.get(id):null;
         if(this.dashboard&&!this.dashboard.menuPlacement)this.dashboard.menuPlacement='NMC_CENTER';
+        // Populate editor selectors for legacy shared/local charts without
+        // silently marking the user's existing saved dashboard as modified.
+        this.dashboard?.widgets.forEach(widget=>{
+          if(widget.type==='bar'){
+            widget.chartType=widget.chartType||'horizontalBar';
+            widget.palette=widget.palette||'maritime';
+          }
+        });
         if(id&&!this.dashboard)void this.router.navigate(['/moei/nmc/dashboards']);
       }
     }));
