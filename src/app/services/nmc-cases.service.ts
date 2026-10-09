@@ -54,7 +54,11 @@ export interface NmcCentralCaseAudit {
   details:{[key:string]:string|number|boolean|null};
   at:string;
 }
-interface CaseResponse{status:'ok';case:NmcCentralCase|null}
+interface CaseResponse{
+  status:'ok';case:NmcCentralCase|null;
+  aiActionPlanStatus?:'READY'|'FAILED';
+  aiActionPlanError?:{code:string;details?:{actionIndex?:number;actionType?:string;actionId?:string}};
+}
 interface CaseHistoryResponse{status:'ok';history:NmcCentralCaseAudit[]}
 
 @Injectable({providedIn:'root'})
@@ -77,7 +81,7 @@ export class NmcCasesService {
     return this.http.get<{status:'ok';cases:NmcCentralCase[]}>(this.root);
   }
   createFromAlert(alertId:string):Observable<CaseResponse>{
-    return this.mutate(this.root+'/from-alert',{alertId},false);
+    return this.mutate(this.root+'/from-alert',{alertId,withAiActionPlan:true},false);
   }
   generateActionPlan(current:NmcCentralCase):Observable<CaseResponse>{
     return this.mutate(this.path(current.id)+'/action-plan/generate',
@@ -164,6 +168,7 @@ export class NmcCasesService {
         :`A01 action #${actionNumber} duplicates normalized actionId "${id}". Each proposal must have a unique ID.`;
     }
     const messages:Record<string,[string,string]>={
+      CASE_CREATION_AI_REQUIRED:['AI action generation must be explicitly requested when creating the case.','يجب طلب توصيات A01 ضمن إجراء إنشاء الحالة.'],
       CASE_SCHEMA_NOT_READY:['Case database migration 004 is required.','يجب تطبيق تحديث قاعدة البيانات رقم 004.'],
       CASE_STORE_UNAVAILABLE:['Case service is unavailable.','خدمة إدارة الحالات غير متاحة.'],
       CASE_ALERT_ACK_REQUIRED:['Acknowledge this alert before creating a case.','يجب استلام التنبيه قبل فتح حالة.'],
