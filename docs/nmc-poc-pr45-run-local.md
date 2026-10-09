@@ -241,5 +241,30 @@ Invoke-RestMethod http://localhost:4200/api/ai/risk-policy/vessels/9328471/histo
 
 Test with no paid agents: save a DRAFT, enter a precise reason, publish using authorized supervisor key, verify new `policyRef` and `previousRevision` in history and active pointer, and verify saved original `score` unchanged while projected score/class and effective Fleet status reflect current settings. Verify no maritime case or historical alert audit has been deleted or auto-closed. Current policy is used for alert eligibility; a critical open finding remains an independent notification trigger.
 
+**Windows / Docker without SQL*Plus — safe manual alternative (new):**
+
+The standalone `ai-proxy/tools/apply-risk-007.mjs` uses the **existing** AI Proxy Oracle connection, executes precisely the four audited `CREATE TABLE` / `CREATE INDEX` statements in migration 007, and never uses DBA credentials. It verifies `NMC_AI`, `FREEPDB1`, the existing AI assessment schema, and that **none** of the new risk-policy objects already exist; stops on partial migration. It will **not apply** anything without explicit `--apply --backup-confirmed` flags. The backup must actually have been taken and verified by the owner first — the flag is only a manual acknowledgment.
+
+~~~powershell
+# From the repository root on the correct feature branch, AFTER git pull:
+$container='moei-nmc-poc-ai-proxy-1'
+docker cp .\ai-proxy\tools\apply-risk-007.mjs "${container}:/app/apply-risk-007.mjs"
+docker cp .\ai-proxy\migrations\007_nmc_risk_policy_versioning.sql "${container}:/app/nmc-risk-007.sql"
+
+# Read-only Oracle inspection; DOES NOT run DDL:
+docker exec $container node /app/apply-risk-007.mjs --check
+
+# Stop here and have DBA confirm the existing Oracle backup.
+# ONE-TIME DDL, ONLY after backup confirmation and passing preflight:
+docker exec $container node /app/apply-risk-007.mjs --apply --backup-confirmed
+
+# Restart ai-proxy only to activate the new 1.0 central baseline:
+$compose=@('-f','compose.yaml','-f','compose.google-psc.yaml','-f','compose.oracle.yaml')
+docker compose $compose restart ai-proxy
+Invoke-RestMethod http://localhost:4200/api/ai/risk-policy | ConvertTo-Json -Depth 5
+~~~
+
+**Never rerun** migration 007 if even one policy table/index exists. Existing saved legacy browser policy (e.g. 1.13) is intentionally **not** imported automatically; it can be manually imported as a draft in the Risk Settings UI and published as a new central version.
+
 **Important:** No DDL is auto-applied during build or startup. CI passing confirms syntax and simulated logic, **not an Oracle migration execution or deployment on the user's machine**. Apply 007 only after DBA preflight and backup.
 
