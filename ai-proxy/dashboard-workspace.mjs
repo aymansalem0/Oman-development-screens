@@ -14,6 +14,8 @@ const TYPES=Object.freeze({
   position:['vesselPositions']
 });
 const RISK=['All','Normal','Watch','High','Critical','Pending'];
+const CHART_TYPES=['horizontalBar','column','pie','donut','line','area'];
+const CHART_PALETTES=['maritime','vibrant','ocean','sunset'];
 export const DASHBOARD_MENU_PLACEMENTS=['NMC_CENTER','SMART_INSPECTION','SETTINGS'];
 const menuPlacementOf=row=>DASHBOARD_MENU_PLACEMENTS.includes(row?.menuPlacement)
   ?row.menuPlacement:'NMC_CENTER';
@@ -37,7 +39,19 @@ function normalize(input,{id,status='DRAFT',version=1}={}){
        typeof w.title!=='string'||!w.title.trim()||w.title.length>100||
        !['half','full'].includes(w.span))throw new DashboardError('DASHBOARD_WIDGET_INVALID');
     ids.add(w.id);
-    return {id:w.id,type:w.type,metric:w.metric,title:w.title.trim(),span:w.span};
+    if(w.type==='bar'){
+      if(w.chartType!==undefined&&!CHART_TYPES.includes(w.chartType))
+        throw new DashboardError('DASHBOARD_CHART_TYPE_INVALID');
+      if(w.palette!==undefined&&!CHART_PALETTES.includes(w.palette))
+        throw new DashboardError('DASHBOARD_CHART_PALETTE_INVALID');
+    }
+    return {
+      id:w.id,type:w.type,metric:w.metric,title:w.title.trim(),span:w.span,
+      ...(w.type==='bar'?{
+        chartType:w.chartType||'horizontalBar',
+        palette:w.palette||'maritime'
+      }:{})
+    };
   });
   const f=input.filters;
   if(!f||typeof f!=='object'||!RISK.includes(f.risk)||
