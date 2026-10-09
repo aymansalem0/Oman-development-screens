@@ -122,3 +122,7 @@
   .nav-subgroup .nav-label,.nav-subgroup .nav-chevron{display:none}
   .nav-subchildren,:host-context([dir="rtl"]) .nav-subchildren{margin:0;padding:0;border:0}
 }
+
+.nav-alert-count{display:inline-flex;align-items:center;justify-content:center;
+  flex:0 0 auto;min-width:20px;height:20px;padding:0 5px;border-radius:999px;
+  background:#ef505b;color:#fff;font-size:9px;font-weight:850;line-height:1}

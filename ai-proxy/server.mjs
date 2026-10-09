@@ -3,6 +3,7 @@ import { getPscVessel, getPscHealth } from './psc-reader.mjs';
 import { FleetAssessmentManager } from './fleet-ai.mjs';
 import { FleetAutoScheduler } from './fleet-scheduler.mjs';
 import { DashboardWorkspace, DashboardError } from './dashboard-workspace.mjs';
+import { NmcAlertWorkspace, NmcAlertError } from './alert-workspace.mjs';
 
 const port = Number(process.env.PORT || 3000);
 const apiKey = (process.env.AIRIA_MENA_KEY || '').trim();
@@ -39,6 +40,20 @@ const repository=dbMode==='oracle'
   : null;
 const fleet=new FleetAssessmentManager({executeAgent:fleetAgentCall,getPscVessel,repository});
 const dashboards=new DashboardWorkspace({mode:dbMode,oracleRepository:repository});
+const alerts=new NmcAlertWorkspace({mode:dbMode,oracleRepository:repository});
+const alertScanEnabled=process.env.NMC_ALERT_SCAN_ENABLED!=='false';
+const alertScanIntervalMs=Math.max(15000,Number(process.env.NMC_ALERT_SCAN_SECONDS||30)*1000);
+async function scanExistingFleetForAlerts(){
+  try{
+    // Intentionally read saved in-memory fleet records only. No Airia calls.
+    const result=await alerts.scanFleet(fleet.snapshot());
+    if(result?.created||result?.escalated)
+      console.info('[nmc-alerts] detected='+result.created+' escalated='+result.escalated);
+  }catch(error){
+    const code=error instanceof NmcAlertError?error.code:'ALERT_SCAN_FAILED';
+    console.error('[nmc-alerts] '+code);
+  }
+}
 const scheduler=new FleetAutoScheduler({fleet,getPscVessel,
   enabled:autoEnabled && Boolean(apiKey),intervalMs:autoInterval,
   maxVessels:process.env.NMC_FLEET_AUTO_MAX_VESSELS || 420,
@@ -122,6 +137,45 @@ const server = createServer(async (req, res) => {
       return respond(res,data?200:404,data||{error:'UNKNOWN_VESSEL'});
     }catch{return respond(res,503,{error:'FLEET_HISTORY_UNAVAILABLE'});}
   }
+  // In-app notifications and business alert workflow. Risk source is SAVED AI.
+  // Shared POC editor/publisher secrets stand in for operator/supervisor
+  // authorization until an authenticated IAM solution is installed.
+  if(path==='/api/ai/alerts'||path.startsWith('/api/ai/alerts/')){
+    const match=/^\/api\/ai\/alerts(?:\/([a-fA-F0-9-]{36})(?:\/(history|acknowledge|follow-up|escalate|resolve))?)?$/.exec(path);
+    if(!match)return respond(res,404,{error:'ALERT_NOT_FOUND'});
+    const [,id,action]=match;
+    try{
+      if(req.method==='GET'){
+        if(!id)return respond(res,200,await alerts.overview());
+        if(action==='history')return respond(res,200,{status:'ok',history:await alerts.history(id)});
+        if(action)return respond(res,404,{error:'ALERT_NOT_FOUND'});
+        const item=await alerts.get(id);
+        return respond(res,item?200:404,item?{status:'ok',alert:item}:{error:'ALERT_NOT_FOUND'});
+      }
+      if(req.method==='POST'&&id&&action){
+        const operations={
+          acknowledge:'ACKNOWLEDGE','follow-up':'START_FOLLOW_UP',
+          escalate:'ESCALATE',resolve:'RESOLVE'
+        };
+        if(!operations[action])return respond(res,405,{error:'METHOD_NOT_ALLOWED'});
+        const supervisor=action==='resolve';
+        dashboards.assertRole(req,supervisor?'PUBLISHER':'EDITOR');
+        const body=await requestJson(req,4096);
+        const updated=await alerts.transition(id,operations[action],
+          body.version,body.note||'',supervisor?'SUPERVISOR':'OPERATOR');
+        return respond(res,200,{status:'ok',alert:updated});
+      }
+      return respond(res,405,{error:'METHOD_NOT_ALLOWED'});
+    }catch(error){
+      if(error instanceof NmcAlertError||error instanceof DashboardError)
+        return respond(res,error.status,{error:error.code});
+      if(Number.isInteger(error?.status)&&error.status>=400&&error.status<500)
+        return respond(res,error.status,{error:'INVALID_REQUEST'});
+      console.error('[nmc-alerts] API_FAILURE');
+      return respond(res,503,{error:'ALERT_STORE_UNAVAILABLE'});
+    }
+  }
+
   // Read-only, published-only sidebar navigation: never return drafts or templates.
   if(path==='/api/ai/dashboards/published'&&req.method==='GET'){
     try{return respond(res,200,{status:'ok',dashboards:await dashboards.publishedMenu()});}
@@ -283,6 +337,10 @@ try{
   server.listen(port,'0.0.0.0',()=>{
     console.log(`NMC AI proxy listening on ${port}; mode=${dbMode}; fleet-auto=${scheduler.enabled}`);
     if(scheduler.enabled)scheduler.start();
+    if(alertScanEnabled){
+      void scanExistingFleetForAlerts();
+      setInterval(()=>void scanExistingFleetForAlerts(),alertScanIntervalMs);
+    }
   });
 }catch(error){
   // Fail closed: no AI requests if Oracle schema / credentials are not ready.

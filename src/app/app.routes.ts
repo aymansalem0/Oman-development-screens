@@ -13,6 +13,7 @@ import { NmcDataQualityConfigurationComponent } from './pages/nmc-data-quality-c
 import { ActivityClassificationMappingComponent } from './pages/activity-classification-mapping.component';
 import { SmartInspectionCandidateCenterComponent } from './pages/smart-inspection-candidate-center.component';
 import { NmcDashboardBuilderComponent } from './pages/nmc-dashboard-builder.component';
+import { NmcAlertCenterComponent } from './pages/nmc-alert-center.component';
 
 const base = 'dashboard/maritime-navigation/navigation-aids-installation-approval';
 
@@ -24,6 +25,7 @@ export const routes: Routes = [
   { path: 'dashboard/master-data/activity-classification-mapping', component: ActivityClassificationMappingComponent },
   { path: 'moei/smart-inspection/candidates', component: SmartInspectionCandidateCenterComponent },
   { path: 'moei/nmc', component: NmcCommandCenterComponent },
+  { path: 'moei/nmc/alerts', component: NmcAlertCenterComponent },
   { path: 'moei/nmc/dashboards', component: NmcDashboardBuilderComponent },
   { path: 'moei/nmc/dashboards/view/:id', component: NmcDashboardBuilderComponent },
   { path: 'moei/nmc/dashboards/:id', component: NmcDashboardBuilderComponent },

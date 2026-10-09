@@ -1059,3 +1059,8 @@ button, input, select { font: inherit; }
   .nmc-shell .nmc-main { margin-left: 0; margin-right: 0; padding-left: 56px; }
   .nmc-shell.rtl .nmc-main { margin-left: 0; margin-right: 0; padding-left: 14px; padding-right: 56px; }
 }
+
+/* Operational alert icon opens the central inbox; no fabricated static count. */
+.alerts-bell{display:inline-flex;align-items:center;justify-content:center;
+  text-decoration:none;color:#486173;font-size:16px}
+.alerts-bell:hover{background:#f3fbfa;color:#0d8177}
