@@ -18,20 +18,6 @@ const VALID_TASK_STATUS=['Assigned','In Progress','Completed','Escalated'];
 export class NmcCaseError extends Error{
   constructor(code,status=400){super(code);this.code=code;this.status=status;}
 }
-function initialTasks(alert){
-  const critical=alert.severity==='CRITICAL';
-  return [
-    {id:'verify-certificate',status:'Assigned',assignedRole:'COMPLIANCE_OFFICER',
-      mandatory:true,evidenceIds:[`CERT-SC-${alert.imo}`]},
-    {id:'enhanced-monitoring',status:'Assigned',assignedRole:'NMC_OFFICER',
-      mandatory:true,evidenceIds:[`AIS-${alert.imo}`]},
-    {id:'priority-inspection',status:'Assigned',assignedRole:'INSPECTION_OFFICER',
-      mandatory:true,evidenceIds:[`INS-${alert.imo}`]},
-    ...(critical?[{id:'restriction-review',status:'Assigned',
-      assignedRole:'COMPLIANCE_SUPERVISOR',mandatory:false,
-      evidenceIds:[`CERT-SC-${alert.imo}`]}]:[])
-  ];
-}
 function auditEntry(row,action,role,note='',details={}){
   return {version:row.version,action,role,note,details,at:row.updatedAt};
 }
