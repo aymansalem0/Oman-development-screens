@@ -100,7 +100,7 @@ export class NmcNavigationComponent implements OnInit, OnDestroy {
   }
 
   get intelligenceRoute(): string {
-    return this.selectedImo ? this.vesselRoute + '/ai-assessment' : '/moei/nmc';
+    return this.selectedImo ? this.vesselRoute + '/risk' : '/moei/nmc';
   }
 
   get caseRoute(): string {
@@ -115,7 +115,8 @@ export class NmcNavigationComponent implements OnInit, OnDestroy {
   get isVessel360(): boolean {
     return /^\/moei\/nmc\/vessel\/\d{7}(?:\/risk)?$/.test(this.currentPath);
   }
-  get isIntelligence(): boolean { return this.currentPath.endsWith('/ai-assessment'); }
+  get isIntelligence(): boolean { return this.currentPath.endsWith('/ai-assessment')||this.currentPath.endsWith('/risk'); }
+  get isGuidanceConfig():boolean{return this.currentPath==='/moei/nmc/admin/operational-guidance';}
   get isCase(): boolean { return this.currentPath.endsWith('/case'); }
   get isSmartInspection(): boolean { return this.currentPath.includes('/smart-inspection'); }
   get isRiskConfig(): boolean {
