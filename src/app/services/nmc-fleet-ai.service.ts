@@ -35,7 +35,7 @@ export interface FleetAiSnapshot {
     failed: number;
   };
   scheduler?: {
-    mode:string;enabled:boolean;checkIntervalSeconds:number;
+    mode:string;enabled:boolean;enabledVessels:number;checkIntervalSeconds:number;
     lastTickAt:string|null;lastError:string|null;
     lastSelected:number;lastUnchanged:number;batchRunning:boolean;
   };
