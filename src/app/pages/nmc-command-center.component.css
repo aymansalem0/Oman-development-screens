@@ -1064,3 +1064,38 @@ button, input, select { font: inherit; }
 .alerts-bell{display:inline-flex;align-items:center;justify-content:center;
   text-decoration:none;color:#486173;font-size:16px}
 .alerts-bell:hover{background:#f3fbfa;color:#0d8177}
+
+/* No implicit vessel selection: keep the details area useful until a user clicks. */
+.vessel-unselected {
+  min-height: 235px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  padding: 24px;
+  text-align: center;
+  gap: 8px;
+  background: linear-gradient(145deg,#fbfefd,#f3f9fa);
+}
+.vessel-unselected-icon {
+  display: grid;
+  place-items: center;
+  width: 45px;
+  height: 45px;
+  font-size: 26px;
+  border-radius: 50%;
+  background: #e4f5f2;
+  color: #0f766e;
+}
+.vessel-unselected h3 {
+  margin: 0;
+  color: #24556a;
+  font-size: 15px;
+}
+.vessel-unselected p {
+  max-width: 350px;
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.6;
+  color: #607888;
+}
