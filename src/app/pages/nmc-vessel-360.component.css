@@ -2392,3 +2392,156 @@ button, a { font: inherit; }
   .v360-quality-controls { width: 100%; justify-content: space-between; }
   .v360-quality-peek { gap: 7px 12px; }
 }
+
+
+/* Evidence-based drill down: detailed methodology, NOT a second copy of the brief. */
+.v360-quality-deep-dive {
+  display:grid;
+  grid-template-columns:minmax(0,1fr);
+  gap:14px;
+  padding-top:16px;
+  margin-top:14px;
+  border-top:1px solid #dce9eb;
+}
+.v360-quality-detail-card {
+  padding:16px 18px;
+  border-radius:12px;
+  background:#fff;
+  border:1px solid #dfe9ec;
+  box-shadow:0 3px 12px rgba(20,65,76,.035);
+  overflow:hidden;
+}
+.v360-quality-detail-card h4 {
+  margin:0 0 8px;
+  font-size:13px;
+  line-height:1.5;
+  color:#1b515b;
+}
+.v360-quality-detail-card > p,
+.v360-quality-source-table p {
+  font-size:11px;
+  font-weight:400;
+  color:#577184;
+  line-height:1.6;
+  margin:5px 0 12px;
+}
+.v360-quality-scroll { overflow-x:auto; max-width:100%; margin:10px 0; }
+.v360-quality-evidence-scroll { max-height:310px; overflow-y:auto; }
+.v360-quality-source-table {
+  border-collapse:separate;
+  border-spacing:0;
+  width:100%;
+  min-width:630px;
+  font-size:11px;
+  text-align:start;
+}
+.v360-quality-source-table th,
+.v360-quality-source-table td {
+  padding:10px 12px;
+  border-bottom:1px solid #e5eef2;
+  vertical-align:top;
+  text-align:start;
+  line-height:1.5;
+  color:#3c596a;
+}
+.v360-quality-source-table thead th {
+  font-size:10px;
+  color:#647d8d;
+  background:#f2f7fa;
+  font-weight:800;
+}
+.v360-quality-source-table tbody tr:hover { background:#f8fbfb; }
+.v360-quality-source-table tbody th { font-weight:750; color:#214858; }
+.v360-quality-source-table td strong { color:#087f77; }
+.v360-quality-mono {
+  font-family:Consolas,ui-monospace,monospace;
+  font-size:10px;
+  overflow-wrap:anywhere;
+}
+.v360-compare-tag {
+  display:inline-block;
+  padding:4px 8px;
+  border-radius:7px;
+  background:#edf2f6;
+  color:#587183;
+  font-size:10px;
+  font-weight:800;
+  white-space:nowrap;
+}
+.v360-compare-tag.matched { color:#057568; background:#e4f6f0; }
+.v360-compare-tag.missing { color:#996819; background:#fff4dd; }
+.v360-compare-tag.mismatch { color:#ba442b; background:#fff0e9; }
+.v360-quality-formula {
+  display:flex;
+  flex-wrap:wrap;
+  align-items:stretch;
+  gap:8px;
+  margin:12px 0;
+}
+.v360-quality-formula span {
+  display:flex;
+  align-items:center;
+  gap:8px;
+  padding:9px 12px;
+  border:1px solid #dde9ea;
+  border-radius:9px;
+  background:#f6fafb;
+  color:#526c7b;
+  font-size:11px;
+  line-height:1.5;
+}
+.v360-quality-formula b { color:#0c766d; font-size:12px; }
+.v360-quality-formula .v360-quality-final {
+  background:#e8f7f2;
+  border-color:#b2dfd0;
+  color:#17544b;
+  font-weight:800;
+}
+.v360-quality-missing {
+  border:1px dashed #dcac60;
+  border-radius:9px;
+  background:#fffaed;
+  padding:11px 13px;
+  color:#875e24 !important;
+}
+.v360-quality-source-meta {
+  display:flex;
+  flex-wrap:wrap;
+  gap:9px;
+  margin:10px 0 13px;
+}
+.v360-quality-source-meta span {
+  display:grid;
+  gap:5px;
+  padding:9px 11px;
+  min-width:170px;
+  border:1px solid #e2ebed;
+  border-radius:8px;
+  background:#f6fafb;
+}
+.v360-quality-source-meta small {font-size:9px;color:#68818d;}
+.v360-quality-source-meta b {font-size:11px;color:#2b5360;overflow-wrap:anywhere;}
+.v360-quality-source-check {
+  display:grid;
+  grid-template-columns:minmax(120px,.8fr) minmax(180px,2fr) auto;
+  align-items:center;
+  gap:12px;
+  padding:9px 10px;
+  border-bottom:1px solid #e9f0f3;
+  font-size:11px;
+}
+.v360-quality-source-check code {font-size:11px;color:#31556a;}
+.v360-quality-source-check > span {overflow-wrap:anywhere;}
+.v360-quality-history-note {
+  margin-top:13px !important;
+  padding:10px 12px;
+  border-left:3px solid #e4ad50;
+  background:#fff9ed;
+  color:#895f27 !important;
+  border-radius:5px;
+}
+@media(max-width:700px) {
+  .v360-quality-detail-card { padding:12px; }
+  .v360-quality-source-check { grid-template-columns:1fr auto; }
+  .v360-quality-source-check > span { grid-column:1 / -1; grid-row:2; }
+}
