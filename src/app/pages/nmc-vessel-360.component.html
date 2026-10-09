@@ -108,12 +108,37 @@
         <p class="v360-quality-state" *ngIf="intelligence.quality.status !== 'CALCULATED'">
           {{ copy('Structural quality not calculated for this saved assessment. A no-AirIA retrospective check is available.', 'لم تُحسب الجودة الهيكلية لهذا التقييم المحفوظ بعد. يمكن إجراء فحص لاحق دون استدعاء Airia.') }}
         </p>
-        <div class="v360-quality-metrics" *ngIf="qualityExpanded && intelligence.quality.breakdown as summary">
-          <span><small>{{ copy('Completeness', 'الاكتمال') }}</small><strong>{{ summary.completenessPercent }}%</strong></span>
-          <span><small>{{ copy('Consistency', 'الاتساق') }}</small><strong>{{ summary.consistencyPercent === null ? '—' : summary.consistencyPercent + '%' }}</strong></span>
-          <span><small>{{ copy('Evidence linkage', 'ربط الأدلة') }}</small><strong>{{ summary.evidenceLinkagePercent === null ? '—' : summary.evidenceLinkagePercent + '%' }}</strong></span>
-          <span><small>{{ copy('Compared identity fields', 'حقول الهوية المقارنة') }}</small><strong>{{ summary.comparedFields }}</strong></span>
-        </div>
+        <div class="v360-quality-deep-dive" *ngIf="qualityExpanded && intelligence.quality.breakdown as summary">
+          <section class="v360-quality-detail-card">
+            <h4>{{ copy('How was the 75-point structural score calculated?', 'كيف تم حساب درجة الجودة الهيكلية؟') }}</h4>
+            <p>{{ copy('These are reproducible checks against synthetic records, not verified facts.', 'هذه فحوصات قابلة لإعادة الحساب على سجلات تجريبية وليست حقائق معتمدة.') }}</p>
+            <p class="v360-quality-missing" *ngIf="!summary.calculationSteps?.length">{{ copy('Detailed audit inputs were not saved in this version. Run the no-Airia quality backfill again to record real source values and evidence links.', 'تفاصيل الحساب لم تكن محفوظة في الإصدار السابق. أعد تشغيل حساب الجودة دون استدعاء Airia لتخزين قيم المصادر وروابط الأدلة الفعلية.') }}</p>
+            <div class="v360-quality-scroll" *ngIf="summary.calculationSteps?.length">
+              <table class="v360-quality-source-table">
+                <thead><tr>
+                  <th>{{ copy('Check and rule', 'الفحص وطريقة الحساب') }}</th>
+                  <th>{{ copy('Evidence count', 'عدد عناصر الفحص') }}</th>
+                  <th>{{ copy('Measured', 'النتيجة') }}</th>
+                  <th>{{ copy('Weight', 'الوزن') }}</th>
+                  <th>{{ copy('Contribution', 'المساهمة') }}</th>
+                </tr></thead>
+                <tbody><tr *ngFor="let step of summary.calculationSteps">
+                  <td><b>{{ qualityMetricLabel(step.key) }}</b><p>{{ qualityMetricExplanation(step.key) }}</p></td>
+                  <td>{{ step.numerator }} / {{ step.denominator }}</td>
+                  <td>{{ step.percent === null ? '—' : step.percent + '%' }}</td>
+                  <td>{{ step.weightPercent }}%</td>
+                  <td><strong>{{ step.rawContribution === null ? '—' : (step.rawContribution | number:'1.0-2') }}</strong></td>
+                </tr></tbody>
+              </table>
+            </div>
+            <div class="v360-quality-formula">
+              <span>{{ copy('Weighted result before synthetic adjustment', 'الدرجة الموزونة قبل خصم البيانات التجريبية') }}: <b>{{ summary.rawScoreBeforeSyntheticCap ?? '—' }}/100</b></span>
+              <span>{{ copy('Synthetic policy multiplier', 'معامل سياسة البيانات التجريبية') }}: <b>× {{ summary.syntheticDiscountFactor === undefined ? '—' : (summary.syntheticDiscountFactor | number:'1.2-2') }}</b></span>
+              <span>{{ copy('Maximum synthetic structural score', 'الحد الأعلى للجودة الهيكلية التجريبية') }}: <b>{{ summary.syntheticUnverifiedScoreCap }}/100</b></span>
+              <span class="v360-quality-final">{{ copy('Final stored quality score', 'الدرجة النهائية المحفوظة') }}: <b>{{ intelligence.quality.score === null ? '—' : intelligence.quality.score + '/100' }}</b></span>
+            </div>
+            <p>{{ copy('Formula: MIN(75, ROUND(raw weighted result × 0.75)). These POC policy limits are NOT measured source reliability or AI confidence.', 'المعادلة: أصغر قيمة من (75، تقريب [الناتج الموزون × 0.75]). هذه حدود سياسة النموذج التجريبي وليست قياساً لموثوقية المصدر أو ثقة AI.') }}</p>
+          </section>
         <div class="v360-quality-conflicts" *ngIf="qualityExpanded">
           <strong>{{ copy('Detected source disagreements', 'اختلافات المصادر المكتشفة') }}: {{ intelligence.conflicts.length }}</strong>
           <span *ngIf="intelligence.conflicts.length === 0">{{ copy('No disagreements stored for compared fields; this does not establish overall accuracy or authority verification.', 'لا توجد اختلافات مسجلة للحقول التي تمت مقارنتها؛ لا يعني ذلك إثبات الدقة العامة أو اعتماد الجهة.') }}</span>
