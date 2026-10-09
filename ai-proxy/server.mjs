@@ -195,10 +195,28 @@ const server = createServer(async (req, res) => {
           // a newer scored assessment that superseded the event.
           const source=fleet.getVesselResult(existing.imo);
           if(!source||source.status!=='COMPLETED'||
-            source.assessmentId!==existing.sourceAssessmentId||
-            source.score!==existing.sourceScore||!Array.isArray(source.signals)||
-            source.signals.length!==5)
+            source.score!==existing.sourceScore||source.level!==existing.sourceLevel||
+            !Array.isArray(source.signals)||source.signals.length!==5)
             throw new NmcCaseError('CASE_SOURCE_ASSESSMENT_UNAVAILABLE',409);
+          // Older PR42 alerts omitted the assessment ID from the snapshot.
+          // Reconcile ONLY when the persisted alert timestamp/ruleset and current
+          // saved AI source prove it was already assessed before that alert.
+          let legacyReconciled=false;
+          if(source.assessmentId!==existing.sourceAssessmentId){
+            const alert=existing.sourceAssessmentId===null&&existing.alertIds?.length
+              ?await alerts.get(existing.alertIds[0]):null;
+            const assessedAt=Date.parse(source.assessedAt||'');
+            const alertedAt=Date.parse(alert?.createdAt||'');
+            if(!alert||alert.imo!==existing.imo||
+              alert.sourceAssessmentId!==null||
+              alert.sourceScore!==source.score||alert.sourceLevel!==source.level||
+              !alert.sourceRulesetVersion||
+              alert.sourceRulesetVersion!==source.configVersion||
+              !source.assessmentId||!Number.isFinite(assessedAt)||
+              !Number.isFinite(alertedAt)||assessedAt>alertedAt)
+              throw new NmcCaseError('CASE_SOURCE_ASSESSMENT_UNAVAILABLE',409);
+            legacyReconciled=true;
+          }
           actionPlanRuns.add(first);
           try {
             const input={
@@ -223,6 +241,10 @@ const server = createServer(async (req, res) => {
               score:existing.sourceScore,level:existing.sourceLevel,
               configVersion:source.configVersion,signals:source.signals
             });
+            // Provenance of the evidence actually supplied to A01, distinct from
+            // the immutable legacy case field that may have been null.
+            plan.evidenceAssessmentId=source.assessmentId;
+            plan.legacySourceReconciled=legacyReconciled;
             const item=await cases.saveActionPlan(first,body.version,plan);
             return respond(res,200,{status:'ok',case:item});
           }finally{actionPlanRuns.delete(first);}
