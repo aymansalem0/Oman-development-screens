@@ -2545,3 +2545,19 @@ button, a { font: inherit; }
   .v360-quality-source-check { grid-template-columns:1fr auto; }
   .v360-quality-source-check > span { grid-column:1 / -1; grid-row:2; }
 }
+
+
+/* Saved Oracle quality and browser-scoped configurable preview are distinct. */
+.v360-quality-controls a.v360-quality-toggle {
+  text-decoration:none;white-space:nowrap;display:inline-flex;align-items:center;
+}
+.v360-policy-comparison {
+  display:flex;align-items:center;flex-wrap:wrap;gap:10px;
+  margin:10px 0 6px;padding:10px 12px;
+  border:1px solid #b9e1d9;background:#effbf7;border-radius:10px;
+}
+.v360-policy-comparison > span {display:grid;gap:3px;}
+.v360-policy-comparison > span[aria-hidden] {display:block;font-size:16px;color:#7ba29e;}
+.v360-policy-comparison small {font-size:9px;color:#5e777c;}
+.v360-policy-comparison b {font-size:15px;color:#0a776e;}
+.v360-policy-comparison .v360-policy-version {font-size:9px;color:#677f88;flex:1;min-width:160px;justify-items:end;}
