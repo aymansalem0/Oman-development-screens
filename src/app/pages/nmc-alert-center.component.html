@@ -110,17 +110,16 @@
       </div>
 
       <article *ngFor="let alert of alertsFiltered" class="alert-card"
-               [class.critical]="(policyFor(alert)?.level||alert.severity)==='Critical'||(!policyFor(alert)&&alert.severity==='CRITICAL')"
+               [class.critical]="displaySeverity(alert)==='CRITICAL'"
                [class.local-superseded]="isPolicySuperseded(alert)">
         <div class="alert-main">
-          <div class="alert-symbol" [class.high]="alert.severity==='HIGH'">
-            {{alert.severity==='CRITICAL'?'!':'▲'}}
+          <div class="alert-symbol" [class.high]="displaySeverity(alert)==='HIGH'">
+            {{displaySeverity(alert)==='CRITICAL'?'!':'▲'}}
           </div>
           <div class="alert-body">
             <div class="alert-meta">
-              <span class="severity" [class.high]="(policyFor(alert)?.level||alert.severity)==='High'||(!policyFor(alert)&&alert.severity==='HIGH')">
-                {{policyFor(alert)?.level === 'Critical'?severityText('CRITICAL'):
-                  policyFor(alert)?.level === 'High'?severityText('HIGH'):severityText(alert.severity)}}
+              <span class="severity" [class.high]="displaySeverity(alert)==='HIGH'">
+                {{severityText(displaySeverity(alert))}}
               </span>
               <span *ngIf="isPolicySuperseded(alert)" class="local-suppressed-pill">
                 {{copy('Not applicable under local Risk Settings','غير مطابق لإعدادات المخاطر المحلية')}}
@@ -129,15 +128,9 @@
               <span class="muted">{{alert.createdAt|date:'medium'}}</span>
             </div>
             <h4>{{copy(
-              alert.severity==='CRITICAL'?'Critical maritime risk requires review':'High maritime risk requires review',
-              alert.severity==='CRITICAL'?'مخاطر بحرية حرجة تستلزم المراجعة':'مخاطر بحرية مرتفعة تستلزم المراجعة')}}</h4>
-            <p>{{copy(
-              alert.detail.includes('inspection')?
-                'A saved assessment identifies a critical open inspection finding.':
-                'A saved assessment exceeded the monitored risk band.',
-              alert.detail.includes('inspection')?
-                'كشف تقييم محفوظ عن مخالفة معاينة حرجة لم تُغلق.':
-                'تجاوز تقييم مخاطر محفوظ مستوى المراقبة المحدد.')}}</p>
+              displaySeverity(alert)==='CRITICAL'?'Critical maritime risk requires review':'High maritime risk requires review',
+              displaySeverity(alert)==='CRITICAL'?'مخاطر بحرية حرجة تستلزم المراجعة':'مخاطر بحرية مرتفعة تستلزم المراجعة')}}</h4>
+            <p>{{triggerDescription(alert)}}</p>
             <div class="facts">
               <span><b>IMO</b> {{alert.imo}}</span>
               <span><b>{{copy('Saved risk','المخاطر المحفوظة')}}</b> {{alert.sourceScore}}/100</span>
