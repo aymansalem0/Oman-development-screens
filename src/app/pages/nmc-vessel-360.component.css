@@ -2561,3 +2561,19 @@ button, a { font: inherit; }
 .v360-policy-comparison small {font-size:9px;color:#5e777c;}
 .v360-policy-comparison b {font-size:15px;color:#0a776e;}
 .v360-policy-comparison .v360-policy-version {font-size:9px;color:#677f88;flex:1;min-width:160px;justify-items:end;}
+
+
+/* Shared NMC navigation: preserve the Vessel 360 responsive reading area. */
+@media (min-width: 1221px) {
+  .v360-shell .v360-main { margin-left: 216px; margin-right: 0; max-width: calc(100% - 216px); }
+  .v360-shell.rtl .v360-main { margin-left: 0; margin-right: 216px; }
+}
+@media (min-width: 961px) and (max-width: 1220px) {
+  .v360-shell .v360-main { margin-left: 66px; margin-right: 0; max-width: calc(100% - 66px); }
+  .v360-shell.rtl .v360-main { margin-left: 0; margin-right: 66px; }
+}
+@media (max-width: 960px) {
+  .v360-shell .v360-main, .v360-shell.rtl .v360-main {
+    margin-left: 0; margin-right: 0; max-width: none; padding-top: 54px;
+  }
+}
