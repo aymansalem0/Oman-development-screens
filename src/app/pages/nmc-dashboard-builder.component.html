@@ -69,12 +69,16 @@
             <div class="db-board-top">
               <div class="db-board-icon">▥</div>
               <span class="db-chip" [class.db-chip-published]="shared.status==='PUBLISHED'">
-                {{shared.status==='PUBLISHED'?copy('Published','منشورة'):copy('Draft','مسودة')}}
+                {{shared.status==='PUBLISHED'?copy('Published','منشورة'):shared.publishedParentId?copy('Revision Draft','مسودة تحديث'):copy('Draft','مسودة')}}
               </span>
             </div>
             <h3>{{shared.title}}</h3>
             <p>{{shared.description||copy('Maritime decision support dashboard','لوحة معلومات لدعم القرار البحري')}}</p>
             <div class="db-board-meta">{{shared.widgets.length}} {{copy('widgets','مؤشرات')}} · {{copy('Version','إصدار')}} {{shared.version}}</div>
+            <p *ngIf="shared.publishedParentId" class="db-revision-hint">
+              {{copy('Changes to an existing published dashboard · awaiting republish',
+                      'تعديلات على لوحة منشورة · في انتظار إعادة النشر')}}
+            </p>
             <div class="db-placement-indicator">
               {{copy('Menu','القائمة')}}:
               {{shared.menuPlacement==='SMART_INSPECTION'?copy('Smart Inspection','المعاينة الذكية'):shared.menuPlacement==='SETTINGS'?copy('Settings','الإعدادات'):copy('NMC Center','المركز البحري الوطني')}}
@@ -94,12 +98,18 @@
             <div class="db-board-actions">
               <button *ngIf="shared.status==='PUBLISHED'" class="db-primary" type="button"
                       (click)="viewPublished(shared)">{{copy('View Dashboard','عرض لوحة المعلومات')}} ↗</button>
+              <button *ngIf="shared.status==='PUBLISHED'" class="db-outline db-edit-live" type="button"
+                      (click)="editPublished(shared)" [disabled]="sharedBusy">
+                ✎ {{copy('Edit Published','تعديل المنشورة')}}
+              </button>
               <button class="db-outline" type="button" (click)="openShared(shared)">
                 {{shared.status==='PUBLISHED'?copy('Use as Template','استخدام كنموذج'):copy('Edit Shared Draft','تعديل المسودة')}}
               </button>
               <button class="db-outline" type="button" (click)="showHistory(shared)">{{copy('History','السجل')}}</button>
               <button class="db-outline" type="button" (click)="publishShared(shared)"
-                      *ngIf="shared.status==='DRAFT'" [disabled]="sharedBusy">{{copy('Publish','نشر')}}</button>
+                      *ngIf="shared.status==='DRAFT'" [disabled]="sharedBusy">
+                {{shared.publishedParentId?copy('Republish','إعادة النشر'):copy('Publish','نشر')}}
+              </button>
               <button class="db-danger" type="button" (click)="archiveShared(shared)"
                       *ngIf="shared.status==='DRAFT'" [disabled]="sharedBusy">{{copy('Archive','أرشفة')}}</button>
             </div>
@@ -135,13 +145,23 @@
         <div class="db-heading-actions">
           <button class="db-outline" type="button" (click)="back()">← {{copy('All Dashboards','كل اللوحات')}}</button>
           <button class="db-outline" type="button" (click)="refresh()">{{copy('Refresh Data','تحديث البيانات')}}</button>
+          <button *ngIf="viewOnly" class="db-primary" type="button" [disabled]="sharedBusy"
+                  (click)="editPublished(board)">✎ {{copy('Edit Published','تعديل المنشورة')}}</button>
           <button *ngIf="!viewOnly" class="db-primary" type="button" (click)="save()" [disabled]="!dirty">✓ {{copy('Save Changes','حفظ التغييرات')}}</button>
           <button *ngIf="!viewOnly" class="db-outline db-workspace-save" type="button" (click)="saveShared()" [disabled]="sharedBusy">
             ⇧ {{copy('Save to Workspace','حفظ في المساحة المشتركة')}}
           </button>
+          <button *ngIf="!viewOnly&&board.publishedParentId" class="db-primary" type="button"
+                  (click)="republishCurrent()" [disabled]="sharedBusy||dirty">
+            ↻ {{copy('Republish','إعادة النشر')}}
+          </button>
         </div>
       </div>
 
+      <p *ngIf="board.publishedParentId&&!viewOnly" class="db-revision-banner">
+        ✎ {{copy('Editing the next revision of an existing published dashboard. The live version stays available until Republish.',
+                  'تعديل الإصدار التالي من لوحة منشورة. النسخة الحالية تظل متاحة حتى إعادة النشر.')}}
+      </p>
       <div class="db-statusline">
         <span>● {{copy('Risk rules','قواعد المخاطر')}}: {{riskVersion}}</span>
         <span>{{copy('Available assessments','التقييمات المتاحة')}}: {{assessed.length}} / {{fleet.length}}</span>

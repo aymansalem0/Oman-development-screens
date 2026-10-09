@@ -215,3 +215,72 @@ test('disallowed chart types and palettes cannot enter centralized dashboard sto
     assert.equal((await workspace.list()).length,0);
   }finally{close();}
 });
+
+
+test('edit published then republish same ID, keeping current page live until approval',async()=>{
+  const {workspace,opts,close}=setup();
+  try{
+    const first=await workspace.create({...sample('published-test'),menuPlacement:'NMC_CENTER'});
+    const published=await workspace.publish(first.id,first.version);
+    const working=await workspace.startPublishedEdit(published.id);
+    assert.notEqual(working.id,published.id);
+    assert.equal(working.publishedParentId,published.id);
+    assert.equal(working.basePublishedVersion,published.version);
+    assert.equal((await workspace.get(published.id)).status,'PUBLISHED');
+    assert.equal((await workspace.publishedMenu()).length,1);
+    const revised=await workspace.save(working.id,{
+      ...working,title:'Updated Maritime Risk',menuPlacement:'SMART_INSPECTION',
+      widgets:[{id:'chart-marine',type:'bar',metric:'byRisk',
+        title:'New Risk Chart',span:'full',chartType:'donut',palette:'maritime'}]
+    });
+    assert.equal(revised.publishedParentId,published.id);
+    assert.equal((await workspace.get(published.id)).title,'Risk Monitoring');
+    assert.equal((await workspace.publishedMenu())[0].menuPlacement,'NMC_CENTER');
+    const republished=await workspace.publish(revised.id,revised.version);
+    assert.equal(republished.id,published.id);
+    assert.equal(republished.status,'PUBLISHED');
+    assert.equal(republished.version,published.version+1);
+    assert.equal(republished.title,'Updated Maritime Risk');
+    assert.equal(republished.menuPlacement,'SMART_INSPECTION');
+    assert.equal(republished.widgets[0].chartType,'donut');
+    assert.equal((await workspace.publishedMenu()).length,1);
+    assert.equal((await workspace.publishedMenu())[0].id,published.id);
+    assert.equal((await workspace.get(revised.id)),null);
+    const loaded=new DashboardWorkspace(opts);
+    assert.deepEqual(await loaded.get(published.id),republished);
+    assert.deepEqual((await loaded.revisions(published.id)).map(x=>x.action),
+      ['PUBLISHED','PUBLISHED','CREATED']);
+    assert.equal((await loaded.revisions(revised.id))[0].action,'ARCHIVED');
+  }finally{close();}
+});
+
+test('stale edit does not overwrite newer published version',async()=>{
+  const {workspace,close}=setup();
+  try{
+    const first=await workspace.create(sample('conflict-test'));
+    const published=await workspace.publish(first.id,first.version);
+    const editorA=await workspace.startPublishedEdit(published.id);
+    const editorB=await workspace.startPublishedEdit(published.id);
+    await workspace.publish(editorA.id,editorA.version);
+    await assert.rejects(()=>workspace.publish(editorB.id,editorB.version),
+      /DASHBOARD_PUBLISHED_VERSION_CONFLICT/);
+    assert.equal((await workspace.get(editorB.id)).status,'DRAFT');
+    assert.equal((await workspace.get(published.id)).version,published.version+1);
+  }finally{close();}
+});
+
+test('tampering with revision parent in save body is ignored',async()=>{
+  const {workspace,close}=setup();
+  try{
+    const first=await workspace.create(sample('tamper-parent'));
+    const pub=await workspace.publish(first.id,first.version);
+    const editing=await workspace.startPublishedEdit(pub.id);
+    const updated=await workspace.save(editing.id,{
+      ...editing,publishedParentId:'another-dashboard',
+      basePublishedVersion:999
+    });
+    assert.equal(updated.publishedParentId,pub.id);
+    assert.equal(updated.basePublishedVersion,pub.version);
+    assert.equal((await workspace.get(pub.id)).status,'PUBLISHED');
+  }finally{close();}
+});

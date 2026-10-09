@@ -186,6 +186,112 @@ export class DashboardWorkspace {
     });
   }
 
+  /**
+   * Stage edits for a published dashboard as a linked, versioned draft.
+   * The published row, URL, menu link and viewer remain untouched.
+   * No migration: the current NMC_DASHBOARD + REVISION tables are reused.
+   */
+  async startPublishedEdit(id,role='EDITOR'){
+    const published=await this.get(id);
+    if(!published)throw new DashboardError('DASHBOARD_NOT_FOUND',404);
+    if(published.status!=='PUBLISHED')throw new DashboardError('DASHBOARD_NOT_PUBLISHED',409);
+    const draftId='edit-'+randomUUID();
+    const draft={
+      ...normalize(published,{id:draftId,status:'DRAFT',version:1}),
+      publishedParentId:id,
+      basePublishedVersion:published.version
+    };
+    if(this.mode==='json'){
+      const db=this._load();
+      if(!db.dashboards[id]||db.dashboards[id].status!=='PUBLISHED'||
+         db.dashboards[id].version!==published.version)
+        throw new DashboardError('DASHBOARD_VERSION_CONFLICT',409);
+      if(Object.keys(db.dashboards).length>=MAX_DASHBOARDS)
+        throw new DashboardError('DASHBOARD_LIMIT_REACHED',409);
+      db.dashboards[draftId]=draft;
+      db.revisions[draftId]=[{version:1,action:'CREATED',role,at:draft.updatedAt}];
+      this._write(db);return clone(draft);
+    }
+    return this._db(async con=>{
+      try{
+        // Parent optimistic check prevents an edit from starting against a stale read.
+        const match=await con.execute(`SELECT DASHBOARD_ID FROM NMC_DASHBOARD
+          WHERE DASHBOARD_ID=:id AND STATUS='PUBLISHED' AND VERSION_NO=:version`,
+          {id,version:published.version},{outFormat:oracledb.OUT_FORMAT_OBJECT});
+        if(match.rows.length!==1)throw new DashboardError('DASHBOARD_VERSION_CONFLICT',409);
+        await con.execute(`INSERT INTO NMC_DASHBOARD
+          (DASHBOARD_ID,TITLE,STATUS,VERSION_NO,DOC_JSON,UPDATED_ROLE)
+          VALUES(:id,:title,'DRAFT',1,:doc,:role)`,
+          {id:draftId,title:draft.title,doc:clob(draft),role});
+        await this._insertRevision(con,draft,'CREATED',role);
+        await con.commit();return draft;
+      }catch(error){await con.rollback();throw error;}
+    });
+  }
+
+  async republishDraft(current,version,role='PUBLISHER'){
+    const parentId=current?.publishedParentId;
+    const baseVersion=current?.basePublishedVersion;
+    if(!parentId||!keyPattern.test(parentId)||
+       !Number.isInteger(baseVersion)||baseVersion<1)
+      throw new DashboardError('DASHBOARD_REVISION_INVALID',409);
+    const published=await this.get(parentId);
+    if(!published||published.status!=='PUBLISHED')
+      throw new DashboardError('DASHBOARD_PUBLISHED_PARENT_NOT_FOUND',409);
+    if(published.version!==baseVersion)
+      throw new DashboardError('DASHBOARD_PUBLISHED_VERSION_CONFLICT',409);
+    if(current.version!==version)throw new DashboardError('DASHBOARD_VERSION_CONFLICT',409);
+    const next=normalize(current,{
+      id:parentId,status:'PUBLISHED',version:published.version+1
+    });
+    // Retire the working draft only after the published row has been updated.
+    const retired={...current,status:'ARCHIVED',version:current.version+1,updatedAt:now()};
+
+    if(this.mode==='json'){
+      const db=this._load();
+      if(db.dashboards[parentId]?.version!==baseVersion||
+         db.dashboards[parentId]?.status!=='PUBLISHED')
+        throw new DashboardError('DASHBOARD_PUBLISHED_VERSION_CONFLICT',409);
+      if(db.dashboards[current.id]?.version!==version||
+         db.dashboards[current.id]?.status!=='DRAFT')
+        throw new DashboardError('DASHBOARD_VERSION_CONFLICT',409);
+      db.dashboards[parentId]=next;
+      db.dashboards[current.id]=retired;
+      db.revisions[parentId]=[
+        {version:next.version,action:'PUBLISHED',role,at:next.updatedAt},
+        ...(db.revisions[parentId]||[])
+      ];
+      db.revisions[current.id]=[
+        {version:retired.version,action:'ARCHIVED',role,at:retired.updatedAt},
+        ...(db.revisions[current.id]||[])
+      ];
+      this._write(db);return clone(next);
+    }
+    return this._db(async con=>{
+      try{
+        const parentChange=await con.execute(`UPDATE NMC_DASHBOARD
+          SET TITLE=:title,VERSION_NO=:newVersion,DOC_JSON=:doc,
+          UPDATED_AT=SYSTIMESTAMP,UPDATED_ROLE=:role
+          WHERE DASHBOARD_ID=:id AND VERSION_NO=:expected AND STATUS='PUBLISHED'`,
+          {id:parentId,title:next.title,newVersion:next.version,
+            doc:clob(next),role,expected:baseVersion});
+        if(parentChange.rowsAffected!==1)
+          throw new DashboardError('DASHBOARD_PUBLISHED_VERSION_CONFLICT',409);
+        const draftChange=await con.execute(`UPDATE NMC_DASHBOARD
+          SET STATUS='ARCHIVED',VERSION_NO=:newVersion,DOC_JSON=:doc,
+          UPDATED_AT=SYSTIMESTAMP,UPDATED_ROLE=:role
+          WHERE DASHBOARD_ID=:id AND VERSION_NO=:expected AND STATUS='DRAFT'`,
+          {id:current.id,newVersion:retired.version,
+            doc:clob(retired),role,expected:version});
+        if(draftChange.rowsAffected!==1)
+          throw new DashboardError('DASHBOARD_VERSION_CONFLICT',409);
+        await this._insertRevision(con,next,'PUBLISHED',role);
+        await this._insertRevision(con,retired,'ARCHIVED',role);
+        await con.commit();return next;
+      }catch(error){await con.rollback();throw error;}
+    });
+  }
+
   async save(id,input,role='EDITOR'){
     const expected=Number(input?.version);
     if(!Number.isInteger(expected)||expected<1)throw new DashboardError('DASHBOARD_VERSION_REQUIRED');
@@ -193,7 +299,14 @@ export class DashboardWorkspace {
     if(!current)throw new DashboardError('DASHBOARD_NOT_FOUND',404);
     if(current.status==='PUBLISHED')throw new DashboardError('PUBLISHED_DASHBOARD_LOCKED',409);
     if(current.version!==expected)throw new DashboardError('DASHBOARD_VERSION_CONFLICT',409);
-    const next=normalize(input,{id,status:'DRAFT',version:expected+1});
+    const next={
+      ...normalize(input,{id,status:'DRAFT',version:expected+1}),
+      // Linkage metadata is controlled by the server, never the request body.
+      ...(current.publishedParentId?{
+        publishedParentId:current.publishedParentId,
+        basePublishedVersion:current.basePublishedVersion
+      }:{})
+    };
     if(this.mode==='json'){
       const db=this._load();
       if(db.dashboards[id]?.version!==expected)throw new DashboardError('DASHBOARD_VERSION_CONFLICT',409);
@@ -222,6 +335,7 @@ export class DashboardWorkspace {
     if(!current)throw new DashboardError('DASHBOARD_NOT_FOUND',404);
     if(current.version!==version)throw new DashboardError('DASHBOARD_VERSION_CONFLICT',409);
     if(current.status!=='DRAFT')throw new DashboardError('DASHBOARD_ALREADY_PUBLISHED',409);
+    if(current.publishedParentId)return this.republishDraft(current,version,role);
     const next={...current,status:'PUBLISHED',version:version+1,updatedAt:now()};
     if(this.mode==='json'){
       const db=this._load();

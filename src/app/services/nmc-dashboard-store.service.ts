@@ -53,6 +53,9 @@ export interface DashboardDefinition {
   title: string;
   description: string;
   status: 'DRAFT' | 'PUBLISHED';
+  /** Populated only on server-created revisions of an existing published dashboard. */
+  publishedParentId?: string;
+  basePublishedVersion?: number;
   /** Legacy dashboards without this field default to NMC Center. */
   menuPlacement?: DashboardMenuPlacement;
   updatedAt: string;

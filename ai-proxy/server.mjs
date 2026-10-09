@@ -150,7 +150,7 @@ const server = createServer(async (req, res) => {
   // Writes require a server-managed access key. Role labels are shared-key
   // permissions, not end-user identity. Integrate real IAM before production.
   if (path === '/api/ai/dashboards' || path.startsWith('/api/ai/dashboards/')) {
-    const match=/^\/api\/ai\/dashboards(?:\/([a-zA-Z0-9_-]{1,100})(?:\/(publish|revisions|placement))?)?$/.exec(path);
+    const match=/^\/api\/ai\/dashboards(?:\/([a-zA-Z0-9_-]{1,100})(?:\/(publish|revisions|placement|edit))?)?$/.exec(path);
     if(!match)return respond(res,404,{error:'NOT_FOUND'});
     const [,id,action]=match;
     try{
@@ -170,6 +170,12 @@ const server = createServer(async (req, res) => {
         dashboards.assertRole(req,'EDITOR');
         const body=await requestJson(req,1024*128);
         return respond(res,200,{status:'ok',dashboard:await dashboards.save(id,body.dashboard)});
+      }
+      if(req.method==='POST'&&id&&action==='edit'){
+        dashboards.assertRole(req,'EDITOR');
+        return respond(res,201,{
+          status:'ok',dashboard:await dashboards.startPublishedEdit(id)
+        });
       }
       if(req.method==='POST'&&id&&action==='publish'){
         dashboards.assertRole(req,'PUBLISHER');

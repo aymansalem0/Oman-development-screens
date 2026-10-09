@@ -52,6 +52,15 @@ export class NmcDashboardWorkspaceService {
       .pipe(catchError(err=>this.catchCredentialFailure(err,'editor')));
   }
 
+  /** Start a central editable revision without unpublishing the live dashboard. */
+  editPublished(id:string):Observable<DashboardOneResponse>{
+    const key=this.requireKey('editor');
+    return this.http.post<DashboardOneResponse>(
+      this.root+'/'+encodeURIComponent(id)+'/edit',{},
+      {headers:this.headers(key)}
+    ).pipe(catchError(err=>this.catchCredentialFailure(err,'editor')));
+  }
+
   save(dashboard:DashboardDefinition,expectedVersion:number):Observable<DashboardOneResponse>{
     const key=this.requireKey('editor');
     const payload={dashboard:{...dashboard,version:expectedVersion}};
@@ -120,6 +129,18 @@ export class NmcDashboardWorkspaceService {
       DASHBOARD_SCHEMA_NOT_READY:['Central dashboard storage is not installed.','لم يتم تهيئة التخزين المركزي للوحات المعلومات.'],
       DASHBOARD_VERSION_CONFLICT:['Another version exists. Refresh shared dashboards before saving.','هناك إصدار أحدث. حدّث لوحات المعلومات المشتركة قبل الحفظ.'],
       PUBLISHED_DASHBOARD_LOCKED:['Published dashboards are read-only. Create an editable copy.','اللوحات المنشورة للعرض فقط. أنشئ نسخة قابلة للتعديل.'],
+      DASHBOARD_PUBLISHED_VERSION_CONFLICT:[
+        'The published dashboard has changed since editing started. Please review its latest version before publishing.',
+        'تغير إصدار لوحة المعلومات المنشورة منذ بدء التعديل. راجع أحدث إصدار قبل إعادة النشر.'
+      ],
+      DASHBOARD_PUBLISHED_PARENT_NOT_FOUND:[
+        'The original published dashboard is no longer available.',
+        'لوحة المعلومات الأصلية المنشورة لم تعد متاحة.'
+      ],
+      DASHBOARD_NOT_PUBLISHED:[
+        'This action requires a published dashboard.',
+        'يتطلب هذا الإجراء لوحة معلومات منشورة.'
+      ],
       DASHBOARD_STORE_UNAVAILABLE:['Workspace service is unavailable.','خدمة إدارة اللوحات غير متاحة.']
     };
     const entry=messages[code];
