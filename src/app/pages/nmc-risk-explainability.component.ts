@@ -148,6 +148,17 @@ export class NmcRiskExplainabilityComponent implements OnInit,OnDestroy {
   }
   get totalContribution():number{return this.factors.reduce((n,f)=>n+f.contribution,0);}
   get calculationMode():string{return this.assessment?.ruleset?.mode||'weighted';}
+  get modeAdjustment():number{
+    if(!this.factors.length)return 0;
+    const weighted=this.totalContribution;
+    const maximum=Math.max(...this.factors.map(x=>x.severity));
+    if(this.calculationMode==='conservative')return Math.max(0,maximum-weighted)*0.28;
+    if(this.calculationMode==='max-signal')return (maximum-weighted)*0.32;
+    return 0;
+  }
+  get reconstructedScore():number{
+    return Math.round(Math.min(100,Math.max(0,this.totalContribution+this.modeAdjustment)));
+  }
   get averageFactorConfidence():number|null{
     if(!this.factors.length)return null;
     return Math.round(this.factors.reduce((v,f)=>v+f.confidence,0)/this.factors.length*100);
