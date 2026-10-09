@@ -139,6 +139,39 @@
             </div>
             <p>{{ copy('Formula: MIN(75, ROUND(raw weighted result × 0.75)). These POC policy limits are NOT measured source reliability or AI confidence.', 'المعادلة: أصغر قيمة من (75، تقريب [الناتج الموزون × 0.75]). هذه حدود سياسة النموذج التجريبي وليست قياساً لموثوقية المصدر أو ثقة AI.') }}</p>
           </section>
+          <section class="v360-quality-detail-card" *ngIf="summary.fieldComparisons?.length">
+            <h4>{{ copy('Cross-source identity checks: compared values', 'مقارنة هوية السفينة: القيم الفعلية من المصدرين') }}</h4>
+            <p>{{ copy('These are the four evaluated identity fields; comparison ignores text case, whitespace and punctuation. This is NOT verification by an authority.', 'هذه هي حقول الهوية الأربعة التي تمت مقارنتها بعد توحيد النصوص والمسافات والترقيم، وليس تحققاً من جهة معتمدة.') }}</p>
+            <div class="v360-quality-scroll"><table class="v360-quality-source-table">
+              <thead><tr><th>{{ copy('Field', 'الحقل') }}</th><th>{{ copy('Internal synthetic fixture', 'القيمة الداخلية التجريبية') }}</th><th>{{ copy('Synthetic PSC registry', 'القيمة من سجل PSC التجريبي') }}</th><th>{{ copy('Result', 'النتيجة') }}</th></tr></thead>
+              <tbody><tr *ngFor="let field of summary.fieldComparisons">
+                <th>{{ qualityFieldLabel(field.field) }}</th>
+                <td>{{ field.internalValue || copy('Missing', 'غير متاح') }}</td>
+                <td>{{ field.externalValue || copy('Missing', 'غير متاح') }}</td>
+                <td><span class="v360-compare-tag" [ngClass]="field.status.toLowerCase()">{{ qualityComparisonLabel(field.status) }}</span></td>
+              </tr></tbody>
+            </table></div>
+            <p>{{ copy('Empty values are reported as missing, not source conflicts; a match means only agreement between these two synthetic rows.', 'القيم الفارغة تُصنف كنواقص وليست تعارضات. والتطابق يعني اتفاق صفَّي البيانات التجريبية فقط.') }}</p>
+          </section>
+
+          <section class="v360-quality-detail-card" *ngIf="summary.evidenceLinkages?.length">
+            <h4>{{ copy('AI evidence-ID trace', 'تتبع معرّفات الأدلة المرتبطة بعوامل AI') }}</h4>
+            <p>{{ copy('Known references', 'المراجع الموجودة') }}:
+              <b>{{ summary.evidenceReferencesLinked ?? '—' }} / {{ summary.evidenceReferencesTotal ?? '—' }}</b>.
+              {{ copy('An ID match is not proof of an authentic PDF or official PSC inspection.', 'تطابق معرّف الدليل لا يثبت اعتماد ملف PDF أو المعاينة الرسمية.') }}
+            </p>
+            <div class="v360-quality-scroll v360-quality-evidence-scroll"><table class="v360-quality-source-table">
+              <thead><tr><th>{{ copy('Factor', 'العامل') }}</th><th>{{ copy('Agent', 'الوكيل') }}</th><th>{{ copy('Evidence ID', 'معرّف الدليل') }}</th><th>{{ copy('Referenced source', 'المصدر') }}</th><th>{{ copy('Link', 'الربط') }}</th></tr></thead>
+              <tbody><tr *ngFor="let link of summary.evidenceLinkages">
+                <td>{{ link.factor }}</td><td>{{ link.agent }}</td>
+                <td class="v360-quality-mono">{{ link.evidenceId }}</td>
+                <td>{{ qualitySourceLabel(link.source) }}</td>
+                <td><span class="v360-compare-tag" [class.matched]="link.matched" [class.mismatch]="!link.matched">
+                  {{ link.matched ? copy('Found', 'موجود') : copy('Unknown', 'غير معروف') }}
+                </span></td>
+              </tr></tbody>
+            </table></div>
+          </section>
         <div class="v360-quality-conflicts" *ngIf="qualityExpanded">
           <strong>{{ copy('Detected source disagreements', 'اختلافات المصادر المكتشفة') }}: {{ intelligence.conflicts.length }}</strong>
           <span *ngIf="intelligence.conflicts.length === 0">{{ copy('No disagreements stored for compared fields; this does not establish overall accuracy or authority verification.', 'لا توجد اختلافات مسجلة للحقول التي تمت مقارنتها؛ لا يعني ذلك إثبات الدقة العامة أو اعتماد الجهة.') }}</span>
