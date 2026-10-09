@@ -111,7 +111,7 @@
         <div class="v360-quality-deep-dive" *ngIf="qualityExpanded && intelligence.quality.breakdown as summary">
           <section class="v360-quality-detail-card">
             <h4>{{ copy('How was the 75-point structural score calculated?', 'كيف تم حساب درجة الجودة الهيكلية؟') }}</h4>
-            <p>{{ copy('These are reproducible checks against synthetic records, not verified facts.', 'هذه فحوصات قابلة لإعادة الحساب على سجلات تجريبية وليست حقائق معتمدة.') }}</p>
+            <p>{{ copy('The current POC assigns 35% to completeness, 30% to consistency, 20% to evidence linkage, and 15% to metadata. These are configurable-policy candidates—not model-learned, statistically calibrated, or approved regulatory weights.', 'أوزان النموذج التجريبي حالياً: 35% للاكتمال، و30% للاتساق، و20% لربط الأدلة، و15% لبيانات المصدر. هذه أوزان مقترحة قابلة للمراجعة وليست أوزاناً مستنتجة إحصائياً أو معتمدة تنظيمياً.') }}</p>
             <p class="v360-quality-missing" *ngIf="!summary.calculationSteps?.length">{{ copy('Detailed audit inputs were not saved in this version. Run the no-Airia quality backfill again to record real source values and evidence links.', 'تفاصيل الحساب لم تكن محفوظة في الإصدار السابق. أعد تشغيل حساب الجودة دون استدعاء Airia لتخزين قيم المصادر وروابط الأدلة الفعلية.') }}</p>
             <div class="v360-quality-scroll" *ngIf="summary.calculationSteps?.length">
               <table class="v360-quality-source-table">
