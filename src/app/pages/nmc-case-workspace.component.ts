@@ -173,6 +173,11 @@ export class NmcCaseWorkspaceComponent implements OnInit {
   }
 
   get inspectionOutcome(): NmcInspectionOutcome | undefined {
+    if(this.centralCase){
+      const item=this.centralCase.inspectionOutcome;
+      return item?{...item,riskReduction:0,inspector:'Smart Inspection',
+        result:item.result as NmcInspectionOutcome['result']}:undefined;
+    }
     return this.caseState.getInspectionOutcome(this.vessel.imo);
   }
 
