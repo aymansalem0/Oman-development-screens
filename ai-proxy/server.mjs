@@ -233,7 +233,12 @@ const server = createServer(async (req, res) => {
     try{
       if(path==='/api/ai/guidance/rules'&&req.method==='GET')
         return respond(res,200,{status:'ok',rules:await guidance.list()});
-      const ruleMatch=/^\/api\/ai\/guidance\/rules\/(NMC-GUIDE-[0-9]{3})(?:\/(history|publish))?$/.exec(path);
+      if(path==='/api/ai/guidance/rules'&&req.method==='POST'){
+        dashboards.assertRole(req,'EDITOR');
+        const body=await requestJson(req,16384);
+        return respond(res,201,{status:'ok',rule:await guidance.create(body.rule)});
+      }
+      const ruleMatch=/^\/api\/ai\/guidance\/rules\/(NMC-GUIDE-[0-9]{3,5})(?:\/(history|publish))?$/.exec(path);
       if(ruleMatch){
         const [,id,action]=ruleMatch;
         if(req.method==='GET'&&action==='history')
