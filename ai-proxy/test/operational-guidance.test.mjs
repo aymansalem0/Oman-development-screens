@@ -57,7 +57,8 @@ test('new user-defined rules remain inert as drafts and require explicit publica
   const service=withFleet(example);await service.initialize();
   const custom={id:'NMC-GUIDE-105',title:'Review saved risk over 55',
     titleAr:'مراجعة المخاطر المحفوظة فوق 55',enabled:true,priority:'WATCH',
-    ownerRole:'NMC_DUTY_OFFICER',condition:{field:'riskScore',operator:'GTE',value:55}};
+    ownerRole:'NMC_DUTY_OFFICER',condition:{field:'riskScore',operator:'GTE',value:55},
+    additionalConditions:[{field:'inspectionSeverity',operator:'GTE',value:80}]};
   const draft=await service.create(custom);
   assert.equal(draft.status,'DRAFT');assert.equal(draft.published,null);
   assert.equal(draft.publishedRevision,0);
@@ -66,7 +67,12 @@ test('new user-defined rules remain inert as drafts and require explicit publica
   const published=await service.change(custom.id,draft.revision,'PUBLISH');
   assert.equal(published.status,'ACTIVE');
   const output=await service.evaluate('9328471');
-  assert.equal(output.rules.find(r=>r.ruleId===custom.id)?.evidenceIds.length>0,true);
+  const matched=output.rules.find(r=>r.ruleId===custom.id);
+  assert.equal(matched?.evidenceIds.length>0,true);
+  assert.equal(matched?.matchedConditions.length,2);
+  service.fleet={getVesselResult:()=>({...example,signals:example.signals.map(x=>
+    x.factor==='inspection'?{...x,severity:70}:x)})};
+  assert.equal((await service.evaluate('9328471')).rules.some(r=>r.ruleId===custom.id),false);
   assert.ok((await service.history(custom.id)).some(x=>x.action==='CREATE'));
 });
 test('unknown or incomplete AI evidence yields no fabricated guidance',async()=>{
