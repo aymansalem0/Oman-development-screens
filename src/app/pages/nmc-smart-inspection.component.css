@@ -319,3 +319,7 @@ a,button,input,textarea { font:inherit; }
   .impact-preview { grid-template-columns:1fr; }
   .impact-preview > span { transform:rotate(90deg); }
 }
+
+
+.inspection-central-note{border:1px solid #c7e4ea;border-radius:10px;padding:12px 15px;background:#f2fafb;color:#216d78;margin:0 0 16px;font-size:11px;line-height:1.6}
+.inspection-central-note.error{border-color:#f2c5c9;background:#fff0f1;color:#aa3a43}
