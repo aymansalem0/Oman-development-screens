@@ -187,7 +187,10 @@ export class NmcCaseWorkspace{
     return this._update(id,version,'INSPECTION_RECORDED',role,
       outcome.summary||'Smart Inspection outcome recorded',row=>{
         if(row.status==='RESOLVED')throw new NmcCaseError('CASE_ALREADY_RESOLVED',409);
-        if(row.inspectionOutcome?.inspectionId===outcome.inspectionId)
+        const previousInspections=Array.isArray(row.inspectionHistory)
+          ?row.inspectionHistory
+          :(row.inspectionOutcome?[row.inspectionOutcome]:[]);
+        if(previousInspections.some(i=>i.inspectionId===outcome.inspectionId))
           throw new NmcCaseError('CASE_INSPECTION_ALREADY_RECORDED',409);
         const request=(row.inspectionRequests||[]).find(r=>r.status==='SCHEDULED'&&
           row.tasks.some(t=>t.actionId===r.actionId&&t.actionType==='PRIORITY_INSPECTION'));
@@ -197,14 +200,21 @@ export class NmcCaseWorkspace{
           (!row.actionPlan&&t.id==='priority-inspection')
           ?{...t,status:'Completed'}:t);
         const requiredDone=tasks.filter(t=>t.mandatory).every(t=>t.status==='Completed');
-        return {...row,inspectionOutcome:{
+        const savedOutcome={
           inspectionId:outcome.inspectionId,
           result:String(outcome.result||'Completed with Findings').slice(0,70),
           findingsCount:outcome.findingsCount,
           criticalFindings:outcome.criticalFindings,
           summary:outcome.summary,
+          inspector:request?.inspector||null,
+          inspectionRequestId:request?.id||null,
           completedAt:now()
-        },inspectionRequests:(row.inspectionRequests||[]).map(r=>r.id===request?.id?
+        };
+        return {...row,inspectionOutcome:savedOutcome,
+          // Carry forward historic case results instead of overwriting the
+          // earlier inspection that existed before the new A01 referral.
+          inspectionHistory:[...previousInspections,savedOutcome],
+          inspectionRequests:(row.inspectionRequests||[]).map(r=>r.id===request?.id?
           {...r,status:'COMPLETED',completedAt:now(),inspectionId:outcome.inspectionId}:r),
           // A field inspection is NOT a verified post-inspection risk
           // assessment; the case must remain in-progress until A02 refresh.
