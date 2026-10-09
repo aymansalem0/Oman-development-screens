@@ -122,6 +122,22 @@ const server = createServer(async (req, res) => {
       return respond(res,data?200:404,data||{error:'UNKNOWN_VESSEL'});
     }catch{return respond(res,503,{error:'FLEET_HISTORY_UNAVAILABLE'});}
   }
+  // Published dashboard sharing is read-only and intentionally excludes drafts.
+  const publishedMatch = /^\/api\/ai\/dashboards\/published\/([a-zA-Z0-9_-]{1,100})$/.exec(path);
+  if (publishedMatch) {
+    if (req.method !== 'GET') return respond(res,405,{error:'METHOD_NOT_ALLOWED'});
+    try {
+      const board = await dashboards.get(publishedMatch[1]);
+      if (!board || board.status !== 'PUBLISHED') {
+        return respond(res,404,{error:'PUBLISHED_DASHBOARD_NOT_FOUND'});
+      }
+      return respond(res,200,{status:'ok',dashboard:board});
+    } catch (error) {
+      if (error instanceof DashboardError) return respond(res,error.status,{error:error.code});
+      return respond(res,503,{error:'DASHBOARD_STORE_UNAVAILABLE'});
+    }
+  }
+
   // Dashboard read operations remain independent of Airia and Fleet scheduler.
   // Writes require a server-managed access key. Role labels are shared-key
   // permissions, not end-user identity. Integrate real IAM before production.
