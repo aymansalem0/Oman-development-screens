@@ -119,7 +119,7 @@
             {{copy('Vessel 360','الملف الشامل للسفينة')}} ↗
           </a>
           <a [routerLink]="['/moei/nmc/vessel',alert.imo,'case']" class="link secondary">
-            {{copy('Open Case Workspace','فتح إدارة الحالة')}} ↗
+            {{copy('Case Workspace','إدارة الحالة')}} ↗
           </a>
           <button type="button" class="secondary" (click)="toggleDetails(alert)">
             {{selectedId===alert.id?copy('Hide History','إخفاء السجل'):copy('Activity History','سجل الأنشطة')}}
