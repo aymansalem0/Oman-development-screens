@@ -21,9 +21,16 @@
     <div class="guide-layout">
       <aside class="guide-card guide-list">
         <div class="guide-card-header"><h2>{{copy('Policy Registry','سجل القواعد')}}</h2><button (click)="load()" [disabled]="loading">{{copy('Refresh','تحديث')}}</button></div>
+        <div class="guide-new-rule">
+          <strong>{{copy('Create New Rule Draft','إنشاء مسودة قاعدة جديدة')}}</strong>
+          <label>{{copy('Rule ID','معرف القاعدة')}}<input [(ngModel)]="newRuleId" placeholder="NMC-GUIDE-005"></label>
+          <label>{{copy('English title','الاسم بالإنجليزية')}}<input [(ngModel)]="newRuleTitle" maxlength="140"></label>
+          <label>{{copy('Arabic title','الاسم بالعربية')}}<input [(ngModel)]="newRuleTitleAr" maxlength="140"></label>
+          <button type="button" class="guide-primary" [disabled]="busy" (click)="createRule()">{{copy('+ Create Draft','+ إنشاء مسودة')}}</button>
+        </div>
         <button *ngFor="let r of rules" class="guide-rule" [class.active]="selected?.id===r.id" (click)="select(r)">
-          <strong>{{lang.isArabic?r.published.titleAr:r.published.title}}</strong>
-          <small>{{r.id}} · Published v{{r.publishedRevision}} · {{r.status}}</small>
+          <strong>{{lang.isArabic?(r.published?.titleAr||r.draft?.titleAr||r.id):(r.published?.title||r.draft?.title||r.id)}}</strong>
+          <small>{{r.id}} · {{r.publishedRevision ? 'Published v'+r.publishedRevision : 'Not published'}} · {{r.status}}</small>
           <span class="guide-badge" *ngIf="r.draft">{{copy('DRAFT','مسودة')}}</span>
         </button>
       </aside>
@@ -68,12 +75,16 @@
             <button type="button" [disabled]="busy||!r.draft" (click)="publish()">{{copy('Publish (Supervisor)','نشر (المشرف)')}}</button>
           </div>
         </form>
-        <div class="guide-current">
+        <div class="guide-current" *ngIf="r.published as published; else unpublished">
           <h3>{{copy('Currently Published Rule','القاعدة المنشورة حاليًا')}}</h3>
-          <p>{{r.published.condition.field}} {{r.published.condition.operator}} {{r.published.condition.value}}
-            → {{lang.isArabic?r.published.titleAr:r.published.title}}</p>
-          <small>v{{r.publishedRevision}} · {{r.published.priority}} · {{r.published.ownerRole}}</small>
+          <p>{{published.condition.field}} {{published.condition.operator}} {{published.condition.value}}
+            → {{lang.isArabic?published.titleAr:published.title}}</p>
+          <small>v{{r.publishedRevision}} · {{published.priority}} · {{published.ownerRole}}</small>
         </div>
+        <ng-template #unpublished>
+          <p class="guide-empty">{{copy('New draft: no guidance will appear until supervisor publication.',
+            'مسودة جديدة: لن يظهر أي إرشاد حتى اعتماد النشر من المشرف.')}}</p>
+        </ng-template>
       </section>
     </div>
     <div class="guide-lower">
