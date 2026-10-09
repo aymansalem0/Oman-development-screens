@@ -206,9 +206,32 @@ export class NmcSmartInspectionComponent implements OnInit {
       inspector: this.inspectorName.trim()
     };
 
-    this.caseState.setInspectionOutcome(this.vessel.imo, outcome);
-    this.existingOutcome = outcome;
-    this.submitted = true;
+    if(this.centralLoading||this.centralBusy||this.centralError)return;
+    if(!this.centralCase){
+      this.centralError=this.copy(
+        'Open an acknowledged alert as a central maritime case before submitting this inspection.',
+        'افتح حالة مركزية من تنبيه مستلم قبل تسجيل نتيجة المعاينة.');
+      return;
+    }
+    this.centralBusy=true;
+    this.cases.inspection(this.centralCase,{
+      inspectionId:outcome.inspectionId,result:outcome.result,
+      findingsCount:outcome.findingsCount,criticalFindings:outcome.criticalFindings,
+      summary:outcome.summary
+    }).subscribe({
+      next:response=>{
+        this.centralBusy=false;
+        this.centralCase=response.case;
+        // Existing preview consumers remain compatible; Oracle is authoritative.
+        this.caseState.setInspectionOutcome(this.vessel.imo,outcome);
+        this.existingOutcome=outcome;
+        this.submitted=true;
+      },
+      error:error=>{
+        this.centralBusy=false;
+        this.centralError=this.cases.readableError(error,this.lang.isArabic);
+      }
+    });
   }
 
   returnToCase(): void {
