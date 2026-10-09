@@ -16,6 +16,10 @@
   <app-nmc-navigation></app-nmc-navigation>
 
   <main class="db-main">
+    <p class="db-message" *ngIf="viewOnly&&viewLoading">{{copy('Loading published dashboard…','جاري تحميل لوحة المعلومات المنشورة…')}}</p>
+    <p class="db-error" *ngIf="viewOnly&&viewError">{{viewError}}
+      <a routerLink="/moei/nmc/dashboards">{{copy('Back to Dashboards','العودة إلى لوحات المعلومات')}}</a>
+    </p>
     <ng-container *ngIf="isManager">
       <div class="db-heading">
         <div>
@@ -72,7 +76,9 @@
             <p>{{shared.description||copy('Maritime decision support dashboard','لوحة معلومات لدعم القرار البحري')}}</p>
             <div class="db-board-meta">{{shared.widgets.length}} {{copy('widgets','مؤشرات')}} · {{copy('Version','إصدار')}} {{shared.version}}</div>
             <div class="db-board-actions">
-              <button class="db-primary" type="button" (click)="openShared(shared)">
+              <button *ngIf="shared.status==='PUBLISHED'" class="db-primary" type="button"
+                      (click)="viewPublished(shared)">{{copy('View Dashboard','عرض لوحة المعلومات')}} ↗</button>
+              <button class="db-outline" type="button" (click)="openShared(shared)">
                 {{shared.status==='PUBLISHED'?copy('Use as Template','استخدام كنموذج'):copy('Edit Shared Draft','تعديل المسودة')}}
               </button>
               <button class="db-outline" type="button" (click)="showHistory(shared)">{{copy('History','السجل')}}</button>
@@ -106,15 +112,15 @@
     <ng-container *ngIf="dashboard as board">
       <div class="db-heading">
         <div>
-          <span class="db-kicker">{{copy('DASHBOARD DESIGNER','مصمم لوحات المعلومات')}}</span>
+          <span class="db-kicker">{{viewOnly?copy('PUBLISHED DASHBOARD','لوحة معلومات منشورة'):copy('DASHBOARD DESIGNER','مصمم لوحات المعلومات')}}</span>
           <h2>{{board.title}}</h2>
           <p>{{copy('Preview the current risk picture while you configure your own dashboard.','عاين المخاطر الحالية أثناء تصميم لوحة المعلومات وتخصيصها.')}}</p>
         </div>
         <div class="db-heading-actions">
           <button class="db-outline" type="button" (click)="back()">← {{copy('All Dashboards','كل اللوحات')}}</button>
           <button class="db-outline" type="button" (click)="refresh()">{{copy('Refresh Data','تحديث البيانات')}}</button>
-          <button class="db-primary" type="button" (click)="save()" [disabled]="!dirty">✓ {{copy('Save Changes','حفظ التغييرات')}}</button>
-          <button class="db-outline db-workspace-save" type="button" (click)="saveShared()" [disabled]="sharedBusy">
+          <button *ngIf="!viewOnly" class="db-primary" type="button" (click)="save()" [disabled]="!dirty">✓ {{copy('Save Changes','حفظ التغييرات')}}</button>
+          <button *ngIf="!viewOnly" class="db-outline db-workspace-save" type="button" (click)="saveShared()" [disabled]="sharedBusy">
             ⇧ {{copy('Save to Workspace','حفظ في المساحة المشتركة')}}
           </button>
         </div>
@@ -129,8 +135,8 @@
       <p class="db-message" *ngIf="saveMessage">{{saveMessage}}</p>
       <p class="db-error" *ngIf="dataError">{{dataError}}</p>
 
-      <div class="db-layout">
-        <aside class="db-designer">
+      <div class="db-layout" [class.db-view-layout]="viewOnly">
+        <aside class="db-designer" *ngIf="!viewOnly">
           <section class="db-panel">
             <h3>{{copy('Dashboard Details','بيانات اللوحة')}}</h3>
             <label>{{copy('Name','الاسم')}}</label>
