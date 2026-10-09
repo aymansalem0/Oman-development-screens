@@ -10,7 +10,7 @@ RUN node ./ai-proxy/build-fleet-evidence.mjs
 FROM node:20-alpine
 ENV NODE_ENV=production
 WORKDIR /app
-COPY ai-proxy/package.json ai-proxy/server.mjs ai-proxy/psc-reader.mjs ai-proxy/fleet-ai.mjs ai-proxy/fleet-scheduler.mjs ai-proxy/oracle-store.mjs ai-proxy/oracle-preflight.mjs ./
+COPY ai-proxy/package.json ai-proxy/server.mjs ai-proxy/psc-reader.mjs ai-proxy/fleet-ai.mjs ai-proxy/fleet-scheduler.mjs ai-proxy/oracle-store.mjs ai-proxy/oracle-preflight.mjs ai-proxy/data-quality.mjs ai-proxy/oracle-quality-backfill.mjs ./
 RUN npm install --omit=dev --no-audit --no-fund --prefer-offline --loglevel=error --fetch-retries=3
 COPY --from=evidence-build /build/ai-proxy/fleet-bundles.json ./fleet-bundles.json
 COPY tools/psc/psc-fixtures.mjs ./psc-fixtures.mjs
