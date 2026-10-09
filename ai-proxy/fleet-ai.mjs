@@ -255,6 +255,14 @@ export class FleetAssessmentManager {
       }
     }
   }
+  async intelligence(imo){
+    if(!VALID_IMOS.has(imo))return null;
+    if(!this.repository)return {imo,assessmentId:null,
+      quality:{score:null,status:'NOT_CALCULATED',version:null,breakdown:null},
+      conflicts:[],independentlyVerifiedDataConfidence:null,
+      dataNature:'SYNTHETIC_POC_NOT_OFFICIAL',storage:'JSON_NO_INTELLIGENCE'};
+    return this.repository.intelligence(imo);
+  }
   async history(imo){
     if(!VALID_IMOS.has(imo))return null;
     if(!this.repository)return {imo,assessments:[],events:[],storage:'JSON_NO_HISTORY'};
