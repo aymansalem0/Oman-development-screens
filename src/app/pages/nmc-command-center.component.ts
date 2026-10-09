@@ -80,6 +80,7 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
   private fleetPoller?: ReturnType<typeof setInterval>;
   private alertPoller?: ReturnType<typeof setInterval>;
   private fleetLoadInFlight = false;
+  private pendingDatabaseFetch = false;
   latestDatabaseFetchAt: string | null = null;
   fetchingSaved = false;
 
@@ -364,7 +365,11 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
       ['Normal','Watch','High','Critical'].includes(row.level||'');
   }
   private loadFleet(fromDatabase=false):void{
-    if(this.fleetLoadInFlight)return;
+    if(this.fleetLoadInFlight){
+      // An explicit Fetch Again cannot be silently dropped by the 7s poll.
+      if(fromDatabase)this.pendingDatabaseFetch=true;
+      return;
+    }
     this.fleetLoadInFlight=true;
     if(fromDatabase)this.fetchingSaved=true;
     const request=fromDatabase?this.fleetAi.fetchSaved():this.fleetAi.snapshot();
@@ -393,12 +398,14 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
             severity:r.criticalOpenFinding?'critical':r.level==='Critical'?'critical':r.level==='High'?'high':'info'
           }));
         this.refreshMapMarkers();
+        if(this.pendingDatabaseFetch){this.pendingDatabaseFetch=false;this.loadFleet(true);}
       },
       error:err=>{
         this.fleetLoadInFlight=false;
         this.fetchingSaved=false;
         // Failed database retrieval must never clear the last good map, priority queue or vessel selection.
         this.fleetError=err?.error?.error||'Fleet AI API unavailable';
+        if(this.pendingDatabaseFetch){this.pendingDatabaseFetch=false;this.loadFleet(true);}
       }
     });
   }
