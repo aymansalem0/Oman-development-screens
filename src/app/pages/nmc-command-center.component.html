@@ -97,6 +97,11 @@
       <p *ngIf="fleetError" class="fleet-error">{{ fleetError }}</p>
     </section>
 
+    <div class="operations-section-label">
+      <strong>{{copy('NMC Operational Overview','نظرة عامة على عمليات المركز البحري')}}</strong>
+      <span>{{copy('Live alerts, cases and attention queue · separate from Fleet AI Risk Assessment',
+                    'التنبيهات والحالات وقائمة المتابعة · منفصلة عن تقييم مخاطر الأسطول')}}</span>
+    </div>
     <section class="kpi-grid">
       <article class="kpi-card">
         <div class="kpi-icon teal">⌖</div>
@@ -121,20 +126,20 @@
       </article>
 
       <article class="kpi-card">
-        <div class="kpi-icon amber">▲</div>
+        <div class="kpi-icon amber">♢</div>
         <div>
-          <span class="kpi-label">{{ copy('High risk', 'مخاطر مرتفعة') }}</span>
-          <strong>{{ highRiskCount }}</strong>
-          <small>{{ copy('priority monitoring', 'مراقبة ذات أولوية') }}</small>
+          <span class="kpi-label">{{ copy('Active Maritime Alerts', 'التنبيهات البحرية النشطة') }}</span>
+          <strong>{{ activeAlertCount===null ? '—' : activeAlertCount }}</strong>
+          <small>{{ copy('from central alert workflow', 'من نظام التنبيهات المركزي') }}</small>
         </div>
       </article>
 
-      <article class="kpi-card critical-card">
-        <div class="kpi-icon coral">!</div>
+      <article class="kpi-card">
+        <div class="kpi-icon sky">▣</div>
         <div>
-          <span class="kpi-label">{{ copy('Critical AI risk', 'مخاطر AI حرجة') }}</span>
-          <strong>{{ criticalCount }}</strong>
-          <small>{{ copy('Human review of simulated results', 'مراجعة بشرية لنتائج المحاكاة') }}</small>
+          <span class="kpi-label">{{ copy('Open Maritime Cases', 'الحالات البحرية المفتوحة') }}</span>
+          <strong>{{ openCaseCount===null ? '—' : openCaseCount }}</strong>
+          <small>{{ copy('human-reviewed case workflow', 'حالات تتطلب متابعة الموظفين') }}</small>
         </div>
       </article>
     </section>
