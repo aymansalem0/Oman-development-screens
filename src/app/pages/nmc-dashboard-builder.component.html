@@ -105,6 +105,11 @@
                       (click)="continuePublishedEdit(shared)" [disabled]="sharedBusy">
                 ✎ {{linkedRevisionFor(shared)?copy('Continue Editing','استكمال التعديل'):copy('Edit Published','تعديل المنشورة')}}
               </button>
+              <button *ngIf="shared.status==='PUBLISHED'&&linkedRevisionFor(shared)" class="db-primary" type="button"
+                      (click)="republishPending(shared)"
+                      [disabled]="sharedBusy||(linkedRevisionFor(shared)?.version||0)<=1">
+                ↻ {{copy('Republish Changes','إعادة نشر التغييرات')}}
+              </button>
               <button class="db-outline" type="button" (click)="openShared(shared)">
                 {{shared.status==='PUBLISHED'?copy('Use as Template','استخدام كنموذج'):copy('Edit Shared Draft','تعديل المسودة')}}
               </button>
