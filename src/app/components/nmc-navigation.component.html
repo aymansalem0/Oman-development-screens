@@ -127,6 +127,12 @@
           <span class="nav-label">{{copy('Data Quality Management','إدارة جودة البيانات')}}</span>
         </a>
 
+        <a class="nav-link" routerLink="/moei/nmc/admin/operational-guidance"
+           [class.active]="isGuidanceConfig" [attr.aria-current]="isGuidanceConfig?'page':null"
+           [title]="copy('Operational Guidance Rules','قواعد الإرشاد التشغيلي')">
+          <span class="nav-icon">⚙</span>
+          <span class="nav-label">{{copy('Operational Guidance Rules','قواعد الإرشاد التشغيلي')}}</span>
+        </a>
         <div class="nav-dashboard-group" *ngIf="dashboardItems('SETTINGS').length">
           <button class="nav-subgroup" type="button"
                   (click)="settingsDashboardsExpanded = !settingsDashboardsExpanded"
