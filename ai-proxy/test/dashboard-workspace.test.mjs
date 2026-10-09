@@ -132,3 +132,32 @@ test('menu location survives draft changes and publication',async()=>{
     assert.equal((await workspace.publishedMenu())[0].menuPlacement,'SETTINGS');
   }finally{close();}
 });
+
+
+test('publisher can relocate a published dashboard without changing its widgets',async()=>{
+  const {workspace,close}=setup();
+  try{
+    const d=await workspace.create({...sample('reposition-test'),menuPlacement:'NMC_CENTER'});
+    const published=await workspace.publish(d.id,d.version);
+    const moved=await workspace.movePublished(published.id,'SMART_INSPECTION',published.version);
+    assert.equal(moved.version,published.version+1);
+    assert.equal(moved.status,'PUBLISHED');
+    assert.deepEqual(moved.widgets,published.widgets);
+    assert.deepEqual((await workspace.publishedMenu()).map(x=>x.menuPlacement),['SMART_INSPECTION']);
+    await assert.rejects(()=>workspace.movePublished(published.id,'SETTINGS',published.version),
+      /DASHBOARD_VERSION_CONFLICT/);
+    const revisions=await workspace.revisions(d.id);
+    assert.deepEqual(revisions.map(r=>r.action),['UPDATED','PUBLISHED','CREATED']);
+  }finally{close();}
+});
+
+test('published relocation rejects draft or unsupported menu area',async()=>{
+  const {workspace,close}=setup();
+  try{
+    const draft=await workspace.create(sample('only-draft'));
+    await assert.rejects(()=>workspace.movePublished(draft.id,'SETTINGS',draft.version),
+      /DASHBOARD_NOT_PUBLISHED/);
+    await assert.rejects(()=>workspace.movePublished(draft.id,'UNAUTHORIZED_MENU',draft.version),
+      /DASHBOARD_MENU_PLACEMENT_INVALID/);
+  }finally{close();}
+});
