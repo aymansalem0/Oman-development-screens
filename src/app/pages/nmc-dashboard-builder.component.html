@@ -151,6 +151,10 @@
           <button *ngIf="!viewOnly" class="db-outline db-workspace-save" type="button" (click)="saveShared()" [disabled]="sharedBusy">
             ⇧ {{copy('Save to Workspace','حفظ في المساحة المشتركة')}}
           </button>
+          <button *ngIf="!viewOnly&&board.publishedParentId" class="db-primary" type="button"
+                  (click)="republishCurrent()" [disabled]="sharedBusy||dirty">
+            ↻ {{copy('Republish','إعادة النشر')}}
+          </button>
         </div>
       </div>
 
