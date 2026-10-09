@@ -63,6 +63,41 @@ export class NmcAlertCenterComponent implements OnInit,OnDestroy{
       }
     }));
   }
+  private loadLinkedCases():void{
+    this.subs.add(this.cases.list().subscribe({
+      next:result=>{this.linkedCases=result.cases||[];},
+      error:()=>{this.linkedCases=[];}
+    }));
+  }
+  linkedCase(alert:NmcOperationalAlert):NmcCentralCase|undefined{
+    return this.linkedCases.find(c=>c.alertIds.includes(alert.id)&&c.status!=='RESOLVED')
+      ||this.linkedCases.find(c=>c.imo===alert.imo&&c.status!=='RESOLVED');
+  }
+  createCase(alert:NmcOperationalAlert):void{
+    if(this.creatingCase||alert.status==='OPEN'||alert.status==='RESOLVED')return;
+    const linked=this.linkedCase(alert);
+    if(linked){
+      void this.router.navigate(['/moei/nmc/vessel',linked.imo,'case']);
+      return;
+    }
+    if(!window.confirm(this.copy(
+      'Open a central maritime case linked to this acknowledged alert?',
+      'فتح حالة بحرية مركزية مرتبطة بهذا التنبيه المستلم؟'
+    )))return;
+    this.creatingCase=alert.id;
+    this.subs.add(this.cases.createFromAlert(alert.id).subscribe({
+      next:result=>{
+        this.creatingCase='';
+        if(result.case)void this.router.navigate(['/moei/nmc/vessel',result.case.imo,'case']);
+        else this.error=this.copy('Case was not returned by the server.','لم يُرجع الخادم بيانات الحالة.');
+      },
+      error:error=>{
+        this.creatingCase='';
+        this.error=this.cases.readableError(error,this.lang.isArabic);
+        if(error?.status===409)this.refresh(false);
+      }
+    }));
+  }
   get activeCount():number{return this.overview?.summary.active||0;}
   get alertsFiltered():NmcOperationalAlert[]{
     const search=this.query.trim().toLowerCase();
