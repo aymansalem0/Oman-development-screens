@@ -161,3 +161,57 @@ test('published relocation rejects draft or unsupported menu area',async()=>{
       /DASHBOARD_MENU_PLACEMENT_INVALID/);
   }finally{close();}
 });
+
+
+test('chart type and colors persist across central save, publish and reload',async()=>{
+  const {workspace,opts,close}=setup();
+  try{
+    const doc=sample('multi-chart-test');
+    doc.widgets.push({
+      id:'chart-1',type:'bar',metric:'byRisk',title:'Fleet Risk',
+      span:'half',chartType:'donut',palette:'maritime'
+    });
+    doc.widgets.push({
+      id:'chart-2',type:'bar',metric:'byType',title:'Fleet Types',
+      span:'full',chartType:'column',palette:'vibrant'
+    });
+    const created=await workspace.create(doc);
+    assert.equal(created.widgets[1].chartType,'donut');
+    assert.equal(created.widgets[2].palette,'vibrant');
+    const revised=await workspace.save(created.id,{
+      ...created,widgets:created.widgets.map(w=>
+        w.id==='chart-2'?{...w,chartType:'area',palette:'sunset'}:w)
+    });
+    const published=await workspace.publish(revised.id,revised.version);
+    assert.equal(published.widgets[2].chartType,'area');
+    assert.equal(published.widgets[2].palette,'sunset');
+    const fresh=new DashboardWorkspace(opts);
+    const stored=await fresh.get(published.id);
+    assert.deepEqual(stored.widgets,published.widgets);
+  }finally{close();}
+});
+
+test('previously saved bar widgets automatically use horizontal bar and maritime palette',async()=>{
+  const {workspace,close}=setup();
+  try{
+    const doc=sample('legacy-chart');
+    doc.widgets.push({id:'old-bar',type:'bar',metric:'byFlag',title:'Flags',span:'full'});
+    const created=await workspace.create(doc);
+    assert.equal(created.widgets[1].chartType,'horizontalBar');
+    assert.equal(created.widgets[1].palette,'maritime');
+  }finally{close();}
+});
+
+test('disallowed chart types and palettes cannot enter centralized dashboard storage',async()=>{
+  const {workspace,close}=setup();
+  try{
+    const doc=sample('invalid-chart');
+    doc.widgets.push({id:'bad',type:'bar',metric:'byType',title:'Types',span:'full',
+      chartType:'scriptTag',palette:'vibrant'});
+    await assert.rejects(()=>workspace.create(doc),/DASHBOARD_CHART_TYPE_INVALID/);
+    doc.widgets[1].chartType='column';
+    doc.widgets[1].palette='malicious-color';
+    await assert.rejects(()=>workspace.create(doc),/DASHBOARD_CHART_PALETTE_INVALID/);
+    assert.equal((await workspace.list()).length,0);
+  }finally{close();}
+});
