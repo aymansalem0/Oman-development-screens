@@ -140,8 +140,17 @@ export class FleetAssessmentManager {
     writeFileSync(tmp,JSON.stringify({schema:1,updatedAt:new Date().toISOString(),results:this.results}),{encoding:'utf8',mode:0o600});
     renameSync(tmp,file);
   }
-  snapshot(){
-    const values=Object.values(this.results).filter(x=>VALID_IMOS.has(x.imo));
+  /** Read-only current database facts. No agent invocation, mutation or scheduler trigger. */
+  async savedSnapshot(){
+    if(this.repository){
+      if(!this.persistenceHealthy)throw new Error('FLEET_PERSISTENCE_UNAVAILABLE');
+      const rows=await this.repository.loadLatest();
+      return this.snapshot(rows);
+    }
+    return this.snapshot(loadStore());
+  }
+  snapshot(sourceResults=this.results){
+    const values=Object.values(sourceResults).filter(x=>VALID_IMOS.has(x.imo));
     const counts={total:420,assessed:0,pending:420,normal:0,watch:0,high:0,critical:0,
       priorityReview:0,failed:0,refreshFailed:0};
     for(const r of values){
