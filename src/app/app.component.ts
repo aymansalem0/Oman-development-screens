@@ -1,6 +1,6 @@
 import { CommonModule } from '@angular/common';
 import { Component } from '@angular/core';
-import { RouterLink, RouterOutlet } from '@angular/router';
+import { Router, RouterLink, RouterOutlet } from '@angular/router';
 import { LanguageService } from './services/language.service';
 
 @Component({
@@ -10,5 +10,9 @@ import { LanguageService } from './services/language.service';
   templateUrl: './app.component.html'
 })
 export class AppComponent {
-  constructor(public lang: LanguageService) {}
+  constructor(public lang: LanguageService, private router: Router) {}
+
+  get isNmcArea(): boolean {
+    return this.router.url.startsWith('/moei/nmc');
+  }
 }
