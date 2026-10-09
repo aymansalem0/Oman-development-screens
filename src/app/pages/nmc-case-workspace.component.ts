@@ -138,7 +138,7 @@ export class NmcCaseWorkspaceComponent implements OnInit {
   }
 
   get riskLevelLabel(): string {
-    const level = this.riskEngine.levelForScore(this.currentRisk);
+    const level = this.centralCase?.sourceLevel||this.riskEngine.levelForScore(this.currentRisk);
     const labels: Record<string,string> = {
       Critical: this.copy('Critical', 'حرج'),
       High: this.copy('High', 'مرتفع'),
