@@ -23,6 +23,21 @@
   <app-nmc-navigation></app-nmc-navigation>
 
   <main class="case-main">
+    <div *ngIf="centralLoading" class="central-case-banner">
+      {{copy('Loading centrally recorded maritime case…','جاري تحميل الحالة البحرية المحفوظة مركزيًا…')}}
+    </div>
+    <div *ngIf="centralError" class="central-case-banner error" role="alert">{{centralError}}</div>
+    <div *ngIf="centralSuccess" class="central-case-banner success" role="status">{{centralSuccess}}</div>
+    <section *ngIf="!centralCase&&!centralLoading" class="central-case-empty">
+      <span>▣</span>
+      <h2>{{copy('No central case has been opened for this vessel',
+                'لم يتم فتح حالة مركزية لهذه السفينة')}}</h2>
+      <p>{{copy('An NMC Officer must acknowledge a maritime alert and explicitly create or link a case. No operational case has been created automatically.',
+                'يجب أن يستلم ضابط المركز البحري التنبيه ثم يفتح حالة أو يربطها بحالة قائمة. لم يتم إنشاء حالة تلقائيًا.')}}</p>
+      <a routerLink="/moei/nmc/alerts">{{copy('Go to Alerts & Notifications','الانتقال إلى التنبيهات والإشعارات')}} →</a>
+    </section>
+    <ng-container *ngIf="centralCase">
+
     <section class="case-hero">
       <div class="case-identity">
         <span class="case-kicker">{{ copy('ACTIVE MARITIME CASE', 'حالة بحرية نشطة') }}</span>
@@ -235,6 +250,7 @@
         </article>
       </aside>
     </section>
+    </ng-container>
   </main>
 
   <div class="task-backdrop" *ngIf="selectedTask" (click)="closeTask()"></div>
