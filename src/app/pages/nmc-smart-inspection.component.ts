@@ -69,6 +69,9 @@ export class NmcSmartInspectionComponent implements OnInit {
       next:result=>{
         this.centralLoading=false;
         this.centralCase=result.case?.status==='RESOLVED'?null:result.case;
+        const scheduled=(this.centralCase?.inspectionRequests||[]).find(r=>
+          r.status==='SCHEDULED'||r.status==='COMPLETED');
+        if(scheduled?.inspector)this.inspectorName=scheduled.inspector;
         // Rebuild after loading the central source assessment so severity isn't
         // inferred from the unrelated 87-point catalog fixture.
         this.buildChecklist();
