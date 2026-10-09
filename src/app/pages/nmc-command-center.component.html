@@ -19,7 +19,11 @@
 
     <div class="topbar-actions">
       <button type="button" class="language-btn" (click)="toggleLanguage()">{{ lang.isArabic ? 'English' : 'العربية' }}</button>
-      <button type="button" class="icon-btn" [attr.aria-label]="copy('Notifications', 'الإشعارات')">🔔<b>3</b></button>
+      <a routerLink="/moei/nmc/alerts" class="icon-btn alerts-bell"
+         [attr.aria-label]="copy('Alerts & Notifications','التنبيهات والإشعارات')"
+         [title]="copy('Open Alerts & Notifications','فتح التنبيهات والإشعارات')">
+        🔔<b *ngIf="unreadAlertCount>0">{{unreadAlertCount}}</b>
+      </a>
       <div class="user-chip">
         <span class="user-avatar">NO</span>
         <span>
