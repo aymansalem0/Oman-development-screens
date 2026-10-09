@@ -2357,3 +2357,38 @@ button, a { font: inherit; }
   line-height: 1.55;
   color: #826536;
 }
+
+
+/* Vessel 360 UX iteration: bring the operational assessment above the fold.
+   Detail is progressive disclosure; completeness is always accessible. */
+.v360-structural-quality { padding: 12px 17px; }
+.v360-quality-header { align-items: center; flex-wrap: wrap; }
+.v360-quality-header h3 { font-size: 13px; }
+.v360-quality-header p { font-size: 11px; }
+.v360-quality-controls { display: flex; align-items: center; gap: 14px; }
+.v360-quality-score { font-size: 23px; white-space: nowrap; }
+.v360-quality-toggle {
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+  padding: 8px 11px; border-radius: 8px;
+  color: #0f766e; border: 1px solid #b5dcd6;
+  background: #f0faf8; font-size: 11px; font-weight: 750; cursor: pointer;
+}
+.v360-quality-toggle:hover { background: #e4f7f2; }
+.v360-quality-toggle:focus-visible { outline: 3px solid #0d9488; outline-offset: 2px; }
+.v360-quality-toggle span { font-size: 14px; }
+.v360-quality-peek {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 9px 16px;
+  margin-top: 8px; font-size: 10.5px; color: #607988;
+}
+.v360-quality-peek span { white-space: nowrap; }
+.v360-quality-peek b { color: #0c766c; font-size: 11px; }
+.v360-quality-metrics { margin-top: 14px; }
+.v360-saved-ai-label strong { font-size: 12px; }
+.v360-saved-ai-label span { font-size: 11px; }
+.v360-saved-ai-meta small { font-size: 9px; }
+.v360-saved-ai-meta b { font-size: 11px; }
+@media(max-width:720px){
+  .v360-quality-header { align-items: flex-start; }
+  .v360-quality-controls { width: 100%; justify-content: space-between; }
+  .v360-quality-peek { gap: 7px 12px; }
+}
