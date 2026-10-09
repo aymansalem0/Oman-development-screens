@@ -1,0 +1,283 @@
+<div class="candidate-shell" [class.rtl]="lang.isArabic" [attr.dir]="lang.dir">
+  <header class="candidate-topbar">
+    <div class="brand-block">
+      <div class="brand-mark">SI</div>
+      <div>
+        <div class="eyebrow">{{ copy('MOEI · SMART INSPECTION', 'وزارة الطاقة والبنية التحتية · المعاينة الذكية') }}</div>
+        <h1>{{ copy('Inspection Candidate & Targeting Center', 'مركز مرشحي المعاينة والاستهداف') }}</h1>
+        <p>{{ copy(
+          'One inspection entry point across service requests, foreign PSC arrivals and NMC referrals',
+          'نقطة دخول موحدة للمعاينات من طلبات الخدمات والسفن الأجنبية المرشحة لرقابة دولة الميناء وإحالات NMC'
+        ) }}</p>
+      </div>
+    </div>
+
+    <div class="top-actions">
+      <span class="population-chip">420 {{ copy('shared vessels', 'سفينة مشتركة') }}</span>
+      <button type="button" class="language-btn" (click)="toggleLanguage()">
+        {{ lang.isArabic ? 'English' : 'العربية' }}
+      </button>
+    </div>
+  </header>
+
+  <main class="candidate-main">
+    <section class="overview-band">
+      <div>
+        <span class="section-kicker">{{ copy('SHARED VESSEL UNIVERSE', 'مجموعة السفن المشتركة') }}</span>
+        <h2>{{ copy('From 420 monitored vessels to an explainable inspection candidate pool', 'من 420 سفينة مراقبة إلى قائمة مرشحين للمعاينة قابلة للتفسير') }}</h2>
+        <p>{{ copy(
+          'Candidate source and inspection regime are kept separate. A vessel can enter through more than one source while remaining one unique IMO record.',
+          'يتم الفصل بين مصدر الترشيح ونظام المعاينة. ويمكن للسفينة الدخول من أكثر من مصدر مع بقائها سجلاً واحداً فريداً برقم IMO.'
+        ) }}</p>
+      </div>
+      <div class="rule-pill">
+        <small>{{ copy('PSC TARGETING BASELINE', 'الخط الأساسي لاستهداف PSC') }}</small>
+        <strong>{{ targetingConfig.pscAnnualInspectionTargetPercent }}%</strong>
+        <span>{{ copy('Configurable · Riyadh MoU baseline', 'قابل للتهيئة · خط أساس Riyadh MoU') }}</span>
+      </div>
+    </section>
+
+    <section class="kpi-grid">
+      <article class="kpi-card">
+        <span class="kpi-icon">◎</span>
+        <div><small>{{ copy('Shared vessel universe', 'مجموعة السفن المشتركة') }}</small><strong>{{ summary.totalVessels }}</strong><p>{{ copy('Read-only NMC vessel population', 'قراءة فقط من مجموعة سفن NMC') }}</p></div>
+      </article>
+      <article class="kpi-card active">
+        <span class="kpi-icon">◆</span>
+        <div><small>{{ copy('Unique inspection candidates', 'مرشحو المعاينة الفريدون') }}</small><strong>{{ summary.uniqueCandidates }}</strong><p>{{ summary.eligibleCandidates }} {{ copy('eligible / mandatory', 'مؤهلة / إلزامية') }}</p></div>
+      </article>
+      <article class="kpi-card service">
+        <span class="kpi-icon">▣</span>
+        <div><small>{{ copy('Service-triggered', 'ناتجة عن طلب خدمة') }}</small><strong>{{ summary.serviceTriggeredCandidates }}</strong><p>{{ copy('UAE-flag service inspections', 'معاينات خدمات للسفن الإماراتية') }}</p></div>
+      </article>
+      <article class="kpi-card psc">
+        <span class="kpi-icon">⚓</span>
+        <div><small>{{ copy('Foreign PSC port calls', 'زيارات سفن أجنبية مرشحة لـ PSC') }}</small><strong>{{ summary.foreignPortCallCandidates }}</strong><p>{{ projectedPscTarget }} {{ copy('POC projected 10% target', 'هدف POC المتوقع بنسبة 10%') }}</p></div>
+      </article>
+      <article class="kpi-card nmc">
+        <span class="kpi-icon">✦</span>
+        <div><small>{{ copy('NMC referrals', 'إحالات NMC') }}</small><strong>{{ summary.nmcReferredCandidates }}</strong><p>{{ summary.overlappingSourceCandidates }} {{ copy('with multiple sources', 'بأكثر من مصدر') }}</p></div>
+      </article>
+      <article class="kpi-card deferred">
+        <span class="kpi-icon">⏱</span>
+        <div><small>{{ copy('Deferred after recent PSC', 'مؤجلة بعد PSC حديث') }}</small><strong>{{ summary.deferredRecentPsc }}</strong><p>{{ copy('No clear grounds in current synthetic context', 'لا توجد أسباب واضحة في السياق التجريبي الحالي') }}</p></div>
+      </article>
+    </section>
+
+    <section class="control-panel">
+      <div class="source-tabs">
+        <button type="button" [class.active]="sourceFilter === 'ALL'" (click)="setSourceFilter('ALL')">
+          {{ copy('All Candidates', 'كل المرشحين') }} <span>{{ summary.uniqueCandidates }}</span>
+        </button>
+        <button type="button" [class.active]="sourceFilter === 'SERVICE_REQUEST'" (click)="setSourceFilter('SERVICE_REQUEST')">
+          {{ copy('Service Requests', 'طلبات الخدمات') }} <span>{{ summary.serviceTriggeredCandidates }}</span>
+        </button>
+        <button type="button" [class.active]="sourceFilter === 'PSC_PORT_CALL'" (click)="setSourceFilter('PSC_PORT_CALL')">
+          {{ copy('PSC / Port Calls', 'PSC / زيارات الموانئ') }} <span>{{ summary.foreignPortCallCandidates }}</span>
+        </button>
+        <button type="button" [class.active]="sourceFilter === 'NMC_CASE'" (click)="setSourceFilter('NMC_CASE')">
+          {{ copy('NMC Referrals', 'إحالات NMC') }} <span>{{ summary.nmcReferredCandidates }}</span>
+        </button>
+      </div>
+
+      <div class="filters-row">
+        <label class="search-box">
+          <span>⌕</span>
+          <input [(ngModel)]="searchTerm" (ngModelChange)="onFilterChange()" [placeholder]="copy('Search vessel, IMO, case or request...', 'ابحث باسم السفينة أو IMO أو الحالة أو الطلب...')" />
+        </label>
+
+        <select [(ngModel)]="eligibilityFilter" (ngModelChange)="onFilterChange()">
+          <option value="ALL">{{ copy('All eligibility states', 'كل حالات الأهلية') }}</option>
+          <option value="MANDATORY">{{ copy('Mandatory', 'إلزامية') }}</option>
+          <option value="ELIGIBLE">{{ copy('Eligible', 'مؤهلة') }}</option>
+          <option value="DEFER_RECENT_PSC">{{ copy('Deferred · Recent PSC', 'مؤجلة · PSC حديث') }}</option>
+          <option value="MANUAL_REVIEW">{{ copy('Manual Review', 'مراجعة يدوية') }}</option>
+        </select>
+
+        <select [(ngModel)]="portFilter" (ngModelChange)="onFilterChange()">
+          <option value="ALL">{{ copy('All expected ports', 'كل الموانئ المتوقعة') }}</option>
+          <option *ngFor="let port of ports" [value]="port">{{ port }}</option>
+        </select>
+
+        <div class="result-count">
+          <strong>{{ filteredCandidates.length }}</strong>
+          <span>{{ copy('matching candidates', 'مرشح مطابق') }}</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="candidate-table-panel">
+      <div class="table-headline">
+        <div>
+          <span class="section-kicker">{{ copy('CANDIDATE POOL', 'قائمة المرشحين') }}</span>
+          <h3>{{ copy('Explainable inspection candidates', 'مرشحو معاينة قابلون للتفسير') }}</h3>
+        </div>
+        <div class="legend">
+          <span><i class="dot service"></i>{{ copy('Service', 'خدمة') }}</span>
+          <span><i class="dot psc"></i>PSC</span>
+          <span><i class="dot nmc"></i>NMC</span>
+          <span class="rule-badge">{{ copy('Rule priority · AI not yet applied', 'أولوية بالقواعد · لم يطبق AI بعد') }}</span>
+        </div>
+      </div>
+
+      <div class="table-scroll">
+        <table class="candidate-table">
+          <thead>
+            <tr>
+              <th>{{ copy('Vessel', 'السفينة') }}</th>
+              <th>{{ copy('Candidate source', 'مصدر الترشيح') }}</th>
+              <th>{{ copy('Port / ETA', 'الميناء / ETA') }}</th>
+              <th>{{ copy('Regime', 'نظام المعاينة') }}</th>
+              <th>{{ copy('Eligibility', 'الأهلية') }}</th>
+              <th>{{ copy('NMC risk', 'مخاطر NMC') }}</th>
+              <th>{{ copy('Rule priority', 'أولوية القواعد') }}</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let candidate of pagedCandidates; trackBy: trackByImo" (click)="selectCandidate(candidate)">
+              <td class="vessel-cell">
+                <strong>{{ candidate.vessel.name }}</strong>
+                <span>IMO {{ candidate.imo }} · {{ candidate.vessel.flag }} · {{ candidate.vessel.type }}</span>
+              </td>
+              <td>
+                <div class="source-badges">
+                  <span *ngFor="let source of candidate.candidateSources" class="source-badge" [ngClass]="sourceClass(source)">
+                    {{ sourceLabel(source) }}
+                  </span>
+                </div>
+              </td>
+              <td>
+                <strong class="port-name">{{ candidate.expectedPort }}</strong>
+                <span class="subtle">{{ candidate.eta }}</span>
+              </td>
+              <td><span class="regime">{{ regimeLabel(candidate) }}</span></td>
+              <td>
+                <span class="eligibility" [ngClass]="candidate.eligibilityStatus.toLowerCase().replaceAll('_','-')">
+                  {{ eligibilityLabel(candidate.eligibilityStatus) }}
+                </span>
+              </td>
+              <td>
+                <div class="risk-cell">
+                  <strong>{{ candidate.vessel.risk }}</strong>
+                  <span>{{ candidate.nmcReferral?.riskLevel || copy('Shared snapshot', 'لقطة مشتركة') }}</span>
+                </div>
+              </td>
+              <td>
+                <div class="priority-cell" [ngClass]="targetingBand(candidate).toLowerCase()">
+                  <strong>{{ targetingScore(candidate) }}</strong>
+                  <span>{{ targetingBandLabel(candidate) }}</span>
+                </div>
+              </td>
+              <td><button type="button" class="open-row" (click)="$event.stopPropagation(); selectCandidate(candidate)">→</button></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="pagination">
+        <span>{{ copy('Page', 'صفحة') }} {{ page }} / {{ pageCount }}</span>
+        <div>
+          <button type="button" (click)="previousPage()" [disabled]="page <= 1">←</button>
+          <button type="button" (click)="nextPage()" [disabled]="page >= pageCount">→</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div class="drawer-backdrop" *ngIf="selectedCandidate" (click)="closeCandidate()"></div>
+  <aside class="candidate-drawer" *ngIf="selectedCandidate as candidate">
+    <div class="drawer-head">
+      <div>
+        <span class="section-kicker">{{ copy('CANDIDATE EXPLAINABILITY', 'تفسير الترشيح') }}</span>
+        <h3>{{ candidate.vessel.name }}</h3>
+        <p>IMO {{ candidate.imo }} · {{ candidate.vessel.flag }} · {{ candidate.vessel.type }}</p>
+      </div>
+      <button type="button" (click)="closeCandidate()">×</button>
+    </div>
+
+    <div class="drawer-score-row">
+      <article>
+        <small>{{ copy('Rule priority', 'أولوية القواعد') }}</small>
+        <strong>{{ targetingScore(candidate) }}</strong>
+        <span>{{ targetingBandLabel(candidate) }}</span>
+      </article>
+      <article>
+        <small>{{ copy('Shared vessel risk', 'مخاطر السفينة المشتركة') }}</small>
+        <strong>{{ candidate.vessel.risk }}</strong>
+        <span>{{ candidate.nmcReferral?.riskLevel || copy('Snapshot', 'لقطة') }}</span>
+      </article>
+      <article>
+        <small>{{ copy('Eligibility', 'الأهلية') }}</small>
+        <b>{{ eligibilityLabel(candidate.eligibilityStatus) }}</b>
+        <span>{{ regimeLabel(candidate) }}</span>
+      </article>
+    </div>
+
+    <section class="drawer-section">
+      <h4>{{ copy('Why is this vessel in the candidate pool?', 'لماذا هذه السفينة ضمن قائمة المرشحين؟') }}</h4>
+      <div class="source-detail" *ngFor="let source of candidate.candidateSources">
+        <span class="source-badge" [ngClass]="sourceClass(source)">{{ sourceLabel(source) }}</span>
+        <p *ngIf="source === 'SERVICE_REQUEST' && candidate.serviceRequest as request">
+          {{ request.requestId }} · {{ request.serviceType }} · {{ copy('Due', 'الاستحقاق') }} {{ request.dueDate }}
+        </p>
+        <p *ngIf="source === 'PSC_PORT_CALL' && candidate.pscContext as psc">
+          {{ psc.portCallId }} · {{ copy('Last PSC', 'آخر PSC') }} {{ psc.lastPscInspectionDaysAgo }} {{ copy('days ago', 'يوماً') }}
+        </p>
+        <p *ngIf="source === 'NMC_CASE' && candidate.nmcReferral as referral">
+          {{ referral.caseId }} · {{ referral.riskLevel }} {{ referral.officialRisk }}/100 · {{ referral.urgency }}
+        </p>
+      </div>
+    </section>
+
+    <section class="drawer-section" *ngIf="candidate.businessSignals.length">
+      <h4>{{ copy('Business / regulatory signals', 'الإشارات التشغيلية / التنظيمية') }}</h4>
+      <div class="signal-list">
+        <article *ngFor="let signal of candidate.businessSignals" [attr.data-severity]="signal.severity.toLowerCase()">
+          <span>{{ signal.source }}</span>
+          <strong>{{ signal.label }}</strong>
+          <small>{{ signal.code }}</small>
+        </article>
+      </div>
+    </section>
+
+    <section class="drawer-section" *ngIf="candidate.pscContext as psc">
+      <h4>{{ copy('PSC targeting context', 'سياق استهداف PSC') }}</h4>
+      <div class="facts-grid">
+        <div><small>{{ copy('Recent inspection < 6 months', 'تفتيش حديث أقل من 6 أشهر') }}</small><strong>{{ psc.inspectedWithinSixMonths ? copy('Yes', 'نعم') : copy('No', 'لا') }}</strong></div>
+        <div><small>{{ copy('Clear grounds', 'أسباب واضحة') }}</small><strong>{{ psc.clearGrounds ? copy('Yes', 'نعم') : copy('No', 'لا') }}</strong></div>
+        <div><small>{{ copy('First / 12m return', 'أول زيارة / عودة بعد 12 شهر') }}</small><strong>{{ psc.firstVisitOrAbsentTwelveMonths ? copy('Yes', 'نعم') : copy('No', 'لا') }}</strong></div>
+        <div><small>{{ copy('Recurring deficiency', 'ملاحظة متكررة') }}</small><strong>{{ psc.recurringDeficiency ? copy('Yes', 'نعم') : copy('No', 'لا') }}</strong></div>
+        <div><small>{{ copy('Previous detention', 'احتجاز سابق') }}</small><strong>{{ psc.previousDetention ? copy('Yes', 'نعم') : copy('No', 'لا') }}</strong></div>
+        <div><small>{{ copy('Certificate concern', 'مشكلة شهادة') }}</small><strong>{{ psc.certificateConcern ? copy('Yes', 'نعم') : copy('No', 'لا') }}</strong></div>
+      </div>
+    </section>
+
+    <section class="drawer-section" *ngIf="candidate.nmcReferral as referral">
+      <h4>{{ copy('NMC referral context', 'سياق إحالة NMC') }}</h4>
+      <div class="chips">
+        <span *ngFor="let driver of referral.riskDrivers">{{ driver }}</span>
+      </div>
+      <div class="chips focus">
+        <span *ngFor="let focus of referral.focusAreas">{{ focus }}</span>
+      </div>
+    </section>
+
+    <section class="drawer-section ai-placeholder">
+      <div>
+        <span class="section-kicker">{{ copy('NEXT STEP', 'الخطوة التالية') }}</span>
+        <h4>{{ copy('AI Targeting Assessment', 'تقييم الاستهداف بالذكاء الاصطناعي') }}</h4>
+        <p>{{ copy(
+          'The next implementation step will send eligible candidate summaries in batches to the Smart Inspection AI to recommend inspection priority, inspection type and focus areas. Regulatory eligibility remains rule-based.',
+          'سترسل الخطوة التالية ملخصات السفن المؤهلة على دفعات إلى ذكاء المعاينة الذكية لاقتراح أولوية ونوع المعاينة ومجالات التركيز، مع بقاء الأهلية التنظيمية محكومة بالقواعد.'
+        ) }}</p>
+      </div>
+      <span class="not-run">{{ copy('NOT YET ASSESSED', 'لم يتم التقييم بعد') }}</span>
+    </section>
+
+    <div class="drawer-actions">
+      <a [routerLink]="['/moei/nmc/vessel', candidate.imo]">{{ copy('Open shared Vessel 360', 'فتح ملف السفينة المشترك 360') }}</a>
+      <button type="button" disabled>{{ copy('Run AI Targeting — next step', 'تشغيل استهداف AI — الخطوة التالية') }}</button>
+    </div>
+  </aside>
+</div>

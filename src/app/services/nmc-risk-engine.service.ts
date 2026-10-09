@@ -180,6 +180,60 @@ export class NmcRiskEngineService {
     };
   }
 
+
+  /**
+   * Calculates a POC risk score exclusively from five validated AI severities.
+   * No synthetic baseline calibration is applied to actual AI-derived severities.
+   * Does NOT publish a decision, change vessel state or perform any enforcement.
+   */
+  evaluateFromAiSignals(
+    vessel: NmcVesselProfile,
+    severities: Record<RiskFactorKey, number>,
+    config: RiskEngineConfig = this.configSubject.value
+  ): RiskEvaluation {
+    const keys: RiskFactorKey[] = ['movement', 'inspection', 'certificate', 'dataQuality', 'history'];
+    if (!keys.every(key => Number.isFinite(severities[key]) && severities[key] >= 0 && severities[key] <= 100)) {
+      throw new Error('All five AI risk severities must be finite numbers from 0 to 100.');
+    }
+
+    let score = this.weightedScore(severities, config.weights);
+    const highestSignal = Math.max(...keys.map(key => severities[key]));
+    if (config.mode === 'conservative') {
+      score += Math.max(0, highestSignal - score) * 0.28;
+    } else if (config.mode === 'max-signal') {
+      score = (score * 0.68) + (highestSignal * 0.32);
+    }
+    score = Math.round(this.clamp(score, 0, 100));
+
+    const factors: RiskFactorEvaluation[] = keys.map(key => {
+      const weight = Math.max(0, Number(config.weights[key] || 0));
+      return {
+        key,
+        severity: severities[key],
+        weight,
+        rawContribution: this.weightContribution(severities[key], weight, config.weights),
+        contribution: 0
+      };
+    });
+
+    const rawTotal = factors.reduce((total, factor) => total + factor.rawContribution, 0);
+    let assigned = 0;
+    factors.forEach((factor, index) => {
+      factor.contribution = index === factors.length - 1
+        ? Math.max(0, score - assigned)
+        : (rawTotal ? Math.max(0, Math.round(factor.rawContribution / rawTotal * score)) : 0);
+      assigned += factor.contribution;
+    });
+    const baseScore = this.getBaselineRisk(vessel);
+    return {
+      score,
+      baseScore,
+      delta: score - baseScore,
+      level: this.levelForScore(score, config),
+      factors
+    };
+  }
+
   applyToVessel(vessel: NmcVesselProfile, config: RiskEngineConfig = this.configSubject.value): NmcVesselProfile {
     const evaluation = this.evaluate(vessel, config);
     return {

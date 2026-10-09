@@ -1,6 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { AfterViewInit, Component, ElementRef, OnDestroy, OnInit, ViewChild } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
+import { Subscription } from 'rxjs';
 import * as L from 'leaflet';
 import {
   NmcVesselProfile,
@@ -9,6 +10,10 @@ import {
 import { NMC_OPERATIONAL_VESSELS, getOperationalVesselByImo } from '../data/nmc-expanded-vessel-catalog';
 import { LanguageService } from '../services/language.service';
 import { NmcRiskEngineService } from '../services/nmc-risk-engine.service';
+import { NmcVesselEvidenceService } from '../services/nmc-vessel-evidence.service';
+import { NmcExternalPscService, NmcExternalPscRecord } from '../services/nmc-external-psc.service';
+import { NmcFleetAiService, FleetAiAssessment, FleetAiHistory, FleetAiIntelligence } from '../services/nmc-fleet-ai.service';
+import { NmcDataQualityConfigService, QualityPolicyImpact, projectQuality } from '../services/nmc-data-quality-config.service';
 
 interface SourceStatus {
   name: string;
@@ -68,6 +73,11 @@ interface RiskFactor {
   label: string;
   value: number;
   source: string;
+  severity?: number;
+  confidence?: number;
+  agent?: string;
+  evidenceIds?: string[];
+  reason?: string;
 }
 
 interface FieldProvenance {
@@ -120,6 +130,19 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
   timeline: TimelineItem[] = [];
   fieldProvenance: Record<string, FieldProvenance> = {};
   selectedProvenance?: FieldProvenance;
+  externalPsc: NmcExternalPscRecord | null = null;
+  pscLoading = false;
+  pscError = '';
+  // Oracle-sourced AI data is read-only, provisional and explicitly separated
+  // from the deterministic vessel/certificate/AIS fixtures.
+  storedAi: FleetAiAssessment | null = null;
+  storedAiHistory: FleetAiHistory | null = null;
+  storedAiIntelligence: FleetAiIntelligence | null = null;
+  intelligenceStatus: 'loading' | 'available' | 'unavailable' = 'loading';
+  qualityExpanded = false;
+  qualityLocalPreview: QualityPolicyImpact | null = null;
+  storedAiStatus: 'loading' | 'available' | 'not-assessed' | 'error' = 'loading';
+  private readonly subscriptions = new Subscription();
 
   hasCertificateConflict = false;
   hasOpenDeficiency = false;
@@ -135,7 +158,11 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
   constructor(
     private route: ActivatedRoute,
     public lang: LanguageService,
-    private riskEngine: NmcRiskEngineService
+    private riskEngine: NmcRiskEngineService,
+    private vesselEvidence: NmcVesselEvidenceService,
+    private externalPscService: NmcExternalPscService,
+    private readonly fleetAiService: NmcFleetAiService,
+    public readonly qualityPolicy: NmcDataQualityConfigService
   ) {}
 
   copy(en: string, ar: string): string {
@@ -145,12 +172,73 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
   toggleLanguage(): void {
     this.lang.toggle();
     this.buildOperationalData();
+    this.applyStoredAiView();
 
     if (this.map) {
       this.map.remove();
       this.map = undefined;
       setTimeout(() => this.initMap());
     }
+  }
+
+  qualityMetricLabel(key: string): string {
+    const labels: Record<string, [string, string]> = {
+      completeness: ['Data completeness', 'اكتمال البيانات'],
+      consistency: ['Cross-source consistency', 'اتساق المصادر'],
+      evidenceLinkage: ['Evidence linkage', 'ربط الأدلة'],
+      provenance: ['Source metadata coverage', 'اكتمال بيانات تعريف المصدر']
+    };
+    const v = labels[key];
+    return v ? this.copy(v[0], v[1]) : key;
+  }
+
+  qualityMetricExplanation(key: string): string {
+    switch (key) {
+      case 'completeness':
+        return this.copy(
+          'Number of populated values out of the 8 expected sides (4 identity fields × internal and PSC). Missing is not a conflict.',
+          'عدد القيم الموجودة من أصل 8 قيم متوقعة (4 حقول هوية × مصدر داخلي وخارجي). القيمة الناقصة ليست تعارضاً.');
+      case 'consistency':
+        return this.copy(
+          'Matching field pairs ÷ identity field pairs where both values exist. Text is normalized by case, spacing and punctuation; a match is not independent truth verification.',
+          'عدد أزواج الحقول المتطابقة ÷ أزواج الحقول التي تتوافر لها قيمتان. تتم تسوية حالة الأحرف والمسافات وعلامات الترقيم؛ التطابق ليس تحققاً مستقلاً من الصحة.');
+      case 'evidenceLinkage':
+        return this.copy(
+          'AI factor evidence references found in the supplied internal or synthetic PSC evidence ID sets ÷ all AI evidence references. A linked ID does not mean the underlying document was authenticated.',
+          'معرّفات الأدلة المرتبطة بعوامل AI الموجودة في قوائم الأدلة الداخلية أو PSC التجريبية ÷ إجمالي المراجع. وجود المعرّف لا يعني اعتماد المستند.');
+      case 'provenance':
+        return this.copy(
+          'Current V1 rule: score 100 when sourceSystem, datasetVersion and retrievedAt all exist; otherwise score 60. This checks metadata availability, not the source authority.',
+          'قاعدة النسخة الحالية: 100 عند توافر sourceSystem وdatasetVersion وretrievedAt جميعاً؛ وإلا 60. هذا فحص لتوافر بيانات تعريف المصدر وليس اعتماد المصدر.');
+      default: return '';
+    }
+  }
+
+  qualityFieldLabel(field: string): string {
+    const labels: Record<string, [string, string]> = {
+      VESSEL_NAME: ['Vessel name', 'اسم السفينة'],
+      FLAG: ['Flag state', 'دولة العلم'],
+      VESSEL_TYPE: ['Vessel type', 'نوع السفينة'],
+      OPERATOR_NAME: ['Operator name', 'اسم المشغل']
+    };
+    const v = labels[field];
+    return v ? this.copy(v[0], v[1]) : field;
+  }
+
+  qualityComparisonLabel(status: string): string {
+    const labels: Record<string, [string, string]> = {
+      MATCHED: ['Matched', 'متطابق'],
+      MISMATCH: ['Disagreement', 'اختلاف'],
+      MISSING: ['Missing value', 'قيمة ناقصة']
+    };
+    const v = labels[status];
+    return v ? this.copy(v[0], v[1]) : status;
+  }
+
+  qualitySourceLabel(source: string): string {
+    if (source === 'NMC_INTERNAL_SIM') return this.copy('Internal synthetic fixture', 'البيانات الداخلية التجريبية');
+    if (source === 'PSC_GOOGLE_SIM') return this.copy('Synthetic PSC registry', 'سجل PSC التجريبي');
+    return this.copy('Unknown ID', 'معرّف غير معروف');
   }
 
   riskLabel(level: string = this.vessel?.riskLevel): string {
@@ -218,7 +306,12 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
       'Certificate profile exposure': 'مخاطر مرتبطة بملف الشهادات',
       'Conflict between authoritative data sources': 'تعارض بين مصادر بيانات معتمدة',
       'Data-quality / external-source factor': 'عامل جودة البيانات / المصدر الخارجي',
-      'Historical vessel / operator risk pattern': 'نمط مخاطر تاريخي للسفينة / المشغل'
+      'Historical vessel / operator risk pattern': 'نمط مخاطر تاريخي للسفينة / المشغل',
+      'Movement and voyage behavior': 'مؤشرات حركة السفينة ورحلتها',
+      'Inspection exposure': 'المخاطر المرتبطة بالمعاينة',
+      'Certificate compliance': 'الامتثال للشهادات',
+      'Data quality risk signal': 'مؤشر مخاطر جودة البيانات',
+      'Vessel inspection and operator history': 'سجل معاينات السفينة والمشغل'
     };
     return this.lang.isArabic ? (labels[label] || label) : label;
   }
@@ -273,9 +366,11 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
     };
 
     this.buildOperationalData();
+    this.loadExternalPsc();
+    this.loadStoredAi();
 
     const requestedTab = this.route.snapshot.queryParamMap.get('tab');
-    if (requestedTab && ['overview','movement','compliance','inspection','certificates','sources'].includes(requestedTab)) {
+    if (requestedTab && ['overview','movement','compliance','inspection','external-psc','certificates','sources'].includes(requestedTab)) {
       this.activeTab = requestedTab;
     }
   }
@@ -285,11 +380,173 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.subscriptions.unsubscribe();
     this.map?.remove();
   }
 
   setTab(tab: string): void {
     this.activeTab = tab;
+  }
+
+  private loadStoredAi(): void {
+    this.storedAiStatus = 'loading';
+    this.subscriptions.add(this.fleetAiService.assessment(this.vessel.imo).subscribe({
+      next: assessment => {
+        const keys = new Set((assessment.signals || []).map(signal => signal.factor));
+        const expected = ['movement', 'inspection', 'certificate', 'dataQuality', 'history'];
+        if (assessment.imo !== this.vessel.imo ||
+            assessment.status !== 'COMPLETED' ||
+            assessment.authoritative !== false ||
+            assessment.sourceNature !== 'SYNTHETIC_NOT_RIYADH_MOU' ||
+            !Number.isFinite(assessment.score) ||
+            !assessment.assessmentId ||
+            keys.size !== 5 || !expected.every(key => keys.has(key))) {
+          this.storedAiStatus = 'error';
+          return;
+        }
+
+        this.storedAi = assessment;
+        this.storedAiStatus = 'available';
+        this.applyStoredAiView();
+        // The Leaflet vessel badge is a generated DOM icon, not Angular-bound.
+        // Refresh it to display the saved Oracle score rather than the fixture score.
+        if (this.map) {
+          this.map.remove();
+          this.map = undefined;
+          setTimeout(() => this.initMap(), 0);
+        }
+        this.loadStoredHistory();
+        this.loadStoredIntelligence();
+      },
+      error: response => {
+        // No assessment is normal for vessels that have not yet been evaluated.
+        this.storedAiStatus = response?.status === 404 ? 'not-assessed' : 'error';
+      }
+    }));
+  }
+
+  private loadStoredIntelligence(): void {
+    this.intelligenceStatus='loading';
+    this.subscriptions.add(this.fleetAiService.intelligence(this.vessel.imo).subscribe({
+      next: result => {
+        if (result.imo!==this.vessel.imo ||
+            result.assessmentId!==this.storedAi?.assessmentId ||
+            result.dataNature!=='SYNTHETIC_POC_NOT_OFFICIAL') {
+          this.intelligenceStatus='unavailable';
+          return;
+        }
+        this.storedAiIntelligence=result;
+        this.qualityLocalPreview=result.quality.breakdown
+          ?projectQuality(result.quality.breakdown,this.qualityPolicy.config):null;
+        this.intelligenceStatus='available';
+      },
+      error: () => {
+        this.storedAiIntelligence=null;
+        this.qualityLocalPreview=null;
+        this.intelligenceStatus='unavailable';
+      }
+    }));
+  }
+
+  private loadStoredHistory(): void {
+    this.subscriptions.add(this.fleetAiService.history(this.vessel.imo).subscribe({
+      next: history => {
+        if (history.imo !== this.vessel.imo ||
+            history.dataNature !== 'SYNTHETIC_POC_NOT_OFFICIAL') return;
+        this.storedAiHistory = history;
+        this.applyStoredAiView();
+      },
+      // Preserve the saved current assessment without inventing timeline events.
+      error: () => { this.storedAiHistory = null; }
+    }));
+  }
+
+  private applyStoredAiView(): void {
+    if (!this.storedAi) return;
+    this.vessel.riskScore = this.storedAi.score ?? this.vessel.riskScore;
+    this.vessel.riskLevel = this.storedAi.level ?? this.vessel.riskLevel;
+    const sources: Record<string, string> = {
+      movement: 'AIS / Movement',
+      inspection: 'Inspection',
+      certificate: 'Certificate Registry',
+      dataQuality: 'Data Quality',
+      history: 'Inspection History'
+    };
+    const names: Record<string, string> = {
+      movement: 'Movement and voyage behavior',
+      inspection: 'Inspection exposure',
+      certificate: 'Certificate compliance',
+      dataQuality: 'Data quality risk signal',
+      history: 'Vessel inspection and operator history'
+    };
+    const weights = this.storedAi.ruleset?.weights as unknown as Record<string, number> | undefined;
+    this.riskFactors = this.storedAi.signals.map(signal => {
+      const weight = weights?.[signal.factor] ?? 0;
+      return {
+        label: names[signal.factor] || signal.factor,
+        value: Math.round(signal.severity * weight) / 100,
+        source: sources[signal.factor] || 'Inspection History',
+        severity: signal.severity,
+        confidence: signal.confidence,
+        agent: signal.sourceAgent,
+        evidenceIds: signal.evidenceIds,
+        reason: signal.reason
+      };
+    });
+    const events = this.storedAiHistory?.events || [];
+    if (events.length) {
+      this.timeline = events.map(event => ({
+        time: event.OCCURRED_AT ? new Date(event.OCCURRED_AT).toLocaleString() : '—',
+        title: event.EVENT_TYPE === 'RISK_CHANGE'
+          ? this.copy('AI risk score changed', 'تغيرت درجة المخاطر بالذكاء الاصطناعي')
+          : this.copy('Saved AI assessment', 'تقييم ذكاء اصطناعي محفوظ'),
+        detail: event.EVENT_TYPE === 'RISK_CHANGE'
+          ? this.copy(
+              `Risk changed from ${event.PREVIOUS_RISK_SCORE ?? '—'} to ${event.NEW_RISK_SCORE ?? '—'} (synthetic POC).`,
+              `تغيرت المخاطر من ${event.PREVIOUS_RISK_SCORE ?? '—'} إلى ${event.NEW_RISK_SCORE ?? '—'} (نموذج تجريبي).`
+            )
+          : this.copy(
+              `Stored composite AI risk: ${event.NEW_RISK_SCORE ?? '—'} / 100 (synthetic POC).`,
+              `المخاطر المركبة المحفوظة: ${event.NEW_RISK_SCORE ?? '—'} من 100 (نموذج تجريبي).`
+            ),
+        kind: (event.NEW_RISK_SCORE ?? 0) >= 85 ? 'critical'
+          : (event.NEW_RISK_SCORE ?? 0) >= 45 ? 'warning' : 'normal'
+      }));
+    } else {
+      this.timeline = [{
+        time: this.storedAi.assessedAt ? new Date(this.storedAi.assessedAt).toLocaleString() : '—',
+        title: this.copy('Saved AI assessment', 'تقييم ذكاء اصطناعي محفوظ'),
+        detail: this.copy(
+          `Stored risk ${this.storedAi.score}/100. Timeline history unavailable; no other events inferred.`,
+          `المخاطر المحفوظة ${this.storedAi.score} من 100. سجل الأحداث غير متاح، ولم يتم افتراض أحداث أخرى.`
+        ),
+        kind: this.storedAi.score! >= 85 ? 'critical' : this.storedAi.score! >= 45 ? 'warning' : 'normal'
+      }];
+    }
+  }
+
+  loadExternalPsc(): void {
+    this.pscLoading = true;
+    this.pscError = '';
+    this.externalPsc = null;
+    this.externalPscService.getVessel(this.vessel.imo).subscribe({
+      next: payload => {
+        if (payload.imo !== this.vessel.imo || payload.authoritative !== false ||
+            payload.dataNature !== 'SYNTHETIC_NOT_RIYADH_MOU') {
+          this.pscError = this.copy('External PSC provenance failed validation.', 'تعذر التحقق من مصدر بيانات PSC الخارجية.');
+        } else {
+          this.externalPsc = payload;
+        }
+        this.pscLoading = false;
+      },
+      error: () => {
+        this.pscLoading = false;
+        this.pscError = this.copy(
+          'External PSC data unavailable. No simulated inspection records have been inferred.',
+          'بيانات PSC الخارجية غير متاحة. لم يتم افتراض أي سجلات تفتيش بديلة.'
+        );
+      }
+    });
   }
 
   openRiskEvidence(source: string): void {
@@ -479,6 +736,8 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
   }
 
   get attentionMessage(): string {
+    if (this.storedAi?.operationalPriority === 'Priority Review')
+      return this.copy('Priority human review of the saved AI assessment', 'مراجعة بشرية ذات أولوية للتقييم المحفوظ بالذكاء الاصطناعي');
     const level = this.vessel.riskLevel;
     if (level === 'Critical') return this.copy('Immediate operational review required', 'مراجعة تشغيلية فورية مطلوبة');
     if (level === 'High') return this.copy('Priority monitoring and review required', 'مراقبة ومراجعة ذات أولوية مطلوبة');
@@ -491,13 +750,20 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private isAtLeast(level: 'Watch' | 'High' | 'Critical'): boolean {
-    const thresholds = this.riskEngine.config.thresholds;
-    if (level === 'Critical') return this.vessel.risk >= thresholds.critical;
-    if (level === 'High') return this.vessel.risk >= thresholds.high;
-    return this.vessel.risk >= thresholds.watch;
+    const thresholds = this.storedAi?.ruleset?.thresholds || this.riskEngine.config.thresholds;
+    const score = this.vessel.riskScore;
+    if (level === 'Critical') return score >= thresholds.critical;
+    if (level === 'High') return score >= thresholds.high;
+    return score >= thresholds.watch;
   }
 
   get attentionDescription(): string {
+    if (this.storedAi?.criticalOpenFinding) {
+      return this.copy(
+        'A critical open finding in synthetic inspection evidence requires priority human review, even though the composite AI risk level is Watch. This is not a regulatory decision.',
+        'توجد ملاحظة حرجة مفتوحة في أدلة المعاينة التجريبية تستلزم مراجعة بشرية ذات أولوية رغم أن تصنيف المخاطر المركبة هو مراقبة. هذا ليس قرارًا تنظيميًا.'
+      );
+    }
     if (this.isAtLeast('Critical')) {
       return this.copy(
         'Multiple movement, inspection, certificate and data-quality indicators have been correlated into a critical vessel risk picture.',
@@ -538,7 +804,7 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
       this.vessel.riskLevel === 'Critical' ? '#e65353' :
       this.vessel.riskLevel === 'High' ? '#ef8b43' :
       this.vessel.riskLevel === 'Watch' ? '#d7a738' : '#4da7a0';
-    return `radial-gradient(circle at center, white 58%, transparent 59%), conic-gradient(${color} 0 ${this.vessel.risk}%, #edf1f3 ${this.vessel.risk}% 100%)`;
+    return `radial-gradient(circle at center, white 58%, transparent 59%), conic-gradient(${color} 0 ${this.vessel.riskScore}%, #edf1f3 ${this.vessel.riskScore}% 100%)`;
   }
 
   private buildOperationalData(): void {
@@ -558,9 +824,11 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
     this.historicalRiskImpact = contribution('history');
 
     this.sources = this.buildSources();
-    this.certificates = this.buildCertificates();
-    this.inspections = this.buildInspections();
-    this.deficiencies = this.buildDeficiencies();
+    // The exact same deterministic fixture now drives Vessel 360 and A01/A02.
+    const bundle = this.vesselEvidence.create(this.vessel);
+    this.certificates = bundle.certificates;
+    this.inspections = bundle.inspections;
+    this.deficiencies = bundle.deficiencies;
     this.riskFactors = this.buildRiskFactors();
     this.timeline = this.buildTimeline();
     this.selectedCertificateId = this.certificates[0].id;
@@ -720,130 +988,6 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
     ];
   }
 
-  private buildCertificates(): CertificateRecord[] {
-    const firstStatus: CertificateRecord['status'] =
-      this.hasCertificateConflict ? 'Conditional' : this.vessel.risk >= 55 ? 'Expiring' : 'Valid';
-
-    return [
-      {
-        id:`CERT-SC-${this.vessel.imo}`,
-        type:'Cargo Ship Safety Construction Certificate',
-        number:`CSC-${this.vessel.imo}-2026`,
-        issuer:this.isUaeFlag ? 'MOEI Maritime Affairs' : this.flagRegistryAuthority,
-        issued:'12 Feb 2026',
-        expiry:this.vessel.risk >= 55 ? '19 Dec 2026' : '11 Feb 2031',
-        status:firstStatus,
-        source:this.isUaeFlag ? 'MOEI Certificate Registry' : 'Verified Flag / RO Certificate Record',
-        condition:this.hasCertificateConflict ? 'Subject to verification of an outstanding safety condition before unrestricted operation.' : undefined,
-        conflict:this.hasCertificateConflict
-      },
-      {
-        id:`CERT-SR-${this.vessel.imo}`,
-        type:'Ship Safety Radio Certificate',
-        number:`CSR-${this.vessel.imo}-2025`,
-        issuer:this.isUaeFlag ? 'MOEI Recognized Organization' : this.vessel.classSociety,
-        issued:'18 Nov 2025',
-        expiry:'17 Nov 2027',
-        status:'Valid',
-        source:this.isUaeFlag ? 'MOEI Certificate Registry' : 'Recognized Organization Record'
-      },
-      {
-        id:`CERT-SE-${this.vessel.imo}`,
-        type:'Ship Safety Equipment Certificate',
-        number:`CSE-${this.vessel.imo}-2025`,
-        issuer:this.isUaeFlag ? 'MOEI Recognized Organization' : this.vessel.classSociety,
-        issued:'02 Sep 2025',
-        expiry:this.vessel.risk >= 65 ? '01 Dec 2026' : '01 Sep 2028',
-        status:this.vessel.risk >= 65 ? 'Expiring' : 'Valid',
-        source:this.isUaeFlag ? 'MOEI Certificate Registry' : 'Recognized Organization Record'
-      },
-      {
-        id:`CERT-ISSC-${this.vessel.imo}`,
-        type:'International Ship Security Certificate',
-        number:`ISSC-${this.vessel.imo}-2024`,
-        issuer:this.flagRegistryAuthority,
-        issued:'04 Apr 2024',
-        expiry:'03 Apr 2029',
-        status:'Valid',
-        source:this.isUaeFlag ? 'MOEI / Flag-State Record' : 'External Flag Record'
-      }
-    ];
-  }
-
-  private buildInspections(): InspectionRecord[] {
-    const latestResult: InspectionRecord['result'] =
-      this.vessel.risk >= 65 ? 'Follow-up Required' :
-      this.vessel.risk >= 45 ? 'Deficiencies Found' : 'Passed';
-
-    return [
-      {
-        id:`INS-2026-${String(1300 + this.vessel.id).padStart(5,'0')}`,
-        date:'19 Aug 2026',
-        port:this.vessel.destination,
-        type:'Port State / Safety Inspection',
-        result:latestResult,
-        inspector:'MOEI Smart Inspection',
-        source:'Smart Inspection',
-        openDeficiencies:this.openDeficiencyCount
-      },
-      {
-        id:`INS-2026-${String(400 + this.vessel.id).padStart(5,'0')}`,
-        date:'13 Mar 2026',
-        port:this.vessel.zone,
-        type:'Safety Compliance Inspection',
-        result:this.vessel.risk >= 50 ? 'Deficiencies Found' : 'Passed',
-        inspector:'MOEI Smart Inspection',
-        source:'Smart Inspection',
-        openDeficiencies:0
-      },
-      {
-        id:`INS-2025-${String(2900 + this.vessel.id).padStart(5,'0')}`,
-        date:'22 Nov 2025',
-        port:'UAE',
-        type:'Routine Inspection',
-        result:'Passed',
-        inspector:'MOEI Smart Inspection',
-        source:'Smart Inspection',
-        openDeficiencies:0
-      }
-    ];
-  }
-
-  private buildDeficiencies(): DeficiencyRecord[] {
-    const records: DeficiencyRecord[] = [];
-
-    if (this.hasOpenDeficiency) {
-      const critical = this.vessel.risk >= 80;
-      records.push({
-        id:`DEF-2026-${400 + this.vessel.id}`,
-        category:critical ? 'Fire Safety' : 'Safety Equipment',
-        description:critical
-          ? 'Fixed fire detection and alarm system failed functional verification during the latest inspection.'
-          : 'Safety equipment finding remains open pending corrective-action evidence.',
-        severity:critical ? 'Critical' : 'Major',
-        status:'Open',
-        raised:'19 Aug 2026',
-        due:'02 Sep 2026',
-        evidence:`Inspection report INS-2026-${String(1300 + this.vessel.id).padStart(5,'0')} · supporting evidence attached`,
-        riskImpact:this.inspectionRiskImpact
-      });
-    }
-
-    records.push({
-      id:`DEF-2026-${100 + this.vessel.id}`,
-      category:'Life Saving Appliances',
-      description:'Historical inspection finding closed after corrective evidence was accepted.',
-      severity:'Minor',
-      status:'Closed',
-      raised:'13 Mar 2026',
-      due:'20 Mar 2026',
-      evidence:'Closure evidence accepted',
-      riskImpact:0
-    });
-
-    return records;
-  }
-
   private buildRiskFactors(): RiskFactor[] {
     const critical = this.vessel.risk >= 80;
     const high = this.vessel.risk >= 65;
@@ -955,13 +1099,13 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
       html:`
         <div class="v360-map-ship ${this.riskCssClass}" style="--ship-size:${shipSize}px;--ring-size:${ringSize}px">
           <span class="v360-risk-ring"></span>
-          ${this.vessel.risk >= 65 ? '<span class="v360-risk-pulse"></span>' : ''}
+          ${this.vessel.riskScore >= 65 ? '<span class="v360-risk-pulse"></span>' : ''}
           <svg class="v360-ship-symbol" viewBox="0 0 24 34" aria-hidden="true" style="transform:rotate(${this.vessel.course}deg)">
             <path d="M12 1.4c1.5 2.1 4.7 4.6 6.5 8.2v15.7L12 32.6 5.5 25.3V9.6C7.3 6 10.5 3.5 12 1.4Z"></path>
             <path class="ship-deck" d="M9.2 10.6h5.6v8.2H9.2z"></path>
             <path class="ship-centerline" d="M12 3.5v24.3"></path>
           </svg>
-          <span class="v360-ship-label">${this.vessel.name} <b>${this.vessel.risk}</b></span>
+          <span class="v360-ship-label">${this.vessel.name} <b>${this.vessel.riskScore}</b></span>
         </div>
       `,
       iconSize:[58,58],
@@ -977,7 +1121,7 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
         <strong>${this.vessel.name}</strong>
         <span>IMO ${this.vessel.imo} · ${this.vessel.lengthM} m</span>
         <span>${this.vessel.speed.toFixed(1)} kn · Course ${this.vessel.course}° · ${this.vessel.destination}</span>
-        <b>Risk ${this.vessel.risk} · ${this.vessel.riskLevel}</b>
+        <b>${this.storedAi ? 'Saved AI risk' : 'Synthetic baseline'} ${this.vessel.riskScore} · ${this.vessel.riskLevel}</b>
       </div>`,
       { direction:'top', offset:[0,-22], opacity:1 }
     ).addTo(this.map);

@@ -1,0 +1,42 @@
+name: NMC External PSC fixture quality
+
+on:
+  pull_request:
+    branches: [main, feature/smart-inspection-poc]
+  workflow_dispatch:
+
+jobs:
+  validate-psc:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Generate repeatable CSV snapshot
+        run: node tools/psc/export-psc.mjs
+      - name: Validate catalogue coverage and referential consistency
+        run: |
+          node --input-type=module <<'EOF'
+          import fs from 'node:fs';
+          import {catalogFromNmcSource,generateExternalPsc} from './tools/psc/psc-fixtures.mjs';
+          const base=fs.readFileSync('src/app/data/nmc-vessel-catalog.ts','utf8');
+          const expanded=fs.readFileSync('src/app/data/nmc-expanded-vessel-catalog.ts','utf8');
+          const d=generateExternalPsc(catalogFromNmcSource(base,expanded));
+          const assert=(cond,msg)=>{if(!cond) throw new Error(msg)};
+          assert(d.registry.length===420,'Expected 420 vessel records');
+          assert(d.inspections.length===1624,'Inspection count drift; check baseline fixtures');
+          assert(d.deficiencies.length===1548,'Deficiency count drift');
+          assert(d.detentions.length===73,'Detention count drift');
+          const v=new Set(d.registry.map(x=>x.imo));
+          const ids=new Set(d.inspections.map(x=>x.inspectionId));
+          assert(v.size===420,'Duplicate IMO');
+          assert(ids.size===d.inspections.length,'Duplicate inspection ID');
+          assert(d.inspections.every(x=>v.has(x.imo)), 'Inspection references unknown vessel');
+          assert(d.deficiencies.every(x=>ids.has(x.inspectionId)), 'Deficiency references unknown inspection');
+          assert(d.detentions.every(x=>ids.has(x.inspectionId)), 'Detention references unknown inspection');
+          assert(d.detentions.every(x=>d.inspections.find(i=>i.inspectionId===x.inspectionId).detained),'Detention without linked detained inspection');
+          assert(d.registry.every(x=>x.dataNature==='SYNTHETIC_NOT_RIYADH_MOU'),'Missing synthetic labelling');
+          assert(d.inspections.every(x=>x.reportPdfStatus==='NOT_UPLOADED'),'False PDF claim');
+          console.log('PSC synthetic fixtures validated:',d.meta);
+          EOF

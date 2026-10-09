@@ -41,16 +41,201 @@
 
       <div class="hero-right">
         <button type="button" class="confidence-card confidence-button" (click)="openProvenance('dataConfidence')" [attr.title]="copy('Open confidence details', 'عرض تفاصيل الثقة')">
-          <small>{{ copy('Data confidence', 'الثقة في البيانات') }}</small>
+          <small>{{ copy('Scenario preset · not calculated', 'قيمة سيناريو تجريبي · ليست محسوبة') }}</small>
           <strong>{{ vessel.dataConfidence }}%</strong>
-          <span>{{ conflictCount }} {{ copy('source conflict', 'تعارض بالمصادر') }} · {{ copy('view basis', 'عرض الأساس') }}</span>
+          <span>{{ copy('Fixture preset, separate from quality score', 'قيمة مسبقة لا تدخل في حساب جودة البيانات') }} · {{ conflictCount }} {{ copy('sample scenario alerts', 'تنبيهات تجريبية') }}</span>
         </button>
-        <a class="risk-card risk-link" [ngClass]="riskCssClass" [routerLink]="['/moei/nmc/vessel', vessel.imo, 'risk']" [attr.title]="copy('Open full risk explainability', 'عرض تفسير المخاطر بالكامل')">
-          <small>{{ copy('Composite risk', 'المخاطر المركبة') }}</small>
+        <a class="risk-card risk-link" [ngClass]="riskCssClass"
+           [routerLink]="['/moei/nmc/vessel', vessel.imo, storedAi ? 'ai-assessment' : 'risk']"
+           [attr.title]="copy('Open risk explanation', 'عرض تفسير المخاطر')">
+          <small>{{ storedAi ? copy('Saved AI risk · POC', 'مخاطر AI المحفوظة · تجريبي') : copy('Synthetic baseline risk', 'مخاطر السيناريو التجريبي') }}</small>
           <strong>{{ vessel.riskScore }}</strong>
           <span>{{ riskLabel() }} · {{ copy('Explain', 'تفسير') }}</span>
         </a>
       </div>
+    </section>
+
+    <section class="v360-saved-ai-bar" [class.v360-ai-ready]="storedAiStatus === 'available'"
+             role="status" aria-live="polite">
+      <div class="v360-saved-ai-label">
+        <strong>✦ {{ copy('Saved Vessel Intelligence', 'معلومات السفينة المحفوظة') }}</strong>
+        <span *ngIf="storedAiStatus === 'loading'">{{ copy('Loading the latest saved assessment…', 'جارٍ تحميل أحدث تقييم محفوظ…') }}</span>
+        <span *ngIf="storedAiStatus === 'not-assessed'">{{ copy('No saved AI assessment yet. Risk and operational context below remain synthetic sample data.', 'لا يوجد تقييم AI محفوظ بعد. المخاطر والبيانات التشغيلية أدناه هي بيانات تجريبية.') }}</span>
+        <span *ngIf="storedAiStatus === 'error'">{{ copy('Saved AI assessment unavailable. Showing synthetic fixture; no AI risk is inferred.', 'التقييم المحفوظ غير متاح. يجري عرض السيناريو التجريبي دون افتراض مخاطر AI.') }}</span>
+        <span *ngIf="storedAiStatus === 'available'">{{ copy('Read-only Oracle assessment from A01/A02 · synthetic evidence · not a regulatory decision', 'تقييم Oracle للقراءة فقط من A01/A02 · أدلة تجريبية · ليس قرارًا تنظيميًا') }}</span>
+      </div>
+      <div class="v360-saved-ai-meta" *ngIf="storedAi as ai">
+        <span><small>{{ copy('Risk / Priority', 'المخاطر / الأولوية') }}</small><b>{{ ai.score }}/100 · {{ ai.operationalPriority }}</b></span>
+        <span><small>{{ copy('Assessment ID', 'رقم التقييم') }}</small><b [title]="ai.assessmentId">{{ ai.assessmentId }}</b></span>
+        <span><small>{{ copy('Assessed at (UTC)', 'وقت التقييم (UTC)') }}</small><b>{{ ai.assessedAt || '—' }}</b></span>
+        <span><small>{{ copy('Five evidence-linked factors', 'خمسة عوامل مرتبطة بالأدلة') }}</small><b>{{ ai.signals.length }} · A01 / A02</b></span>
+      </div>
+    </section>
+
+    <section class="v360-structural-quality panel" *ngIf="storedAi" role="region"
+             [attr.aria-label]="copy('Verified-source limitations and data comparison', 'حدود التحقق من المصادر ومقارنة البيانات')">
+      <div class="v360-quality-header">
+        <div>
+          <h3>{{ copy('Data Quality & Cross-Source Consistency', 'جودة البيانات واتساق المصادر') }}</h3>
+          <p>{{ copy('Synthetic cross-source structural checks · not verified maritime data confidence', 'فحص هيكلي لمصادر تجريبية · لا يمثل الثقة في بيانات بحرية معتمدة') }}</p>
+        </div>
+        <div class="v360-quality-controls">
+          <span class="v360-quality-score" *ngIf="storedAiIntelligence?.quality?.score !== null && storedAiIntelligence?.quality?.score !== undefined">
+            {{ storedAiIntelligence?.quality?.score }}/100
+            <small>{{ copy('Structural only', 'جودة هيكلية فقط') }}</small>
+          </span>
+          <a class="v360-quality-toggle" [routerLink]="['/moei/nmc/admin/data-quality']" [queryParams]="{imo:vessel.imo}">
+            ⚙ {{ copy('Configure rules', 'إعدادات الجودة') }}
+          </a>
+          <button type="button" class="v360-quality-toggle" (click)="qualityExpanded = !qualityExpanded"
+                  [attr.aria-expanded]="qualityExpanded">
+            {{ qualityExpanded ? copy('Hide details', 'إخفاء التفاصيل') : copy('View details', 'عرض التفاصيل') }}
+            <span aria-hidden="true">{{ qualityExpanded ? '−' : '+' }}</span>
+          </button>
+        </div>
+      </div>
+      <p class="v360-quality-state" *ngIf="intelligenceStatus === 'loading'">
+        {{ copy('Checking stored source comparisons…', 'جارٍ تحميل مقارنة المصادر المحفوظة…') }}
+      </p>
+      <p class="v360-quality-state" *ngIf="intelligenceStatus === 'unavailable'">
+        {{ copy('Data-quality details unavailable. No confidence or absence-of-conflict assertion is made.', 'تفاصيل جودة البيانات غير متاحة. لا نفترض مستوى ثقة أو عدم وجود تعارض.') }}
+      </p>
+      <ng-container *ngIf="storedAiIntelligence as intelligence">
+        <div class="v360-policy-comparison" *ngIf="qualityLocalPreview as projection">
+          <span><small>{{ copy('Saved in Oracle', 'الدرجة المحفوظة في Oracle') }}</small>
+            <b>{{ intelligence.quality.score ?? '—' }}/100</b></span>
+          <span aria-hidden="true">→</span>
+          <span><small>{{ copy('Configured local preview', 'المعاينة بالإعدادات المحلية') }}</small>
+            <b>{{ projection.score ?? '—' }}/100</b></span>
+          <span class="v360-policy-version">{{ qualityPolicy.config.version }} ·
+            {{ copy('browser only, Oracle unchanged', 'المتصفح فقط؛ Oracle لم يتغير') }}</span>
+        </div>
+        <div class="v360-quality-peek" *ngIf="intelligence.quality.breakdown as summary">
+          <span>{{ copy('Completeness', 'الاكتمال') }} <b>{{ summary.completenessPercent }}%</b></span>
+          <span>{{ copy('Consistency', 'الاتساق') }} <b>{{ summary.consistencyPercent === null ? '—' : summary.consistencyPercent + '%' }}</b></span>
+          <span>{{ copy('Evidence linkage', 'ربط الأدلة') }} <b>{{ summary.evidenceLinkagePercent === null ? '—' : summary.evidenceLinkagePercent + '%' }}</b></span>
+          <span>{{ copy('Compared identity fields', 'حقول الهوية المقارنة') }} <b>{{ summary.comparedFields }}</b></span>
+          <span>{{ copy('Persisted field differences', 'اختلافات الحقول المحفوظة') }} <b>{{ intelligence.conflicts.length }}</b></span>
+        </div>
+        <p class="v360-quality-state" *ngIf="intelligence.quality.status !== 'CALCULATED'">
+          {{ copy('Structural quality not calculated for this saved assessment. A no-AirIA retrospective check is available.', 'لم تُحسب الجودة الهيكلية لهذا التقييم المحفوظ بعد. يمكن إجراء فحص لاحق دون استدعاء Airia.') }}
+        </p>
+        <div class="v360-quality-deep-dive" *ngIf="qualityExpanded && intelligence.quality.breakdown as summary">
+          <section class="v360-quality-detail-card">
+            <h4>{{ copy('Saved Oracle calculation · policy at time of scoring', 'معادلة Oracle المحفوظة · إعدادات وقت الاحتساب') }}</h4>
+            <p>{{ copy('The current POC assigns 35% to completeness, 30% to consistency, 20% to evidence linkage, and 15% to metadata. These are configurable-policy candidates—not model-learned, statistically calibrated, or approved regulatory weights.', 'أوزان النموذج التجريبي حالياً: 35% للاكتمال، و30% للاتساق، و20% لربط الأدلة، و15% لبيانات المصدر. هذه أوزان مقترحة قابلة للمراجعة وليست أوزاناً مستنتجة إحصائياً أو معتمدة تنظيمياً.') }}</p>
+            <p class="v360-quality-missing" *ngIf="!summary.calculationSteps?.length">{{ copy('Detailed audit inputs were not saved in this version. Run the no-Airia quality backfill again to record real source values and evidence links.', 'تفاصيل الحساب لم تكن محفوظة في الإصدار السابق. أعد تشغيل حساب الجودة دون استدعاء Airia لتخزين قيم المصادر وروابط الأدلة الفعلية.') }}</p>
+            <div class="v360-quality-scroll" *ngIf="summary.calculationSteps?.length">
+              <table class="v360-quality-source-table">
+                <thead><tr>
+                  <th>{{ copy('Check and rule', 'الفحص وطريقة الحساب') }}</th>
+                  <th>{{ copy('Evidence count', 'عدد عناصر الفحص') }}</th>
+                  <th>{{ copy('Measured', 'النتيجة') }}</th>
+                  <th>{{ copy('Weight', 'الوزن') }}</th>
+                  <th>{{ copy('Contribution', 'المساهمة') }}</th>
+                </tr></thead>
+                <tbody><tr *ngFor="let step of summary.calculationSteps">
+                  <td><b>{{ qualityMetricLabel(step.key) }}</b><p>{{ qualityMetricExplanation(step.key) }}</p></td>
+                  <td>{{ step.numerator }} / {{ step.denominator }}</td>
+                  <td>{{ step.percent === null ? '—' : step.percent + '%' }}</td>
+                  <td>{{ step.weightPercent }}%</td>
+                  <td><strong>{{ step.rawContribution === null ? '—' : (step.rawContribution | number:'1.0-2') }}</strong></td>
+                </tr></tbody>
+              </table>
+            </div>
+            <div class="v360-quality-formula">
+              <span>{{ copy('Weighted result before synthetic adjustment', 'الدرجة الموزونة قبل خصم البيانات التجريبية') }}: <b>{{ summary.rawScoreBeforeSyntheticCap ?? '—' }}/100</b></span>
+              <span>{{ copy('Synthetic policy multiplier', 'معامل سياسة البيانات التجريبية') }}: <b>× {{ summary.syntheticDiscountFactor === undefined ? '—' : (summary.syntheticDiscountFactor | number:'1.2-2') }}</b></span>
+              <span>{{ copy('Maximum synthetic structural score', 'الحد الأعلى للجودة الهيكلية التجريبية') }}: <b>{{ summary.syntheticUnverifiedScoreCap }}/100</b></span>
+              <span class="v360-quality-final">{{ copy('Final stored quality score', 'الدرجة النهائية المحفوظة') }}: <b>{{ intelligence.quality.score === null ? '—' : intelligence.quality.score + '/100' }}</b></span>
+            </div>
+            <p>{{ copy('Formula: MIN(75, ROUND(raw weighted result × 0.75)). These POC policy limits are NOT measured source reliability or AI confidence.', 'المعادلة: أصغر قيمة من (75، تقريب [الناتج الموزون × 0.75]). هذه حدود سياسة النموذج التجريبي وليست قياساً لموثوقية المصدر أو ثقة AI.') }}</p>
+          </section>
+          <section class="v360-quality-detail-card" *ngIf="qualityLocalPreview as projection">
+            <h4>{{ copy('Your configured impact · live breakdown', 'أثر إعداداتك · الحساب التفصيلي الجديد') }}</h4>
+            <p>{{ copy('Projected from saved source rows; does not alter Oracle, the five risk factors or AI agents.', 'حساب متوقع من مدخلات المصادر المحفوظة؛ لا يغير Oracle أو عوامل المخاطر الخمسة أو الوكلاء.') }}</p>
+            <div class="v360-quality-scroll"><table class="v360-quality-source-table">
+              <thead><tr><th>{{ copy('Quality factor', 'عامل الجودة') }}</th><th>{{ copy('Inputs', 'المدخلات') }}</th>
+                <th>{{ copy('Measured', 'القياس') }}</th><th>{{ copy('Your weight', 'وزنك الجديد') }}</th><th>{{ copy('Contribution', 'المساهمة الجديدة') }}</th></tr></thead>
+              <tbody><tr *ngFor="let step of projection.steps">
+                <td>{{ qualityMetricLabel(step.key) }}</td><td>{{ step.numerator }}/{{ step.denominator }}</td>
+                <td>{{ step.percent ?? '—' }}%</td><td>{{ step.weightPercent }}%</td>
+                <td>{{ step.rawContribution ?? '—' }}</td></tr></tbody>
+            </table></div>
+            <div class="v360-quality-formula">
+              <span>{{ copy('New weighted result', 'المجموع الموزون الجديد') }}: <b>{{ projection.rawScore ?? '—' }}</b></span>
+              <span>{{ copy('Your synthetic factor', 'معامل الخصم الجديد') }}: <b>{{ projection.syntheticDiscountPercent }}%</b></span>
+              <span>{{ copy('Fixed synthetic cap', 'الحد الأعلى الثابت') }}: <b>{{ projection.syntheticCap }}</b></span>
+              <span class="v360-quality-final">{{ copy('Configured local score', 'درجة المعاينة وفق إعداداتك') }}: <b>{{ projection.score ?? '—' }}/100</b></span>
+            </div>
+          </section>
+          <section class="v360-quality-detail-card" *ngIf="summary.fieldComparisons?.length">
+            <h4>{{ copy('Cross-source identity checks: compared values', 'مقارنة هوية السفينة: القيم الفعلية من المصدرين') }}</h4>
+            <p>{{ copy('These are the four evaluated identity fields; comparison ignores text case, whitespace and punctuation. This is NOT verification by an authority.', 'هذه هي حقول الهوية الأربعة التي تمت مقارنتها بعد توحيد النصوص والمسافات والترقيم، وليس تحققاً من جهة معتمدة.') }}</p>
+            <div class="v360-quality-scroll"><table class="v360-quality-source-table">
+              <thead><tr><th>{{ copy('Field', 'الحقل') }}</th><th>{{ copy('Internal synthetic fixture', 'القيمة الداخلية التجريبية') }}</th><th>{{ copy('Synthetic PSC registry', 'القيمة من سجل PSC التجريبي') }}</th><th>{{ copy('Result', 'النتيجة') }}</th></tr></thead>
+              <tbody><tr *ngFor="let field of summary.fieldComparisons">
+                <th>{{ qualityFieldLabel(field.field) }}</th>
+                <td>{{ field.internalValue || copy('Missing', 'غير متاح') }}</td>
+                <td>{{ field.externalValue || copy('Missing', 'غير متاح') }}</td>
+                <td><span class="v360-compare-tag" [ngClass]="field.status.toLowerCase()">{{ qualityComparisonLabel(field.status) }}</span></td>
+              </tr></tbody>
+            </table></div>
+            <p>{{ copy('Empty values are reported as missing, not source conflicts; a match means only agreement between these two synthetic rows.', 'القيم الفارغة تُصنف كنواقص وليست تعارضات. والتطابق يعني اتفاق صفَّي البيانات التجريبية فقط.') }}</p>
+          </section>
+
+          <section class="v360-quality-detail-card" *ngIf="summary.evidenceLinkages?.length">
+            <h4>{{ copy('AI evidence-ID trace', 'تتبع معرّفات الأدلة المرتبطة بعوامل AI') }}</h4>
+            <p>{{ copy('Known references', 'المراجع الموجودة') }}:
+              <b>{{ summary.evidenceReferencesLinked ?? '—' }} / {{ summary.evidenceReferencesTotal ?? '—' }}</b>.
+              {{ copy('An ID match is not proof of an authentic PDF or official PSC inspection.', 'تطابق معرّف الدليل لا يثبت اعتماد ملف PDF أو المعاينة الرسمية.') }}
+            </p>
+            <div class="v360-quality-scroll v360-quality-evidence-scroll"><table class="v360-quality-source-table">
+              <thead><tr><th>{{ copy('Factor', 'العامل') }}</th><th>{{ copy('Agent', 'الوكيل') }}</th><th>{{ copy('Evidence ID', 'معرّف الدليل') }}</th><th>{{ copy('Referenced source', 'المصدر') }}</th><th>{{ copy('Link', 'الربط') }}</th></tr></thead>
+              <tbody><tr *ngFor="let link of summary.evidenceLinkages">
+                <td>{{ link.factor }}</td><td>{{ link.agent }}</td>
+                <td class="v360-quality-mono">{{ link.evidenceId }}</td>
+                <td>{{ qualitySourceLabel(link.source) }}</td>
+                <td><span class="v360-compare-tag" [class.matched]="link.matched" [class.mismatch]="!link.matched">
+                  {{ link.matched ? copy('Found', 'موجود') : copy('Unknown', 'غير معروف') }}
+                </span></td>
+              </tr></tbody>
+            </table></div>
+          </section>
+          <section class="v360-quality-detail-card" *ngIf="summary.provenanceChecks?.length">
+            <h4>{{ copy('PSC source metadata validation', 'فحص بيانات تعريف مصدر PSC') }}</h4>
+            <p>{{ copy('Current V1 rule: 100% if all three metadata fields exist, otherwise 60%. This does not verify any official source.', 'قاعدة الإصدار الحالي: 100% عند توافر الحقول الثلاثة وإلا 60%. هذا لا يثبت اعتماد المصدر.') }}</p>
+            <div class="v360-quality-source-meta">
+              <span><small>{{ copy('Internal record class', 'نوع السجل الداخلي') }}</small><b>{{ summary.sourceProvenance?.internalSystem || '—' }}</b></span>
+              <span><small>{{ copy('External record class', 'نوع السجل الخارجي') }}</small><b>{{ summary.sourceProvenance?.externalSystem || '—' }}</b></span>
+              <span><small>{{ copy('PSC retrieval mode', 'طريقة استرجاع PSC') }}</small><b>{{ summary.sourceProvenance?.pscMode || '—' }}</b></span>
+            </div>
+            <div class="v360-quality-source-check" *ngFor="let check of summary.provenanceChecks">
+              <code>{{ check.field }}</code>
+              <span>{{ check.value || copy('Missing', 'غير متاح') }}</span>
+              <b class="v360-compare-tag" [class.matched]="check.present" [class.missing]="!check.present">{{ check.present ? copy('Present', 'موجود') : copy('Missing', 'ناقص') }}</b>
+            </div>
+            <p class="v360-quality-history-note" *ngIf="summary.reconstructionNotice">{{ copy('Retrospective calculation: field values come from the current synthetic PSC workbook, not a preserved PSC snapshot at the original AI assessment time. The AI score remains unchanged.', 'احتساب لاحق: قيم الحقول مأخوذة من ملف PSC التجريبي الحالي وليس من نسخة محفوظة وقت تقييم AI الأصلي. درجة مخاطر AI لم تتغير.') }}</p>
+          </section>
+
+          <section class="v360-quality-detail-card">
+            <h4>{{ copy('Persisted cross-source disagreements', 'اختلافات المصادر المحفوظة') }}</h4>
+        <div class="v360-quality-conflicts" *ngIf="qualityExpanded">
+          <strong>{{ copy('Detected source disagreements', 'اختلافات المصادر المكتشفة') }}: {{ intelligence.conflicts.length }}</strong>
+          <span *ngIf="intelligence.conflicts.length === 0">{{ copy('No disagreements stored for compared fields; this does not establish overall accuracy or authority verification.', 'لا توجد اختلافات مسجلة للحقول التي تمت مقارنتها؛ لا يعني ذلك إثبات الدقة العامة أو اعتماد الجهة.') }}</span>
+          <div class="v360-quality-conflict" *ngFor="let issue of intelligence.conflicts">
+            <b>{{ issue.FIELD_NAME }} · {{ issue.STATUS }}</b>
+            <span>{{ issue.CONFLICT_SUMMARY }}</span>
+            <small>{{ copy('Internal evidence', 'الدليل الداخلي') }}: {{ issue.SOURCE_A_EVIDENCE_ID || copy('Not recorded', 'غير مسجل') }} ·
+              {{ copy('External row evidence', 'دليل السجل الخارجي') }}: {{ issue.SOURCE_B_EVIDENCE_ID || copy('No stable ID available', 'لا يوجد معرّف ثابت متاح') }}</small>
+          </div>
+        </div>
+        <p class="v360-quality-disclaimer">
+          {{ copy('Synthetic POC only. Independently verified data confidence remains unavailable. Data quality and risk are separate metrics.', 'بيانات نموذج تجريبي فقط. الثقة المعتمدة على تحقق مستقل غير متاحة. جودة البيانات ودرجة المخاطر مقياسان مختلفان.') }}
+        </p>
+          </section>
+        </div>
+      </ng-container>
     </section>
 
     <section class="critical-banner" [ngClass]="riskCssClass">
@@ -69,6 +254,7 @@
       <button type="button" [class.active]="activeTab === 'movement'" (click)="setTab('movement')">{{ copy('Movement', 'الحركة') }}</button>
       <button type="button" [class.active]="activeTab === 'compliance'" (click)="setTab('compliance')">{{ copy('Compliance', 'الامتثال') }}</button>
       <button type="button" [class.active]="activeTab === 'inspection'" (click)="setTab('inspection')">{{ copy('Inspection', 'المعاينة') }}</button>
+      <button type="button" [class.active]="activeTab === 'external-psc'" (click)="setTab('external-psc')">{{ copy('External PSC', 'التفتيش الإقليمي التجريبي') }}</button>
       <button type="button" [class.active]="activeTab === 'certificates'" (click)="setTab('certificates')">{{ copy('Certificates', 'الشهادات') }}</button>
       <button type="button" [class.active]="activeTab === 'sources'" (click)="setTab('sources')">{{ copy('Data Sources', 'مصادر البيانات') }}</button>
     </nav>
@@ -206,10 +392,10 @@
         <article class="panel risk-panel">
           <div class="panel-header">
             <div>
-              <h3>{{ copy('Why is this vessel', 'لماذا هذه السفينة') }} {{ riskLabel() }}؟</h3>
-              <p>{{ copy('Transparent composite risk contribution', 'تفسير شفاف لمكونات درجة المخاطر') }}</p>
+              <h3>{{ copy('Why is this vessel classified as', 'لماذا صُنِّفت السفينة') }} {{ riskLabel() }}{{ lang.isArabic ? '؟' : '?' }}</h3>
+              <p>{{ storedAi ? copy('Weighted contributions from the saved A01/A02 assessment', 'المساهمات الموزونة من تقييم A01/A02 المحفوظ') : copy('Synthetic risk model · no saved AI result', 'نموذج مخاطر تجريبي · لا توجد نتيجة AI محفوظة') }}</p>
             </div>
-            <span class="risk-confidence">{{ vessel.riskConfidence }}% {{ copy('confidence', 'ثقة') }}</span>
+            <span class="risk-confidence">{{ storedAi ? copy('Oracle saved · POC', 'محفوظ Oracle · تجريبي') : copy('Fixture estimate', 'تقدير تجريبي') }}</span>
           </div>
 
           <div class="risk-score-row">
@@ -227,13 +413,23 @@
             <button type="button" class="factor-row factor-link" *ngFor="let factor of riskFactors" (click)="openRiskEvidence(factor.source)">
               <div class="factor-main">
                 <strong>{{ factorLabel(factor.label) }}</strong>
-                <small>{{ sourceLabel(factor.source) }} · {{ copy('Open evidence', 'عرض الدليل') }}</small>
+                <small *ngIf="!storedAi">{{ sourceLabel(factor.source) }} · {{ copy('Open sample evidence', 'عرض دليل تجريبي') }}</small>
+                <small *ngIf="storedAi">
+                  {{ factor.agent }} · {{ copy('Severity', 'الشدة') }} {{ factor.severity }} ·
+                  {{ copy('Agent confidence', 'ثقة الوكيل') }} {{ (factor.confidence! * 100) | number:'1.0-0' }}%
+                </small>
+                <small *ngIf="storedAi && factor.reason" class="v360-ai-reason">{{ factor.reason }}</small>
+                <small *ngIf="storedAi && factor.evidenceIds?.length" class="v360-ai-evidence">
+                  {{ copy('Evidence IDs', 'معرّفات الأدلة') }}: {{ factor.evidenceIds?.join(', ') }}
+                </small>
               </div>
-              <span>+{{ factor.value }}</span>
+              <span>+{{ factor.value | number:'1.0-2' }}</span>
             </button>
           </div>
 
-          <a class="outline-btn explainability-link" [routerLink]="['/moei/nmc/vessel', vessel.imo, 'risk']">{{ copy('Open full explainability view', 'فتح التفسير الكامل للمخاطر') }}</a>
+          <a class="outline-btn explainability-link" [routerLink]="['/moei/nmc/vessel', vessel.imo, storedAi ? 'ai-assessment' : 'risk']">
+              {{ storedAi ? copy('Open saved AI assessment and evidence', 'عرض تقييم AI المحفوظ والأدلة') : copy('Open synthetic risk explanation', 'عرض تفسير المخاطر التجريبي') }}
+            </a>
         </article>
 
         <article class="panel conflict-panel" *ngIf="hasCertificateConflict">
@@ -278,7 +474,7 @@
           <div class="panel-header">
             <div>
               <h3>{{ copy('Vessel Intelligence Timeline', 'الخط الزمني لمعلومات السفينة') }}</h3>
-              <p>{{ copy('How the operational picture evolved', 'كيف تطورت الصورة التشغيلية') }}</p>
+              <p>{{ storedAi ? copy('Events read from Oracle, not synthetic on-screen events', 'أحداث من Oracle وليست أحداثًا مفترضة على الشاشة') : copy('Synthetic sample timeline, not recorded AI history', 'خط زمني تجريبي وليس سجلًا لتقييم AI') }}</p>
             </div>
           </div>
 
@@ -562,6 +758,125 @@
       </article>
     </section>
 
+
+
+    <section class="evidence-tab psc-section" *ngIf="activeTab === 'external-psc'">
+      <div class="evidence-heading">
+        <div>
+          <span class="section-kicker">{{ copy('EXTERNAL MARITIME INTELLIGENCE · SIMULATED', 'المعلومات البحرية الخارجية · محاكاة') }}</span>
+          <h3>{{ copy('External Port State Control History', 'سجل رقابة دولة الميناء الخارجي') }}</h3>
+          <p>{{ copy('Independent fictional PSC records linked by the selected IMO. Not Riyadh MoU data and not verified regulatory findings.',
+                     'سجلات PSC افتراضية مستقلة مرتبطة برقم IMO المختار. ليست بيانات Riyadh MoU ولا نتائج رقابية معتمدة.') }}</p>
+        </div>
+        <div class="evidence-heading-actions">
+          <button type="button" class="secondary-btn" (click)="loadExternalPsc()">{{ copy('Refresh external source', 'تحديث المصدر الخارجي') }}</button>
+        </div>
+      </div>
+
+      <div *ngIf="pscLoading" class="psc-state">{{ copy('Loading selected-vessel PSC records...', 'جاري تحميل سجلات PSC الخاصة بالسفينة...') }}</div>
+      <div *ngIf="pscError" class="psc-state psc-error">{{ pscError }}</div>
+
+      <ng-container *ngIf="externalPsc as psc">
+        <div class="psc-provenance">
+          <span class="psc-badge">{{ psc.googleSheetsConnected
+            ? copy('Google Sheets · live connector', 'Google Sheets · اتصال مباشر')
+            : copy('Offline dataset snapshot · Google not connected', 'نسخة بيانات محلية · Google غير متصل') }}</span>
+          <strong>{{ copy('SIMULATED PSC — NOT REAL RIYADH MOU DATA', 'بيانات PSC تجريبية — ليست بيانات الرياض الحقيقية') }}</strong>
+          <small>{{ psc.sourceSystem }} · {{ psc.datasetVersion }} · {{ copy('As of', 'بتاريخ') }} {{ psc.asOf }}</small>
+        </div>
+
+        <div class="inspection-kpis">
+          <div><small>{{ copy('External inspections', 'المعاينات الخارجية') }}</small><strong>{{ psc.summary.inspections }}</strong></div>
+          <div><small>{{ copy('Deficiencies', 'المخالفات') }}</small><strong>{{ psc.summary.deficiencies }}</strong></div>
+          <div><small>{{ copy('Open findings', 'ملاحظات مفتوحة') }}</small><strong>{{ psc.summary.openDeficiencies }}</strong></div>
+          <div><small>{{ copy('Historical detentions', 'الاحتجازات السابقة') }}</small><strong>{{ psc.summary.detentions }}</strong></div>
+        </div>
+
+        <div *ngIf="psc.coverage === 'NO_RECORD_IN_FIXTURE'" class="psc-state">
+          {{ copy('No record in this simulation. This does NOT mean the vessel has no real PSC inspection or detention history.',
+                   'لا يوجد سجل في هذه المحاكاة، وهذا لا يعني خلو السفينة من سجلات معاينات أو احتجازات حقيقية.') }}
+        </div>
+
+        <article class="panel psc-card" *ngIf="psc.inspections.length">
+          <div class="panel-header">
+            <div><h3>{{ copy('External Inspection History', 'تاريخ المعاينات الخارجية') }}</h3>
+              <p>{{ copy('Synthetic port state control inspections · most recent first', 'معاينات رقابة دولة الميناء التجريبية · الأحدث أولًا') }}</p></div>
+          </div>
+          <div class="psc-table-wrap">
+            <table class="psc-table">
+              <thead><tr>
+                <th>{{ copy('Inspection ID', 'رقم المعاينة') }}</th>
+                <th>{{ copy('Date', 'التاريخ') }}</th>
+                <th>{{ copy('Port / country', 'الميناء / الدولة') }}</th>
+                <th>{{ copy('Result', 'النتيجة') }}</th>
+                <th>{{ copy('Deficiencies', 'الملاحظات') }}</th>
+                <th>{{ copy('Detention', 'احتجاز') }}</th>
+              </tr></thead>
+              <tbody>
+                <tr *ngFor="let item of psc.inspections">
+                  <td><strong>{{ item.inspectionId }}</strong></td>
+                  <td>{{ item.inspectionDate }}</td>
+                  <td>{{ item.port }} · {{ item.country }}</td>
+                  <td>{{ item.result }}</td>
+                  <td>{{ item.deficiencyCount }} ({{ item.openDeficiencies }} {{ copy('open', 'مفتوحة') }})</td>
+                  <td>{{ item.detained ? copy('Yes · fictional', 'نعم · افتراضي') : copy('No', 'لا') }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+
+        <article class="panel psc-card" *ngIf="psc.deficiencies.length">
+          <div class="panel-header">
+            <div><h3>{{ copy('External PSC Deficiencies', 'ملاحظات التفتيش الخارجي') }}</h3>
+              <p>{{ copy('These are distinct from MOEI Smart Inspection records', 'هذه السجلات منفصلة عن بيانات المعاينات الداخلية لدى الوزارة') }}</p></div>
+          </div>
+          <div class="psc-table-wrap">
+            <table class="psc-table">
+              <thead><tr>
+                <th>{{ copy('Deficiency ID', 'رقم الملاحظة') }}</th>
+                <th>{{ copy('Category', 'التصنيف') }}</th>
+                <th>{{ copy('Severity', 'الخطورة') }}</th>
+                <th>{{ copy('Status', 'الحالة') }}</th>
+                <th>{{ copy('Description', 'الوصف') }}</th>
+              </tr></thead>
+              <tbody>
+                <tr *ngFor="let item of psc.deficiencies">
+                  <td><strong>{{ item.deficiencyId }}</strong></td>
+                  <td>{{ item.category }}</td>
+                  <td>{{ item.severity }}</td>
+                  <td>{{ item.status }}</td>
+                  <td>{{ item.description }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+
+        <article class="panel psc-card" *ngIf="psc.detentions.length">
+          <div class="panel-header"><div><h3>{{ copy('Simulated Detention History', 'سجل الاحتجاز الافتراضي') }}</h3></div></div>
+          <div class="psc-table-wrap">
+            <table class="psc-table">
+              <thead><tr>
+                <th>{{ copy('Reference', 'المرجع') }}</th>
+                <th>{{ copy('Date', 'التاريخ') }}</th>
+                <th>{{ copy('Release', 'الإفراج') }}</th>
+                <th>{{ copy('Reason', 'السبب') }}</th>
+                <th>{{ copy('Status', 'الحالة') }}</th>
+              </tr></thead>
+              <tbody><tr *ngFor="let item of psc.detentions">
+                <td>{{ item.detentionId }}</td>
+                <td>{{ item.detentionDate }}</td>
+                <td>{{ item.releaseDate }}</td>
+                <td>{{ item.reason }}</td>
+                <td>{{ item.status }}</td>
+              </tr></tbody>
+            </table>
+          </div>
+        </article>
+        <p class="psc-disclaimer">{{ psc.disclaimer }}</p>
+      </ng-container>
+    </section>
 
     <section class="evidence-tab" *ngIf="activeTab === 'compliance'">
       <div class="evidence-heading">

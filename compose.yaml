@@ -1,0 +1,80 @@
+name: moei-nmc-poc
+
+services:
+  ai-proxy:
+    build:
+      context: .
+      dockerfile: ai-proxy/Dockerfile
+    environment:
+      PORT: "3000"
+      AIRIA_MENA_KEY: ${AIRIA_MENA_KEY:-}
+      AIRIA_BASE_URL: ${AIRIA_BASE_URL:-https://mena.api.airia.ai}
+      AIRIA_TIMEOUT_MS: "120000"
+      # Autonomous fleet assessment is opt-in at server deployment, never a UI action.
+      # Set NMC_FLEET_AUTO_ENABLED=true once after reviewing potential Airia costs.
+      NMC_FLEET_AUTO_ENABLED: ${NMC_FLEET_AUTO_ENABLED:-false}
+      NMC_FLEET_REFRESH_SECONDS: ${NMC_FLEET_REFRESH_SECONDS:-3600}
+      # Safe staged rollout: first run with MAX_VESSELS=1, inspect 2 Airia requests.
+      NMC_FLEET_AUTO_MAX_VESSELS: ${NMC_FLEET_AUTO_MAX_VESSELS:-420}
+      NMC_FLEET_AUTO_RETRY_FAILED: ${NMC_FLEET_AUTO_RETRY_FAILED:-false}
+      NMC_FLEET_STORE_PATH: /data/fleet-assessments.json
+      # 'oracle' requires compose.oracle.yaml, NMC_AI user and V1 migration.
+      NMC_DB_MODE: ${NMC_DB_MODE:-json}
+      NMC_DB_CONNECT_STRING: ${NMC_DB_CONNECT_STRING:-oracle-free-23:1521/freepdb1}
+      NMC_DB_USER: ${NMC_DB_USER:-NMC_AI}
+      NMC_DB_PASSWORD: ${NMC_DB_PASSWORD:-}
+      # Default: deterministic offline copy of the same 420-vessel Google Sheet fixture.
+      # Explicit 'google_sheets' requires a read-only service account mounted by compose.google-psc.yaml.
+      PSC_SOURCE_MODE: ${PSC_SOURCE_MODE:-snapshot}
+      PSC_GOOGLE_SHEET_ID: ${PSC_GOOGLE_SHEET_ID:-1sefQv6E-Avvgmklv4WQbpFBEc7MmlCAcOc0c-rI_Wmg}
+      PSC_GOOGLE_CREDENTIALS_PATH: /run/secrets/nmc-psc-google.json
+    volumes:
+      - nmc-fleet-results:/data
+    expose:
+      - "3000"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/ai/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+    networks:
+      - nmc
+
+  nmc:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "127.0.0.1:${NMC_HOST_PORT:-4200}:80"
+    depends_on:
+      ai-proxy:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - nmc
+
+  nmc-dev:
+    profiles: ["dev"]
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    ports:
+      - "127.0.0.1:${NMC_DEV_HOST_PORT:-4201}:4200"
+    volumes:
+      - ./:/workspace
+      - nmc-dev-node-modules:/workspace/node_modules
+    depends_on:
+      ai-proxy:
+        condition: service_healthy
+    networks:
+      - nmc
+
+networks:
+  nmc:
+    driver: bridge
+
+volumes:
+  nmc-fleet-results:
+  nmc-dev-node-modules:
