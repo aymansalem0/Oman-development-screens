@@ -14,6 +14,7 @@ import {
   NmcCaseStateService,
   NmcInspectionOutcome
 } from '../services/nmc-case-state.service';
+import {NmcCasesService,NmcCentralCase,NmcCentralCaseAudit} from '../services/nmc-cases.service';
 
 type CaseStatus = 'Open' | 'In Progress' | 'Pending Verification' | 'Resolved';
 type TaskStatus = 'Pending' | 'Assigned' | 'In Progress' | 'Completed' | 'Escalated';
@@ -60,6 +61,11 @@ export class NmcCaseWorkspaceComponent implements OnInit {
   caseStatus: CaseStatus = 'Open';
   selectedTask?: CaseTask;
   resolutionNote = '';
+  centralCase:NmcCentralCase|null=null;
+  centralLoading=true;
+  centralBusy=false;
+  centralError='';
+  centralSuccess='';
   tasks: CaseTask[] = [];
   timeline: CaseTimelineItem[] = [];
   stakeholders: Stakeholder[] = [];
@@ -69,14 +75,15 @@ export class NmcCaseWorkspaceComponent implements OnInit {
     private router: Router,
     public lang: LanguageService,
     private caseState: NmcCaseStateService,
-    private riskEngine: NmcRiskEngineService
+    private riskEngine: NmcRiskEngineService,
+    private readonly cases: NmcCasesService
   ) {}
 
   ngOnInit(): void {
     const imo = this.route.snapshot.paramMap.get('imo') || NMC_OPERATIONAL_VESSELS[0].imo;
     const profile = getOperationalVesselByImo(imo) || NMC_OPERATIONAL_VESSELS[0];
     this.vessel = this.riskEngine.applyToVessel(profile);
-    this.buildCase();
+    this.loadCentralCase();
   }
 
   copy(en: string, ar: string): string {
