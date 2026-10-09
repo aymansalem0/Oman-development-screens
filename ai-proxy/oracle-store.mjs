@@ -300,7 +300,7 @@ export class OracleIntelligenceStore {
   // Idempotent no-AirIA recheck for an existing SAVED assessment.
   // Defaults to rollback unless explicitly confirmed by caller.
   async backfillDataQuality(imo,assessmentId,quality,{dryRun=true}={}){
-    if(!/^\\d{7}$/.test(imo)||!quality||!['CALCULATED','INSUFFICIENT_EVIDENCE'].includes(quality.calculationStatus))
+    if(!/^[0-9]{7}$/.test(imo)||!quality||!['CALCULATED','INSUFFICIENT_EVIDENCE'].includes(quality.calculationStatus))
       throw new Error('QUALITY_BACKFILL_INPUT_INVALID');
     const con=await this.pool.getConnection();
     try{
