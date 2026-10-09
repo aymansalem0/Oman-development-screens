@@ -21,3 +21,9 @@
 .guide-test,.guide-audit{padding-bottom:14px}.guide-test p{padding:0 20px;color:#69828e;line-height:1.5}.guide-test .guide-actions input{max-width:210px}
 .guide-test-result,.guide-audit-row,.guide-empty{padding:12px 20px;border-bottom:1px solid #eff4f5}.guide-audit-row small{display:block;margin-top:5px;color:#8295a5}.guide-empty{color:#8295a5}
 @media(max-width:950px){.guide-layout,.guide-lower{grid-template-columns:1fr}.guide-intro{grid-template-columns:1fr}.guide-fields{grid-template-columns:1fr}}
+
+.guide-new-rule{display:flex;flex-direction:column;gap:9px;padding:16px 19px;border-bottom:2px solid #d9ecea;background:#fbfefd}
+.guide-new-rule>strong{font-size:12px;color:#155c61}
+.guide-new-rule label{font-size:10px;color:#607e89;display:flex;flex-direction:column;gap:5px}
+.guide-new-rule input{height:35px;border:1px solid #d9e5e8;border-radius:7px;padding:6px 9px;background:#fff;width:100%}
+.guide-new-rule button{padding:10px;border:1px solid #087c75;color:#fff;border-radius:7px;background:#0f8278;font-weight:800}
