@@ -278,19 +278,40 @@
                   </select>
                 </label>
               </div>
+              <div class="db-chart-settings" *ngIf="!viewOnly&&widget.type==='bar'">
+                <label>{{copy('Chart Type','نوع الرسم البياني')}}
+                  <select [(ngModel)]="widget.chartType" (ngModelChange)="configureChart(widget)">
+                    <option *ngFor="let type of chartTypes" [value]="type.value">
+                      {{copy(type.en,type.ar)}}
+                    </option>
+                  </select>
+                </label>
+                <label>{{copy('Color Theme','مجموعة الألوان')}}
+                  <select [(ngModel)]="widget.palette" (ngModelChange)="configureChart(widget)"
+                          [disabled]="widget.metric==='byRisk'">
+                    <option *ngFor="let theme of chartPalettes" [value]="theme.value">
+                      {{copy(theme.en,theme.ar)}}
+                    </option>
+                  </select>
+                </label>
+                <small *ngIf="widget.metric==='byRisk'" class="db-risk-color-note">
+                  {{copy('Risk-level colors are standardized for clear interpretation.',
+                          'ألوان مستويات المخاطر ثابتة لضمان وضوح دلالتها.')}}
+                </small>
+              </div>
               <div class="db-kpi" *ngIf="widget.type==='kpi'">
                 <strong>{{isLoading?'…':metricNumber(widget.metric)}}</strong>
                 <span>{{metricName(widget.metric)}}</span>
               </div>
 
-              <div class="db-bars" *ngIf="widget.type==='bar'">
-                <div class="db-bar-row" *ngFor="let bar of barRows(widget.metric)">
-                  <span class="db-bar-name">{{bar.name}}</span>
-                  <div class="db-bar-track"><div class="db-bar-fill" [style.width.%]="bar.percent"></div></div>
-                  <strong>{{bar.count}}</strong>
-                </div>
-                <p class="db-muted" *ngIf="filtered.length===0">{{copy('No matching vessels','لا توجد سفن مطابقة')}}</p>
-              </div>
+              <app-nmc-distribution-chart
+                *ngIf="widget.type==='bar'"
+                [rows]="barRows(widget.metric)"
+                [metric]="widget.metric"
+                [chartType]="widget.chartType||'horizontalBar'"
+                [palette]="widget.palette||'maritime'"
+                [isArabic]="lang.isArabic">
+              </app-nmc-distribution-chart>
 
               <div class="db-table-wrap" *ngIf="widget.type==='table'">
                 <table class="db-table">
