@@ -6,6 +6,7 @@ import { DashboardWorkspace, DashboardError } from './dashboard-workspace.mjs';
 import { NmcAlertWorkspace, NmcAlertError } from './alert-workspace.mjs';
 import { NmcCaseWorkspace, NmcCaseError } from './case-workspace.mjs';
 import { normalizeA01Actions, ActionPlanError } from './nmc-action-plan.mjs';
+import { OperationalGuidance, GuidanceError } from './operational-guidance.mjs';
 
 const port = Number(process.env.PORT || 3000);
 const apiKey = (process.env.AIRIA_MENA_KEY || '').trim();
@@ -40,7 +41,10 @@ if(!['json','oracle'].includes(dbMode))throw new Error('NMC_DB_MODE_UNSUPPORTED'
 const repository=dbMode==='oracle'
   ? new (await import('./oracle-store.mjs')).OracleIntelligenceStore()
   : null;
-const fleet=new FleetAssessmentManager({executeAgent:fleetAgentCall,getPscVessel,repository});
+let guidance;
+const fleet=new FleetAssessmentManager({executeAgent:fleetAgentCall,getPscVessel,repository,
+  onAssessmentSaved:async row=>guidance?.materialize(row.imo)});
+guidance=new OperationalGuidance({mode:dbMode,oracleRepository:repository,fleet});
 const dashboards=new DashboardWorkspace({mode:dbMode,oracleRepository:repository});
 const alerts=new NmcAlertWorkspace({mode:dbMode,oracleRepository:repository});
 const cases=new NmcCaseWorkspace({mode:dbMode,oracleRepository:repository,alerts});
@@ -211,6 +215,45 @@ const server = createServer(async (req, res) => {
       return respond(res,data?200:404,data||{error:'UNKNOWN_VESSEL'});
     }catch{return respond(res,503,{error:'FLEET_HISTORY_UNAVAILABLE'});}
   }
+  // Platform guidance is NOT an AI agent. GET is strictly read-only and never calls Airia.
+  if(path==='/api/ai/guidance/rules'||path.startsWith('/api/ai/guidance/')){
+    try{
+      if(path==='/api/ai/guidance/rules'&&req.method==='GET')
+        return respond(res,200,{status:'ok',rules:await guidance.list()});
+      const ruleMatch=/^\/api\/ai\/guidance\/rules\/(NMC-GUIDE-[0-9]{3})(?:\/(history|publish))?$/.exec(path);
+      if(ruleMatch){
+        const [,id,action]=ruleMatch;
+        if(req.method==='GET'&&action==='history')
+          return respond(res,200,{status:'ok',history:await guidance.history(id)});
+        if(req.method==='PUT'&&!action){
+          dashboards.assertRole(req,'EDITOR');
+          const body=await requestJson(req,16384);
+          return respond(res,200,{status:'ok',rule:await guidance.change(id,body.revision,'EDIT',body.rule)});
+        }
+        if(req.method==='POST'&&action==='publish'){
+          dashboards.assertRole(req,'PUBLISHER');
+          const body=await requestJson(req,4096);
+          return respond(res,200,{status:'ok',rule:await guidance.change(id,body.revision,'PUBLISH')});
+        }
+      }
+      const vesselMatch=/^\/api\/ai\/guidance\/vessels\/(\d{7})(?:\/(materialize))?$/.exec(path);
+      if(vesselMatch){
+        const [,imo,action]=vesselMatch;
+        if(req.method==='GET'&&!action)return respond(res,200,await guidance.evaluate(imo));
+        if(req.method==='POST'&&action==='materialize'){
+          dashboards.assertRole(req,'PUBLISHER');
+          return respond(res,200,await guidance.materialize(imo));
+        }
+      }
+      return respond(res,405,{error:'METHOD_NOT_ALLOWED'});
+    }catch(error){
+      if(error instanceof GuidanceError||error instanceof DashboardError)
+        return respond(res,error.status,{error:error.code});
+      console.error('[nmc-guidance] API_FAILURE');
+      return respond(res,503,{error:'GUIDANCE_UNAVAILABLE'});
+    }
+  }
+
   // Read-only cross-domain Smart Inspection scheduling queue from centrally saved cases.
   // Legacy synthetic targeting candidates remain a separate information source.
   if(path==='/api/ai/inspection-referrals'){
@@ -534,6 +577,7 @@ const server = createServer(async (req, res) => {
 
 try{
   await fleet.initialize(scheduler.bundles);
+  await guidance.initialize(); // fail closed if Oracle guidance migration 006 is absent
   server.listen(port,'0.0.0.0',()=>{
     console.log(`NMC AI proxy listening on ${port}; mode=${dbMode}; fleet-auto=${scheduler.enabled}`);
     if(scheduler.enabled)scheduler.start();
