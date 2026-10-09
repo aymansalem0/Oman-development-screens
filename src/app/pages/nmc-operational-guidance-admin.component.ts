@@ -22,6 +22,8 @@ export class NmcOperationalGuidanceAdminComponent implements OnInit{
   loading=false;busy=false;error='';message='';
   history:Array<{revision:number;action:string;role:string;at:string}>=[];
   testImo='9328471';testResults:string[]=[];
+  newRuleId='NMC-GUIDE-005';newRuleTitle='Review new maritime risk finding';
+  newRuleTitleAr='مراجعة مؤشر مخاطر بحرية جديد';
   readonly availableFields:Array<{value:GuidanceField;en:string;ar:string}>=[
     {value:'criticalOpenFinding',en:'Critical open finding',ar:'ملاحظة حرجة مفتوحة'},
     {value:'inspectionSeverity',en:'Inspection severity',ar:'شدة مخاطر التفتيش'},
@@ -52,7 +54,9 @@ export class NmcOperationalGuidanceAdminComponent implements OnInit{
   }
   select(rule?:GuidanceRuleState):void{
     this.selected=rule;
-    this.draft=rule?JSON.parse(JSON.stringify(rule.draft||rule.published)) as GuidancePolicy:undefined;
+    this.draft=rule?(rule.draft||rule.published
+      ?JSON.parse(JSON.stringify(rule.draft||rule.published)) as GuidancePolicy
+      :undefined):undefined;
     this.testResults=[];this.history=[];
     if(rule)this.api.history(rule.id).subscribe({next:x=>this.history=x.history,error:()=>this.history=[]});
   }
@@ -72,6 +76,23 @@ export class NmcOperationalGuidanceAdminComponent implements OnInit{
     this.draft.condition.operator=field.endsWith('Severity')||field==='riskScore'?'GTE':'EQUALS';
     this.draft.condition.value=field==='criticalOpenFinding'||field==='dataConflictDetected'?true:
       field==='riskLevel'?'Watch':field==='operationalPriority'?'Priority Review':75;
+  }
+  createRule():void{
+    if(this.busy)return;
+    const policy:GuidancePolicy={
+      id:this.newRuleId.trim(),title:this.newRuleTitle.trim(),
+      titleAr:this.newRuleTitleAr.trim(),enabled:true,
+      priority:'WATCH',ownerRole:'NMC_DUTY_OFFICER',
+      condition:{field:'criticalOpenFinding',operator:'EQUALS',value:true}
+    };
+    this.busy=true;this.error='';this.message='';
+    this.api.createDraft(policy).subscribe({
+      next:x=>{this.busy=false;this.rules=[...this.rules,x.rule];
+        this.select(x.rule);this.message=this.copy(
+          'New rule created as an unpublished draft. Review settings and obtain supervisor approval to activate.',
+          'تم إنشاء القاعدة كمسودة غير منشورة. راجع الإعدادات واعتمدها من المشرف لتفعيلها.');},
+      error:e=>{this.busy=false;this.error=this.api.message(e,this.lang.isArabic);}
+    });
   }
   saveDraft():void{
     if(!this.selected||!this.draft||this.busy)return;
