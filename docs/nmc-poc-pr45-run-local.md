@@ -27,7 +27,7 @@ Ensure local `.env` contains your **existing** valid values:
 `NMC_DB_MODE=oracle`, `NMC_DB_CONNECT_STRING=oracle-free-23:1521/freepdb1`,
 `NMC_DB_USER=NMC_AI`, `NMC_DB_PASSWORD`, 
 `NMC_DASHBOARD_EDITOR_KEY` and a *different* `NMC_DASHBOARD_PUBLISHER_KEY`.
-Set `NMC_FLEET_AUTO_ENABLED=false` for cost controlled, manually triggered tests.
+Keep your previously approved controlled `NMC_FLEET_AUTO_ENABLED` and `NMC_FLEET_AUTO_MAX_VESSELS` values unchanged; do not increase paid Airia scope as part of a UI update.
 Make sure `oracle-free-23` is running and already reachable via the `nmc-oracle-link` Docker network.
 
 Because migration 004 uses a restrictive Oracle CHECK on case audit action names,
@@ -110,9 +110,83 @@ Expected: AI proxy health is `ok`, Oracle `ready`, and JSON containing `cases`, 
 - On first page load, **no vessel is selected**: the details pane asks the officer to select one. Only map/list clicks reveal the vessel details and selected route. Opening or polling the screen must not auto-select a vessel. Hovering over an unselected marker does not reveal a vessel dossier.
 - Existing selection remains in view when subsequent polling refreshes the selected vessel's saved score; a clean page reload starts unselected.
 - With the example controlled two-vessel rollout, if backend `counts` reads `assessed:2`, `pending:418`, `watch:1`, `priorityReview:1`, expect those figures on Command Center and one corresponding Priority Review item. Check actual backend counts before treating this as fixed test data.
-- This increment updates **only Angular frontend files**. Deploy via `docker compose $compose build nmc` then `docker compose $compose up -d --no-deps --force-recreate nmc`. Do **not** recreate `ai-proxy`/Oracle just for this UI fix; preserve the server's controlled `NMC_FLEET_AUTO_MAX_VESSELS` setting.
+- The earlier Command Center risk-label fix was frontend-only. The newer Guidance Rules and fresh Oracle Fetch Again features (section 6) also update `ai-proxy` and require additive migration 006 for guidance persistence. Never recreate Oracle or widen scheduler scope.
 
-## 6. Verification / known limits
+## 6. Risk Intelligence, Operational Guidance Settings and database refresh (migration 006)
+
+**IMPORTANT: This increment touches the ai-proxy backend AND Angular frontend and adds an optional, manually provisioned Oracle schema.** Existing cases, alerts, assessments and audit history are never reset or migrated destructively.
+
+### DBA-run additive schema step, AFTER backup
+
+Before upgrading the backend UI with Operational Guidance, confirm migration 005 has been applied and ensure the following four tables are NOT present in the `NMC_AI` user schema:
+`NMC_GUIDANCE_POLICY`, `NMC_GUIDANCE_POLICY_AUDIT`, `NMC_GUIDANCE_RESULT` (three tables, plus its index).
+The script is `ai-proxy/migrations/006_nmc_operational_guidance.sql`.
+If any object already exists, **STOP** and reconcile with DBA; Oracle DDL auto-commits and partial reruns are unsafe.
+
+PowerShell:
+
+~~~powershell
+docker ps --filter "name=oracle-free-23"
+docker cp .\ai-proxy\migrations\006_nmc_operational_guidance.sql oracle-free-23:/tmp/006_nmc_operational_guidance.sql
+docker exec -it oracle-free-23 bash
+sqlplus /nolog
+~~~
+
+SQL*Plus (connect with existing approved credentials; never paste secrets into chat):
+
+~~~sql
+CONNECT NMC_AI@"localhost:1521/freepdb1"
+SHOW USER;
+SELECT SYS_CONTEXT('USERENV','CON_NAME') AS PDB_NAME FROM DUAL;
+SELECT TABLE_NAME FROM USER_TABLES WHERE TABLE_NAME LIKE 'NMC_GUIDANCE_%';
+-- Expect ZERO ROWS before the first ever migration 006 run.
+@/tmp/006_nmc_operational_guidance.sql
+EXIT
+~~~
+
+If migration 006 is missing, the backend still starts with the **existing Fleet AI Scheduler and Case/Alert modules preserved**; the new Guidance Settings API fails closed with a schema error. Apply migration before testing the guidance UI.
+
+### Deploy (preserve existing 10-vessel controlled scope)
+
+~~~powershell
+git status --short
+git pull --ff-only origin feature/nmc-a01-actions-inspection-referral-v1
+# Reuse your EXISTING $compose from successful Google PSC + Oracle run:
+docker compose $compose config --quiet
+docker compose $compose build ai-proxy nmc
+docker compose $compose up -d --no-deps --force-recreate ai-proxy nmc
+docker compose $compose ps
+~~~
+
+**Do not** execute `down -v`, recreate `oracle-free-23`, reveal .env secrets, or widen `NMC_FLEET_AUTO_MAX_VESSELS` as part of this UI change. Check `GET /api/ai/fleet/status` after restart to verify your original saved risk assessments remain intact.
+
+### Acceptance
+
+- **Command Center:** 4 lower operational cards are now Contacts, Require Attention, Active Maritime Alerts, Open Maritime Cases. The latter two read actual persisted alert and case workflows. No fake zeros on failed reads.
+- **Reset map:** only restores map bounds/search/filter and preserves selected vessel, stored assessment scores, priorities and existing cases; it also executes a **read-only fresh DB fetch**. It cannot delete cases or risks.
+- **Fetch Again (Database):** explicit button calls `GET /api/ai/fleet/saved-status`. This endpoint reads Oracle `loadLatest()` directly (or JSON in JSON mode) with **zero Airia/PSC calls**, no task changes, no database writes. Existing 7s read-only polling continues for saved display updates.
+- **Automatic AI reevaluation:** remains **server-side hourly scheduler** with the existing bounded rollout, processing only changed **supported inputs**. Current change fingerprint covers synthetic vessel bundle, external PSC simulated inspection/deficiency/detention fields and ruleset. Current POC does NOT ingest real PDFs or arbitrary Google Drive document revisions; these must be added as a separate secure document-source connector and versioned document manifest before claiming document-change-triggered AI reassessment.
+- **Risk Intelligence:** canonical route `/#/moei/nmc/vessel/9328471/risk`. Keeps Risk Classification Thresholds; correct saved Oracle 60/Watch (not old fictitious 86), five saved A01/A02 factors, published assessment weights, evidence IDs and source reasons; Platform-composed Situation Summary; Platform Operational Guidance (not Airia recommendations). No Airia calls on GET. Former `/ai-assessment` route is an alias to Risk Intelligence to prevent conflicting legacy baseline screens.
+- **Settings → Operational Guidance Rules:** `/#/moei/nmc/admin/operational-guidance`. A rule editor saves draft revisions (Editor key), publishes with supervisor key, lists audit, and tests published policies against one saved IMO without AI or cases. Four initial POC rules, two disabled until evidence/authority is available; no hardcoded static fake closures.
+- **Maritime Case:** approved A01 proposed actions remain the sole task source, generated on explicit Create Case. Its immutable source Risk Score and assessment ID link back to full Risk Intelligence. No reset or Risk page opens a new case.
+- **Oracle guidance materialization:** new successful assessments trigger deterministic advisory materialization in the background; older assessments can be evaluated from saved factors through read-only GET without rerunning A01/A02. No automatic change to source scores or tasks.
+
+### Quick PowerShell verification
+
+~~~powershell
+$health=Invoke-RestMethod http://localhost:4200/api/ai/health
+$health.persistence | Format-List
+$saved=Invoke-RestMethod http://localhost:4200/api/ai/fleet/saved-status
+$saved.counts | Format-List
+$saved.results.'9328471' | Format-List
+Invoke-RestMethod http://localhost:4200/api/ai/guidance/rules |
+  Select-Object -ExpandProperty rules | Select-Object id,status,publishedRevision
+Invoke-RestMethod http://localhost:4200/api/ai/guidance/vessels/9328471 |
+  Select-Object -ExpandProperty rules |
+  Select-Object ruleId,priority,status,evidenceIds
+~~~
+
+## 7. Verification / known limits
 
 - Backend unit test: `npm --prefix ai-proxy test`. Syntax: `npm --prefix ai-proxy run check`. Angular: `npm run build` (Node.js/npm required).
 - Oracle migration 005 adds only the new allowed audit action names. There are no new independent inspection tables in this increment; referrals are stored within versioned central NMC_CASE JSON and audit.
