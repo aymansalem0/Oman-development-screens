@@ -1,6 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { AfterViewInit, Component, ElementRef, OnDestroy, OnInit, ViewChild } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
+import { Subscription } from 'rxjs';
 import * as L from 'leaflet';
 import {
   NmcVesselProfile,
@@ -11,6 +12,7 @@ import { LanguageService } from '../services/language.service';
 import { NmcRiskEngineService } from '../services/nmc-risk-engine.service';
 import { NmcVesselEvidenceService } from '../services/nmc-vessel-evidence.service';
 import { NmcExternalPscService, NmcExternalPscRecord } from '../services/nmc-external-psc.service';
+import { NmcFleetAiService, FleetAiAssessment, FleetAiHistory } from '../services/nmc-fleet-ai.service';
 
 interface SourceStatus {
   name: string;
@@ -70,6 +72,11 @@ interface RiskFactor {
   label: string;
   value: number;
   source: string;
+  severity?: number;
+  confidence?: number;
+  agent?: string;
+  evidenceIds?: string[];
+  reason?: string;
 }
 
 interface FieldProvenance {
@@ -125,6 +132,12 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
   externalPsc: NmcExternalPscRecord | null = null;
   pscLoading = false;
   pscError = '';
+  // Oracle-sourced AI data is read-only, provisional and explicitly separated
+  // from the deterministic vessel/certificate/AIS fixtures.
+  storedAi: FleetAiAssessment | null = null;
+  storedAiHistory: FleetAiHistory | null = null;
+  storedAiStatus: 'loading' | 'available' | 'not-assessed' | 'error' = 'loading';
+  private readonly subscriptions = new Subscription();
 
   hasCertificateConflict = false;
   hasOpenDeficiency = false;
@@ -142,7 +155,8 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
     public lang: LanguageService,
     private riskEngine: NmcRiskEngineService,
     private vesselEvidence: NmcVesselEvidenceService,
-    private externalPscService: NmcExternalPscService
+    private externalPscService: NmcExternalPscService,
+    private readonly fleetAiService: NmcFleetAiService
   ) {}
 
   copy(en: string, ar: string): string {
@@ -152,6 +166,7 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
   toggleLanguage(): void {
     this.lang.toggle();
     this.buildOperationalData();
+    this.applyStoredAiView();
 
     if (this.map) {
       this.map.remove();
@@ -225,7 +240,12 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
       'Certificate profile exposure': 'مخاطر مرتبطة بملف الشهادات',
       'Conflict between authoritative data sources': 'تعارض بين مصادر بيانات معتمدة',
       'Data-quality / external-source factor': 'عامل جودة البيانات / المصدر الخارجي',
-      'Historical vessel / operator risk pattern': 'نمط مخاطر تاريخي للسفينة / المشغل'
+      'Historical vessel / operator risk pattern': 'نمط مخاطر تاريخي للسفينة / المشغل',
+      'Movement and voyage behavior': 'مؤشرات حركة السفينة ورحلتها',
+      'Inspection exposure': 'المخاطر المرتبطة بالمعاينة',
+      'Certificate compliance': 'الامتثال للشهادات',
+      'Data quality risk signal': 'مؤشر مخاطر جودة البيانات',
+      'Vessel inspection and operator history': 'سجل معاينات السفينة والمشغل'
     };
     return this.lang.isArabic ? (labels[label] || label) : label;
   }
@@ -281,6 +301,7 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
 
     this.buildOperationalData();
     this.loadExternalPsc();
+    this.loadStoredAi();
 
     const requestedTab = this.route.snapshot.queryParamMap.get('tab');
     if (requestedTab && ['overview','movement','compliance','inspection','external-psc','certificates','sources'].includes(requestedTab)) {
@@ -293,11 +314,118 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.subscriptions.unsubscribe();
     this.map?.remove();
   }
 
   setTab(tab: string): void {
     this.activeTab = tab;
+  }
+
+  private loadStoredAi(): void {
+    this.storedAiStatus = 'loading';
+    this.subscriptions.add(this.fleetAiService.assessment(this.vessel.imo).subscribe({
+      next: assessment => {
+        const keys = new Set((assessment.signals || []).map(signal => signal.factor));
+        const expected = ['movement', 'inspection', 'certificate', 'dataQuality', 'history'];
+        if (assessment.imo !== this.vessel.imo ||
+            assessment.status !== 'COMPLETED' ||
+            assessment.authoritative !== false ||
+            assessment.sourceNature !== 'SYNTHETIC_NOT_RIYADH_MOU' ||
+            !Number.isFinite(assessment.score) ||
+            !assessment.assessmentId ||
+            keys.size !== 5 || !expected.every(key => keys.has(key))) {
+          this.storedAiStatus = 'error';
+          return;
+        }
+
+        this.storedAi = assessment;
+        this.storedAiStatus = 'available';
+        this.applyStoredAiView();
+        this.loadStoredHistory();
+      },
+      error: response => {
+        // No assessment is normal for vessels that have not yet been evaluated.
+        this.storedAiStatus = response?.status === 404 ? 'not-assessed' : 'error';
+      }
+    }));
+  }
+
+  private loadStoredHistory(): void {
+    this.subscriptions.add(this.fleetAiService.history(this.vessel.imo).subscribe({
+      next: history => {
+        if (history.imo !== this.vessel.imo ||
+            history.dataNature !== 'SYNTHETIC_POC_NOT_OFFICIAL') return;
+        this.storedAiHistory = history;
+        this.applyStoredAiView();
+      },
+      // Preserve the saved current assessment without inventing timeline events.
+      error: () => { this.storedAiHistory = null; }
+    }));
+  }
+
+  private applyStoredAiView(): void {
+    if (!this.storedAi) return;
+    this.vessel.riskScore = this.storedAi.score ?? this.vessel.riskScore;
+    this.vessel.riskLevel = this.storedAi.level ?? this.vessel.riskLevel;
+    const sources: Record<string, string> = {
+      movement: 'AIS / Movement',
+      inspection: 'Inspection',
+      certificate: 'Certificate Registry',
+      dataQuality: 'Data Quality',
+      history: 'Inspection History'
+    };
+    const names: Record<string, string> = {
+      movement: 'Movement and voyage behavior',
+      inspection: 'Inspection exposure',
+      certificate: 'Certificate compliance',
+      dataQuality: 'Data quality risk signal',
+      history: 'Vessel inspection and operator history'
+    };
+    const weights = this.storedAi.ruleset?.weights as unknown as Record<string, number> | undefined;
+    this.riskFactors = this.storedAi.signals.map(signal => {
+      const weight = weights?.[signal.factor] ?? 0;
+      return {
+        label: names[signal.factor] || signal.factor,
+        value: Math.round(signal.severity * weight) / 100,
+        source: sources[signal.factor] || 'Inspection History',
+        severity: signal.severity,
+        confidence: signal.confidence,
+        agent: signal.sourceAgent,
+        evidenceIds: signal.evidenceIds,
+        reason: signal.reason
+      };
+    });
+    const events = this.storedAiHistory?.events || [];
+    if (events.length) {
+      this.timeline = events.map(event => ({
+        time: event.OCCURRED_AT ? new Date(event.OCCURRED_AT).toLocaleString() : '—',
+        title: event.EVENT_TYPE === 'RISK_CHANGE'
+          ? this.copy('AI risk score changed', 'تغيرت درجة المخاطر بالذكاء الاصطناعي')
+          : this.copy('Saved AI assessment', 'تقييم ذكاء اصطناعي محفوظ'),
+        detail: event.EVENT_TYPE === 'RISK_CHANGE'
+          ? this.copy(
+              `Risk changed from ${event.PREVIOUS_RISK_SCORE ?? '—'} to ${event.NEW_RISK_SCORE ?? '—'} (synthetic POC).`,
+              `تغيرت المخاطر من ${event.PREVIOUS_RISK_SCORE ?? '—'} إلى ${event.NEW_RISK_SCORE ?? '—'} (نموذج تجريبي).`
+            )
+          : this.copy(
+              `Stored composite AI risk: ${event.NEW_RISK_SCORE ?? '—'} / 100 (synthetic POC).`,
+              `المخاطر المركبة المحفوظة: ${event.NEW_RISK_SCORE ?? '—'} من 100 (نموذج تجريبي).`
+            ),
+        kind: (event.NEW_RISK_SCORE ?? 0) >= 85 ? 'critical'
+          : (event.NEW_RISK_SCORE ?? 0) >= 45 ? 'warning' : 'normal'
+      }));
+    } else {
+      this.timeline = [{
+        time: this.storedAi.assessedAt ? new Date(this.storedAi.assessedAt).toLocaleString() : '—',
+        title: this.copy('Saved AI assessment', 'تقييم ذكاء اصطناعي محفوظ'),
+        detail: this.copy(
+          `Stored risk ${this.storedAi.score}/100. Timeline history unavailable; no other events inferred.`,
+          `المخاطر المحفوظة ${this.storedAi.score} من 100. سجل الأحداث غير متاح، ولم يتم افتراض أحداث أخرى.`
+        ),
+        kind: this.storedAi.score! >= 85 ? 'critical' : this.storedAi.score! >= 45 ? 'warning' : 'normal'
+      }];
+    }
   }
 
   loadExternalPsc(): void {
@@ -523,10 +651,11 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private isAtLeast(level: 'Watch' | 'High' | 'Critical'): boolean {
-    const thresholds = this.riskEngine.config.thresholds;
-    if (level === 'Critical') return this.vessel.risk >= thresholds.critical;
-    if (level === 'High') return this.vessel.risk >= thresholds.high;
-    return this.vessel.risk >= thresholds.watch;
+    const thresholds = this.storedAi?.ruleset?.thresholds || this.riskEngine.config.thresholds;
+    const score = this.vessel.riskScore;
+    if (level === 'Critical') return score >= thresholds.critical;
+    if (level === 'High') return score >= thresholds.high;
+    return score >= thresholds.watch;
   }
 
   get attentionDescription(): string {
@@ -570,7 +699,7 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
       this.vessel.riskLevel === 'Critical' ? '#e65353' :
       this.vessel.riskLevel === 'High' ? '#ef8b43' :
       this.vessel.riskLevel === 'Watch' ? '#d7a738' : '#4da7a0';
-    return `radial-gradient(circle at center, white 58%, transparent 59%), conic-gradient(${color} 0 ${this.vessel.risk}%, #edf1f3 ${this.vessel.risk}% 100%)`;
+    return `radial-gradient(circle at center, white 58%, transparent 59%), conic-gradient(${color} 0 ${this.vessel.riskScore}%, #edf1f3 ${this.vessel.riskScore}% 100%)`;
   }
 
   private buildOperationalData(): void {
