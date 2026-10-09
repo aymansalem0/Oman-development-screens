@@ -284,7 +284,9 @@ export class OracleIntelligenceStore {
         SET LAST_ASSESSMENT_ID=:b_assessment_id,
           CONFLICT_SUMMARY=:b_summary
         WHERE IMO=:b_imo AND FIELD_NAME=:b_field_name
-          AND STATUS='PENDING_REVIEW'`,binds);
+          AND STATUS='PENDING_REVIEW'`,
+        {b_assessment_id:binds.b_assessment_id,b_summary:binds.b_summary,
+         b_imo:binds.b_imo,b_field_name:binds.b_field_name});
       if(updated.rowsAffected===0){
         await con.execute(`INSERT INTO NMC_DATA_CONFLICT(
           CONFLICT_ID,IMO,FIRST_DETECTED_ASSESSMENT_ID,LAST_ASSESSMENT_ID,
