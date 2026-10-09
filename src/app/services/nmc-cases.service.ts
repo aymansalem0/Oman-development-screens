@@ -173,6 +173,8 @@ export class NmcCasesService {
       A01_ACTION_EVIDENCE_MISSING:['A01 proposal lacks verified source evidence.','اقتراح A01 لا يحتوي أدلة مصدر تم التحقق منها.'],
       A01_ACTION_INVALID:['A01 returned an unsupported action type or duplicate identifier.','أعاد A01 نوع إجراء غير مدعوم أو معرفًا مكررًا.'],
       CASE_SOURCE_ASSESSMENT_UNAVAILABLE:['The original saved assessment is unavailable or was superseded. No AI run was made.','التقييم الأصلي غير متاح أو تم استبداله؛ لم يتم استدعاء AI.'],
+      CASE_RISK_REASSESSMENT_PENDING:['Case closure is blocked: the completed inspection requires verified A02 evidence refresh and a new saved risk assessment. Original risk remains unchanged.','لا يمكن إغلاق الحالة: المعاينة المكتملة تتطلب تحديث أدلة A02 وإعادة تقييم مخاطر جديدة ومحفوظة؛ درجة المخاطر الأصلية لم تتغير.'],
+      CASE_ACTION_DECISIONS_PENDING:['Review all A01 proposals before closing the case.','يجب اتخاذ قرار بشأن جميع توصيات A01 قبل إغلاق الحالة.'],
       CASE_ACTION_PLAN_REQUIRED:['Generate and review an A01 action plan before completion.','يجب إنشاء خطة إجراءات A01 ومراجعتها قبل الإغلاق.'],
       CASE_ACTION_PLAN_EXISTS:['The action plan already exists; refresh this case.','خطة الإجراءات موجودة بالفعل. حدث الحالة.'],
       CASE_ACTION_ALREADY_DECIDED:['This AI proposal has already been decided.','تم اتخاذ قرار بشأن هذا الاقتراح بالفعل.'],
