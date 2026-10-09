@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main, feature/smart-inspection-poc, feature/nmc-published-dashboard-view-v3]
+    branches: [main, feature/smart-inspection-poc, 'feature/nmc-*']
 
 jobs:
   build:
