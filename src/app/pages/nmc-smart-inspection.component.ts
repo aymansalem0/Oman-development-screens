@@ -104,7 +104,7 @@ export class NmcSmartInspectionComponent implements OnInit {
   }
 
   get caseId(): string {
-    return `NMC-CASE-2026-${this.vessel.imo.slice(-4)}`;
+    return this.centralCase?'NMC-'+this.centralCase.id.slice(0,8).toUpperCase():'—';
   }
 
   get inspectionId(): string {
