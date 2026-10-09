@@ -485,7 +485,14 @@ export class NmcDashboardBuilderComponent implements OnInit,OnDestroy {
     }
     const selected=Array.from(counts.entries()).map(([name,count])=>({name,count}));
     if(metric!=='byRisk')selected.sort((a,b)=>b.count-a.count||a.name.localeCompare(b.name));
-    const visible=selected.slice(0,8);
+    // Preserve the complete filtered fleet in pie/doughnut percentages:
+    // merge minor categories into "Other" rather than dropping them.
+    const visible=selected.length>8&&metric!=='byRisk'
+      ?[...selected.slice(0,7),{
+        name:this.copy('Other','أخرى'),
+        count:selected.slice(7).reduce((sum,row)=>sum+row.count,0)
+      }]
+      :selected;
     const max=Math.max(1,...visible.map(v=>v.count));
     return visible.map(row=>({...row,percent:Math.round(row.count/max*100)}));
   }
