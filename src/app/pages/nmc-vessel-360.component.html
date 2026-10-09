@@ -84,6 +84,9 @@
             {{ storedAiIntelligence?.quality?.score }}/100
             <small>{{ copy('Structural only', 'جودة هيكلية فقط') }}</small>
           </span>
+          <a class="v360-quality-toggle" [routerLink]="['/moei/nmc/admin/data-quality']" [queryParams]="{imo:vessel.imo}">
+            ⚙ {{ copy('Configure rules', 'إعدادات الجودة') }}
+          </a>
           <button type="button" class="v360-quality-toggle" (click)="qualityExpanded = !qualityExpanded"
                   [attr.aria-expanded]="qualityExpanded">
             {{ qualityExpanded ? copy('Hide details', 'إخفاء التفاصيل') : copy('View details', 'عرض التفاصيل') }}
@@ -98,6 +101,15 @@
         {{ copy('Data-quality details unavailable. No confidence or absence-of-conflict assertion is made.', 'تفاصيل جودة البيانات غير متاحة. لا نفترض مستوى ثقة أو عدم وجود تعارض.') }}
       </p>
       <ng-container *ngIf="storedAiIntelligence as intelligence">
+        <div class="v360-policy-comparison" *ngIf="qualityLocalPreview as projection">
+          <span><small>{{ copy('Saved in Oracle', 'الدرجة المحفوظة في Oracle') }}</small>
+            <b>{{ intelligence.quality.score ?? '—' }}/100</b></span>
+          <span aria-hidden="true">→</span>
+          <span><small>{{ copy('Configured local preview', 'المعاينة بالإعدادات المحلية') }}</small>
+            <b>{{ projection.score ?? '—' }}/100</b></span>
+          <span class="v360-policy-version">{{ qualityPolicy.config.version }} ·
+            {{ copy('browser only, Oracle unchanged', 'المتصفح فقط؛ Oracle لم يتغير') }}</span>
+        </div>
         <div class="v360-quality-peek" *ngIf="intelligence.quality.breakdown as summary">
           <span>{{ copy('Completeness', 'الاكتمال') }} <b>{{ summary.completenessPercent }}%</b></span>
           <span>{{ copy('Consistency', 'الاتساق') }} <b>{{ summary.consistencyPercent === null ? '—' : summary.consistencyPercent + '%' }}</b></span>
@@ -110,7 +122,7 @@
         </p>
         <div class="v360-quality-deep-dive" *ngIf="qualityExpanded && intelligence.quality.breakdown as summary">
           <section class="v360-quality-detail-card">
-            <h4>{{ copy('How was the 75-point structural score calculated?', 'كيف تم حساب درجة الجودة الهيكلية؟') }}</h4>
+            <h4>{{ copy('Saved Oracle calculation · policy at time of scoring', 'معادلة Oracle المحفوظة · إعدادات وقت الاحتساب') }}</h4>
             <p>{{ copy('The current POC assigns 35% to completeness, 30% to consistency, 20% to evidence linkage, and 15% to metadata. These are configurable-policy candidates—not model-learned, statistically calibrated, or approved regulatory weights.', 'أوزان النموذج التجريبي حالياً: 35% للاكتمال، و30% للاتساق، و20% لربط الأدلة، و15% لبيانات المصدر. هذه أوزان مقترحة قابلة للمراجعة وليست أوزاناً مستنتجة إحصائياً أو معتمدة تنظيمياً.') }}</p>
             <p class="v360-quality-missing" *ngIf="!summary.calculationSteps?.length">{{ copy('Detailed audit inputs were not saved in this version. Run the no-Airia quality backfill again to record real source values and evidence links.', 'تفاصيل الحساب لم تكن محفوظة في الإصدار السابق. أعد تشغيل حساب الجودة دون استدعاء Airia لتخزين قيم المصادر وروابط الأدلة الفعلية.') }}</p>
             <div class="v360-quality-scroll" *ngIf="summary.calculationSteps?.length">
@@ -138,6 +150,24 @@
               <span class="v360-quality-final">{{ copy('Final stored quality score', 'الدرجة النهائية المحفوظة') }}: <b>{{ intelligence.quality.score === null ? '—' : intelligence.quality.score + '/100' }}</b></span>
             </div>
             <p>{{ copy('Formula: MIN(75, ROUND(raw weighted result × 0.75)). These POC policy limits are NOT measured source reliability or AI confidence.', 'المعادلة: أصغر قيمة من (75، تقريب [الناتج الموزون × 0.75]). هذه حدود سياسة النموذج التجريبي وليست قياساً لموثوقية المصدر أو ثقة AI.') }}</p>
+          </section>
+          <section class="v360-quality-detail-card" *ngIf="qualityLocalPreview as projection">
+            <h4>{{ copy('Your configured impact · live breakdown', 'أثر إعداداتك · الحساب التفصيلي الجديد') }}</h4>
+            <p>{{ copy('Projected from saved source rows; does not alter Oracle, the five risk factors or AI agents.', 'حساب متوقع من مدخلات المصادر المحفوظة؛ لا يغير Oracle أو عوامل المخاطر الخمسة أو الوكلاء.') }}</p>
+            <div class="v360-quality-scroll"><table class="v360-quality-source-table">
+              <thead><tr><th>{{ copy('Quality factor', 'عامل الجودة') }}</th><th>{{ copy('Inputs', 'المدخلات') }}</th>
+                <th>{{ copy('Measured', 'القياس') }}</th><th>{{ copy('Your weight', 'وزنك الجديد') }}</th><th>{{ copy('Contribution', 'المساهمة الجديدة') }}</th></tr></thead>
+              <tbody><tr *ngFor="let step of projection.steps">
+                <td>{{ qualityMetricLabel(step.key) }}</td><td>{{ step.numerator }}/{{ step.denominator }}</td>
+                <td>{{ step.percent ?? '—' }}%</td><td>{{ step.weightPercent }}%</td>
+                <td>{{ step.rawContribution ?? '—' }}</td></tr></tbody>
+            </table></div>
+            <div class="v360-quality-formula">
+              <span>{{ copy('New weighted result', 'المجموع الموزون الجديد') }}: <b>{{ projection.rawScore ?? '—' }}</b></span>
+              <span>{{ copy('Your synthetic factor', 'معامل الخصم الجديد') }}: <b>{{ projection.syntheticDiscountPercent }}%</b></span>
+              <span>{{ copy('Fixed synthetic cap', 'الحد الأعلى الثابت') }}: <b>{{ projection.syntheticCap }}</b></span>
+              <span class="v360-quality-final">{{ copy('Configured local score', 'درجة المعاينة وفق إعداداتك') }}: <b>{{ projection.score ?? '—' }}/100</b></span>
+            </div>
           </section>
           <section class="v360-quality-detail-card" *ngIf="summary.fieldComparisons?.length">
             <h4>{{ copy('Cross-source identity checks: compared values', 'مقارنة هوية السفينة: القيم الفعلية من المصدرين') }}</h4>
