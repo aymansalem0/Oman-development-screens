@@ -159,8 +159,15 @@ export class NmcSmartInspectionComponent implements OnInit {
     return this.findings.filter(item => item.severity === 'Major').length;
   }
 
+  get isSchedulingRequired():boolean{
+    return !!this.centralCase?.actionPlan &&
+      !(this.centralCase.inspectionRequests||[]).some(
+        r=>r.status==='SCHEDULED'||r.status==='COMPLETED');
+  }
+
   get canSubmit(): boolean {
-    return this.completedChecks === this.checks.length && !!this.inspectorName.trim();
+    return !this.isSchedulingRequired &&
+      this.completedChecks === this.checks.length && !!this.inspectorName.trim();
   }
 
   get resultLabel(): string {
