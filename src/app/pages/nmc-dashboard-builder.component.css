@@ -29,3 +29,16 @@
 .db-history-row:last-child{border-bottom:0}
 .db-history-row strong{color:#0c7a70}
 @media(max-width:650px){.db-history-row{grid-template-columns:40px 1fr 70px}.db-history-row span:last-child{grid-column:1/-1}}
+
+
+/* Viewer uses the same trusted widget renderers without any editor tools. */
+.db-view-layout{grid-template-columns:minmax(0,1fr)}
+.db-view-layout .db-canvas{max-width:100%}
+.db-view-layout .db-widgets{grid-template-columns:repeat(2,minmax(0,1fr))}
+.db-readonly-title{display:block;line-height:1.5}
+.db-view-filters{display:flex;align-items:end;gap:14px;flex-wrap:wrap;padding:14px 18px;margin-bottom:18px;background:white;border:1px solid #dce9ed;border-radius:13px;box-shadow:0 5px 20px #1c43590c}
+.db-view-filters>strong{font-size:12px;color:#164d64;margin-inline-end:auto;align-self:center}
+.db-view-filters label{display:flex;flex-direction:column;gap:5px;font-size:10px;font-weight:750;color:#5c7889;min-width:115px}
+.db-view-filters input,.db-view-filters select{border:1px solid #dae7eb;border-radius:8px;height:35px;padding:6px 9px;color:#345c6d;background:#fff;font-size:11px;max-width:195px}
+.db-view-filters input:focus,.db-view-filters select:focus{outline:2px solid #92d9cc}
+@media(max-width:650px){.db-view-layout .db-widgets{grid-template-columns:1fr}.db-view-filters>strong{width:100%}.db-view-filters label{flex:1;min-width:130px}.db-view-filters input,.db-view-filters select{max-width:none;width:100%}}
