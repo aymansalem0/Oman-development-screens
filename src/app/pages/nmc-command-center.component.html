@@ -46,6 +46,9 @@
 
       <div class="heading-actions">
         <button type="button" class="secondary-btn" (click)="resetMapView()">⌂ {{ copy('Reset map', 'إعادة ضبط الخريطة') }}</button>
+        <button type="button" class="secondary-btn db-fetch-btn" (click)="fetchAgain()" [disabled]="fetchingSaved" [attr.aria-busy]="fetchingSaved">
+          ↻ {{ fetchingSaved ? copy('Fetching saved data…','جارٍ استرجاع البيانات المحفوظة…') : copy('Fetch Again (Database)','جلب أحدث البيانات من قاعدة البيانات') }}
+        </button>
         <button type="button" class="primary-btn" (click)="toggleFeed()">
           <span>{{ feedLive ? '❚❚' : '▶' }}</span>
           {{ feedLive ? copy('Pause live feed', 'إيقاف التغذية المباشرة') : copy('Resume live feed', 'استئناف التغذية المباشرة') }}
@@ -81,6 +84,9 @@
         </span>
         <span>{{ fleetSnapshot?.scheduler?.enabledVessels ?? 0 }} / {{ fleetSnapshot?.fleetSize ?? 420 }} {{ copy('vessels in active assessment scope', 'سفينة ضمن نطاق التقييم المفعّل') }}</span>
         <span>{{ copy('Saved risk results update automatically; opening this screen never starts an AI call.', 'تتحدث النتائج المحفوظة تلقائياً؛ فتح الشاشة لا يشغّل أي استدعاء AI.') }}</span>
+        <span *ngIf="latestDatabaseFetchAt">{{ copy('Database fetched at','آخر استرجاع من قاعدة البيانات') }}: {{latestDatabaseFetchAt | date:'mediumTime'}}</span>
+        <span>{{copy('A01/A02 reassessment is triggered by changed supported evidence on the configured background schedule, not by map reset.',
+                    'تُعاد معالجة A01/A02 عند تغير الأدلة المتصلة خلال الجدولة الخلفية، وليس بإعادة ضبط الخريطة.')}}</span>
         <span *ngIf="fleetSnapshot?.job as job">
           {{ copy('Background job', 'مهمة الخلفية') }} {{ job.status }} · {{ fleetProgress }}
         </span>
