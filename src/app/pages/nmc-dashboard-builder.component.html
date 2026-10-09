@@ -75,6 +75,10 @@
             <h3>{{shared.title}}</h3>
             <p>{{shared.description||copy('Maritime decision support dashboard','لوحة معلومات لدعم القرار البحري')}}</p>
             <div class="db-board-meta">{{shared.widgets.length}} {{copy('widgets','مؤشرات')}} · {{copy('Version','إصدار')}} {{shared.version}}</div>
+            <div class="db-placement-indicator">
+              {{copy('Menu','القائمة')}}:
+              {{shared.menuPlacement==='SMART_INSPECTION'?copy('Smart Inspection','المعاينة الذكية'):shared.menuPlacement==='SETTINGS'?copy('Settings','الإعدادات'):copy('NMC Center','المركز البحري الوطني')}}
+            </div>
             <div class="db-board-actions">
               <button *ngIf="shared.status==='PUBLISHED'" class="db-primary" type="button"
                       (click)="viewPublished(shared)">{{copy('View Dashboard','عرض لوحة المعلومات')}} ↗</button>
@@ -173,6 +177,17 @@
             <input [(ngModel)]="board.title" (ngModelChange)="touch()" maxlength="100"/>
             <label>{{copy('Description','الوصف')}}</label>
             <textarea [(ngModel)]="board.description" (ngModelChange)="touch()" maxlength="500" rows="3"></textarea>
+            <label>{{copy('Show Published Dashboard Under','إظهار لوحة المعلومات المنشورة تحت')}}</label>
+            <select [(ngModel)]="board.menuPlacement" (ngModelChange)="touch()"
+                    [attr.aria-label]="copy('Navigation menu location','مكان العرض في القائمة')">
+              <option *ngFor="let placement of menuPlacements" [value]="placement.value">
+                {{copy(placement.en,placement.ar)}}
+              </option>
+            </select>
+            <p class="db-placement-help">
+              {{copy('After publishing, this dashboard will appear under Dashboards in the selected main-menu section.',
+                      'بعد النشر ستظهر لوحة المعلومات تحت Dashboards في القسم المحدد من القائمة الرئيسية.')}}
+            </p>
           </section>
 
           <section class="db-panel">
