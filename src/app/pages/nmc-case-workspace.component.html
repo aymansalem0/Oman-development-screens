@@ -40,7 +40,7 @@
 
     <section class="case-hero">
       <div class="case-identity">
-        <span class="case-kicker">{{ copy('ACTIVE MARITIME CASE', 'حالة بحرية نشطة') }}</span>
+        <span class="case-kicker">{{centralCase?.status==='RESOLVED'?copy('RESOLVED MARITIME CASE','حالة بحرية مغلقة'):copy('ACTIVE MARITIME CASE','حالة بحرية نشطة')}}</span>
         <div class="case-title-row">
           <div>
             <h2>{{ caseId }}</h2>
@@ -50,15 +50,15 @@
         </div>
 
         <div class="case-context">
-          <span>{{ copy('Case owner', 'مالك الحالة') }}: <strong>{{ copy('NMC Duty Officer', 'ضابط مناوبة المركز البحري') }}</strong></span>
-          <span>{{ copy('Opened', 'تاريخ الفتح') }}: <strong>07 Oct 2026 · 22:45</strong></span>
+          <span>{{ copy('Case owner', 'مالك الحالة') }}: <strong>{{copy('NMC Duty Officer', 'ضابط مناوبة المركز البحري')}}</strong></span>
+          <span>{{ copy('Opened', 'تاريخ الفتح') }}: <strong>{{centralCase?.createdAt|date:'medium'}}</strong></span>
           <span>{{ copy('Source', 'المصدر') }}: <strong>{{ copy('AI assessment + human approval', 'تقييم الذكاء الاصطناعي + اعتماد بشري') }}</strong></span>
         </div>
       </div>
 
       <div class="case-metrics">
         <article class="metric-card risk" [ngClass]="riskClass">
-          <small>{{ copy('Current risk', 'المخاطر الحالية') }}</small>
+          <small>{{copy('Saved AI Risk Score','درجة مخاطر AI المحفوظة')}}</small>
           <strong>{{ currentRisk }}</strong>
           <span>{{ riskLevelLabel }}</span>
         </article>
