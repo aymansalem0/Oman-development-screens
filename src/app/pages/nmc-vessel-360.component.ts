@@ -138,6 +138,7 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
   storedAiHistory: FleetAiHistory | null = null;
   storedAiIntelligence: FleetAiIntelligence | null = null;
   intelligenceStatus: 'loading' | 'available' | 'unavailable' = 'loading';
+  qualityExpanded = false;
   storedAiStatus: 'loading' | 'available' | 'not-assessed' | 'error' = 'loading';
   private readonly subscriptions = new Subscription();
 
