@@ -46,6 +46,39 @@ export interface FleetAiSnapshot {
   };
   results: Record<string,FleetAiVessel>;
 }
+/** How the synthetic data-quality engine reached its persisted structural score. */
+export interface FleetAiQualityStep {
+  key: 'completeness' | 'consistency' | 'evidenceLinkage' | 'provenance';
+  label: string;
+  percent: number | null;
+  weightPercent: number;
+  numerator: number;
+  denominator: number;
+  rawContribution: number | null;
+}
+export interface FleetAiFieldComparison {
+  field: string;
+  internalValue: string | null;
+  externalValue: string | null;
+  internalSource: string;
+  externalSource: string;
+  internalEvidenceId: string | null;
+  externalEvidenceId: string | null;
+  status: 'MATCHED' | 'MISMATCH' | 'MISSING';
+  comparisonRule: string;
+}
+export interface FleetAiEvidenceLink {
+  factor: string;
+  agent: string;
+  evidenceId: string;
+  matched: boolean;
+  source: string;
+}
+export interface FleetAiProvenanceCheck {
+  field: 'sourceSystem' | 'datasetVersion' | 'retrievedAt';
+  value: string | null;
+  present: boolean;
+}
 export interface FleetAiIntelligence {
   imo: string;
   assessmentId: string | null;
@@ -65,6 +98,28 @@ export interface FleetAiIntelligence {
       missingFieldSides: number;
       disagreementCount: number;
       syntheticUnverifiedScoreCap: number;
+      rawScoreBeforeSyntheticCap?: number | null;
+      syntheticDiscountFactor?: number;
+      rawWeightedContributionMethod?: string;
+      finalScoreMethod?: string;
+      identityValueSidesPresent?: number;
+      identityValueSidesExpected?: number;
+      matchingIdentityFields?: number;
+      evidenceReferencesLinked?: number;
+      evidenceReferencesTotal?: number;
+      calculationSteps?: FleetAiQualityStep[];
+      fieldComparisons?: FleetAiFieldComparison[];
+      evidenceLinkages?: FleetAiEvidenceLink[];
+      provenanceChecks?: FleetAiProvenanceCheck[];
+      sourceProvenance?: {
+        internalSystem: string;
+        externalSystem: string;
+        pscSourceSystem: string | null;
+        pscDatasetVersion: string | null;
+        pscRetrievedAt: string | null;
+        pscMode: string;
+        reconstruction: string;
+      };
       note: string;
       reconstructionNotice?: string;
     };
