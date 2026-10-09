@@ -27,3 +27,13 @@
 .guide-new-rule label{font-size:10px;color:#607e89;display:flex;flex-direction:column;gap:5px}
 .guide-new-rule input{height:35px;border:1px solid #d9e5e8;border-radius:7px;padding:6px 9px;background:#fff;width:100%}
 .guide-new-rule button{padding:10px;border:1px solid #087c75;color:#fff;border-radius:7px;background:#0f8278;font-weight:800}
+
+.guide-condition-builder{padding:15px 20px;margin:0 19px 8px;border:1px dashed #c6dfe4;border-radius:10px;background:#f7fcfe}
+.guide-cond-header{display:flex;justify-content:space-between;gap:10px;align-items:center}.guide-cond-header strong{font-size:12px;color:#1b5265}
+.guide-cond-header button{border:1px solid #afd6d0;padding:8px 10px;border-radius:7px;background:#eaf8f3;color:#0a716b;font-weight:800}
+.guide-condition-builder>p{font-size:10px;color:#6c8997;line-height:1.5}
+.guide-extra-condition{display:flex;align-items:center;gap:7px;padding:8px 0}
+.guide-extra-condition span{font-size:10px;font-weight:900;color:#0e847d}
+.guide-extra-condition select,.guide-extra-condition input{min-width:0;flex:1;border:1px solid #d4e4e9;border-radius:7px;padding:8px;color:#234958;background:#fff}
+.guide-extra-condition button{border:0;border-radius:6px;padding:8px;color:#ae4346;background:#fff0ee}
+@media(max-width:650px){.guide-extra-condition{flex-wrap:wrap}.guide-extra-condition select,.guide-extra-condition input{flex-basis:45%}}
