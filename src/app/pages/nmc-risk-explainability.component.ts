@@ -124,7 +124,7 @@ export class NmcRiskExplainabilityComponent implements OnInit {
       {key:'Normal',min:0,max:t.watch-1,width:t.watch},
       {key:'Watch',min:t.watch,max:t.high-1,width:t.high-t.watch},
       {key:'High',min:t.high,max:t.critical-1,width:t.critical-t.high},
-      {key:'Critical',min:t.critical,max:100,width:101-t.critical}
+      {key:'Critical',min:t.critical,max:100,width:100-t.critical}
     ];
   }
   thresholdName(key:string):string{
@@ -132,7 +132,8 @@ export class NmcRiskExplainabilityComponent implements OnInit {
       Normal:['Normal','طبيعي'],Watch:['Watch','مراقبة'],
       High:['High','مرتفع'],Critical:['Critical','حرج']
     };
-    return this.copy(...(d[key]||[key,key]) as [string,string]);
+    const pair=d[key]||[key,key];
+    return this.copy(pair[0],pair[1]);
   }
   get totalContribution():number{return this.factors.reduce((n,f)=>n+f.contribution,0);}
   get calculationMode():string{return this.assessment?.ruleset?.mode||'weighted';}
