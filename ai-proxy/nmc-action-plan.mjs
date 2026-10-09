@@ -106,7 +106,9 @@ export function normalizeA01Actions(raw,{imo,assessmentId,score,level,configVers
   const ids=new Set();
   const proposedActions=src.proposedActions.map((a,index)=>{
     const actionIndex=index+1;
-    const rawId=a?.actionId;
+    if(!a||typeof a!=='object'||Array.isArray(a))
+      throw new ActionPlanError('A01_ACTION_ID_INVALID',422,{actionIndex,actionId:'(missing)'});
+    const rawId=a.actionId;
     const actionId=normalizeIdentifier(rawId);
     if(!actionId){
       throw new ActionPlanError('A01_ACTION_ID_INVALID',422,{
