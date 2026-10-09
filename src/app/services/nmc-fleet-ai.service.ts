@@ -168,6 +168,11 @@ export class NmcFleetAiService {
   snapshot():Observable<FleetAiSnapshot>{
     return this.http.get<FleetAiSnapshot>('/api/ai/fleet/status');
   }
+  /** Fresh Oracle/JSON persisted snapshot; never invokes Airia or the scheduler. */
+  fetchSaved():Observable<FleetAiSnapshot & {fetchedFrom:string;fetchedAt:string}>{
+    return this.http.get<FleetAiSnapshot & {fetchedFrom:string;fetchedAt:string}>(
+      '/api/ai/fleet/saved-status');
+  }
   assessment(imo:string):Observable<FleetAiAssessment>{
     return this.http.get<FleetAiAssessment>('/api/ai/fleet/results/'+encodeURIComponent(imo));
   }
