@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "start": "node server.mjs",
-    "check": "node --check dashboard-workspace.mjs && node --check server.mjs && node --check psc-reader.mjs && node --check fleet-ai.mjs && node --check fleet-scheduler.mjs && node --check oracle-store.mjs"
+    "check": "node --check dashboard-workspace.mjs && node --check server.mjs && node --check psc-reader.mjs && node --check fleet-ai.mjs && node --check fleet-scheduler.mjs && node --check oracle-store.mjs",
+    "test": "node --test test/dashboard-workspace.test.mjs"
   },
   "engines": {
     "node": ">=20"
