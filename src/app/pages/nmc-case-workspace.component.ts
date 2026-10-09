@@ -353,7 +353,9 @@ export class NmcCaseWorkspaceComponent implements OnInit {
   }
 
   private buildCase(preserveState = false): void {
-    const persistedStates = this.caseState.getTaskStates(this.vessel.imo);
+    const persistedStates = this.centralCase
+      ?Object.fromEntries(this.centralCase.tasks.map(t=>[t.id,t.status]))
+      :this.caseState.getTaskStates(this.vessel.imo);
     const previous = preserveState
       ? new Map(this.tasks.map(task => [task.id, task.status]))
       : new Map<string, TaskStatus>();
@@ -362,7 +364,7 @@ export class NmcCaseWorkspaceComponent implements OnInit {
       previous.set(id, status as TaskStatus);
     });
 
-    const level = this.riskEngine.levelForScore(this.vessel.risk);
+    const level = this.centralCase?.sourceLevel||this.riskEngine.levelForScore(this.vessel.risk);
     const critical = level === 'Critical';
     const high = level === 'Critical' || level === 'High';
     const watch = level !== 'Normal';
@@ -370,7 +372,7 @@ export class NmcCaseWorkspaceComponent implements OnInit {
 
     const tasks: CaseTask[] = [];
 
-    if (this.vessel.risk >= 55) {
+    if ((this.centralCase?.sourceScore??this.vessel.risk) >= 55) {
       tasks.push({
         id: 'verify-certificate',
         title: this.copy('Verify certificate status', 'التحقق من حالة الشهادة'),
