@@ -14,7 +14,7 @@ import {
   NmcCaseStateService,
   NmcInspectionOutcome
 } from '../services/nmc-case-state.service';
-import {NmcCasesService,NmcCentralCase,NmcCentralCaseAudit} from '../services/nmc-cases.service';
+import {NmcCasesService,NmcCentralCase,NmcCentralCaseAudit,NmcAiAction} from '../services/nmc-cases.service';
 
 type CaseStatus = 'Open' | 'In Progress' | 'Pending Verification' | 'Resolved';
 type TaskStatus = 'Pending' | 'Assigned' | 'In Progress' | 'Completed' | 'Escalated';
@@ -32,6 +32,7 @@ interface CaseTask {
   mandatory: boolean;
   evidence: string[];
   note: string;
+  actionType?: string;
 }
 
 interface CaseTimelineItem {
@@ -66,6 +67,7 @@ export class NmcCaseWorkspaceComponent implements OnInit {
   centralBusy=false;
   centralError='';
   centralSuccess='';
+  actionNotes:Record<string,string>={};
   tasks: CaseTask[] = [];
   timeline: CaseTimelineItem[] = [];
   stakeholders: Stakeholder[] = [];
@@ -169,6 +171,7 @@ export class NmcCaseWorkspaceComponent implements OnInit {
   }
 
   get mandatoryComplete(): boolean {
+    if(!this.centralCase?.tasks.length)return false;
     return this.centralCase
       ?this.centralCase.tasks.filter(t=>t.mandatory).every(t=>t.status==='Completed')
       :this.tasks.filter(task=>task.mandatory).every(task=>task.status==='Completed');
@@ -195,8 +198,84 @@ export class NmcCaseWorkspaceComponent implements OnInit {
 
   get nextAction(): string {
     const next = this.tasks.find(task => task.status !== 'Completed');
+    if(!this.centralCase?.actionPlan)return this.copy('Generate the A01 action plan', 'إنشاء خطة الإجراءات من A01');
+    if(this.centralCase.actionPlan.proposedActions.some(a=>a.decision==='PENDING'))
+      return this.copy('Review proposed AI actions', 'مراجعة الإجراءات المقترحة من AI');
     if (!next) return this.copy('Ready for case resolution', 'جاهزة لإغلاق الحالة');
     return next.title;
+  }
+
+  generateAiActions():void{
+    if(!this.centralCase||this.centralBusy||this.centralCase.actionPlan)return;
+    if(!window.confirm(this.copy(
+      'Call Airia A01 once to generate evidence-backed proposed actions for this saved assessment?',
+      'استدعاء Airia A01 لإنشاء إجراءات مقترحة تستند إلى الأدلة لهذا التقييم المحفوظ؟')))return;
+    this.centralBusy=true;this.centralError='';this.centralSuccess='';
+    this.cases.generateActionPlan(this.centralCase).subscribe({
+      next:res=>{
+        this.centralBusy=false;
+        if(res.case)this.applyCase(res.case);
+        this.centralSuccess=this.copy(
+          'A01 action proposals are ready for human approval. No tasks were created yet.',
+          'اقتراحات A01 جاهزة للاعتماد البشري؛ لم يتم إنشاء أي مهام بعد.');
+      },
+      error:error=>{
+        this.centralBusy=false;
+        this.centralError=this.cases.readableError(error,this.lang.isArabic);
+        if(error?.status===409)this.loadCentralCase();
+      }
+    });
+  }
+
+  decideAiAction(item:NmcAiAction,decision:'ACCEPT'|'REJECT'|'MODIFY'):void{
+    if(!this.centralCase||this.centralBusy||item.decision!=='PENDING')return;
+    const note=(this.actionNotes[item.actionId]||'').trim();
+    if(decision!=='ACCEPT'&&!note){
+      this.centralError=this.copy('Enter a reason for modification or rejection.','ادخل سبب التعديل أو الرفض.');
+      return;
+    }
+    if(!window.confirm(this.copy(
+      'Save this human decision? Accepted actions become central tasks; inspection actions enter the scheduling queue.',
+      'حفظ القرار البشري؟ الإجراءات المقبولة تتحول إلى مهام، والمعاينات إلى قائمة الجدولة.')))return;
+    this.centralBusy=true;this.centralError='';
+    this.cases.decideAiAction(this.centralCase,item.actionId,decision,note).subscribe({
+      next:res=>{
+        this.centralBusy=false;
+        if(res.case)this.applyCase(res.case);
+        this.centralSuccess=this.copy(
+          'Decision audited. Approved actions are now saved as case tasks.',
+          'تم توثيق القرار وإنشاء المهام المعتمدة في الحالة.');
+      },
+      error:error=>{
+        this.centralBusy=false;
+        this.centralError=this.cases.readableError(error,this.lang.isArabic);
+        if(error?.status===409)this.loadCentralCase();
+      }
+    });
+  }
+
+  get pendingInspection():boolean{
+    return !!this.centralCase?.inspectionRequests?.some(
+      r=>r.status==='PENDING_SCHEDULING');
+  }
+  inspectionTask(task:CaseTask):boolean{
+    return task.actionType==='PRIORITY_INSPECTION'||
+      (!task.actionType&&task.id==='priority-inspection');
+  }
+  openInspectionForTask(task:CaseTask):void{
+    if(this.pendingInspection){
+      void this.router.navigate(['/moei/smart-inspection/candidates']);
+      return;
+    }
+    // Only a scheduled request may proceed to field inspection in new AI cases.
+    if(this.centralCase?.actionPlan &&
+      !this.centralCase.inspectionRequests?.some(
+        r=>r.actionId===task.id&&['SCHEDULED','COMPLETED'].includes(r.status))){
+      this.centralError=this.copy('Schedule the accepted NMC inspection request first.',
+        'يجب جدولة طلب المعاينة المعتمد أولًا.');
+      return;
+    }
+    this.navigateInspection();
   }
 
   openTask(task: CaseTask): void {
@@ -233,11 +312,11 @@ export class NmcCaseWorkspaceComponent implements OnInit {
   }
 
   startTask(task:CaseTask):void{
-    if(task.id==='priority-inspection'){this.openSmartInspection();return;}
+    if(this.inspectionTask(task)){this.openInspectionForTask(task);return;}
     this.updateTask(task,'START');
   }
   completeTask(task:CaseTask):void{
-    if(task.id==='priority-inspection'){
+    if(this.inspectionTask(task)){
       this.centralError=this.copy(
         'Inspection completion must be recorded from Smart Inspection.',
         'يجب تسجيل نتيجة المعاينة داخل المعاينة الذكية.');
@@ -278,13 +357,8 @@ export class NmcCaseWorkspaceComponent implements OnInit {
     void this.router.navigate(['/moei/nmc/vessel',this.vessel.imo,'smart-inspection']);
   }
   openSmartInspection():void{
-    if(!this.centralCase||this.centralBusy)return;
-    const inspection=this.centralCase.tasks.find(task=>task.id==='priority-inspection');
-    if(inspection?.status==='Assigned'){
-      this.updateTask(this.tasks.find(task=>task.id==='priority-inspection')!, 'START',true);
-      return;
-    }
-    this.navigateInspection();
+    const task=this.tasks.find(t=>this.inspectionTask(t));
+    if(task)this.openInspectionForTask(task);
   }
 
   statusLabel(status: CaseStatus | TaskStatus): string {
@@ -450,16 +524,18 @@ export class NmcCaseWorkspaceComponent implements OnInit {
 
     this.tasks = this.centralCase ? this.centralCase.tasks.map(stored=>{
       const draft=tasks.find(item=>item.id===stored.id);
-      return draft?{
-        ...draft,status:stored.status as TaskStatus,
-        mandatory:stored.mandatory,evidence:stored.evidenceIds,
-        owner:stored.assignedRole
-      }:{
-        id:stored.id,title:stored.id.replaceAll('-',' '),
-        owner:stored.assignedRole,source:'Operational follow-up',
-        priority:'High' as const,dueLabel:'Follow-up',
+      const priority:CaseTask['priority']=stored.priority==='CRITICAL'||stored.priority==='IMMEDIATE'
+        ?'Critical':stored.priority==='MEDIUM'?'Medium':stored.priority==='MONITOR'||
+        stored.priority==='ROUTINE'?'Continuous':'High';
+      return {
+        id:stored.id,title:stored.title||draft?.title||stored.id.replaceAll('-',' '),
+        owner:stored.assignedRole,source:stored.provenance==='AIRIA_A01_HUMAN_APPROVED'
+          ?'Airia A01 · officer approved':draft?.source||'Operational follow-up',
+        priority:stored.title?priority:(draft?.priority||priority),
+        dueLabel:stored.title?'Follow-up':draft?.dueLabel||'Follow-up',
         status:stored.status as TaskStatus,mandatory:stored.mandatory,
-        evidence:stored.evidenceIds,note:''
+        evidence:stored.evidenceIds,note:stored.reason||draft?.note||'',
+        actionType:stored.actionType
       };
     }):tasks;
 
