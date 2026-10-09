@@ -76,6 +76,7 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
   private riskSubscription?: Subscription;
   private fleetPoller?: ReturnType<typeof setInterval>;
   private alertPoller?: ReturnType<typeof setInterval>;
+  private fleetLoadInFlight = false;
 
   constructor(
     private router: Router,
@@ -113,9 +114,9 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
     }).format(this.now);
   }
 
-  riskLabel(score: number): string {
+  riskLabel(score: number, imo?: string): string {
     if(score<0)return this.copy('Pending AI','بانتظار AI');
-    const level = this.riskLevel(score) as RiskLevel;
+    const level = this.riskLevel(score, imo) as RiskLevel;
     const labels: Record<RiskLevel, string> = {
       Critical: this.copy('Critical', 'حرج'),
       High: this.copy('High', 'مرتفع'),
@@ -327,11 +328,10 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
   private fleetResult(v: NmcVesselProfile): FleetAiVessel | undefined {
     return this.fleetSnapshot?.results[v.imo];
   }
-  get assessedCount():number{return this.vessels.filter(v=>v.risk>=0).length;}
-  get pendingCount():number{return 420-this.assessedCount;}
-  get priorityReviewCount():number{
-    return this.vessels.filter(v=>v.risk>=0&&this.fleetResult(v)?.operationalPriority==='Priority Review').length;
-  }
+  // Aggregate counters are authoritative server-side fleet snapshot counts, not locally recalculated scores.
+  get assessedCount():number{return this.fleetSnapshot?.counts.assessed ?? 0;}
+  get pendingCount():number{return this.fleetSnapshot?.counts.pending ?? 420;}
+  get priorityReviewCount():number{return this.fleetSnapshot?.counts.priorityReview ?? 0;}
   get fleetJobRunning():boolean{return this.fleetSnapshot?.job?.status==='RUNNING';}
   get fleetProgress():string{
     const j=this.fleetSnapshot?.job;
@@ -343,22 +343,30 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
       error:()=>{this.unreadAlertCount=0;}
     });
   }
+  /** Saved Oracle-backed assessments are displayed using the ruleset that actually produced them.
+   *  Browser-local Risk Management drafts MUST NOT hide stored scores or reclassify them. */
+  private hasSavedScore(row?: FleetAiVessel): boolean {
+    return row?.status==='COMPLETED' && typeof row.score==='number' &&
+      Number.isFinite(row.score) && row.score>=0 && row.score<=100 &&
+      ['Normal','Watch','High','Critical'].includes(row.level||'');
+  }
   private loadFleet():void{
+    if(this.fleetLoadInFlight)return;
+    this.fleetLoadInFlight=true;
     this.fleetAi.snapshot().subscribe({
       next:snapshot=>{
+        this.fleetLoadInFlight=false;
         this.fleetSnapshot=snapshot;this.fleetError='';
-        const currentVersion=this.riskEngine.config.version;
         const selectedId=this.selectedVessel?.id;
         this.vessels=this.vessels.map(v=>{
           const row=snapshot.results[v.imo];
-          const risk=row?.status==='COMPLETED'&&row.configVersion===currentVersion&&Number.isFinite(row.score)
-            ?Number(row.score):-1;
-          return {...v,risk};
+          return {...v,risk:this.hasSavedScore(row)?Number(row!.score):-1};
         });
-        this.selectedVessel=this.vessels.find(v=>v.id===selectedId)||this.vessels[0];
+        // A screen refresh or polling must never auto-select the first vessel.
+        this.selectedVessel=selectedId===undefined?undefined:this.vessels.find(v=>v.id===selectedId);
         this.attentionPage=Math.min(this.attentionPage,this.attentionPageCount);
         this.events=Object.values(snapshot.results)
-          .filter(r=>r.status==='COMPLETED'&&r.configVersion===currentVersion&&r.assessedAt)
+          .filter(r=>this.hasSavedScore(r)&&r.assessedAt)
           .sort((a,b)=>String(b.assessedAt).localeCompare(String(a.assessedAt)))
           .slice(0,5).map((r):MaritimeEvent=>({
             time:new Date(r.assessedAt!).toLocaleTimeString('en-GB',{hour12:false}),
@@ -369,7 +377,10 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
           }));
         this.refreshMapMarkers();
       },
-      error:err=>{this.fleetError=err?.error?.error||'Fleet AI API unavailable';}
+      error:err=>{
+        this.fleetLoadInFlight=false;
+        this.fleetError=err?.error?.error||'Fleet AI API unavailable';
+      }
     });
   }
   riskDisplay(v:NmcVesselProfile):string{return v.risk<0?'—':String(v.risk);}
@@ -379,7 +390,7 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
     return this.vessels.filter(vessel => {
       const matchesSearch = !query || [vessel.name, vessel.imo, vessel.destination, vessel.flag]
         .some(value => value.toLowerCase().includes(query));
-      const matchesRisk = this.riskFilter === 'All' || this.riskLevel(vessel.risk) === this.riskFilter;
+      const matchesRisk = this.riskFilter === 'All' || this.riskLevel(vessel.risk, vessel.imo) === this.riskFilter;
       const matchesType = this.typeFilter === 'All' || vessel.type === this.typeFilter;
       return matchesSearch && matchesRisk && matchesType;
     });
@@ -387,7 +398,7 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
 
   get allAttentionVessels(): NmcVesselProfile[] {
     return [...this.vessels]
-      .filter(v=>v.risk>=0&&(this.riskLevel(v.risk)!=='Normal'||this.fleetResult(v)?.operationalPriority==='Priority Review'))
+      .filter(v=>v.risk>=0&&(this.riskLevel(v.risk,v.imo)!=='Normal'||this.fleetResult(v)?.operationalPriority==='Priority Review'))
       .sort((a,b)=>Number(this.fleetResult(b)?.operationalPriority==='Priority Review')-
         Number(this.fleetResult(a)?.operationalPriority==='Priority Review')||b.risk-a.risk);
   }
@@ -433,7 +444,7 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
   }
 
   private syncAttentionPageForVessel(vessel: NmcVesselProfile): void {
-    if(vessel.risk<0||this.riskLevel(vessel.risk)==='Normal')return;
+    if(vessel.risk<0||this.riskLevel(vessel.risk,vessel.imo)==='Normal')return;
     const index = this.allAttentionVessels.findIndex(item => item.id === vessel.id);
     if (index >= 0) this.attentionPage = Math.floor(index / this.attentionPageSize) + 1;
   }
@@ -445,10 +456,14 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
   get monitoredCount(): number { return this.trafficSnapshot.totalContacts; }
   get correlatedProfileCount(): number { return this.trafficSnapshot.correlatedProfiles; }
   get attentionCount():number{return this.allAttentionVessels.length;}
-  get highRiskCount():number{return this.vessels.filter(v=>v.risk>=0&&['High','Critical'].includes(this.riskLevel(v.risk))).length;}
-  get criticalCount():number{return this.vessels.filter(v=>v.risk>=0&&this.riskLevel(v.risk)==='Critical').length;}
-  riskLevel(score:number):RiskLevel|'Pending'{return score<0?'Pending':this.riskEngine.levelForScore(score);}
-  riskClass(score:number):string{return score<0?'pending':this.riskEngine.levelForScore(score).toLowerCase();}
+  get highRiskCount():number{return (this.fleetSnapshot?.counts.high ?? 0)+(this.fleetSnapshot?.counts.critical ?? 0);}
+  get criticalCount():number{return this.fleetSnapshot?.counts.critical ?? 0;}
+  riskLevel(score:number, imo?:string):RiskLevel|'Pending'{
+    if(score<0)return 'Pending';
+    const saved=imo?this.fleetSnapshot?.results[imo]:undefined;
+    return this.hasSavedScore(saved)?saved!.level!:this.riskEngine.levelForScore(score);
+  }
+  riskClass(score:number, imo?:string):string{return this.riskLevel(score,imo).toLowerCase();}
 
   selectVessel(vessel: NmcVesselProfile, fly = true): void {
     this.selectedVessel = vessel;
@@ -510,7 +525,6 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
       if (existing) {
         existing.setLatLng([vessel.lat, vessel.lng]);
         existing.setIcon(this.createVesselIcon(vessel));
-        existing.setTooltipContent(this.tooltipFor(vessel));
         continue;
       }
 
@@ -520,7 +534,6 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
         riseOnHover: true
       });
 
-      marker.bindTooltip(this.tooltipFor(vessel), {direction:'top',offset:[0,-18],opacity:1});
 
       marker.on('click', () => this.handleVesselInteraction(vessel));
       marker.addTo(this.map);
@@ -528,14 +541,8 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
     }
   }
 
-  private tooltipFor(v:NmcVesselProfile):string{
-    return '<div class="map-vessel-tooltip"><strong>'+v.name+'</strong>'+
-      '<span>IMO '+v.imo+' · '+this.flagLabel(v.flag)+' · '+this.vesselTypeLabel(v.type)+'</span>'+
-      '<span>'+v.speed.toFixed(1)+' kn · '+v.destination+'</span>'+
-      '<b>'+this.copy('AI Risk','مخاطر AI')+' '+this.riskDisplay(v)+' · '+this.riskLabel(v.risk)+'</b></div>';
-  }
   private createVesselIcon(vessel: NmcVesselProfile): L.DivIcon {
-    const level = this.riskClass(vessel.risk);
+    const level = this.riskClass(vessel.risk,vessel.imo);
     const selected = this.selectedVessel?.id === vessel.id ? 'selected' : '';
     const isSelected = this.selectedVessel?.id === vessel.id;
     const shipSize = isSelected
@@ -554,7 +561,7 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
             <path class="ship-deck" d="M9.2 10.6h5.6v8.2H9.2z"></path>
             <path class="ship-centerline" d="M12 3.5v24.3"></path>
           </svg>
-          ${isSelected || this.riskLevel(vessel.risk) === 'Critical' ? `<span class="ship-label">${vessel.name}<b>${this.riskDisplay(vessel)}</b></span>` : ''}
+          ${isSelected ? `<span class="ship-label">${vessel.name}<b>${this.riskDisplay(vessel)}</b></span>` : ''}
         </div>
       `,
       iconSize:[52,52],
@@ -563,8 +570,10 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
   }
 
   private drawSelectedTrack(): void {
-    if (!this.map || !this.selectedVessel) return;
+    if (!this.map) return;
     if (this.selectedTrack) this.selectedTrack.removeFrom(this.map);
+    this.selectedTrack=undefined;
+    if (!this.selectedVessel) return;
 
     const route = SEA_ROUTES[this.selectedVessel.routeKey];
     if (!route) return;
