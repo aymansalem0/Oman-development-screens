@@ -3,7 +3,7 @@ import {HttpClient,HttpHeaders} from '@angular/common/http';
 import {Observable,throwError,forkJoin,of} from 'rxjs';
 import {catchError,map,switchMap} from 'rxjs/operators';
 import {NmcFleetAiService,FleetAiAssessment} from './nmc-fleet-ai.service';
-import {NmcRiskEngineService,RiskEngineConfig,RiskFactorKey} from './nmc-risk-engine.service';
+import {NmcRiskEngineService,RiskFactorKey} from './nmc-risk-engine.service';
 import {getOperationalVesselByImo} from '../data/nmc-expanded-vessel-catalog';
 
 export type AlertStatus='OPEN'|'ACKNOWLEDGED'|'IN_PROGRESS'|'ESCALATED'|'RESOLVED';
