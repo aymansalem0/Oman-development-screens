@@ -1,4 +1,5 @@
 import { Component, OnDestroy, OnInit } from '@angular/core';
+import { CommonModule } from '@angular/common';
 import { Router, RouterLink, NavigationEnd } from '@angular/router';
 import { filter, Subscription } from 'rxjs';
 import { LanguageService } from '../services/language.service';
@@ -13,7 +14,7 @@ import { PublishedDashboardMenuItem } from '../services/nmc-dashboard-workspace.
 @Component({
   selector: 'app-nmc-navigation',
   standalone: true,
-  imports: [RouterLink],
+  imports: [CommonModule, RouterLink],
   templateUrl: './nmc-navigation.component.html',
   styleUrl: './nmc-navigation.component.css'
 })
