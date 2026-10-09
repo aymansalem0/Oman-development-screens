@@ -220,3 +220,26 @@ Invoke-RestMethod http://localhost:4200/api/ai/guidance/vessels/9328471 |
 - Scheduling requires a human operator (shared POC staging editor key); production-grade scheduler RBAC/Keycloak, A04 live dossier and A02 post-inspection recalculation are later work.
 - If `CASE_SOURCE_ASSESSMENT_UNAVAILABLE` appears, verify saved source assessment and initial alert provenance. Do not recreate fake scores or relaunch fleet assessments to bypass checks.
 - If A01 response has no valid action list, Airia pipeline output needs correction; don't pretend fixture tasks were AI-generated.
+
+## 8. Central Oracle Risk Policy — migration 007, immutable version history
+
+Risk Management now uses a single centrally active policy (rather than independently published localStorage copies) after migration **007**. `NMC_RISK_POLICY_VERSION` is an append-only policy snapshot ledger; `NMC_RISK_POLICY_ACTIVE` points to exactly one effective revision; `NMC_RISK_POLICY_PROJECTION` retains version-specific calculated risk with references to the original saved `NMC_AI_ASSESSMENT.ASSESSMENT_ID`. It **does not overwrite** source AI results, existing maritime cases or historical alert audit.
+
+A supervisor with the already configured `X-NMC-DASHBOARD-KEY` PUBLISHER credential approves a new version with a required change reason and operator label. Optimistic `expectedRevision` guards concurrent edits. Each publication stores a full snapshot and a link to the previous revision. The Risk Settings page shows version history with change descriptions and displays the currently active version. Historical local browser versions cannot be reconstructed from localStorage automatically; an existing browser setting can only be imported as a **new unpublished draft**.
+
+**STOP/DBA preflight:** take backup, verify `NMC_AI` and `FREEPDB1`, and check that no `NMC_RISK_POLICY%` tables exist before the FIRST run. Oracle DDL autocommits; if partially installed, reconcile manually rather than rerun. Run `ai-proxy/migrations/007_nmc_risk_policy_versioning.sql` in SQL*Plus as NMC_AI. Then restart **ai-proxy** using the EXISTING three Compose files (do not recreate Oracle), followed by the `nmc` Angular container. The application seeds **NMC Risk Ruleset 1.0** centrally ONLY when all 007 objects exist; it intentionally does not assume a user browser's prior 1.13 is the authoritative nationwide baseline.
+
+Check read-only endpoints after startup:
+
+~~~powershell
+Invoke-RestMethod http://localhost:4200/api/ai/risk-policy | ConvertTo-Json -Depth 5
+Invoke-RestMethod http://localhost:4200/api/ai/risk-policy/history | ConvertTo-Json -Depth 5
+Invoke-RestMethod http://localhost:4200/api/ai/risk-policy/projections | Select-Object policyRef,assessed
+Invoke-RestMethod http://localhost:4200/api/ai/risk-policy/vessels/9328471/history |
+  ConvertTo-Json -Depth 5
+~~~
+
+Test with no paid agents: save a DRAFT, enter a precise reason, publish using authorized supervisor key, verify new `policyRef` and `previousRevision` in history and active pointer, and verify saved original `score` unchanged while projected score/class and effective Fleet status reflect current settings. Verify no maritime case or historical alert audit has been deleted or auto-closed. Current policy is used for alert eligibility; a critical open finding remains an independent notification trigger.
+
+**Important:** No DDL is auto-applied during build or startup. CI passing confirms syntax and simulated logic, **not an Oracle migration execution or deployment on the user's machine**. Apply 007 only after DBA preflight and backup.
+
