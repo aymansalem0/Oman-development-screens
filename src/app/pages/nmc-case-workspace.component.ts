@@ -183,23 +183,14 @@ export class NmcCaseWorkspaceComponent implements OnInit {
     return this.caseState.getInspectionOutcome(this.vessel.imo);
   }
 
+  // Immutable source assessment carried by the case. Human task/inspection completion
+  // must never fabricate an updated risk score or subtract fixed points.
   get currentRisk(): number {
-    if(this.centralCase)return this.centralCase.sourceScore;
-    let score = this.vessel.risk;
-    if (this.isTaskCompleted('verify-certificate')) score -= this.vessel.risk >= 80 ? 12 : 6;
-
-    if (this.isTaskCompleted('priority-inspection')) {
-      score -= this.inspectionOutcome?.riskReduction ?? (['High','Critical'].includes(this.riskEngine.levelForScore(this.vessel.risk)) ? 18 : 8);
-    }
-
-    if (this.isTaskCompleted('enhanced-monitoring')) score -= 3;
-    if (this.isTaskCompleted('restriction-review')) score -= 5;
-    if (this.caseStatus === 'Resolved') score -= 6;
-    return Math.max(12, score);
+    return this.centralCase?.sourceScore ?? this.vessel.risk;
   }
 
-  get riskDelta(): number {
-    return this.centralCase?0:this.currentRisk - this.vessel.risk;
+  get riskReassessmentPending(): boolean {
+    return !!this.centralCase?.inspectionOutcome;
   }
 
   get nextAction(): string {
