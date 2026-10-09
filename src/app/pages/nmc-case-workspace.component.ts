@@ -398,7 +398,9 @@ export class NmcCaseWorkspaceComponent implements OnInit {
       });
     }
 
-    if (high) {
+    // The verified alert may require inspection even when the composite score
+    // is Watch (e.g. critical-open-finding with saved score 60).
+    if (high || this.centralCase?.tasks.some(t => t.id === 'priority-inspection')) {
       tasks.push({
         id: 'priority-inspection',
         title: this.copy('Create priority follow-up inspection', 'إنشاء معاينة متابعة ذات أولوية'),
