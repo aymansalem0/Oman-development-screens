@@ -183,23 +183,14 @@ export class NmcCaseWorkspaceComponent implements OnInit {
     return this.caseState.getInspectionOutcome(this.vessel.imo);
   }
 
+  // Immutable source assessment carried by the case. Human task/inspection completion
+  // must never fabricate an updated risk score or subtract fixed points.
   get currentRisk(): number {
-    if(this.centralCase)return this.centralCase.sourceScore;
-    let score = this.vessel.risk;
-    if (this.isTaskCompleted('verify-certificate')) score -= this.vessel.risk >= 80 ? 12 : 6;
-
-    if (this.isTaskCompleted('priority-inspection')) {
-      score -= this.inspectionOutcome?.riskReduction ?? (['High','Critical'].includes(this.riskEngine.levelForScore(this.vessel.risk)) ? 18 : 8);
-    }
-
-    if (this.isTaskCompleted('enhanced-monitoring')) score -= 3;
-    if (this.isTaskCompleted('restriction-review')) score -= 5;
-    if (this.caseStatus === 'Resolved') score -= 6;
-    return Math.max(12, score);
+    return this.centralCase?.sourceScore ?? this.vessel.risk;
   }
 
-  get riskDelta(): number {
-    return this.centralCase?0:this.currentRisk - this.vessel.risk;
+  get riskReassessmentPending(): boolean {
+    return !!this.centralCase?.inspectionOutcome;
   }
 
   get nextAction(): string {
@@ -370,7 +361,9 @@ export class NmcCaseWorkspaceComponent implements OnInit {
     const critical = level === 'Critical';
     const high = level === 'Critical' || level === 'High';
     const watch = level !== 'Normal';
-    const conflict = this.riskEngine.evaluate(this.vessel).baseScore >= 80;
+    // Synthetic catalog >=80 does not prove a certificate conflict in a saved-AI case.
+    // A future A02 evidence-backed case plan will carry authoritative conflict findings.
+    const conflict = this.centralCase ? false : this.riskEngine.evaluate(this.vessel).baseScore >= 80;
 
     const tasks: CaseTask[] = [];
 
@@ -407,7 +400,9 @@ export class NmcCaseWorkspaceComponent implements OnInit {
       });
     }
 
-    if (high) {
+    // The verified alert may require inspection even when the composite score
+    // is Watch (e.g. critical-open-finding with saved score 60).
+    if (high || this.centralCase?.tasks.some(t => t.id === 'priority-inspection')) {
       tasks.push({
         id: 'priority-inspection',
         title: this.copy('Create priority follow-up inspection', 'إنشاء معاينة متابعة ذات أولوية'),

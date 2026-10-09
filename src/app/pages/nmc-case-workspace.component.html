@@ -58,14 +58,14 @@
 
       <div class="case-metrics">
         <article class="metric-card risk" [ngClass]="riskClass">
-          <small>{{copy('Saved AI Risk Score','درجة مخاطر AI المحفوظة')}}</small>
+          <small>{{copy('Risk at case creation (saved AI assessment)','المخاطر عند فتح الحالة (تقييم AI المحفوظ)')}}</small>
           <strong>{{ currentRisk }}</strong>
           <span>{{ riskLevelLabel }}</span>
         </article>
         <article class="metric-card">
-          <small>{{ copy('Risk change', 'تغير المخاطر') }}</small>
-          <strong [class.positive-change]="riskDelta < 0">{{ riskDelta > 0 ? '+' : '' }}{{ riskDelta }}</strong>
-          <span>{{ copy('from', 'من') }} {{ vessel.risk }}</span>
+          <small>{{ copy('Post-inspection risk reassessment', 'إعادة تقييم المخاطر بعد المعاينة') }}</small>
+          <strong>{{ riskReassessmentPending ? copy('Pending', 'مطلوبة') : copy('Not performed', 'لم تُجرَ') }}</strong>
+          <span>{{ copy('No assumed risk reduction', 'لا يوجد تخفيض افتراضي للمخاطر') }}</span>
         </article>
         <article class="metric-card">
           <small>{{ copy('Case progress', 'تقدم الحالة') }}</small>
@@ -228,11 +228,11 @@
                   <small>{{ completedTasks }}/{{ tasks.length }} {{ copy('tasks complete', 'مهام مكتملة') }}</small>
                 </p>
               </div>
-              <div [class.complete]="currentRisk < vessel.risk">
-                <span>{{ currentRisk < vessel.risk ? '✓' : '○' }}</span>
+              <div>
+                <span>○</span>
                 <p>
-                  <strong>{{ copy('Risk recalculated', 'تمت إعادة احتساب المخاطر') }}</strong>
-                  <small>{{ vessel.risk }} → {{ currentRisk }}</small>
+                  <strong>{{ copy('Post-inspection risk reassessment not recorded', 'لم يتم تسجيل إعادة تقييم المخاطر بعد المعاينة') }}</strong>
+                  <small>{{ copy('The original saved AI assessment remains unchanged; a new evidence-based evaluation is required.', 'يبقى تقييم AI الأصلي كما هو؛ ويلزم تقييم جديد بناءً على الأدلة.') }}</small>
                 </p>
               </div>
             </div>

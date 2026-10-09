@@ -69,6 +69,9 @@ export class NmcSmartInspectionComponent implements OnInit {
       next:result=>{
         this.centralLoading=false;
         this.centralCase=result.case?.status==='RESOLVED'?null:result.case;
+        // Rebuild after loading the central source assessment so severity isn't
+        // inferred from the unrelated 87-point catalog fixture.
+        this.buildChecklist();
         if(this.centralCase?.inspectionOutcome){
           const o=this.centralCase.inspectionOutcome;
           this.existingOutcome={...o,riskReduction:0,inspector:'Smart Inspection',
@@ -115,8 +118,14 @@ export class NmcSmartInspectionComponent implements OnInit {
     return `NMC-INS-2026-${this.vessel.imo.slice(-4)}`;
   }
 
+  // Case-originated inspection must use the saved AI assessment at case creation,
+  // not the unrelated synthetic vessel-catalog risk (e.g. 87 vs saved 60).
+  get incomingRisk(): number {
+    return this.centralCase?.sourceScore ?? this.vessel.risk;
+  }
+
   get riskLabel(): string {
-    const level = this.riskEngine.levelForScore(this.vessel.risk);
+    const level = this.riskEngine.levelForScore(this.incomingRisk);
     const map: Record<string,string> = {
       Critical: this.copy('Critical', 'حرج'),
       High: this.copy('High', 'مرتفع'),
@@ -127,7 +136,7 @@ export class NmcSmartInspectionComponent implements OnInit {
   }
 
   get riskClass(): string {
-    return this.riskEngine.levelForScore(this.vessel.risk).toLowerCase();
+    return this.riskEngine.levelForScore(this.incomingRisk).toLowerCase();
   }
 
   get completedChecks(): number {
@@ -160,13 +169,8 @@ export class NmcSmartInspectionComponent implements OnInit {
     return this.copy('Cleared', 'مستوفاة');
   }
 
-  get estimatedRiskReduction(): number {
-    if (!this.canSubmit) return 0;
-    if (this.criticalFindings > 0) return 4;
-    if (this.majorFindings > 0) return 10;
-    if (this.findings.length > 0) return 14;
-    return ['High','Critical'].includes(this.riskEngine.levelForScore(this.vessel.risk)) ? 18 : 8;
-  }
+  // Inspection Pass/Fail alone is not a new five-factor A01/A02 risk assessment.
+  // Until evidence refresh + deterministic recalculation completes, risk impact is UNKNOWN.
 
   setStatus(item: InspectionCheck, status: CheckStatus): void {
     item.status = status;
@@ -205,7 +209,7 @@ export class NmcSmartInspectionComponent implements OnInit {
       result,
       findingsCount: this.findings.length,
       criticalFindings: this.criticalFindings,
-      riskReduction: this.estimatedRiskReduction,
+      riskReduction: 0, // compatibility-only local DTO; never treated as verified risk impact
       summary: this.generalNote.trim() || summary,
       inspector: this.inspectorName.trim()
     };
@@ -245,7 +249,7 @@ export class NmcSmartInspectionComponent implements OnInit {
   }
 
   private buildChecklist(): void {
-    const level = this.riskEngine.levelForScore(this.vessel.risk);
+    const level = this.riskEngine.levelForScore(this.incomingRisk);
     const critical = level === 'Critical';
     const high = level === 'Critical' || level === 'High';
 
