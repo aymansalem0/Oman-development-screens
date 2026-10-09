@@ -13,8 +13,8 @@
       <button type="button" class="language-btn" (click)="toggleLanguage()">{{ lang.isArabic ? 'English' : 'العربية' }}</button>
       <a class="back-btn" routerLink="/moei/nmc">{{ lang.isArabic ? 'العودة إلى مركز القيادة →' : '← Back to Command Center' }}</a>
       <button type="button" class="secondary-btn">{{ copy('Export vessel brief', 'تصدير ملخص السفينة') }}</button>
-      <a class="secondary-btn ai-assessment-btn" [routerLink]="['/moei/nmc/vessel', vessel.imo, 'ai-assessment']">
-        ✦ {{ copy('AI Situation Assessment', 'تقييم الموقف بالذكاء الاصطناعي') }}
+      <a class="secondary-btn ai-assessment-btn" [routerLink]="['/moei/nmc/vessel', vessel.imo, 'risk']">
+        ✦ {{ copy('Risk Intelligence & Explainability', 'تحليل وتفسير المخاطر') }}
       </a>
       <a class="primary-btn case-link-btn" [routerLink]="['/moei/nmc/vessel', vessel.imo, 'case']">
         ▣ {{ copy('Open NMC Case', 'فتح حالة بالمركز البحري') }}
