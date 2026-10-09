@@ -65,7 +65,7 @@
           <span class="nav-icon">⚠</span>
           <span class="nav-label">{{ copy('Risk Management', 'إدارة المخاطر') }}</span>
         </a>
-        <a class="nav-link" routerLink="/moei/nmc/admin/data-quality"
+        <a class="nav-link" routerLink="/moei/nmc/admin/data-quality" [queryParams]="selectedImo ? { imo: selectedImo } : null"
            [class.active]="isQualityConfig" [attr.aria-current]="isQualityConfig ? 'page' : null"
            [title]="copy('Data Quality Management', 'إدارة جودة البيانات')">
           <span class="nav-icon">▤</span>
