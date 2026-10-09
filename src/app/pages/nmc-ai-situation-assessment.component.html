@@ -270,6 +270,11 @@
               </button>
             </div>
 
+            <button *ngIf="centralCase && item.decision!=='Pending'" type="button"
+                    (click)="saveDecision(item)" [disabled]="centralBusy"
+                    class="case-decision-save">
+              ✓ {{copy('Save Decision to Case','حفظ القرار في الحالة')}}
+            </button>
             <div class="officer-note" *ngIf="item.decision === 'Modified' || item.decision === 'Rejected'">
               <label>
                 {{ item.decision === 'Rejected'
