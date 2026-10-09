@@ -68,23 +68,41 @@ export class NmcAlertWorkspace {
     });
   }
 
-  async overview(){
+  async overview(projections=null){
     const alerts=await this.list();
+    const byImo=projections?new Map(projections.projections.map(p=>[p.imo,p])):null;
+    for(const a of alerts){
+      const p=byImo?.get(a.imo);
+      if(!p)continue;
+      a.effectiveRiskScore=p.riskScore;
+      a.effectiveRiskLevel=p.riskLevel;
+      a.effectivePriority=p.operationalPriority;
+      a.effectivePolicyRevision=p.policyRevision;
+      a.effectivePolicyRef=p.policyVersion;
+      a.effectiveAssessmentId=p.sourceAssessmentId;
+      a.policyApplicable=p.criticalOpenFinding||
+        p.riskLevel==='High'||p.riskLevel==='Critical';
+      a.effectiveSeverity=p.criticalOpenFinding||p.riskLevel==='Critical'?
+        'CRITICAL':p.riskLevel==='High'?'HIGH':a.severity;
+      a.effectiveTrigger=p.criticalOpenFinding?'CRITICAL_OPEN_FINDING':'RISK_BAND';
+    }
     const summary={
       total:alerts.length,active:0,open:0,acknowledged:0,
       inProgress:0,escalated:0,critical:0,high:0,unread:0
     };
     for(const a of alerts){
-      if(!isActive(a))continue;
+      if(!isActive(a)||a.policyApplicable===false)continue;
       summary.active++;
       if(a.status==='OPEN'){summary.open++;summary.unread++;}
       if(a.status==='ACKNOWLEDGED')summary.acknowledged++;
       if(a.status==='IN_PROGRESS')summary.inProgress++;
       if(a.status==='ESCALATED'){summary.escalated++;summary.unread++;}
-      if(a.severity==='CRITICAL')summary.critical++;
-      if(a.severity==='HIGH')summary.high++;
+      if((a.effectiveSeverity||a.severity)==='CRITICAL')summary.critical++;
+      if((a.effectiveSeverity||a.severity)==='HIGH')summary.high++;
     }
-    return {status:'ok',alerts,summary,updatedAt:now()};
+    return {status:'ok',alerts,summary,updatedAt:now(),
+      riskPolicyRevision:projections?.policyRevision||null,
+      riskPolicyRef:projections?.policyRef||null};
   }
 
   /**
@@ -99,6 +117,7 @@ export class NmcAlertWorkspace {
     try{
       const current=await this.list();
       const byKey=new Set(current.map(row=>row.alertKey));
+      const alreadyActive=new Set(current.filter(a=>a.status!=='RESOLVED').map(a=>a.imo));
       for(const row of Object.values(snapshot?.results||{})){
         if(row?.status!=='COMPLETED'||!validImo(row.imo)||!Number.isFinite(row.score))continue;
         const critical=row.level==='Critical'||row.criticalOpenFinding===true;
@@ -106,7 +125,7 @@ export class NmcAlertWorkspace {
         if(!critical&&!high)continue;
         const severity=critical?'CRITICAL':'HIGH';
         const alertKey=`AI_RISK:${row.imo}:${severity}`;
-        if(byKey.has(alertKey))continue;
+        if(byKey.has(alertKey)||alreadyActive.has(row.imo))continue;
         const sourceId=typeof row.assessmentId==='string'?
           row.assessmentId.slice(0,100):null;
         const title=critical?'Critical maritime risk requires review':
@@ -118,14 +137,19 @@ export class NmcAlertWorkspace {
           id:randomUUID(),alertKey,imo:row.imo,
           severity,status:'OPEN',assignedRole:'NMC_OFFICER',
           source:'SAVED_AI_ASSESSMENT',sourceAssessmentId:sourceId,
-          sourceScore:row.score,sourceLevel:row.level,
-          sourceRulesetVersion:row.configVersion||null,
+          sourceScore:Number.isFinite(row.sourceAiScore)?row.sourceAiScore:row.score,
+          sourceLevel:row.sourceAiLevel||row.level,
+          sourceRulesetVersion:row.sourceAiScore!==undefined?
+            (row.aiRulesetVersion||'SAVED_AI_SOURCE'):row.configVersion||null,
+          triggeredByPolicyVersion:row.configVersion||null,
+          triggeredByPolicyRevision:row.riskPolicyRevision||null,
+          triggeringRiskScore:row.score,triggeringRiskLevel:row.level,
           title,detail,actionHint:'Review vessel evidence and decide follow-up',
           version:1,createdAt:now(),updatedAt:now(),
           provenance:'SYNTHETIC_POC_NON_REGULATORY'
         };
         const inserted=await this._insert(item);
-        if(inserted){byKey.add(alertKey);created++;}
+        if(inserted){byKey.add(alertKey);alreadyActive.add(row.imo);created++;}
       }
       // Business monitoring threshold, not an MOEI contractual SLA.
       for(const item of await this.list()){
