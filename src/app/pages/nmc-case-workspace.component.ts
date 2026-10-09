@@ -111,7 +111,7 @@ export class NmcCaseWorkspaceComponent implements OnInit {
   }
 
   get riskClass(): string {
-    return this.riskEngine.levelForScore(this.currentRisk).toLowerCase();
+    return (this.centralCase?.sourceLevel||this.riskEngine.levelForScore(this.currentRisk)).toLowerCase();
   }
 
   get completedTasks(): number {
