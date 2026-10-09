@@ -83,6 +83,54 @@ test('Actual A01 actions are validated against stored evidence, not inferred ris
  assert.throws(()=>normalizeA01Actions({signals:[]},
    {imo,assessmentId:'A-1',score:60,level:'Watch',signals}),/A01_ACTIONS_NOT_AVAILABLE/);
 });
+test('A01 accepts safe camelCase and uppercase naming without inventing actions',()=>{
+  const proposal=(actionId,actionType)=>({
+    actionId,actionType,priority:'HIGH',confidence:0.91,requiresHumanApproval:true
+  });
+  const ctx={imo,assessmentId:'A-1',score:60,level:'Watch',configVersion:'v1',signals};
+  const raw={evidence:[{type:'INSPECTION',evidenceIds:['INS-2026-01301']}],
+    proposedActions:[proposal('Priority_Inspection_01','priorityInspection')]};
+  const normalized=normalizeA01Actions(raw,ctx);
+  assert.equal(normalized.proposedActions[0].actionId,'priority-inspection-01');
+  assert.equal(normalized.proposedActions[0].actionType,'PRIORITY_INSPECTION');
+  assert.deepEqual(normalized.proposedActions[0].evidenceIds,['INS-2026-01301']);
+  const alias=normalizeA01Actions({...raw,
+    proposedActions:[proposal('PRIORITY_02','REQUEST_PRIORITY_INSPECTION')]},ctx);
+  assert.equal(alias.proposedActions[0].actionType,'PRIORITY_INSPECTION');
+  assert.equal(alias.proposedActions[0].actionId,'priority-02');
+});
+
+test('A01 rejects unknown actions and normalized duplicate IDs with precise, safe diagnostics',()=>{
+  const ctx={imo,assessmentId:'A-1',score:60,level:'Watch',configVersion:'v1',signals};
+  const proposal=(actionId,actionType)=>({
+    actionId,actionType,priority:'HIGH',confidence:0.91,requiresHumanApproval:true
+  });
+  assert.throws(()=>normalizeA01Actions({proposedActions:[
+    proposal('action-1','DETENTION_ORDER')
+  ]},ctx),error=>{
+    assert.equal(error.code,'A01_ACTION_TYPE_UNSUPPORTED');
+    assert.deepEqual(error.details,{actionIndex:1,actionType:'DETENTION_ORDER'});
+    return true;
+  });
+  assert.throws(()=>normalizeA01Actions({proposedActions:[
+    proposal('Verify_Certificate','VERIFY_CERTIFICATE'),
+    proposal('verify-certificate','VERIFY_CERTIFICATE')
+  ]},ctx),error=>{
+    assert.equal(error.code,'A01_ACTION_ID_DUPLICATE');
+    assert.deepEqual(error.details,{actionIndex:2,actionId:'verify-certificate'});
+    return true;
+  });
+  assert.throws(()=>normalizeA01Actions({proposedActions:[
+    proposal(undefined,'VERIFY_CERTIFICATE')
+  ]},ctx),error=>{
+    assert.equal(error.code,'A01_ACTION_ID_INVALID');
+    assert.equal(error.details.actionIndex,1);
+    return true;
+  });
+  assert.throws(()=>normalizeA01Actions({proposedActions:[null]},ctx),
+    /A01_ACTION_ID_INVALID/);
+});
+
 test('A01 plan cannot be published twice and does not create tasks before human approval',async()=>{
  const db=setup();
  try{
