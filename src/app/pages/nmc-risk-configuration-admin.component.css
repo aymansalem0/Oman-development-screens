@@ -328,3 +328,9 @@ a,button,input,textarea { font:inherit; }
   .impact-row { grid-template-columns:1fr; }
   .impact-row.header { display:none; }
 }
+
+.risk-admin-readiness{margin:0 0 15px;background:#e9f5fc;border:1px solid #bcdde9;border-radius:13px;padding:15px 20px;display:flex;justify-content:space-between;gap:15px;align-items:center;color:#27536b}
+.risk-admin-readiness strong{font-size:13px}.risk-admin-readiness p{font-size:11px;line-height:1.65;margin:5px 0}
+.risk-admin-readiness .risk-admin-error{color:#a73535;font-weight:750}
+.risk-admin-readiness button{padding:10px 13px;border:1px solid #a6cada;background:#fff;border-radius:8px;white-space:nowrap;color:#27536b;cursor:pointer}
+@media(max-width:900px){.risk-admin-readiness{flex-direction:column;align-items:flex-start}}
