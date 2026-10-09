@@ -94,7 +94,10 @@ export class DashboardWorkspace {
 
   async get(id){
     if(!keyPattern.test(id))throw new DashboardError('DASHBOARD_ID_INVALID');
-    if(this.mode==='json')return clone(this._load().dashboards[id]||null);
+    if(this.mode==='json'){
+      const row=this._load().dashboards[id];
+      return row&&row.status!=='ARCHIVED'?clone(row):null;
+    }
     return this._db(async con=>{
       const out=await con.execute(`SELECT DOC_JSON FROM NMC_DASHBOARD WHERE DASHBOARD_ID=:id
         AND STATUS<>'ARCHIVED'`,{id},{outFormat:oracledb.OUT_FORMAT_OBJECT});
