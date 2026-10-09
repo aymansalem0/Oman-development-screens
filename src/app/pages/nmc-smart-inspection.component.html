@@ -50,7 +50,7 @@
       <div class="hero-metrics">
         <article class="metric-card risk" [ngClass]="riskClass">
           <small>{{ copy('Incoming risk', 'المخاطر عند الاستلام') }}</small>
-          <strong>{{ vessel.risk }}</strong>
+          <strong>{{ incomingRisk }}</strong>
           <span>{{ riskLabel }}</span>
         </article>
         <article class="metric-card">
@@ -64,9 +64,9 @@
           <span>{{ criticalFindings }} {{ copy('critical', 'حرجة') }}</span>
         </article>
         <article class="metric-card impact">
-          <small>{{ copy('Estimated risk change', 'التغير المتوقع في المخاطر') }}</small>
-          <strong>-{{ estimatedRiskReduction }}</strong>
-          <span>{{ copy('after completion', 'بعد الاستكمال') }}</span>
+          <small>{{ copy('Post-inspection risk', 'المخاطر بعد المعاينة') }}</small>
+          <strong>{{ copy('Pending', 'بانتظار التقييم') }}</strong>
+          <span>{{ copy('Evidence refresh and recalculation required', 'يلزم تحديث الأدلة وإعادة الحساب') }}</span>
         </article>
       </div>
     </section>
@@ -162,12 +162,12 @@
             <div class="impact-preview">
               <div>
                 <small>{{ copy('Incoming risk', 'المخاطر عند الاستلام') }}</small>
-                <strong>{{ vessel.risk }}</strong>
+                <strong>{{ incomingRisk }}</strong>
               </div>
               <span>→</span>
               <div>
-                <small>{{ copy('Expected after return to NMC', 'المتوقع بعد الإرجاع إلى NMC') }}</small>
-                <strong>{{ vessel.risk - estimatedRiskReduction }}</strong>
+                <small>{{ copy('After return to NMC', 'بعد العودة إلى المركز البحري') }}</small>
+                <strong>{{ copy('Reassessment pending', 'بانتظار إعادة التقييم') }}</strong>
               </div>
             </div>
 
@@ -193,7 +193,7 @@
           </div>
           <div class="outcome-body">
             <span class="outcome-badge">{{ existingOutcome.result }}</span>
-            <strong>-{{ existingOutcome.riskReduction }} {{ copy('risk impact', 'تأثير على المخاطر') }}</strong>
+            <strong>{{ copy('Risk impact pending evidence-based reassessment', 'تأثير المعاينة على المخاطر ينتظر إعادة التقييم المستند إلى الأدلة') }}</strong>
             <p>{{ existingOutcome.summary }}</p>
             <small>{{ existingOutcome.completedAt }} · {{ existingOutcome.inspector }}</small>
           </div>
