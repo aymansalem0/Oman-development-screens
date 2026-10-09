@@ -112,10 +112,13 @@ test('A01 rejects unknown actions and normalized duplicate IDs with precise, saf
     assert.deepEqual(error.details,{actionIndex:1,actionType:'DETENTION_ORDER'});
     return true;
   });
-  assert.throws(()=>normalizeA01Actions({proposedActions:[
-    proposal('Verify_Certificate','VERIFY_CERTIFICATE'),
-    proposal('verify-certificate','VERIFY_CERTIFICATE')
-  ]},ctx),error=>{
+  assert.throws(()=>normalizeA01Actions({
+    evidence:[{type:'CERTIFICATE',evidenceIds:['CERT-SC-9328471']}],
+    proposedActions:[
+      proposal('Verify_Certificate','VERIFY_CERTIFICATE'),
+      proposal('verify-certificate','VERIFY_CERTIFICATE')
+    ]
+  },ctx),error=>{
     assert.equal(error.code,'A01_ACTION_ID_DUPLICATE');
     assert.deepEqual(error.details,{actionIndex:2,actionId:'verify-certificate'});
     return true;
