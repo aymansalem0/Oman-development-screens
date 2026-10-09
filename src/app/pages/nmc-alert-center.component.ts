@@ -81,14 +81,20 @@ export class NmcAlertCenterComponent implements OnInit,OnDestroy{
       return;
     }
     if(!window.confirm(this.copy(
-      'Open a central maritime case linked to this acknowledged alert?',
-      'فتح حالة بحرية مركزية مرتبطة بهذا التنبيه المستلم؟'
+      'Create the maritime case AND call Airia A01 once to prepare real evidence-backed recommendations? The agent call may incur usage cost. No tasks will be created until you approve the recommendations.',
+      'إنشاء الحالة البحرية مع استدعاء Airia A01 مرة واحدة لإعداد توصيات حقيقية مدعومة بالأدلة؟ قد يترتب على الاستدعاء تكلفة استخدام. لن تُنشأ مهام حتى تعتمد التوصيات.'
     )))return;
     this.creatingCase=alert.id;
     this.subs.add(this.cases.createFromAlert(alert.id).subscribe({
       next:result=>{
         this.creatingCase='';
-        if(result.case)void this.router.navigate(['/moei/nmc/vessel',result.case.imo,'case']);
+        if(result.case){
+          const aiError=result.aiActionPlanStatus==='FAILED'
+            ?result.aiActionPlanError?.code||'A01_ACTION_PLAN_UNAVAILABLE':null;
+          void this.router.navigate(['/moei/nmc/vessel',result.case.imo,'case'],{
+            queryParams:aiError?{aiError}:undefined
+          });
+        }
         else this.error=this.copy('Case was not returned by the server.','لم يُرجع الخادم بيانات الحالة.');
       },
       error:error=>{
