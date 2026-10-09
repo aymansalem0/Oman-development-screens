@@ -117,7 +117,7 @@ export class NmcRiskConfigurationAdminComponent implements OnInit, OnDestroy {
               const vessel=lookup.get(validImos[i]);
               if(!vessel||!assessment||assessment.status!=='COMPLETED'||
                  assessment.authoritative!==false||!Number.isFinite(assessment.score)||
-                 !assessment.assessmentId||
+                 !assessment.assessmentId||!Array.isArray(assessment.signals)||
                  !this.factorKeys.every(key=>assessment.signals.filter(x=>
                    x.factor===key&&Number.isFinite(x.severity)).length===1))return [];
               return [{vessel,assessment}];
