@@ -1964,3 +1964,8 @@ button {
     grid-template-columns: 1fr;
   }
 }
+
+/* Dedicated MOEI/NMC screens supply their own navigation and ministry branding. */
+.app-shell.nmc-mode .workspace,
+.app-shell.rtl.nmc-mode .workspace { width: 100%; margin: 0; }
+.app-shell.nmc-mode .page-content { padding: 0; }
