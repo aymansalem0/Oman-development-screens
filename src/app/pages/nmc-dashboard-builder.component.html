@@ -114,7 +114,7 @@
         <div>
           <span class="db-kicker">{{viewOnly?copy('PUBLISHED DASHBOARD','لوحة معلومات منشورة'):copy('DASHBOARD DESIGNER','مصمم لوحات المعلومات')}}</span>
           <h2>{{board.title}}</h2>
-          <p>{{copy('Preview the current risk picture while you configure your own dashboard.','عاين المخاطر الحالية أثناء تصميم لوحة المعلومات وتخصيصها.')}}</p>
+          <p>{{viewOnly?copy('Maritime operational intelligence · Published view','مؤشرات التشغيل البحري · نسخة منشورة'):copy('Preview the current risk picture while you configure your own dashboard.','عاين المخاطر الحالية أثناء تصميم لوحة المعلومات وتخصيصها.')}}</p>
         </div>
         <div class="db-heading-actions">
           <button class="db-outline" type="button" (click)="back()">← {{copy('All Dashboards','كل اللوحات')}}</button>
@@ -130,7 +130,7 @@
         <span>● {{copy('Risk rules','قواعد المخاطر')}}: {{riskVersion}}</span>
         <span>{{copy('Available assessments','التقييمات المتاحة')}}: {{assessed.length}} / {{fleet.length}}</span>
         <span *ngIf="lastRefresh">{{copy('Updated','آخر تحديث')}}: {{lastRefresh | date:'shortTime'}}</span>
-        <span *ngIf="dirty" class="db-unsaved">{{copy('Unsaved changes','تغييرات غير محفوظة')}}</span>
+        <span *ngIf="dirty&&!viewOnly" class="db-unsaved">{{copy('Unsaved changes','تغييرات غير محفوظة')}}</span>
       </div>
       <p class="db-message" *ngIf="saveMessage">{{saveMessage}}</p>
       <p class="db-error" *ngIf="dataError">{{dataError}}</p>
@@ -184,7 +184,7 @@
 
         <section class="db-canvas">
           <div class="db-canvas-header">
-            <div><span class="db-kicker">{{copy('LIVE PREVIEW','المعاينة المباشرة')}}</span>
+            <div><span class="db-kicker">{{viewOnly?copy('MARITIME DASHBOARD','لوحة المعلومات البحرية'):copy('LIVE PREVIEW','المعاينة المباشرة')}}</span>
               <h3>{{board.title}}</h3>
               <small>{{filtered.length}} {{copy('vessels matching selected filters','سفينة وفق الفلاتر المختارة')}}</small>
             </div>
@@ -199,13 +199,14 @@
           <div class="db-widgets">
             <article class="db-widget" *ngFor="let widget of board.widgets; let i=index"
                   [class.db-full]="widget.span==='full'"
-                  draggable="true" (dragstart)="onDragStart($event,widget.id)"
+                  [draggable]="!viewOnly" (dragstart)="onDragStart($event,widget.id)"
                   (dragover)="onDragOver($event)" (drop)="onDrop($event,widget.id)"
                   (dragend)="draggedId=null">
               <div class="db-widget-head">
-                <span class="db-drag" [title]="copy('Drag to reorder','اسحب لإعادة الترتيب')">⠿</span>
-                <input class="db-widget-title" [(ngModel)]="widget.title" (ngModelChange)="touch()" maxlength="100" [attr.aria-label]="copy('Widget title','عنوان المؤشر')"/>
-                <span class="db-widget-tools">
+                <span class="db-drag" *ngIf="!viewOnly" [title]="copy('Drag to reorder','اسحب لإعادة الترتيب')">⠿</span>
+                <strong *ngIf="viewOnly" class="db-widget-title db-readonly-title">{{widget.title}}</strong>
+                <input *ngIf="!viewOnly" class="db-widget-title" [(ngModel)]="widget.title" (ngModelChange)="touch()" maxlength="100" [attr.aria-label]="copy('Widget title','عنوان المؤشر')"/>
+                <span class="db-widget-tools" *ngIf="!viewOnly">
                   <button type="button" (click)="moveWidget(widget.id,-1)" [disabled]="i===0" [title]="copy('Move up','تحريك لأعلى')">↑</button>
                   <button type="button" (click)="moveWidget(widget.id,1)" [disabled]="i===board.widgets.length-1" [title]="copy('Move down','تحريك لأسفل')">↓</button>
                   <button type="button" (click)="changeWidth(widget)" [title]="copy('Toggle widget width','تغيير عرض المؤشر')">⇔</button>
@@ -213,7 +214,7 @@
                 </span>
               </div>
 
-              <div class="db-widget-config">
+              <div class="db-widget-config" *ngIf="!viewOnly">
                 <label>{{copy('Indicator','المؤشر')}}
                   <select [(ngModel)]="widget.metric" (ngModelChange)="changeMetric(widget)">
                     <option *ngFor="let option of catalog[widget.type]" [value]="option.value">{{copy(option.en,option.ar)}}</option>
