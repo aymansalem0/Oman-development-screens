@@ -30,56 +30,7 @@
     </div>
   </header>
 
-  <aside class="nmc-sidebar">
-    <div class="sidebar-section-label">{{ copy('OPERATIONS', 'العمليات') }}</div>
-
-    <button type="button" class="nav-item active">
-      <span class="nav-icon">◉</span>
-      <span>{{ copy('Command Center', 'مركز القيادة') }}</span>
-    </button>
-    <button type="button" class="nav-item">
-      <span class="nav-icon">⌖</span>
-      <span>{{ copy('Vessel Monitoring', 'مراقبة السفن') }}</span>
-      <span class="count-badge">{{ monitoredCount }}</span>
-    </button>
-    <button type="button" class="nav-item">
-      <span class="nav-icon">⚠</span>
-      <span>{{ copy('Alerts & Events', 'التنبيهات والأحداث') }}</span>
-      <span class="count-badge warning">{{ attentionCount }}</span>
-    </button>
-    <button type="button" class="nav-item">
-      <span class="nav-icon">▣</span>
-      <span>{{ copy('Cases & Incidents', 'الحالات والحوادث') }}</span>
-      <span class="count-badge">4</span>
-    </button>
-    <button type="button" class="nav-item">
-      <span class="nav-icon">✓</span>
-      <span>{{ copy('Smart Inspection', 'المعاينة الذكية') }}</span>
-    </button>
-
-    <div class="sidebar-section-label second">{{ copy('INTELLIGENCE', 'الاستخبارات') }}</div>
-
-    <button type="button" class="nav-item">
-      <span class="nav-icon">✦</span>
-      <span>{{ copy('Maritime Intelligence', 'الاستخبارات البحرية') }}</span>
-    </button>
-    <button type="button" class="nav-item">
-      <span class="nav-icon">▥</span>
-      <span>{{ copy('Dashboards', 'لوحات المعلومات') }}</span>
-    </button>
-    <a class="nav-item" routerLink="/moei/nmc/admin/risk-configuration">
-      <span class="nav-icon">⚙</span>
-      <span>{{ copy('Configuration', 'الإعدادات') }}</span>
-    </a>
-
-    <div class="system-health">
-      <div>
-        <span class="health-dot"></span>
-        <strong>{{ copy('Systems operational', 'الأنظمة تعمل بصورة طبيعية') }}</strong>
-      </div>
-      <small>{{ copy('Synthetic sources · live PSC only when configured', 'مصادر تجريبية · PSC متصل عند تهيئته') }}</small>
-    </div>
-  </aside>
+  <app-nmc-navigation></app-nmc-navigation>
 
   <main class="nmc-main">
     <section class="page-heading">
