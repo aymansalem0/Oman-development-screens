@@ -6,6 +6,7 @@ import { LanguageService } from '../services/language.service';
 import { DashboardMenuPlacement } from '../services/nmc-dashboard-store.service';
 import { NmcDashboardNavigationService } from '../services/nmc-dashboard-navigation.service';
 import { PublishedDashboardMenuItem } from '../services/nmc-dashboard-workspace.service';
+import { NmcAlertsService } from '../services/nmc-alerts.service';
 
 /**
  * Unified business navigation. Published dashboard links are server-driven,
@@ -29,6 +30,7 @@ export class NmcNavigationComponent implements OnInit, OnDestroy {
   currentPath = '';
   selectedImo: string | null = null;
   publishedDashboards: PublishedDashboardMenuItem[] = [];
+  unreadAlerts = 0;
   private readonly subscriptions = new Subscription();
   private refreshTimer?: ReturnType<typeof setInterval>;
   private readonly selectedKey = 'moei-nmc-selected-vessel-imo';
@@ -36,7 +38,8 @@ export class NmcNavigationComponent implements OnInit, OnDestroy {
   constructor(
     private readonly router: Router,
     public readonly lang: LanguageService,
-    private readonly dashboardNavigation: NmcDashboardNavigationService
+    private readonly dashboardNavigation: NmcDashboardNavigationService,
+    private readonly alertsService: NmcAlertsService
   ) {}
 
   ngOnInit(): void {
@@ -55,11 +58,13 @@ export class NmcNavigationComponent implements OnInit, OnDestroy {
     ).subscribe(event => {
       this.updateRoute(event.urlAfterRedirects);
       this.dashboardNavigation.refresh();
+      this.refreshAlertCount();
       this.mobileOpen = false;
     }));
     this.dashboardNavigation.refresh();
+    this.refreshAlertCount();
     // Publication from another browser is reflected without requiring reload.
-    this.refreshTimer = setInterval(() => this.dashboardNavigation.refresh(), 30000);
+    this.refreshTimer = setInterval(() => {this.dashboardNavigation.refresh();this.refreshAlertCount();}, 30000);
   }
 
   ngOnDestroy(): void {
@@ -68,6 +73,15 @@ export class NmcNavigationComponent implements OnInit, OnDestroy {
   }
 
   copy(en: string, ar: string): string { return this.lang.pick(en, ar); }
+
+  get isAlertCenter():boolean{return this.currentPath==='/moei/nmc/alerts';}
+  private refreshAlertCount():void{
+    const req=this.alertsService.overview().subscribe({
+      next:result=>{this.unreadAlerts=result.summary.unread;},
+      error:()=>{this.unreadAlerts=0;}
+    });
+    this.subscriptions.add(req);
+  }
 
   dashboardItems(area: DashboardMenuPlacement): PublishedDashboardMenuItem[] {
     return this.publishedDashboards.filter(item => item.menuPlacement === area);
