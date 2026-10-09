@@ -103,6 +103,27 @@ export class NmcCaseWorkspaceComponent implements OnInit {
     });
   }
 
+  private loadCentralHistory():void{
+    if(!this.centralCase)return;
+    this.cases.history(this.centralCase.id).subscribe({
+      next:response=>{
+        this.timeline=response.history.map(event=>({
+          time:new Date(event.at).toLocaleString(),
+          type:event.action==='RESOLVED'?'Resolution':
+            event.action.includes('ESCALATE')?'Escalation':
+            event.action==='DECISION_RECORDED'?'Decision':
+            event.action==='INSPECTION_RECORDED'?'Inspection':'Task',
+          title:event.action.replaceAll('_',' '),
+          detail:event.note||this.copy('Action recorded','تم تسجيل الإجراء'),
+          actor:event.role
+        }));
+      },
+      error:()=>{
+        this.centralError=this.copy('Case history is unavailable.','سجل أنشطة الحالة غير متاح.');
+      }
+    });
+  }
+
   copy(en: string, ar: string): string {
     return this.lang.pick(en, ar);
   }
