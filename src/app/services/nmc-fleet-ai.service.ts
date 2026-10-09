@@ -46,6 +46,41 @@ export interface FleetAiSnapshot {
   };
   results: Record<string,FleetAiVessel>;
 }
+export interface FleetAiIntelligence {
+  imo: string;
+  assessmentId: string | null;
+  dataNature: 'SYNTHETIC_POC_NOT_OFFICIAL';
+  independentlyVerifiedDataConfidence: null;
+  quality: {
+    score: number | null;
+    status: 'CALCULATED' | 'INSUFFICIENT_EVIDENCE' | 'NOT_CALCULATED';
+    version: string | null;
+    breakdown: null | {
+      scoreKind: 'STRUCTURAL_QUALITY_NOT_DATA_CONFIDENCE';
+      completenessPercent: number;
+      consistencyPercent: number | null;
+      evidenceLinkagePercent: number | null;
+      provenanceMetadataPercent: number;
+      comparedFields: number;
+      missingFieldSides: number;
+      disagreementCount: number;
+      syntheticUnverifiedScoreCap: number;
+      note: string;
+      reconstructionNotice?: string;
+    };
+  };
+  conflicts: Array<{
+    CONFLICT_ID: string;
+    FIELD_NAME: string;
+    STATUS: 'PENDING_REVIEW' | 'CONFIRMED' | 'DISMISSED' | 'RESOLVED';
+    CONFLICT_SUMMARY: string;
+    SOURCE_A_EVIDENCE_ID: string | null;
+    SOURCE_B_EVIDENCE_ID: string | null;
+    FIRST_DETECTED_ASSESSMENT_ID: string | null;
+    LAST_ASSESSMENT_ID: string | null;
+  }>;
+}
+
 export interface FleetAiHistory {
   imo: string;
   assessments: Array<{
@@ -83,6 +118,9 @@ export class NmcFleetAiService {
   }
   history(imo:string):Observable<FleetAiHistory>{
     return this.http.get<FleetAiHistory>('/api/ai/fleet/history/'+encodeURIComponent(imo));
+  }
+  intelligence(imo:string):Observable<FleetAiIntelligence>{
+    return this.http.get<FleetAiIntelligence>('/api/ai/fleet/intelligence/'+encodeURIComponent(imo));
   }
 
 }
