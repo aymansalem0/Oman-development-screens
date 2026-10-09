@@ -70,6 +70,31 @@
             <label class="guide-checkbox"><input name="enabled" type="checkbox" [(ngModel)]="d.enabled">
               {{copy('Active when published','تُفعّل عند النشر')}}</label>
           </div>
+          <div class="guide-condition-builder">
+            <div class="guide-cond-header">
+              <strong>{{copy('Additional AND Conditions','شروط إضافية مرتبطة بـ AND')}}</strong>
+              <button type="button" [disabled]="(d.additionalConditions?.length||0)>=5" (click)="addCondition()">
+                + {{copy('Add Condition','إضافة شرط')}}</button>
+            </div>
+            <p>{{copy('Every condition must match the saved verified facts. At most six conditions per rule.',
+                     'يجب تحقق كل الشروط من الحقائق المحفوظة؛ الحد الأقصى ستة شروط لكل قاعدة.')}}</p>
+            <div class="guide-extra-condition" *ngFor="let c of d.additionalConditions||[];let i=index">
+              <span>AND</span>
+              <select [(ngModel)]="c.field" [name]="'extraField'+i" (ngModelChange)="onConditionFieldChanged(c)">
+                <option *ngFor="let option of availableFields" [value]="option.value">{{copy(option.en,option.ar)}}</option>
+              </select>
+              <span>{{kind(c.field)==='number'?'≥':'='}}</span>
+              <input *ngIf="kind(c.field)==='number'" type="number" [name]="'extraValueNumber'+i"
+                     [(ngModel)]="c.value" min="0" max="100">
+              <select *ngIf="kind(c.field)==='boolean'" [name]="'extraValueBoolean'+i" [(ngModel)]="c.value">
+                <option [ngValue]="true">True</option><option [ngValue]="false">False</option>
+              </select>
+              <select *ngIf="kind(c.field)==='choice'" [name]="'extraValueChoice'+i" [(ngModel)]="c.value">
+                <option *ngFor="let x of choices(c.field)" [value]="x">{{x}}</option>
+              </select>
+              <button type="button" (click)="removeCondition(i)" [attr.aria-label]="copy('Remove condition','حذف الشرط')">×</button>
+            </div>
+          </div>
           <div class="guide-actions">
             <button class="guide-primary" type="submit" [disabled]="busy">{{copy('Save Draft','حفظ المسودة')}}</button>
             <button type="button" [disabled]="busy||!r.draft" (click)="publish()">{{copy('Publish (Supervisor)','نشر (المشرف)')}}</button>
