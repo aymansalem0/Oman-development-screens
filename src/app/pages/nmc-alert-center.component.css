@@ -94,3 +94,14 @@ button,input,select{font:inherit}
 [dir="rtl"] .decision-panel,[dir="rtl"] .history-panel{margin-left:0;margin-right:52px}
 @media(max-width:1050px){.kpi-cards{grid-template-columns:repeat(2,minmax(0,1fr))}.alerts-main{padding-left:20px;padding-right:20px}.toolbar{align-items:start;flex-direction:column}.controls{width:100%}.controls label{flex:1}.controls input,.controls select{width:100%;min-width:0}}
 @media(max-width:700px){.alerts-main,[dir="rtl"] .alerts-main{margin:0;padding:110px 16px 40px}.topbar{padding:0 15px}.heading{flex-direction:column;align-items:start}.heading h2{font-size:23px}.heading-actions{align-self:stretch}.workspace{padding:15px}.controls{flex-direction:column}.kpi-cards{gap:9px}.kpi-cards article{padding:11px;gap:8px}.stat-icon{height:33px;width:33px;flex-basis:33px}.actions,[dir="rtl"] .actions{padding:14px 0 10px}.decision-panel,.history-panel,[dir="rtl"] .decision-panel,[dir="rtl"] .history-panel{margin:0}.live-pill{display:none}.facts{gap:8px}.alert-card{padding:13px}}
+
+.alerts-policy-preview{display:flex;justify-content:space-between;align-items:center;gap:16px;margin:13px 0 16px;border:1px solid #b8dfe1;background:#eefdfe;border-radius:13px;padding:14px 18px;color:#214e60}
+.alerts-policy-preview strong{font-size:12px;color:#0d6f78}
+.alerts-policy-preview p{margin:6px 0;color:#496e7d;font-size:11px;line-height:1.65}
+.alerts-policy-preview small{display:block;color:#698c9a;font-size:10px;line-height:1.6}
+.alerts-policy-preview .policy-warning{color:#a96812;font-weight:800}
+.alerts-policy-preview>a{white-space:nowrap;flex-shrink:0;padding:10px 13px;border-radius:8px;border:1px solid #a9d6d6;text-decoration:none;color:#0c7575;background:#fff}
+.local-suppressed-pill{padding:5px 8px;border-radius:8px;color:#9a6725;background:#fff1d8;border:1px solid #efd9b1;font-size:10px;font-weight:800}
+.alert-card.local-superseded{background:#f9fafb;border-color:#e3e7eb;box-shadow:none;opacity:.82}
+.local-superseded-note{margin:8px 20px 16px;border-radius:9px;padding:13px 14px;background:#f5f7fa;border:1px solid #dce6eb;color:#536d7e;font-size:11px;line-height:1.6}
+@media(max-width:900px){.alerts-policy-preview{flex-direction:column;align-items:flex-start}}
