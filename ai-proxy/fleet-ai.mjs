@@ -9,6 +9,7 @@ import {mkdirSync, readFileSync, writeFileSync, renameSync, existsSync} from 'no
 import {dirname} from 'node:path';
 import {timingSafeEqual} from 'node:crypto';
 import {catalogFromNmcSource} from './psc-fixtures.mjs';
+import {evaluateDataQuality} from './data-quality.mjs';
 
 const baseTs=readFileSync(new URL('./nmc-vessel-catalog.ts',import.meta.url),'utf8');
 const extraTs=readFileSync(new URL('./nmc-expanded-vessel-catalog.ts',import.meta.url),'utf8');
@@ -281,6 +282,7 @@ export class FleetAssessmentManager {
     ]);
     const signals=verifyFleetSignals(a01,a02,ids,psc.evidenceIds,psc.inspections.length>0);
     const risk=evaluateFleetSignals(signals,cfg);
+    const quality=evaluateDataQuality({bundle:v,psc,signals});
     const internal=v.inlineContext.deficiencies||[];
     const criticalOpen=internal.some(x=>x.status==='Open'&&x.severity==='Critical')||
       psc.deficiencies.some(x=>x.status==='OPEN'&&x.severity==='CRITICAL');
@@ -291,7 +293,7 @@ export class FleetAssessmentManager {
       operationalPriority:priority,criticalOpenFinding:criticalOpen,
       reviewedByHuman:false,authoritative:false,
       sourceMode:psc.sourceMode,pscSummary:psc.summary,
-      signals,configVersion:risk.configVersion,ruleset:cfg,
+      signals,quality,configVersion:risk.configVersion,ruleset:cfg,
       assessedAt:new Date().toISOString(),
       sourceNature:'SYNTHETIC_NOT_RIYADH_MOU',evidenceVerified:false,
       disclaimer:'Provisional simulation. Internal fixture conditions may reflect synthetic baseline. No regulatory action.'
