@@ -537,6 +537,15 @@ a, button, textarea { font:inherit; }
 .ai-decision-buttons{display:flex;flex-wrap:wrap;gap:8px;margin-top:7px}
 .ai-decision-buttons button:nth-child(2){background:#28698b}
 .ai-decision-buttons button:nth-child(3){background:#9b4848}
+.case-legacy-notice{
+  display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;
+  margin:10px 14px;padding:13px 15px;border-radius:10px;
+  background:#fff9ee;border:1px solid #f2dfb5;color:#755522;
+  font-size:11px;line-height:1.6;
+}
+.case-legacy-notice strong{font-weight:850;color:#815917}
+.case-legacy-notice span:nth-child(2){flex:1 1 100%;color:#795c34}
+.case-legacy-notice span:last-child{font-weight:700}
 .ai-queue-note{margin-top:14px;background:#eaf7f4;padding:12px;border-radius:9px}
 .ai-queue-note a{color:#087e85;font-weight:700}
 @media(max-width:800px){.ai-action-heading{flex-direction:column;align-items:stretch}.ai-action-rows{grid-template-columns:1fr}}
