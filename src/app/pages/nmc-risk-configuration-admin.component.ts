@@ -1,3 +1,4 @@
+import { NmcNavigationComponent } from '../components/nmc-navigation.component';
 import { CommonModule } from '@angular/common';
 import { Component, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
@@ -26,7 +27,7 @@ interface ImpactRow {
 @Component({
   selector: 'app-nmc-risk-configuration-admin',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink],
+  imports: [CommonModule, FormsModule, RouterLink, NmcNavigationComponent],
   templateUrl: './nmc-risk-configuration-admin.component.html',
   styleUrl: './nmc-risk-configuration-admin.component.css'
 })
