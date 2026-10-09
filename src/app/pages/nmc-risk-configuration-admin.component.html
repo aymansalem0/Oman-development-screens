@@ -5,7 +5,8 @@
       <div>
         <div class="eyebrow">{{ copy('MOEI · National Maritime Center', 'وزارة الطاقة والبنية التحتية · المركز البحري الوطني') }}</div>
         <h1>{{ copy('Risk Configuration Administration', 'إدارة إعدادات المخاطر') }}</h1>
-        <p>{{ copy('Configure scoring logic, weights and operational thresholds', 'تهيئة منطق احتساب المخاطر والأوزان والحدود التشغيلية') }}</p>
+        <p>{{ copy('Browser-local risk policy preview · saved A01/A02 risk signals · not an Oracle publication',
+                 'معاينة محلية لإعدادات المخاطر · مؤشرات A01/A02 المحفوظة · ليست نشرًا في Oracle') }}</p>
       </div>
     </div>
 
@@ -13,7 +14,7 @@
       <button type="button" class="language-btn" (click)="toggleLanguage()">{{ lang.isArabic ? 'English' : 'العربية' }}</button>
       <a class="secondary-btn" routerLink="/moei/nmc">{{ copy('Back to Command Center', 'العودة إلى مركز القيادة') }}</a>
       <button type="button" class="publish-btn" (click)="publish()" [disabled]="!canPublish">
-        ✓ {{ copy('Publish & Apply', 'نشر وتطبيق') }}
+        ✓ {{ copy('Save Policy in This Browser', 'حفظ الإعدادات في هذا المتصفح') }}
       </button>
     </div>
   </header>
@@ -26,13 +27,13 @@
         <span class="section-kicker">{{ copy('BUSINESS-CONFIGURABLE RISK ENGINE', 'محرك مخاطر قابل للتهيئة بواسطة الأعمال') }}</span>
         <h2>{{ copy('Maritime Risk Model Configuration', 'تهيئة نموذج المخاطر البحرية') }}</h2>
         <p>{{ copy(
-          'Change how vessel risk is calculated and classified. Preview the impact across all 420 monitored vessels before publishing.',
-          'غيّر طريقة احتساب وتصنيف مخاطر السفن، وعاين التأثير على جميع السفن الـ420 قبل النشر.'
+          'Change how saved A01/A02 factor severities are weighted and classified. The preview covers saved AI-assessed vessels only; no unassessed vessels are invented.',
+          'غيّر أوزان مؤشرات A01/A02 وتصنيفها. تتم معاينة تأثير الإعدادات على السفن التي لديها تقييم AI محفوظ فقط، دون اختلاق نتائج للسفن غير المقيّمة.'
         ) }}</p>
       </div>
 
       <div class="published-meta">
-        <span>{{ copy('Published ruleset', 'مجموعة القواعد المنشورة') }}</span>
+        <span>{{ copy('Published in this browser only', 'منشورة في هذا المتصفح فقط') }}</span>
         <strong>{{ published.version }}</strong>
         <small>{{ published.publishedAt }} · {{ published.publishedBy }}</small>
       </div>
@@ -52,6 +53,19 @@
       </div>
     </div>
 
+    <div class="risk-admin-readiness" role="note">
+      <div><strong>{{copy('Verified saved AI assessment coverage','تغطية تقييمات AI المحفوظة')}}</strong>
+        <p>{{copy('Stored AI assessments','تقييمات AI المحفوظة')}}: <b>{{savedInputs.length}}</b> /
+          {{copy('Monitored vessels','السفن المراقبة')}}: 420 ·
+          {{copy('Without saved assessment','بدون تقييم AI محفوظ')}}: {{420 - savedInputs.length}}</p>
+        <p>{{copy('Changing thresholds can change classification without changing the numeric risk score. Changing weights or scoring mode may change the score. These changes are currently browser-only policy projections and do not alter the Oracle fleet, operations, guidance or approved cases.',
+                   'قد تغير حدود التصنيف مستوى الخطورة دون تغيير الرقم. تغيير الأوزان أو طريقة الحساب قد يغير الدرجة. هذه النتائج معاينة لإعدادات المتصفح فقط، ولا تعدل تقييمات Oracle أو العمليات أو الإرشادات أو الحالات المعتمدة.')}}</p>
+        <p class="risk-admin-error" *ngIf="savedError" role="alert">{{savedError}}</p>
+        <p *ngIf="savedLoading">{{copy('Loading saved A01/A02 assessments…','جارٍ تحميل تقييمات A01/A02 المحفوظة…')}}</p>
+      </div>
+      <button type="button" class="secondary-action" (click)="reloadSaved()" [disabled]="savedLoading">
+        {{copy('Reload saved AI evidence','إعادة تحميل أدلة AI المحفوظة')}}</button>
+    </div>
     <section class="admin-grid">
       <div class="configuration-column">
         <article class="panel">
@@ -198,7 +212,7 @@
             <button type="button" class="secondary-action" (click)="discardChanges()">{{ copy('Discard Draft', 'إلغاء التعديلات') }}</button>
             <button type="button" class="secondary-action" (click)="resetDraftToDefaults()">{{ copy('Load Defaults', 'تحميل الإعدادات الافتراضية') }}</button>
             <button type="button" class="publish-action" (click)="publish()" [disabled]="!canPublish">
-              ✓ {{ copy('Publish & Recalculate 420 Vessels', 'نشر وإعادة احتساب مخاطر 420 سفينة') }}
+              ✓ {{ copy('Apply Browser Policy to Saved AI Preview', 'تطبيق إعدادات المتصفح على معاينة AI المحفوظة') }}
             </button>
           </div>
         </article>
@@ -210,18 +224,18 @@
             <div>
               <span class="section-kicker">{{ copy('IMPACT ANALYSIS', 'تحليل التأثير') }}</span>
               <h3>{{ copy('Before publishing', 'قبل النشر') }}</h3>
-              <p>{{ copy('Live preview across the monitored fleet.', 'معاينة مباشرة على جميع السفن المراقبة.') }}</p>
+              <p>{{ copy('Comparison uses saved A01/A02 factors for assessed vessels only.', 'المقارنة تستخدم عوامل A01/A02 المحفوظة للسفن التي تم تقييمها فقط.') }}</p>
             </div>
           </div>
 
           <div class="impact-summary">
             <div>
-              <small>{{ copy('Vessels re-scored', 'سفن ستتم إعادة تقييمها') }}</small>
+              <small>{{ copy('Saved AI vessels with score changes', 'سفن تغيرت درجتها في المعاينة') }}</small>
               <strong>{{ changedVesselCount }}</strong>
-              <span>/ 420</span>
+              <span>/ {{savedInputs.length}}</span>
             </div>
             <div>
-              <small>{{ copy('Classification changes', 'تغيرات في التصنيف') }}</small>
+              <small>{{ copy('Saved AI vessel classification changes', 'تغير تصنيف السفن المقيمة') }}</small>
               <strong>{{ changedLevelCount }}</strong>
               <span>{{ copy('vessels', 'سفينة') }}</span>
             </div>
@@ -308,10 +322,10 @@
         <article class="panel published-panel">
           <div class="panel-header">
             <div>
-              <span class="section-kicker">{{ copy('CURRENT PRODUCTION RULESET', 'مجموعة القواعد الحالية') }}</span>
+              <span class="section-kicker">{{ copy('BROWSER PUBLISHED POLICY · NOT SERVER PRODUCTION', 'قواعد منشورة في المتصفح · ليست معتمدة على الخادم') }}</span>
               <h3>{{ published.version }}</h3>
             </div>
-            <span class="live-badge">{{ copy('ACTIVE', 'نشطة') }}</span>
+            <span class="live-badge">{{ copy('LOCAL ONLY', 'محلية فقط') }}</span>
           </div>
 
           <div class="published-body">
