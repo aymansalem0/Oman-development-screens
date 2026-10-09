@@ -118,7 +118,7 @@ Expected: AI proxy health is `ok`, Oracle `ready`, and JSON containing `cases`, 
 
 ### DBA-run additive schema step, AFTER backup
 
-Before upgrading the backend UI with Operational Guidance, confirm migration 005 has been applied and ensure the following four tables are NOT present in the `NMC_AI` user schema:
+Before upgrading the backend UI with Operational Guidance, confirm migration 005 has been applied and ensure the following three tables are NOT present in the `NMC_AI` user schema:
 `NMC_GUIDANCE_POLICY`, `NMC_GUIDANCE_POLICY_AUDIT`, `NMC_GUIDANCE_RESULT` (three tables, plus its index).
 The script is `ai-proxy/migrations/006_nmc_operational_guidance.sql`.
 If any object already exists, **STOP** and reconcile with DBA; Oracle DDL auto-commits and partial reruns are unsafe.
@@ -167,7 +167,7 @@ docker compose $compose ps
 - **Fetch Again (Database):** explicit button calls `GET /api/ai/fleet/saved-status`. This endpoint reads Oracle `loadLatest()` directly (or JSON in JSON mode) with **zero Airia/PSC calls**, no task changes, no database writes. Existing 7s read-only polling continues for saved display updates.
 - **Automatic AI reevaluation:** remains **server-side hourly scheduler** with the existing bounded rollout, processing only changed **supported inputs**. Current change fingerprint covers synthetic vessel bundle, external PSC simulated inspection/deficiency/detention fields and ruleset. Current POC does NOT ingest real PDFs or arbitrary Google Drive document revisions; these must be added as a separate secure document-source connector and versioned document manifest before claiming document-change-triggered AI reassessment.
 - **Risk Intelligence:** canonical route `/#/moei/nmc/vessel/9328471/risk`. Keeps Risk Classification Thresholds; correct saved Oracle 60/Watch (not old fictitious 86), five saved A01/A02 factors, published assessment weights, evidence IDs and source reasons; Platform-composed Situation Summary; Platform Operational Guidance (not Airia recommendations). No Airia calls on GET. Former `/ai-assessment` route is an alias to Risk Intelligence to prevent conflicting legacy baseline screens.
-- **Settings → Operational Guidance Rules:** `/#/moei/nmc/admin/operational-guidance`. A rule editor saves draft revisions (Editor key), publishes with supervisor key, lists audit, and tests published policies against one saved IMO without AI or cases. Four initial POC rules, two disabled until evidence/authority is available; no hardcoded static fake closures.
+- **Settings → Operational Guidance Rules:** `/#/moei/nmc/admin/operational-guidance`. A rule editor **creates new rules as unpublished drafts**, edits draft revisions (Editor key), publishes with supervisor key, lists audit, and tests published policies against one saved IMO without AI or cases. Four initial POC rules, two disabled until evidence/authority is available; no hardcoded static fake closures.
 - **Maritime Case:** approved A01 proposed actions remain the sole task source, generated on explicit Create Case. Its immutable source Risk Score and assessment ID link back to full Risk Intelligence. No reset or Risk page opens a new case.
 - **Oracle guidance materialization:** new successful assessments trigger deterministic advisory materialization in the background; older assessments can be evaluated from saved factors through read-only GET without rerunning A01/A02. No automatic change to source scores or tasks.
 
