@@ -189,8 +189,13 @@
           <article *ngFor="let g of guidanceItems" class="rx-guidance-item">
             <div class="rx-guidance-head"><strong>{{guidanceName(g)}}</strong><span>{{g.priority}}</span></div>
             <p>{{g.ruleId}} · {{copy('Published revision','الإصدار المنشور')}} {{g.ruleRevision}} · {{g.ownerRole}}</p>
-            <p>{{copy('Triggered by','الشرط')}}: {{g.condition.field}} {{g.condition.operator}}
-              {{g.condition.value}} · {{copy('Observed','القيمة')}}: {{g.observedValue}}</p>
+            <div class="rx-matched-conditions">
+              <p *ngFor="let matched of g.matchedConditions; let i=index">
+                {{i===0?copy('Triggered by','الشرط'):'AND'}}:
+                {{matched.condition.field}} {{matched.condition.operator}}
+                {{matched.condition.value}} · {{copy('Observed','القيمة')}}: {{matched.observedValue}}
+              </p>
+            </div>
             <div class="rx-evidence-tags"><code *ngFor="let id of g.evidenceIds">{{id}}</code></div>
             <small>{{copy('Platform advisory only — human confirmation required for any case action',
                            'إرشاد من المنصة فقط — أي إجراء في الحالة يحتاج موافقة المسؤول')}}</small>
