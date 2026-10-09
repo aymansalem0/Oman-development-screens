@@ -86,6 +86,38 @@ async function scanExistingFleetForAlerts(){
     console.error('[nmc-alerts] '+code);
   }
 }
+/** Overlay CURRENT central policy on a saved immutable assessment snapshot.
+ * Original A01/A02 result and ruleset remain referenced for audit/history.
+ * No DB writes, no AI, no source assessment mutation. */
+async function effectiveFleetSnapshot(snapshot){
+  if(!riskPolicy.ready)return {...snapshot,riskPolicyStatus:'NOT_READY'};
+  const active=await riskPolicy.projectCurrent();
+  const byImo=new Map(active.projections.map(p=>[p.imo,p]));
+  const results={};
+  const counts={...snapshot.counts,normal:0,watch:0,high:0,critical:0,priorityReview:0};
+  for(const [imo,row] of Object.entries(snapshot.results)){
+    const p=byImo.get(imo);
+    if(p&&p.sourceAssessmentId===row.assessmentId&&row.status==='COMPLETED'){
+      results[imo]={...row,
+        sourceAiScore:row.score,sourceAiLevel:row.level,
+        sourceAiConfigVersion:row.configVersion,
+        score:p.riskScore,level:p.riskLevel,
+        operationalPriority:p.operationalPriority,
+        configVersion:active.policyRef,
+        activePolicyRevision:active.policyRevision,
+        scoringSource:'CURRENT_CENTRAL_RISK_POLICY'};
+    }else results[imo]={...row,
+      scoringSource:row.status==='COMPLETED'?'ORIGINAL_AI_ASSESSMENT_UNPROJECTED':null};
+    const current=results[imo];
+    if(current.status==='COMPLETED'){
+      const band=current.level?.toLowerCase();
+      if(['normal','watch','high','critical'].includes(band))counts[band]++;
+      if(current.operationalPriority==='Priority Review')counts.priorityReview++;
+    }
+  }
+  return {...snapshot,results,counts,activePolicyRevision:active.policyRevision,
+    activePolicyRef:active.policyRef,riskPolicyStatus:'ACTIVE'};
+}
 const scheduler=new FleetAutoScheduler({fleet,getPscVessel,
   enabled:autoEnabled && Boolean(apiKey),intervalMs:autoInterval,
   maxVessels:process.env.NMC_FLEET_AUTO_MAX_VESSELS || 420,
@@ -215,13 +247,18 @@ const server = createServer(async (req, res) => {
     return respond(res, 200, getPscHealth());
   }
   if (req.method === 'GET' && path === '/api/ai/fleet/status') {
-    return respond(res,200,{...fleet.snapshot(),storageMode:dbMode,persistenceHealthy:fleet.persistenceHealthy,scheduler:scheduler.status()});
+    try{
+      const current=await effectiveFleetSnapshot(fleet.snapshot());
+      return respond(res,200,{...current,storageMode:dbMode,
+        persistenceHealthy:fleet.persistenceHealthy,scheduler:scheduler.status()});
+    }catch{return respond(res,503,{error:'RISK_POLICY_PROJECTION_UNAVAILABLE'});}
   }
   // Fetch Again: fresh direct Oracle read, no dashboard-triggered AI.
   if(req.method==='GET'&&path==='/api/ai/fleet/saved-status'){
     try{
       const saved=await fleet.savedSnapshot();
-      return respond(res,200,{...saved,storageMode:dbMode,
+      const current=await effectiveFleetSnapshot(saved);
+      return respond(res,200,{...current,storageMode:dbMode,
         persistenceHealthy:fleet.persistenceHealthy,scheduler:scheduler.status(),
         fetchedFrom:dbMode==='oracle'?'ORACLE':'PERSISTED_JSON',
         fetchedAt:new Date().toISOString()});
