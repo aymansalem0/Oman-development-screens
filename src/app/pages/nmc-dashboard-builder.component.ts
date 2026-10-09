@@ -6,7 +6,7 @@ import { Subscription } from 'rxjs';
 import { LanguageService } from '../services/language.service';
 import { NmcNavigationComponent } from '../components/nmc-navigation.component';
 import {
-  DASHBOARD_METRICS, DashboardDefinition, DashboardMetric,
+  DASHBOARD_METRICS, DashboardDefinition, DashboardMetric, DashboardTemplateKind,
   DashboardWidget, DashboardWidgetKind, NmcDashboardStoreService
 } from '../services/nmc-dashboard-store.service';
 import {
@@ -229,6 +229,15 @@ export class NmcDashboardBuilderComponent implements OnInit,OnDestroy {
       next:r=>this.sharedHistory=r.revisions,
       error:error=>this.sharedError=this.workspace.readableError(error,this.lang.isArabic)
     }));
+  }
+
+  createFromTemplate(kind:DashboardTemplateKind):void {
+    try {
+      const board=this.store.createFromTemplate(kind);
+      this.open(board.id);
+    }catch {
+      this.saveMessage=this.copy('Could not create dashboard template.','تعذر إنشاء لوحة معلومات من النموذج.');
+    }
   }
 
   create():void {
