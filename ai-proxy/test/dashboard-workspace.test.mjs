@@ -74,3 +74,61 @@ test('write operations stay disabled with no configured credentials',()=>{
   const store=new DashboardWorkspace({mode:'json',editorKey:'',publisherKey:''});
   assert.throws(()=>store.assertRole({headers:{'x-nmc-dashboard-key':'anything'}},'EDITOR'),/DASHBOARD_WRITE_NOT_CONFIGURED/);
 });
+
+
+test('published sidebar registry excludes drafts and groups all allowed menu areas',async()=>{
+  const {workspace,opts,close}=setup();
+  try{
+    const nmc=await workspace.create({...sample('nmc-test'),menuPlacement:'NMC_CENTER'});
+    const smart=await workspace.create({...sample('smart-test'),menuPlacement:'SMART_INSPECTION'});
+    const settings=await workspace.create({...sample('settings-test'),menuPlacement:'SETTINGS'});
+    await workspace.create({...sample('draft-test'),menuPlacement:'SMART_INSPECTION'});
+    assert.deepEqual(await workspace.publishedMenu(),[]);
+    await workspace.publish(nmc.id,nmc.version);
+    await workspace.publish(smart.id,smart.version);
+    await workspace.publish(settings.id,settings.version);
+    const items=await workspace.publishedMenu();
+    assert.equal(items.length,3);
+    assert.deepEqual(
+      new Set(items.map(item=>item.menuPlacement)),
+      new Set(['NMC_CENTER','SMART_INSPECTION','SETTINGS'])
+    );
+    assert.equal(items.some(item=>item.id==='draft-test'),false);
+    assert.equal(Object.keys(items[0]).sort().join(','),'id,menuPlacement,title');
+    const reopened=new DashboardWorkspace(opts);
+    assert.deepEqual(await reopened.publishedMenu(),items);
+  }finally{close();}
+});
+
+test('legacy dashboards without menu placement default to NMC Center',async()=>{
+  const {workspace,close}=setup();
+  try{
+    const created=await workspace.create(sample('legacy-test'));
+    assert.equal(created.menuPlacement,'NMC_CENTER');
+    const published=await workspace.publish(created.id,created.version);
+    assert.equal(published.menuPlacement,'NMC_CENTER');
+    assert.equal((await workspace.publishedMenu())[0].menuPlacement,'NMC_CENTER');
+  }finally{close();}
+});
+
+test('invalid menu target is rejected before any shared-dashboard change',async()=>{
+  const {workspace,close}=setup();
+  try{
+    await assert.rejects(()=>workspace.create({
+      ...sample('invalid-target'),menuPlacement:'CUSTOM_SCRIPT'
+    }),/DASHBOARD_MENU_PLACEMENT_INVALID/);
+    assert.deepEqual(await workspace.list(),[]);
+  }finally{close();}
+});
+
+test('menu location survives draft changes and publication',async()=>{
+  const {workspace,close}=setup();
+  try{
+    const created=await workspace.create({...sample('placed'),menuPlacement:'NMC_CENTER'});
+    const changed=await workspace.save(created.id,{
+      ...created,menuPlacement:'SETTINGS'
+    });
+    await workspace.publish(created.id,changed.version);
+    assert.equal((await workspace.publishedMenu())[0].menuPlacement,'SETTINGS');
+  }finally{close();}
+});
