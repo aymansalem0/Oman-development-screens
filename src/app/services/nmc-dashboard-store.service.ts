@@ -2,6 +2,23 @@ import { Injectable } from '@angular/core';
 import { BehaviorSubject } from 'rxjs';
 
 export type DashboardWidgetKind = 'kpi' | 'bar' | 'table' | 'position';
+/** The 'bar' widget kind is a distribution widget; chartType selects the renderer. */
+export type NmcChartType = 'horizontalBar' | 'column' | 'pie' | 'donut' | 'line' | 'area';
+export type NmcChartPalette = 'maritime' | 'vibrant' | 'ocean' | 'sunset';
+export const NMC_CHART_TYPES: Array<{value:NmcChartType;en:string;ar:string}> = [
+  {value:'horizontalBar',en:'Horizontal Bar',ar:'أعمدة أفقية'},
+  {value:'column',en:'Column',ar:'أعمدة رأسية'},
+  {value:'pie',en:'Pie',ar:'دائري'},
+  {value:'donut',en:'Doughnut',ar:'حلقي'},
+  {value:'line',en:'Line (categories)',ar:'خطي (تصنيفات)'},
+  {value:'area',en:'Area (categories)',ar:'مساحي (تصنيفات)'}
+];
+export const NMC_CHART_PALETTES: Array<{value:NmcChartPalette;en:string;ar:string}> = [
+  {value:'maritime',en:'Maritime',ar:'بحري'},
+  {value:'vibrant',en:'Vibrant',ar:'ألوان زاهية'},
+  {value:'ocean',en:'Ocean',ar:'محيطي'},
+  {value:'sunset',en:'Sunset',ar:'غروب'}
+];
 export type DashboardMenuPlacement = 'NMC_CENTER' | 'SMART_INSPECTION' | 'SETTINGS';
 export const DASHBOARD_MENU_PLACEMENTS: Array<{value:DashboardMenuPlacement;en:string;ar:string}> = [
   {value:'NMC_CENTER',en:'NMC Center',ar:'المركز البحري الوطني'},
@@ -19,6 +36,9 @@ export interface DashboardWidget {
   metric: DashboardMetric;
   title: string;
   span: 'half' | 'full';
+  /** Optional for compatibility with all previously saved distribution widgets. */
+  chartType?: NmcChartType;
+  palette?: NmcChartPalette;
 }
 
 export interface DashboardFilters {
@@ -77,8 +97,8 @@ export function dashboardDefaults(): DashboardDefinition {
       {id:'w-assessed',type:'kpi',metric:'assessedCount',title:'Assessed Vessels',span:'half'},
       {id:'w-attention',type:'kpi',metric:'attentionCount',title:'Requires Attention',span:'half'},
       {id:'w-priority',type:'kpi',metric:'priorityCount',title:'Priority Review',span:'half'},
-      {id:'w-risk',type:'bar',metric:'byRisk',title:'Risk Distribution',span:'half'},
-      {id:'w-types',type:'bar',metric:'byType',title:'Vessels by Type',span:'half'},
+      {id:'w-risk',type:'bar',metric:'byRisk',title:'Risk Distribution',span:'half',chartType:'donut',palette:'maritime'},
+      {id:'w-types',type:'bar',metric:'byType',title:'Vessels by Type',span:'half',chartType:'column',palette:'ocean'},
       {id:'w-table',type:'table',metric:'vesselTable',title:'Vessel Risk Register',span:'full'}
     ]
   };
@@ -228,6 +248,10 @@ export class NmcDashboardStoreService {
        !Array.isArray(d.widgets)||d.widgets.length>30)throw new Error('INVALID_DASHBOARD');
     const ids=new Set<string>();
     for(const w of d.widgets){
+      if(w.type==='bar'&&
+        (w.chartType!==undefined&&!NMC_CHART_TYPES.some(t=>t.value===w.chartType)||
+         w.palette!==undefined&&!NMC_CHART_PALETTES.some(p=>p.value===w.palette)))
+        throw new Error('INVALID_DASHBOARD_CHART');
       if(!w.id||ids.has(w.id)||w.title.length>100||!w.title.trim()||
          !DASHBOARD_METRICS[w.type]?.some(m=>m.value===w.metric)||
          !['half','full'].includes(w.span))throw new Error('INVALID_DASHBOARD_WIDGET');
