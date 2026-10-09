@@ -101,6 +101,77 @@ async function requestJson(req, limit = maxBytes) {
   return parsed;
 }
 
+
+// Only an explicit operator creation or retry calls Airia A01: never GET,
+// dashboard display, alert scanning or page refresh.
+async function prepareCaseA01Actions(caseId,version){
+          const existing=await cases.get(caseId);
+          if(!existing)throw new NmcCaseError('CASE_NOT_FOUND',404);
+          if(existing.version!==version)throw new NmcCaseError('CASE_VERSION_CONFLICT',409);
+          if(existing.status==='RESOLVED')throw new NmcCaseError('CASE_ALREADY_RESOLVED',409);
+          if(existing.actionPlan)throw new NmcCaseError('CASE_ACTION_PLAN_EXISTS',409);
+          if(actionPlanRuns.has(caseId))throw new NmcCaseError('CASE_ACTION_PLAN_IN_PROGRESS',409);
+          if(!apiKey)throw new NmcCaseError('AIRIA_NOT_CONFIGURED',503);
+          // Strong provenance check: use ONLY the exact saved A01/A02 assessment
+          // that initiated this case. Never silently use the synthetic fixture or
+          // a newer scored assessment that superseded the event.
+          const source=fleet.getVesselResult(existing.imo);
+          if(!source||source.status!=='COMPLETED'||
+            source.score!==existing.sourceScore||source.level!==existing.sourceLevel||
+            !Array.isArray(source.signals)||source.signals.length!==5)
+            throw new NmcCaseError('CASE_SOURCE_ASSESSMENT_UNAVAILABLE',409);
+          // Older PR42 alerts omitted the assessment ID from the snapshot.
+          // Reconcile ONLY when the persisted alert timestamp/ruleset and current
+          // saved AI source prove it was already assessed before that alert.
+          let legacyReconciled=false;
+          if(source.assessmentId!==existing.sourceAssessmentId){
+            const alert=existing.sourceAssessmentId===null&&existing.alertIds?.length
+              ?await alerts.get(existing.alertIds[0]):null;
+            const assessedAt=Date.parse(source.assessedAt||'');
+            const alertedAt=Date.parse(alert?.createdAt||'');
+            if(!alert||alert.imo!==existing.imo||
+              alert.sourceAssessmentId!==null||
+              alert.sourceScore!==source.score||alert.sourceLevel!==source.level||
+              !alert.sourceRulesetVersion||
+              alert.sourceRulesetVersion!==source.configVersion||
+              !source.assessmentId||!Number.isFinite(assessedAt)||
+              !Number.isFinite(alertedAt)||assessedAt>alertedAt)
+              throw new NmcCaseError('CASE_SOURCE_ASSESSMENT_UNAVAILABLE',409);
+            legacyReconciled=true;
+          }
+          actionPlanRuns.add(caseId);
+          try {
+            const input={
+              requestMeta:{correlationId:'CASE-'+caseId+'-'+existing.version,language:'en'},
+              subject:{type:'VESSEL',imo:existing.imo},bundleRef:'VBL-'+existing.imo,
+              mode:'SITUATION_ASSESSMENT',
+              officialRisk:{
+                evaluationId:existing.sourceAssessmentId,score:existing.sourceScore,
+                level:existing.sourceLevel,rulesetVersion:source.configVersion
+              },
+              riskSignalRunId:existing.sourceAssessmentId,
+              requestedOutputs:['SUMMARY','WHY_IT_MATTERS','EVIDENCE','ACTIONS'],
+              approvedSignalEvidence:source.signals.map(s=>({
+                factor:s.factor,severity:s.severity,evidenceIds:s.evidenceIds,
+                reason:s.reason
+              })),
+              provenance:'SYNTHETIC_POC_NOT_REGULATORY'
+            };
+            const raw=await fleetAgentCall('a01',input);
+            const plan=normalizeA01Actions(raw,{
+              imo:existing.imo,assessmentId:existing.sourceAssessmentId,
+              score:existing.sourceScore,level:existing.sourceLevel,
+              configVersion:source.configVersion,signals:source.signals
+            });
+            // Provenance of the evidence actually supplied to A01, distinct from
+            // the immutable legacy case field that may have been null.
+            plan.evidenceAssessmentId=source.assessmentId;
+            plan.legacySourceReconciled=legacyReconciled;
+            const item=await cases.saveActionPlan(caseId,version,plan);
+            return respond(res,200,{status:'ok',case:item});
+          }finally{actionPlanRuns.delete(caseId);}
+}
+
 const server = createServer(async (req, res) => {
   const path = new URL(req.url || '/', 'http://localhost').pathname;
 
@@ -176,78 +247,36 @@ const server = createServer(async (req, res) => {
         if(first==='from-alert'&&!action){
           dashboards.assertRole(req,'EDITOR');
           const body=await requestJson(req,4096);
+          if(body.withAiActionPlan!==true)
+            throw new NmcCaseError('CASE_CREATION_AI_REQUIRED',400);
           const item=await cases.fromAlert(body.alertId);
-          return respond(res,200,{status:'ok',case:item});
+          if(item.actionPlan)
+            return respond(res,200,{status:'ok',case:item,aiActionPlanStatus:'READY'});
+          try{
+            // Exactly one requested A01 call as part of Create Maritime Case.
+            // The case is persisted before A01, so retries never duplicate it.
+            const planned=await prepareCaseA01Actions(item.id,item.version);
+            return respond(res,200,{status:'ok',case:planned,aiActionPlanStatus:'READY'});
+          }catch(error){
+            // Fail closed: preserve the case and prior audit, but never pretend
+            // AI proposals exist if the agent failed or returned invalid data.
+            if(!(error instanceof NmcCaseError||error instanceof ActionPlanError||
+                 String(error?.message||'').startsWith('AIRIA_')))throw error;
+            const code=error instanceof NmcCaseError||error instanceof ActionPlanError
+              ?error.code:'A01_ACTION_PLAN_UNAVAILABLE';
+            const stored=await cases.get(item.id);
+            return respond(res,200,{status:'ok',case:stored,
+              aiActionPlanStatus:'FAILED',aiActionPlanError:{
+                code,details:error instanceof ActionPlanError?error.details:{}
+              }});
+          }
         }
         if(!/^[a-f\d-]{36}$/i.test(first))return respond(res,404,{error:'CASE_NOT_FOUND'});
         if(action==='action-plan'&&second==='generate'&&!third){
           dashboards.assertRole(req,'EDITOR');
           const body=await requestJson(req,4096);
-          const existing=await cases.get(first);
-          if(!existing)throw new NmcCaseError('CASE_NOT_FOUND',404);
-          if(existing.version!==body.version)throw new NmcCaseError('CASE_VERSION_CONFLICT',409);
-          if(existing.status==='RESOLVED')throw new NmcCaseError('CASE_ALREADY_RESOLVED',409);
-          if(existing.actionPlan)throw new NmcCaseError('CASE_ACTION_PLAN_EXISTS',409);
-          if(actionPlanRuns.has(first))throw new NmcCaseError('CASE_ACTION_PLAN_IN_PROGRESS',409);
-          if(!apiKey)throw new NmcCaseError('AIRIA_NOT_CONFIGURED',503);
-          // Strong provenance check: use ONLY the exact saved A01/A02 assessment
-          // that initiated this case. Never silently use the synthetic fixture or
-          // a newer scored assessment that superseded the event.
-          const source=fleet.getVesselResult(existing.imo);
-          if(!source||source.status!=='COMPLETED'||
-            source.score!==existing.sourceScore||source.level!==existing.sourceLevel||
-            !Array.isArray(source.signals)||source.signals.length!==5)
-            throw new NmcCaseError('CASE_SOURCE_ASSESSMENT_UNAVAILABLE',409);
-          // Older PR42 alerts omitted the assessment ID from the snapshot.
-          // Reconcile ONLY when the persisted alert timestamp/ruleset and current
-          // saved AI source prove it was already assessed before that alert.
-          let legacyReconciled=false;
-          if(source.assessmentId!==existing.sourceAssessmentId){
-            const alert=existing.sourceAssessmentId===null&&existing.alertIds?.length
-              ?await alerts.get(existing.alertIds[0]):null;
-            const assessedAt=Date.parse(source.assessedAt||'');
-            const alertedAt=Date.parse(alert?.createdAt||'');
-            if(!alert||alert.imo!==existing.imo||
-              alert.sourceAssessmentId!==null||
-              alert.sourceScore!==source.score||alert.sourceLevel!==source.level||
-              !alert.sourceRulesetVersion||
-              alert.sourceRulesetVersion!==source.configVersion||
-              !source.assessmentId||!Number.isFinite(assessedAt)||
-              !Number.isFinite(alertedAt)||assessedAt>alertedAt)
-              throw new NmcCaseError('CASE_SOURCE_ASSESSMENT_UNAVAILABLE',409);
-            legacyReconciled=true;
-          }
-          actionPlanRuns.add(first);
-          try {
-            const input={
-              requestMeta:{correlationId:'CASE-'+first+'-'+existing.version,language:'en'},
-              subject:{type:'VESSEL',imo:existing.imo},bundleRef:'VBL-'+existing.imo,
-              mode:'SITUATION_ASSESSMENT',
-              officialRisk:{
-                evaluationId:existing.sourceAssessmentId,score:existing.sourceScore,
-                level:existing.sourceLevel,rulesetVersion:source.configVersion
-              },
-              riskSignalRunId:existing.sourceAssessmentId,
-              requestedOutputs:['SUMMARY','WHY_IT_MATTERS','EVIDENCE','ACTIONS'],
-              approvedSignalEvidence:source.signals.map(s=>({
-                factor:s.factor,severity:s.severity,evidenceIds:s.evidenceIds,
-                reason:s.reason
-              })),
-              provenance:'SYNTHETIC_POC_NOT_REGULATORY'
-            };
-            const raw=await fleetAgentCall('a01',input);
-            const plan=normalizeA01Actions(raw,{
-              imo:existing.imo,assessmentId:existing.sourceAssessmentId,
-              score:existing.sourceScore,level:existing.sourceLevel,
-              configVersion:source.configVersion,signals:source.signals
-            });
-            // Provenance of the evidence actually supplied to A01, distinct from
-            // the immutable legacy case field that may have been null.
-            plan.evidenceAssessmentId=source.assessmentId;
-            plan.legacySourceReconciled=legacyReconciled;
-            const item=await cases.saveActionPlan(first,body.version,plan);
-            return respond(res,200,{status:'ok',case:item});
-          }finally{actionPlanRuns.delete(first);}
+          const item=await prepareCaseA01Actions(first,body.version);
+          return respond(res,200,{status:'ok',case:item});
         }
         if(action==='actions'&&second&&third==='decision'){
           dashboards.assertRole(req,'EDITOR');
