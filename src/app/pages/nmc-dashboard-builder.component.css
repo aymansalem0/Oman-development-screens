@@ -69,3 +69,13 @@
 .db-chart-settings select:focus{outline:2px solid #9bdad1}
 .db-risk-color-note{width:100%;font-size:10px;color:#8c9caa}
 app-nmc-distribution-chart{display:block;min-width:0}
+
+
+/* Editing a published dashboard always stages a safe draft revision. */
+.db-edit-live{border-color:#9cd4c5;background:#f1faf6;color:#077d6b}
+.db-edit-live:hover{background:#dcf6ec}
+.db-revision-hint{min-height:auto!important;margin:6px 0 9px!important;
+  color:#187a72!important;font-size:10px!important}
+.db-revision-banner{border:1px solid #a6dcd2;background:#f1faf8;
+  color:#0b7067;padding:11px 14px;border-radius:10px;font-size:11px;
+  line-height:1.6;margin:0 0 14px}
