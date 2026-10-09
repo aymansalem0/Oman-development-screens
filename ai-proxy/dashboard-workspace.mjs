@@ -230,6 +230,47 @@ export class DashboardWorkspace {
     });
   }
 
+  /**
+   * Relocate an already published dashboard without editing its widgets
+   * or temporarily removing it from readers' navigation.
+   * Uses PUBLISHER role and optimistic versioning.
+   * The existing UPDATED revision action is reused to avoid schema changes.
+   */
+  async movePublished(id,menuPlacement,version,role='PUBLISHER'){
+    if(!DASHBOARD_MENU_PLACEMENTS.includes(menuPlacement))
+      throw new DashboardError('DASHBOARD_MENU_PLACEMENT_INVALID');
+    if(!Number.isInteger(version)||version<1)
+      throw new DashboardError('DASHBOARD_VERSION_REQUIRED');
+    const current=await this.get(id);
+    if(!current)throw new DashboardError('DASHBOARD_NOT_FOUND',404);
+    if(current.status!=='PUBLISHED')
+      throw new DashboardError('DASHBOARD_NOT_PUBLISHED',409);
+    if(current.version!==version)
+      throw new DashboardError('DASHBOARD_VERSION_CONFLICT',409);
+    if(menuPlacementOf(current)===menuPlacement)return current;
+    const next={...current,menuPlacement,version:version+1,updatedAt:now()};
+    if(this.mode==='json'){
+      const db=this._load();
+      if(db.dashboards[id]?.version!==version||db.dashboards[id].status!=='PUBLISHED')
+        throw new DashboardError('DASHBOARD_VERSION_CONFLICT',409);
+      db.dashboards[id]=next;
+      db.revisions[id]=[{version:next.version,action:'UPDATED',role,at:next.updatedAt},...(db.revisions[id]||[])];
+      this._write(db);return clone(next);
+    }
+    return this._db(async con=>{
+      try{
+        const result=await con.execute(`UPDATE NMC_DASHBOARD
+          SET VERSION_NO=:nextVersion,DOC_JSON=:doc,UPDATED_AT=SYSTIMESTAMP,
+          UPDATED_ROLE=:role
+          WHERE DASHBOARD_ID=:id AND VERSION_NO=:version AND STATUS='PUBLISHED'`,
+          {id,nextVersion:next.version,doc:clob(next),role,version});
+        if(result.rowsAffected!==1)throw new DashboardError('DASHBOARD_VERSION_CONFLICT',409);
+        await this._insertRevision(con,next,'UPDATED',role);
+        await con.commit();return next;
+      }catch(error){await con.rollback();throw error;}
+    });
+  }
+
   async archive(id,version,role='EDITOR'){
     if(!Number.isInteger(version)||version<1)throw new DashboardError('DASHBOARD_VERSION_REQUIRED');
     const current=await this.get(id);
