@@ -12,7 +12,7 @@ import { LanguageService } from '../services/language.service';
 import { NmcRiskEngineService } from '../services/nmc-risk-engine.service';
 import { NmcVesselEvidenceService } from '../services/nmc-vessel-evidence.service';
 import { NmcExternalPscService, NmcExternalPscRecord } from '../services/nmc-external-psc.service';
-import { NmcFleetAiService, FleetAiAssessment, FleetAiHistory } from '../services/nmc-fleet-ai.service';
+import { NmcFleetAiService, FleetAiAssessment, FleetAiHistory, FleetAiIntelligence } from '../services/nmc-fleet-ai.service';
 
 interface SourceStatus {
   name: string;
@@ -136,6 +136,8 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
   // from the deterministic vessel/certificate/AIS fixtures.
   storedAi: FleetAiAssessment | null = null;
   storedAiHistory: FleetAiHistory | null = null;
+  storedAiIntelligence: FleetAiIntelligence | null = null;
+  intelligenceStatus: 'loading' | 'available' | 'unavailable' = 'loading';
   storedAiStatus: 'loading' | 'available' | 'not-assessed' | 'error' = 'loading';
   private readonly subscriptions = new Subscription();
 
@@ -350,10 +352,31 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
           setTimeout(() => this.initMap(), 0);
         }
         this.loadStoredHistory();
+        this.loadStoredIntelligence();
       },
       error: response => {
         // No assessment is normal for vessels that have not yet been evaluated.
         this.storedAiStatus = response?.status === 404 ? 'not-assessed' : 'error';
+      }
+    }));
+  }
+
+  private loadStoredIntelligence(): void {
+    this.intelligenceStatus='loading';
+    this.subscriptions.add(this.fleetAiService.intelligence(this.vessel.imo).subscribe({
+      next: result => {
+        if (result.imo!==this.vessel.imo ||
+            result.assessmentId!==this.storedAi?.assessmentId ||
+            result.dataNature!=='SYNTHETIC_POC_NOT_OFFICIAL') {
+          this.intelligenceStatus='unavailable';
+          return;
+        }
+        this.storedAiIntelligence=result;
+        this.intelligenceStatus='available';
+      },
+      error: () => {
+        this.storedAiIntelligence=null;
+        this.intelligenceStatus='unavailable';
       }
     }));
   }
