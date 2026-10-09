@@ -188,8 +188,8 @@ export class NmcCaseWorkspace{
           row.tasks.some(t=>t.actionId===r.actionId&&t.actionType==='PRIORITY_INSPECTION'));
         if((row.actionPlan||row.inspectionRequests?.length)&&!request)
           throw new NmcCaseError('CASE_INSPECTION_NOT_SCHEDULED',409);
-        const tasks=row.tasks.map(t=>t.actionType==='PRIORITY_INSPECTION'||
-          (t.id==='priority-inspection'&&!row.actionPlan)
+        const tasks=row.tasks.map(t=>(request&&t.actionId===request.actionId)||
+          (!row.actionPlan&&t.id==='priority-inspection')
           ?{...t,status:'Completed'}:t);
         const requiredDone=tasks.filter(t=>t.mandatory).every(t=>t.status==='Completed');
         return {...row,inspectionOutcome:{
@@ -251,6 +251,8 @@ export class NmcCaseWorkspace{
         if(tasks.some(t=>t.id===task.id))throw new NmcCaseError('CASE_TASK_EXISTS',409);
         tasks.push(task);
         if(action.actionType==='PRIORITY_INSPECTION'){
+          if(inspectionRequests.some(r=>r.status!=='COMPLETED'))
+            throw new NmcCaseError('CASE_ACTIVE_INSPECTION_EXISTS',409);
           inspectionRequests.push({
             id:randomUUID(),caseId:row.id,imo:row.imo,actionId:action.actionId,
             status:'PENDING_SCHEDULING',inspectionRegime:'FOCUSED_INSPECTION',
