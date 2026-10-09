@@ -1,0 +1,166 @@
+<div class="nmc-shell" [attr.dir]="lang.dir">
+  <header class="topbar">
+    <div class="brand">
+      <span class="anchor">⚓</span>
+      <div>
+        <small>MOEI · {{copy('Maritime Operations','العمليات البحرية')}}</small>
+        <h1>{{copy('National Maritime Center','المركز البحري الوطني')}}</h1>
+      </div>
+    </div>
+    <div class="header-actions">
+      <span class="live-pill"><i></i>{{copy('Operational Alert Management','إدارة التنبيهات التشغيلية')}}</span>
+      <button type="button" (click)="lang.toggle()" class="language">{{lang.isArabic?'English':'العربية'}}</button>
+    </div>
+  </header>
+  <app-nmc-navigation></app-nmc-navigation>
+  <main class="alerts-main">
+    <div class="breadcrumb">
+      <a routerLink="/moei/nmc">{{copy('NMC Center','المركز البحري الوطني')}}</a>
+      <span>›</span> {{copy('Alerts & Notifications','التنبيهات والإشعارات')}}
+    </div>
+    <section class="heading">
+      <div>
+        <span class="eyebrow">{{copy('MARITIME SITUATIONAL AWARENESS','الوعي بالموقف البحري')}}</span>
+        <h2>{{copy('Alerts & Notifications','التنبيهات والإشعارات')}}</h2>
+        <p>{{copy('Risk-based operational alerts with controlled actions and traceable follow-up.',
+                  'تنبيهات تشغيلية مرتبطة بالمخاطر، مع إجراءات متابعة قابلة للتتبع.')}}</p>
+      </div>
+      <div class="heading-actions">
+        <span class="update-time" *ngIf="overview">{{copy('Updated','آخر تحديث')}}: {{overview.updatedAt|date:'shortTime'}}</span>
+        <button type="button" class="refresh" (click)="refresh()" [disabled]="loading">
+          ↻ {{copy('Refresh','تحديث')}}
+        </button>
+      </div>
+    </section>
+
+    <section class="kpi-cards">
+      <article><div class="stat-icon all">▤</div><div><span>{{copy('Active Alerts','التنبيهات النشطة')}}</span>
+        <strong>{{overview?.summary?.active??'—'}}</strong></div></article>
+      <article><div class="stat-icon critical">!</div><div><span>{{copy('Critical','حرجة')}}</span>
+        <strong>{{overview?.summary?.critical??'—'}}</strong></div></article>
+      <article><div class="stat-icon pending">◷</div><div><span>{{copy('New / Unacknowledged','جديدة / لم تُستلم')}}</span>
+        <strong>{{overview?.summary?.unread??'—'}}</strong></div></article>
+      <article><div class="stat-icon escalated">↗</div><div><span>{{copy('Escalated','تم تصعيدها')}}</span>
+        <strong>{{overview?.summary?.escalated??'—'}}</strong></div></article>
+    </section>
+
+    <div class="notice" role="status" *ngIf="success">✓ {{success}}</div>
+    <div class="error" role="alert" *ngIf="error">{{error}}</div>
+
+    <section class="workspace">
+      <div class="toolbar">
+        <div>
+          <h3>{{copy('Operational Alert Inbox','صندوق التنبيهات التشغيلية')}}</h3>
+          <p>{{copy('Only saved AI risk assessments trigger alert detection.','تنشأ التنبيهات من تقييمات المخاطر المحفوظة فقط.')}}</p>
+        </div>
+        <div class="controls">
+          <label class="search">
+            <span class="sr-only">{{copy('Search alerts','بحث في التنبيهات')}}</span>
+            <input type="search" [(ngModel)]="query"
+              [placeholder]="copy('Search vessel IMO or alert','بحث برقم السفينة أو التنبيه')"/>
+          </label>
+          <label class="filter">
+            <span class="sr-only">{{copy('Status filter','تصفية حسب الحالة')}}</span>
+            <select [(ngModel)]="filter">
+              <option value="ACTIVE">{{copy('Active','نشطة')}}</option>
+              <option value="ALL">{{copy('All','الكل')}}</option>
+              <option value="OPEN">{{copy('New','جديدة')}}</option>
+              <option value="ESCALATED">{{copy('Escalated','مصعّدة')}}</option>
+              <option value="RESOLVED">{{copy('Resolved','مغلقة')}}</option>
+            </select>
+          </label>
+        </div>
+      </div>
+
+      <div *ngIf="loading&&!overview" class="empty">{{copy('Loading maritime alerts…','جاري تحميل التنبيهات البحرية…')}}</div>
+      <div *ngIf="!loading&&!error&&alertsFiltered.length===0" class="empty">
+        <div class="empty-icon">✓</div>
+        <strong>{{copy('No alerts match the current filter','لا توجد تنبيهات مطابقة للبحث')}}</strong>
+        <p>{{copy('High and critical alerts appear automatically after a saved AI risk assessment meets the monitoring criteria.',
+                  'تظهر التنبيهات المرتفعة والحرجة تلقائيًا عندما يحقق تقييم AI محفوظ شروط المراقبة.')}}</p>
+      </div>
+
+      <article *ngFor="let alert of alertsFiltered" class="alert-card"
+               [class.critical]="alert.severity==='CRITICAL'">
+        <div class="alert-main">
+          <div class="alert-symbol" [class.high]="alert.severity==='HIGH'">
+            {{alert.severity==='CRITICAL'?'!':'▲'}}
+          </div>
+          <div class="alert-body">
+            <div class="alert-meta">
+              <span class="severity" [class.high]="alert.severity==='HIGH'">{{severityText(alert.severity)}}</span>
+              <span class="status" [attr.data-status]="alert.status">{{statusText(alert.status)}}</span>
+              <span class="muted">{{alert.createdAt|date:'medium'}}</span>
+            </div>
+            <h4>{{copy(
+              alert.severity==='CRITICAL'?'Critical maritime risk requires review':'High maritime risk requires review',
+              alert.severity==='CRITICAL'?'مخاطر بحرية حرجة تستلزم المراجعة':'مخاطر بحرية مرتفعة تستلزم المراجعة')}}</h4>
+            <p>{{copy(
+              alert.detail.includes('inspection')?
+                'A saved assessment identifies a critical open inspection finding.':
+                'A saved assessment exceeded the monitored risk band.',
+              alert.detail.includes('inspection')?
+                'كشف تقييم محفوظ عن مخالفة معاينة حرجة لم تُغلق.':
+                'تجاوز تقييم مخاطر محفوظ مستوى المراقبة المحدد.')}}</p>
+            <div class="facts">
+              <span><b>IMO</b> {{alert.imo}}</span>
+              <span><b>{{copy('Risk','المخاطر')}}</b> {{alert.sourceScore}}/100</span>
+              <span><b>{{copy('Assigned','المسؤول')}}</b>
+                {{alert.assignedRole==='NMC_SUPERVISOR'?copy('NMC Supervisor','مشرف المركز البحري'):copy('NMC Officer','ضابط المركز البحري')}}
+              </span>
+              <span *ngIf="alert.sourceAssessmentId" [title]="alert.sourceAssessmentId">
+                <b>{{copy('Assessment','التقييم')}}</b> {{alert.sourceAssessmentId}}
+              </span>
+            </div>
+          </div>
+        </div>
+        <div class="actions">
+          <a [routerLink]="['/moei/nmc/vessel',alert.imo]" class="link secondary">
+            {{copy('Vessel 360','الملف الشامل للسفينة')}} ↗
+          </a>
+          <a [routerLink]="['/moei/nmc/vessel',alert.imo,'case']" class="link secondary">
+            {{copy('Open Case Workspace','فتح إدارة الحالة')}} ↗
+          </a>
+          <button type="button" class="secondary" (click)="toggleDetails(alert)">
+            {{selectedId===alert.id?copy('Hide History','إخفاء السجل'):copy('Activity History','سجل الأنشطة')}}
+          </button>
+        </div>
+        <div class="decision-panel" *ngIf="alert.status!=='RESOLVED'">
+          <label>{{copy('Operator note / resolution reason','ملاحظة الموظف / سبب الإغلاق')}}
+            <input type="text" [(ngModel)]="notes[alert.id]" maxlength="500"
+              [placeholder]="copy('Record operational context before an action','سجّل سبب الإجراء أو نتيجة التحقق')">
+          </label>
+          <div class="decision-actions">
+            <button *ngIf="allowed(alert,'ACKNOWLEDGE')" type="button" class="primary"
+                    [disabled]="!!busy" (click)="act(alert,'ACKNOWLEDGE')">
+              ✓ {{actionText('ACKNOWLEDGE')}}
+            </button>
+            <button *ngIf="allowed(alert,'START_FOLLOW_UP')" type="button" class="primary"
+                    [disabled]="!!busy" (click)="act(alert,'START_FOLLOW_UP')">
+              → {{actionText('START_FOLLOW_UP')}}
+            </button>
+            <button *ngIf="allowed(alert,'ESCALATE')" type="button" class="escalate-btn"
+                    [disabled]="!!busy" (click)="act(alert,'ESCALATE')">
+              ↗ {{actionText('ESCALATE')}}
+            </button>
+            <button *ngIf="allowed(alert,'RESOLVE')" type="button" class="resolve-btn"
+                    [disabled]="!!busy" (click)="act(alert,'RESOLVE')">
+              ✓ {{actionText('RESOLVE')}}
+            </button>
+          </div>
+        </div>
+        <div *ngIf="selectedId===alert.id" class="history-panel">
+          <h5>{{copy('Alert Audit Trail','سجل تغييرات التنبيه')}}</h5>
+          <p *ngIf="auditLoading">{{copy('Loading history…','جاري تحميل السجل…')}}</p>
+          <div class="audit-row" *ngFor="let item of audit">
+            <span class="audit-dot"></span>
+            <div><strong>{{auditAction(item.action)}}</strong>
+              <p>{{item.note||copy('Action recorded','تم تسجيل الإجراء')}}</p>
+            </div>
+            <small>{{item.role}} · {{item.at|date:'short'}}</small>
+          </div>
+        </div>
+      </article>
+    </section>
+  </main>
+</div>
