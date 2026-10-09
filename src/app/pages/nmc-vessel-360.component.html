@@ -41,9 +41,9 @@
 
       <div class="hero-right">
         <button type="button" class="confidence-card confidence-button" (click)="openProvenance('dataConfidence')" [attr.title]="copy('Open confidence details', 'عرض تفاصيل الثقة')">
-          <small>{{ copy('Fixture data confidence', 'ثقة البيانات التجريبية') }}</small>
+          <small>{{ copy('Fixture confidence indicator', 'مؤشر ثقة تجريبي') }}</small>
           <strong>{{ vessel.dataConfidence }}%</strong>
-          <span>{{ conflictCount }} {{ copy('source conflict', 'تعارض بالمصادر') }} · {{ copy('view basis', 'عرض الأساس') }}</span>
+          <span>{{ conflictCount }} {{ copy('synthetic scenario alerts', 'تنبيهات سيناريو تجريبي') }} · {{ copy('view sample basis', 'عرض الأساس التجريبي') }}</span>
         </button>
         <a class="risk-card risk-link" [ngClass]="riskCssClass"
            [routerLink]="['/moei/nmc/vessel', vessel.imo, storedAi ? 'ai-assessment' : 'risk']"
@@ -77,12 +77,19 @@
       <div class="v360-quality-header">
         <div>
           <h3>{{ copy('Data Quality & Cross-Source Consistency', 'جودة البيانات واتساق المصادر') }}</h3>
-          <p>{{ copy('Deterministic structural check · not AI confidence and not authority verification', 'فحص هيكلي قائم على قواعد محددة · ليس ثقة الذكاء الاصطناعي ولا تحققًا من جهة معتمدة') }}</p>
+          <p>{{ copy('Synthetic cross-source structural checks · not verified maritime data confidence', 'فحص هيكلي لمصادر تجريبية · لا يمثل الثقة في بيانات بحرية معتمدة') }}</p>
         </div>
-        <span class="v360-quality-score" *ngIf="storedAiIntelligence?.quality?.score !== null && storedAiIntelligence?.quality?.score !== undefined">
-          {{ storedAiIntelligence?.quality?.score }}/100
-          <small>{{ copy('Structural only', 'جودة هيكلية فقط') }}</small>
-        </span>
+        <div class="v360-quality-controls">
+          <span class="v360-quality-score" *ngIf="storedAiIntelligence?.quality?.score !== null && storedAiIntelligence?.quality?.score !== undefined">
+            {{ storedAiIntelligence?.quality?.score }}/100
+            <small>{{ copy('Structural only', 'جودة هيكلية فقط') }}</small>
+          </span>
+          <button type="button" class="v360-quality-toggle" (click)="qualityExpanded = !qualityExpanded"
+                  [attr.aria-expanded]="qualityExpanded">
+            {{ qualityExpanded ? copy('Hide details', 'إخفاء التفاصيل') : copy('View details', 'عرض التفاصيل') }}
+            <span aria-hidden="true">{{ qualityExpanded ? '−' : '+' }}</span>
+          </button>
+        </div>
       </div>
       <p class="v360-quality-state" *ngIf="intelligenceStatus === 'loading'">
         {{ copy('Checking stored source comparisons…', 'جارٍ تحميل مقارنة المصادر المحفوظة…') }}
@@ -91,16 +98,23 @@
         {{ copy('Data-quality details unavailable. No confidence or absence-of-conflict assertion is made.', 'تفاصيل جودة البيانات غير متاحة. لا نفترض مستوى ثقة أو عدم وجود تعارض.') }}
       </p>
       <ng-container *ngIf="storedAiIntelligence as intelligence">
+        <div class="v360-quality-peek" *ngIf="intelligence.quality.breakdown as summary">
+          <span>{{ copy('Completeness', 'الاكتمال') }} <b>{{ summary.completenessPercent }}%</b></span>
+          <span>{{ copy('Consistency', 'الاتساق') }} <b>{{ summary.consistencyPercent === null ? '—' : summary.consistencyPercent + '%' }}</b></span>
+          <span>{{ copy('Evidence linkage', 'ربط الأدلة') }} <b>{{ summary.evidenceLinkagePercent === null ? '—' : summary.evidenceLinkagePercent + '%' }}</b></span>
+          <span>{{ copy('Compared identity fields', 'حقول الهوية المقارنة') }} <b>{{ summary.comparedFields }}</b></span>
+          <span>{{ copy('Persisted field differences', 'اختلافات الحقول المحفوظة') }} <b>{{ intelligence.conflicts.length }}</b></span>
+        </div>
         <p class="v360-quality-state" *ngIf="intelligence.quality.status !== 'CALCULATED'">
           {{ copy('Structural quality not calculated for this saved assessment. A no-AirIA retrospective check is available.', 'لم تُحسب الجودة الهيكلية لهذا التقييم المحفوظ بعد. يمكن إجراء فحص لاحق دون استدعاء Airia.') }}
         </p>
-        <div class="v360-quality-metrics" *ngIf="intelligence.quality.breakdown as summary">
+        <div class="v360-quality-metrics" *ngIf="qualityExpanded && intelligence.quality.breakdown as summary">
           <span><small>{{ copy('Completeness', 'الاكتمال') }}</small><strong>{{ summary.completenessPercent }}%</strong></span>
           <span><small>{{ copy('Consistency', 'الاتساق') }}</small><strong>{{ summary.consistencyPercent === null ? '—' : summary.consistencyPercent + '%' }}</strong></span>
           <span><small>{{ copy('Evidence linkage', 'ربط الأدلة') }}</small><strong>{{ summary.evidenceLinkagePercent === null ? '—' : summary.evidenceLinkagePercent + '%' }}</strong></span>
           <span><small>{{ copy('Compared identity fields', 'حقول الهوية المقارنة') }}</small><strong>{{ summary.comparedFields }}</strong></span>
         </div>
-        <div class="v360-quality-conflicts">
+        <div class="v360-quality-conflicts" *ngIf="qualityExpanded">
           <strong>{{ copy('Detected source disagreements', 'اختلافات المصادر المكتشفة') }}: {{ intelligence.conflicts.length }}</strong>
           <span *ngIf="intelligence.conflicts.length === 0">{{ copy('No disagreements stored for compared fields; this does not establish overall accuracy or authority verification.', 'لا توجد اختلافات مسجلة للحقول التي تمت مقارنتها؛ لا يعني ذلك إثبات الدقة العامة أو اعتماد الجهة.') }}</span>
           <div class="v360-quality-conflict" *ngFor="let issue of intelligence.conflicts">
@@ -110,7 +124,7 @@
               {{ copy('External row evidence', 'دليل السجل الخارجي') }}: {{ issue.SOURCE_B_EVIDENCE_ID || copy('No stable ID available', 'لا يوجد معرّف ثابت متاح') }}</small>
           </div>
         </div>
-        <p class="v360-quality-disclaimer">
+        <p class="v360-quality-disclaimer" *ngIf="qualityExpanded">
           {{ copy('Synthetic POC data. Independently verified data confidence: unavailable. A structural score is never proof of an authentic record.', 'بيانات تجريبية. الثقة المؤكدة بالتحقق المستقل غير متاحة. درجة الجودة الهيكلية ليست دليلًا على صحة أو اعتماد السجل.') }}
         </p>
       </ng-container>
@@ -270,7 +284,7 @@
         <article class="panel risk-panel">
           <div class="panel-header">
             <div>
-              <h3>{{ copy('Why is this vessel', 'لماذا هذه السفينة') }} {{ riskLabel() }}؟</h3>
+              <h3>{{ copy('Why is this vessel classified as', 'لماذا صُنِّفت السفينة') }} {{ riskLabel() }}{{ lang.isArabic ? '؟' : '?' }}</h3>
               <p>{{ storedAi ? copy('Weighted contributions from the saved A01/A02 assessment', 'المساهمات الموزونة من تقييم A01/A02 المحفوظ') : copy('Synthetic risk model · no saved AI result', 'نموذج مخاطر تجريبي · لا توجد نتيجة AI محفوظة') }}</p>
             </div>
             <span class="risk-confidence">{{ storedAi ? copy('Oracle saved · POC', 'محفوظ Oracle · تجريبي') : copy('Fixture estimate', 'تقدير تجريبي') }}</span>
