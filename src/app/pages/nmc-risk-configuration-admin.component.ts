@@ -14,7 +14,6 @@ import {
   RiskCalculationMode,
   RiskEngineConfig,
   RiskFactorKey,
-  RiskWeights,
   RiskPopulationStats
 } from '../services/nmc-risk-engine.service';
 
