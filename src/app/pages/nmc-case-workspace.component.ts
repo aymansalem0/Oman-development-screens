@@ -182,6 +182,7 @@ export class NmcCaseWorkspaceComponent implements OnInit {
   }
 
   get currentRisk(): number {
+    if(this.centralCase)return this.centralCase.sourceScore;
     let score = this.vessel.risk;
     if (this.isTaskCompleted('verify-certificate')) score -= this.vessel.risk >= 80 ? 12 : 6;
 
