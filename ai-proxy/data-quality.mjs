@@ -26,14 +26,24 @@ export function evaluateDataQuality({bundle,psc,signals}){
     throw new Error('QUALITY_VESSEL_ID_INVALID');
 
   const comparisons=[];
+  const fieldComparisons=[];
   const disagreements=[];
   const values=[];
   for(const field of FIELDS){
     const a=clean(internal[field.internal]);
     const b=clean(psc[field.external]);
     values.push(Boolean(a),Boolean(b));
-    if(!a||!b)continue; // Missing values are missing, not proof of disagreement.
-    const matched=canonical(a)===canonical(b);
+    const available=Boolean(a)&&Boolean(b);
+    const matched=available&&canonical(a)===canonical(b);
+    fieldComparisons.push({
+      field:field.field,internalValue:a||null,externalValue:b||null,
+      internalSource:'NMC_INTERNAL_SIM',externalSource:'PSC_GOOGLE_SIM',
+      internalEvidenceId:(bundle.evidenceIds||[]).includes('VES-'+internalId)?'VES-'+internalId:null,
+      externalEvidenceId:null, // The synthetic PSC registry row provides no stable record ID.
+      status:!available?'MISSING':matched?'MATCHED':'MISMATCH',
+      comparisonRule:'Unicode NFKC; trim; collapse whitespace; case-insensitive; ignore punctuation.'
+    });
+    if(!available)continue; // Missing values are missing, not proof of disagreement.
     comparisons.push({field:field.field,matched});
     if(!matched)disagreements.push({
       fieldName:field.field,
@@ -45,13 +55,28 @@ export function evaluateDataQuality({bundle,psc,signals}){
     });
   }
 
-  const knownIds=new Set([...(bundle.evidenceIds||[]),...(psc.evidenceIds||[])]);
-  const links=(signals||[]).flatMap(signal=>Array.isArray(signal.evidenceIds)?signal.evidenceIds:[]);
-  const linked=links.filter(id=>knownIds.has(id)).length;
+  const internalIds=new Set(bundle.evidenceIds||[]);
+  const externalIds=new Set(psc.evidenceIds||[]);
+  const knownIds=new Set([...internalIds,...externalIds]);
+  const evidenceLinkages=(signals||[]).flatMap(signal=>
+    (Array.isArray(signal.evidenceIds)?signal.evidenceIds:[]).map(id=>({
+      factor:signal.factor||'UNKNOWN',agent:signal.sourceAgent||'NOT_RECORDED',
+      evidenceId:id,matched:knownIds.has(id),
+      source:internalIds.has(id)?'NMC_INTERNAL_SIM':externalIds.has(id)?'PSC_GOOGLE_SIM':'UNKNOWN'
+    })));
+  const links=evidenceLinkages.map(row=>row.evidenceId);
+  const linked=evidenceLinkages.filter(row=>row.matched).length;
   const completeness=clamp(values.filter(Boolean).length/values.length*100);
   const consistency=comparisons.length?clamp(comparisons.filter(c=>c.matched).length/comparisons.length*100):null;
   const evidenceCoverage=links.length?clamp(linked/links.length*100):null;
-  const provenance=psc.sourceSystem&&psc.datasetVersion&&psc.retrievedAt?100:60;
+  // Current V1 heuristic treats source metadata as one all-or-nothing check,
+  // not three separately weighted sub-scores.
+  const provenanceChecks=[
+    {field:'sourceSystem',value:psc.sourceSystem||null,present:Boolean(psc.sourceSystem)},
+    {field:'datasetVersion',value:psc.datasetVersion||null,present:Boolean(psc.datasetVersion)},
+    {field:'retrievedAt',value:psc.retrievedAt||null,present:Boolean(psc.retrievedAt)}
+  ];
+  const provenance=provenanceChecks.every(row=>row.present)?100:60;
   const insufficient=!comparisons.length||!links.length||evidenceCoverage===null;
   // Transparent structural heuristic. Synthetic source/absence of PDF evidence
   // cap at 75, avoiding a misleading 100% confidence claim.
@@ -60,6 +85,19 @@ export function evaluateDataQuality({bundle,psc,signals}){
   // Proportional uncertainty discount: even one inconsistency lowers the score.
   // A simple cap would hide discrepancies until uncapped quality fell below 75.
   const score=uncapped===null?null:Math.min(75,Math.round(uncapped*.75));
+  const metric=(key,label,percent,weight,numerator,denominator)=>({
+    key,label,percent,weightPercent:weight,numerator,denominator,
+    rawContribution:percent===null?null:Math.round(percent*weight)/100
+  });
+  const calculationSteps=[
+    metric('completeness','Populated identity values',completeness,35,
+      values.filter(Boolean).length,values.length),
+    metric('consistency','Matching compared identity fields',consistency,30,
+      comparisons.filter(row=>row.matched).length,comparisons.length),
+    metric('evidenceLinkage','Recognized AI evidence references',evidenceCoverage,20,linked,links.length),
+    metric('provenance','PSC metadata rule: all 3 fields present = 100, otherwise = 60',provenance,15,
+      provenanceChecks.filter(row=>row.present).length,provenanceChecks.length)
+  ];
   return {
     calculationStatus:insufficient?'INSUFFICIENT_EVIDENCE':'CALCULATED',
     calculationVersion:'NMC Structural Quality 1.0',
@@ -68,6 +106,27 @@ export function evaluateDataQuality({bundle,psc,signals}){
     breakdown:{
       scoreKind:'STRUCTURAL_QUALITY_NOT_DATA_CONFIDENCE',
       calculationVersion:'NMC Structural Quality 1.0',
+      calculationSteps,
+      fieldComparisons,
+      evidenceLinkages,
+      provenanceChecks,
+      sourceProvenance:{
+        internalSystem:'NMC_INTERNAL_SIM',
+        externalSystem:'PSC_GOOGLE_SIM',
+        pscSourceSystem:psc.sourceSystem||null,
+        pscDatasetVersion:psc.datasetVersion||null,
+        pscRetrievedAt:psc.retrievedAt||null,
+        pscMode:psc.sourceMode,
+        reconstruction:'SOURCE_AT_QUALITY_CALCULATION_TIME_NOT_HISTORICAL_PSC_SNAPSHOT'
+      },
+      matchingIdentityFields:comparisons.filter(row=>row.matched).length,
+      identityValueSidesPresent:values.filter(Boolean).length,
+      identityValueSidesExpected:values.length,
+      evidenceReferencesLinked:linked,
+      evidenceReferencesTotal:links.length,
+      rawWeightedContributionMethod:'SUM(percent * weightPercent / 100), then round to whole score',
+      syntheticDiscountFactor:0.75,
+      finalScoreMethod:'MIN(75, ROUND(rawWeightedScore * 0.75))',
       completenessPercent:completeness,
       consistencyPercent:consistency,
       evidenceLinkagePercent:evidenceCoverage,
