@@ -171,6 +171,17 @@ docker compose $compose ps
 - **Maritime Case:** approved A01 proposed actions remain the sole task source, generated on explicit Create Case. Its immutable source Risk Score and assessment ID link back to full Risk Intelligence. No reset or Risk page opens a new case.
 - **Oracle guidance materialization:** new successful assessments trigger deterministic advisory materialization in the background; older assessments can be evaluated from saved factors through read-only GET without rerunning A01/A02. No automatic change to source scores or tasks.
 
+### Risk Management settings vs immutable Oracle AI assessments
+
+The original `/#/moei/nmc/admin/risk-configuration` screen saved rules to **browser localStorage**, not Oracle. Previously its `Publish & Recalculate 420 Vessels` message was misleading: it had been calculating synthetic fixture risk across 420 vessels while only 10 saved A01/A02 assessments existed. This increment corrects the behavior and labels both the scope and source.
+
+- **Risk Settings Impact Analysis:** compares current vs draft scoring on the vessels with five actual saved A01/A02 factor severities retrieved from the backend. An unassessed vessel never receives an invented score. Displayed data are projections, not persisted Oracle decisions.
+- **Risk Intelligence:** replays the exact deterministic fleet risk formula using those same saved A01/A02 severities and the currently published local Risk Settings. Its prominent **Policy Projection** score/level and five weighted contributions now respond to changing thresholds, weights or calculation mode. The header also displays the immutable Oracle assessment (score, class, ruleset version), so no one can mistake a UI projection for a saved regulatory decision.
+- **Threshold change alone does not change the numeric score.** E.g. a previously saved score of 60/Watch with thresholds 45/65/85 becomes **60/Critical** under browser settings 10/30/50. A weight or mode change can change the numeric score itself.
+- **Operational Guidance, Cases, Alerts, Command Center fleet counts, Vessel 360 saved status and Fleet Scheduler** still read server/Oracle assessments and do **not** respond to another browser's localStorage rules. The current UI shows this explicitly. For fully authoritative ministry-wide policy publication and global re-scoring, a separate server-side versioned risk-ruleset workflow with controlled assessment re-projection, auditing and consistent downstream consumers is required; do not claim the browser preview has completed that step.
+
+Safe frontend-only deploy for this change: pull the branch, `docker compose $compose build nmc`, then `docker compose $compose up -d --no-deps --force-recreate nmc`. Do not rebuild Oracle, rerun Migration 006 or issue Airia requests for a classification-only change.
+
 ### Quick PowerShell verification
 
 ~~~powershell
