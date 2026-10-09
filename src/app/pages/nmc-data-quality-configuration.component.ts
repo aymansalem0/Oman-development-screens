@@ -54,6 +54,19 @@ export class NmcDataQualityConfigurationComponent implements OnInit,OnDestroy {
       : this.draft.enabledFields.filter(f=>f!==key);
     this.recalculate();
   }
+  normalizeWeights():void {
+    const weights=this.metrics.map(k=>Number(this.draft.weights[k]||0));
+    const total=weights.reduce((sum,x)=>sum+x,0);
+    if(total<=0||weights.some(x=>!Number.isFinite(x)||x<0))return;
+    let assigned=0;
+    this.metrics.forEach((key,index)=>{
+      const next=index===this.metrics.length-1?100-assigned
+        :Math.round(weights[index]/total*100);
+      this.draft.weights[key]=next;
+      assigned+=next;
+    });
+    this.recalculate();
+  }
   get totalWeight():number {return this.metrics.reduce((sum,k)=>sum+Number(this.draft.weights[k]||0),0);}
   get delta():number|null {
     return this.proposed?.score!=null && this.saved?.quality.score!=null
