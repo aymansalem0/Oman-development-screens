@@ -22,6 +22,7 @@ import {
 import { NMC_OPERATIONAL_VESSELS } from '../data/nmc-expanded-vessel-catalog';
 import { LanguageService } from '../services/language.service';
 import { NmcRiskEngineService } from '../services/nmc-risk-engine.service';
+import { NmcAlertsService } from '../services/nmc-alerts.service';
 
 interface MaritimeEvent {
   time: string;
@@ -51,6 +52,7 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
   vessels: NmcVesselProfile[] = NMC_OPERATIONAL_VESSELS.map(vessel => ({ ...vessel, risk: -1 }));
   fleetSnapshot: FleetAiSnapshot | null = null;
   fleetError = '';
+  unreadAlertCount = 0;
 
   attentionPage = 1;
   readonly attentionPageSize = 6;
@@ -73,12 +75,14 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
   private lastInteractiveVesselId?: number;
   private riskSubscription?: Subscription;
   private fleetPoller?: ReturnType<typeof setInterval>;
+  private alertPoller?: ReturnType<typeof setInterval>;
 
   constructor(
     private router: Router,
     public lang: LanguageService,
     private riskEngine: NmcRiskEngineService,
-    private readonly fleetAi: NmcFleetAiService
+    private readonly fleetAi: NmcFleetAiService,
+    private readonly alertsService: NmcAlertsService
   ) {}
 
   copy(en: string, ar: string): string {
@@ -189,6 +193,8 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
   ngOnInit(): void {
     this.riskSubscription = this.riskEngine.config$.subscribe(() => this.loadFleet());
     this.fleetPoller = setInterval(() => this.loadFleet(), 7000);
+    this.loadAlertCount();
+    this.alertPoller=setInterval(()=>this.loadAlertCount(),30000);
 
     this.timer = setInterval(() => {
       this.now = new Date();
@@ -204,6 +210,7 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
     if (this.timer) clearInterval(this.timer);
     this.riskSubscription?.unsubscribe();
     if(this.fleetPoller)clearInterval(this.fleetPoller);
+    if(this.alertPoller)clearInterval(this.alertPoller);
     this.map?.remove();
   }
 
@@ -329,6 +336,12 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
   get fleetProgress():string{
     const j=this.fleetSnapshot?.job;
     return j?j.completed+' completed · '+j.failed+' failed / '+j.total:'';
+  }
+  private loadAlertCount():void{
+    this.alertsService.overview().subscribe({
+      next:response=>{this.unreadAlertCount=response.summary.unread;},
+      error:()=>{this.unreadAlertCount=0;}
+    });
   }
   private loadFleet():void{
     this.fleetAi.snapshot().subscribe({
