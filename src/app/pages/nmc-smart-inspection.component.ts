@@ -69,13 +69,17 @@ export class NmcSmartInspectionComponent implements OnInit {
       next:result=>{
         this.centralLoading=false;
         this.centralCase=result.case?.status==='RESOLVED'?null:result.case;
-        const scheduled=(this.centralCase?.inspectionRequests||[]).find(r=>
-          r.status==='SCHEDULED'||r.status==='COMPLETED');
+        const scheduled=this.activeScheduledReferral;
         if(scheduled?.inspector)this.inspectorName=scheduled.inspector;
         // Rebuild after loading the central source assessment so severity isn't
         // inferred from the unrelated 87-point catalog fixture.
         this.buildChecklist();
-        if(this.centralCase?.inspectionOutcome){
+        if(scheduled){
+          // A legacy case outcome must NOT complete a new A01 scheduling
+          // request; this is a separate inspection session.
+          this.existingOutcome=undefined;
+          this.submitted=false;
+        }else if(this.centralCase?.inspectionOutcome){
           const o=this.centralCase.inspectionOutcome;
           this.existingOutcome={...o,riskReduction:0,inspector:'Smart Inspection',
             result:o.result as NmcInspectionOutcome['result']};
@@ -117,8 +121,15 @@ export class NmcSmartInspectionComponent implements OnInit {
     return this.centralCase?'NMC-'+this.centralCase.id.slice(0,8).toUpperCase():'—';
   }
 
+  get activeScheduledReferral(){
+    return this.centralCase?.inspectionRequests?.find(r=>r.status==='SCHEDULED');
+  }
+
   get inspectionId(): string {
-    return `NMC-INS-2026-${this.vessel.imo.slice(-4)}`;
+    const referral=this.activeScheduledReferral;
+    return referral
+      ?'NMC-INS-'+referral.id.replaceAll('-','').slice(0,20).toUpperCase()
+      :`NMC-INS-2026-${this.vessel.imo.slice(-4)}`;
   }
 
   // Case-originated inspection must use the saved AI assessment at case creation,
@@ -163,13 +174,14 @@ export class NmcSmartInspectionComponent implements OnInit {
   }
 
   get isSchedulingRequired():boolean{
-    return !!this.centralCase?.actionPlan &&
-      !(this.centralCase.inspectionRequests||[]).some(
-        r=>r.status==='SCHEDULED'||r.status==='COMPLETED');
+    if(!this.centralCase?.actionPlan)return false;
+    // Never reuse earlier COMPLETED inspections to authorize a new field visit.
+    return !this.activeScheduledReferral;
   }
 
   get canSubmit(): boolean {
-    return !this.isSchedulingRequired &&
+    return (!this.centralCase?.actionPlan||!!this.activeScheduledReferral) &&
+      !this.isSchedulingRequired && !this.submitted &&
       this.completedChecks === this.checks.length && !!this.inspectorName.trim();
   }
 
@@ -215,7 +227,7 @@ export class NmcSmartInspectionComponent implements OnInit {
 
     const outcome: NmcInspectionOutcome = {
       inspectionId: this.inspectionId,
-      completedAt: '23:35',
+      completedAt: new Date().toISOString(),
       result,
       findingsCount: this.findings.length,
       criticalFindings: this.criticalFindings,
