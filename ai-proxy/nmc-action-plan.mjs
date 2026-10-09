@@ -36,14 +36,21 @@ export class ActionPlanError extends Error{
 }
 function extract(raw){
   let value=raw;
-  for(let i=0;i<5;i++){
+  for(let i=0;i<6;i++){
+    if(value===undefined||value===null)
+      throw new ActionPlanError('A01_ACTIONS_NOT_AVAILABLE');
     if(typeof value==='string'){
       try{value=JSON.parse(value);}catch{throw new ActionPlanError('A01_UNSUPPORTED_RESPONSE');}
     }
-    if(!value||typeof value!=='object'||Array.isArray(value))
+    if(Array.isArray(value)){
+      if(value.length!==1)throw new ActionPlanError('A01_UNSUPPORTED_RESPONSE');
+      value=value[0];continue;
+    }
+    if(!value||typeof value!=='object')
       throw new ActionPlanError('A01_UNSUPPORTED_RESPONSE');
     if(Array.isArray(value.proposedActions))return value;
-    value=value.result??value.output??value.response??value.data??value.content;
+    value=value.result??value.output??value.response??value.data??
+      value.finalOutput??value.outputText??value.content??value.text;
   }
   throw new ActionPlanError('A01_ACTIONS_NOT_AVAILABLE');
 }
