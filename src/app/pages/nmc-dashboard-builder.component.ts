@@ -6,7 +6,7 @@ import { Subscription } from 'rxjs';
 import { LanguageService } from '../services/language.service';
 import { NmcNavigationComponent } from '../components/nmc-navigation.component';
 import {
-  DASHBOARD_METRICS, DASHBOARD_MENU_PLACEMENTS, DashboardDefinition, DashboardMetric, DashboardTemplateKind,
+  DASHBOARD_METRICS, DASHBOARD_MENU_PLACEMENTS, DashboardMenuPlacement, DashboardDefinition, DashboardMetric, DashboardTemplateKind,
   DashboardWidget, DashboardWidgetKind, NmcDashboardStoreService
 } from '../services/nmc-dashboard-store.service';
 import {
@@ -37,6 +37,7 @@ export class NmcDashboardBuilderComponent implements OnInit,OnDestroy {
   dashboard:DashboardDefinition|null=null;
   dashboards:DashboardDefinition[]=[];
   sharedDashboards:DashboardDefinition[]=[];
+  selectedMenuPlacement:Record<string,DashboardMenuPlacement>={};
   sharedError='';
   sharedBusy=false;
   sharedHistory:DashboardRevision[]=[];
@@ -145,6 +146,9 @@ export class NmcDashboardBuilderComponent implements OnInit,OnDestroy {
     const sub=this.workspace.list().subscribe({
       next:data=>{
         this.sharedDashboards=data.dashboards;
+        this.selectedMenuPlacement=Object.fromEntries(data.dashboards.map(d=>[
+          d.id,d.menuPlacement||'NMC_CENTER'
+        ])) as Record<string,DashboardMenuPlacement>;
         this.sharedError='';
         this.sharedVersions=new Map(data.dashboards.map(d=>[d.id,d.version]));
       },
@@ -235,6 +239,32 @@ export class NmcDashboardBuilderComponent implements OnInit,OnDestroy {
         this.loadShared();
         this.dashboardNavigation.refresh();
         this.sharedError=this.copy('Dashboard published successfully.','تم نشر لوحة المعلومات بنجاح.');
+      },
+      error:error=>{
+        this.sharedBusy=false;
+        this.sharedError=this.workspace.readableError(error,this.lang.isArabic);
+      }
+    }));
+  }
+
+  moveSharedMenu(board:DashboardDefinition):void {
+    if(board.status!=='PUBLISHED'||this.sharedBusy)return;
+    const target=this.selectedMenuPlacement[board.id]||'NMC_CENTER';
+    if(target===(board.menuPlacement||'NMC_CENTER'))return;
+    this.sharedBusy=true;
+    let request;
+    try {request=this.workspace.movePublished(board.id,board.version,target);}
+    catch(error){
+      this.sharedBusy=false;
+      this.sharedError=this.workspace.readableError(error,this.lang.isArabic);
+      return;
+    }
+    this.subs.add(request.subscribe({
+      next:()=>{
+        this.sharedBusy=false;
+        this.loadShared();
+        this.dashboardNavigation.refresh();
+        this.sharedError=this.copy('Dashboard menu location updated.','تم تحديث مكان لوحة المعلومات في القائمة.');
       },
       error:error=>{
         this.sharedBusy=false;
