@@ -120,6 +120,8 @@
           </div>
           <div class="rx-explain-note">
             {{copy('Calculation mode','طريقة الحساب')}}: <b>{{calculationMode}}</b> ·
+            {{copy('Mode adjustment','تعديل نمط الحساب')}}: <b>{{modeAdjustment | number:'1.2-2'}}</b> ·
+            {{copy('Reconstructed','الحساب المُعاد')}}: <b>{{reconstructedScore}}/100</b> ·
             {{copy('Saved final result','النتيجة النهائية المحفوظة')}}: <b>{{a.score}}/100</b>.
             {{copy('No synthetic baseline calibration or AI rerun occurs here.',
                    'لا تتم إضافة خط أساس تجريبي أو استدعاء AI جديد عند فتح الشاشة.')}}
