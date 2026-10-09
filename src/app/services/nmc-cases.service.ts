@@ -8,6 +8,27 @@ export type NmcCentralTaskStatus='Assigned'|'In Progress'|'Completed'|'Escalated
 export interface NmcCentralCaseTask {
   id:string;status:NmcCentralTaskStatus;
   assignedRole:string;mandatory:boolean;evidenceIds:string[];
+  actionId?:string;actionType?:string;title?:string;priority?:string;
+  reason?:string;provenance?:string;
+}
+export interface NmcAiAction {
+  actionId:string;actionType:string;title:string;reason:string;
+  priority:string;ownerRole:string;confidence:number;
+  evidenceIds:string[];requiresHumanApproval:boolean;
+  decision:'PENDING'|'ACCEPT'|'REJECT'|'MODIFY';decisionNote?:string;
+}
+export interface NmcAiActionPlan {
+  source:string;sourceAssessmentId:string|null;sourceScore:number;
+  sourceLevel:string;configVersion:string|null;summary:string;whyItMatters:string;
+  agentAssessmentId:string|null;createdAt:string;proposedActions:NmcAiAction[];
+}
+export interface NmcInspectionReferral {
+  id:string;caseId:string;imo:string;actionId:string;
+  status:'PENDING_SCHEDULING'|'SCHEDULED'|'COMPLETED';
+  priority:string;reason:string;evidenceIds:string[];sourceScore:number;
+  sourceAssessmentId:string|null;port:string|null;scheduledAt:string|null;
+  inspector:string|null;createdAt:string;version:number;caseStatus?:string;
+  sourceLevel?:string;
 }
 export interface NmcCentralDecision {
   recommendationId:string;decision:'ACCEPT'|'MODIFY'|'REJECT';
@@ -23,6 +44,8 @@ export interface NmcCentralCase {
   alertIds:string[];sourceScore:number;sourceLevel:string;
   createdAt:string;updatedAt:string;version:number;
   tasks:NmcCentralCaseTask[];decisions:NmcCentralDecision[];
+  actionPlan?:NmcAiActionPlan|null;
+  inspectionRequests?:NmcInspectionReferral[];
   inspectionOutcome:NmcCentralInspection|null;
   resolutionNote:string|null;provenance:string;
 }
@@ -55,6 +78,23 @@ export class NmcCasesService {
   }
   createFromAlert(alertId:string):Observable<CaseResponse>{
     return this.mutate(this.root+'/from-alert',{alertId},false);
+  }
+  generateActionPlan(current:NmcCentralCase):Observable<CaseResponse>{
+    return this.mutate(this.path(current.id)+'/action-plan/generate',
+      {version:current.version},false);
+  }
+  decideAiAction(current:NmcCentralCase,actionId:string,
+    decision:'ACCEPT'|'MODIFY'|'REJECT',note=''):Observable<CaseResponse>{
+    return this.mutate(this.path(current.id)+'/actions/'+encodeURIComponent(actionId)+'/decision',
+      {version:current.version,decision,note},false);
+  }
+  inspectionReferrals():Observable<{status:'ok';requests:NmcInspectionReferral[]}>{
+    return this.http.get<{status:'ok';requests:NmcInspectionReferral[]}>('/api/ai/inspection-referrals');
+  }
+  scheduleInspection(current:NmcCentralCase,requestId:string,
+    scheduledAt:string,port:string,inspector:string):Observable<CaseResponse>{
+    return this.mutate(this.path(current.id)+'/inspections/'+encodeURIComponent(requestId)+'/schedule',
+      {version:current.version,scheduledAt,port,inspector},false);
   }
   task(current:NmcCentralCase,taskId:string,action:'START'|'COMPLETE'|'ESCALATE',note=''):Observable<CaseResponse>{
     return this.mutate(this.path(current.id)+'/task',
@@ -105,6 +145,19 @@ export class NmcCasesService {
       CASE_STORE_UNAVAILABLE:['Case service is unavailable.','خدمة إدارة الحالات غير متاحة.'],
       CASE_ALERT_ACK_REQUIRED:['Acknowledge this alert before creating a case.','يجب استلام التنبيه قبل فتح حالة.'],
       CASE_VERSION_CONFLICT:['The case has been updated in another session. Reload it.','تم تعديل الحالة في جلسة أخرى. أعد تحميلها.'],
+      A01_ACTIONS_NOT_AVAILABLE:['A01 did not provide a valid situation action plan. Verify the Airia pipeline contract.','لم يرجع A01 خطة إجراءات صحيحة. راجع مخرجات Airia.'],
+      A01_UNSUPPORTED_RESPONSE:['A01 response format is unsupported; no tasks were created.','تنسيق استجابة A01 غير مدعوم ولم يتم إنشاء مهام.'],
+      A01_ACTION_EVIDENCE_MISSING:['A01 proposal lacks verified source evidence.','اقتراح A01 لا يحتوي أدلة مصدر تم التحقق منها.'],
+      A01_ACTION_INVALID:['A01 returned an unsupported action type or duplicate identifier.','أعاد A01 نوع إجراء غير مدعوم أو معرفًا مكررًا.'],
+      CASE_SOURCE_ASSESSMENT_UNAVAILABLE:['The original saved assessment is unavailable or was superseded. No AI run was made.','التقييم الأصلي غير متاح أو تم استبداله؛ لم يتم استدعاء AI.'],
+      CASE_ACTION_PLAN_REQUIRED:['Generate and review an A01 action plan before completion.','يجب إنشاء خطة إجراءات A01 ومراجعتها قبل الإغلاق.'],
+      CASE_ACTION_PLAN_EXISTS:['The action plan already exists; refresh this case.','خطة الإجراءات موجودة بالفعل. حدث الحالة.'],
+      CASE_ACTION_ALREADY_DECIDED:['This AI proposal has already been decided.','تم اتخاذ قرار بشأن هذا الاقتراح بالفعل.'],
+      CASE_INSPECTION_NOT_SCHEDULED:['Schedule the inspection from Smart Inspection before submitting its results.','يجب جدولة المعاينة في المعاينة الذكية قبل تسجيل النتائج.'],
+      CASE_INSPECTION_SCHEDULE_CONFLICT:['Inspection request was already scheduled; refresh the queue.','تمت جدولة طلب المعاينة. حدث القائمة.'],
+      CASE_SCHEDULE_INVALID:['Select a future date/time, inspection port and inspector.','حدد موعدًا مستقبليًا وميناءً ومعاينًا.'],
+      A01_ACTION_PLAN_UNAVAILABLE:['Airia A01 action plan call failed. Nothing was created.','تعذر تنفيذ خطة إجراءات Airia A01؛ لم يتم إنشاء أي شيء.'],
+      AIRIA_NOT_CONFIGURED:['Airia API is not configured for the POC.','لم يتم إعداد اتصال Airia لهذا الاختبار.'],
       CASE_TASK_TRANSITION_INVALID:['This task action is unavailable in its current state.','الإجراء غير متاح في الحالة الحالية للمهمة.'],
       CASE_INSPECTION_EVIDENCE_REQUIRED:['Record the inspection outcome before completing this task.','يجب تسجيل نتيجة المعاينة قبل استكمال المهمة.'],
       CASE_RESOLUTION_NOTE_REQUIRED:['A resolution reason is required.','يجب إدخال سبب الإغلاق.'],
