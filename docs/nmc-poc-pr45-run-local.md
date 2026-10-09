@@ -103,7 +103,16 @@ Expected: AI proxy health is `ok`, Oracle `ready`, and JSON containing `cases`, 
 
 **Existing cases** can contain older hardcoded tasks and historical inspection outcomes. They remain persisted for audit but are intentionally invisible in the new AI-only task list. An existing saved A01 plan is reused without extra agent calls. Older cases without a saved plan can be recovered through the explicit Retry button; do not delete case/audit data or force a duplicate active case. Scheduled new A01 inspections use a new unique ID and do not reuse the legacy inspection result.
 
-## 5. Verification / known limits
+## 5. Command Center live-risk UI regression (frontend-only)
+
+- Frontend polls the read-only `GET /api/ai/fleet/status` every 7 seconds. It displays Oracle-backed `counts`, validated saved vessel `score`/`level`, attention list, latest completed assessment events and vessel map colors without running Airia.
+- Any browser-local Risk Management ruleset version must **not** hide an already saved assessment or reclassify its published level. Historical score and ruleset remain unchanged; no browser-side recalculation replaces Oracle evidence.
+- On first page load, **no vessel is selected**: the details pane asks the officer to select one. Only map/list clicks reveal the vessel details and selected route. Opening or polling the screen must not auto-select a vessel. Hovering over an unselected marker does not reveal a vessel dossier.
+- Existing selection remains in view when subsequent polling refreshes the selected vessel's saved score; a clean page reload starts unselected.
+- With the example controlled two-vessel rollout, if backend `counts` reads `assessed:2`, `pending:418`, `watch:1`, `priorityReview:1`, expect those figures on Command Center and one corresponding Priority Review item. Check actual backend counts before treating this as fixed test data.
+- This increment updates **only Angular frontend files**. Deploy via `docker compose $compose build nmc` then `docker compose $compose up -d --no-deps --force-recreate nmc`. Do **not** recreate `ai-proxy`/Oracle just for this UI fix; preserve the server's controlled `NMC_FLEET_AUTO_MAX_VESSELS` setting.
+
+## 6. Verification / known limits
 
 - Backend unit test: `npm --prefix ai-proxy test`. Syntax: `npm --prefix ai-proxy run check`. Angular: `npm run build` (Node.js/npm required).
 - Oracle migration 005 adds only the new allowed audit action names. There are no new independent inspection tables in this increment; referrals are stored within versioned central NMC_CASE JSON and audit.
