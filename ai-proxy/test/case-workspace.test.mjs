@@ -273,7 +273,7 @@ test('Scheduling is explicit, role-side and optimistic version-locked; inspectio
      inspectionId:'NMC-INS-2026-8471',findingsCount:0,criticalFindings:0,
      result:'Cleared',summary:'All pass'});
    assert.equal(row.inspectionRequests[0].status,'COMPLETED');
-   assert.equal(row.tasks.find(t=>t.id==='priority-inspection').status,'Completed');
+   assert.equal(row.tasks.find(t=>t.actionId==='priority-inspection').status,'Completed');
    assert.equal(row.sourceScore,91);
    assert.equal((await db.cases.history(row.id))[0].action,'INSPECTION_RECORDED');
    row=await db.cases.decideAction(row.id,row.version,'verify-certificate','REJECT',
@@ -301,7 +301,8 @@ test('Human supervisor closes only when mandatory actions are completed',async()
      /CASE_SUPERVISOR_REQUIRED/);
    await assert.rejects(()=>db.cases.resolve(row.id,row.version,'Completed','SUPERVISOR'),
      /CASE_MANDATORY_TASKS_INCOMPLETE/);
-   row=await db.cases.task(row.id,row.version,'verify-certificate','COMPLETE','Evidence verified');
+   row=await db.cases.task(row.id,row.version,
+     row.tasks.find(t=>t.actionId==='verify-certificate').id,'COMPLETE','Evidence verified');
    row=await db.cases.resolve(row.id,row.version,'Verified and closed','SUPERVISOR');
    assert.equal(row.status,'RESOLVED');
    assert.equal((await db.cases.byImo(imo)).id,row.id);
