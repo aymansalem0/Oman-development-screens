@@ -169,7 +169,9 @@ export class NmcCaseWorkspaceComponent implements OnInit {
   }
 
   get mandatoryComplete(): boolean {
-    return this.tasks.filter(task => task.mandatory).every(task => task.status === 'Completed');
+    return this.centralCase
+      ?this.centralCase.tasks.filter(t=>t.mandatory).every(t=>t.status==='Completed')
+      :this.tasks.filter(task=>task.mandatory).every(task=>task.status==='Completed');
   }
 
   get inspectionOutcome(): NmcInspectionOutcome | undefined {
