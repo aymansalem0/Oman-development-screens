@@ -199,7 +199,7 @@ export class NmcCaseWorkspaceComponent implements OnInit {
   }
 
   get riskDelta(): number {
-    return this.currentRisk - this.vessel.risk;
+    return this.centralCase?0:this.currentRisk - this.vessel.risk;
   }
 
   get nextAction(): string {
