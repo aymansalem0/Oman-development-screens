@@ -70,8 +70,7 @@
         <article class="metric-card">
           <small>{{ copy('Task completion · not case readiness', 'إنجاز المهام · ليس جاهزية الإغلاق') }}</small>
           <strong>{{ progressPercent }}%</strong>
-          <span>{{ completedTasks }}/{{ tasks.length }} {{ copy('tasks complete', 'مهام مكتملة') }} ·
-            {{legacyTaskCount}} {{copy('historical','سابقة')}}</span>
+          <span>{{ completedTasks }}/{{ tasks.length }} {{ copy('approved A01 tasks completed', 'مهام A01 المعتمدة المكتملة') }}</span>
         </article>
         <article class="metric-card">
           <small>{{ copy('Open / escalated', 'مفتوحة / مصعدة') }}</small>
@@ -84,7 +83,7 @@
     <section class="case-progress-strip">
       <div class="progress-head">
         <div>
-          <strong>{{ copy('Task completion (historical + A01-approved)', 'إنجاز المهام (سابقة + معتمدة من A01)') }}</strong>
+          <strong>{{ copy('Approved A01 task completion', 'إنجاز المهام المعتمدة من A01 فقط') }}</strong>
           <p>{{ copy('Task percentage does not include pending AI decisions or post-inspection risk verification.',
               'نسبة إنجاز المهام لا تشمل قرارات AI المعلقة أو إعادة تقييم المخاطر بعد المعاينة.') }}</p>
         </div>
@@ -108,12 +107,12 @@
         </div>
         <button *ngIf="!centralCase?.actionPlan" type="button" class="ai-plan-button"
                 [disabled]="centralBusy||caseStatus==='Resolved'" (click)="generateAiActions()">
-          ✦ {{ copy('Generate with Airia A01', 'إنشاء باستخدام Airia A01') }}
+          ↻ {{ copy('Retry A01 recommendations', 'إعادة محاولة تحميل توصيات A01') }}
         </button>
       </div>
       <div class="ai-plan-alert" *ngIf="!centralCase?.actionPlan">
-        {{ copy('No real A01 action plan saved yet. No AI-generated case tasks will be created until you explicitly run A01 and approve its proposals.',
-          'لم تُحفظ خطة فعلية من A01 بعد. لن تُنشأ مهام AI حتى تطلب التحليل وتوافق على اقتراحاته.') }}
+        {{ copy('A01 recommendations are prepared automatically when Create Maritime Case is confirmed. If this case was opened before the change or A01 failed, use Retry. No tasks are invented.',
+          'يتم إعداد توصيات A01 عند تأكيد إنشاء الحالة البحرية. إذا كانت الحالة قديمة أو فشل A01، استخدم إعادة المحاولة. لن ننشئ مهام افتراضية.') }}
       </div>
       <ng-container *ngIf="centralCase?.actionPlan as plan">
         <p class="ai-plan-context">{{ plan.summary }} <small>{{ copy('Saved source risk', 'المخاطر الأصلية') }}: {{ plan.sourceScore }}/100 · {{ plan.sourceAssessmentId }}</small></p>
@@ -159,14 +158,12 @@
             <span class="task-count">{{ tasks.length }} {{ copy('tasks', 'مهام') }}</span>
           </div>
 
-          <div class="case-legacy-notice" *ngIf="legacyTaskCount>0">
-            <strong>{{copy('Historical case tasks', 'مهام الحالة السابقة')}}: {{legacyTaskCount}}</strong>
-            <span>{{copy(
-              'These tasks were saved before the current Airia A01 plan. They are retained for audit; their completion does not approve the new AI proposals.',
-              'هذه المهام محفوظة من قبل خطة Airia A01 الحالية ولم تُحذف من سجل التدقيق. اكتمالها لا يعني اعتماد توصيات AI الجديدة.')}}
-            </span>
-            <span>{{copy('New A01-approved tasks','المهام الجديدة المعتمدة من A01')}}: {{approvedAiTaskCount}} ·
-              {{copy('Pending proposals','توصيات تنتظر القرار')}}: {{pendingAiActionCount}}</span>
+          <div class="ai-plan-alert" *ngIf="!tasks.length">
+            {{centralCase?.actionPlan
+              ?copy('No approved A01 tasks yet. Review the recommendations above; only accepted actions will appear here.',
+                    'لا توجد مهام معتمدة من A01 بعد. راجع التوصيات أعلاه؛ لن تظهر هنا إلا الإجراءات المعتمدة.')
+              :copy('Recommendations are not yet available. No historical or template tasks are displayed.',
+                    'التوصيات غير متاحة بعد؛ لن تظهر مهام قديمة أو ثابتة.')}}
           </div>
           <div class="task-list">
             <article class="task-card" *ngFor="let task of tasks" [class.selected]="selectedTask?.id === task.id">
