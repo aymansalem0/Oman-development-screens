@@ -98,6 +98,53 @@ export class NmcAiSituationAssessmentComponent implements OnInit {
     });
   }
 
+  private loadCentralCase():void {
+    this.cases.byImo(this.vessel.imo).subscribe({
+      next:response=>{
+        this.centralCase=response.case?.status==='RESOLVED'?null:response.case;
+        if(this.centralCase){
+          for(const item of this.recommendations){
+            const entry=this.centralCase.decisions.find(d=>d.recommendationId===item.id);
+            if(entry){
+              item.decision=entry.decision==='ACCEPT'?'Accepted':
+                entry.decision==='MODIFY'?'Modified':'Rejected';
+              item.officerNote=entry.note;
+            }
+          }
+        }
+      },
+      error:err=>{this.centralError=this.cases.readableError(err,this.lang.isArabic);}
+    });
+  }
+
+  saveDecision(item:AiRecommendation):void {
+    if(!this.centralCase||this.centralBusy||item.decision==='Pending')return;
+    if(item.decision!=='Accepted'&&!item.officerNote.trim()){
+      this.centralError=this.copy('Enter an explanation for this decision.',
+        'أدخل سبب هذا القرار.');
+      return;
+    }
+    const decision=item.decision==='Accepted'?'ACCEPT':
+      item.decision==='Modified'?'MODIFY':'REJECT';
+    this.centralBusy=true;this.centralError='';this.centralMessage='';
+    const current=this.centralCase;
+    this.cases.decision(current,item.id,decision,item.officerNote,
+      this.evidenceFor(item).map(e=>e.record)).subscribe({
+      next:response=>{
+        this.centralBusy=false;
+        this.centralCase=response.case;
+        this.centralMessage=this.copy(
+          'Decision saved to the maritime case audit trail.',
+          'تم حفظ القرار في سجل الحالة البحرية.');
+      },
+      error:err=>{
+        this.centralBusy=false;
+        this.centralError=this.cases.readableError(err,this.lang.isArabic);
+        if(err?.status===409)this.loadCentralCase();
+      }
+    });
+  }
+
   copy(en: string, ar: string): string {
     return this.lang.pick(en, ar);
   }
