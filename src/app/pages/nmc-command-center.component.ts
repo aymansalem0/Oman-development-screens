@@ -77,6 +77,8 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
   private fleetPoller?: ReturnType<typeof setInterval>;
   private alertPoller?: ReturnType<typeof setInterval>;
   private fleetLoadInFlight = false;
+  latestDatabaseFetchAt: string | null = null;
+  fetchingSaved = false;
 
   constructor(
     private router: Router,
@@ -243,7 +245,7 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
       { color:'#0284c7', weight:1.6, dashArray:'8 7', fillColor:'#38bdf8', fillOpacity:0.04 }
     ).bindTooltip(this.copy('East Coast Monitoring Area', 'منطقة مراقبة الساحل الشرقي'), { sticky:true }).addTo(this.map);
 
-    this.resetMapView();
+    this.resetMapBounds();
     this.refreshMapMarkers();
     this.drawSelectedTrack();
   }
@@ -350,13 +352,17 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
       Number.isFinite(row.score) && row.score>=0 && row.score<=100 &&
       ['Normal','Watch','High','Critical'].includes(row.level||'');
   }
-  private loadFleet():void{
+  private loadFleet(fromDatabase=false):void{
     if(this.fleetLoadInFlight)return;
     this.fleetLoadInFlight=true;
-    this.fleetAi.snapshot().subscribe({
+    if(fromDatabase)this.fetchingSaved=true;
+    const request=fromDatabase?this.fleetAi.fetchSaved():this.fleetAi.snapshot();
+    request.subscribe({
       next:snapshot=>{
         this.fleetLoadInFlight=false;
+        this.fetchingSaved=false;
         this.fleetSnapshot=snapshot;this.fleetError='';
+        if(fromDatabase)this.latestDatabaseFetchAt=new Date().toISOString();
         const selectedId=this.selectedVessel?.id;
         this.vessels=this.vessels.map(v=>{
           const row=snapshot.results[v.imo];
@@ -379,10 +385,13 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
       },
       error:err=>{
         this.fleetLoadInFlight=false;
+        this.fetchingSaved=false;
+        // Failed database retrieval must never clear the last good map, priority queue or vessel selection.
         this.fleetError=err?.error?.error||'Fleet AI API unavailable';
       }
     });
   }
+  fetchAgain():void{this.loadFleet(true);}
   riskDisplay(v:NmcVesselProfile):string{return v.risk<0?'—':String(v.risk);}
 
   get filteredVessels(): NmcVesselProfile[] {
@@ -505,6 +514,16 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
   }
 
   resetMapView(): void {
+    // Map reset is presentation-only: do not clear saved risk, case state or chosen vessel.
+    this.searchTerm='';this.riskFilter='All';this.typeFilter='All';
+    this.resetMapBounds();
+    this.refreshMapMarkers();
+    this.drawSelectedTrack();
+    // Explicitly fetch up-to-date persisted scores and priority statuses.
+    // The backend handles changed evidence on its own hourly schedule; no Airia call here.
+    this.fetchAgain();
+  }
+  private resetMapBounds():void{
     this.map?.fitBounds(L.latLngBounds([[23.35,51.55],[26.75,57.75]]), { padding:[16,16] });
   }
 
