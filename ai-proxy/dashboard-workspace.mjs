@@ -14,6 +14,9 @@ const TYPES=Object.freeze({
   position:['vesselPositions']
 });
 const RISK=['All','Normal','Watch','High','Critical','Pending'];
+export const DASHBOARD_MENU_PLACEMENTS=['NMC_CENTER','SMART_INSPECTION','SETTINGS'];
+const menuPlacementOf=row=>DASHBOARD_MENU_PLACEMENTS.includes(row?.menuPlacement)
+  ?row.menuPlacement:'NMC_CENTER';
 const ROLES=['EDITOR','PUBLISHER'];
 const MAX_DASHBOARDS=60;
 const keyPattern=/^[a-zA-Z0-9_-]{1,100}$/;
@@ -42,8 +45,11 @@ function normalize(input,{id,status='DRAFT',version=1}={}){
      typeof f.flag!=='string'||f.flag.length>80||
      typeof f.search!=='string'||f.search.length>120)
     throw new DashboardError('DASHBOARD_FILTERS_INVALID');
+  // Old shared dashboards have no placement field and remain under NMC Center.
+  if(input.menuPlacement!==undefined&&!DASHBOARD_MENU_PLACEMENTS.includes(input.menuPlacement))
+    throw new DashboardError('DASHBOARD_MENU_PLACEMENT_INVALID');
   return {
-    id,status,version,title,description,
+    id,status,version,title,description,menuPlacement:menuPlacementOf(input),
     updatedAt:now(),widgets:safeWidgets,
     filters:{risk:f.risk,type:f.type,flag:f.flag,search:f.search}
   };
@@ -90,6 +96,30 @@ export class DashboardWorkspace {
         WHERE STATUS<>'ARCHIVED' ORDER BY UPDATED_AT DESC`,[],{outFormat:oracledb.OUT_FORMAT_OBJECT});
       return out.rows.map(row=>JSON.parse(row.DOC_JSON));
     });
+  }
+
+  /**
+   * Public navigation registry. Only published dashboards are returned.
+   * No draft titles/content, widget configuration or edit secrets leak here.
+   */
+  async publishedMenu(){
+    let published;
+    if(this.mode==='json'){
+      published=Object.values(this._load().dashboards).filter(row=>row.status==='PUBLISHED');
+    }else{
+      published=await this._db(async con=>{
+        const out=await con.execute(`SELECT DASHBOARD_ID,TITLE,DOC_JSON
+          FROM NMC_DASHBOARD WHERE STATUS='PUBLISHED' ORDER BY TITLE`,
+          [],{outFormat:oracledb.OUT_FORMAT_OBJECT});
+        return out.rows.map(row=>{
+          const doc=JSON.parse(row.DOC_JSON);
+          return {id:row.DASHBOARD_ID,title:row.TITLE,menuPlacement:doc.menuPlacement,status:'PUBLISHED'};
+        });
+      });
+    }
+    return published.map(row=>({
+      id:row.id,title:row.title,menuPlacement:menuPlacementOf(row)
+    })).sort((a,b)=>a.title.localeCompare(b.title)||a.id.localeCompare(b.id));
   }
 
   async get(id){
