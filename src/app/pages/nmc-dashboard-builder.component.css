@@ -15,3 +15,17 @@
 @media(min-width:961px) and (max-width:1220px){.db-main,.db-shell.rtl .db-main{max-width:calc(100% - 66px);margin-left:66px;margin-right:0}.db-shell.rtl .db-main{margin-left:0;margin-right:66px}.db-layout{grid-template-columns:215px minmax(0,1fr)}}
 @media(max-width:960px){.db-main,.db-shell.rtl .db-main{max-width:100%;margin:0;padding:65px 15px 20px}.db-layout{grid-template-columns:1fr}.db-designer{grid-template-columns:repeat(2,minmax(0,1fr))}.db-heading{flex-wrap:wrap}.db-widgets{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:650px){.db-topbar{padding:8px 12px}.db-brand h1{font-size:14px}.db-brand p,.db-brand small{font-size:8px}.db-designer{grid-template-columns:1fr}.db-widgets{grid-template-columns:1fr}.db-board-actions{flex-wrap:wrap}.db-widget.db-full{grid-column:auto}.db-widget-tools button{padding:4px}.db-widget-config{justify-content:flex-start}.db-main{padding-inline:11px}}
+
+
+/* Central management shares the same design vocabulary as personal drafts. */
+.db-shared-area{margin-top:38px;padding-top:26px;border-top:1px solid #d9e6eb}
+.db-chip-published{background:#ddf8eb;border-color:#a2e5c4;color:#087a50}
+.db-workspace-save{border-color:#9bd9c8;background:#eafbf4;color:#0d816b}
+.db-workspace-save:hover{background:#daf6e8}
+.db-history{margin-top:20px;border:1px solid #e1e9ed;background:#fff;border-radius:12px;overflow:hidden}
+.db-history-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 15px;border-bottom:1px solid #eaf1f4}
+.db-history-head h3{font-size:13px;color:#284e63;margin:0}
+.db-history-row{display:grid;grid-template-columns:60px 1fr 100px minmax(130px,1.2fr);gap:8px;padding:11px 15px;border-bottom:1px solid #f0f4f6;color:#627f8d;font-size:11px}
+.db-history-row:last-child{border-bottom:0}
+.db-history-row strong{color:#0c7a70}
+@media(max-width:650px){.db-history-row{grid-template-columns:40px 1fr 70px}.db-history-row span:last-child{grid-column:1/-1}}
