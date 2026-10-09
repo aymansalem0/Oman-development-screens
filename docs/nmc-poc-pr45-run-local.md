@@ -93,15 +93,15 @@ Expected: AI proxy health is `ok`, Oracle `ready`, and JSON containing `cases`, 
 ## 4. Interactive business acceptance
 
 1. Open `http://localhost:4200/#/moei/nmc/alerts`.
-2. Find a **saved High/Critical** vessel alert (a saved assessment, not a synthetic catalog score), click **Acknowledge**, then **Create Maritime Case**. A *new* case should have **zero seeded tasks**.
-3. In Case Workspace click **Generate with Airia A01**. This is **one intentional billable agent call**, not an automatic page-load action. The actual A01 pipeline must support `mode:SITUATION_ASSESSMENT`, `proposedActions`, allowed action types and evidence IDs matching saved A01/A02 signals. Unsupported responses should fail closed with no fabricated tasks.
-4. Review each proposal and accept/reject/accept-with-note. If you accept **PRIORITY_INSPECTION**, it creates one central `PENDING_SCHEDULING` request with the unchanged case source risk.
+2. Find a **saved High/Critical** vessel alert (saved assessment, not a synthetic catalog score), click **Acknowledge**, then **Create Maritime Case**. Confirm that creating a case also triggers **ONE explicit Airia A01 call**. Wait for the response: the Case Workspace opens **with the validated proposed actions already saved**. There is no separate "Generate" step on a successful creation. A new case begins with **zero tasks** until a human approves A01 proposals.
+3. In Case Workspace, review each real A01 proposal, then accept/reject/accept-with-note. **Only approved A01 action tasks are displayed** in Tasks & SLA. Older fixed-template tasks remain in the database and history but are hidden from the active task list, progress and closure conditions. If the creation-time Airia run fails, the case is kept and a **Retry A01 recommendations** recovery button appears; retry is manual and may make another billable call. No GET/page refresh invokes an agent.
+4. Accepting **PRIORITY_INSPECTION** creates one central `PENDING_SCHEDULING` request for Smart Inspection with unchanged saved risk. The A01 pipeline must support `mode:SITUATION_ASSESSMENT`, `proposedActions`, approved action types and evidence IDs; unsupported responses fail closed, without fabricated tasks.
 5. Open `http://localhost:4200/#/moei/smart-inspection/candidates`. At top, the **Required inspections for scheduling** section reads real centrally saved referrals; the synthetic candidate pool underneath remains separate.
 6. Select **future date/time, port, inspector/team** and Confirm Schedule. Refresh page and another browser to verify central persistence.
 7. Return to Case → **Schedule / Open Inspection** and complete all inspection checklist items as **Pass**. Submit.
 8. Confirm that the request is **COMPLETED**, case inspection task is completed, and the original saved assessment (example 60/100) is **unchanged**: no fabricated -18 points or 87-point fixture replacement. **Post-inspection A02/A01 deterministic reassessment is not implemented in this PR**, and must read **pending**.
 
-**Existing cases** opened on older branches may contain legacy tasks; they are preserved. For a clean A01-origin test, use a newly opened case for an assessed vessel with an acknowledged High/Critical alert. Do not delete old case/audit or force a duplicate active case.
+**Existing cases** can contain older hardcoded tasks and historical inspection outcomes. They remain persisted for audit but are intentionally invisible in the new AI-only task list. An existing saved A01 plan is reused without extra agent calls. Older cases without a saved plan can be recovered through the explicit Retry button; do not delete case/audit data or force a duplicate active case. Scheduled new A01 inspections use a new unique ID and do not reuse the legacy inspection result.
 
 ## 5. Verification / known limits
 
