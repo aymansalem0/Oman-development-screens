@@ -61,7 +61,7 @@ export class NmcNavigationComponent implements OnInit, OnDestroy {
   }
 
   get isCommandCenter(): boolean { return this.currentPath === '/moei/nmc'; }
-  get isVessel360(): boolean { return /^\/moei\/nmc\/vessel\/\d{7}$/.test(this.currentPath); }
+  get isVessel360(): boolean { return /^\/moei\/nmc\/vessel\/\d{7}(?:\/risk)?$/.test(this.currentPath); }
   get isIntelligence(): boolean { return this.currentPath.endsWith('/ai-assessment'); }
   get isCase(): boolean { return this.currentPath.endsWith('/case'); }
   get isSmartInspection(): boolean {
