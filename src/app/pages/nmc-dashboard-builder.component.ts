@@ -313,6 +313,60 @@ export class NmcDashboardBuilderComponent implements OnInit,OnDestroy {
     }));
   }
 
+  /**
+   * Republish from the designer after the central revision was saved.
+   * Never publish unsaved local changes or an out-of-date shared revision.
+   */
+  republishCurrent():void {
+    const board=this.dashboard;
+    if(!board?.publishedParentId||this.viewOnly||this.sharedBusy)return;
+    if(this.dirty){
+      this.saveMessage=this.copy(
+        'Save your changes to the shared workspace before republishing.',
+        'احفظ تغييراتك في المساحة المشتركة قبل إعادة النشر.'
+      );
+      return;
+    }
+    const shared=this.getShared(board.id);
+    if(!shared||shared.status!=='DRAFT'||
+       this.sharedVersions.get(board.id)!==shared.version){
+      this.saveMessage=this.copy(
+        'Refresh the shared workspace and save your revision before republishing.',
+        'حدّث المساحة المشتركة واحفظ الإصدار قبل إعادة النشر.'
+      );
+      this.loadShared();
+      return;
+    }
+    if(!window.confirm(this.copy(
+      'Republish the updated dashboard? The current public link will show this revision.',
+      'إعادة نشر اللوحة بعد التعديل؟ سيعرض الرابط الأصلي الإصدار الجديد.'
+    )))return;
+    this.sharedBusy=true;
+    let request;
+    try{request=this.workspace.publish(board.id,shared.version);}
+    catch(error){
+      this.sharedBusy=false;
+      this.saveMessage=this.workspace.readableError(error,this.lang.isArabic);
+      return;
+    }
+    this.subs.add(request.subscribe({
+      next:response=>{
+        this.sharedBusy=false;
+        this.dashboardNavigation.refresh();
+        this.loadShared();
+        this.saveMessage=this.copy(
+          'Dashboard republished successfully using its existing link.',
+          'تمت إعادة نشر لوحة المعلومات بنجاح على نفس الرابط.'
+        );
+        void this.router.navigate(['/moei/nmc/dashboards/view',response.dashboard.id]);
+      },
+      error:error=>{
+        this.sharedBusy=false;
+        this.saveMessage=this.workspace.readableError(error,this.lang.isArabic);
+      }
+    }));
+  }
+
   moveSharedMenu(board:DashboardDefinition):void {
     if(board.status!=='PUBLISHED'||this.sharedBusy)return;
     const target=this.selectedMenuPlacement[board.id]||'NMC_CENTER';
