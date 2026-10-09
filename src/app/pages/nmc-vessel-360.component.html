@@ -72,6 +72,50 @@
       </div>
     </section>
 
+    <section class="v360-structural-quality panel" *ngIf="storedAi" role="region"
+             [attr.aria-label]="copy('Verified-source limitations and data comparison', 'حدود التحقق من المصادر ومقارنة البيانات')">
+      <div class="v360-quality-header">
+        <div>
+          <h3>{{ copy('Data Quality & Cross-Source Consistency', 'جودة البيانات واتساق المصادر') }}</h3>
+          <p>{{ copy('Deterministic structural check · not AI confidence and not authority verification', 'فحص هيكلي قائم على قواعد محددة · ليس ثقة الذكاء الاصطناعي ولا تحققًا من جهة معتمدة') }}</p>
+        </div>
+        <span class="v360-quality-score" *ngIf="storedAiIntelligence?.quality?.score !== null && storedAiIntelligence?.quality?.score !== undefined">
+          {{ storedAiIntelligence?.quality?.score }}/100
+          <small>{{ copy('Structural only', 'جودة هيكلية فقط') }}</small>
+        </span>
+      </div>
+      <p class="v360-quality-state" *ngIf="intelligenceStatus === 'loading'">
+        {{ copy('Checking stored source comparisons…', 'جارٍ تحميل مقارنة المصادر المحفوظة…') }}
+      </p>
+      <p class="v360-quality-state" *ngIf="intelligenceStatus === 'unavailable'">
+        {{ copy('Data-quality details unavailable. No confidence or absence-of-conflict assertion is made.', 'تفاصيل جودة البيانات غير متاحة. لا نفترض مستوى ثقة أو عدم وجود تعارض.') }}
+      </p>
+      <ng-container *ngIf="storedAiIntelligence as intelligence">
+        <p class="v360-quality-state" *ngIf="intelligence.quality.status !== 'CALCULATED'">
+          {{ copy('Structural quality not calculated for this saved assessment. A no-AirIA retrospective check is available.', 'لم تُحسب الجودة الهيكلية لهذا التقييم المحفوظ بعد. يمكن إجراء فحص لاحق دون استدعاء Airia.') }}
+        </p>
+        <div class="v360-quality-metrics" *ngIf="intelligence.quality.breakdown as summary">
+          <span><small>{{ copy('Completeness', 'الاكتمال') }}</small><strong>{{ summary.completenessPercent }}%</strong></span>
+          <span><small>{{ copy('Consistency', 'الاتساق') }}</small><strong>{{ summary.consistencyPercent === null ? '—' : summary.consistencyPercent + '%' }}</strong></span>
+          <span><small>{{ copy('Evidence linkage', 'ربط الأدلة') }}</small><strong>{{ summary.evidenceLinkagePercent === null ? '—' : summary.evidenceLinkagePercent + '%' }}</strong></span>
+          <span><small>{{ copy('Compared identity fields', 'حقول الهوية المقارنة') }}</small><strong>{{ summary.comparedFields }}</strong></span>
+        </div>
+        <div class="v360-quality-conflicts">
+          <strong>{{ copy('Detected source disagreements', 'اختلافات المصادر المكتشفة') }}: {{ intelligence.conflicts.length }}</strong>
+          <span *ngIf="intelligence.conflicts.length === 0">{{ copy('No disagreements stored for compared fields; this does not establish overall accuracy or authority verification.', 'لا توجد اختلافات مسجلة للحقول التي تمت مقارنتها؛ لا يعني ذلك إثبات الدقة العامة أو اعتماد الجهة.') }}</span>
+          <div class="v360-quality-conflict" *ngFor="let issue of intelligence.conflicts">
+            <b>{{ issue.FIELD_NAME }} · {{ issue.STATUS }}</b>
+            <span>{{ issue.CONFLICT_SUMMARY }}</span>
+            <small>{{ copy('Internal evidence', 'الدليل الداخلي') }}: {{ issue.SOURCE_A_EVIDENCE_ID || copy('Not recorded', 'غير مسجل') }} ·
+              {{ copy('External row evidence', 'دليل السجل الخارجي') }}: {{ issue.SOURCE_B_EVIDENCE_ID || copy('No stable ID available', 'لا يوجد معرّف ثابت متاح') }}</small>
+          </div>
+        </div>
+        <p class="v360-quality-disclaimer">
+          {{ copy('Synthetic POC data. Independently verified data confidence: unavailable. A structural score is never proof of an authentic record.', 'بيانات تجريبية. الثقة المؤكدة بالتحقق المستقل غير متاحة. درجة الجودة الهيكلية ليست دليلًا على صحة أو اعتماد السجل.') }}
+        </p>
+      </ng-container>
+    </section>
+
     <section class="critical-banner" [ngClass]="riskCssClass">
       <div class="critical-icon">!</div>
       <div>
