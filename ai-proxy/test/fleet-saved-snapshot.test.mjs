@@ -1,8 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {FleetAssessmentManager} from '../fleet-ai.mjs';
-
-test('Fetch Again reads the Oracle persistence projection, does not trigger Airia and preserves the live cache',async()=>{
+import {existsSync} from 'node:fs';
+// Local PSC fixtures are intentionally not committed to GitHub; run this test
+// when the developer has installed them. CI must not import unavailable fixtures.
+const localFixtureAvailable=existsSync(new URL('../psc-fixtures.mjs',import.meta.url));
+test('Fetch Again reads the Oracle persistence projection, does not trigger Airia and preserves the live cache',
+  {skip:localFixtureAvailable?false:'Local PSC fixture unavailable in CI'},async()=>{
+  const {FleetAssessmentManager}=await import('../fleet-ai.mjs');
   let oracleReads=0,airiaCalls=0,pscCalls=0;
   const persisted={
     imo:'9328471',assessmentId:'d48953e9-344c-4c2b-83a2-bf305b624c63',
