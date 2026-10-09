@@ -9,6 +9,7 @@ import {
   NmcAlertsService,NmcOperationalAlert,NmcAlertAudit,
   NmcAlertsOverview,AlertAction,AlertSeverity,AlertStatus
 } from '../services/nmc-alerts.service';
+import {NmcCasesService,NmcCentralCase} from '../services/nmc-cases.service';
 
 type StatusFilter='ACTIVE'|'ALL'|'OPEN'|'ESCALATED'|'RESOLVED';
 @Component({
@@ -30,10 +31,13 @@ export class NmcAlertCenterComponent implements OnInit,OnDestroy{
   audit:NmcAlertAudit[]=[];
   auditLoading=false;
   notes:Record<string,string>={};
+  linkedCases:NmcCentralCase[]=[];
+  creatingCase='';
   private readonly subs=new Subscription();
   private poller?:ReturnType<typeof setInterval>;
 
-  constructor(public lang:LanguageService,private readonly alerts:NmcAlertsService){}
+  constructor(public lang:LanguageService,private readonly alerts:NmcAlertsService,
+    private readonly cases:NmcCasesService,private readonly router:Router){}
   ngOnInit():void{
     this.refresh();
     this.poller=setInterval(()=>{if(!this.busy)this.refresh(false);},30000);
@@ -49,6 +53,7 @@ export class NmcAlertCenterComponent implements OnInit,OnDestroy{
       next:data=>{
         this.overview=data;
         this.loading=false;
+        this.loadLinkedCases();
         this.error='';
         if(this.selectedId)this.loadHistory(this.selectedId);
       },
