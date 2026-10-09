@@ -33,6 +33,7 @@ interface CaseTask {
   evidence: string[];
   note: string;
   actionType?: string;
+  actionId?: string;
 }
 
 interface CaseTimelineItem {
@@ -290,14 +291,18 @@ export class NmcCaseWorkspaceComponent implements OnInit {
       (!task.actionType&&task.id==='priority-inspection');
   }
   openInspectionForTask(task:CaseTask):void{
-    if(this.pendingInspection){
+    // Historical inspections are not automatically tied to newly generated
+    // Airia requests even if their old task IDs resemble A01 action IDs.
+    if(!task.actionId){
+      this.navigateInspection();return;
+    }
+    const referral=this.centralCase?.inspectionRequests?.find(
+      r=>r.actionId===task.actionId);
+    if(referral?.status==='PENDING_SCHEDULING'){
       void this.router.navigate(['/moei/smart-inspection/candidates']);
       return;
     }
-    // Only a scheduled request may proceed to field inspection in new AI cases.
-    if(this.centralCase?.actionPlan &&
-      !this.centralCase.inspectionRequests?.some(
-        r=>r.actionId===task.id&&['SCHEDULED','COMPLETED'].includes(r.status))){
+    if(!referral||!['SCHEDULED','COMPLETED'].includes(referral.status)){
       this.centralError=this.copy('Schedule the accepted NMC inspection request first.',
         'يجب جدولة طلب المعاينة المعتمد أولًا.');
       return;
@@ -564,7 +569,7 @@ export class NmcCaseWorkspaceComponent implements OnInit {
         dueLabel:stored.title?'Follow-up':draft?.dueLabel||'Follow-up',
         status:stored.status as TaskStatus,mandatory:stored.mandatory,
         evidence:stored.evidenceIds,note:stored.reason||draft?.note||'',
-        actionType:stored.actionType
+        actionType:stored.actionType,actionId:stored.actionId
       };
     }):tasks;
 
