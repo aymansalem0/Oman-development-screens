@@ -154,6 +154,10 @@ test('Human supervisor closes only when mandatory actions are completed',async()
    let row=await opened(db);
    row=await db.cases.saveActionPlan(row.id,row.version,plan(row));
    row=await db.cases.decideAction(row.id,row.version,'verify-certificate','ACCEPT');
+   row=await db.cases.decideAction(row.id,row.version,'priority-inspection','REJECT',
+     'Reviewed; no new physical inspection required');
+   row=await db.cases.decideAction(row.id,row.version,'enhanced-monitoring','REJECT',
+     'No additional monitoring ordered');
    await assert.rejects(()=>db.cases.resolve(row.id,row.version,'Completed','OPERATOR'),
      /CASE_SUPERVISOR_REQUIRED/);
    await assert.rejects(()=>db.cases.resolve(row.id,row.version,'Completed','SUPERVISOR'),
