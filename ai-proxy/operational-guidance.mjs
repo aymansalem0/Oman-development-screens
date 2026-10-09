@@ -57,7 +57,7 @@ function validateRule(input,id){
     enabled:input.enabled,condition:validatedCondition(input.condition),
     additionalConditions:extra.map(validatedCondition)};
 }
-const starter=defaultInput.map(input=>({id:input.id,revision:1,status:'ACTIVE',
+const starter=defaultInput.map(input=>({id:input.id,revision:1,status:input.enabled?'ACTIVE':'INACTIVE',
   published:validateRule(input,input.id),draft:null,
   publishedRevision:1,updatedAt:new Date().toISOString()}));
 const jsonPath=process.env.NMC_GUIDANCE_STORE_PATH||'/data/nmc-guidance.json';
