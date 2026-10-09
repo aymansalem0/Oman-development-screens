@@ -342,6 +342,13 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
         this.storedAi = assessment;
         this.storedAiStatus = 'available';
         this.applyStoredAiView();
+        // The Leaflet vessel badge is a generated DOM icon, not Angular-bound.
+        // Refresh it to display the saved Oracle score rather than the fixture score.
+        if (this.map) {
+          this.map.remove();
+          this.map = undefined;
+          setTimeout(() => this.initMap(), 0);
+        }
         this.loadStoredHistory();
       },
       error: response => {
@@ -1002,13 +1009,13 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
       html:`
         <div class="v360-map-ship ${this.riskCssClass}" style="--ship-size:${shipSize}px;--ring-size:${ringSize}px">
           <span class="v360-risk-ring"></span>
-          ${this.vessel.risk >= 65 ? '<span class="v360-risk-pulse"></span>' : ''}
+          ${this.vessel.riskScore >= 65 ? '<span class="v360-risk-pulse"></span>' : ''}
           <svg class="v360-ship-symbol" viewBox="0 0 24 34" aria-hidden="true" style="transform:rotate(${this.vessel.course}deg)">
             <path d="M12 1.4c1.5 2.1 4.7 4.6 6.5 8.2v15.7L12 32.6 5.5 25.3V9.6C7.3 6 10.5 3.5 12 1.4Z"></path>
             <path class="ship-deck" d="M9.2 10.6h5.6v8.2H9.2z"></path>
             <path class="ship-centerline" d="M12 3.5v24.3"></path>
           </svg>
-          <span class="v360-ship-label">${this.vessel.name} <b>${this.vessel.risk}</b></span>
+          <span class="v360-ship-label">${this.vessel.name} <b>${this.vessel.riskScore}</b></span>
         </div>
       `,
       iconSize:[58,58],
@@ -1024,7 +1031,7 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
         <strong>${this.vessel.name}</strong>
         <span>IMO ${this.vessel.imo} · ${this.vessel.lengthM} m</span>
         <span>${this.vessel.speed.toFixed(1)} kn · Course ${this.vessel.course}° · ${this.vessel.destination}</span>
-        <b>Risk ${this.vessel.risk} · ${this.vessel.riskLevel}</b>
+        <b>${this.storedAi ? 'Saved AI risk' : 'Synthetic baseline'} ${this.vessel.riskScore} · ${this.vessel.riskLevel}</b>
       </div>`,
       { direction:'top', offset:[0,-22], opacity:1 }
     ).addTo(this.map);
