@@ -188,9 +188,7 @@
               <span class="status" [attr.data-status]="alert.status">{{statusText(alert.status)}}</span>
               <span class="muted">{{alert.createdAt|date:'medium'}}</span>
             </div>
-            <h4>{{copy(
-              displaySeverity(alert)==='CRITICAL'?'Critical maritime risk requires review':'High maritime risk requires review',
-              displaySeverity(alert)==='CRITICAL'?'مخاطر بحرية حرجة تستلزم المراجعة':'مخاطر بحرية مرتفعة تستلزم المراجعة')}}</h4>
+            <h4>{{alertHeadline(alert)}}</h4>
             <p>{{triggerDescription(alert)}}</p>
             <div class="facts">
               <span><b>IMO</b> {{alert.imo}}</span>
