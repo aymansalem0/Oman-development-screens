@@ -6,7 +6,7 @@ import { Subscription } from 'rxjs';
 import { LanguageService } from '../services/language.service';
 import { NmcNavigationComponent } from '../components/nmc-navigation.component';
 import {
-  DASHBOARD_METRICS, DASHBOARD_MENU_PLACEMENTS, DashboardMenuPlacement, DashboardDefinition, DashboardMetric, DashboardTemplateKind,
+  DASHBOARD_METRICS, DASHBOARD_MENU_PLACEMENTS, NMC_CHART_TYPES, NMC_CHART_PALETTES, NmcChartType, NmcChartPalette, DashboardMenuPlacement, DashboardDefinition, DashboardMetric, DashboardTemplateKind,
   DashboardWidget, DashboardWidgetKind, NmcDashboardStoreService
 } from '../services/nmc-dashboard-store.service';
 import {
@@ -15,18 +15,21 @@ import {
 import { NmcRiskEngineService } from '../services/nmc-risk-engine.service';
 import { NmcDashboardWorkspaceService, DashboardRevision } from '../services/nmc-dashboard-workspace.service';
 import { NmcDashboardNavigationService } from '../services/nmc-dashboard-navigation.service';
+import { NmcDistributionChartComponent } from '../components/nmc-distribution-chart.component';
 
 type BarRow={name:string;count:number;percent:number};
 
 @Component({
   selector:'app-nmc-dashboard-builder',
   standalone:true,
-  imports:[CommonModule,FormsModule,RouterLink,NmcNavigationComponent],
+  imports:[CommonModule,FormsModule,RouterLink,NmcNavigationComponent,NmcDistributionChartComponent],
   templateUrl:'./nmc-dashboard-builder.component.html',
   styleUrl:'./nmc-dashboard-builder.component.css'
 })
 export class NmcDashboardBuilderComponent implements OnInit,OnDestroy {
   readonly catalog=DASHBOARD_METRICS;
+  readonly chartTypes=NMC_CHART_TYPES;
+  readonly chartPalettes=NMC_CHART_PALETTES;
   readonly menuPlacements=DASHBOARD_MENU_PLACEMENTS;
   readonly widgetKinds: Array<{id:DashboardWidgetKind;en:string;ar:string;icon:string}>=[
     {id:'kpi',en:'KPI Card',ar:'بطاقة مؤشر',icon:'▦'},
@@ -335,7 +338,8 @@ export class NmcDashboardBuilderComponent implements OnInit,OnDestroy {
     const first=this.catalog[type][0];
     this.dashboard.widgets.push({
       id:'widget-'+(globalThis.crypto?.randomUUID?.()||Date.now().toString(36)),
-      type,metric:first.value,title:first.en,span:type==='table'||type==='position'?'full':'half'
+      type,metric:first.value,title:first.en,span:type==='table'||type==='position'?'full':'half',
+      ...(type==='bar'?{chartType:'horizontalBar' as NmcChartType,palette:'maritime' as NmcChartPalette}:{})
     });
     this.touch();
   }
@@ -344,6 +348,13 @@ export class NmcDashboardBuilderComponent implements OnInit,OnDestroy {
     if(this.viewOnly)return;
     const meta=this.catalog[widget.type].find(x=>x.value===widget.metric);
     if(meta)widget.title=meta.en;
+    this.touch();
+  }
+
+  configureChart(widget:DashboardWidget):void {
+    if(this.viewOnly||widget.type!=='bar')return;
+    widget.chartType=widget.chartType||'horizontalBar';
+    widget.palette=widget.palette||'maritime';
     this.touch();
   }
 
