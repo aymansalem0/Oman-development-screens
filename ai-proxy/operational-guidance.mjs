@@ -111,8 +111,34 @@ export class OperationalGuidance{
       return r.rows.map(x=>({revision:x.REVISION,action:x.ACTION_NAME,role:x.ACTOR_ROLE,at:x.CREATED_AT}));
     });
   }
+  async create(input){
+    const id=String(input?.id||'');
+    if(!/^NMC-GUIDE-[0-9]{3,5}$/.test(id))throw new GuidanceError('GUIDANCE_RULE_INVALID');
+    const draft=validateRule(input,id);
+    const newState={id,revision:1,status:'DRAFT',published:null,draft,
+      publishedRevision:0,updatedAt:new Date().toISOString()};
+    if(this.mode==='json'){
+      if(this.jsonState.rules.some(r=>r.id===id))throw new GuidanceError('GUIDANCE_RULE_EXISTS',409);
+      this.jsonState.rules.push(newState);
+      this.jsonState.audit.push({ruleId:id,revision:1,action:'CREATE',role:'EDITOR',at:newState.updatedAt});
+      this.writeJson();
+      return clone(newState);
+    }
+    return this.withConnection(async con=>{
+      try{
+        await con.execute('INSERT INTO NMC_GUIDANCE_POLICY(RULE_ID,REVISION,STATUS,RULE_JSON) VALUES(:id,:revision,:status,:doc)',
+          {id,revision:1,status:'DRAFT',doc:clob(newState)});
+        await this.writeAudit(con,newState,'CREATE','EDITOR');
+        await con.commit();return newState;
+      }catch(e){
+        await con.rollback();
+        if(e?.errorNum===1)throw new GuidanceError('GUIDANCE_RULE_EXISTS',409);
+        throw new GuidanceError('GUIDANCE_WRITE_FAILED',503);
+      }
+    });
+  }
   async change(ruleId,revision,operation,draft){
-    if(!starter.some(r=>r.id===ruleId))throw new GuidanceError('GUIDANCE_RULE_NOT_FOUND',404);
+    if(!/^NMC-GUIDE-[0-9]{3,5}$/.test(ruleId))throw new GuidanceError('GUIDANCE_RULE_NOT_FOUND',404);
     if(!Number.isInteger(revision)||revision<1)throw new GuidanceError('GUIDANCE_VERSION_INVALID');
     if(!['EDIT','PUBLISH'].includes(operation))throw new GuidanceError('GUIDANCE_OPERATION_INVALID');
     const changeState=state=>{
