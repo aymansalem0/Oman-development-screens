@@ -150,7 +150,12 @@ export class NmcCaseWorkspace{
         assignedRole:action==='ESCALATE'?'NMC_SUPERVISOR':t.assignedRole
       }:t);
       const requiredDone=tasks.filter(t=>t.mandatory).every(t=>t.status==='Completed');
-      return {...row,tasks,status:requiredDone?'PENDING_VERIFICATION':'IN_PROGRESS'};
+      const aiDecisionsPending=!!row.actionPlan?.proposedActions?.some(
+        a=>a.decision==='PENDING');
+      // Mandatory tasks alone do not mean a reviewed AI plan or post-inspection
+      // reassessment is complete. Do not display a false PENDING_VERIFICATION.
+      const verified=requiredDone&&!aiDecisionsPending&&!row.inspectionOutcome;
+      return {...row,tasks,status:verified?'PENDING_VERIFICATION':'IN_PROGRESS'};
     },{taskId,action});
   }
   async decision(id,version,data,role='OPERATOR'){
@@ -201,7 +206,9 @@ export class NmcCaseWorkspace{
           completedAt:now()
         },inspectionRequests:(row.inspectionRequests||[]).map(r=>r.id===request?.id?
           {...r,status:'COMPLETED',completedAt:now(),inspectionId:outcome.inspectionId}:r),
-          tasks,status:requiredDone?'PENDING_VERIFICATION':'IN_PROGRESS'};
+          // A field inspection is NOT a verified post-inspection risk
+          // assessment; the case must remain in-progress until A02 refresh.
+          tasks,status:'IN_PROGRESS'};
       },{inspectionId:outcome.inspectionId});
   }
 
@@ -215,7 +222,9 @@ export class NmcCaseWorkspace{
         if(row.imo!==plan.imo||row.sourceScore!==plan.sourceScore||
           row.sourceAssessmentId!==plan.sourceAssessmentId)
           throw new NmcCaseError('CASE_ACTION_PLAN_SOURCE_MISMATCH',409);
-        return {...row,actionPlan:plan};
+        // An older case may have been pending verification on its legacy tasks.
+        // Starting a new AI action review reopens the operational work stage.
+        return {...row,actionPlan:plan,status:'IN_PROGRESS'};
       },{sourceAssessmentId:plan.sourceAssessmentId,proposals:plan.proposedActions.length});
   }
   async decideAction(id,version,actionId,decision,note='',role='OPERATOR'){
@@ -263,8 +272,14 @@ export class NmcCaseWorkspace{
           });
         }
       }
+      const allDecisionsRecorded=nextActions.every(a=>a.decision!=='PENDING');
+      const allRequiredDone=tasks.length>0&&
+        tasks.filter(t=>t.mandatory).every(t=>t.status==='Completed');
+      // Legacy completed tasks cannot mark a case ready while A01 proposals
+      // remain undecided or while a new inspection lacks reassessment.
+      const ready=allDecisionsRecorded&&allRequiredDone&&!row.inspectionOutcome;
       return {...row,actionPlan:{...plan,proposedActions:nextActions},
-        tasks,inspectionRequests,status:accepted?'IN_PROGRESS':row.status};
+        tasks,inspectionRequests,status:ready?'PENDING_VERIFICATION':'IN_PROGRESS'};
     },{actionId,decision});
   }
   async listInspectionRequests(){
@@ -305,6 +320,11 @@ export class NmcCaseWorkspace{
         throw new NmcCaseError('CASE_ACTION_DECISIONS_PENDING',409);
       if(row.tasks.some(t=>t.mandatory&&t.status!=='Completed'))
         throw new NmcCaseError('CASE_MANDATORY_TASKS_INCOMPLETE',409);
+      // Stage 3 will add evidence-linked A02 compliance refresh and a new,
+      // persisted deterministic risk assessment. Until then, no completed
+      // inspection can be presented as fully reassessed and ready for closure.
+      if(row.inspectionOutcome)
+        throw new NmcCaseError('CASE_RISK_REASSESSMENT_PENDING',409);
       return {...row,status:'RESOLVED',resolutionNote:reason};
     },{});
   }
