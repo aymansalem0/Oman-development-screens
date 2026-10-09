@@ -345,7 +345,7 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
     return j?j.completed+' completed · '+j.failed+' failed / '+j.total:'';
   }
   private loadOperations():void{
-    this.alertsService.overview().subscribe({
+    this.alertsService.overviewForBrowserPolicy().subscribe({
       next:response=>{
         this.unreadAlertCount=response.summary.unread;
         this.activeAlertCount=response.summary.active;
