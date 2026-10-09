@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync,rmSync} from 'node:fs';
+import {mkdtempSync,rmSync,readFileSync} from 'node:fs';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 import {CentralRiskPolicy,calculateRiskPolicy,validateRiskConfig} from '../risk-policy.mjs';
@@ -56,4 +56,13 @@ test('publishing creates immutable versions, active pointer, stale revision reje
     assert.equal((await restarted.active()).revision,2);
     assert.equal(assessment.score,60);assert.equal(assessment.level,'Watch');
   }finally{rmSync(dir,{recursive:true,force:true});}
+});
+
+test('Oracle risk policy binds avoid reserved SQL keywords that block central seed',()=>{
+  const source=readFileSync(new URL('../risk-policy.mjs',import.meta.url),'utf8');
+  for(const reserved of ['level','by','ref']){
+    assert.doesNotMatch(source,new RegExp(':'+reserved+'\\b','i'));
+  }
+  assert.match(source,/:b_published_by/);
+  assert.match(source,/:b_risk_level/);
 });
