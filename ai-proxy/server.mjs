@@ -7,6 +7,7 @@ import { NmcAlertWorkspace, NmcAlertError } from './alert-workspace.mjs';
 import { NmcCaseWorkspace, NmcCaseError } from './case-workspace.mjs';
 import { normalizeA01Actions, ActionPlanError } from './nmc-action-plan.mjs';
 import { OperationalGuidance, GuidanceError } from './operational-guidance.mjs';
+import { CentralRiskPolicy, RiskPolicyError } from './risk-policy.mjs';
 
 const port = Number(process.env.PORT || 3000);
 const apiKey = (process.env.AIRIA_MENA_KEY || '').trim();
@@ -42,9 +43,16 @@ const repository=dbMode==='oracle'
   ? new (await import('./oracle-store.mjs')).OracleIntelligenceStore()
   : null;
 let guidance;
+let riskPolicy;
 const fleet=new FleetAssessmentManager({executeAgent:fleetAgentCall,getPscVessel,repository,
-  onAssessmentSaved:async row=>guidance?.materialize(row.imo)});
+  onAssessmentSaved:async row=>{
+    try{await guidance?.materialize(row.imo);}
+    catch{console.error('[nmc-guidance] RESULT_MATERIALIZATION_FAILED');}
+    try{await riskPolicy?.materializeCurrent(row);}
+    catch{console.error('[nmc-risk-policy] PROJECTION_MATERIALIZATION_FAILED');}
+  }});
 guidance=new OperationalGuidance({mode:dbMode,oracleRepository:repository,fleet});
+riskPolicy=new CentralRiskPolicy({mode:dbMode,oracleRepository:repository,fleet});
 const dashboards=new DashboardWorkspace({mode:dbMode,oracleRepository:repository});
 const alerts=new NmcAlertWorkspace({mode:dbMode,oracleRepository:repository});
 const cases=new NmcCaseWorkspace({mode:dbMode,oracleRepository:repository,alerts});
@@ -53,8 +61,24 @@ const alertScanEnabled=process.env.NMC_ALERT_SCAN_ENABLED!=='false';
 const alertScanIntervalMs=Math.max(15000,Number(process.env.NMC_ALERT_SCAN_SECONDS||30)*1000);
 async function scanExistingFleetForAlerts(){
   try{
-    // Intentionally read saved in-memory fleet records only. No Airia calls.
-    const result=await alerts.scanFleet(fleet.snapshot());
+    // Only saved A01/A02 signals; central published risk policy is authoritative
+    // for current notification eligibility. Prior cases/assessment rows are immutable.
+    const original=fleet.snapshot();
+    let effective=original;
+    if(riskPolicy.ready){
+      const projected=await riskPolicy.projectCurrent();
+      const byImo=new Map(projected.projections.map(p=>[p.imo,p]));
+      effective={...original,results:Object.fromEntries(Object.entries(original.results).map(([imo,row])=>{
+        const p=byImo.get(imo);
+        return [imo,p?{
+          ...row,score:p.riskScore,level:p.riskLevel,
+          operationalPriority:p.operationalPriority,criticalOpenFinding:p.criticalOpenFinding,
+          configVersion:projected.policyRef,riskPolicyRevision:projected.policyRevision,
+          sourceAiScore:row.score,sourceAiLevel:row.level
+        }:row];
+      }))};
+    }
+    const result=await alerts.scanFleet(effective);
     if(result?.created||result?.escalated)
       console.info('[nmc-alerts] detected='+result.created+' escalated='+result.escalated);
   }catch(error){
@@ -228,6 +252,37 @@ const server = createServer(async (req, res) => {
       return respond(res,data?200:404,data||{error:'UNKNOWN_VESSEL'});
     }catch{return respond(res,503,{error:'FLEET_HISTORY_UNAVAILABLE'});}
   }
+  // Centrally published NMC Risk Settings — immutable version history.
+  // No AI calls, no source assessment rewrites or browser-managed versions.
+  if(path==='/api/ai/risk-policy'||path.startsWith('/api/ai/risk-policy/')){
+    try{
+      if(req.method==='GET'&&path==='/api/ai/risk-policy')
+        return respond(res,200,{status:'ok',active:await riskPolicy.active()});
+      if(req.method==='GET'&&path==='/api/ai/risk-policy/history')
+        return respond(res,200,{status:'ok',history:await riskPolicy.history()});
+      if(req.method==='GET'&&path==='/api/ai/risk-policy/projections')
+        return respond(res,200,await riskPolicy.projectCurrent());
+      const vesselPolicyMatch=/^\/api\/ai\/risk-policy\/vessels\/(\d{7})(?:\/(history))?$/.exec(path);
+      if(req.method==='GET'&&vesselPolicyMatch){
+        if(vesselPolicyMatch[2])
+          return respond(res,200,{status:'ok',history:await riskPolicy.projectionHistory(vesselPolicyMatch[1])});
+        const projection=await riskPolicy.vessel(vesselPolicyMatch[1]);
+        return respond(res,projection?200:404,{status:projection?'ok':'missing',projection});
+      }
+      if(req.method==='POST'&&path==='/api/ai/risk-policy/publish'){
+        dashboards.assertRole(req,'PUBLISHER');
+        const body=await requestJson(req,16384);
+        return respond(res,201,{status:'ok',published:await riskPolicy.publish(body)});
+      }
+      return respond(res,405,{error:'METHOD_NOT_ALLOWED'});
+    }catch(error){
+      if(error instanceof RiskPolicyError||error instanceof DashboardError)
+        return respond(res,error.status,{error:error.code});
+      console.error('[nmc-risk-policy] API_FAILURE');
+      return respond(res,503,{error:'RISK_POLICY_UNAVAILABLE'});
+    }
+  }
+
   // Platform guidance is NOT an AI agent. GET is strictly read-only and never calls Airia.
   if(path==='/api/ai/guidance/rules'||path.startsWith('/api/ai/guidance/')){
     try{
@@ -595,6 +650,8 @@ const server = createServer(async (req, res) => {
 
 try{
   await fleet.initialize(scheduler.bundles);
+  try{await riskPolicy.initialize();}
+  catch(error){console.error('[nmc-risk-policy] RISK_POLICY_SCHEMA_NOT_READY');}
   try{await guidance.initialize();}
   catch(error){
     // Guidance requires migration 006, but an optional UI module must never
