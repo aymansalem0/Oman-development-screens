@@ -23,7 +23,11 @@
           <h2>{{copy('My Dashboards','لوحات المعلومات')}}</h2>
           <p>{{copy('Design and adapt maritime decision-support views using operational data.','صمم وعدّل لوحات معلومات لدعم القرار من البيانات التشغيلية.')}}</p>
         </div>
-        <button class="db-primary" type="button" (click)="create()">＋ {{copy('Create Dashboard','إنشاء لوحة معلومات')}}</button>
+        <div class="db-heading-actions">
+          <button class="db-outline" type="button" (click)="createFromTemplate('management')">▥ {{copy('Management View','لوحة الإدارة')}}</button>
+          <button class="db-outline" type="button" (click)="createFromTemplate('executive')">◆ {{copy('Executive View','لوحة الإدارة العليا')}}</button>
+          <button class="db-primary" type="button" (click)="create()">＋ {{copy('Create Dashboard','إنشاء لوحة معلومات')}}</button>
+        </div>
       </div>
       <p class="db-message" *ngIf="saveMessage">{{saveMessage}}</p>
       <div class="db-manage-grid">
@@ -44,6 +48,59 @@
           <button class="db-primary" type="button" (click)="create()">{{copy('Create Dashboard','إنشاء لوحة معلومات')}}</button>
         </div>
       </div>
+
+      <section class="db-shared-area">
+        <div class="db-heading">
+          <div>
+            <span class="db-kicker">{{copy('CENTRAL DASHBOARD WORKSPACE','مساحة لوحات المعلومات المركزية')}}</span>
+            <h2>{{copy('Shared Dashboards','لوحات المعلومات المشتركة')}}</h2>
+            <p>{{copy('Versioned dashboards available to your team. Editing and publishing require authorized access.','لوحات معلومات بإصدارات محفوظة متاحة للفريق. يتطلب التعديل والنشر صلاحية معتمدة.')}}</p>
+          </div>
+          <button type="button" class="db-outline" (click)="loadShared()">↻ {{copy('Refresh Workspace','تحديث المساحة')}}</button>
+        </div>
+
+        <p class="db-message" *ngIf="sharedError">{{sharedError}}</p>
+        <div class="db-manage-grid">
+          <article class="db-board-card" *ngFor="let shared of sharedDashboards">
+            <div class="db-board-top">
+              <div class="db-board-icon">▥</div>
+              <span class="db-chip" [class.db-chip-published]="shared.status==='PUBLISHED'">
+                {{shared.status==='PUBLISHED'?copy('Published','منشورة'):copy('Draft','مسودة')}}
+              </span>
+            </div>
+            <h3>{{shared.title}}</h3>
+            <p>{{shared.description||copy('Maritime decision support dashboard','لوحة معلومات لدعم القرار البحري')}}</p>
+            <div class="db-board-meta">{{shared.widgets.length}} {{copy('widgets','مؤشرات')}} · {{copy('Version','إصدار')}} {{shared.version}}</div>
+            <div class="db-board-actions">
+              <button class="db-primary" type="button" (click)="openShared(shared)">
+                {{shared.status==='PUBLISHED'?copy('Use as Template','استخدام كنموذج'):copy('Edit Shared Draft','تعديل المسودة')}}
+              </button>
+              <button class="db-outline" type="button" (click)="showHistory(shared)">{{copy('History','السجل')}}</button>
+              <button class="db-outline" type="button" (click)="publishShared(shared)"
+                      *ngIf="shared.status==='DRAFT'" [disabled]="sharedBusy">{{copy('Publish','نشر')}}</button>
+              <button class="db-danger" type="button" (click)="archiveShared(shared)"
+                      *ngIf="shared.status==='DRAFT'" [disabled]="sharedBusy">{{copy('Archive','أرشفة')}}</button>
+            </div>
+          </article>
+          <div class="db-empty" *ngIf="!sharedDashboards.length">
+            <div class="db-empty-symbol">▥</div>
+            <h3>{{copy('No shared dashboards yet','لا توجد لوحات مشتركة بعد')}}</h3>
+            <p>{{copy('Save a dashboard to the workspace from the designer.','احفظ لوحة معلومات في المساحة المشتركة من المصمم.')}}</p>
+          </div>
+        </div>
+        <div class="db-history" *ngIf="historyDashboardTitle">
+          <div class="db-history-head">
+            <h3>{{copy('Version history','سجل الإصدارات')}} · {{historyDashboardTitle}}</h3>
+            <button type="button" class="db-outline" (click)="historyDashboardTitle=''">{{copy('Close','إغلاق')}}</button>
+          </div>
+          <div *ngFor="let item of sharedHistory" class="db-history-row">
+            <span>v{{item.version}}</span>
+            <strong>{{item.action}}</strong>
+            <span>{{item.role}}</span>
+            <span>{{item.at|date:'medium'}}</span>
+          </div>
+        </div>
+      </section>
     </ng-container>
 
     <ng-container *ngIf="dashboard as board">
@@ -57,6 +114,9 @@
           <button class="db-outline" type="button" (click)="back()">← {{copy('All Dashboards','كل اللوحات')}}</button>
           <button class="db-outline" type="button" (click)="refresh()">{{copy('Refresh Data','تحديث البيانات')}}</button>
           <button class="db-primary" type="button" (click)="save()" [disabled]="!dirty">✓ {{copy('Save Changes','حفظ التغييرات')}}</button>
+          <button class="db-outline db-workspace-save" type="button" (click)="saveShared()" [disabled]="sharedBusy">
+            ⇧ {{copy('Save to Workspace','حفظ في المساحة المشتركة')}}
+          </button>
         </div>
       </div>
 

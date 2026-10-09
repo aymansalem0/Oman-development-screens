@@ -18,6 +18,11 @@ services:
       NMC_FLEET_AUTO_MAX_VESSELS: ${NMC_FLEET_AUTO_MAX_VESSELS:-420}
       NMC_FLEET_AUTO_RETRY_FAILED: ${NMC_FLEET_AUTO_RETRY_FAILED:-false}
       NMC_FLEET_STORE_PATH: /data/fleet-assessments.json
+      # Dashboard administration is read-only unless BOTH server-side keys are configured.
+      # Use separate long random secrets for editor and publisher permissions.
+      NMC_DASHBOARD_EDITOR_KEY: ${NMC_DASHBOARD_EDITOR_KEY:-}
+      NMC_DASHBOARD_PUBLISHER_KEY: ${NMC_DASHBOARD_PUBLISHER_KEY:-}
+      NMC_DASHBOARD_STORE_PATH: /data/nmc-dashboard-workspace.json
       # 'oracle' requires compose.oracle.yaml, NMC_AI user and V1 migration.
       NMC_DB_MODE: ${NMC_DB_MODE:-json}
       NMC_DB_CONNECT_STRING: ${NMC_DB_CONNECT_STRING:-oracle-free-23:1521/freepdb1}

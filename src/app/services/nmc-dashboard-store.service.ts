@@ -75,6 +75,44 @@ export function dashboardDefaults(): DashboardDefinition {
   };
 }
 
+
+export type DashboardTemplateKind = 'operational' | 'management' | 'executive';
+
+/**
+ * Reuse the existing validated vessel analytics only. Management and executive
+ * presets deliberately do not invent incident/SLA or historical-trend KPIs.
+ */
+export function buildDashboardTemplate(kind:DashboardTemplateKind):DashboardDefinition {
+  const base=dashboardDefaults();
+  if(kind==='operational')return base;
+  if(kind==='management'){
+    base.title='NMC Management Overview';
+    base.description='Fleet risk, assessment coverage and operational priority monitoring';
+    base.widgets=[
+      {id:'mg-assessed',type:'kpi',metric:'assessedCount',title:'AI-Assessed Vessels',span:'half'},
+      {id:'mg-attention',type:'kpi',metric:'attentionCount',title:'Requires Attention',span:'half'},
+      {id:'mg-priority',type:'kpi',metric:'priorityCount',title:'Priority Reviews',span:'half'},
+      {id:'mg-avg-risk',type:'kpi',metric:'averageRisk',title:'Average Assessed Risk',span:'half'},
+      {id:'mg-risk',type:'bar',metric:'byRisk',title:'Fleet Risk Distribution',span:'half'},
+      {id:'mg-type',type:'bar',metric:'byType',title:'Fleet by Vessel Type',span:'half'},
+      {id:'mg-register',type:'table',metric:'vesselTable',title:'Operational Risk Register',span:'full'}
+    ];
+  }else{
+    base.title='Executive Maritime Overview';
+    base.description='Strategic maritime fleet indicators and priority risk overview';
+    base.widgets=[
+      {id:'ex-total',type:'kpi',metric:'vesselCount',title:'Monitored Vessels',span:'half'},
+      {id:'ex-assessed',type:'kpi',metric:'assessedCount',title:'Assessment Coverage',span:'half'},
+      {id:'ex-critical',type:'kpi',metric:'highCriticalCount',title:'High and Critical Risks',span:'half'},
+      {id:'ex-priority',type:'kpi',metric:'priorityCount',title:'Priority Intervention Reviews',span:'half'},
+      {id:'ex-risk',type:'bar',metric:'byRisk',title:'Strategic Risk Distribution',span:'half'},
+      {id:'ex-area',type:'bar',metric:'byZone',title:'Risks by Operational Area',span:'half'},
+      {id:'ex-register',type:'table',metric:'vesselTable',title:'Priority Vessel Register',span:'full'}
+    ];
+  }
+  return base;
+}
+
 const clone = <T>(value:T):T => JSON.parse(JSON.stringify(value)) as T;
 
 @Injectable({providedIn:'root'})
@@ -88,6 +126,46 @@ export class NmcDashboardStoreService {
   get(id:string): DashboardDefinition | null {
     const found=this.subject.value.find(row=>row.id===id);
     return found?clone(found):null;
+  }
+
+  createFromTemplate(kind:DashboardTemplateKind):DashboardDefinition {
+    const model=buildDashboardTemplate(kind);
+    const draft:DashboardDefinition={
+      ...model,id:'dashboard-'+(globalThis.crypto?.randomUUID?.()||Date.now().toString(36)),
+      status:'DRAFT',version:1,updatedAt:new Date().toISOString(),
+      widgets:model.widgets.map(w=>({
+        ...w,id:'widget-'+(globalThis.crypto?.randomUUID?.()||Math.random().toString(36).slice(2))
+      }))
+    };
+    this.commit([...this.subject.value,draft]);
+    return clone(draft);
+  }
+
+  /** Import a centrally stored definition without fabricating a version change. */
+  importShared(input:DashboardDefinition):DashboardDefinition {
+    this.validate(input);
+    const snapshot=clone(input);
+    this.commit([
+      ...this.subject.value.filter(item=>item.id!==snapshot.id),
+      snapshot
+    ]);
+    return clone(snapshot);
+  }
+
+  /** Editing a published dashboard starts as a new, independent draft. */
+  forkPublished(input:DashboardDefinition):DashboardDefinition {
+    this.validate(input);
+    const draft:DashboardDefinition={
+      ...clone(input),
+      id:'dashboard-'+(globalThis.crypto?.randomUUID?.()||Date.now().toString(36)),
+      title:input.title+' - Copy',
+      status:'DRAFT',version:1,updatedAt:new Date().toISOString(),
+      widgets:input.widgets.map(widget=>({
+        ...widget,id:'widget-'+(globalThis.crypto?.randomUUID?.()||Math.random().toString(36).slice(2))
+      }))
+    };
+    this.commit([...this.subject.value,draft]);
+    return clone(draft);
   }
 
   create(): DashboardDefinition {
