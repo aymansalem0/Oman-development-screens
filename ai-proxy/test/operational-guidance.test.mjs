@@ -53,6 +53,22 @@ test('rule editing is draft-only; publishing is revisioned with audit',async()=>
   const audit=await service.history(state.id);
   assert.deepEqual(audit.slice(0,2).map(x=>x.action),['PUBLISH','EDIT']);
 });
+test('new user-defined rules remain inert as drafts and require explicit publication',async()=>{
+  const service=withFleet(example);await service.initialize();
+  const custom={id:'NMC-GUIDE-105',title:'Review saved risk over 55',
+    titleAr:'مراجعة المخاطر المحفوظة فوق 55',enabled:true,priority:'WATCH',
+    ownerRole:'NMC_DUTY_OFFICER',condition:{field:'riskScore',operator:'GTE',value:55}};
+  const draft=await service.create(custom);
+  assert.equal(draft.status,'DRAFT');assert.equal(draft.published,null);
+  assert.equal(draft.publishedRevision,0);
+  assert.equal((await service.evaluate('9328471')).rules.some(r=>r.ruleId===custom.id),false);
+  await assert.rejects(service.create(custom),e=>e.code==='GUIDANCE_RULE_EXISTS');
+  const published=await service.change(custom.id,draft.revision,'PUBLISH');
+  assert.equal(published.status,'ACTIVE');
+  const output=await service.evaluate('9328471');
+  assert.equal(output.rules.find(r=>r.ruleId===custom.id)?.evidenceIds.length>0,true);
+  assert.ok((await service.history(custom.id)).some(x=>x.action==='CREATE'));
+});
 test('unknown or incomplete AI evidence yields no fabricated guidance',async()=>{
   const service=withFleet({...example,signals:example.signals.slice(0,4)});await service.initialize();
   await assert.rejects(service.evaluate('9328471'),e=>e.code==='GUIDANCE_ASSESSMENT_NOT_FOUND');
