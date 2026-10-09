@@ -1,3 +1,4 @@
+import { NmcNavigationComponent } from '../components/nmc-navigation.component';
 import { CommonModule } from '@angular/common';
 import { Component, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
@@ -50,7 +51,7 @@ interface Stakeholder {
 @Component({
   selector: 'app-nmc-case-workspace',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink],
+  imports: [CommonModule, FormsModule, RouterLink, NmcNavigationComponent],
   templateUrl: './nmc-case-workspace.component.html',
   styleUrl: './nmc-case-workspace.component.css'
 })
