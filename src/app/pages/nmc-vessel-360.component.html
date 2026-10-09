@@ -41,15 +41,34 @@
 
       <div class="hero-right">
         <button type="button" class="confidence-card confidence-button" (click)="openProvenance('dataConfidence')" [attr.title]="copy('Open confidence details', 'عرض تفاصيل الثقة')">
-          <small>{{ copy('Data confidence', 'الثقة في البيانات') }}</small>
+          <small>{{ copy('Fixture data confidence', 'ثقة البيانات التجريبية') }}</small>
           <strong>{{ vessel.dataConfidence }}%</strong>
           <span>{{ conflictCount }} {{ copy('source conflict', 'تعارض بالمصادر') }} · {{ copy('view basis', 'عرض الأساس') }}</span>
         </button>
-        <a class="risk-card risk-link" [ngClass]="riskCssClass" [routerLink]="['/moei/nmc/vessel', vessel.imo, 'risk']" [attr.title]="copy('Open full risk explainability', 'عرض تفسير المخاطر بالكامل')">
-          <small>{{ copy('Composite risk', 'المخاطر المركبة') }}</small>
+        <a class="risk-card risk-link" [ngClass]="riskCssClass"
+           [routerLink]="['/moei/nmc/vessel', vessel.imo, storedAi ? 'ai-assessment' : 'risk']"
+           [attr.title]="copy('Open risk explanation', 'عرض تفسير المخاطر')">
+          <small>{{ storedAi ? copy('Saved AI risk · POC', 'مخاطر AI المحفوظة · تجريبي') : copy('Synthetic baseline risk', 'مخاطر السيناريو التجريبي') }}</small>
           <strong>{{ vessel.riskScore }}</strong>
           <span>{{ riskLabel() }} · {{ copy('Explain', 'تفسير') }}</span>
         </a>
+      </div>
+    </section>
+
+    <section class="v360-saved-ai-bar" [class.v360-ai-ready]="storedAiStatus === 'available'"
+             role="status" aria-live="polite">
+      <div class="v360-saved-ai-label">
+        <strong>✦ {{ copy('Saved Vessel Intelligence', 'معلومات السفينة المحفوظة') }}</strong>
+        <span *ngIf="storedAiStatus === 'loading'">{{ copy('Loading the latest saved assessment…', 'جارٍ تحميل أحدث تقييم محفوظ…') }}</span>
+        <span *ngIf="storedAiStatus === 'not-assessed'">{{ copy('No saved AI assessment yet. Risk and operational context below remain synthetic sample data.', 'لا يوجد تقييم AI محفوظ بعد. المخاطر والبيانات التشغيلية أدناه هي بيانات تجريبية.') }}</span>
+        <span *ngIf="storedAiStatus === 'error'">{{ copy('Saved AI assessment unavailable. Showing synthetic fixture; no AI risk is inferred.', 'التقييم المحفوظ غير متاح. يجري عرض السيناريو التجريبي دون افتراض مخاطر AI.') }}</span>
+        <span *ngIf="storedAiStatus === 'available'">{{ copy('Read-only Oracle assessment from A01/A02 · synthetic evidence · not a regulatory decision', 'تقييم Oracle للقراءة فقط من A01/A02 · أدلة تجريبية · ليس قرارًا تنظيميًا') }}</span>
+      </div>
+      <div class="v360-saved-ai-meta" *ngIf="storedAi as ai">
+        <span><small>{{ copy('Risk / Priority', 'المخاطر / الأولوية') }}</small><b>{{ ai.score }}/100 · {{ ai.operationalPriority }}</b></span>
+        <span><small>{{ copy('Assessment ID', 'رقم التقييم') }}</small><b [title]="ai.assessmentId">{{ ai.assessmentId }}</b></span>
+        <span><small>{{ copy('Assessed at (UTC)', 'وقت التقييم (UTC)') }}</small><b>{{ ai.assessedAt || '—' }}</b></span>
+        <span><small>{{ copy('Five evidence-linked factors', 'خمسة عوامل مرتبطة بالأدلة') }}</small><b>{{ ai.signals.length }} · A01 / A02</b></span>
       </div>
     </section>
 
@@ -208,9 +227,9 @@
           <div class="panel-header">
             <div>
               <h3>{{ copy('Why is this vessel', 'لماذا هذه السفينة') }} {{ riskLabel() }}؟</h3>
-              <p>{{ copy('Transparent composite risk contribution', 'تفسير شفاف لمكونات درجة المخاطر') }}</p>
+              <p>{{ storedAi ? copy('Weighted contributions from the saved A01/A02 assessment', 'المساهمات الموزونة من تقييم A01/A02 المحفوظ') : copy('Synthetic risk model · no saved AI result', 'نموذج مخاطر تجريبي · لا توجد نتيجة AI محفوظة') }}</p>
             </div>
-            <span class="risk-confidence">{{ vessel.riskConfidence }}% {{ copy('confidence', 'ثقة') }}</span>
+            <span class="risk-confidence">{{ storedAi ? copy('Oracle saved · POC', 'محفوظ Oracle · تجريبي') : copy('Fixture estimate', 'تقدير تجريبي') }}</span>
           </div>
 
           <div class="risk-score-row">
@@ -228,13 +247,23 @@
             <button type="button" class="factor-row factor-link" *ngFor="let factor of riskFactors" (click)="openRiskEvidence(factor.source)">
               <div class="factor-main">
                 <strong>{{ factorLabel(factor.label) }}</strong>
-                <small>{{ sourceLabel(factor.source) }} · {{ copy('Open evidence', 'عرض الدليل') }}</small>
+                <small *ngIf="!storedAi">{{ sourceLabel(factor.source) }} · {{ copy('Open sample evidence', 'عرض دليل تجريبي') }}</small>
+                <small *ngIf="storedAi">
+                  {{ factor.agent }} · {{ copy('Severity', 'الشدة') }} {{ factor.severity }} ·
+                  {{ copy('Agent confidence', 'ثقة الوكيل') }} {{ (factor.confidence! * 100) | number:'1.0-0' }}%
+                </small>
+                <small *ngIf="storedAi && factor.reason" class="v360-ai-reason">{{ factor.reason }}</small>
+                <small *ngIf="storedAi && factor.evidenceIds?.length" class="v360-ai-evidence">
+                  {{ copy('Evidence IDs', 'معرّفات الأدلة') }}: {{ factor.evidenceIds?.join(', ') }}
+                </small>
               </div>
-              <span>+{{ factor.value }}</span>
+              <span>+{{ factor.value | number:'1.0-2' }}</span>
             </button>
           </div>
 
-          <a class="outline-btn explainability-link" [routerLink]="['/moei/nmc/vessel', vessel.imo, 'risk']">{{ copy('Open full explainability view', 'فتح التفسير الكامل للمخاطر') }}</a>
+          <a class="outline-btn explainability-link" [routerLink]="['/moei/nmc/vessel', vessel.imo, storedAi ? 'ai-assessment' : 'risk']">
+              {{ storedAi ? copy('Open saved AI assessment and evidence', 'عرض تقييم AI المحفوظ والأدلة') : copy('Open synthetic risk explanation', 'عرض تفسير المخاطر التجريبي') }}
+            </a>
         </article>
 
         <article class="panel conflict-panel" *ngIf="hasCertificateConflict">
@@ -279,7 +308,7 @@
           <div class="panel-header">
             <div>
               <h3>{{ copy('Vessel Intelligence Timeline', 'الخط الزمني لمعلومات السفينة') }}</h3>
-              <p>{{ copy('How the operational picture evolved', 'كيف تطورت الصورة التشغيلية') }}</p>
+              <p>{{ storedAi ? copy('Events read from Oracle, not synthetic on-screen events', 'أحداث من Oracle وليست أحداثًا مفترضة على الشاشة') : copy('Synthetic sample timeline, not recorded AI history', 'خط زمني تجريبي وليس سجلًا لتقييم AI') }}</p>
             </div>
           </div>
 
