@@ -193,6 +193,19 @@ const server = createServer(async (req, res) => {
   if (req.method === 'GET' && path === '/api/ai/fleet/status') {
     return respond(res,200,{...fleet.snapshot(),storageMode:dbMode,persistenceHealthy:fleet.persistenceHealthy,scheduler:scheduler.status()});
   }
+  // Fetch Again: fresh direct Oracle read, no dashboard-triggered AI.
+  if(req.method==='GET'&&path==='/api/ai/fleet/saved-status'){
+    try{
+      const saved=await fleet.savedSnapshot();
+      return respond(res,200,{...saved,storageMode:dbMode,
+        persistenceHealthy:fleet.persistenceHealthy,scheduler:scheduler.status(),
+        fetchedFrom:dbMode==='oracle'?'ORACLE':'PERSISTED_JSON',
+        fetchedAt:new Date().toISOString()});
+    }catch(error){
+      console.error('[nmc-fleet] SAVED_STATUS_READ_FAILED');
+      return respond(res,503,{error:'FLEET_SAVED_READ_FAILED'});
+    }
+  }
   if (req.method === 'GET' && path === '/api/ai/fleet/analytics') {
     return respond(res, 200, fleet.analytics());
   }
@@ -577,7 +590,12 @@ const server = createServer(async (req, res) => {
 
 try{
   await fleet.initialize(scheduler.bundles);
-  await guidance.initialize(); // fail closed if Oracle guidance migration 006 is absent
+  try{await guidance.initialize();}
+  catch(error){
+    // Guidance requires migration 006, but an optional UI module must never
+    // take down the live risk scheduler, existing cases, or saved Oracle scores.
+    console.error('[nmc-guidance] GUIDANCE_SCHEMA_NOT_READY');
+  }
   server.listen(port,'0.0.0.0',()=>{
     console.log(`NMC AI proxy listening on ${port}; mode=${dbMode}; fleet-auto=${scheduler.enabled}`);
     if(scheduler.enabled)scheduler.start();
