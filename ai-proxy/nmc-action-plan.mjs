@@ -31,9 +31,42 @@ const roles={
   REQUEST_EXTERNAL_VERIFICATION:'COMPLIANCE_OFFICER',
   NO_ACTION:'NMC_OFFICER'
 };
+/**
+ * Only bounded, non-sensitive action identifiers/types are returned on parse
+ * failure. Never return raw Airia content, payload, certificates or evidence.
+ */
 export class ActionPlanError extends Error{
-  constructor(code,status=422){super(code);this.code=code;this.status=status;}
+  constructor(code,status=422,details={}){
+    super(code);this.code=code;this.status=status;this.details=details;
+  }
 }
+const safeDiagnostic=value=>typeof value==='string'
+  ?value.trim().replace(/[^a-zA-Z0-9 _./-]/g,'?').slice(0,80)
+  :'(missing)';
+const normalizeIdentifier=value=>{
+  if(typeof value!=='string')return null;
+  // A01 may use camelCase, UPPER_SNAKE_CASE or kebab-case. The platform
+  // requires safe lowercase kebab-case for persisted tasks and API paths.
+  const normalized=value.trim()
+    .replace(/([a-z0-9])([A-Z])/g,'$1-$2')
+    .replace(/[_\s]+/g,'-').toLowerCase();
+  return /^[-a-z0-9]{1,60}$/.test(normalized)?normalized:null;
+};
+const aliases=Object.freeze({
+  REQUEST_PRIORITY_INSPECTION:'PRIORITY_INSPECTION',
+  CREATE_PRIORITY_INSPECTION:'PRIORITY_INSPECTION',
+  VERIFY_CERTIFICATE_STATUS:'VERIFY_CERTIFICATE',
+  MAINTAIN_ENHANCED_MONITORING:'ENHANCED_MONITORING',
+  REVIEW_OPEN_DEFICIENCY:'REVIEW_DEFICIENCY',
+  REQUEST_INDEPENDENT_VERIFICATION:'REQUEST_EXTERNAL_VERIFICATION'
+});
+const normalizeActionType=value=>{
+  if(typeof value!=='string')return '';
+  const canonical=value.trim()
+    .replace(/([a-z0-9])([A-Z])/g,'$1_$2')
+    .replace(/[\s-]+/g,'_').toUpperCase();
+  return aliases[canonical]||canonical;
+};
 function extract(raw){
   let value=raw;
   for(let i=0;i<6;i++){
@@ -71,10 +104,26 @@ export function normalizeA01Actions(raw,{imo,assessmentId,score,level,configVers
     evidenceGroups.set(type,unique([...(evidenceGroups.get(type)||[]),...refs]));
   }
   const ids=new Set();
-  const proposedActions=src.proposedActions.map(a=>{
-    const actionId=safeText(a?.actionId,60),actionType=safeText(a?.actionType,50);
-    if(!/^[-a-z0-9]{1,60}$/.test(actionId)||ids.has(actionId)||!allowTypes.has(actionType))
-      throw new ActionPlanError('A01_ACTION_INVALID');
+  const proposedActions=src.proposedActions.map((a,index)=>{
+    const actionIndex=index+1;
+    const rawId=a?.actionId;
+    const actionId=normalizeIdentifier(rawId);
+    if(!actionId){
+      throw new ActionPlanError('A01_ACTION_ID_INVALID',422,{
+        actionIndex,actionId:safeDiagnostic(rawId)
+      });
+    }
+    if(ids.has(actionId)){
+      throw new ActionPlanError('A01_ACTION_ID_DUPLICATE',422,{
+        actionIndex,actionId
+      });
+    }
+    const actionType=normalizeActionType(a?.actionType);
+    if(!allowTypes.has(actionType)){
+      throw new ActionPlanError('A01_ACTION_TYPE_UNSUPPORTED',422,{
+        actionIndex,actionType:safeDiagnostic(a?.actionType)
+      });
+    }
     ids.add(actionId);
     if(a.requiresHumanApproval!==true && a.requiresHumanApproval!==false)
       throw new ActionPlanError('A01_APPROVAL_METADATA_MISSING');
