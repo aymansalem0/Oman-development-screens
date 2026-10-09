@@ -86,9 +86,11 @@ export class OracleIntelligenceStore {
         st.REFRESH_FAILURE,st.FAILURE_REASON,
         a.RISK_SCORE,a.RISK_LEVEL,a.OPERATIONAL_PRIORITY,a.CRITICAL_OPEN_FINDING,
         a.RULESET_VERSION,a.INPUT_HASH,a.SOURCE_MODE,a.SOURCE_NATURE,a.RULESET_JSON,
-        a.PSC_SUMMARY_JSON,${time('a.ASSESSED_AT')} ASSESSED_AT
+        a.PSC_SUMMARY_JSON,${time('a.ASSESSED_AT')} ASSESSED_AT,
+        dq.QUALITY_SCORE,dq.CALCULATION_STATUS,dq.CALCULATION_VERSION,dq.BREAKDOWN_JSON
         FROM NMC_VESSEL_CURRENT_STATE st
-        LEFT JOIN NMC_AI_ASSESSMENT a ON a.ASSESSMENT_ID=st.ASSESSMENT_ID`;
+        LEFT JOIN NMC_AI_ASSESSMENT a ON a.ASSESSMENT_ID=st.ASSESSMENT_ID
+        LEFT JOIN NMC_DATA_QUALITY dq ON dq.ASSESSMENT_ID=a.ASSESSMENT_ID`;
       const query=await con.execute(sql,{},{outFormat:oracledb.OUT_FORMAT_OBJECT});
       const map={};const byId={};
       for(const r of query.rows){
@@ -108,6 +110,9 @@ export class OracleIntelligenceStore {
             assessedAt:r.ASSESSED_AT,signals:[],
             ruleset:JSON.parse(r.RULESET_JSON),
             pscSummary:r.PSC_SUMMARY_JSON?JSON.parse(r.PSC_SUMMARY_JSON):null,
+            quality:{qualityScore:r.QUALITY_SCORE,calculationStatus:r.CALCULATION_STATUS||'NOT_CALCULATED',
+              calculationVersion:r.CALCULATION_VERSION||null,
+              breakdown:r.BREAKDOWN_JSON?JSON.parse(r.BREAKDOWN_JSON):null},
             reviewedByHuman:false,evidenceVerified:false
           });
           byId[r.ASSESSMENT_ID]=record;
@@ -210,8 +215,16 @@ export class OracleIntelligenceStore {
       }
       stage='DATA_QUALITY';
       await con.execute(`INSERT INTO NMC_DATA_QUALITY(
-        ASSESSMENT_ID,CALCULATION_STATUS)
-        VALUES(:id,'NOT_CALCULATED')`,{id});
+        ASSESSMENT_ID,QUALITY_SCORE,CALCULATION_VERSION,BREAKDOWN_JSON,CALCULATION_STATUS)
+        VALUES(:b_id,:b_score,:b_version,:b_breakdown,:b_status)`,
+        {b_id:id,b_score:row.quality?.qualityScore??null,
+          b_version:row.quality?.calculationVersion??null,
+          b_breakdown:row.quality?jsonClob(row.quality.breakdown):null,
+          b_status:row.quality?.calculationStatus||'NOT_CALCULATED'});
+      stage='DATA_CONFLICTS';
+      if(row.quality?.disagreements?.length){
+        await this.writeDisagreements(con,row.imo,id,row.quality.disagreements);
+      }
       stage='CURRENT_STATE';
       const nextAt=utc(row.nextCheckAt);
       await con.execute(`MERGE INTO NMC_VESSEL_CURRENT_STATE dst
@@ -253,6 +266,93 @@ export class OracleIntelligenceStore {
       throw new Error('ORACLE_ASSESSMENT_WRITE_FAILED');
     }
     finally{await con.close();}
+  }
+
+
+  // No automatic authority resolution: disagreements remain PENDING_REVIEW.
+  // Only fields directly compared between two present synthetic records qualify.
+  async writeDisagreements(con,imo,assessmentId,disagreements){
+    for(const conflict of disagreements){
+      const binds={
+        b_imo:imo,b_assessment_id:assessmentId,
+        b_field_name:conflict.fieldName,
+        b_summary:String(conflict.summary||'Synthetic data disagreement').slice(0,2000),
+        b_source_a:conflict.sourceAEvidenceId||null,
+        b_source_b:conflict.sourceBEvidenceId||null
+      };
+      const updated=await con.execute(`UPDATE NMC_DATA_CONFLICT
+        SET LAST_ASSESSMENT_ID=:b_assessment_id,
+          CONFLICT_SUMMARY=:b_summary
+        WHERE IMO=:b_imo AND FIELD_NAME=:b_field_name
+          AND STATUS='PENDING_REVIEW'`,binds);
+      if(updated.rowsAffected===0){
+        await con.execute(`INSERT INTO NMC_DATA_CONFLICT(
+          CONFLICT_ID,IMO,FIRST_DETECTED_ASSESSMENT_ID,LAST_ASSESSMENT_ID,
+          FIELD_NAME,SOURCE_A_EVIDENCE_ID,SOURCE_B_EVIDENCE_ID,
+          CONFLICT_SUMMARY,STATUS)
+          VALUES(:b_conflict_id,:b_imo,:b_assessment_id,:b_assessment_id,
+            :b_field_name,:b_source_a,:b_source_b,:b_summary,'PENDING_REVIEW')`,
+          {...binds,b_conflict_id:randomUUID()});
+      }
+    }
+  }
+
+  // Idempotent no-AirIA recheck for an existing SAVED assessment.
+  // Defaults to rollback unless explicitly confirmed by caller.
+  async backfillDataQuality(imo,assessmentId,quality,{dryRun=true}={}){
+    if(!/^\\d{7}$/.test(imo)||!quality||!['CALCULATED','INSUFFICIENT_EVIDENCE'].includes(quality.calculationStatus))
+      throw new Error('QUALITY_BACKFILL_INPUT_INVALID');
+    const con=await this.pool.getConnection();
+    try{
+      const current=await con.execute(`SELECT COUNT(*) FROM NMC_VESSEL_CURRENT_STATE s
+        WHERE s.IMO=:b_imo AND s.ASSESSMENT_ID=:b_id`,
+        {b_imo:imo,b_id:assessmentId});
+      if(current.rows[0][0]!==1)throw new Error('QUALITY_BACKFILL_CURRENT_ASSESSMENT_REQUIRED');
+      const updated=await con.execute(`UPDATE NMC_DATA_QUALITY
+        SET QUALITY_SCORE=:b_score,CALCULATION_VERSION=:b_version,
+          BREAKDOWN_JSON=:b_breakdown,CALCULATION_STATUS=:b_status
+        WHERE ASSESSMENT_ID=:b_id`,
+        {b_id:assessmentId,b_score:quality.qualityScore,
+          b_version:quality.calculationVersion,
+          b_breakdown:jsonClob(quality.breakdown),b_status:quality.calculationStatus});
+      if(updated.rowsAffected!==1)throw new Error('QUALITY_BACKFILL_ROW_NOT_FOUND');
+      await this.writeDisagreements(con,imo,assessmentId,quality.disagreements||[]);
+      if(dryRun)await con.rollback(); else await con.commit();
+      return {imo,assessmentId,dryRun,qualityScore:quality.qualityScore,
+        detectedDisagreements:quality.disagreements?.length||0};
+    }catch(error){await con.rollback();throw new Error(
+      /^QUALITY_BACKFILL_[A-Z_]+$/.test(String(error?.message))?error.message:'QUALITY_BACKFILL_DB_FAILED'
+    );}finally{await con.close();}
+  }
+
+  async intelligence(imo){
+    const con=await this.pool.getConnection();
+    try{
+      const current=await con.execute(`SELECT a.ASSESSMENT_ID,a.IMO,
+          dq.QUALITY_SCORE,dq.CALCULATION_VERSION,dq.CALCULATION_STATUS,dq.BREAKDOWN_JSON
+        FROM NMC_VESSEL_CURRENT_STATE st
+        JOIN NMC_AI_ASSESSMENT a ON a.ASSESSMENT_ID=st.ASSESSMENT_ID
+        LEFT JOIN NMC_DATA_QUALITY dq ON dq.ASSESSMENT_ID=a.ASSESSMENT_ID
+        WHERE st.IMO=:b_imo`,{b_imo:imo},{outFormat:oracledb.OUT_FORMAT_OBJECT});
+      const c=current.rows[0];
+      if(!c)return null;
+      const conflicts=await con.execute(`SELECT CONFLICT_ID,FIELD_NAME,STATUS,
+          CONFLICT_SUMMARY,SOURCE_A_EVIDENCE_ID,SOURCE_B_EVIDENCE_ID,
+          FIRST_DETECTED_ASSESSMENT_ID,LAST_ASSESSMENT_ID
+        FROM NMC_DATA_CONFLICT WHERE IMO=:b_imo
+        ORDER BY CREATED_AT DESC FETCH FIRST 100 ROWS ONLY`,
+        {b_imo:imo},{outFormat:oracledb.OUT_FORMAT_OBJECT});
+      return {
+        imo,assessmentId:c.ASSESSMENT_ID,
+        quality:{score:c.QUALITY_SCORE??null,
+          status:c.CALCULATION_STATUS||'NOT_CALCULATED',
+          version:c.CALCULATION_VERSION||null,
+          breakdown:c.BREAKDOWN_JSON?JSON.parse(c.BREAKDOWN_JSON):null},
+        conflicts:conflicts.rows,
+        independentlyVerifiedDataConfidence:null,
+        dataNature:'SYNTHETIC_POC_NOT_OFFICIAL'
+      };
+    }finally{await con.close();}
   }
 
   async saveStateBatch(records){
