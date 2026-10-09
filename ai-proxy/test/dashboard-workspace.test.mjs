@@ -259,13 +259,18 @@ test('stale edit does not overwrite newer published version',async()=>{
   try{
     const first=await workspace.create(sample('conflict-test'));
     const published=await workspace.publish(first.id,first.version);
-    const editorA=await workspace.startPublishedEdit(published.id);
-    const editorB=await workspace.startPublishedEdit(published.id);
-    await workspace.publish(editorA.id,editorA.version);
-    await assert.rejects(()=>workspace.publish(editorB.id,editorB.version),
+    const editor=await workspace.startPublishedEdit(published.id);
+    const updated=await workspace.save(editor.id,{...editor,title:'Revised title'});
+    // A manager relocates the live dashboard while the linked draft is open.
+    const moved=await workspace.movePublished(published.id,'SETTINGS',published.version);
+    await assert.rejects(()=>workspace.publish(updated.id,updated.version),
       /DASHBOARD_PUBLISHED_VERSION_CONFLICT/);
-    assert.equal((await workspace.get(editorB.id)).status,'DRAFT');
-    assert.equal((await workspace.get(published.id)).version,published.version+1);
+    assert.equal((await workspace.get(editor.id)).status,'DRAFT');
+    const unchangedLive=await workspace.get(published.id);
+    assert.equal(unchangedLive.version,published.version+1);
+    assert.equal(unchangedLive.title,published.title);
+    assert.equal(unchangedLive.menuPlacement,'SETTINGS');
+    assert.equal(moved.id,published.id);
   }finally{close();}
 });
 
