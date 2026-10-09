@@ -1,3 +1,4 @@
+import { NmcNavigationComponent } from '../components/nmc-navigation.component';
 import {CommonModule} from '@angular/common';
 import {Component,OnDestroy,OnInit} from '@angular/core';
 import {FormsModule} from '@angular/forms';
@@ -9,7 +10,7 @@ import {NmcDataQualityConfigService,QualityDemoPolicy,QualityMetricKey,QualityId
   QualityPolicyImpact,QUALITY_METRICS,QUALITY_ID_FIELDS,projectQuality} from '../services/nmc-data-quality-config.service';
 
 @Component({selector:'app-nmc-data-quality-configuration',standalone:true,
-  imports:[CommonModule,FormsModule,RouterLink],
+  imports: [CommonModule,FormsModule,RouterLink, NmcNavigationComponent],
   templateUrl:'./nmc-data-quality-configuration.component.html',
   styleUrl:'./nmc-data-quality-configuration.component.css'})
 export class NmcDataQualityConfigurationComponent implements OnInit,OnDestroy {

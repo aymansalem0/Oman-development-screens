@@ -1,3 +1,4 @@
+import { NmcNavigationComponent } from '../components/nmc-navigation.component';
 import { CommonModule } from '@angular/common';
 import {
   AfterViewInit,
@@ -33,7 +34,7 @@ interface MaritimeEvent {
 @Component({
   selector: 'app-nmc-command-center',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink],
+  imports: [CommonModule, FormsModule, RouterLink, NmcNavigationComponent],
   templateUrl: './nmc-command-center.component.html',
   styleUrl: './nmc-command-center.component.css'
 })

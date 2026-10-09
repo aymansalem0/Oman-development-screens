@@ -1,3 +1,4 @@
+import { NmcNavigationComponent } from '../components/nmc-navigation.component';
 import { CommonModule } from '@angular/common';
 import { Component, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
@@ -32,7 +33,7 @@ interface InspectionCheck {
 @Component({
   selector: 'app-nmc-smart-inspection',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink],
+  imports: [CommonModule, FormsModule, RouterLink, NmcNavigationComponent],
   templateUrl: './nmc-smart-inspection.component.html',
   styleUrl: './nmc-smart-inspection.component.css'
 })

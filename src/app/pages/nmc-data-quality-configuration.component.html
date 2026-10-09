@@ -2,6 +2,7 @@
 <header class="qa-top"><div><small>MOEI • NATIONAL MARITIME CENTER</small><h1>{{copy('Data Quality Configuration','إعدادات جودة البيانات')}}</h1>
 <p>{{copy('Configurable POC calculation with live impact','احتساب تجريبي قابل للتعديل مع عرض الأثر فورًا')}}</p></div>
 <nav><button (click)="lang.toggle()">{{lang.isArabic?'English':'العربية'}}</button><a [routerLink]="['/moei/nmc/vessel',imo]">{{copy('Back to Vessel 360','العودة إلى ملف السفينة')}}</a></nav></header>
+<app-nmc-navigation></app-nmc-navigation>
 <main>
 <section class="qa-alert"><strong>{{copy('Browser-only POC policy','إعدادات تجريبية محفوظة في المتصفح فقط')}}</strong>
 <p>{{copy('Changes here recalculate a transparent preview from saved source evidence, without changing the Oracle quality score, risk score or calling Airia. Server-wide publishing requires authenticated admin approval.','التعديلات تعيد حساب معاينة مباشرة من الأدلة المسجلة، دون تغيير جودة البيانات أو المخاطر في Oracle ودون استدعاء Airia. النشر على الخادم يتطلب توثيق مسؤول النظام والموافقة.')}}</p></section>

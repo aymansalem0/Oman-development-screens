@@ -1,5 +1,5 @@
-<div class="app-shell" [class.rtl]="lang.isArabic" [attr.dir]="lang.dir">
-  <aside class="sidebar">
+<div class="app-shell" [class.nmc-mode]="isNmcArea" [class.rtl]="lang.isArabic" [attr.dir]="lang.dir">
+  <aside class="sidebar" *ngIf="!isNmcArea">
     <div class="sidebar-user">
       <div class="sidebar-user-icon">✣</div>
       <span>{{ lang.t('employee') }}</span>
@@ -39,7 +39,7 @@
   </aside>
 
   <div class="workspace">
-    <header class="topbar">
+    <header class="topbar" *ngIf="!isNmcArea">
       <div class="ministry-brand">
         <div class="oman-mark">⚓</div>
         <div>

@@ -25,59 +25,7 @@
     </div>
   </header>
 
-  <aside class="nmc-context-sidebar">
-    <div class="sidebar-section-label">{{ copy('OPERATIONS', 'العمليات') }}</div>
-
-    <a class="nav-item" routerLink="/moei/nmc">
-      <span class="nav-icon">◉</span>
-      <span>{{ copy('Command Center', 'مركز القيادة') }}</span>
-    </a>
-
-    <a class="nav-item" [routerLink]="['/moei/nmc/vessel', vessel.imo]">
-      <span class="nav-icon">⌖</span>
-      <span>{{ copy('Vessel Monitoring', 'مراقبة السفن') }}</span>
-    </a>
-
-    <button type="button" class="nav-item">
-      <span class="nav-icon">⚠</span>
-      <span>{{ copy('Alerts & Events', 'التنبيهات والأحداث') }}</span>
-    </button>
-
-    <a class="nav-item" [routerLink]="['/moei/nmc/vessel', vessel.imo, 'case']">
-      <span class="nav-icon">▣</span>
-      <span>{{ copy('Cases & Incidents', 'الحالات والحوادث') }}</span>
-    </a>
-
-    <a class="nav-item" [routerLink]="['/moei/nmc/vessel', vessel.imo, 'smart-inspection']">
-      <span class="nav-icon">✓</span>
-      <span>{{ copy('Smart Inspection', 'المعاينة الذكية') }}</span>
-    </a>
-
-    <div class="sidebar-section-label second">{{ copy('INTELLIGENCE', 'الاستخبارات') }}</div>
-
-    <a class="nav-item active" [routerLink]="['/moei/nmc/vessel', vessel.imo, 'ai-assessment']">
-      <span class="nav-icon">✦</span>
-      <span>{{ copy('Maritime Intelligence', 'الاستخبارات البحرية') }}</span>
-    </a>
-
-    <button type="button" class="nav-item">
-      <span class="nav-icon">▥</span>
-      <span>{{ copy('Dashboards', 'لوحات المعلومات') }}</span>
-    </button>
-
-    <a class="nav-item" routerLink="/moei/nmc/admin/risk-configuration">
-      <span class="nav-icon">⚙</span>
-      <span>{{ copy('Configuration', 'الإعدادات') }}</span>
-    </a>
-
-    <div class="system-health">
-      <div>
-        <span class="health-dot"></span>
-        <strong>{{ copy('Systems operational', 'الأنظمة تعمل بصورة طبيعية') }}</strong>
-      </div>
-      <small>{{ copy('Synthetic POC · external registries not connected', 'بيانات تجريبية · السجلات الخارجية غير متصلة') }}</small>
-    </div>
-  </aside>
+  <app-nmc-navigation></app-nmc-navigation>
 
   <main class="ai-main">
     <section class="vessel-hero">
