@@ -63,6 +63,10 @@ export class NmcAiSituationAssessmentComponent implements OnInit {
   /** Tracks any attempted live run, including partial/unsupported agent responses. */
   liveAttempted = false;
   showSampleAssessment = false;
+  centralCase:NmcCentralCase|null=null;
+  centralBusy=false;
+  centralError='';
+  centralMessage='';
 
   readonly generatedAt = '07 Oct 2026 · 22:43:06';
   readonly modelLabel = 'Maritime Situation Intelligence';
@@ -72,7 +76,8 @@ export class NmcAiSituationAssessmentComponent implements OnInit {
     public lang: LanguageService,
     private riskEngine: NmcRiskEngineService,
     private readonly vesselEvidence: NmcVesselEvidenceService,
-    private readonly fleetAi: NmcFleetAiService
+    private readonly fleetAi: NmcFleetAiService,
+    private readonly cases: NmcCasesService
   ) {}
 
   ngOnInit(): void {
@@ -80,6 +85,7 @@ export class NmcAiSituationAssessmentComponent implements OnInit {
     const profile = getOperationalVesselByImo(imo) || NMC_OPERATIONAL_VESSELS[0];
     this.vessel = this.riskEngine.applyToVessel(profile);
     this.rebuildAssessment();
+    this.loadCentralCase();
     this.fleetAi.assessment(profile.imo).subscribe({
       next:row=>{
         if(row.status==='COMPLETED' && Number.isFinite(row.score) &&
