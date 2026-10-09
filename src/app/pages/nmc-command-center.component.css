@@ -1099,3 +1099,8 @@ button, input, select { font: inherit; }
   line-height: 1.6;
   color: #607888;
 }
+
+.operations-section-label{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 0 10px;padding:0 3px;color:#22536a}
+.operations-section-label strong{font-size:14px}
+.operations-section-label span{font-size:10px;color:#8395a1}
+.db-fetch-btn:disabled{opacity:.65;cursor:wait}
