@@ -135,7 +135,9 @@ export class NmcCaseWorkspace{
     return this._update(id,version,'TASK_'+action,role,note,row=>{
       if(row.status==='RESOLVED')throw new NmcCaseError('CASE_ALREADY_RESOLVED',409);
       const task=row.tasks.find(item=>item.id===taskId);
-      if(!task)throw new NmcCaseError('CASE_TASK_NOT_FOUND',404);
+      if(!task||!row.actionPlan||
+         task.provenance!=='AIRIA_A01_HUMAN_APPROVED')
+        throw new NmcCaseError('CASE_TASK_NOT_FOUND',404);
       const valid=action==='START'
         ?task.status==='Assigned'
         :action==='COMPLETE'
@@ -149,7 +151,8 @@ export class NmcCaseWorkspace{
         ...t,status:nextStatus,
         assignedRole:action==='ESCALATE'?'NMC_SUPERVISOR':t.assignedRole
       }:t);
-      const requiredDone=tasks.filter(t=>t.mandatory).every(t=>t.status==='Completed');
+      const aiTasks=tasks.filter(t=>t.provenance==='AIRIA_A01_HUMAN_APPROVED');
+      const requiredDone=aiTasks.filter(t=>t.mandatory).every(t=>t.status==='Completed');
       const aiDecisionsPending=!!row.actionPlan?.proposedActions?.some(
         a=>a.decision==='PENDING');
       // Mandatory tasks alone do not mean a reviewed AI plan or post-inspection
@@ -199,7 +202,8 @@ export class NmcCaseWorkspace{
         const tasks=row.tasks.map(t=>(request&&t.actionId===request.actionId)||
           (!row.actionPlan&&t.id==='priority-inspection')
           ?{...t,status:'Completed'}:t);
-        const requiredDone=tasks.filter(t=>t.mandatory).every(t=>t.status==='Completed');
+        const aiTasks=tasks.filter(t=>t.provenance==='AIRIA_A01_HUMAN_APPROVED');
+      const requiredDone=aiTasks.filter(t=>t.mandatory).every(t=>t.status==='Completed');
         const savedOutcome={
           inspectionId:outcome.inspectionId,
           result:String(outcome.result||'Completed with Findings').slice(0,70),
@@ -289,8 +293,9 @@ export class NmcCaseWorkspace{
         }
       }
       const allDecisionsRecorded=nextActions.every(a=>a.decision!=='PENDING');
-      const allRequiredDone=tasks.length>0&&
-        tasks.filter(t=>t.mandatory).every(t=>t.status==='Completed');
+      const aiTasks=tasks.filter(t=>t.provenance==='AIRIA_A01_HUMAN_APPROVED');
+      const allRequiredDone=aiTasks.filter(t=>t.mandatory)
+        .every(t=>t.status==='Completed');
       // Legacy completed tasks cannot mark a case ready while A01 proposals
       // remain undecided or while a new inspection lacks reassessment.
       const ready=allDecisionsRecorded&&allRequiredDone&&!row.inspectionOutcome;
@@ -330,11 +335,12 @@ export class NmcCaseWorkspace{
     if(!reason)throw new NmcCaseError('CASE_RESOLUTION_NOTE_REQUIRED');
     return this._update(id,version,'RESOLVED',role,reason,row=>{
       if(row.status==='RESOLVED')throw new NmcCaseError('CASE_ALREADY_RESOLVED',409);
-      if(!row.actionPlan && !row.tasks.length)
+      if(!row.actionPlan)
         throw new NmcCaseError('CASE_ACTION_PLAN_REQUIRED',409);
       if(row.actionPlan?.proposedActions?.some(a=>a.decision==='PENDING'))
         throw new NmcCaseError('CASE_ACTION_DECISIONS_PENDING',409);
-      if(row.tasks.some(t=>t.mandatory&&t.status!=='Completed'))
+      if(row.tasks.some(t=>t.provenance==='AIRIA_A01_HUMAN_APPROVED'&&
+        t.mandatory&&t.status!=='Completed'))
         throw new NmcCaseError('CASE_MANDATORY_TASKS_INCOMPLETE',409);
       // Stage 3 will add evidence-linked A02 compliance refresh and a new,
       // persisted deterministic risk assessment. Until then, no completed
