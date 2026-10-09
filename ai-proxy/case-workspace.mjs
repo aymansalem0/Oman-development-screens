@@ -3,7 +3,7 @@
  * assessments. Case creation is always initiated by an NMC operator after
  * acknowledging a persisted alert. The event and case remain linked.
  */
-import {randomUUID} from 'node:crypto';
+import {createHash,randomUUID} from 'node:crypto';
 import {existsSync,mkdirSync,readFileSync,writeFileSync,renameSync} from 'node:fs';
 import {dirname} from 'node:path';
 import oracledb from 'oracledb';
@@ -249,15 +249,21 @@ export class NmcCaseWorkspace{
       const tasks=[...row.tasks];
       const inspectionRequests=[...(row.inspectionRequests||[])];
       if(accepted){
+        // New A01 tasks are separately namespaced from old fixed-template case
+        // task IDs. Preserve actionId unchanged for inspection referral joins.
+        const suffix=createHash('sha256').update(action.actionId).digest('hex').slice(0,10);
+        const generatedTaskId='a01-'+action.actionId.slice(0,42)+'-'+suffix;
         const task={
-          id:action.actionId,actionId:action.actionId,actionType:action.actionType,
+          id:generatedTaskId,actionId:action.actionId,actionType:action.actionType,
           title:action.title,priority:action.priority,reason:action.reason,
           status:'Assigned',assignedRole:action.ownerRole,
           mandatory:true,evidenceIds:action.evidenceIds,
           provenance:'AIRIA_A01_HUMAN_APPROVED',sourceAssessmentId:row.sourceAssessmentId,
           generatedAt:now()
         };
-        if(tasks.some(t=>t.id===task.id))throw new NmcCaseError('CASE_TASK_EXISTS',409);
+        if(tasks.some(t=>t.id===task.id||
+          (t.provenance==='AIRIA_A01_HUMAN_APPROVED'&&t.actionId===action.actionId)))
+          throw new NmcCaseError('CASE_TASK_EXISTS',409);
         tasks.push(task);
         if(action.actionType==='PRIORITY_INSPECTION'){
           if(inspectionRequests.some(r=>r.status!=='COMPLETED'))
