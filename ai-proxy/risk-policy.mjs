@@ -20,7 +20,7 @@ const clob=x=>({val:JSON.stringify(x),type:oracledb.DB_TYPE_CLOB});
 const time=col=>`TO_CHAR(${col} AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.FF3"Z"')`;
 const storeFile=process.env.NMC_RISK_POLICY_STORE_PATH||'/data/nmc-risk-policy.json';
 export class RiskPolicyError extends Error{
-  constructor(code,status=400){super(code);this.code=code;this.status=status;}
+  constructor(code,status=400,cause=null){super(code,{cause});this.code=code;this.status=status;}
 }
 export function validateRiskConfig(c){
   if(!c||typeof c!=='object'||Array.isArray(c)||!c.weights||!c.thresholds||
@@ -109,18 +109,19 @@ export class CentralRiskPolicy{
         const at=iso(),config={...copy(baseline),publishedAt:at};
         await c.execute(`INSERT INTO NMC_RISK_POLICY_VERSION
           (VERSION_NO,POLICY_REF,PREVIOUS_VERSION_NO,CONFIG_JSON,CHANGE_REASON,PUBLISHED_BY,ACTOR_ROLE)
-          VALUES(1,:ref,NULL,:doc,:reason,:by,'SYSTEM')`,
-          {ref:config.version,doc:clob(config),reason:config.changeReason,by:config.publishedBy});
+          VALUES(1,:b_policy_ref,NULL,:b_config_json,:b_change_reason,:b_published_by,'SYSTEM')`,
+          {b_policy_ref:config.version,b_config_json:clob(config),
+            b_change_reason:config.changeReason,b_published_by:config.publishedBy});
         await c.execute('INSERT INTO NMC_RISK_POLICY_ACTIVE(SINGLETON_ID,VERSION_NO) VALUES(1,1)');
         await c.commit();
       });
       this.ready=true;
     }catch(e){
       if(e instanceof RiskPolicyError)throw e;
-      throw new RiskPolicyError('RISK_POLICY_SCHEMA_NOT_READY',503);
+      throw new RiskPolicyError('RISK_POLICY_SCHEMA_NOT_READY',503,e);
     }
   }
-  requireReady(){if(!this.ready)throw new RiskPolicyError('RISK_POLICY_SCHEMA_NOT_READY',503);}
+  requireReady(){if(!this.ready)throw new RiskPolicyError('RISK_POLICY_SCHEMA_NOT_READY',503,e);}
   async active(){
     this.requireReady();
     if(this.mode==='json')return copy(this.state.versions.find(v=>v.revision===this.state.activeRevision));
@@ -191,17 +192,18 @@ export class CentralRiskPolicy{
         const next=change(previous);
         await c.execute(`INSERT INTO NMC_RISK_POLICY_VERSION
           (VERSION_NO,POLICY_REF,PREVIOUS_VERSION_NO,CONFIG_JSON,CHANGE_REASON,PUBLISHED_BY,ACTOR_ROLE)
-          VALUES(:rev,:ref,:prev,:doc,:reason,:by,'PUBLISHER')`,
-          {rev:next.revision,ref:next.policyRef,prev:next.previousRevision,
-            doc:clob(next.config),reason:next.reason,by:next.publishedBy});
+          VALUES(:b_rev,:b_policy_ref,:b_prev,:b_config_json,:b_change_reason,:b_published_by,'PUBLISHER')`,
+          {b_rev:next.revision,b_policy_ref:next.policyRef,b_prev:next.previousRevision,
+            b_config_json:clob(next.config),b_change_reason:next.reason,
+            b_published_by:next.publishedBy});
         for(const p of next.projections){
           await c.execute(`INSERT INTO NMC_RISK_POLICY_PROJECTION
             (POLICY_VERSION_NO,ASSESSMENT_ID,IMO,RISK_SCORE,RISK_LEVEL,OPERATIONAL_PRIORITY,
              CRITICAL_OPEN_FINDING)
-            VALUES(:revision,:assessment,:imo,:score,:level,:priority,:critical)`,
-            {revision:next.revision,assessment:p.sourceAssessmentId,imo:p.imo,
-              score:p.riskScore,level:p.riskLevel,priority:p.operationalPriority,
-              critical:p.criticalOpenFinding?'Y':'N'});
+            VALUES(:b_revision,:b_assessment_id,:b_imo,:b_score,:b_risk_level,:b_priority,:b_critical)`,
+            {b_revision:next.revision,b_assessment_id:p.sourceAssessmentId,b_imo:p.imo,
+              b_score:p.riskScore,b_risk_level:p.riskLevel,b_priority:p.operationalPriority,
+              b_critical:p.criticalOpenFinding?'Y':'N'});
         }
         await c.execute(`UPDATE NMC_RISK_POLICY_ACTIVE
           SET VERSION_NO=:revision,UPDATED_AT=SYSTIMESTAMP WHERE SINGLETON_ID=1`,
@@ -275,10 +277,10 @@ export class CentralRiskPolicy{
           await c.execute(`INSERT INTO NMC_RISK_POLICY_PROJECTION
             (POLICY_VERSION_NO,ASSESSMENT_ID,IMO,RISK_SCORE,RISK_LEVEL,OPERATIONAL_PRIORITY,
              CRITICAL_OPEN_FINDING)
-            VALUES(:revision,:assessment,:imo,:score,:level,:priority,:critical)`,
-            {revision:active.revision,assessment:p.sourceAssessmentId,imo:p.imo,
-              score:p.riskScore,level:p.riskLevel,priority:p.operationalPriority,
-              critical:p.criticalOpenFinding?'Y':'N'});
+            VALUES(:b_revision,:b_assessment_id,:b_imo,:b_score,:b_risk_level,:b_priority,:b_critical)`,
+            {b_revision:active.revision,b_assessment_id:p.sourceAssessmentId,b_imo:p.imo,
+              b_score:p.riskScore,b_risk_level:p.riskLevel,b_priority:p.operationalPriority,
+              b_critical:p.criticalOpenFinding?'Y':'N'});
           await c.commit();
         }
       }catch(e){await c.rollback();if(e?.errorNum!==1)throw e;}
