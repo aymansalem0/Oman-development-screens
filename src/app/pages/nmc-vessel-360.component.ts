@@ -466,6 +466,9 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
     if (!this.storedAi) return;
     this.vessel.riskScore = this.storedAi.score ?? this.vessel.riskScore;
     this.vessel.riskLevel = this.storedAi.level ?? this.vessel.riskLevel;
+    // All risk-dependent overview indicators must use the same saved A01/A02 score,
+    // not a different browser-side synthetic fixture risk.
+    this.vessel.risk=this.storedAi.score;
     const sources: Record<string, string> = {
       movement: 'AIS / Movement',
       inspection: 'Inspection',
