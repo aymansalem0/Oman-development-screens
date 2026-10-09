@@ -116,7 +116,9 @@ export async function getPscVessel(imo) {
   if (inspections.length !== vessel.externalInspectionCount) throw new Error('PSC_VESSEL_COUNT_MISMATCH');
   const coverage=inspections.length?'SIMULATED_RECORDS':'NO_RECORD_IN_FIXTURE';
   return {
+    // Actual registry row values; do not infer these from the internal fixture.
     imo:vessel.imo,vesselName:vessel.vesselName,
+    flag:vessel.flag,vesselType:vessel.vesselType,operator:vessel.operator,
     sourceSystem:PSC_SOURCE, datasetVersion:PSC_VERSION, sourceMode:mode,
     dataNature:'SYNTHETIC_NOT_RIYADH_MOU', authoritative:false,
     externalEvidenceVerified:false, pdfContentAvailable:false, coverage,
