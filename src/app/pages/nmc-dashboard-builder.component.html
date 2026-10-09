@@ -1,0 +1,212 @@
+<div class="db-shell" [class.rtl]="lang.isArabic" [attr.dir]="lang.dir">
+  <header class="db-topbar">
+    <div class="db-brand">
+      <span class="db-logo">▥</span>
+      <div><small>{{copy('MOEI · NATIONAL MARITIME CENTER','وزارة الطاقة والبنية التحتية · المركز البحري الوطني')}}</small>
+        <h1>{{copy('Maritime Analytics','التحليلات البحرية')}}</h1>
+        <p>{{copy('Self-Service Dashboards','لوحات معلومات ذاتية الخدمة')}}</p>
+      </div>
+    </div>
+    <div class="db-top-actions">
+      <button class="db-outline" type="button" (click)="lang.toggle()">{{lang.isArabic?'English':'العربية'}}</button>
+      <a class="db-outline" routerLink="/moei/nmc">{{copy('Command Center','مركز القيادة')}}</a>
+    </div>
+  </header>
+
+  <app-nmc-navigation></app-nmc-navigation>
+
+  <main class="db-main">
+    <ng-container *ngIf="isManager">
+      <div class="db-heading">
+        <div>
+          <span class="db-kicker">{{copy('DASHBOARD MANAGEMENT','إدارة لوحات المعلومات')}}</span>
+          <h2>{{copy('My Dashboards','لوحات المعلومات')}}</h2>
+          <p>{{copy('Design and adapt maritime decision-support views using operational data.','صمم وعدّل لوحات معلومات لدعم القرار من البيانات التشغيلية.')}}</p>
+        </div>
+        <button class="db-primary" type="button" (click)="create()">＋ {{copy('Create Dashboard','إنشاء لوحة معلومات')}}</button>
+      </div>
+      <p class="db-message" *ngIf="saveMessage">{{saveMessage}}</p>
+      <div class="db-manage-grid">
+        <article class="db-board-card" *ngFor="let item of dashboards">
+          <div class="db-board-top"><div class="db-board-icon">▦</div><span class="db-chip">{{copy('Draft','مسودة')}}</span></div>
+          <h3>{{item.title}}</h3>
+          <p>{{item.description || copy('Custom maritime dashboard','لوحة معلومات بحرية مخصصة')}}</p>
+          <div class="db-board-meta">{{item.widgets.length}} {{copy('widgets','مؤشرات')}} · {{copy('Version','إصدار')}} {{item.version}}</div>
+          <div class="db-board-actions">
+            <button class="db-primary" type="button" (click)="open(item.id)">{{copy('Open Designer','فتح المصمم')}}</button>
+            <button class="db-outline" type="button" (click)="duplicate(item.id)">{{copy('Duplicate','نسخ')}}</button>
+            <button class="db-danger" type="button" (click)="remove(item.id)">{{copy('Delete','حذف')}}</button>
+          </div>
+        </article>
+        <div class="db-empty" *ngIf="!dashboards.length">
+          <div class="db-empty-symbol">▥</div>
+          <h3>{{copy('Start with a new dashboard','ابدأ بإنشاء لوحة معلومات جديدة')}}</h3>
+          <button class="db-primary" type="button" (click)="create()">{{copy('Create Dashboard','إنشاء لوحة معلومات')}}</button>
+        </div>
+      </div>
+    </ng-container>
+
+    <ng-container *ngIf="dashboard as board">
+      <div class="db-heading">
+        <div>
+          <span class="db-kicker">{{copy('DASHBOARD DESIGNER','مصمم لوحات المعلومات')}}</span>
+          <h2>{{board.title}}</h2>
+          <p>{{copy('Preview the current risk picture while you configure your own dashboard.','عاين المخاطر الحالية أثناء تصميم لوحة المعلومات وتخصيصها.')}}</p>
+        </div>
+        <div class="db-heading-actions">
+          <button class="db-outline" type="button" (click)="back()">← {{copy('All Dashboards','كل اللوحات')}}</button>
+          <button class="db-outline" type="button" (click)="refresh()">{{copy('Refresh Data','تحديث البيانات')}}</button>
+          <button class="db-primary" type="button" (click)="save()" [disabled]="!dirty">✓ {{copy('Save Changes','حفظ التغييرات')}}</button>
+        </div>
+      </div>
+
+      <div class="db-statusline">
+        <span>● {{copy('Risk rules','قواعد المخاطر')}}: {{riskVersion}}</span>
+        <span>{{copy('Available assessments','التقييمات المتاحة')}}: {{assessed.length}} / {{fleet.length}}</span>
+        <span *ngIf="lastRefresh">{{copy('Updated','آخر تحديث')}}: {{lastRefresh | date:'shortTime'}}</span>
+        <span *ngIf="dirty" class="db-unsaved">{{copy('Unsaved changes','تغييرات غير محفوظة')}}</span>
+      </div>
+      <p class="db-message" *ngIf="saveMessage">{{saveMessage}}</p>
+      <p class="db-error" *ngIf="dataError">{{dataError}}</p>
+
+      <div class="db-layout">
+        <aside class="db-designer">
+          <section class="db-panel">
+            <h3>{{copy('Dashboard Details','بيانات اللوحة')}}</h3>
+            <label>{{copy('Name','الاسم')}}</label>
+            <input [(ngModel)]="board.title" (ngModelChange)="touch()" maxlength="100"/>
+            <label>{{copy('Description','الوصف')}}</label>
+            <textarea [(ngModel)]="board.description" (ngModelChange)="touch()" maxlength="500" rows="3"></textarea>
+          </section>
+
+          <section class="db-panel">
+            <h3>{{copy('Widget Library','مكتبة المؤشرات')}}</h3>
+            <p>{{copy('Add new business indicators to the canvas.','أضف مؤشرات الأعمال إلى مساحة التصميم.')}}</p>
+            <div class="db-library">
+              <button type="button" *ngFor="let kind of widgetKinds" (click)="addWidget(kind.id)" [disabled]="board.widgets.length>=30">
+                <span class="db-library-icon">{{kind.icon}}</span>
+                <span>{{copy(kind.en,kind.ar)}}</span><b>＋</b>
+              </button>
+            </div>
+          </section>
+
+          <section class="db-panel">
+            <h3>{{copy('Data Filters','فلاتر البيانات')}}</h3>
+            <label>{{copy('Risk level','مستوى المخاطر')}}</label>
+            <select [(ngModel)]="board.filters.risk" (ngModelChange)="touch()">
+              <option value="All">{{copy('All levels','كل المستويات')}}</option>
+              <option value="Normal">{{copy('Normal','طبيعي')}}</option>
+              <option value="Watch">{{copy('Watch','مراقبة')}}</option>
+              <option value="High">{{copy('High','مرتفع')}}</option>
+              <option value="Critical">{{copy('Critical','حرج')}}</option>
+              <option value="Pending">{{copy('Not assessed','لم يتم التقييم')}}</option>
+            </select>
+            <label>{{copy('Vessel type','نوع السفينة')}}</label>
+            <select [(ngModel)]="board.filters.type" (ngModelChange)="touch()">
+              <option value="All">{{copy('All types','كل الأنواع')}}</option>
+              <option *ngFor="let type of types" [value]="type">{{type}}</option>
+            </select>
+            <label>{{copy('Flag','العلم')}}</label>
+            <select [(ngModel)]="board.filters.flag" (ngModelChange)="touch()">
+              <option value="All">{{copy('All flags','كل الأعلام')}}</option>
+              <option *ngFor="let flag of flags" [value]="flag">{{flag}}</option>
+            </select>
+            <label>{{copy('Search by name or IMO','بحث باسم السفينة أو IMO')}}</label>
+            <input [(ngModel)]="board.filters.search" (ngModelChange)="touch()" [placeholder]="copy('Vessel name or IMO','اسم السفينة أو IMO')"/>
+          </section>
+        </aside>
+
+        <section class="db-canvas">
+          <div class="db-canvas-header">
+            <div><span class="db-kicker">{{copy('LIVE PREVIEW','المعاينة المباشرة')}}</span>
+              <h3>{{board.title}}</h3>
+              <small>{{filtered.length}} {{copy('vessels matching selected filters','سفينة وفق الفلاتر المختارة')}}</small>
+            </div>
+            <span class="db-chip">{{board.widgets.length}} {{copy('widgets','مؤشرات')}}</span>
+          </div>
+          <div class="db-empty" *ngIf="!board.widgets.length">
+            <div class="db-empty-symbol">＋</div>
+            <h3>{{copy('Your canvas is ready','مساحة التصميم جاهزة')}}</h3>
+            <p>{{copy('Choose a widget from the library to get started.','اختر مؤشرًا من المكتبة للبدء.')}}</p>
+          </div>
+
+          <div class="db-widgets">
+            <article class="db-widget" *ngFor="let widget of board.widgets; let i=index"
+                  [class.db-full]="widget.span==='full'"
+                  draggable="true" (dragstart)="onDragStart($event,widget.id)"
+                  (dragover)="onDragOver($event)" (drop)="onDrop($event,widget.id)"
+                  (dragend)="draggedId=null">
+              <div class="db-widget-head">
+                <span class="db-drag" [title]="copy('Drag to reorder','اسحب لإعادة الترتيب')">⠿</span>
+                <input class="db-widget-title" [(ngModel)]="widget.title" (ngModelChange)="touch()" maxlength="100" [attr.aria-label]="copy('Widget title','عنوان المؤشر')"/>
+                <span class="db-widget-tools">
+                  <button type="button" (click)="moveWidget(widget.id,-1)" [disabled]="i===0" [title]="copy('Move up','تحريك لأعلى')">↑</button>
+                  <button type="button" (click)="moveWidget(widget.id,1)" [disabled]="i===board.widgets.length-1" [title]="copy('Move down','تحريك لأسفل')">↓</button>
+                  <button type="button" (click)="changeWidth(widget)" [title]="copy('Toggle widget width','تغيير عرض المؤشر')">⇔</button>
+                  <button type="button" class="db-remove" (click)="deleteWidget(widget.id)" [title]="copy('Remove widget','حذف المؤشر')">×</button>
+                </span>
+              </div>
+
+              <div class="db-widget-config">
+                <label>{{copy('Indicator','المؤشر')}}
+                  <select [(ngModel)]="widget.metric" (ngModelChange)="changeMetric(widget)">
+                    <option *ngFor="let option of catalog[widget.type]" [value]="option.value">{{copy(option.en,option.ar)}}</option>
+                  </select>
+                </label>
+              </div>
+              <div class="db-kpi" *ngIf="widget.type==='kpi'">
+                <strong>{{isLoading?'…':metricNumber(widget.metric)}}</strong>
+                <span>{{metricName(widget.metric)}}</span>
+              </div>
+
+              <div class="db-bars" *ngIf="widget.type==='bar'">
+                <div class="db-bar-row" *ngFor="let bar of barRows(widget.metric)">
+                  <span class="db-bar-name">{{bar.name}}</span>
+                  <div class="db-bar-track"><div class="db-bar-fill" [style.width.%]="bar.percent"></div></div>
+                  <strong>{{bar.count}}</strong>
+                </div>
+                <p class="db-muted" *ngIf="filtered.length===0">{{copy('No matching vessels','لا توجد سفن مطابقة')}}</p>
+              </div>
+
+              <div class="db-table-wrap" *ngIf="widget.type==='table'">
+                <table class="db-table">
+                  <thead><tr>
+                    <th>{{copy('Vessel','السفينة')}}</th><th>IMO</th><th>{{copy('Type','النوع')}}</th>
+                    <th>{{copy('Flag','العلم')}}</th><th>{{copy('Risk','المخاطر')}}</th><th>{{copy('Level','المستوى')}}</th>
+                    <th>{{copy('Action','الإجراء')}}</th>
+                  </tr></thead>
+                  <tbody>
+                    <tr *ngFor="let vessel of tableRows">
+                      <td>{{vessel.name}}</td><td>{{vessel.imo}}</td><td>{{vessel.type}}</td><td>{{vessel.flag}}</td>
+                      <td><strong>{{vessel.calculatedRisk ?? '—'}}</strong></td>
+                      <td><span class="db-risk-pill" [attr.data-level]="vessel.riskCategory">{{vessel.riskCategory}}</span></td>
+                      <td><button class="db-text-link" type="button" (click)="openVessel(vessel)">{{copy('Vessel 360','ملف السفينة')}} ↗</button></td>
+                    </tr>
+                    <tr *ngIf="!tableRows.length"><td colspan="7">{{copy('No data for the selected filters.','لا توجد بيانات وفق الفلاتر المختارة.')}}</td></tr>
+                  </tbody>
+                </table>
+                <div class="db-pagination" *ngIf="tablePages>1">
+                  <button type="button" (click)="setPage(tablePage-1)" [disabled]="tablePage<=1">‹</button>
+                  <span>{{tablePage}} / {{tablePages}}</span>
+                  <button type="button" (click)="setPage(tablePage+1)" [disabled]="tablePage>=tablePages">›</button>
+                </div>
+              </div>
+
+              <div class="db-position-wrap" *ngIf="widget.type==='position'">
+                <div class="db-position-grid">
+                  <button *ngFor="let vessel of plotRows()" type="button" class="db-vessel-dot"
+                          [style.left.%]="plotX(vessel)" [style.top.%]="plotY(vessel)"
+                          [attr.data-risk]="vessel.riskCategory"
+                          [title]="vessel.name+' · IMO '+vessel.imo"
+                          (click)="openVessel(vessel)"></button>
+                  <div class="db-position-label">{{copy('Geographic position overview','نظرة عامة على مواقع السفن')}}</div>
+                </div>
+                <small class="db-muted">{{copy('Position plot — select a vessel for details.','عرض مواقع السفن — اختر سفينة لعرض التفاصيل.')}}</small>
+              </div>
+            </article>
+          </div>
+        </section>
+      </div>
+    </ng-container>
+  </main>
+</div>
