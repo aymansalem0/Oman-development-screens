@@ -1,6 +1,7 @@
 import {NmcNavigationComponent} from '../components/nmc-navigation.component';
 import {CommonModule} from '@angular/common';
-import {Component,OnInit} from '@angular/core';
+import {Component,OnDestroy,OnInit} from '@angular/core';
+import {Subscription} from 'rxjs';
 import {ActivatedRoute,RouterLink} from '@angular/router';
 import {NmcVesselProfile} from '../data/nmc-vessel-catalog';
 import {getOperationalVesselByImo} from '../data/nmc-expanded-vessel-catalog';
@@ -24,7 +25,8 @@ interface Threshold {
   templateUrl:'./nmc-risk-explainability.component.html',
   styleUrl:'./nmc-risk-explainability.component.css'
 })
-export class NmcRiskExplainabilityComponent implements OnInit {
+export class NmcRiskExplainabilityComponent implements OnInit,OnDestroy {
+  private readonly subscriptions=new Subscription();
   vessel?:NmcVesselProfile;
   assessment:FleetAiAssessment|null=null;
   factors:RiskFactor[]=[];
@@ -50,18 +52,25 @@ export class NmcRiskExplainabilityComponent implements OnInit {
     private readonly cases:NmcCasesService){}
 
   ngOnInit():void{
-    const imo=this.route.snapshot.paramMap.get('imo')||'';
-    this.vessel=getOperationalVesselByImo(imo);
-    if(!this.vessel){this.assessmentError='Unknown vessel IMO';this.busy=false;return;}
-    this.refresh();
+    this.subscriptions.add(this.route.paramMap.subscribe(params=>{
+      const imo=params.get('imo')||'';
+      this.vessel=getOperationalVesselByImo(imo);
+      this.assessment=null;this.factors=[];this.selectedFactor=undefined;
+      this.guidanceItems=[];this.linkedCase=null;
+      if(!this.vessel){this.assessmentError='Unknown vessel IMO';this.busy=false;return;}
+      this.refresh();
+    }));
   }
+  ngOnDestroy():void{this.subscriptions.unsubscribe();}
   copy(en:string,ar:string):string{return this.lang.pick(en,ar);}
   toggleLanguage():void{this.lang.toggle();}
   refresh():void{
     if(!this.vessel)return;
     this.busy=true;this.assessmentError='';
-    this.fleet.assessment(this.vessel.imo).subscribe({
+    const imo=this.vessel.imo;
+    this.subscriptions.add(this.fleet.assessment(imo).subscribe({
       next:row=>{
+        if(this.vessel?.imo!==imo)return;
         this.busy=false;
         if(row.status!=='COMPLETED'||!row.assessmentId||
            typeof row.score!=='number'||!Number.isFinite(row.score)||
@@ -87,24 +96,26 @@ export class NmcRiskExplainabilityComponent implements OnInit {
           'Some saved risk factors are missing.','بعض عوامل المخاطر المحفوظة غير موجودة.');
         this.selectedFactor=this.factors.find(x=>x.id===prior)||this.factors[0];
       },
-      error:()=>{this.busy=false;this.assessment=null;this.factors=[];this.assessmentError=
+      error:()=>{if(this.vessel?.imo!==imo)return;
+        this.busy=false;this.assessment=null;this.factors=[];this.assessmentError=
         this.copy('No saved validated assessment; no simulated score will be substituted.',
                   'لا يوجد تقييم محفوظ ومتحقق منه؛ لن يتم عرض درجة مخاطر تجريبية كبديل.');}
-    });
+    }));
     this.loadGuidance();
-    this.cases.byImo(this.vessel.imo).subscribe({
-      next:r=>this.linkedCase=r.case?.status==='RESOLVED'?null:r.case,
-      error:()=>this.linkedCase=null
-    });
+    this.subscriptions.add(this.cases.byImo(imo).subscribe({
+      next:r=>{if(this.vessel?.imo===imo)this.linkedCase=r.case?.status==='RESOLVED'?null:r.case;},
+      error:()=>{if(this.vessel?.imo===imo)this.linkedCase=null;}
+    }));
   }
   loadGuidance():void{
     if(!this.vessel)return;
     this.guidanceBusy=true;this.guidanceError='';
-    this.guidance.forVessel(this.vessel.imo).subscribe({
-      next:r=>{this.guidanceBusy=false;this.guidanceItems=r.rules;},
-      error:e=>{this.guidanceBusy=false;this.guidanceItems=[];
+    const imo=this.vessel.imo;
+    this.subscriptions.add(this.guidance.forVessel(imo).subscribe({
+      next:r=>{if(this.vessel?.imo!==imo)return;this.guidanceBusy=false;this.guidanceItems=r.rules;},
+      error:e=>{if(this.vessel?.imo!==imo)return;this.guidanceBusy=false;this.guidanceItems=[];
         this.guidanceError=this.guidance.message(e,this.lang.isArabic);}
-    });
+    }));
   }
   get riskScore():number|null{return this.assessment?.score??null;}
   get riskLevel():string{return this.assessment?.level||'Pending';}
