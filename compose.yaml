@@ -23,6 +23,12 @@ services:
       NMC_DASHBOARD_EDITOR_KEY: ${NMC_DASHBOARD_EDITOR_KEY:-}
       NMC_DASHBOARD_PUBLISHER_KEY: ${NMC_DASHBOARD_PUBLISHER_KEY:-}
       NMC_DASHBOARD_STORE_PATH: /data/nmc-dashboard-workspace.json
+      # In-app maritime alerts detect high/critical risk only from SAVED assessments.
+      # No agent calls, no AI cost, no updates to fleet results.
+      NMC_ALERT_SCAN_ENABLED: ${NMC_ALERT_SCAN_ENABLED:-true}
+      NMC_ALERT_SCAN_SECONDS: ${NMC_ALERT_SCAN_SECONDS:-30}
+      NMC_ALERT_ESCALATE_MINUTES: ${NMC_ALERT_ESCALATE_MINUTES:-15}
+      NMC_ALERT_STORE_PATH: /data/nmc-alert-workspace.json
       # 'oracle' requires compose.oracle.yaml, NMC_AI user and V1 migration.
       NMC_DB_MODE: ${NMC_DB_MODE:-json}
       NMC_DB_CONNECT_STRING: ${NMC_DB_CONNECT_STRING:-oracle-free-23:1521/freepdb1}
