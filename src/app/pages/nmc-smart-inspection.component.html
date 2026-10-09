@@ -87,6 +87,11 @@
       </div>
     </section>
 
+    <div *ngIf="isSchedulingRequired" class="inspection-central-note error" role="alert">
+      {{copy('This NMC referral must be scheduled and assigned by Smart Inspection before recording results.',
+        'يجب جدولة إحالة NMC وإسنادها بواسطة المعاينة الذكية قبل تسجيل النتائج.')}}
+      <a [routerLink]="['/moei/smart-inspection/candidates']">{{copy('Open scheduling queue','فتح قائمة الجدولة')}}</a>
+    </div>
     <section class="inspection-grid">
       <div class="left-column">
         <article class="panel checklist-panel">

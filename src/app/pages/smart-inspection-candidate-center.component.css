@@ -264,3 +264,29 @@ button, input, select, a { font: inherit; }
   .facts-grid { grid-template-columns:1fr; }
   .drawer-actions { grid-template-columns:1fr; }
 }
+
+
+/* Server-backed NMC case referrals awaiting human scheduling */
+.referral-queue{background:#fff;border:1px solid #cae0df;border-radius:16px;padding:22px;margin-bottom:24px;box-shadow:0 7px 18px #1769770d}
+.referral-top{display:flex;justify-content:space-between;align-items:center;gap:18px}
+.referral-top h2{margin:7px 0;color:#164650}
+.referral-top p{max-width:850px;color:#567180;line-height:1.55}
+.referral-refresh,.referral-form button{cursor:pointer;border:0;background:#087c75;border-radius:9px;color:#fff;padding:11px 17px;font-weight:700}
+.referral-error,.referral-success,.referral-empty{border-radius:8px;padding:12px}
+.referral-error{background:#fcebed;color:#a7353e}
+.referral-success{background:#e1f5e9;color:#206642}
+.referral-empty{background:#edf6f7;color:#466879}
+.referral-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(400px,1fr));gap:15px}
+.referral-card{border:1px solid #d9e5e8;border-radius:12px;background:#f9fcfc;padding:16px;display:grid;grid-template-columns:1fr;gap:14px}
+.referral-card strong{color:#115469}
+.referral-card p{color:#446471;line-height:1.5}
+.referral-card small{display:block;color:#667a85;overflow-wrap:anywhere}
+.referral-card a,.referral-history a{display:inline-block;color:#087b85;font-weight:700;margin-top:8px}
+.referral-state{margin-inline-start:10px;font-size:11px;background:#d8e9f1;color:#215675;padding:6px 9px;border-radius:18px}
+.referral-form{display:grid;gap:7px}
+.referral-form label{font-size:12px;color:#355766;font-weight:700}
+.referral-form input{width:100%;background:#fff;border:1px solid #ccdce3;border-radius:8px;padding:11px;color:#1b4255}
+.referral-form button{margin-top:7px}
+.referral-form button:disabled{opacity:.6;cursor:wait}
+.referral-history{margin-top:14px;background:#eaf4f6;border-radius:9px;padding:10px;color:#3f6870}
+@media(max-width:800px){.referral-top{align-items:stretch;flex-direction:column}.referral-cards{grid-template-columns:1fr}}

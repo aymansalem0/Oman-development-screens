@@ -46,6 +46,9 @@
 
       <div class="heading-actions">
         <button type="button" class="secondary-btn" (click)="resetMapView()">⌂ {{ copy('Reset map', 'إعادة ضبط الخريطة') }}</button>
+        <button type="button" class="secondary-btn db-fetch-btn" (click)="fetchAgain()" [disabled]="fetchingSaved" [attr.aria-busy]="fetchingSaved">
+          ↻ {{ fetchingSaved ? copy('Fetching saved data…','جارٍ استرجاع البيانات المحفوظة…') : copy('Fetch Again (Database)','جلب أحدث البيانات من قاعدة البيانات') }}
+        </button>
         <button type="button" class="primary-btn" (click)="toggleFeed()">
           <span>{{ feedLive ? '❚❚' : '▶' }}</span>
           {{ feedLive ? copy('Pause live feed', 'إيقاف التغذية المباشرة') : copy('Resume live feed', 'استئناف التغذية المباشرة') }}
@@ -60,8 +63,8 @@
           <span class="fleet-ai-kicker">{{ copy('AI-DRIVEN FLEET RISK · SYNTHETIC POC', 'مخاطر الأسطول بالذكاء الاصطناعي · تجربة محاكاة') }}</span>
           <h3>{{ copy('Fleet AI Risk Assessment', 'تقييم مخاطر الأسطول بالذكاء الاصطناعي') }}</h3>
           <p>{{ copy(
-            'Risk analysis runs automatically in the backend. Every hour, each vessel is checked for new evidence; changed vessels are reassessed by A01/A02 and the deterministic Risk Engine. The dashboard loads saved scores immediately. Synthetic POC, not official.',
-            'يعمل تقييم المخاطر تلقائياً في الخلفية. يتم فحص أدلة كل سفينة كل ساعة، وإعادة تقييم السفن التي تغيرت بياناتها بواسطة A01/A02 ومحرك المخاطر الحتمي. تعرض الشاشة النتائج المحفوظة فوراً. جميع البيانات تجريبية.'
+            'The backend checks vessels within the configured rollout scope every hour. New or changed evidence is assessed with A01/A02; stored risk scores and alert priorities appear here automatically. Synthetic POC, not official.',
+            'يعمل التقييم في الخلفية على نطاق السفن المفعّل فقط، وتُراجع الأدلة كل ساعة. تُحلل الأدلة الجديدة أو المتغيرة بواسطة A01/A02 وتظهر درجات المخاطر والأولويات المحفوظة تلقائياً. جميع البيانات تجريبية.'
           ) }}</p>
         </div>
         <span class="fleet-ai-status">{{ assessedCount }} / 420 {{ copy('AI assessed', 'تم تحليلها') }}</span>
@@ -79,7 +82,11 @@
             ? copy('● Automatic hourly vessel refresh ACTIVE', '● تحديث السفن التلقائي كل ساعة نشط')
             : copy('◌ Automatic assessment not enabled on server', '◌ التقييم التلقائي غير مفعّل على الخادم') }}
         </span>
-        <span>{{ copy('Background assessments run without opening this screen.', 'يعمل تحليل السفن في الخلفية دون الحاجة لفتح هذه الشاشة.') }}</span>
+        <span>{{ fleetSnapshot?.scheduler?.enabledVessels ?? 0 }} / {{ fleetSnapshot?.fleetSize ?? 420 }} {{ copy('vessels in active assessment scope', 'سفينة ضمن نطاق التقييم المفعّل') }}</span>
+        <span>{{ copy('Saved risk results update automatically; opening this screen never starts an AI call.', 'تتحدث النتائج المحفوظة تلقائياً؛ فتح الشاشة لا يشغّل أي استدعاء AI.') }}</span>
+        <span *ngIf="latestDatabaseFetchAt">{{ copy('Database fetched at','آخر استرجاع من قاعدة البيانات') }}: {{latestDatabaseFetchAt | date:'mediumTime'}}</span>
+        <span>{{copy('A01/A02 reassessment is triggered by changed supported evidence on the configured background schedule, not by map reset.',
+                    'تُعاد معالجة A01/A02 عند تغير الأدلة المتصلة خلال الجدولة الخلفية، وليس بإعادة ضبط الخريطة.')}}</span>
         <span *ngIf="fleetSnapshot?.job as job">
           {{ copy('Background job', 'مهمة الخلفية') }} {{ job.status }} · {{ fleetProgress }}
         </span>
@@ -90,6 +97,11 @@
       <p *ngIf="fleetError" class="fleet-error">{{ fleetError }}</p>
     </section>
 
+    <div class="operations-section-label">
+      <strong>{{copy('NMC Operational Overview','نظرة عامة على عمليات المركز البحري')}}</strong>
+      <span>{{copy('Live alerts, cases and attention queue · separate from Fleet AI Risk Assessment',
+                    'التنبيهات والحالات وقائمة المتابعة · منفصلة عن تقييم مخاطر الأسطول')}}</span>
+    </div>
     <section class="kpi-grid">
       <article class="kpi-card">
         <div class="kpi-icon teal">⌖</div>
@@ -114,20 +126,20 @@
       </article>
 
       <article class="kpi-card">
-        <div class="kpi-icon amber">▲</div>
+        <div class="kpi-icon amber">♢</div>
         <div>
-          <span class="kpi-label">{{ copy('High risk', 'مخاطر مرتفعة') }}</span>
-          <strong>{{ highRiskCount }}</strong>
-          <small>{{ copy('priority monitoring', 'مراقبة ذات أولوية') }}</small>
+          <span class="kpi-label">{{ copy('Active Maritime Alerts', 'التنبيهات البحرية النشطة') }}</span>
+          <strong>{{ activeAlertCount===null ? '—' : activeAlertCount }}</strong>
+          <small>{{ copy('from central alert workflow', 'من نظام التنبيهات المركزي') }}</small>
         </div>
       </article>
 
-      <article class="kpi-card critical-card">
-        <div class="kpi-icon coral">!</div>
+      <article class="kpi-card">
+        <div class="kpi-icon sky">▣</div>
         <div>
-          <span class="kpi-label">{{ copy('Critical AI risk', 'مخاطر AI حرجة') }}</span>
-          <strong>{{ criticalCount }}</strong>
-          <small>{{ copy('Human review of simulated results', 'مراجعة بشرية لنتائج المحاكاة') }}</small>
+          <span class="kpi-label">{{ copy('Open Maritime Cases', 'الحالات البحرية المفتوحة') }}</span>
+          <strong>{{ openCaseCount===null ? '—' : openCaseCount }}</strong>
+          <small>{{ copy('human-reviewed case workflow', 'حالات تتطلب متابعة الموظفين') }}</small>
         </div>
       </article>
     </section>
@@ -212,13 +224,13 @@
             (keydown.enter)="handleVesselInteraction(vessel)"
             (keydown.space)="$event.preventDefault(); handleVesselInteraction(vessel)"
           >
-            <div class="rank" [ngClass]="riskClass(vessel.risk)">{{ attentionRank(i) }}</div>
+            <div class="rank" [ngClass]="riskClass(vessel.risk,vessel.imo)">{{ attentionRank(i) }}</div>
 
             <div class="attention-main">
               <div class="attention-title">
                 <strong>{{ vessel.name }}</strong>
-                <span class="risk-chip" [ngClass]="riskClass(vessel.risk)">
-                  {{ riskLabel(vessel.risk) }} · {{ riskDisplay(vessel) }}
+                <span class="risk-chip" [ngClass]="riskClass(vessel.risk,vessel.imo)">
+                  {{ riskLabel(vessel.risk,vessel.imo) }} · {{ riskDisplay(vessel) }}
                 </span>
               </div>
 
@@ -313,6 +325,12 @@
         </div>
       </div>
 
+      <div class="vessel-panel panel vessel-unselected" *ngIf="!selectedVessel" role="status">
+        <div class="vessel-unselected-icon">⌖</div>
+        <h3>{{ copy('Select a vessel to view details', 'اختر سفينة لعرض بياناتها') }}</h3>
+        <p>{{ copy('Click a vessel on the map or in Requires Attention Now. Vessel details and its route are displayed only after selection.', 'اضغط على سفينة في الخريطة أو قائمة تتطلب الانتباه الآن؛ لن تظهر بيانات السفينة ومسارها إلا بعد اختيارها.') }}</p>
+      </div>
+
       <div class="vessel-panel panel" *ngIf="selectedVessel as v">
         <div class="vessel-panel-head">
           <div>
@@ -321,10 +339,10 @@
             <p>IMO {{ v.imo }} · MMSI {{ v.mmsi }}</p>
           </div>
 
-          <div class="big-risk" [ngClass]="riskClass(v.risk)">
+          <div class="big-risk" [ngClass]="riskClass(v.risk,v.imo)">
             <small>{{ copy('RISK', 'المخاطر') }}</small>
             <strong>{{ riskDisplay(v) }}</strong>
-            <span>{{ riskLabel(v.risk) }}</span>
+            <span>{{ riskLabel(v.risk,v.imo) }}</span>
           </div>
         </div>
 
@@ -362,7 +380,7 @@
         <div class="scenario-alert" *ngIf="v.risk >= 65">
           <span class="scenario-icon">!</span>
           <div>
-            <strong>{{ riskLabel(v.risk) }} {{ copy('attention level', 'مستوى الانتباه') }}</strong>
+            <strong>{{ riskLabel(v.risk,v.imo) }} {{ copy('attention level', 'مستوى الانتباه') }}</strong>
             <p>{{ copy("Open Vessel 360 to review the vessel's correlated movement, compliance, certificates, inspections and risk evidence.", 'افتح Vessel 360 لمراجعة الحركة المترابطة والامتثال والشهادات والمعاينات وأدلة المخاطر الخاصة بالسفينة.') }}</p>
           </div>
         </div>

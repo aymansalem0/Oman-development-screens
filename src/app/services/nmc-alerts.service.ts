@@ -1,7 +1,10 @@
 import {Injectable} from '@angular/core';
 import {HttpClient,HttpHeaders} from '@angular/common/http';
-import {Observable,throwError} from 'rxjs';
-import {catchError} from 'rxjs/operators';
+import {Observable,throwError,forkJoin,of} from 'rxjs';
+import {catchError,map,switchMap} from 'rxjs/operators';
+import {NmcFleetAiService,FleetAiAssessment} from './nmc-fleet-ai.service';
+import {NmcRiskEngineService,RiskFactorKey} from './nmc-risk-engine.service';
+import {getOperationalVesselByImo} from '../data/nmc-expanded-vessel-catalog';
 
 export type AlertStatus='OPEN'|'ACKNOWLEDGED'|'IN_PROGRESS'|'ESCALATED'|'RESOLVED';
 export type AlertSeverity='HIGH'|'CRITICAL';
@@ -44,10 +47,61 @@ export class NmcAlertsService {
   private readonly root='/api/ai/alerts';
   private operatorKey='';
   private supervisorKey='';
-  constructor(private readonly http:HttpClient){}
+  constructor(private readonly http:HttpClient,
+    private readonly fleet:NmcFleetAiService,
+    private readonly riskEngine:NmcRiskEngineService){}
 
   overview():Observable<NmcAlertsOverview>{
     return this.http.get<NmcAlertsOverview>(this.root);
+  }
+  /**
+   * UI-only eligibility projection for navigation/Command Center counts.
+   * DOES NOT resolve, suppress or delete persisted Oracle alerts.
+   * On incomplete evidence, fail open rather than hide a possible safety finding.
+   */
+  overviewForBrowserPolicy():Observable<NmcAlertsOverview>{
+    return this.overview().pipe(switchMap(data=>{
+      const active=data.alerts.filter(a=>a.status!=='RESOLVED');
+      const imos=[...new Set(active.map(a=>a.imo))];
+      if(!imos.length)return of(data);
+      const config=this.riskEngine.config;
+      if(this.riskEngine.validate(config).length)return of(data);
+      return forkJoin(imos.map(imo=>this.fleet.assessment(imo).pipe(
+        map(assessment=>({imo,assessment})),
+        catchError(()=>of({imo,assessment:null as FleetAiAssessment|null}))
+      ))).pipe(map(rows=>{
+        const matches=new Map<string,{eligible:boolean;level:string}>();
+        const factorKeys:RiskFactorKey[]=['movement','inspection','certificate','dataQuality','history'];
+        for(const {imo,assessment} of rows){
+          const vessel=getOperationalVesselByImo(imo);
+          if(!assessment||!vessel||assessment.status!=='COMPLETED'||
+             !Array.isArray(assessment.signals)||
+             !factorKeys.every(f=>assessment.signals.filter(s=>
+               s.factor===f&&Number.isFinite(s.severity)&&s.severity>=0&&s.severity<=100).length===1))
+            continue;
+          const values=Object.fromEntries(assessment.signals.map(s=>
+            [s.factor,s.severity])) as Record<RiskFactorKey,number>;
+          const risk=this.riskEngine.evaluateFromAiSignals(vessel,values,config);
+          const critical=assessment.criticalOpenFinding===true;
+          matches.set(imo,{eligible:critical||risk.level==='High'||risk.level==='Critical',
+            level:critical?'Critical':risk.level});
+        }
+        const relevant=active.filter(a=>matches.get(a.imo)?.eligible!==false);
+        return {...data,summary:{
+          ...data.summary,
+          active:relevant.length,
+          open:relevant.filter(a=>a.status==='OPEN').length,
+          acknowledged:relevant.filter(a=>a.status==='ACKNOWLEDGED').length,
+          inProgress:relevant.filter(a=>a.status==='IN_PROGRESS').length,
+          escalated:relevant.filter(a=>a.status==='ESCALATED').length,
+          unread:relevant.filter(a=>a.status==='OPEN'||a.status==='ESCALATED').length,
+          critical:relevant.filter(a=>matches.get(a.imo)?.level==='Critical'||
+            (!matches.has(a.imo)&&a.severity==='CRITICAL')).length,
+          high:relevant.filter(a=>matches.get(a.imo)?.level==='High'||
+            (!matches.has(a.imo)&&a.severity==='HIGH')).length
+        }};
+      }),catchError(()=>of(data)));
+    }));
   }
   history(id:string):Observable<{status:'ok';history:NmcAlertAudit[]}>{
     return this.http.get<{status:'ok';history:NmcAlertAudit[]}>(

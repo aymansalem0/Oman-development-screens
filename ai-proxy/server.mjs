@@ -5,6 +5,9 @@ import { FleetAutoScheduler } from './fleet-scheduler.mjs';
 import { DashboardWorkspace, DashboardError } from './dashboard-workspace.mjs';
 import { NmcAlertWorkspace, NmcAlertError } from './alert-workspace.mjs';
 import { NmcCaseWorkspace, NmcCaseError } from './case-workspace.mjs';
+import { normalizeA01Actions, ActionPlanError } from './nmc-action-plan.mjs';
+import { OperationalGuidance, GuidanceError } from './operational-guidance.mjs';
+import { CentralRiskPolicy, RiskPolicyError } from './risk-policy.mjs';
 
 const port = Number(process.env.PORT || 3000);
 const apiKey = (process.env.AIRIA_MENA_KEY || '').trim();
@@ -39,22 +42,81 @@ if(!['json','oracle'].includes(dbMode))throw new Error('NMC_DB_MODE_UNSUPPORTED'
 const repository=dbMode==='oracle'
   ? new (await import('./oracle-store.mjs')).OracleIntelligenceStore()
   : null;
-const fleet=new FleetAssessmentManager({executeAgent:fleetAgentCall,getPscVessel,repository});
+let guidance;
+let riskPolicy;
+const fleet=new FleetAssessmentManager({executeAgent:fleetAgentCall,getPscVessel,repository,
+  onAssessmentSaved:async row=>{
+    try{await guidance?.materialize(row.imo);}
+    catch{console.error('[nmc-guidance] RESULT_MATERIALIZATION_FAILED');}
+    try{await riskPolicy?.materializeCurrent(row);}
+    catch{console.error('[nmc-risk-policy] PROJECTION_MATERIALIZATION_FAILED');}
+  }});
+guidance=new OperationalGuidance({mode:dbMode,oracleRepository:repository,fleet});
+riskPolicy=new CentralRiskPolicy({mode:dbMode,oracleRepository:repository,fleet});
 const dashboards=new DashboardWorkspace({mode:dbMode,oracleRepository:repository});
 const alerts=new NmcAlertWorkspace({mode:dbMode,oracleRepository:repository});
 const cases=new NmcCaseWorkspace({mode:dbMode,oracleRepository:repository,alerts});
+const actionPlanRuns=new Set(); // process-local duplicate A01 invocation guard; version-lock remains authoritative
 const alertScanEnabled=process.env.NMC_ALERT_SCAN_ENABLED!=='false';
 const alertScanIntervalMs=Math.max(15000,Number(process.env.NMC_ALERT_SCAN_SECONDS||30)*1000);
 async function scanExistingFleetForAlerts(){
   try{
-    // Intentionally read saved in-memory fleet records only. No Airia calls.
-    const result=await alerts.scanFleet(fleet.snapshot());
+    // Only saved A01/A02 signals; central published risk policy is authoritative
+    // for current notification eligibility. Prior cases/assessment rows are immutable.
+    const original=fleet.snapshot();
+    let effective=original;
+    if(riskPolicy.ready){
+      const projected=await riskPolicy.projectCurrent();
+      const byImo=new Map(projected.projections.map(p=>[p.imo,p]));
+      effective={...original,results:Object.fromEntries(Object.entries(original.results).map(([imo,row])=>{
+        const p=byImo.get(imo);
+        return [imo,p?{
+          ...row,score:p.riskScore,level:p.riskLevel,
+          operationalPriority:p.operationalPriority,criticalOpenFinding:p.criticalOpenFinding,
+          configVersion:projected.policyRef,riskPolicyRevision:projected.policyRevision,
+          sourceAiScore:row.score,sourceAiLevel:row.level,aiRulesetVersion:row.configVersion
+        }:row];
+      }))};
+    }
+    const result=await alerts.scanFleet(effective);
     if(result?.created||result?.escalated)
       console.info('[nmc-alerts] detected='+result.created+' escalated='+result.escalated);
   }catch(error){
     const code=error instanceof NmcAlertError?error.code:'ALERT_SCAN_FAILED';
     console.error('[nmc-alerts] '+code);
   }
+}
+/** Overlay CURRENT central policy on a saved immutable assessment snapshot.
+ * Original A01/A02 result and ruleset remain referenced for audit/history.
+ * No DB writes, no AI, no source assessment mutation. */
+async function effectiveFleetSnapshot(snapshot){
+  if(!riskPolicy.ready)return {...snapshot,riskPolicyStatus:'NOT_READY'};
+  const active=await riskPolicy.projectCurrent();
+  const byImo=new Map(active.projections.map(p=>[p.imo,p]));
+  const results={};
+  const counts={...snapshot.counts,normal:0,watch:0,high:0,critical:0,priorityReview:0};
+  for(const [imo,row] of Object.entries(snapshot.results)){
+    const p=byImo.get(imo);
+    if(p&&p.sourceAssessmentId===row.assessmentId&&row.status==='COMPLETED'){
+      results[imo]={...row,
+        sourceAiScore:row.score,sourceAiLevel:row.level,
+        sourceAiConfigVersion:row.configVersion,
+        score:p.riskScore,level:p.riskLevel,
+        operationalPriority:p.operationalPriority,
+        configVersion:active.policyRef,
+        activePolicyRevision:active.policyRevision,
+        scoringSource:'CURRENT_CENTRAL_RISK_POLICY'};
+    }else results[imo]={...row,
+      scoringSource:row.status==='COMPLETED'?'ORIGINAL_AI_ASSESSMENT_UNPROJECTED':null};
+    const current=results[imo];
+    if(current.status==='COMPLETED'){
+      const band=current.level?.toLowerCase();
+      if(['normal','watch','high','critical'].includes(band))counts[band]++;
+      if(current.operationalPriority==='Priority Review')counts.priorityReview++;
+    }
+  }
+  return {...snapshot,results,counts,activePolicyRevision:active.policyRevision,
+    activePolicyRef:active.policyRef,riskPolicyStatus:'ACTIVE'};
 }
 const scheduler=new FleetAutoScheduler({fleet,getPscVessel,
   enabled:autoEnabled && Boolean(apiKey),intervalMs:autoInterval,
@@ -99,6 +161,76 @@ async function requestJson(req, limit = maxBytes) {
   return parsed;
 }
 
+
+// Only an explicit operator creation or retry calls Airia A01: never GET,
+// dashboard display, alert scanning or page refresh.
+async function prepareCaseA01Actions(caseId,version){
+          const existing=await cases.get(caseId);
+          if(!existing)throw new NmcCaseError('CASE_NOT_FOUND',404);
+          if(existing.version!==version)throw new NmcCaseError('CASE_VERSION_CONFLICT',409);
+          if(existing.status==='RESOLVED')throw new NmcCaseError('CASE_ALREADY_RESOLVED',409);
+          if(existing.actionPlan)throw new NmcCaseError('CASE_ACTION_PLAN_EXISTS',409);
+          if(actionPlanRuns.has(caseId))throw new NmcCaseError('CASE_ACTION_PLAN_IN_PROGRESS',409);
+          if(!apiKey)throw new NmcCaseError('AIRIA_NOT_CONFIGURED',503);
+          // Strong provenance check: use ONLY the exact saved A01/A02 assessment
+          // that initiated this case. Never silently use the synthetic fixture or
+          // a newer scored assessment that superseded the event.
+          const source=fleet.getVesselResult(existing.imo);
+          if(!source||source.status!=='COMPLETED'||
+            source.score!==existing.sourceScore||source.level!==existing.sourceLevel||
+            !Array.isArray(source.signals)||source.signals.length!==5)
+            throw new NmcCaseError('CASE_SOURCE_ASSESSMENT_UNAVAILABLE',409);
+          // Older PR42 alerts omitted the assessment ID from the snapshot.
+          // Reconcile ONLY when the persisted alert timestamp/ruleset and current
+          // saved AI source prove it was already assessed before that alert.
+          let legacyReconciled=false;
+          if(source.assessmentId!==existing.sourceAssessmentId){
+            const alert=existing.sourceAssessmentId===null&&existing.alertIds?.length
+              ?await alerts.get(existing.alertIds[0]):null;
+            const assessedAt=Date.parse(source.assessedAt||'');
+            const alertedAt=Date.parse(alert?.createdAt||'');
+            if(!alert||alert.imo!==existing.imo||
+              alert.sourceAssessmentId!==null||
+              alert.sourceScore!==source.score||alert.sourceLevel!==source.level||
+              !alert.sourceRulesetVersion||
+              alert.sourceRulesetVersion!==source.configVersion||
+              !source.assessmentId||!Number.isFinite(assessedAt)||
+              !Number.isFinite(alertedAt)||assessedAt>alertedAt)
+              throw new NmcCaseError('CASE_SOURCE_ASSESSMENT_UNAVAILABLE',409);
+            legacyReconciled=true;
+          }
+          actionPlanRuns.add(caseId);
+          try {
+            const input={
+              requestMeta:{correlationId:'CASE-'+caseId+'-'+existing.version,language:'en'},
+              subject:{type:'VESSEL',imo:existing.imo},bundleRef:'VBL-'+existing.imo,
+              mode:'SITUATION_ASSESSMENT',
+              officialRisk:{
+                evaluationId:existing.sourceAssessmentId,score:existing.sourceScore,
+                level:existing.sourceLevel,rulesetVersion:source.configVersion
+              },
+              riskSignalRunId:existing.sourceAssessmentId,
+              requestedOutputs:['SUMMARY','WHY_IT_MATTERS','EVIDENCE','ACTIONS'],
+              approvedSignalEvidence:source.signals.map(s=>({
+                factor:s.factor,severity:s.severity,evidenceIds:s.evidenceIds,
+                reason:s.reason
+              })),
+              provenance:'SYNTHETIC_POC_NOT_REGULATORY'
+            };
+            const raw=await fleetAgentCall('a01',input);
+            const plan=normalizeA01Actions(raw,{
+              imo:existing.imo,assessmentId:existing.sourceAssessmentId,
+              score:existing.sourceScore,level:existing.sourceLevel,
+              configVersion:source.configVersion,signals:source.signals
+            });
+            // Provenance of the evidence actually supplied to A01, distinct from
+            // the immutable legacy case field that may have been null.
+            plan.evidenceAssessmentId=source.assessmentId;
+            plan.legacySourceReconciled=legacyReconciled;
+            return await cases.saveActionPlan(caseId,version,plan);
+          }finally{actionPlanRuns.delete(caseId);}
+}
+
 const server = createServer(async (req, res) => {
   const path = new URL(req.url || '/', 'http://localhost').pathname;
 
@@ -115,7 +247,25 @@ const server = createServer(async (req, res) => {
     return respond(res, 200, getPscHealth());
   }
   if (req.method === 'GET' && path === '/api/ai/fleet/status') {
-    return respond(res,200,{...fleet.snapshot(),storageMode:dbMode,persistenceHealthy:fleet.persistenceHealthy,scheduler:scheduler.status()});
+    try{
+      const current=await effectiveFleetSnapshot(fleet.snapshot());
+      return respond(res,200,{...current,storageMode:dbMode,
+        persistenceHealthy:fleet.persistenceHealthy,scheduler:scheduler.status()});
+    }catch{return respond(res,503,{error:'RISK_POLICY_PROJECTION_UNAVAILABLE'});}
+  }
+  // Fetch Again: fresh direct Oracle read, no dashboard-triggered AI.
+  if(req.method==='GET'&&path==='/api/ai/fleet/saved-status'){
+    try{
+      const saved=await fleet.savedSnapshot();
+      const current=await effectiveFleetSnapshot(saved);
+      return respond(res,200,{...current,storageMode:dbMode,
+        persistenceHealthy:fleet.persistenceHealthy,scheduler:scheduler.status(),
+        fetchedFrom:dbMode==='oracle'?'ORACLE':'PERSISTED_JSON',
+        fetchedAt:new Date().toISOString()});
+    }catch(error){
+      console.error('[nmc-fleet] SAVED_STATUS_READ_FAILED');
+      return respond(res,503,{error:'FLEET_SAVED_READ_FAILED'});
+    }
   }
   if (req.method === 'GET' && path === '/api/ai/fleet/analytics') {
     return respond(res, 200, fleet.analytics());
@@ -139,11 +289,98 @@ const server = createServer(async (req, res) => {
       return respond(res,data?200:404,data||{error:'UNKNOWN_VESSEL'});
     }catch{return respond(res,503,{error:'FLEET_HISTORY_UNAVAILABLE'});}
   }
+  // Centrally published NMC Risk Settings — immutable version history.
+  // No AI calls, no source assessment rewrites or browser-managed versions.
+  if(path==='/api/ai/risk-policy'||path.startsWith('/api/ai/risk-policy/')){
+    try{
+      if(req.method==='GET'&&path==='/api/ai/risk-policy')
+        return respond(res,200,{status:'ok',active:await riskPolicy.active()});
+      if(req.method==='GET'&&path==='/api/ai/risk-policy/history')
+        return respond(res,200,{status:'ok',history:await riskPolicy.history()});
+      if(req.method==='GET'&&path==='/api/ai/risk-policy/projections')
+        return respond(res,200,await riskPolicy.projectCurrent());
+      const vesselPolicyMatch=/^\/api\/ai\/risk-policy\/vessels\/(\d{7})(?:\/(history))?$/.exec(path);
+      if(req.method==='GET'&&vesselPolicyMatch){
+        if(vesselPolicyMatch[2])
+          return respond(res,200,{status:'ok',history:await riskPolicy.projectionHistory(vesselPolicyMatch[1])});
+        const projection=await riskPolicy.vessel(vesselPolicyMatch[1]);
+        return respond(res,projection?200:404,{status:projection?'ok':'missing',projection});
+      }
+      if(req.method==='POST'&&path==='/api/ai/risk-policy/publish'){
+        dashboards.assertRole(req,'PUBLISHER');
+        const body=await requestJson(req,16384);
+        const published=await riskPolicy.publish(body);
+        // No external AI; risk version takes effect immediately on the server.
+        // Scanner does not duplicate any active vessel alert or mutate existing cases.
+        if(alertScanEnabled)await scanExistingFleetForAlerts();
+        return respond(res,201,{status:'ok',published});
+      }
+      return respond(res,405,{error:'METHOD_NOT_ALLOWED'});
+    }catch(error){
+      if(error instanceof RiskPolicyError||error instanceof DashboardError)
+        return respond(res,error.status,{error:error.code});
+      console.error('[nmc-risk-policy] API_FAILURE');
+      return respond(res,503,{error:'RISK_POLICY_UNAVAILABLE'});
+    }
+  }
+
+  // Platform guidance is NOT an AI agent. GET is strictly read-only and never calls Airia.
+  if(path==='/api/ai/guidance/rules'||path.startsWith('/api/ai/guidance/')){
+    try{
+      if(path==='/api/ai/guidance/rules'&&req.method==='GET')
+        return respond(res,200,{status:'ok',rules:await guidance.list()});
+      if(path==='/api/ai/guidance/rules'&&req.method==='POST'){
+        dashboards.assertRole(req,'EDITOR');
+        const body=await requestJson(req,16384);
+        return respond(res,201,{status:'ok',rule:await guidance.create(body.rule)});
+      }
+      const ruleMatch=/^\/api\/ai\/guidance\/rules\/(NMC-GUIDE-[0-9]{3,5})(?:\/(history|publish))?$/.exec(path);
+      if(ruleMatch){
+        const [,id,action]=ruleMatch;
+        if(req.method==='GET'&&action==='history')
+          return respond(res,200,{status:'ok',history:await guidance.history(id)});
+        if(req.method==='PUT'&&!action){
+          dashboards.assertRole(req,'EDITOR');
+          const body=await requestJson(req,16384);
+          return respond(res,200,{status:'ok',rule:await guidance.change(id,body.revision,'EDIT',body.rule)});
+        }
+        if(req.method==='POST'&&action==='publish'){
+          dashboards.assertRole(req,'PUBLISHER');
+          const body=await requestJson(req,4096);
+          return respond(res,200,{status:'ok',rule:await guidance.change(id,body.revision,'PUBLISH')});
+        }
+      }
+      const vesselMatch=/^\/api\/ai\/guidance\/vessels\/(\d{7})(?:\/(materialize))?$/.exec(path);
+      if(vesselMatch){
+        const [,imo,action]=vesselMatch;
+        if(req.method==='GET'&&!action)return respond(res,200,await guidance.evaluate(imo));
+        if(req.method==='POST'&&action==='materialize'){
+          dashboards.assertRole(req,'PUBLISHER');
+          return respond(res,200,await guidance.materialize(imo));
+        }
+      }
+      return respond(res,405,{error:'METHOD_NOT_ALLOWED'});
+    }catch(error){
+      if(error instanceof GuidanceError||error instanceof DashboardError)
+        return respond(res,error.status,{error:error.code});
+      console.error('[nmc-guidance] API_FAILURE');
+      return respond(res,503,{error:'GUIDANCE_UNAVAILABLE'});
+    }
+  }
+
+  // Read-only cross-domain Smart Inspection scheduling queue from centrally saved cases.
+  // Legacy synthetic targeting candidates remain a separate information source.
+  if(path==='/api/ai/inspection-referrals'){
+    if(req.method!=='GET')return respond(res,405,{error:'METHOD_NOT_ALLOWED'});
+    try{return respond(res,200,{status:'ok',requests:await cases.listInspectionRequests()});}
+    catch{return respond(res,503,{error:'CASE_STORE_UNAVAILABLE'});}
+  }
+
   // A case is opened only after a human acknowledges a saved alert.
   // Audit and task changes are server-side, never browser-local session state.
   if(path==='/api/ai/cases'||path.startsWith('/api/ai/cases/')){
     const segments=path.split('/').filter(Boolean);
-    const [, , resource, first, action, second]=segments;
+    const [, , resource, first, action, second, third]=segments;
     if(resource!=='cases')return respond(res,404,{error:'CASE_NOT_FOUND'});
     try{
       if(req.method==='GET'){
@@ -166,10 +403,51 @@ const server = createServer(async (req, res) => {
         if(first==='from-alert'&&!action){
           dashboards.assertRole(req,'EDITOR');
           const body=await requestJson(req,4096);
+          if(body.withAiActionPlan!==true)
+            throw new NmcCaseError('CASE_CREATION_AI_REQUIRED',400);
+          if(!apiKey)throw new NmcCaseError('AIRIA_NOT_CONFIGURED',503);
           const item=await cases.fromAlert(body.alertId);
-          return respond(res,200,{status:'ok',case:item});
+          if(item.actionPlan)
+            return respond(res,200,{status:'ok',case:item,aiActionPlanStatus:'READY'});
+          try{
+            // Exactly one requested A01 call as part of Create Maritime Case.
+            // The case is persisted before A01, so retries never duplicate it.
+            const planned=await prepareCaseA01Actions(item.id,item.version);
+            return respond(res,200,{status:'ok',case:planned,aiActionPlanStatus:'READY'});
+          }catch(error){
+            // Fail closed: preserve the case and prior audit, but never pretend
+            // AI proposals exist if the agent failed or returned invalid data.
+            if(!(error instanceof NmcCaseError||error instanceof ActionPlanError||
+                 String(error?.message||'').startsWith('AIRIA_')))throw error;
+            const code=error instanceof NmcCaseError||error instanceof ActionPlanError
+              ?error.code:'A01_ACTION_PLAN_UNAVAILABLE';
+            const stored=await cases.get(item.id);
+            return respond(res,200,{status:'ok',case:stored,
+              aiActionPlanStatus:'FAILED',aiActionPlanError:{
+                code,details:error instanceof ActionPlanError?error.details:{}
+              }});
+          }
         }
         if(!/^[a-f\d-]{36}$/i.test(first))return respond(res,404,{error:'CASE_NOT_FOUND'});
+        if(action==='action-plan'&&second==='generate'&&!third){
+          dashboards.assertRole(req,'EDITOR');
+          const body=await requestJson(req,4096);
+          const item=await prepareCaseA01Actions(first,body.version);
+          return respond(res,200,{status:'ok',case:item});
+        }
+        if(action==='actions'&&second&&third==='decision'){
+          dashboards.assertRole(req,'EDITOR');
+          const body=await requestJson(req,4096);
+          const item=await cases.decideAction(first,body.version,second,
+            body.decision,body.note||'');
+          return respond(res,200,{status:'ok',case:item});
+        }
+        if(action==='inspections'&&second&&third==='schedule'){
+          dashboards.assertRole(req,'EDITOR');
+          const body=await requestJson(req,4096);
+          const item=await cases.scheduleInspection(first,body.version,second,body);
+          return respond(res,200,{status:'ok',case:item});
+        }
         if(action==='task'&&!second){
           dashboards.assertRole(req,'EDITOR');
           const body=await requestJson(req,4096);
@@ -198,11 +476,19 @@ const server = createServer(async (req, res) => {
       }
       return respond(res,405,{error:'METHOD_NOT_ALLOWED'});
     }catch(error){
+      if(error instanceof ActionPlanError)
+        return respond(res,error.status,{error:error.code,details:error.details});
       if(error instanceof NmcCaseError||error instanceof NmcAlertError||
          error instanceof DashboardError)
         return respond(res,error.status,{error:error.code});
       if(Number.isInteger(error?.status)&&error.status>=400&&error.status<500)
         return respond(res,error.status,{error:'INVALID_REQUEST'});
+      // Upstream AI faults must never be mistaken for case-store failures.
+      const upstreamCode=String(error?.message||'');
+      if(upstreamCode==='AIRIA_NOT_CONFIGURED')
+        return respond(res,503,{error:'AIRIA_NOT_CONFIGURED'});
+      if(upstreamCode.startsWith('AIRIA_'))
+        return respond(res,502,{error:'A01_ACTION_PLAN_UNAVAILABLE'});
       console.error('[nmc-cases] API_FAILURE');
       return respond(res,503,{error:'CASE_STORE_UNAVAILABLE'});
     }
@@ -217,7 +503,10 @@ const server = createServer(async (req, res) => {
     const [,id,action]=match;
     try{
       if(req.method==='GET'){
-        if(!id)return respond(res,200,await alerts.overview());
+        if(!id){
+          const projection=riskPolicy.ready?await riskPolicy.projectCurrent():null;
+          return respond(res,200,await alerts.overview(projection));
+        }
         if(action==='history')return respond(res,200,{status:'ok',history:await alerts.history(id)});
         if(action)return respond(res,404,{error:'ALERT_NOT_FOUND'});
         const item=await alerts.get(id);
@@ -405,6 +694,30 @@ const server = createServer(async (req, res) => {
 
 try{
   await fleet.initialize(scheduler.bundles);
+  try{
+    await riskPolicy.initialize();
+    // Backfill only the new projection table for pre-existing saved assessments,
+    // without altering source assessments, cases or the alert audit.
+    for(const row of Object.values(fleet.results)){
+      if(row.status==='COMPLETED'&&row.assessmentId)
+        await riskPolicy.materializeCurrent(row);
+    }
+  }catch(error){
+    // Surface only an Oracle error CODE for DBA diagnostics; do not log SQL,
+    // connection strings, credentials, policy config or saved assessment data.
+    const causeCode=String(error?.cause?.code||'UNKNOWN');
+    const safeCode=/^(?:ORA-[0-9]{5}|NJS-[0-9]{3,5}|DPI-[0-9]{4}|UNKNOWN)$/.test(causeCode)
+      ?causeCode:'UNKNOWN';
+    const stage=riskPolicy.ready?'PROJECTION_BACKFILL':'POLICY_INITIALIZATION';
+    console.error('[nmc-risk-policy] RISK_POLICY_SCHEMA_NOT_READY stage='+stage+
+      ' reason='+String(error?.code||'UNKNOWN')+' oracleCode='+safeCode);
+  }
+  try{await guidance.initialize();}
+  catch(error){
+    // Guidance requires migration 006, but an optional UI module must never
+    // take down the live risk scheduler, existing cases, or saved Oracle scores.
+    console.error('[nmc-guidance] GUIDANCE_SCHEMA_NOT_READY');
+  }
   server.listen(port,'0.0.0.0',()=>{
     console.log(`NMC AI proxy listening on ${port}; mode=${dbMode}; fleet-auto=${scheduler.enabled}`);
     if(scheduler.enabled)scheduler.start();

@@ -912,3 +912,43 @@ a, button { font: inherit; }
 @media (max-width: 960px) {
   .rx-shell .rx-main, .rx-shell.rtl .rx-main { margin: 0; max-width: none; padding-top: 54px; }
 }
+
+/* Saved AI Risk Intelligence: cleanly separates scoring, trace, and platform advisories. */
+.risk-meta{font-size:9px;max-width:540px;line-height:1.6;color:#6f8899;overflow-wrap:anywhere}
+.rx-priority{font-size:14px!important;line-height:1.45!important;color:#a56b12!important}
+.rx-notice{background:#f0f8fa;color:#386777;border:1px solid #d7eaf0;border-radius:9px;margin:12px 0;padding:13px 15px;font-size:11px;line-height:1.6}
+.rx-warning{border-color:#f0cfaa;background:#fff8eb;color:#966025}
+.rx-inline{margin-bottom:0}
+.rx-explain-note{margin:12px 14px 16px;padding:11px 13px;border-radius:9px;background:#f3f8fa;color:#4a6f81;font-size:10px;line-height:1.5}
+.rx-evidence-tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.rx-evidence-tags code{background:#edf6f9;border:1px solid #d5e9f0;color:#225873;border-radius:6px;padding:5px 7px;font-size:10px;overflow-wrap:anywhere}
+.rx-insight-card{margin-top:16px}
+.rx-insight-card>.panel-header{padding:18px 20px}
+.rx-insight-card>.panel-header h3{font-size:15px}
+.rx-insight-card>.panel-header p{font-size:10px;line-height:1.5}
+.rx-insight-card>p{padding:7px 20px 20px;margin:0;font-size:11px;line-height:1.8;color:#3c5b6c}
+.rx-guidance-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(255px,1fr));gap:12px;padding:18px 20px}
+.rx-guidance-item{padding:15px;border-radius:11px;border:1px solid #d7e9ea;background:linear-gradient(145deg,#f8fffd,#fff)}
+.rx-guidance-head{display:flex;justify-content:space-between;align-items:center;gap:8px;color:#214d60;font-size:12px}
+.rx-guidance-head span{flex-shrink:0;border-radius:20px;padding:4px 7px;background:#e8f6ed;color:#327e51;font-size:9px}
+.rx-guidance-item p{font-size:10px;color:#5d7a89;line-height:1.6;margin:9px 0}
+.rx-guidance-item small{display:block;margin-top:10px;color:#7d8f9c;line-height:1.5}
+.rx-actions{display:flex;gap:10px;flex-wrap:wrap;padding:16px 18px}
+.rx-actions .secondary-btn{font-size:11px;padding:11px 15px}
+.decision-card .rx-notice{margin:12px 18px 18px}
+@media(max-width:950px){.rx-guidance-list{grid-template-columns:1fr}.rx-main{padding:14px}}
+
+/* Risk model preview is deliberately distinguished from immutable Oracle evidence. */
+.rx-policy-banner{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-top:12px;padding:14px 16px;background:#eaf6fd;border:1px solid #b9dcef;border-radius:12px;color:#265a72}
+.rx-policy-banner>div{min-width:0}
+.rx-policy-banner strong{font-size:12px;display:block}
+.rx-policy-banner p{font-size:10px;line-height:1.65;margin:6px 0;color:#4f7184}
+.rx-policy-banner small{font-size:9px;color:#5a788b;overflow-wrap:anywhere}
+.rx-policy-banner>.secondary-btn{flex-shrink:0;font-size:10px;background:#fff}
+.rx-policy-delta{display:inline-block;background:#fff0c6;color:#986617;border-radius:5px;padding:3px 6px;margin-inline-start:7px}
+.projected-risk-card{min-width:160px!important;text-align:center}
+.source-risk-card{background:#eff5fa!important;border-color:#cbdbe7!important;text-align:center}
+.source-risk-card strong{color:#345b70!important}
+.source-risk-card small,.projected-risk-card small{font-size:8px;font-weight:750}
+.source-risk-card span,.projected-risk-card span{font-size:8px}
+@media(max-width:950px){.rx-policy-banner{flex-direction:column;align-items:flex-start}.hero-metrics{flex-wrap:wrap}}

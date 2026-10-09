@@ -14,7 +14,7 @@ import {
   NmcCaseStateService,
   NmcInspectionOutcome
 } from '../services/nmc-case-state.service';
-import {NmcCasesService,NmcCentralCase,NmcCentralCaseAudit} from '../services/nmc-cases.service';
+import {NmcCasesService,NmcCentralCase,NmcCentralCaseAudit,NmcAiAction} from '../services/nmc-cases.service';
 
 type CaseStatus = 'Open' | 'In Progress' | 'Pending Verification' | 'Resolved';
 type TaskStatus = 'Pending' | 'Assigned' | 'In Progress' | 'Completed' | 'Escalated';
@@ -32,6 +32,8 @@ interface CaseTask {
   mandatory: boolean;
   evidence: string[];
   note: string;
+  actionType?: string;
+  actionId?: string;
 }
 
 interface CaseTimelineItem {
@@ -66,6 +68,7 @@ export class NmcCaseWorkspaceComponent implements OnInit {
   centralBusy=false;
   centralError='';
   centralSuccess='';
+  actionNotes:Record<string,string>={};
   tasks: CaseTask[] = [];
   timeline: CaseTimelineItem[] = [];
   stakeholders: Stakeholder[] = [];
@@ -92,7 +95,10 @@ export class NmcCaseWorkspaceComponent implements OnInit {
       next:response=>{
         this.centralCase=response.case;
         this.centralLoading=false;
-        this.centralError='';
+        const aiError=this.route.snapshot.queryParamMap.get('aiError');
+        this.centralError=aiError&&!this.centralCase?.actionPlan
+          ?this.cases.readableError({error:{error:aiError}},this.lang.isArabic)
+          :'';
         this.buildCase();
         if(this.centralCase)this.loadCentralHistory();
       },
@@ -169,9 +175,28 @@ export class NmcCaseWorkspaceComponent implements OnInit {
   }
 
   get mandatoryComplete(): boolean {
-    return this.centralCase
-      ?this.centralCase.tasks.filter(t=>t.mandatory).every(t=>t.status==='Completed')
-      :this.tasks.filter(task=>task.mandatory).every(task=>task.status==='Completed');
+    if(!this.centralCase)return false;
+    // A reviewed plan with every action rejected / NO_ACTION may have zero
+    // tasks. That is a deliberate human decision, not an empty-case default.
+    if(!this.centralCase.actionPlan)return false;
+    if(this.pendingAiActionCount>0)return false;
+    return this.tasks.filter(t=>t.mandatory)
+      .every(t=>t.status==='Completed');
+  }
+
+  get pendingAiActionCount():number{
+    return this.centralCase?.actionPlan?.proposedActions.filter(
+      a=>a.decision==='PENDING').length||0;
+  }
+
+  get approvedAiTaskCount():number{
+    return this.tasks.length;
+  }
+
+  get readyForResolution():boolean{
+    return !!this.centralCase&&this.centralCase.status!=='RESOLVED'&&
+      this.mandatoryComplete&&this.pendingAiActionCount===0&&
+      !this.riskReassessmentPending;
   }
 
   get inspectionOutcome(): NmcInspectionOutcome | undefined {
@@ -195,8 +220,93 @@ export class NmcCaseWorkspaceComponent implements OnInit {
 
   get nextAction(): string {
     const next = this.tasks.find(task => task.status !== 'Completed');
+    if(!this.centralCase?.actionPlan)return this.copy(
+      'A01 recommendations were unavailable at case creation · retry',
+      'توصيات A01 لم تتوفر عند إنشاء الحالة · إعادة المحاولة');
+    if(this.centralCase.actionPlan.proposedActions.some(a=>a.decision==='PENDING'))
+      return this.copy('Review proposed AI actions', 'مراجعة الإجراءات المقترحة من AI');
+    if(this.riskReassessmentPending)
+      return this.copy('Await verified post-inspection risk reassessment',
+        'في انتظار إعادة تقييم المخاطر بأدلة المعاينة');
     if (!next) return this.copy('Ready for case resolution', 'جاهزة لإغلاق الحالة');
     return next.title;
+  }
+
+  generateAiActions():void{
+    if(!this.centralCase||this.centralBusy||this.centralCase.actionPlan)return;
+    if(!window.confirm(this.copy(
+      'Retry the unsuccessful A01 step from case creation? This makes one explicit Airia call.',
+      'إعادة محاولة خطوة A01 التي لم تكتمل عند إنشاء الحالة؟ سيتم استدعاء Airia مرة واحدة.')))return;
+    this.centralBusy=true;this.centralError='';this.centralSuccess='';
+    this.cases.generateActionPlan(this.centralCase).subscribe({
+      next:res=>{
+        this.centralBusy=false;
+        if(res.case)this.applyCase(res.case);
+        this.centralSuccess=this.copy(
+          'A01 proposals are ready. Only your approved A01 actions appear as case tasks.',
+          'توصيات A01 جاهزة. لن تظهر كمهام إلا توصيات A01 التي اعتمدتها.');
+      },
+      error:error=>{
+        this.centralBusy=false;
+        this.centralError=this.cases.readableError(error,this.lang.isArabic);
+        if(error?.status===409)this.loadCentralCase();
+      }
+    });
+  }
+
+  decideAiAction(item:NmcAiAction,decision:'ACCEPT'|'REJECT'|'MODIFY'):void{
+    if(!this.centralCase||this.centralBusy||item.decision!=='PENDING')return;
+    const note=(this.actionNotes[item.actionId]||'').trim();
+    if(decision!=='ACCEPT'&&!note){
+      this.centralError=this.copy('Enter a reason for modification or rejection.','ادخل سبب التعديل أو الرفض.');
+      return;
+    }
+    if(!window.confirm(this.copy(
+      'Save this human decision? Accepted actions become central tasks; inspection actions enter the scheduling queue.',
+      'حفظ القرار البشري؟ الإجراءات المقبولة تتحول إلى مهام، والمعاينات إلى قائمة الجدولة.')))return;
+    this.centralBusy=true;this.centralError='';
+    this.cases.decideAiAction(this.centralCase,item.actionId,decision,note).subscribe({
+      next:res=>{
+        this.centralBusy=false;
+        if(res.case)this.applyCase(res.case);
+        this.centralSuccess=this.copy(
+          'Decision audited. Approved actions are now saved as case tasks.',
+          'تم توثيق القرار وإنشاء المهام المعتمدة في الحالة.');
+      },
+      error:error=>{
+        this.centralBusy=false;
+        this.centralError=this.cases.readableError(error,this.lang.isArabic);
+        if(error?.status===409)this.loadCentralCase();
+      }
+    });
+  }
+
+  get pendingInspection():boolean{
+    return !!this.centralCase?.inspectionRequests?.some(
+      r=>r.status==='PENDING_SCHEDULING');
+  }
+  inspectionTask(task:CaseTask):boolean{
+    return task.actionType==='PRIORITY_INSPECTION'||
+      (!task.actionType&&task.id==='priority-inspection');
+  }
+  openInspectionForTask(task:CaseTask):void{
+    // Historical inspections are not automatically tied to newly generated
+    // Airia requests even if their old task IDs resemble A01 action IDs.
+    if(!task.actionId){
+      this.navigateInspection();return;
+    }
+    const referral=this.centralCase?.inspectionRequests?.find(
+      r=>r.actionId===task.actionId);
+    if(referral?.status==='PENDING_SCHEDULING'){
+      void this.router.navigate(['/moei/smart-inspection/candidates']);
+      return;
+    }
+    if(!referral||!['SCHEDULED','COMPLETED'].includes(referral.status)){
+      this.centralError=this.copy('Schedule the accepted NMC inspection request first.',
+        'يجب جدولة طلب المعاينة المعتمد أولًا.');
+      return;
+    }
+    this.navigateInspection();
   }
 
   openTask(task: CaseTask): void {
@@ -233,11 +343,11 @@ export class NmcCaseWorkspaceComponent implements OnInit {
   }
 
   startTask(task:CaseTask):void{
-    if(task.id==='priority-inspection'){this.openSmartInspection();return;}
+    if(this.inspectionTask(task)){this.openInspectionForTask(task);return;}
     this.updateTask(task,'START');
   }
   completeTask(task:CaseTask):void{
-    if(task.id==='priority-inspection'){
+    if(this.inspectionTask(task)){
       this.centralError=this.copy(
         'Inspection completion must be recorded from Smart Inspection.',
         'يجب تسجيل نتيجة المعاينة داخل المعاينة الذكية.');
@@ -252,7 +362,7 @@ export class NmcCaseWorkspaceComponent implements OnInit {
     this.updateTask(task,'ESCALATE');
   }
   resolveCase():void{
-    if(!this.centralCase||!this.mandatoryComplete||this.centralBusy)return;
+    if(!this.centralCase||!this.readyForResolution||this.centralBusy)return;
     if(!this.resolutionNote.trim()){
       this.centralError=this.copy('Resolution reason is required.','يجب إدخال سبب الإغلاق.');
       return;
@@ -278,13 +388,8 @@ export class NmcCaseWorkspaceComponent implements OnInit {
     void this.router.navigate(['/moei/nmc/vessel',this.vessel.imo,'smart-inspection']);
   }
   openSmartInspection():void{
-    if(!this.centralCase||this.centralBusy)return;
-    const inspection=this.centralCase.tasks.find(task=>task.id==='priority-inspection');
-    if(inspection?.status==='Assigned'){
-      this.updateTask(this.tasks.find(task=>task.id==='priority-inspection')!, 'START',true);
-      return;
-    }
-    this.navigateInspection();
+    const task=this.tasks.find(t=>this.inspectionTask(t));
+    if(task)this.openInspectionForTask(task);
   }
 
   statusLabel(status: CaseStatus | TaskStatus): string {
@@ -345,209 +450,61 @@ export class NmcCaseWorkspaceComponent implements OnInit {
     });
   }
 
-  private buildCase(preserveState = false): void {
-    const persistedStates = this.centralCase
-      ?Object.fromEntries(this.centralCase.tasks.map(t=>[t.id,t.status]))
-      :this.caseState.getTaskStates(this.vessel.imo);
-    const previous = preserveState
-      ? new Map(this.tasks.map(task => [task.id, task.status]))
-      : new Map<string, TaskStatus>();
-
-    Object.entries(persistedStates).forEach(([id, status]) => {
-      previous.set(id, status as TaskStatus);
-    });
-
-    const level = this.centralCase?.sourceLevel||this.riskEngine.levelForScore(this.vessel.risk);
-    const critical = level === 'Critical';
-    const high = level === 'Critical' || level === 'High';
-    const watch = level !== 'Normal';
-    // Synthetic catalog >=80 does not prove a certificate conflict in a saved-AI case.
-    // A future A02 evidence-backed case plan will carry authoritative conflict findings.
-    const conflict = this.centralCase ? false : this.riskEngine.evaluate(this.vessel).baseScore >= 80;
-
-    const tasks: CaseTask[] = [];
-
-    if ((this.centralCase?.sourceScore??this.vessel.risk) >= 55) {
-      tasks.push({
-        id: 'verify-certificate',
-        title: this.copy('Verify certificate status', 'التحقق من حالة الشهادة'),
-        owner: this.copy('Certificate Compliance Officer', 'مسؤول امتثال الشهادات'),
-        source: this.copy('AI recommendation + certificate evidence', 'توصية الذكاء الاصطناعي + أدلة الشهادة'),
-        priority: conflict ? 'Critical' : 'High',
-        slaMinutes: conflict ? 15 : 60,
-        dueLabel: conflict ? this.copy('15 min', '15 دقيقة') : this.copy('60 min', '60 دقيقة'),
-        status: previous.get('verify-certificate') || 'Assigned',
-        mandatory: true,
-        evidence: [`CERT-SC-${this.vessel.imo}`, `DQC-${this.vessel.imo}`],
-        note: conflict
-          ? this.copy('Resolve the conflict between the primary certificate record and trusted external source.', 'حل التعارض بين سجل الشهادة الأساسي والمصدر الخارجي الموثوق.')
-          : this.copy('Confirm certificate validity and applicable conditions.', 'تأكيد صلاحية الشهادة والشروط المطبقة.')
+  private buildCase(_preserveState = false): void {
+    // Central Oracle case is the only task source. Historic hardcoded tasks
+    // remain stored for audit but never appear as current recommendations.
+    const current=this.centralCase;
+    this.tasks=(current?.tasks||[])
+      .filter(t=>t.provenance==='AIRIA_A01_HUMAN_APPROVED')
+      .map(stored=>{
+        const priority:CaseTask['priority']=stored.priority==='CRITICAL'||
+          stored.priority==='IMMEDIATE'?'Critical':
+          stored.priority==='MEDIUM'?'Medium':
+          stored.priority==='MONITOR'||stored.priority==='ROUTINE'?'Continuous':'High';
+        return {
+          id:stored.id,
+          actionId:stored.actionId,
+          title:stored.title||stored.actionType||stored.id,
+          owner:stored.assignedRole,
+          source:this.copy('Airia A01 · approved by an officer',
+            'Airia A01 · معتمدة من الموظف'),
+          priority,
+          dueLabel:this.copy('Operational follow-up','متابعة تشغيلية'),
+          status:stored.status as TaskStatus,
+          mandatory:stored.mandatory,
+          evidence:stored.evidenceIds||[],
+          note:stored.reason||'',
+          actionType:stored.actionType
+        };
       });
-    }
+    const states:Record<string,CaseStatus>={
+      OPEN:'Open',IN_PROGRESS:'In Progress',
+      PENDING_VERIFICATION:'Pending Verification',RESOLVED:'Resolved'
+    };
+    this.caseStatus=current?states[current.status]||'Open':'Open';
+    if(this.caseStatus==='Pending Verification'&&!this.readyForResolution)
+      this.caseStatus='In Progress';
 
-    if (watch) {
-      tasks.push({
-        id: 'enhanced-monitoring',
-        title: this.copy('Maintain enhanced AIS / LRIT monitoring', 'استمرار المراقبة المعززة عبر AIS / LRIT'),
-        owner: this.copy('NMC Operations', 'عمليات المركز البحري الوطني'),
-        source: this.copy('Movement risk indicator', 'مؤشر مخاطر الحركة'),
-        priority: critical ? 'Critical' : 'Continuous',
-        dueLabel: this.copy('Continuous', 'مستمرة'),
-        status: previous.get('enhanced-monitoring') || 'In Progress',
-        mandatory: true,
-        evidence: [`AIS-${this.vessel.mmsi}`],
-        note: this.copy('Maintain active monitoring until the case is resolved or risk returns to normal monitored range.', 'استمرار المراقبة النشطة حتى إغلاق الحالة أو عودة المخاطر إلى النطاق الطبيعي للمراقبة.')
-      });
-    }
-
-    // The verified alert may require inspection even when the composite score
-    // is Watch (e.g. critical-open-finding with saved score 60).
-    if (high || this.centralCase?.tasks.some(t => t.id === 'priority-inspection')) {
-      tasks.push({
-        id: 'priority-inspection',
-        title: this.copy('Create priority follow-up inspection', 'إنشاء معاينة متابعة ذات أولوية'),
-        owner: this.copy('Smart Inspection Team', 'فريق المعاينة الذكية'),
-        source: this.copy('Open inspection deficiency', 'ملاحظة معاينة مفتوحة'),
-        priority: critical ? 'Critical' : 'High',
-        slaMinutes: 120,
-        dueLabel: this.copy('2 hrs', 'ساعتان'),
-        status: previous.get('priority-inspection') || 'Assigned',
-        mandatory: true,
-        evidence: [`INS-2026-${String(1300 + this.vessel.id).padStart(5,'0')}`],
-        note: this.copy('Carry forward the current vessel risk context and open deficiency into the inspection task.', 'نقل سياق مخاطر السفينة الحالي والملاحظة المفتوحة إلى مهمة المعاينة.')
-      });
-    }
-
-    if (critical) {
-      tasks.push({
-        id: 'restriction-review',
-        title: this.copy('Review need for regulatory restriction', 'مراجعة الحاجة إلى قيد تنظيمي'),
-        owner: this.copy('Maritime Compliance Supervisor', 'مشرف الامتثال البحري'),
-        source: this.copy('Human-approved conditional action', 'إجراء مشروط معتمد بشرياً'),
-        priority: 'High',
-        dueLabel: this.copy('After verification', 'بعد التحقق'),
-        status: previous.get('restriction-review') || 'Pending',
-        mandatory: false,
-        evidence: [`CERT-SC-${this.vessel.imo}`, `INS-2026-${String(1300 + this.vessel.id).padStart(5,'0')}`],
-        note: this.copy('Restriction remains conditional and cannot be imposed automatically by AI.', 'يظل القيد مشروطاً ولا يمكن فرضه تلقائياً بواسطة الذكاء الاصطناعي.')
-      });
-    }
-
-    if (!tasks.length) {
-      tasks.push({
-        id: 'routine-monitoring',
-        title: this.copy('Continue routine monitoring', 'استمرار المراقبة الاعتيادية'),
-        owner: this.copy('NMC Operations', 'عمليات المركز البحري الوطني'),
-        source: this.copy('Normal operational monitoring', 'المراقبة التشغيلية الاعتيادية'),
-        priority: 'Continuous',
-        dueLabel: this.copy('Continuous', 'مستمرة'),
-        status: previous.get('routine-monitoring') || 'In Progress',
-        mandatory: true,
-        evidence: [`AIS-${this.vessel.mmsi}`],
-        note: this.copy('No priority intervention is currently required.', 'لا يوجد تدخل ذو أولوية مطلوب حالياً.')
-      });
-    }
-
-    this.tasks = this.centralCase ? this.centralCase.tasks.map(stored=>{
-      const draft=tasks.find(item=>item.id===stored.id);
-      return draft?{
-        ...draft,status:stored.status as TaskStatus,
-        mandatory:stored.mandatory,evidence:stored.evidenceIds,
-        owner:stored.assignedRole
-      }:{
-        id:stored.id,title:stored.id.replaceAll('-',' '),
-        owner:stored.assignedRole,source:'Operational follow-up',
-        priority:'High' as const,dueLabel:'Follow-up',
-        status:stored.status as TaskStatus,mandatory:stored.mandatory,
-        evidence:stored.evidenceIds,note:''
-      };
-    }):tasks;
-
-    if (this.mandatoryComplete) {
-      this.caseStatus = 'Pending Verification';
-    } else if (this.completedTasks > 0 || this.tasks.some(task => task.status === 'In Progress' || task.status === 'Escalated')) {
-      this.caseStatus = 'In Progress';
-    } else {
-      this.caseStatus = 'Open';
-    }
-
-    if(this.centralCase){
-      const states:Record<string,CaseStatus>={
-        OPEN:'Open',IN_PROGRESS:'In Progress',
-        PENDING_VERIFICATION:'Pending Verification',RESOLVED:'Resolved'
-      };
-      this.caseStatus=states[this.centralCase.status]||'Open';
-    }
-    this.stakeholders = [
+    const actions=current?.actionPlan?.proposedActions||[];
+    const roles=[...new Set(actions.map(a=>a.ownerRole).filter(Boolean))];
+    this.stakeholders=[
       {
-        role: this.copy('Case Owner', 'مالك الحالة'),
-        unit: this.copy('NMC Duty Officer', 'ضابط مناوبة المركز البحري'),
-        responsibility: this.copy('Own case coordination and operational decision tracking.', 'امتلاك تنسيق الحالة ومتابعة القرارات التشغيلية.'),
-        state: 'Active'
+        role:this.copy('Case Owner','مالك الحالة'),
+        unit:this.copy('NMC Duty Officer','ضابط مناوبة المركز البحري'),
+        responsibility:this.copy('Review AI recommendations and coordinate the approved work.',
+          'مراجعة توصيات AI وتنسيق الأعمال المعتمدة.'),
+        state:'Active'
       },
-      {
-        role: this.copy('Compliance', 'الامتثال'),
-        unit: this.copy('Maritime Compliance', 'الامتثال البحري'),
-        responsibility: this.copy('Verify regulatory and certificate conditions.', 'التحقق من الشروط التنظيمية وشروط الشهادات.'),
-        state: conflict ? 'Active' : 'Notified'
-      },
-      {
-        role: this.copy('Inspection', 'المعاينة'),
-        unit: this.copy('Smart Inspection', 'المعاينة الذكية'),
-        responsibility: this.copy('Execute priority inspection and return findings to NMC.', 'تنفيذ المعاينة ذات الأولوية وإعادة النتائج إلى المركز البحري الوطني.'),
-        state: high ? 'Active' : 'Waiting'
-      },
-      {
-        role: this.copy('Supervisor', 'المشرف'),
-        unit: this.copy('NMC Supervisor', 'مشرف المركز البحري الوطني'),
-        responsibility: this.copy('Receive SLA escalation and approve case resolution.', 'استقبال تصعيدات SLA واعتماد إغلاق الحالة.'),
-        state: critical ? 'Notified' : 'Waiting'
-      }
+      ...roles.map(role=>({
+        role:this.copy('A01 recommended owner','المسؤول المقترح من A01'),
+        unit:role.replaceAll('_',' '),
+        responsibility:this.copy('Participates only when the officer approves the linked A01 action.',
+          'يشارك عند اعتماد الموظف الإجراء المرتبط بتوصية A01.'),
+        state:(actions.some(a=>a.ownerRole===role&&a.decision==='ACCEPT')
+          ?'Active':'Waiting') as Stakeholder['state']
+      }))
     ];
-
-    if (!preserveState) {
-      this.timeline = [
-        {
-          time: '22:45',
-          type: 'Decision',
-          title: this.copy('NMC case created', 'تم إنشاء حالة بالمركز البحري الوطني'),
-          detail: this.copy('Officer approved operational follow-up and opened a coordinated maritime case.', 'اعتمد المسؤول المتابعة التشغيلية وتم فتح حالة بحرية منسقة.'),
-          actor: this.copy('NMC Duty Officer', 'ضابط مناوبة المركز البحري')
-        },
-        {
-          time: '22:44',
-          type: 'AI',
-          title: this.copy('AI recommendations reviewed', 'تمت مراجعة توصيات الذكاء الاصطناعي'),
-          detail: this.copy('Evidence-grounded recommendations were presented for human decision.', 'تم عرض توصيات مبنية على الأدلة لاتخاذ القرار البشري.'),
-          actor: this.copy('Maritime Situation Intelligence', 'استخبارات الموقف البحري')
-        },
-        {
-          time: '22:43',
-          type: 'AI',
-          title: this.copy('AI situation assessment generated', 'تم إنشاء تقييم الموقف بالذكاء الاصطناعي'),
-          detail: this.copy('Movement, inspection, certificate, data-quality and historical indicators were correlated.', 'تم ربط مؤشرات الحركة والمعاينة والشهادات وجودة البيانات والسجل التاريخي.'),
-          actor: this.copy('NMC AI', 'ذكاء المركز البحري')
-        },
-        {
-          time: '22:42',
-          type: 'Risk',
-          title: this.copy(`Risk assessed as ${this.riskEngine.levelForScore(this.vessel.risk)}`, `تم تقييم المخاطر عند المستوى ${this.riskLevelLabel}`),
-          detail: this.copy(`Composite vessel score reached ${this.vessel.risk}/100.`, `وصلت الدرجة المركبة لمخاطر السفينة إلى ${this.vessel.risk}/100.`),
-          actor: this.copy('NMC Risk Engine', 'محرك مخاطر المركز البحري')
-        }
-      ];
-
-      const persistedTimeline = this.caseState.getTimeline(this.vessel.imo).map(item => ({
-        time: item.time,
-        type: item.type as TimelineType,
-        title: item.title,
-        detail: item.detail,
-        actor: item.actor
-      }));
-
-      if (persistedTimeline.length) {
-        this.timeline = [...persistedTimeline, ...this.timeline];
-      }
-    }
+    // No synthetic timeline. loadCentralHistory() provides actual server audit.
+    if(!current)this.timeline=[];
   }
 }

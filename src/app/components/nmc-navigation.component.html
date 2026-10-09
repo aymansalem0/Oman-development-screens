@@ -72,23 +72,21 @@
     </section>
 
     <section class="nav-section">
-      <button *ngIf="dashboardItems('SMART_INSPECTION').length"
-              class="nav-group" type="button"
+      <button class="nav-group" type="button"
               (click)="smartInspectionExpanded = !smartInspectionExpanded"
               [attr.aria-expanded]="smartInspectionExpanded" aria-controls="smart-inspection-dashboards">
         <span class="nav-icon">✓</span>
         <span class="nav-label">{{copy('Smart Inspection','المعاينة الذكية')}}</span>
         <span class="nav-chevron">{{smartInspectionExpanded ? '⌄' : '›'}}</span>
       </button>
-      <div *ngIf="!dashboardItems('SMART_INSPECTION').length" class="nav-group nav-future"
-           [class.active]="isSmartInspection"
-           [attr.aria-label]="copy('Smart Inspection; modules to be added','المعاينة الذكية؛ ستضاف الخدمات لاحقاً')">
-        <span class="nav-icon">✓</span>
-        <span class="nav-label">{{copy('Smart Inspection','المعاينة الذكية')}}</span>
-      </div>
       <div class="nav-children" id="smart-inspection-dashboards"
            [hidden]="!smartInspectionExpanded"
-           *ngIf="dashboardItems('SMART_INSPECTION').length">
+           >
+        <a class="nav-link" routerLink="/moei/smart-inspection/candidates"
+            [class.active]="isSmartInspection">
+          <span class="nav-icon">☷</span>
+          <span class="nav-label">{{copy('Required Inspections / Scheduling','المعاينات المطلوبة / الجدولة')}}</span>
+        </a>
         <button class="nav-subgroup" type="button"
                 (click)="smartDashboardsExpanded = !smartDashboardsExpanded"
                 [attr.aria-expanded]="smartDashboardsExpanded" aria-controls="smart-published-dashboards">
@@ -129,6 +127,12 @@
           <span class="nav-label">{{copy('Data Quality Management','إدارة جودة البيانات')}}</span>
         </a>
 
+        <a class="nav-link" routerLink="/moei/nmc/admin/operational-guidance"
+           [class.active]="isGuidanceConfig" [attr.aria-current]="isGuidanceConfig?'page':null"
+           [title]="copy('Operational Guidance Rules','قواعد الإرشاد التشغيلي')">
+          <span class="nav-icon">⚙</span>
+          <span class="nav-label">{{copy('Operational Guidance Rules','قواعد الإرشاد التشغيلي')}}</span>
+        </a>
         <div class="nav-dashboard-group" *ngIf="dashboardItems('SETTINGS').length">
           <button class="nav-subgroup" type="button"
                   (click)="settingsDashboardsExpanded = !settingsDashboardsExpanded"

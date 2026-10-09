@@ -3,7 +3,7 @@
  * assessments. Case creation is always initiated by an NMC operator after
  * acknowledging a persisted alert. The event and case remain linked.
  */
-import {randomUUID} from 'node:crypto';
+import {createHash,randomUUID} from 'node:crypto';
 import {existsSync,mkdirSync,readFileSync,writeFileSync,renameSync} from 'node:fs';
 import {dirname} from 'node:path';
 import oracledb from 'oracledb';
@@ -17,20 +17,6 @@ const noteValue=x=>typeof x==='string'&&x.trim().length>0&&x.length<=500?x.trim(
 const VALID_TASK_STATUS=['Assigned','In Progress','Completed','Escalated'];
 export class NmcCaseError extends Error{
   constructor(code,status=400){super(code);this.code=code;this.status=status;}
-}
-function initialTasks(alert){
-  const critical=alert.severity==='CRITICAL';
-  return [
-    {id:'verify-certificate',status:'Assigned',assignedRole:'COMPLIANCE_OFFICER',
-      mandatory:true,evidenceIds:[`CERT-SC-${alert.imo}`]},
-    {id:'enhanced-monitoring',status:'Assigned',assignedRole:'NMC_OFFICER',
-      mandatory:true,evidenceIds:[`AIS-${alert.imo}`]},
-    {id:'priority-inspection',status:'Assigned',assignedRole:'INSPECTION_OFFICER',
-      mandatory:true,evidenceIds:[`INS-${alert.imo}`]},
-    ...(critical?[{id:'restriction-review',status:'Assigned',
-      assignedRole:'COMPLIANCE_SUPERVISOR',mandatory:false,
-      evidenceIds:[`CERT-SC-${alert.imo}`]}]:[])
-  ];
 }
 function auditEntry(row,action,role,note='',details={}){
   return {version:row.version,action,role,note,details,at:row.updatedAt};
@@ -105,7 +91,9 @@ export class NmcCaseWorkspace{
       source:'SAVED_AI_ALERT',sourceAssessmentId:alert.sourceAssessmentId,
       alertIds:[alert.id],sourceScore:alert.sourceScore,sourceLevel:alert.sourceLevel,
       createdAt:timestamp,updatedAt:timestamp,version:1,
-      tasks:initialTasks(alert),decisions:[],inspectionOutcome:null,
+      // New cases start with no fabricated tasks. A01 proposes actions;
+      // human acceptance materializes tasks in the central case.
+      tasks:[],actionPlan:null,inspectionRequests:[],decisions:[],inspectionOutcome:null,
       resolutionNote:null,provenance:'SYNTHETIC_POC_NON_REGULATORY'
     };
     const log=auditEntry(record,'CREATED',role,
@@ -147,22 +135,30 @@ export class NmcCaseWorkspace{
     return this._update(id,version,'TASK_'+action,role,note,row=>{
       if(row.status==='RESOLVED')throw new NmcCaseError('CASE_ALREADY_RESOLVED',409);
       const task=row.tasks.find(item=>item.id===taskId);
-      if(!task)throw new NmcCaseError('CASE_TASK_NOT_FOUND',404);
+      if(!task||!row.actionPlan||
+         task.provenance!=='AIRIA_A01_HUMAN_APPROVED')
+        throw new NmcCaseError('CASE_TASK_NOT_FOUND',404);
       const valid=action==='START'
         ?task.status==='Assigned'
         :action==='COMPLETE'
           ?['Assigned','In Progress','Escalated'].includes(task.status)
           :['Assigned','In Progress'].includes(task.status);
       if(!valid)throw new NmcCaseError('CASE_TASK_TRANSITION_INVALID',409);
-      if(action==='COMPLETE'&&taskId==='priority-inspection'&&!row.inspectionOutcome)
+      if(action==='COMPLETE'&&task.actionType==='PRIORITY_INSPECTION'&&!row.inspectionOutcome)
         throw new NmcCaseError('CASE_INSPECTION_EVIDENCE_REQUIRED',409);
       const nextStatus={START:'In Progress',COMPLETE:'Completed',ESCALATE:'Escalated'}[action];
       const tasks=row.tasks.map(t=>t.id===taskId?{
         ...t,status:nextStatus,
         assignedRole:action==='ESCALATE'?'NMC_SUPERVISOR':t.assignedRole
       }:t);
-      const requiredDone=tasks.filter(t=>t.mandatory).every(t=>t.status==='Completed');
-      return {...row,tasks,status:requiredDone?'PENDING_VERIFICATION':'IN_PROGRESS'};
+      const aiTasks=tasks.filter(t=>t.provenance==='AIRIA_A01_HUMAN_APPROVED');
+      const requiredDone=aiTasks.filter(t=>t.mandatory).every(t=>t.status==='Completed');
+      const aiDecisionsPending=!!row.actionPlan?.proposedActions?.some(
+        a=>a.decision==='PENDING');
+      // Mandatory tasks alone do not mean a reviewed AI plan or post-inspection
+      // reassessment is complete. Do not display a false PENDING_VERIFICATION.
+      const verified=requiredDone&&!aiDecisionsPending&&!row.inspectionOutcome;
+      return {...row,tasks,status:verified?'PENDING_VERIFICATION':'IN_PROGRESS'};
     },{taskId,action});
   }
   async decision(id,version,data,role='OPERATOR'){
@@ -194,20 +190,144 @@ export class NmcCaseWorkspace{
     return this._update(id,version,'INSPECTION_RECORDED',role,
       outcome.summary||'Smart Inspection outcome recorded',row=>{
         if(row.status==='RESOLVED')throw new NmcCaseError('CASE_ALREADY_RESOLVED',409);
-        if(row.inspectionOutcome?.inspectionId===outcome.inspectionId)
+        const previousInspections=Array.isArray(row.inspectionHistory)
+          ?row.inspectionHistory
+          :(row.inspectionOutcome?[row.inspectionOutcome]:[]);
+        if(previousInspections.some(i=>i.inspectionId===outcome.inspectionId))
           throw new NmcCaseError('CASE_INSPECTION_ALREADY_RECORDED',409);
-        const tasks=row.tasks.map(t=>t.id==='priority-inspection'
+        const request=(row.inspectionRequests||[]).find(r=>r.status==='SCHEDULED'&&
+          row.tasks.some(t=>t.actionId===r.actionId&&t.actionType==='PRIORITY_INSPECTION'));
+        if((row.actionPlan||row.inspectionRequests?.length)&&!request)
+          throw new NmcCaseError('CASE_INSPECTION_NOT_SCHEDULED',409);
+        const tasks=row.tasks.map(t=>(request&&t.actionId===request.actionId)||
+          (!row.actionPlan&&t.id==='priority-inspection')
           ?{...t,status:'Completed'}:t);
-        const requiredDone=tasks.filter(t=>t.mandatory).every(t=>t.status==='Completed');
-        return {...row,inspectionOutcome:{
+        const aiTasks=tasks.filter(t=>t.provenance==='AIRIA_A01_HUMAN_APPROVED');
+      const requiredDone=aiTasks.filter(t=>t.mandatory).every(t=>t.status==='Completed');
+        const savedOutcome={
           inspectionId:outcome.inspectionId,
           result:String(outcome.result||'Completed with Findings').slice(0,70),
           findingsCount:outcome.findingsCount,
           criticalFindings:outcome.criticalFindings,
           summary:outcome.summary,
+          inspector:request?.inspector||null,
+          inspectionRequestId:request?.id||null,
           completedAt:now()
-        },tasks,status:requiredDone?'PENDING_VERIFICATION':'IN_PROGRESS'};
+        };
+        return {...row,inspectionOutcome:savedOutcome,
+          // Carry forward historic case results instead of overwriting the
+          // earlier inspection that existed before the new A01 referral.
+          inspectionHistory:[...previousInspections,savedOutcome],
+          inspectionRequests:(row.inspectionRequests||[]).map(r=>r.id===request?.id?
+          {...r,status:'COMPLETED',completedAt:now(),inspectionId:outcome.inspectionId}:r),
+          // A field inspection is NOT a verified post-inspection risk
+          // assessment; the case must remain in-progress until A02 refresh.
+          tasks,status:'IN_PROGRESS'};
       },{inspectionId:outcome.inspectionId});
+  }
+
+  async saveActionPlan(id,version,plan,role='OPERATOR'){
+    if(!plan||!Array.isArray(plan.proposedActions)||!plan.proposedActions.length)
+      throw new NmcCaseError('CASE_ACTION_PLAN_INVALID');
+    return this._update(id,version,'A01_ACTION_PLAN_RECORDED',role,
+      'A01 evidence-backed proposals submitted for human decision',row=>{
+        if(row.status==='RESOLVED')throw new NmcCaseError('CASE_ALREADY_RESOLVED',409);
+        if(row.actionPlan)throw new NmcCaseError('CASE_ACTION_PLAN_EXISTS',409);
+        if(row.imo!==plan.imo||row.sourceScore!==plan.sourceScore||
+          row.sourceAssessmentId!==plan.sourceAssessmentId)
+          throw new NmcCaseError('CASE_ACTION_PLAN_SOURCE_MISMATCH',409);
+        // An older case may have been pending verification on its legacy tasks.
+        // Starting a new AI action review reopens the operational work stage.
+        return {...row,actionPlan:plan,status:'IN_PROGRESS'};
+      },{sourceAssessmentId:plan.sourceAssessmentId,proposals:plan.proposedActions.length});
+  }
+  async decideAction(id,version,actionId,decision,note='',role='OPERATOR'){
+    if(!['ACCEPT','REJECT','MODIFY'].includes(decision))
+      throw new NmcCaseError('CASE_DECISION_INVALID');
+    if(decision!=='ACCEPT'&&!noteValue(note))
+      throw new NmcCaseError('CASE_DECISION_REASON_REQUIRED');
+    return this._update(id,version,'A01_ACTION_'+decision,role,note,row=>{
+      if(row.status==='RESOLVED')throw new NmcCaseError('CASE_ALREADY_RESOLVED',409);
+      const plan=row.actionPlan;
+      if(!plan)throw new NmcCaseError('CASE_ACTION_PLAN_REQUIRED',409);
+      const action=plan.proposedActions.find(a=>a.actionId===actionId);
+      if(!action)throw new NmcCaseError('CASE_ACTION_NOT_FOUND',404);
+      if(action.decision!=='PENDING')throw new NmcCaseError('CASE_ACTION_ALREADY_DECIDED',409);
+      if((decision==='ACCEPT'||decision==='MODIFY')&&
+        (!Array.isArray(action.evidenceIds)||!action.evidenceIds.length)&&
+        action.actionType!=='NO_ACTION')throw new NmcCaseError('CASE_ACTION_EVIDENCE_REQUIRED');
+      const accepted=decision!=='REJECT'&&action.actionType!=='NO_ACTION';
+      const nextActions=plan.proposedActions.map(a=>a.actionId===actionId?
+        {...a,decision,decisionNote:noteValue(note)||'',
+          decidedAt:now(),decidedBy:role}:a);
+      const tasks=[...row.tasks];
+      const inspectionRequests=[...(row.inspectionRequests||[])];
+      if(accepted){
+        // New A01 tasks are separately namespaced from old fixed-template case
+        // task IDs. Preserve actionId unchanged for inspection referral joins.
+        const suffix=createHash('sha256').update(action.actionId).digest('hex').slice(0,10);
+        const generatedTaskId='a01-'+action.actionId.slice(0,42)+'-'+suffix;
+        const task={
+          id:generatedTaskId,actionId:action.actionId,actionType:action.actionType,
+          title:action.title,priority:action.priority,reason:action.reason,
+          status:'Assigned',assignedRole:action.ownerRole,
+          mandatory:true,evidenceIds:action.evidenceIds,
+          provenance:'AIRIA_A01_HUMAN_APPROVED',sourceAssessmentId:row.sourceAssessmentId,
+          generatedAt:now()
+        };
+        if(tasks.some(t=>t.id===task.id||
+          (t.provenance==='AIRIA_A01_HUMAN_APPROVED'&&t.actionId===action.actionId)))
+          throw new NmcCaseError('CASE_TASK_EXISTS',409);
+        tasks.push(task);
+        if(action.actionType==='PRIORITY_INSPECTION'){
+          if(inspectionRequests.some(r=>r.status!=='COMPLETED'))
+            throw new NmcCaseError('CASE_ACTIVE_INSPECTION_EXISTS',409);
+          inspectionRequests.push({
+            id:randomUUID(),caseId:row.id,imo:row.imo,actionId:action.actionId,
+            status:'PENDING_SCHEDULING',inspectionRegime:'FOCUSED_INSPECTION',
+            priority:action.priority,reason:action.reason,evidenceIds:action.evidenceIds,
+            sourceScore:row.sourceScore,sourceAssessmentId:row.sourceAssessmentId,
+            port:null,scheduledAt:null,inspector:null,scheduledBy:null,
+            createdAt:now(),version:1
+          });
+        }
+      }
+      const allDecisionsRecorded=nextActions.every(a=>a.decision!=='PENDING');
+      const aiTasks=tasks.filter(t=>t.provenance==='AIRIA_A01_HUMAN_APPROVED');
+      const allRequiredDone=aiTasks.filter(t=>t.mandatory)
+        .every(t=>t.status==='Completed');
+      // Legacy completed tasks cannot mark a case ready while A01 proposals
+      // remain undecided or while a new inspection lacks reassessment.
+      const ready=allDecisionsRecorded&&allRequiredDone&&!row.inspectionOutcome;
+      return {...row,actionPlan:{...plan,proposedActions:nextActions},
+        tasks,inspectionRequests,status:ready?'PENDING_VERIFICATION':'IN_PROGRESS'};
+    },{actionId,decision});
+  }
+  async listInspectionRequests(){
+    const rows=await this.list();
+    return rows.flatMap(c=>(c.inspectionRequests||[]).map(r=>({
+      ...r,caseStatus:c.status,sourceLevel:c.sourceLevel
+    }))).sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
+  }
+  async scheduleInspection(id,version,requestId,data,role='OPERATOR'){
+    const {scheduledAt,port,inspector}=data||{};
+    const stamp=Date.parse(scheduledAt);
+    if(typeof scheduledAt!=='string'||!Number.isFinite(stamp)||stamp<=Date.now()||
+      typeof port!=='string'||!port.trim()||port.trim().length>120||
+      typeof inspector!=='string'||!inspector.trim()||inspector.trim().length>120)
+      throw new NmcCaseError('CASE_SCHEDULE_INVALID');
+    return this._update(id,version,'INSPECTION_SCHEDULED',role,
+      'NMC referral scheduled by a human Smart Inspection coordinator',row=>{
+        if(row.status==='RESOLVED')throw new NmcCaseError('CASE_ALREADY_RESOLVED',409);
+        const req=(row.inspectionRequests||[]).find(r=>r.id===requestId);
+        if(!req)throw new NmcCaseError('CASE_INSPECTION_REQUEST_NOT_FOUND',404);
+        if(req.status!=='PENDING_SCHEDULING')
+          throw new NmcCaseError('CASE_INSPECTION_SCHEDULE_CONFLICT',409);
+        return {...row,inspectionRequests:row.inspectionRequests.map(r=>r.id!==requestId?r:{
+          ...r,status:'SCHEDULED',scheduledAt:new Date(stamp).toISOString(),
+          port:port.trim(),inspector:inspector.trim(),scheduledBy:role,version:r.version+1
+        })};
+      },{requestId,scheduledAt:new Date(stamp).toISOString()});
   }
   async resolve(id,version,note,role='SUPERVISOR'){
     if(role!=='SUPERVISOR')throw new NmcCaseError('CASE_SUPERVISOR_REQUIRED',403);
@@ -215,8 +335,18 @@ export class NmcCaseWorkspace{
     if(!reason)throw new NmcCaseError('CASE_RESOLUTION_NOTE_REQUIRED');
     return this._update(id,version,'RESOLVED',role,reason,row=>{
       if(row.status==='RESOLVED')throw new NmcCaseError('CASE_ALREADY_RESOLVED',409);
-      if(row.tasks.some(t=>t.mandatory&&t.status!=='Completed'))
+      if(!row.actionPlan)
+        throw new NmcCaseError('CASE_ACTION_PLAN_REQUIRED',409);
+      if(row.actionPlan?.proposedActions?.some(a=>a.decision==='PENDING'))
+        throw new NmcCaseError('CASE_ACTION_DECISIONS_PENDING',409);
+      if(row.tasks.some(t=>t.provenance==='AIRIA_A01_HUMAN_APPROVED'&&
+        t.mandatory&&t.status!=='Completed'))
         throw new NmcCaseError('CASE_MANDATORY_TASKS_INCOMPLETE',409);
+      // Stage 3 will add evidence-linked A02 compliance refresh and a new,
+      // persisted deterministic risk assessment. Until then, no completed
+      // inspection can be presented as fully reassessed and ready for closure.
+      if(row.inspectionOutcome)
+        throw new NmcCaseError('CASE_RISK_REASSESSMENT_PENDING',409);
       return {...row,status:'RESOLVED',resolutionNote:reason};
     },{});
   }

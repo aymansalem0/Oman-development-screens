@@ -3,253 +3,250 @@
     <div class="brand-block">
       <div class="brand-mark">⚓</div>
       <div>
-        <div class="eyebrow">{{ copy('MOEI · National Maritime Center', 'وزارة الطاقة والبنية التحتية · المركز البحري الوطني') }}</div>
-        <h1>{{ copy('Risk Explainability', 'تفسير المخاطر') }}</h1>
-        <p>{{ copy('Rule-to-evidence traceability for vessel prioritization', 'تتبع القواعد حتى الأدلة المستخدمة في تحديد أولوية السفينة') }}</p>
+        <div class="eyebrow">{{copy('MOEI · NATIONAL MARITIME CENTER','وزارة الطاقة والبنية التحتية · المركز البحري الوطني')}}</div>
+        <h1>{{copy('Risk Intelligence & Explainability','تحليل وتفسير المخاطر البحرية')}}</h1>
+        <p>{{copy('Saved AI signals · deterministic scoring · policy-based operational guidance',
+                   'مؤشرات AI المحفوظة · حساب المخاطر · إرشادات تشغيلية من قواعد المنصة')}}</p>
       </div>
     </div>
-
     <div class="top-actions">
-      <button type="button" class="language-btn" (click)="toggleLanguage()">{{ lang.isArabic ? 'English' : 'العربية' }}</button>
-      <a class="back-link" [routerLink]="['/moei/nmc/vessel', vessel.imo]">{{ lang.isArabic ? 'العودة إلى ملف السفينة →' : '← Back to Vessel 360' }}</a>
-      <a class="secondary-btn" [routerLink]="['/moei/nmc/vessel', vessel.imo, 'ai-assessment']">
-        ✦ {{ copy('AI Situation Assessment', 'تقييم الموقف بالذكاء الاصطناعي') }}
-      </a>
-      <a class="secondary-btn" routerLink="/moei/nmc">{{ copy('Command Center', 'مركز القيادة') }}</a>
+      <button class="secondary-btn" type="button" (click)="toggleLanguage()">{{lang.isArabic?'English':'العربية'}}</button>
+      <a class="secondary-btn" routerLink="/moei/nmc">{{copy('Command Center','مركز القيادة')}}</a>
+      <a class="back-link" *ngIf="vessel" [routerLink]="['/moei/nmc/vessel',vessel.imo]">{{copy('← Vessel 360','العودة إلى الملف الشامل ←')}}</a>
     </div>
   </header>
-
   <app-nmc-navigation></app-nmc-navigation>
 
   <main class="rx-main">
     <section class="hero-card">
       <div class="vessel-summary">
-        <div class="vessel-kicker">{{ copy('EXPLAINING CURRENT RISK', 'تفسير المخاطر الحالية') }}</div>
-        <h2>{{ vessel.name }}</h2>
-        <div class="identity-row">
-          <span>IMO {{ vessel.imo }}</span>
-          <span>{{ vessel.flag }}</span>
-          <span>{{ vessel.type }}</span>
-          <span>{{ vessel.destination }}</span>
+        <div class="vessel-kicker">{{copy('SAVED A01/A02 EVIDENCE · LOCAL POLICY PROJECTION · SYNTHETIC POC',
+         'أدلة A01/A02 المحفوظة · حساب وفق إعدادات المتصفح · نموذج تجريبي')}}</div>
+        <h2>{{vessel?.name || copy('Vessel not found','السفينة غير موجودة')}}</h2>
+        <div class="identity-row" *ngIf="vessel as v">
+          <span>IMO {{v.imo}}</span><span>{{v.flag}}</span><span>{{v.type}}</span><span>{{v.destination}}</span>
+          <span *ngIf="assessment">{{assessment.sourceMode}}</span>
         </div>
+        <p class="risk-meta" *ngIf="assessment">
+          {{copy('Assessment ID','معرف التقييم')}}: {{assessment.assessmentId}} ·
+          {{assessment.assessedAt | date:'medium'}} · {{assessment.configVersion}}
+        </p>
       </div>
-
       <div class="hero-metrics">
-        <div class="metric-card risk" [ngClass]="riskClass">
-          <small>{{ copy('Risk score', 'درجة المخاطر') }}</small>
-          <strong>{{ vessel.risk }}</strong>
-          <span>{{ riskLabel() }}</span>
+        <div class="metric-card risk projected-risk-card" [ngClass]="riskClass">
+          <small>{{copy('Score under Risk Settings · browser preview',
+                       'الدرجة وفق إعدادات المخاطر · معاينة المتصفح')}}</small>
+          <strong>{{riskScore===null?'—':riskScore}}</strong>
+          <span>{{riskLabel}} · {{activeRiskConfig?.version||'—'}}</span>
+        </div>
+        <div class="metric-card source-risk-card">
+          <small>{{copy('Original Oracle AI assessment','تقييم AI الأصلي المحفوظ في Oracle')}}</small>
+          <strong>{{sourceRiskScore===null?'—':sourceRiskScore}}</strong>
+          <span>{{sourceRiskLevel}} · {{assessment?.configVersion||'—'}}</span>
         </div>
         <div class="metric-card">
-          <small>{{ copy('Risk confidence', 'الثقة في المخاطر') }}</small>
-          <strong>{{ vessel.riskConfidence }}%</strong>
-          <span>{{ copy('Evidence-supported calculation', 'احتساب مدعوم بالأدلة') }}</span>
+          <small>{{copy('Projected priority · advisory','الأولوية المتوقعة · استرشادية')}}</small>
+          <strong class="rx-priority">{{projectedPriority}}</strong>
+          <span>{{copy('Saved priority','الأولوية المحفوظة')}}: {{assessment?.operationalPriority || '—'}}</span>
         </div>
         <div class="metric-card">
-          <small>{{ copy('Data confidence', 'الثقة في البيانات') }}</small>
-          <strong>{{ vessel.dataConfidence }}%</strong>
-          <span>{{ conflictCount }} {{ copy('unresolved conflicts', 'تعارضات غير محلولة') }}</span>
+          <small>{{copy('Mean agent signal confidence','متوسط ثقة مؤشرات AI')}}</small>
+          <strong>{{averageFactorConfidence===null?'—':averageFactorConfidence+'%'}}</strong>
+          <span>{{copy('Not verified source confidence','ليست ثقة اعتماد المصادر')}}</span>
         </div>
       </div>
     </section>
 
-    <section class="threshold-card">
-      <div class="threshold-head">
+    <div *ngIf="busy" class="rx-notice">{{copy('Loading saved A01/A02 evidence…','جارٍ تحميل نتائج A01/A02 المحفوظة…')}}</div>
+    <div *ngIf="assessmentError" class="rx-notice rx-warning" role="alert">{{assessmentError}}</div>
+    <div *ngIf="!assessment && !busy" class="rx-notice">
+      {{copy('No baseline or fabricated risk score is displayed. Return to Command Center and wait for a validated fleet assessment.',
+             'لا نعرض درجة مخاطر افتراضية. ارجع إلى مركز القيادة وانتظر اكتمال تقييم المخاطر الموثق.')}}
+    </div>
+
+    <ng-container *ngIf="assessment as a">
+      <div class="rx-policy-banner" role="note">
         <div>
-          <h3>{{ copy('Risk Classification Thresholds', 'حدود تصنيف المخاطر') }}</h3>
-          <p>{{ copy('Current score is evaluated against configured operational thresholds.', 'يتم تقييم الدرجة الحالية مقابل الحدود التشغيلية المهيأة.') }}</p>
+          <strong>{{copy('Risk Settings applied to saved AI signals',
+                        'تطبيق إعدادات المخاطر الحالية على مؤشرات AI المحفوظة')}}</strong>
+          <p>{{copy('The displayed projection is recalculated when Risk Settings are published in this browser. It is NOT written to Oracle, and does not change fleet counts, alerts, cases, or guidance decisions.',
+                     'يُعاد حساب الدرجة المعروضة عند نشر إعدادات المخاطر في هذا المتصفح فقط. لا يتم حفظها في Oracle ولا تغير العدادات أو التنبيهات أو الحالات أو قرارات الإرشاد.')}}</p>
+          <small>{{copy('Original saved risk','المخاطر الأصلية المحفوظة')}}: {{a.score}} · {{a.level}} · {{a.configVersion}}
+             → {{copy('Current settings projection','المتوقع وفق الإعدادات الحالية')}}: {{riskScore}} · {{riskLevel}} · {{activeRiskConfig?.version||'—'}}
+             <b *ngIf="policyChanged" class="rx-policy-delta">{{copy('CONFIGURATION CHANGED','الإعدادات مختلفة')}}</b>
+          </small>
         </div>
-        <div class="engine-meta">
-          <span>{{ engineVersion }}</span>
-          <span>{{ copy('Evaluated', 'تم التقييم') }} {{ evaluatedAt }}</span>
-        </div>
+        <a class="secondary-btn" routerLink="/moei/nmc/admin/risk-configuration">{{copy('Manage Risk Settings','إدارة إعدادات المخاطر')}}</a>
       </div>
-
-      <div class="threshold-track">
-        <div class="band normal" style="width:45%"><span>{{ thresholdLabel('Normal') }} · 0–44</span></div>
-        <div class="band watch" style="width:20%"><span>{{ thresholdLabel('Watch') }} · 45–64</span></div>
-        <div class="band high" style="width:20%"><span>{{ thresholdLabel('High') }} · 65–84</span></div>
-        <div class="band critical" style="width:15%"><span>{{ thresholdLabel('Critical') }} · 85–100</span></div>
-        <div class="score-marker" [style.left.%]="scoreMarkerPosition">
-          <b>{{ vessel.risk }}</b>
-          <i></i>
-        </div>
-      </div>
-    </section>
-
-    <section class="explain-grid">
-      <div class="factor-panel panel">
-        <div class="panel-header">
+      <section class="threshold-card">
+        <div class="threshold-head">
           <div>
-            <h3>{{ copy('How the score was built', 'كيف تم احتساب الدرجة') }}</h3>
-            <p>{{ factors.length }} {{ copy('correlated factors', 'عوامل مترابطة') }} · {{ copy('total contribution', 'إجمالي المساهمة') }} {{ totalContribution }}</p>
+            <h3>{{copy('Risk Classification Thresholds','حدود تصنيف المخاطر')}}</h3>
+            <p>{{copy('Current published browser Risk Settings; original Oracle thresholds remain in the historical assessment.',
+                      'حدود تصنيف إعدادات المتصفح المنشورة؛ حدود Oracle الأصلية محفوظة داخل التقييم التاريخي.')}}</p>
           </div>
-          <span class="count-pill">{{ triggeredCount }} {{ copy('active triggers', 'عوامل نشطة') }}</span>
+          <div class="engine-meta"><span>{{activeRiskConfig?.version||'—'}}</span><span>{{copy('Saved','محفوظ')}}: {{a.configVersion}}</span></div>
         </div>
+        <div class="threshold-track">
+          <div *ngFor="let band of thresholds" class="band" [ngClass]="band.key.toLowerCase()" [style.width.%]="band.width">
+            <span>{{thresholdName(band.key)}} · {{band.min}}–{{band.max}}</span>
+          </div>
+          <div class="score-marker" [style.left.%]="scoreMarkerPosition"><b>{{riskScore}}</b><i></i></div>
+        </div>
+        <div class="rx-notice rx-inline" *ngIf="a.criticalOpenFinding">
+          ⚠ {{copy('A critical open finding requires Priority Review independently of the calculated risk classification.',
+                     'الملاحظة الحرجة المفتوحة تتطلب مراجعة ذات أولوية بغض النظر عن تصنيف المخاطر المحسوب.')}}
+          {{copy('Current policy class','التصنيف الحالي')}}: {{riskLabel}}.
+          {{copy('Saved assessment class','تصنيف التقييم الأصلي')}}: {{sourceRiskLevel}}.
+        </div>
+      </section>
 
-        <div class="factor-list">
-          <button
-            type="button"
-            class="factor-card"
-            *ngFor="let factor of factors"
-            [class.active]="selectedFactor?.id === factor.id"
-            (click)="selectFactor(factor)"
-          >
-            <div class="factor-score">+{{ factor.contribution }}</div>
-            <div class="factor-content">
-              <div class="factor-title-row">
-                <strong>{{ factor.label }}</strong>
-                <span class="status-chip" [ngClass]="factor.status.toLowerCase()">{{ factorStatusLabel(factor.status) }}</span>
+      <section class="explain-grid">
+        <div class="factor-panel panel">
+          <div class="panel-header">
+            <div>
+              <h3>{{copy('How the Score Was Built','كيف تم احتساب درجة المخاطر')}}</h3>
+              <p>{{copy('Five saved A01/A02 severities × current browser-published weights (never fixture baselines)',
+                        'خمسة مؤشرات محفوظة من A01/A02 × الأوزان المنشورة في إعدادات المتصفح (دون خطوط أساس افتراضية)')}}</p>
+            </div>
+            <span class="count-pill">{{factors.length}} {{copy('factors','عوامل')}}</span>
+          </div>
+          <div class="factor-list">
+            <button type="button" *ngFor="let factor of factors" class="factor-card"
+                    [class.active]="selectedFactor?.id===factor.id" (click)="selectFactor(factor)">
+              <div class="factor-score">+{{factor.contribution | number:'1.2-2'}}</div>
+              <div class="factor-content">
+                <div class="factor-title-row">
+                  <strong>{{copy(factor.label,factor.labelAr)}}</strong>
+                  <span class="status-chip observed">{{factor.sourceAgent}}</span>
+                </div>
+                <p>{{copy('Severity','الشدة')}} {{factor.severity}}/100 ·
+                   {{copy('Weight','الوزن')}} {{factor.weight}}%</p>
+                <div class="factor-meta">
+                  <span>{{copy('AI signal confidence','ثقة إشارة AI')}} {{factor.confidence*100 | number:'1.0-0'}}%</span>
+                  <span>{{factor.evidenceIds.length}} {{copy('evidence references','مراجع أدلة')}}</span>
+                </div>
               </div>
-              <p>{{ factor.ruleId }} · {{ factor.source }}</p>
-              <div class="factor-meta">
-                <span>{{ sourceClassLabel(factor.sourceClass) }}</span>
-                <span>{{ factor.dataConfidence }}% {{ copy('data confidence', 'ثقة في البيانات') }}</span>
-                <span *ngIf="factor.conflict" class="conflict">{{ copy('Conflict', 'التعارض') }}</span>
-              </div>
+              <span class="chevron">›</span>
+            </button>
+          </div>
+          <div class="calculation-ledger">
+            <span>{{copy('Weighted factor contributions','مساهمات العوامل الموزونة')}}</span>
+            <strong>
+              <ng-container *ngFor="let f of factors;let last=last">
+                {{f.contribution | number:'1.2-2'}}<ng-container *ngIf="!last"> + </ng-container>
+              </ng-container>
+              = {{totalContribution | number:'1.2-2'}}
+            </strong>
+          </div>
+          <div class="rx-explain-note">
+            {{copy('Calculation mode','طريقة الحساب')}}: <b>{{calculationMode}}</b> ·
+            {{copy('Mode adjustment','تعديل نمط الحساب')}}: <b>{{modeAdjustment | number:'1.2-2'}}</b> ·
+            {{copy('Reconstructed','الحساب المُعاد')}}: <b>{{reconstructedScore}}/100</b> ·
+            {{copy('Current settings score','درجة الإعدادات الحالية')}}: <b>{{riskScore}}/100</b> ·
+            {{copy('Original saved score','الدرجة الأصلية المحفوظة')}}: <b>{{a.score}}/100</b>.
+            {{copy('No synthetic baseline calibration or AI rerun occurs here.',
+                   'لا تتم إضافة خط أساس تجريبي أو استدعاء AI جديد عند فتح الشاشة.')}}
+          </div>
+        </div>
+
+        <aside class="evidence-panel panel" *ngIf="selectedFactor as f">
+          <div class="panel-header">
+            <div><h3>{{copy('Rule & Evidence Trace','تتبع الحساب والأدلة')}}</h3>
+              <p>{{copy(f.label,f.labelAr)}} · {{f.sourceAgent}}</p>
             </div>
-            <span class="chevron">›</span>
-          </button>
-        </div>
+            <span class="source-class">{{copy('SYNTHETIC · NOT OFFICIAL','تجريبي · غير رسمي')}}</span>
+          </div>
+          <div class="selected-factor-hero">
+            <div><small>{{copy('RISK CONTRIBUTION','المساهمة')}}</small>
+              <strong>+{{f.contribution | number:'1.2-2'}}</strong>
+            </div>
+            <div><small>{{copy('FACTOR SEVERITY','شدة العامل')}}</small><strong>{{f.severity}}/100</strong></div>
+          </div>
+          <div class="trace-section">
+            <span class="section-label">{{copy('DETERMINISTIC SCORING','الحساب المحدد')}}</span>
+            <div class="trace-note"><strong>{{f.severity}} × {{f.weight}}% = {{f.contribution | number:'1.2-2'}}</strong>
+              <p>{{copy('Agent','الوكيل')}}: {{f.sourceAgent}} · {{copy('Confidence','الثقة')}}: {{f.confidence*100 | number:'1.0-0'}}%</p>
+            </div>
+          </div>
+          <div class="trace-section">
+            <span class="section-label">{{copy('SAVED AI EXPLANATION','تفسير AI المحفوظ')}}</span>
+            <div class="explanation-note"><p>{{f.reason}}</p></div>
+          </div>
+          <div class="trace-section">
+            <span class="section-label">{{copy('EVIDENCE IDS · REFERENCED, NOT AUTHORITY-VERIFIED','مراجع الأدلة · غير معتمدة رسميًا')}}</span>
+            <div class="rx-evidence-tags">
+              <code *ngFor="let id of f.evidenceIds">{{id}}</code>
+              <span *ngIf="!f.evidenceIds.length">{{copy('No recorded IDs','لا توجد معرفات مسجلة')}}</span>
+            </div>
+          </div>
+          <div class="evidence-actions" *ngIf="vessel as v">
+            <a class="secondary-btn" [routerLink]="['/moei/nmc/vessel',v.imo]"
+               [queryParams]="{tab:f.id==='inspection'||f.id==='history'?'inspection':f.id==='certificate'||f.id==='dataQuality'?'certificates':'movement'}">
+              {{copy('Open vessel source context','عرض بيانات المصدر في ملف السفينة')}}</a>
+          </div>
+        </aside>
+      </section>
 
-        <div class="calculation-ledger">
-          <span>{{ copy('Calculation', 'الاحتساب') }}</span>
-          <strong>
-            <ng-container *ngFor="let factor of factors; let last = last">
-              {{ factor.contribution }}<ng-container *ngIf="!last"> + </ng-container>
-            </ng-container>
-            = {{ totalContribution }}
-          </strong>
-        </div>
-      </div>
+      <section class="rx-insight-card panel">
+        <div class="panel-header"><div>
+          <h3>{{copy('Maritime Situation Summary','ملخص الموقف البحري')}}</h3>
+          <p>{{copy('Platform projection from saved A01/A02 evidence under current browser-published Risk Settings',
+                   'إسقاط حسابي من أدلة A01/A02 المحفوظة وفق إعدادات المخاطر المنشورة في المتصفح')}}</p>
+        </div></div>
+        <p>{{situationSummary}}</p>
+      </section>
 
-      <aside class="evidence-panel panel" *ngIf="selectedFactor as factor">
+      <section class="rx-insight-card panel">
         <div class="panel-header">
-          <div>
-            <h3>{{ copy('Rule & Evidence Trace', 'تتبع القاعدة والدليل') }}</h3>
-            <p>{{ factor.ruleId }}</p>
+          <div><h3>{{copy('Recommended Operational Response','الاستجابة التشغيلية الموصى بها')}}</h3>
+            <p>{{copy('Server-published platform guidance uses the ORIGINAL Oracle AI assessment, not this browser-only risk projection. Advisory only; no tasks.',
+                      'إرشادات المنصة المنشورة على الخادم تعتمد على تقييم Oracle الأصلي، وليس توقع المخاطر المحلي بالمتصفح. إرشادية فقط؛ دون إنشاء مهام.')}}</p>
           </div>
-          <span class="source-class" [ngClass]="{
-            'moei': factor.sourceClass === 'MOEI Authoritative',
-            'external': factor.sourceClass === 'External Authoritative',
-            'trusted': factor.sourceClass === 'External Trusted',
-            'feed': factor.sourceClass === 'Operational Feed',
-            'derived': factor.sourceClass === 'Internal Derived'
-          }">{{ factor.sourceClass }}</span>
+          <span class="readiness-pill">{{copy('PLATFORM GUIDANCE','إرشادات المنصة')}}</span>
         </div>
-
-        <div class="selected-factor-hero">
-          <div>
-            <small>{{ copy('RISK CONTRIBUTION', 'المساهمة في المخاطر') }}</small>
-            <strong>+{{ factor.contribution }}</strong>
-          </div>
-          <div>
-            <small>{{ copy('FACTOR', 'العامل') }}</small>
-            <strong>{{ factor.label }}</strong>
-          </div>
-        </div>
-
-        <div class="trace-section">
-          <span class="section-label">1 · {{ copy('RULE', 'القاعدة') }}</span>
-          <div class="trace-card">
-            <div><small>{{ copy('Rule ID', 'معرف القاعدة') }}</small><strong>{{ factor.ruleId }}</strong></div>
-            <div><small>{{ copy('Rule logic', 'منطق القاعدة') }}</small><strong>{{ factor.ruleLogic }}</strong></div>
-          </div>
-        </div>
-
-        <div class="trace-section">
-          <span class="section-label">2 · {{ copy('TRIGGER', 'المُحفز') }}</span>
-          <div class="trace-note">
-            <strong>{{ copy('Why the rule fired', 'سبب تفعيل القاعدة') }}</strong>
-            <p>{{ factor.trigger }}</p>
-          </div>
-        </div>
-
-        <div class="trace-section">
-          <span class="section-label">3 · {{ copy('SOURCE & EVIDENCE', 'المصدر والدليل') }}</span>
-          <div class="trace-card two-col">
-            <div><small>{{ copy('Source', 'المصدر') }}</small><strong>{{ factor.source }}</strong></div>
-            <div><small>{{ copy('Authority', 'الجهة المعتمدة') }}</small><strong>{{ factor.authority }}</strong></div>
-            <div><small>{{ copy('Evidence record', 'سجل الدليل') }}</small><strong>{{ factor.evidenceRecord }}</strong></div>
-            <div><small>{{ copy('Conflict', 'التعارض') }}</small><strong [class.warning-text]="factor.conflict">{{ factor.conflict ? copy('Unresolved', 'غير محلول') : copy('None', 'لا يوجد') }}</strong></div>
-          </div>
-        </div>
-
-        <div class="trace-section">
-          <span class="section-label">4 · {{ copy('CONFIDENCE', 'الثقة') }}</span>
-          <div class="confidence-grid">
-            <div>
-              <small>{{ copy('Source trust', 'الثقة في المصدر') }}</small>
-              <strong>{{ factor.sourceTrust }}%</strong>
-              <span><i [style.width.%]="factor.sourceTrust"></i></span>
+        <div class="rx-notice" *ngIf="guidanceBusy">{{copy('Evaluating published guidance rules…','جارٍ تطبيق قواعد الإرشاد المنشورة…')}}</div>
+        <div class="rx-notice rx-warning" *ngIf="guidanceError" role="alert">{{guidanceError}}</div>
+        <div class="rx-guidance-list">
+          <article *ngFor="let g of guidanceItems" class="rx-guidance-item">
+            <div class="rx-guidance-head"><strong>{{guidanceName(g)}}</strong><span>{{g.priority}}</span></div>
+            <p>{{g.ruleId}} · {{copy('Published revision','الإصدار المنشور')}} {{g.ruleRevision}} · {{g.ownerRole}}</p>
+            <div class="rx-matched-conditions">
+              <p *ngFor="let matched of g.matchedConditions; let i=index">
+                {{i===0?copy('Triggered by','الشرط'):'AND'}}:
+                {{matched.condition.field}} {{matched.condition.operator}}
+                {{matched.condition.value}} · {{copy('Observed','القيمة')}}: {{matched.observedValue}}
+              </p>
             </div>
-            <div>
-              <small>{{ copy('Data confidence', 'الثقة في البيانات') }}</small>
-              <strong>{{ factor.dataConfidence }}%</strong>
-              <span><i [style.width.%]="factor.dataConfidence"></i></span>
-            </div>
-            <div>
-              <small>{{ copy('Identity match', 'تطابق الهوية') }}</small>
-              <strong>{{ factor.identityMatch }}%</strong>
-              <span><i [style.width.%]="factor.identityMatch"></i></span>
-            </div>
-            <div>
-              <small>{{ copy('Freshness', 'حداثة البيانات') }}</small>
-              <strong>{{ factor.freshness }}%</strong>
-              <span><i [style.width.%]="factor.freshness"></i></span>
-            </div>
-          </div>
+            <div class="rx-evidence-tags"><code *ngFor="let id of g.evidenceIds">{{id}}</code></div>
+            <small>{{copy('Platform advisory only — human confirmation required for any case action',
+                           'إرشاد من المنصة فقط — أي إجراء في الحالة يحتاج موافقة المسؤول')}}</small>
+          </article>
+          <p *ngIf="!guidanceBusy&&!guidanceError&&!guidanceItems.length" class="rx-notice">
+            {{copy('No published rule matches the stored verified inputs. No guidance is invented.',
+                   'لا توجد قاعدة منشورة تنطبق على المدخلات المسجلة؛ لن تُنشأ إرشادات افتراضية.')}}
+          </p>
         </div>
+      </section>
 
-        <div class="explanation-note" [class.warning]="factor.conflict">
-          <strong>{{ factor.conflict ? copy('Human verification required', 'يتطلب تحققاً بشرياً') : copy('Explainability note', 'ملاحظة التفسير') }}</strong>
-          <p>{{ factor.explanation }}</p>
+      <section class="decision-card panel">
+        <div class="panel-header"><div>
+          <h3>{{copy('Next Operational Step','الخطوة التشغيلية التالية')}}</h3>
+          <p>{{copy('Risk explanation remains separate from A01 case proposals and human decisions.',
+                    'تفسير المخاطر منفصل عن توصيات A01 الخاصة بالحالة وقرارات المسؤول.')}}</p>
+        </div><span class="readiness-pill">{{copy('HUMAN-IN-THE-LOOP','القرار البشري')}}</span></div>
+        <div class="rx-actions" *ngIf="vessel as v">
+          <a class="secondary-btn" routerLink="/moei/nmc/alerts">{{copy('Review Maritime Alerts','مراجعة التنبيهات البحرية')}}</a>
+          <a class="secondary-btn" *ngIf="linkedCase" [routerLink]="['/moei/nmc/vessel',v.imo,'case']">
+            {{copy('Open Existing Maritime Case & A01 Proposals','فتح الحالة الحالية وتوصيات A01')}}</a>
+          <a class="secondary-btn" routerLink="/moei/nmc/admin/operational-guidance">
+            {{copy('Guidance Rules (Settings)','قواعد الإرشاد (الإعدادات)')}}</a>
         </div>
-
-        <div class="evidence-actions">
-          <a
-            class="secondary-btn"
-            [routerLink]="['/moei/nmc/vessel', vessel.imo]"
-            [queryParams]="{tab: factor.id === 'inspection' || factor.id === 'history' ? 'inspection' : factor.id === 'certificate' || factor.id === 'data-quality' ? 'certificates' : 'movement'}"
-          >{{ copy('Open source context', 'فتح سياق المصدر') }}</a>
-        </div>
-      </aside>
-    </section>
-
-    <section class="decision-card panel">
-      <div class="panel-header">
-        <div>
-          <h3>{{ copy('Decision Readiness', 'جاهزية القرار') }}</h3>
-          <p>{{ copy('The score is explainable, evidence-linked and separated from AI advice.', 'درجة المخاطر قابلة للتفسير ومرتبطة بالأدلة ومنفصلة عن توصيات الذكاء الاصطناعي.') }}</p>
-        </div>
-        <span class="readiness-pill">{{ copy('Human decision remains authoritative', 'القرار البشري يظل صاحب السلطة') }}</span>
-      </div>
-
-      <div class="decision-grid">
-        <div>
-          <small>{{ copy('Risk engine output', 'ناتج محرك المخاطر') }}</small>
-          <strong>{{ vessel.risk }} · {{ riskLabel() }}</strong>
-          <p>{{ copy('Deterministic rule contributions shown above.', 'مساهمات القواعد المحددة موضحة أعلاه.') }}</p>
-        </div>
-        <div>
-          <small>{{ copy('Risk confidence', 'الثقة في المخاطر') }}</small>
-          <strong>{{ vessel.riskConfidence }}%</strong>
-          <p>{{ copy('Confidence that the current evidence supports this calculated prioritization.', 'درجة الثقة في أن الأدلة الحالية تدعم أولوية المخاطر المحتسبة.') }}</p>
-        </div>
-        <div>
-          <small>{{ copy('Data confidence', 'الثقة في البيانات') }}</small>
-          <strong>{{ vessel.dataConfidence }}%</strong>
-          <p>{{ copy('Quality of the correlated data used by the risk engine.', 'جودة البيانات المترابطة المستخدمة بواسطة محرك المخاطر.') }}</p>
-        </div>
-        <div class="ai-decision-cell">
-          <small>{{ copy('AI recommendation', 'توصية الذكاء الاصطناعي') }}</small>
-          <strong>{{ copy('Available for review', 'متاحة للمراجعة') }}</strong>
-          <p>{{ copy('Open the AI situation assessment to review evidence-grounded recommendations and record the officer decision.', 'افتح تقييم الموقف بالذكاء الاصطناعي لمراجعة التوصيات المبنية على الأدلة وتسجيل قرار المسؤول.') }}</p>
-          <a class="ai-open-link" [routerLink]="['/moei/nmc/vessel', vessel.imo, 'ai-assessment']">
-            ✦ {{ copy('Open AI assessment', 'فتح تقييم الذكاء الاصطناعي') }}
-          </a>
-        </div>
-      </div>
-    </section>
+        <p class="rx-notice" *ngIf="!linkedCase">
+          {{copy('A new case is created only from an acknowledged maritime alert. Opening this page does not create a case or call an AI agent.',
+                   'تُنشأ الحالة الجديدة فقط من تنبيه بحري تم الإقرار به. فتح هذه الشاشة لا ينشئ حالة ولا يستدعي AI.')}}
+        </p>
+      </section>
+    </ng-container>
   </main>
 </div>

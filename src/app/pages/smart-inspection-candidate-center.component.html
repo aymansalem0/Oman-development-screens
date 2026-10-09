@@ -21,6 +21,62 @@
   </header>
 
   <main class="candidate-main">
+    <section class="referral-queue" aria-label="NMC required inspections scheduling">
+      <div class="referral-top">
+        <div>
+          <span class="section-kicker">{{copy('LIVE NMC CASE REFERRALS','إحالات حالات NMC المباشرة')}}</span>
+          <h2>{{copy('Required inspections for scheduling','المعاينات المطلوب جدولتها')}}</h2>
+          <p>{{copy('Only human-approved A01 inspection actions create entries here. This central queue is separate from the synthetic targeting candidates below.',
+            'تظهر هنا فقط إحالات المعاينة الناتجة عن إجراءات A01 المعتمدة بشريًا. هذه قائمة مركزية مستقلة عن المرشحين التجريبيين أدناه.') }}</p>
+        </div>
+        <button type="button" class="referral-refresh" (click)="loadReferrals()" [disabled]="inboundLoading">
+          ↻ {{copy('Refresh','تحديث')}}
+        </button>
+      </div>
+      <p *ngIf="inboundLoading">{{copy('Loading saved inspection requests…','جاري تحميل طلبات المعاينة المحفوظة…')}}</p>
+      <p *ngIf="inboundError" class="referral-error" role="alert">{{inboundError}}</p>
+      <p *ngIf="scheduleSuccess" class="referral-success" role="status">{{scheduleSuccess}}</p>
+      <p *ngIf="!inboundLoading&&!pendingReferrals.length" class="referral-empty">
+        {{copy('No approved inspection requests awaiting scheduling. Generate and approve a real A01 inspection recommendation in an NMC case to create one.',
+          'لا توجد طلبات معاينة معتمدة تنتظر الجدولة. أنشئ توصية معاينة فعلية من A01 واعتمدها داخل حالة NMC لتظهر هنا.')}}
+      </p>
+      <div class="referral-cards">
+        <article class="referral-card" *ngFor="let item of pendingReferrals">
+          <div>
+            <strong>IMO {{item.imo}} · {{item.priority}}</strong>
+            <span class="referral-state">{{item.status}}</span>
+            <p>{{item.reason}}</p>
+            <small>{{copy('Source risk','المخاطر عند الإحالة')}}: {{item.sourceScore}}/100 ·
+              {{copy('Case','الحالة')}}: {{item.caseId.slice(0,8)}} ·
+              {{copy('Evidence','الأدلة')}}: {{item.evidenceIds.join(', ')}}</small>
+            <a [routerLink]="['/moei/nmc/vessel',item.imo,'case']">
+              {{copy('Open originating NMC Case →','فتح حالة NMC المصدر ←')}}</a>
+          </div>
+          <div class="referral-form">
+            <label>{{copy('Scheduled date and time','موعد المعاينة')}}</label>
+            <input type="datetime-local" [(ngModel)]="dates[item.id]"/>
+            <label>{{copy('Port / location','الميناء / الموقع')}}</label>
+            <input type="text" [(ngModel)]="schedulingPorts[item.id]" maxlength="120"
+              [placeholder]="copy('Approved inspection location','موقع المعاينة المعتمد')"/>
+            <label>{{copy('Inspector / team','المعاين / الفريق')}}</label>
+            <input type="text" [(ngModel)]="inspectors[item.id]" maxlength="120"
+              [placeholder]="copy('Assigned inspection team','فريق المعاينة المسند')"/>
+            <button type="button" (click)="scheduleReferral(item)" [disabled]="!!scheduleBusy">
+              {{copy('Confirm schedule','اعتماد الجدولة')}}
+            </button>
+          </div>
+        </article>
+      </div>
+      <div *ngIf="inboundReferrals.length>pendingReferrals.length" class="referral-history">
+        {{copy('Previously scheduled/completed referrals','إحالات سبق جدولتها أو إتمامها')}}:
+        <span *ngFor="let r of inboundReferrals">
+          <ng-container *ngIf="r.status!=='PENDING_SCHEDULING'">
+            <a [routerLink]="['/moei/nmc/vessel',r.imo,'case']">{{r.imo}} · {{r.status}}</a>&nbsp;
+          </ng-container>
+        </span>
+      </div>
+    </section>
+
     <section class="overview-band">
       <div>
         <span class="section-kicker">{{ copy('SHARED VESSEL UNIVERSE', 'مجموعة السفن المشتركة') }}</span>
@@ -129,7 +185,7 @@
               <th>{{ copy('Port / ETA', 'الميناء / ETA') }}</th>
               <th>{{ copy('Regime', 'نظام المعاينة') }}</th>
               <th>{{ copy('Eligibility', 'الأهلية') }}</th>
-              <th>{{ copy('NMC risk', 'مخاطر NMC') }}</th>
+              <th>{{ copy('Synthetic fixture risk', 'مخاطر البيانات التجريبية') }}</th>
               <th>{{ copy('Rule priority', 'أولوية القواعد') }}</th>
               <th></th>
             </tr>
@@ -160,7 +216,7 @@
               <td>
                 <div class="risk-cell">
                   <strong>{{ candidate.vessel.risk }}</strong>
-                  <span>{{ candidate.nmcReferral?.riskLevel || copy('Shared snapshot', 'لقطة مشتركة') }}</span>
+                  <span>{{ copy('Fixture only · not saved AI risk', 'بيانات تجريبية وليست المخاطر المحفوظة من AI') }}</span>
                 </div>
               </td>
               <td>

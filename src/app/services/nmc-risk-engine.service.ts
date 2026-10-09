@@ -1,5 +1,7 @@
 import { Injectable } from '@angular/core';
-import { BehaviorSubject } from 'rxjs';
+import { BehaviorSubject, Observable } from 'rxjs';
+import { HttpClient, HttpHeaders } from '@angular/common/http';
+import { map, tap } from 'rxjs/operators';
 import { NmcVesselProfile, RiskLevel } from '../data/nmc-vessel-catalog';
 import { NMC_OPERATIONAL_VESSELS } from '../data/nmc-expanded-vessel-catalog';
 
@@ -31,6 +33,14 @@ export interface RiskEngineConfig {
   changeReason: string;
 }
 
+export interface CentralPolicyVersion{
+  revision:number;policyRef:string;previousRevision:number|null;
+  config:RiskEngineConfig;reason:string;publishedBy:string;actorRole:string;
+  publishedAt:string;
+}
+export interface CentralPolicyPublishResponse {
+  status:'ok';published:CentralPolicyVersion&{projectionCount:number};
+}
 export interface RiskFactorEvaluation {
   key: RiskFactorKey;
   severity: number;
@@ -84,8 +94,18 @@ export class NmcRiskEngineService {
     NMC_OPERATIONAL_VESSELS.map(vessel => [vessel.id, vessel.risk])
   );
 
-  private readonly configSubject = new BehaviorSubject<RiskEngineConfig>(this.loadConfig());
+  private readonly configSubject = new BehaviorSubject<RiskEngineConfig>(this.cloneConfig(DEFAULT_CONFIG));
   readonly config$ = this.configSubject.asObservable();
+  activeVersion:CentralPolicyVersion|null=null;
+  centralReady=false;
+  centralError='';
+  private fetchInProgress=false;
+  constructor(private readonly http:HttpClient){
+    this.refreshCentral();
+    // Every tab converges on a single Oracle-backed version; no browser localStorage
+    // can override the server's active policy.
+    setInterval(()=>this.refreshCentral(),15000);
+  }
 
   get config(): RiskEngineConfig {
     return this.cloneConfig(this.configSubject.value);
@@ -95,34 +115,70 @@ export class NmcRiskEngineService {
     return this.cloneConfig(DEFAULT_CONFIG);
   }
 
+  /** Legacy localStorage is available ONLY as a manually importable draft. */
+  get legacyBrowserDraft():RiskEngineConfig|null{
+    try{
+      const raw=localStorage.getItem(this.storageKey);
+      if(!raw)return null;
+      const parsed=JSON.parse(raw) as RiskEngineConfig;
+      return this.validate(parsed).length?null:this.cloneConfig(parsed);
+    }catch{return null;}
+  }
+  syncPublishedFromStorage():void{this.refreshCentral();}
+  refreshCentral():void{
+    if(this.fetchInProgress)return;
+    this.fetchInProgress=true;
+    this.http.get<{status:'ok';active:CentralPolicyVersion}>('/api/ai/risk-policy')
+      .subscribe({
+        next:result=>{
+          this.fetchInProgress=false;this.centralError='';
+          this.centralReady=true;this.setCentralVersion(result.active);
+        },
+        error:e=>{
+          this.fetchInProgress=false;
+          this.centralReady=false;
+          this.centralError=e?.error?.error||'RISK_POLICY_UNAVAILABLE';
+        }
+      });
+  }
+  private setCentralVersion(version:CentralPolicyVersion):void{
+    const next=this.cloneConfig(version.config);
+    if(this.validate(next).length){
+      this.centralReady=false;this.centralError='INVALID_CENTRAL_RISK_POLICY';
+      return;
+    }
+    const changed=this.activeVersion?.revision!==version.revision;
+    this.activeVersion=version;
+    if(changed||JSON.stringify(this.configSubject.value)!==JSON.stringify(next))
+      this.configSubject.next(next);
+  }
+  history():Observable<CentralPolicyVersion[]>{
+    return this.http.get<{status:'ok';history:CentralPolicyVersion[]}>('/api/ai/risk-policy/history')
+      .pipe(map(r=>r.history));
+  }
+  publishCentral(config:RiskEngineConfig,expectedRevision:number,accessKey:string):
+      Observable<CentralPolicyPublishResponse>{
+    if(!accessKey.trim())throw new Error('PUBLISHER_ACCESS_KEY_REQUIRED');
+    const headers=new HttpHeaders({'X-NMC-DASHBOARD-KEY':accessKey.trim()});
+    return this.http.post<CentralPolicyPublishResponse>('/api/ai/risk-policy/publish',{
+      expectedRevision,config,reason:config.changeReason,publishedBy:config.publishedBy
+    },{headers}).pipe(tap(response=>{
+      const {projectionCount:_,...version}=response.published;
+      this.centralReady=true;this.centralError='';
+      this.setCentralVersion(version);
+    }));
+  }
+
   cloneConfig(config: RiskEngineConfig): RiskEngineConfig {
     return JSON.parse(JSON.stringify(config)) as RiskEngineConfig;
   }
 
-  publish(config: RiskEngineConfig): RiskEngineConfig {
-    const next = this.cloneConfig(config);
-    next.version = this.nextVersion(this.configSubject.value.version);
-    next.publishedAt = new Intl.DateTimeFormat('en-GB', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false
-    }).format(new Date()).replace(',', ' ·');
-    next.publishedBy = next.publishedBy || 'NMC Risk Administrator';
-    next.changeReason = next.changeReason || 'Risk model configuration updated';
-
-    this.saveConfig(next);
-    this.configSubject.next(next);
-    return this.cloneConfig(next);
+  publish(_config: RiskEngineConfig): RiskEngineConfig {
+    throw new Error('CENTRAL_RISK_POLICY_PUBLISH_REQUIRED');
   }
-
   resetToDefaults(): RiskEngineConfig {
-    const defaults = this.cloneConfig(DEFAULT_CONFIG);
-    this.saveConfig(defaults);
-    this.configSubject.next(defaults);
-    return defaults;
+    // Reset is a DRAFT operation; the active policy changes only after publication.
+    return this.cloneConfig(DEFAULT_CONFIG);
   }
 
   evaluate(vessel: NmcVesselProfile, config: RiskEngineConfig = this.configSubject.value): RiskEvaluation {

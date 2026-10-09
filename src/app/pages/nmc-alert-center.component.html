@@ -22,8 +22,8 @@
       <div>
         <span class="eyebrow">{{copy('MARITIME SITUATIONAL AWARENESS','الوعي بالموقف البحري')}}</span>
         <h2>{{copy('Alerts & Notifications','التنبيهات والإشعارات')}}</h2>
-        <p>{{copy('Risk-based operational alerts with controlled actions and traceable follow-up.',
-                  'تنبيهات تشغيلية مرتبطة بالمخاطر، مع إجراءات متابعة قابلة للتتبع.')}}</p>
+        <p>{{copy('Saved operational alerts with a live eligibility preview from browser Risk Settings. Historical audit and linked cases remain untouched.',
+                  'تنبيهات تشغيلية محفوظة مع معاينة مطابقة أحدث إعدادات المخاطر بالمتصفح؛ يظل السجل والحالات المرتبطة دون تغيير.')}}</p>
       </div>
       <div class="heading-actions">
         <span class="update-time" *ngIf="overview">{{copy('Updated','آخر تحديث')}}: {{overview.updatedAt|date:'shortTime'}}</span>
@@ -34,24 +34,114 @@
     </section>
 
     <section class="kpi-cards">
-      <article><div class="stat-icon all">▤</div><div><span>{{copy('Active Alerts','التنبيهات النشطة')}}</span>
-        <strong>{{overview?.summary?.active??'—'}}</strong></div></article>
-      <article><div class="stat-icon critical">!</div><div><span>{{copy('Critical','حرجة')}}</span>
-        <strong>{{overview?.summary?.critical??'—'}}</strong></div></article>
-      <article><div class="stat-icon pending">◷</div><div><span>{{copy('New / Unacknowledged','جديدة / لم تُستلم')}}</span>
-        <strong>{{overview?.summary?.unread??'—'}}</strong></div></article>
-      <article><div class="stat-icon escalated">↗</div><div><span>{{copy('Escalated','تم تصعيدها')}}</span>
-        <strong>{{overview?.summary?.escalated??'—'}}</strong></div></article>
+      <article><div class="stat-icon all">▤</div><div>
+        <span>{{copy('Risk-eligible notifications · current projection',
+                      'التنبيهات المطابقة لتوقع المخاطر الحالي')}}</span>
+        <strong>{{overview&&projectionReady?policySummary.eligibleTotal:'—'}}</strong>
+        <small>{{copy('Saved alerts + projected-only candidates','تنبيهات محفوظة + مرشحات غير مسجلة')}}</small>
+      </div></article>
+      <article><div class="stat-icon critical">!</div><div>
+        <span>{{copy('Critical under current policy / finding','حرجة وفق القواعد الحالية / الملاحظات')}}</span>
+        <strong>{{overview&&projectionReady?policySummary.critical+policySummary.projectedCritical:'—'}}</strong>
+      </div></article>
+      <article><div class="stat-icon pending">◷</div><div>
+        <span>{{copy('New projected candidates · not in Oracle','مرشحات جديدة لم تُسجل في Oracle')}}</span>
+        <strong>{{overview&&projectionReady?policySummary.projectedNew:'—'}}</strong>
+      </div></article>
+      <article><div class="stat-icon escalated">↗</div><div>
+        <span>{{copy('Active persisted alerts','التنبيهات التشغيلية النشطة المحفوظة')}}</span>
+        <strong>{{overview&&projectionReady?policySummary.active:'—'}}</strong>
+        <small>{{copy('Unacknowledged','لم تُستلم')}}: {{policySummary.unread}} ·
+          {{copy('Escalated','مصعّدة')}}: {{policySummary.escalated}}</small>
+      </div></article>
     </section>
 
+    <section class="projected-risk-population" role="region"
+             [attr.aria-label]="copy('Projected fleet risk distribution','توزيع المخاطر المتوقع للأسطول')">
+      <div class="projection-heading">
+        <div><strong>{{copy('Fleet Risk Projection · saved A01/A02 assessments',
+                            'توقع مخاطر الأسطول · تقييمات A01/A02 المحفوظة')}}</strong>
+          <p>{{copy('Only the assessed fleet is scored. Unassessed contacts never receive invented risk values.',
+                     'يتم حساب المخاطر للسفن ذات التقييمات المحفوظة فقط، دون اختلاق درجات للسفن غير المقيّمة.')}}</p>
+        </div>
+        <span class="projected-policy-badge">{{policyConfig?.version||'—'}}</span>
+      </div>
+      <div class="projection-grid">
+        <div><small>{{copy('Projected vessels','السفن التي أُعيد حسابها')}}</small>
+          <strong>{{projectionReady?riskPopulation.projected:'—'}}<em>/ {{riskPopulation.monitored}}</em></strong></div>
+        <div><small>{{copy('Normal','طبيعي')}}</small><strong>{{projectionReady?riskPopulation.normal:'—'}}</strong></div>
+        <div><small>{{copy('Watch','مراقبة')}}</small><strong>{{projectionReady?riskPopulation.watch:'—'}}</strong></div>
+        <div><small>{{copy('High','مرتفع')}}</small><strong>{{projectionReady?riskPopulation.high:'—'}}</strong></div>
+        <div><small>{{copy('Critical · score classification','حرج · تصنيف الدرجة')}}</small>
+          <strong>{{projectionReady?riskPopulation.critical:'—'}}</strong></div>
+        <div><small>{{copy('Average risk score','متوسط درجة المخاطر')}}</small>
+          <strong>{{projectionReady?riskPopulation.averageScore:'—'}}<em>/100</em></strong></div>
+        <div><small>{{copy('Total risk score · assessed only','مجموع درجات المخاطر · للسفن المقيّمة')}}</small>
+          <strong>{{projectionReady?riskPopulation.scoreSum:'—'}}</strong></div>
+      </div>
+      <p class="projection-caveat">{{copy('Critical operational alerts may exceed the Critical score-band count because a documented critical open finding is an independent alert trigger.',
+            'قد يتجاوز عدد التنبيهات الحرجة عدد السفن المصنفة حرجة؛ لأن وجود ملاحظة حرجة مفتوحة سبب مستقل لإطلاق تنبيه.')}}</p>
+    </section>
+    <section class="alerts-policy-preview" role="note">
+      <div>
+        <strong>⚖ {{copy('Active Risk Settings · local eligibility review',
+                         'إعدادات المخاطر الحالية · مراجعة المطابقة المحلية')}}</strong>
+        <p>
+          {{copy('Published browser policy','قواعد المتصفح المنشورة')}}:
+          <b>{{policyConfig?.version||'—'}}</b> ·
+          {{copy('Watch / High / Critical','مراقبة / مرتفع / حرج')}}:
+          {{policyConfig?.thresholds?.watch}} /
+          {{policyConfig?.thresholds?.high}} /
+          {{policyConfig?.thresholds?.critical}}
+        </p>
+        <p>
+          {{copy('Risk alerts removed from ACTIVE VIEW by current projection',
+                 'التنبيهات المُخفاة من العرض النشط وفق توقع المخاطر الحالي')}}:
+          <b>{{projectionReady?hiddenByLocalPolicy:'—'}}</b> ·
+          {{copy('New high/critical candidates not yet in Oracle',
+                 'مرشحات مخاطر مرتفعة/حرجة جديدة لم تُسجل في Oracle')}}:
+          <b>{{projectionReady?projectedCandidates.length:'—'}}</b> ·
+          {{copy('Original saved alerts remain in Oracle and are visible under All. Unresolved critical findings always remain in review.',
+                 'التنبيهات الأصلية محفوظة في Oracle ويمكن عرضها من «الكل». تظل الملاحظات الحرجة المفتوحة بحاجة إلى مراجعة دائمًا.')}}
+        </p>
+        <small>{{copy('This is not central policy publication or automatic legal resolution. Risk changes cannot silently close a linked maritime case.',
+                       'هذه معاينة محلية وليست نشرًا مركزيًا أو إغلاقًا رسميًا تلقائيًا. لا يتم إغلاق الحالات البحرية المرتبطة دون اعتماد.')}}</small>
+        <p *ngIf="policyLoading">{{copy('Rechecking saved A01/A02 evidence…','جارٍ مراجعة أدلة A01/A02 المحفوظة…')}}</p>
+        <p *ngIf="policyError" class="policy-warning" role="alert">{{policyError}}</p>
+      </div>
+      <a class="link secondary" routerLink="/moei/nmc/admin/risk-configuration">
+        {{copy('Risk Management','إعدادات المخاطر')}} ↗
+      </a>
+    </section>
     <div class="notice" role="status" *ngIf="success">✓ {{success}}</div>
     <div class="error" role="alert" *ngIf="error">{{error}}</div>
 
+    <section *ngIf="projectionReady&&projectedCandidates.length" class="projected-candidates">
+      <div class="candidate-heading">
+        <strong>{{copy('New Risk Notifications — Projection Only',
+                       'تنبيهات مخاطر جديدة — معاينة غير محفوظة')}}</strong>
+        <p>{{copy('These assessed vessels newly meet the published browser High/Critical policy, but no persisted Oracle alert exists. They are not official operational alerts: creating a case or notifying officers requires central backend policy publication.',
+                  'هذه السفن ذات التقييمات المحفوظة تحقق شروط المخاطر المرتفعة/الحرجة وفق المتصفح، لكن لا توجد تنبيهات مسجلة لها في Oracle. لا يمكن فتح حالة أو إرسال إشعار رسمي قبل نشر القواعد مركزيًا في الخادم.')}}</p>
+      </div>
+      <article class="projected-candidate-row" *ngFor="let item of projectedCandidates">
+        <div><strong>IMO {{item.imo}} · {{item.level}} · {{item.score}}/100</strong>
+          <small>{{copy('Original Oracle risk','المخاطر الأصلية في Oracle')}}:
+            {{item.sourceRiskScore}}/100 · {{item.sourceRiskLevel}}
+            · {{item.reason==='CRITICAL_OPEN_FINDING'?
+              copy('Critical open finding','ملاحظة حرجة مفتوحة'):
+              copy('Projected risk threshold','حد المخاطر المتوقع')}}</small></div>
+        <div class="candidate-links">
+          <a [routerLink]="['/moei/nmc/vessel',item.imo,'risk']">{{copy('Risk Intelligence','تحليل المخاطر')}} ↗</a>
+          <a [routerLink]="['/moei/nmc/vessel',item.imo]">{{copy('Vessel 360','ملف السفينة')}} ↗</a>
+        </div>
+      </article>
+    </section>
     <section class="workspace">
       <div class="toolbar">
         <div>
           <h3>{{copy('Operational Alert Inbox','صندوق التنبيهات التشغيلية')}}</h3>
-          <p>{{copy('Only saved AI risk assessments trigger alert detection.','تنشأ التنبيهات من تقييمات المخاطر المحفوظة فقط.')}}</p>
+          <p>{{copy('Eligible active alerts reflect current browser Risk Settings; policy-ineligible records remain accessible in All / Activity History.',
+                   'تعرض التنبيهات النشطة المطابقة لإعدادات مخاطر المتصفح؛ وتظل السجلات غير المطابقة متاحة في «الكل» وسجل الأنشطة.')}}</p>
         </div>
         <div class="controls">
           <label class="search">
@@ -81,30 +171,34 @@
       </div>
 
       <article *ngFor="let alert of alertsFiltered" class="alert-card"
-               [class.critical]="alert.severity==='CRITICAL'">
+               [class.critical]="displaySeverity(alert)==='CRITICAL'"
+               [class.local-superseded]="isPolicySuperseded(alert)">
         <div class="alert-main">
-          <div class="alert-symbol" [class.high]="alert.severity==='HIGH'">
-            {{alert.severity==='CRITICAL'?'!':'▲'}}
+          <div class="alert-symbol" [class.high]="displaySeverity(alert)==='HIGH'">
+            {{displaySeverity(alert)==='CRITICAL'?'!':'▲'}}
           </div>
           <div class="alert-body">
             <div class="alert-meta">
-              <span class="severity" [class.high]="alert.severity==='HIGH'">{{severityText(alert.severity)}}</span>
+              <span class="severity" [class.high]="displaySeverity(alert)==='HIGH'">
+                {{severityText(displaySeverity(alert))}}
+              </span>
+              <span *ngIf="isPolicySuperseded(alert)" class="local-suppressed-pill">
+                {{copy('Not applicable under local Risk Settings','غير مطابق لإعدادات المخاطر المحلية')}}
+              </span>
               <span class="status" [attr.data-status]="alert.status">{{statusText(alert.status)}}</span>
               <span class="muted">{{alert.createdAt|date:'medium'}}</span>
             </div>
-            <h4>{{copy(
-              alert.severity==='CRITICAL'?'Critical maritime risk requires review':'High maritime risk requires review',
-              alert.severity==='CRITICAL'?'مخاطر بحرية حرجة تستلزم المراجعة':'مخاطر بحرية مرتفعة تستلزم المراجعة')}}</h4>
-            <p>{{copy(
-              alert.detail.includes('inspection')?
-                'A saved assessment identifies a critical open inspection finding.':
-                'A saved assessment exceeded the monitored risk band.',
-              alert.detail.includes('inspection')?
-                'كشف تقييم محفوظ عن مخالفة معاينة حرجة لم تُغلق.':
-                'تجاوز تقييم مخاطر محفوظ مستوى المراقبة المحدد.')}}</p>
+            <h4>{{alertHeadline(alert)}}</h4>
+            <p>{{triggerDescription(alert)}}</p>
             <div class="facts">
               <span><b>IMO</b> {{alert.imo}}</span>
-              <span><b>{{copy('Risk','المخاطر')}}</b> {{alert.sourceScore}}/100</span>
+              <span *ngIf="policyFor(alert) as policy" class="projected-main-risk">
+                <b>{{copy('Current Risk Projection','المخاطر المتوقعة الحالية')}}</b>
+                {{policy.score}}/100 · {{policy.level}}
+              </span>
+              <span><b>{{copy('Original Oracle risk','المخاطر الأصلية في Oracle')}}</b>
+                {{alert.sourceScore}}/100 · {{alert.sourceLevel}}
+              </span>
               <span><b>{{copy('Assigned','المسؤول')}}</b>
                 {{alert.assignedRole==='NMC_SUPERVISOR'?copy('NMC Supervisor','مشرف المركز البحري'):copy('NMC Officer','ضابط المركز البحري')}}
               </span>
@@ -122,7 +216,7 @@
              class="link secondary">
             {{copy('Open Linked Case','فتح الحالة المرتبطة')}} ↗
           </a>
-          <button *ngIf="!linkedCase(alert)&&alert.status!=='RESOLVED'" type="button"
+          <button *ngIf="!linkedCase(alert)&&alert.status!=='RESOLVED'&&!isPolicySuperseded(alert)" type="button"
                   class="link primary" [disabled]="alert.status==='OPEN'||!!creatingCase"
                   (click)="createCase(alert)">
             + {{copy('Create Maritime Case','إنشاء حالة بحرية')}}
@@ -131,7 +225,11 @@
             {{selectedId===alert.id?copy('Hide History','إخفاء السجل'):copy('Activity History','سجل الأنشطة')}}
           </button>
         </div>
-        <div class="decision-panel" *ngIf="alert.status!=='RESOLVED'">
+        <div *ngIf="isPolicySuperseded(alert)" class="local-superseded-note">
+          {{copy('Hidden from Active by local policy comparison. This is not a persisted resolution; original alert, audit history and linked cases are retained.',
+                   'مخفي من «نشط» بعد مقارنة الإعدادات المحلية، لكنه ليس إغلاقًا مسجلًا. التنبيه وسجله وحالاته المرتبطة محفوظة.')}}
+        </div>
+        <div class="decision-panel" *ngIf="alert.status!=='RESOLVED'&&!isPolicySuperseded(alert)">
           <label>{{copy('Operator note / resolution reason','ملاحظة الموظف / سبب الإغلاق')}}
             <input type="text" [(ngModel)]="notes[alert.id]" maxlength="500"
               [placeholder]="copy('Record operational context before an action','سجّل سبب الإجراء أو نتيجة التحقق')">

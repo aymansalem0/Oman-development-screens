@@ -114,8 +114,9 @@ function loadStore(){
   return {};
 }
 export class FleetAssessmentManager {
-  constructor({executeAgent,getPscVessel,repository=null}){
+  constructor({executeAgent,getPscVessel,repository=null,onAssessmentSaved=null}){
     this.executeAgent=executeAgent;
+    this.onAssessmentSaved=onAssessmentSaved;
     this.getPscVessel=getPscVessel;
     this.repository=repository;
     this.results=repository?{}:loadStore();
@@ -139,8 +140,17 @@ export class FleetAssessmentManager {
     writeFileSync(tmp,JSON.stringify({schema:1,updatedAt:new Date().toISOString(),results:this.results}),{encoding:'utf8',mode:0o600});
     renameSync(tmp,file);
   }
-  snapshot(){
-    const values=Object.values(this.results).filter(x=>VALID_IMOS.has(x.imo));
+  /** Read-only current database facts. No agent invocation, mutation or scheduler trigger. */
+  async savedSnapshot(){
+    if(this.repository){
+      if(!this.persistenceHealthy)throw new Error('FLEET_PERSISTENCE_UNAVAILABLE');
+      const rows=await this.repository.loadLatest();
+      return this.snapshot(rows);
+    }
+    return this.snapshot(loadStore());
+  }
+  snapshot(sourceResults=this.results){
+    const values=Object.values(sourceResults).filter(x=>VALID_IMOS.has(x.imo));
     const counts={total:420,assessed:0,pending:420,normal:0,watch:0,high:0,critical:0,
       priorityReview:0,failed:0,refreshFailed:0};
     for(const r of values){
@@ -157,7 +167,7 @@ export class FleetAssessmentManager {
       fleetSize:420,counts,job:this.job&&{
         id:this.job.id,status:this.job.status,total:this.job.total,completed:this.job.completed,
         failed:this.job.failed,startedAt:this.job.startedAt,finishedAt:this.job.finishedAt||null
-      },results:Object.fromEntries(values.map(v=>[v.imo,{imo:v.imo,status:v.status,score:v.score,level:v.level,operationalPriority:v.operationalPriority,criticalOpenFinding:v.criticalOpenFinding,assessedAt:v.assessedAt,reasonCode:v.reasonCode,configVersion:v.configVersion,sourceMode:v.sourceMode,
+      },results:Object.fromEntries(values.map(v=>[v.imo,{imo:v.imo,assessmentId:v.assessmentId||null,status:v.status,score:v.score,level:v.level,operationalPriority:v.operationalPriority,criticalOpenFinding:v.criticalOpenFinding,assessedAt:v.assessedAt,reasonCode:v.reasonCode,configVersion:v.configVersion,sourceMode:v.sourceMode,
         lastCheckedAt:v.lastCheckedAt,nextCheckAt:v.nextCheckAt,refreshFailure:v.refreshFailure||null}]))};
   }
   getVesselResult(imo){return VALID_IMOS.has(imo)?(this.results[imo]||null):null;}
@@ -243,6 +253,13 @@ export class FleetAssessmentManager {
           }
           this.results[v.imo]=current;
           job.completed++;
+          // Guidance is derived ONLY after a saved assessment; an optional
+          // guidance subsystem outage must not invalidate the already committed AI score.
+          if(this.onAssessmentSaved){
+            try{await this.onAssessmentSaved(current);}catch{
+              console.error('[nmc-guidance] RESULT_MATERIALIZATION_FAILED');
+            }
+          }
         }catch(error){
           const reasonCode=serializeError(error);
           console.error('[fleet] imo='+v.imo+' reasonCode='+reasonCode);

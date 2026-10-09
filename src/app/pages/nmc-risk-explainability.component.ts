@@ -1,340 +1,235 @@
-import { NmcNavigationComponent } from '../components/nmc-navigation.component';
-import { CommonModule } from '@angular/common';
-import { Component, OnInit } from '@angular/core';
-import { ActivatedRoute, RouterLink } from '@angular/router';
-import {
-  NmcVesselProfile
-} from '../data/nmc-vessel-catalog';
-import { NMC_OPERATIONAL_VESSELS, getOperationalVesselByImo } from '../data/nmc-expanded-vessel-catalog';
-import { LanguageService } from '../services/language.service';
-import { NmcRiskEngineService } from '../services/nmc-risk-engine.service';
+import {NmcNavigationComponent} from '../components/nmc-navigation.component';
+import {CommonModule} from '@angular/common';
+import {Component,OnDestroy,OnInit} from '@angular/core';
+import {Subscription} from 'rxjs';
+import {ActivatedRoute,RouterLink} from '@angular/router';
+import {NmcVesselProfile} from '../data/nmc-vessel-catalog';
+import {getOperationalVesselByImo} from '../data/nmc-expanded-vessel-catalog';
+import {LanguageService} from '../services/language.service';
+import {NmcFleetAiService,FleetAiAssessment} from '../services/nmc-fleet-ai.service';
+import {NmcRiskEngineService,RiskEngineConfig,RiskEvaluation,RiskFactorKey} from '../services/nmc-risk-engine.service';
+import {NmcOperationalGuidanceService,GuidanceResult} from '../services/nmc-operational-guidance.service';
+import {NmcCasesService,NmcCentralCase} from '../services/nmc-cases.service';
 
-type SourceClass =
-  | 'MOEI Authoritative'
-  | 'External Authoritative'
-  | 'External Trusted'
-  | 'Operational Feed'
-  | 'Internal Derived';
-
-interface RiskFactorEvidence {
-  id: string;
-  ruleId: string;
-  label: string;
-  contribution: number;
-  source: string;
-  sourceClass: SourceClass;
-  authority: string;
-  evidenceRecord: string;
-  trigger: string;
-  ruleLogic: string;
-  sourceTrust: number;
-  dataConfidence: number;
-  identityMatch: number;
-  freshness: number;
-  conflict: boolean;
-  status: 'Triggered' | 'Observed' | 'Historical';
-  explanation: string;
+type FactorKey='movement'|'inspection'|'certificate'|'dataQuality'|'history';
+interface RiskFactor {
+  id:FactorKey;label:string;labelAr:string;
+  severity:number;weight:number;contribution:number;confidence:number;
+  evidenceIds:string[];reason:string;sourceAgent:string;
 }
-
-interface ThresholdBand {
-  label: string;
-  min: number;
-  max: number;
-  className: string;
+interface Threshold {
+  key:string;min:number;max:number;width:number;
 }
-
 @Component({
-  selector: 'app-nmc-risk-explainability',
-  standalone: true,
-  imports: [CommonModule, RouterLink, NmcNavigationComponent],
-  templateUrl: './nmc-risk-explainability.component.html',
-  styleUrl: './nmc-risk-explainability.component.css'
+  selector:'app-nmc-risk-explainability',standalone:true,
+  imports:[CommonModule,RouterLink,NmcNavigationComponent],
+  templateUrl:'./nmc-risk-explainability.component.html',
+  styleUrl:'./nmc-risk-explainability.component.css'
 })
-export class NmcRiskExplainabilityComponent implements OnInit {
-  vessel!: NmcVesselProfile;
-  factors: RiskFactorEvidence[] = [];
-  selectedFactor?: RiskFactorEvidence;
+export class NmcRiskExplainabilityComponent implements OnInit,OnDestroy {
+  private readonly subscriptions=new Subscription();
+  vessel?:NmcVesselProfile;
+  assessment:FleetAiAssessment|null=null;
+  // The local Risk Management settings apply only to this browser's policy projection;
+  // immutable Oracle assessment and audit history must NEVER be relabeled as recalculated.
+  activeRiskConfig:RiskEngineConfig|null=null;
+  projectedRisk:RiskEvaluation|null=null;
+  factors:RiskFactor[]=[];
+  selectedFactor?:RiskFactor;
+  guidanceItems:GuidanceResult[]=[];
+  guidanceError='';
+  assessmentError='';
+  busy=true;
+  guidanceBusy=true;
+  linkedCase:NmcCentralCase|null=null;
+  readonly factorLabels:Record<FactorKey,[string,string]>={
+    movement:['Movement & voyage','الحركة والرحلة'],
+    inspection:['Inspection & deficiencies','التفتيش والملاحظات'],
+    certificate:['Certificates & compliance','الشهادات والامتثال'],
+    dataQuality:['Data quality','جودة البيانات'],
+    history:['Historical risk','المخاطر التاريخية']
+  };
+  readonly factorOrder:FactorKey[]=['movement','inspection','certificate','dataQuality','history'];
 
-  get thresholds(): ThresholdBand[] {
-    return this.riskEngine.thresholds().map(item => ({
-      label: item.label,
-      min: item.min,
-      max: item.max,
-      className: item.label.toLowerCase()
+  constructor(private route:ActivatedRoute,public lang:LanguageService,
+    private readonly fleet:NmcFleetAiService,
+    private readonly riskEngine:NmcRiskEngineService,
+    private readonly guidance:NmcOperationalGuidanceService,
+    private readonly cases:NmcCasesService){}
+
+  ngOnInit():void{
+    this.subscriptions.add(this.riskEngine.config$.subscribe(policy=>{
+      this.activeRiskConfig=policy;
+      this.updatePolicyProjection();
+    }));
+    window.addEventListener('storage',this.onPolicyStorageChange);
+    this.subscriptions.add(this.route.paramMap.subscribe(params=>{
+      const imo=params.get('imo')||'';
+      this.vessel=getOperationalVesselByImo(imo);
+      this.assessment=null;this.projectedRisk=null;
+      this.factors=[];this.selectedFactor=undefined;
+      this.guidanceItems=[];this.linkedCase=null;
+      if(!this.vessel){this.assessmentError='Unknown vessel IMO';this.busy=false;return;}
+      this.refresh();
     }));
   }
-
-  get engineVersion(): string {
-    return this.riskEngine.config.version;
+  ngOnDestroy():void{
+    this.subscriptions.unsubscribe();
+    window.removeEventListener('storage',this.onPolicyStorageChange);
   }
-
-  readonly evaluatedAt = '07 Oct 2026 · 22:42:18';
-
-  constructor(
-    private route: ActivatedRoute,
-    public lang: LanguageService,
-    private riskEngine: NmcRiskEngineService
-  ) {}
-
-  copy(en: string, ar: string): string {
-    return this.lang.pick(en, ar);
+  private readonly onPolicyStorageChange=(event:StorageEvent):void=>{
+    if(event.key==='moei-nmc-risk-engine-config:v1')this.riskEngine.syncPublishedFromStorage();
+  };
+  copy(en:string,ar:string):string{return this.lang.pick(en,ar);}
+  toggleLanguage():void{this.lang.toggle();}
+  refresh():void{
+    if(!this.vessel)return;
+    this.busy=true;this.assessmentError='';
+    const imo=this.vessel.imo;
+    this.subscriptions.add(this.fleet.assessment(imo).subscribe({
+      next:row=>{
+        if(this.vessel?.imo!==imo)return;
+        this.busy=false;
+        if(row.status!=='COMPLETED'||!row.assessmentId||
+           typeof row.score!=='number'||!Number.isFinite(row.score)||
+           !Array.isArray(row.signals)||row.signals.length!==5){
+          this.assessmentError=this.copy('A valid saved A01/A02 assessment is not available.','لا يوجد تقييم A01/A02 صالح ومحفوظ.');
+          return;
+        }
+        // Rebuild from the five SAVED A01/A02 severities using the currently
+        // configured risk model; the source Oracle score remains unchanged.
+        this.assessment=row;
+        this.updatePolicyProjection();
+      },
+      error:()=>{if(this.vessel?.imo!==imo)return;
+        this.busy=false;this.assessment=null;this.projectedRisk=null;
+        this.factors=[];this.assessmentError=
+        this.copy('No saved validated assessment; no simulated score will be substituted.',
+                  'لا يوجد تقييم محفوظ ومتحقق منه؛ لن يتم عرض درجة مخاطر تجريبية كبديل.');}
+    }));
+    this.loadGuidance();
+    this.subscriptions.add(this.cases.byImo(imo).subscribe({
+      next:r=>{if(this.vessel?.imo===imo)this.linkedCase=r.case?.status==='RESOLVED'?null:r.case;},
+      error:()=>{if(this.vessel?.imo===imo)this.linkedCase=null;}
+    }));
   }
-
-  toggleLanguage(): void {
-    const selectedId = this.selectedFactor?.id;
-    this.lang.toggle();
-    this.factors = this.buildFactors();
-    this.selectedFactor = this.factors.find(factor => factor.id === selectedId) || this.factors[0];
+  loadGuidance():void{
+    if(!this.vessel)return;
+    this.guidanceBusy=true;this.guidanceError='';
+    const imo=this.vessel.imo;
+    this.subscriptions.add(this.guidance.forVessel(imo).subscribe({
+      next:r=>{if(this.vessel?.imo!==imo)return;this.guidanceBusy=false;this.guidanceItems=r.rules;},
+      error:e=>{if(this.vessel?.imo!==imo)return;this.guidanceBusy=false;this.guidanceItems=[];
+        this.guidanceError=this.guidance.message(e,this.lang.isArabic);}
+    }));
   }
-
-  riskLabel(level: string = this.riskLevel): string {
-    const labels: Record<string, string> = {
-      Critical: this.copy('Critical', 'حرج'),
-      High: this.copy('High', 'مرتفع'),
-      Watch: this.copy('Watch', 'مراقبة'),
-      Normal: this.copy('Normal', 'طبيعي')
+  /** Scoring policy projection is recomputed from persisted AI evidence, NEVER fixture calibration. */
+  private updatePolicyProjection():void{
+    const row=this.assessment,config=this.activeRiskConfig,vessel=this.vessel;
+    if(!row||!config||!vessel)return;
+    const valid=this.factorOrder.every(key=>
+      row.signals.filter(signal=>signal.factor===key&&
+        Number.isFinite(signal.severity)&&signal.severity>=0&&signal.severity<=100).length===1);
+    if(!valid||this.riskEngine.validate(config).length){
+      this.projectedRisk=null;this.factors=[];
+      this.assessmentError=this.copy(
+        'Cannot project risk: saved factor evidence or the published browser policy is invalid.',
+        'لا يمكن حساب المخاطر: أدلة العوامل المحفوظة أو قواعد المتصفح غير صالحة.');
+      return;
+    }
+    const severities=Object.fromEntries(this.factorOrder.map(key=>
+      [key,row.signals.find(signal=>signal.factor===key)!.severity])) as Record<RiskFactorKey,number>;
+    this.projectedRisk=this.riskEngine.evaluateFromAiSignals(vessel,severities,config);
+    const previous=this.selectedFactor?.id;
+    this.factors=this.factorOrder.map(id=>{
+      const signal=row.signals.find(x=>x.factor===id)!;
+      const weight=config.weights[id];
+      return {
+        id,label:this.factorLabels[id][0],labelAr:this.factorLabels[id][1],
+        severity:signal.severity,weight,
+        contribution:signal.severity*weight/100,
+        confidence:signal.confidence,evidenceIds:signal.evidenceIds||[],
+        reason:signal.reason||'',sourceAgent:signal.sourceAgent
+      };
+    });
+    this.selectedFactor=this.factors.find(x=>x.id===previous)||this.factors[0];
+  }
+  get riskScore():number|null{return this.projectedRisk?.score??null;}
+  get riskLevel():string{return this.projectedRisk?.level||'Pending';}
+  get sourceRiskScore():number|null{return this.assessment?.score??null;}
+  get sourceRiskLevel():string{return this.assessment?.level||'Pending';}
+  get policyChanged():boolean{
+    const original=this.assessment?.ruleset,current=this.activeRiskConfig;
+    if(!original||!current)return false;
+    return original.mode!==current.mode||
+      this.factorOrder.some(key=>original.weights[key]!==current.weights[key])||
+      original.thresholds.watch!==current.thresholds.watch||
+      original.thresholds.high!==current.thresholds.high||
+      original.thresholds.critical!==current.thresholds.critical;
+  }
+  get projectedPriority():string{
+    if(!this.assessment||!this.projectedRisk)return '—';
+    return this.assessment.criticalOpenFinding||this.riskLevel==='Critical'
+      ?'Priority Review':this.riskLevel==='High'?'Enhanced Monitoring':'Routine';
+  }
+  get riskClass():string{return this.riskLevel.toLowerCase();}
+  get riskLabel():string{
+    const values:Record<string,[string,string]>={
+      Normal:['Normal','طبيعي'],Watch:['Watch','مراقبة'],
+      High:['High','مرتفع'],Critical:['Critical','حرج'],Pending:['Pending','بانتظار التقييم']
     };
-    return labels[level] || level;
+    const labels=values[this.riskLevel]||values['Pending'];
+    return this.copy(labels[0],labels[1]);
   }
-
-  thresholdLabel(label: string): string {
-    const labels: Record<string, string> = {
-      Normal: 'طبيعي',
-      Watch: 'مراقبة',
-      High: 'مرتفع',
-      Critical: 'حرج'
-    };
-    return this.lang.isArabic ? (labels[label] || label) : label;
-  }
-
-  sourceClassLabel(value: SourceClass): string {
-    const labels: Record<SourceClass, string> = {
-      'MOEI Authoritative': 'مصدر معتمد من الوزارة',
-      'External Authoritative': 'مصدر خارجي معتمد',
-      'External Trusted': 'مصدر خارجي موثوق',
-      'Operational Feed': 'تغذية تشغيلية',
-      'Internal Derived': 'قيمة مشتقة داخلياً'
-    };
-    return this.lang.isArabic ? labels[value] : value;
-  }
-
-  factorStatusLabel(status: RiskFactorEvidence['status']): string {
-    const labels: Record<RiskFactorEvidence['status'], string> = {
-      Triggered: 'مُفعّل',
-      Observed: 'مرصود',
-      Historical: 'تاريخي'
-    };
-    return this.lang.isArabic ? labels[status] : status;
-  }
-
-  ngOnInit(): void {
-    const imo = this.route.snapshot.paramMap.get('imo') || NMC_OPERATIONAL_VESSELS[0].imo;
-    const profile = getOperationalVesselByImo(imo) || NMC_OPERATIONAL_VESSELS[0];
-    this.vessel = this.riskEngine.applyToVessel(profile);
-    this.factors = this.buildFactors();
-    this.selectedFactor = this.factors[0];
-  }
-
-  get riskLevel(): string {
-    return this.riskEngine.levelForScore(this.vessel.risk);
-  }
-
-  get riskClass(): string {
-    return this.riskLevel.toLowerCase();
-  }
-
-  get isUaeFlag(): boolean {
-    return this.vessel.flag === 'UAE';
-  }
-
-  get totalContribution(): number {
-    return this.factors.reduce((sum, factor) => sum + factor.contribution, 0);
-  }
-
-  get triggeredCount(): number {
-    return this.factors.filter(factor => factor.status === 'Triggered').length;
-  }
-
-  get conflictCount(): number {
-    return this.factors.filter(factor => factor.conflict).length;
-  }
-
-  get scoreMarkerPosition(): number {
-    return Math.max(1, Math.min(99, this.vessel.risk));
-  }
-
-  get flagRegistryAuthority(): string {
-    const authorities: Record<string, string> = {
-      UAE: 'MOEI Vessel Registry',
-      Liberia: 'Liberia Maritime Authority',
-      Panama: 'Panama Maritime Authority',
-      'Marshall Is.': 'Marshall Islands Maritime Administrator',
-      Singapore: 'Maritime and Port Authority of Singapore',
-      Malta: 'Malta Ship Registry',
-      'Hong Kong': 'Hong Kong Shipping Registry',
-      Bahamas: 'Bahamas Maritime Authority'
-    };
-    return authorities[this.vessel.flag] || `${this.vessel.flag} Flag Administration`;
-  }
-
-  selectFactor(factor: RiskFactorEvidence): void {
-    this.selectedFactor = factor;
-  }
-
-  private buildFactors(): RiskFactorEvidence[] {
-    const evaluation = this.riskEngine.evaluate(this.vessel);
-    const evidenceRisk = evaluation.baseScore;
-    const hasOpenDeficiency = evidenceRisk >= 45;
-    const hasMovementException = evidenceRisk >= 65;
-    const hasCertificateConcern = evidenceRisk >= 55;
-    const hasSourceConflict = evidenceRisk >= 80;
-
-    const contribution = (key: 'movement' | 'inspection' | 'certificate' | 'dataQuality' | 'history'): number =>
-      evaluation.factors.find(factor => factor.key === key)?.contribution || 0;
-
-    const movement = contribution('movement');
-    const inspection = contribution('inspection');
-    const certificate = contribution('certificate');
-    const dataConflict = contribution('dataQuality');
-    const historical = contribution('history');
-
-    const certificateSource = this.isUaeFlag
-      ? 'MOEI Certificate Registry'
-      : `${this.vessel.flag} Flag / Verified Certificate Record`;
-    const certificateClass: SourceClass = this.isUaeFlag
-      ? 'MOEI Authoritative'
-      : 'External Authoritative';
-
+  get scoreMarkerPosition():number{return this.riskScore===null?0:Math.min(99,Math.max(1,this.riskScore));}
+  get thresholds():Threshold[]{
+    const t=this.activeRiskConfig?.thresholds??{watch:45,high:65,critical:85};
     return [
-      {
-        id: 'inspection',
-        ruleId: 'RISK-INS-004',
-        label: hasOpenDeficiency
-          ? this.copy('Open inspection deficiency', 'ملاحظة معاينة مفتوحة')
-          : this.copy('Inspection exposure', 'مخاطر مرتبطة بالمعاينة'),
-        contribution: inspection,
-        source: 'MOEI Smart Inspection',
-        sourceClass: 'MOEI Authoritative',
-        authority: this.copy('MOEI inspection record', 'سجل معاينة معتمد من الوزارة'),
-        evidenceRecord: `INS-2026-${String(1300 + this.vessel.id).padStart(5, '0')}`,
-        trigger: hasOpenDeficiency
-          ? this.copy('An inspection finding remains open and requires corrective follow-up.', 'توجد ملاحظة معاينة ما زالت مفتوحة وتتطلب متابعة إجراء تصحيحي.')
-          : this.copy('Historical inspection context contributes a low baseline exposure.', 'يسهم سجل المعاينات التاريخي بمستوى مخاطر أساسي منخفض.'),
-        ruleLogic: hasOpenDeficiency
-          ? this.copy('Open Major/Critical Deficiency → weighted inspection contribution', 'ملاحظة كبيرة/حرجة مفتوحة ← مساهمة موزونة في مخاطر المعاينة')
-          : this.copy('No open deficiency → historical inspection baseline only', 'لا توجد ملاحظة مفتوحة ← خط أساس تاريخي للمعاينة فقط'),
-        sourceTrust: 100,
-        dataConfidence: 100,
-        identityMatch: 100,
-        freshness: 96,
-        conflict: false,
-        status: hasOpenDeficiency ? 'Triggered' : 'Historical',
-        explanation: hasOpenDeficiency
-          ? this.copy('The risk engine uses the unresolved inspection finding because it is an active MOEI regulatory record linked directly to this IMO.', 'يستخدم محرك المخاطر ملاحظة المعاينة غير المغلقة لأنها سجل تنظيمي نشط تابع للوزارة ومرتبط مباشرة برقم IMO.')
-          : this.copy('No active deficiency is open, so the inspection factor is limited to historical exposure.', 'لا توجد ملاحظة نشطة مفتوحة، لذلك يقتصر عامل المعاينة على المخاطر التاريخية.')
-      },
-      {
-        id: 'movement',
-        ruleId: 'RISK-MOV-011',
-        label: hasMovementException
-          ? this.copy('Movement anomaly / route deviation', 'حركة غير اعتيادية / انحراف عن المسار')
-          : this.copy('Voyage & movement exposure', 'مخاطر الرحلة والحركة'),
-        contribution: movement,
-        source: 'AIS / LRIT',
-        sourceClass: 'Operational Feed',
-        authority: this.copy('Operational vessel tracking source', 'مصدر تتبع تشغيلي للسفن'),
-        evidenceRecord: `AIS-${this.vessel.mmsi}`,
-        trigger: hasMovementException
-          ? this.copy('Observed movement differs from the monitored route pattern and current voyage behavior.', 'الحركة المرصودة تختلف عن نمط المسار المراقب وسلوك الرحلة الحالي.')
-          : this.copy('Current voyage, approach zone and movement state are monitored without a critical anomaly.', 'تتم مراقبة الرحلة الحالية ومنطقة الاقتراب وحالة الحركة دون وجود حالة حرجة غير اعتيادية.'),
-        ruleLogic: hasMovementException
-          ? this.copy('Route deviation + abnormal movement pattern → movement risk contribution', 'انحراف عن المسار + نمط حركة غير اعتيادي ← مساهمة في مخاطر الحركة')
-          : this.copy('Active monitored voyage → baseline movement contribution', 'رحلة نشطة تحت المراقبة ← مساهمة أساسية في مخاطر الحركة'),
-        sourceTrust: 96,
-        dataConfidence: Math.max(91, this.vessel.dataConfidence),
-        identityMatch: 99,
-        freshness: Math.max(92, 100 - Math.min(8, this.vessel.lastUpdate)),
-        conflict: false,
-        status: hasMovementException ? 'Triggered' : 'Observed',
-        explanation: this.copy('Movement risk is calculated from live position, speed, course, destination and route behavior after matching the tracking identity to the vessel record.', 'يتم احتساب مخاطر الحركة من الموقع والسرعة والمسار والوجهة وسلوك الرحلة بعد مطابقة هوية التتبع مع سجل السفينة.')
-      },
-      {
-        id: 'certificate',
-        ruleId: 'RISK-CERT-007',
-        label: hasSourceConflict
-          ? this.copy('Conditional certificate state', 'حالة شهادة مشروطة')
-          : hasCertificateConcern
-            ? this.copy('Certificate validity proximity / condition', 'اقتراب انتهاء صلاحية الشهادة / شرط قائم')
-            : this.copy('Certificate portfolio exposure', 'مخاطر مرتبطة بملف الشهادات'),
-        contribution: certificate,
-        source: certificateSource,
-        sourceClass: certificateClass,
-        authority: this.isUaeFlag ? this.copy('MOEI certificate authority', 'جهة الشهادات بالوزارة') : this.flagRegistryAuthority,
-        evidenceRecord: `CERT-SC-${this.vessel.imo}`,
-        trigger: hasSourceConflict
-          ? this.copy('A certificate condition is active and requires verification.', 'يوجد شرط نشط على إحدى الشهادات ويتطلب التحقق.')
-          : hasCertificateConcern
-            ? this.copy('A monitored statutory certificate is approaching a configured validity threshold.', 'تقترب إحدى الشهادات النظامية المراقبة من حد صلاحية مهيأ.')
-            : this.copy('No critical certificate exception; normal portfolio exposure applies.', 'لا توجد حالة حرجة بالشهادات؛ يتم تطبيق مستوى المخاطر الطبيعي لملف الشهادات.'),
-        ruleLogic: hasSourceConflict
-          ? this.copy('Conditional / restricted certificate → elevated certificate contribution', 'شهادة مشروطة / مقيدة ← مساهمة مرتفعة في مخاطر الشهادات')
-          : hasCertificateConcern
-            ? this.copy('Expiry/condition threshold reached → monitored certificate contribution', 'بلوغ حد الانتهاء/الشرط ← مساهمة مراقبة في مخاطر الشهادات')
-            : this.copy('Valid certificate portfolio → baseline contribution', 'ملف شهادات ساري ← مساهمة أساسية'),
-        sourceTrust: this.isUaeFlag ? 100 : 96,
-        dataConfidence: hasSourceConflict ? 92 : 97,
-        identityMatch: 100,
-        freshness: hasSourceConflict ? 94 : 97,
-        conflict: hasSourceConflict,
-        status: hasCertificateConcern ? 'Triggered' : 'Observed',
-        explanation: this.copy('Certificate status is evaluated independently from movement and inspection data. Foreign-flag registration authority remains external to MOEI.', 'يتم تقييم حالة الشهادات بشكل مستقل عن بيانات الحركة والمعاينة، وتظل جهة تسجيل السفن الأجنبية خارج سلطة تسجيل الوزارة.')
-      },
-      {
-        id: 'data-quality',
-        ruleId: 'RISK-DQ-003',
-        label: hasSourceConflict
-          ? this.copy('Authoritative source conflict', 'تعارض بين مصادر معتمدة')
-          : this.copy('Data-quality exposure', 'مخاطر جودة البيانات'),
-        contribution: dataConflict,
-        source: 'NMC Data Correlation Layer',
-        sourceClass: 'Internal Derived',
-        authority: this.copy('Cross-source correlation and validation', 'ربط المصادر والتحقق بينها'),
-        evidenceRecord: `DQC-${this.vessel.imo}`,
-        trigger: hasSourceConflict
-          ? this.copy('Two trusted sources report different certificate states for the same vessel record.', 'يعرض مصدران موثوقان حالتين مختلفتين للشهادة نفسها ضمن سجل السفينة.')
-          : this.copy('No unresolved cross-source conflict; normal data-quality exposure remains.', 'لا يوجد تعارض غير محلول بين المصادر؛ يظل مستوى مخاطر جودة البيانات طبيعياً.'),
-        ruleLogic: hasSourceConflict
-          ? this.copy('Unresolved authoritative conflict → data-quality risk contribution', 'تعارض معتمد غير محلول ← مساهمة في مخاطر جودة البيانات')
-          : this.copy('Matched sources → minimal data-quality contribution', 'مصادر متطابقة ← مساهمة محدودة في مخاطر جودة البيانات'),
-        sourceTrust: 98,
-        dataConfidence: this.vessel.dataConfidence,
-        identityMatch: 99,
-        freshness: 97,
-        conflict: hasSourceConflict,
-        status: hasSourceConflict ? 'Triggered' : 'Observed',
-        explanation: hasSourceConflict
-          ? this.copy('The platform preserves the conflict instead of silently choosing a source. Human verification is required before enforcement based on the disputed fact.', 'تحتفظ المنصة بالتعارض بدلاً من اختيار أحد المصادر تلقائياً. ويتطلب الأمر تحققاً بشرياً قبل اتخاذ إجراء تنظيمي بناءً على المعلومة محل الخلاف.')
-          : this.copy('Source correlation is healthy and no material conflict is currently unresolved.', 'ربط المصادر سليم ولا يوجد حالياً تعارض جوهري غير محلول.')
-      },
-      {
-        id: 'history',
-        ruleId: 'RISK-HIST-009',
-        label: this.copy('Historical vessel / operator risk pattern', 'نمط مخاطر تاريخي للسفينة / المشغل'),
-        contribution: historical,
-        source: 'Inspection & Operator History',
-        sourceClass: this.isUaeFlag ? 'MOEI Authoritative' : 'External Trusted',
-        authority: this.isUaeFlag ? this.copy('MOEI historical compliance context', 'سياق امتثال تاريخي معتمد من الوزارة') : this.copy('Verified historical maritime context', 'سياق بحري تاريخي تم التحقق منه'),
-        evidenceRecord: `HIST-${this.vessel.imo}`,
-        trigger: this.copy('Historical inspection, vessel and operator context contributes to the current risk baseline.', 'يسهم سياق المعاينات والسفينة والمشغل تاريخياً في خط أساس المخاطر الحالي.'),
-        ruleLogic: this.copy('Historical findings / operator pattern → weighted historical contribution', 'ملاحظات تاريخية / نمط المشغل ← مساهمة تاريخية موزونة'),
-        sourceTrust: this.isUaeFlag ? 100 : 94,
-        dataConfidence: Math.max(90, this.vessel.dataConfidence),
-        identityMatch: 99,
-        freshness: 92,
-        conflict: false,
-        status: 'Historical',
-        explanation: this.copy('Historical risk is retained separately so current operational events do not erase recurring vessel or operator patterns.', 'يتم الاحتفاظ بالمخاطر التاريخية بشكل مستقل حتى لا تلغي الأحداث التشغيلية الحالية الأنماط المتكررة للسفينة أو المشغل.')
-      }
+      {key:'Normal',min:0,max:t.watch-1,width:t.watch},
+      {key:'Watch',min:t.watch,max:t.high-1,width:t.high-t.watch},
+      {key:'High',min:t.high,max:t.critical-1,width:t.critical-t.high},
+      {key:'Critical',min:t.critical,max:100,width:100-t.critical}
     ];
   }
+  thresholdName(key:string):string{
+    const d:Record<string,[string,string]>={
+      Normal:['Normal','طبيعي'],Watch:['Watch','مراقبة'],
+      High:['High','مرتفع'],Critical:['Critical','حرج']
+    };
+    const pair=d[key]||[key,key];
+    return this.copy(pair[0],pair[1]);
+  }
+  get totalContribution():number{return this.factors.reduce((n,f)=>n+f.contribution,0);}
+  get calculationMode():string{return this.activeRiskConfig?.mode||'weighted';}
+  get modeAdjustment():number{
+    if(!this.factors.length)return 0;
+    const weighted=this.totalContribution;
+    const maximum=Math.max(...this.factors.map(x=>x.severity));
+    if(this.calculationMode==='conservative')return Math.max(0,maximum-weighted)*0.28;
+    if(this.calculationMode==='max-signal')return (maximum-weighted)*0.32;
+    return 0;
+  }
+  get reconstructedScore():number{
+    return Math.round(Math.min(100,Math.max(0,this.totalContribution+this.modeAdjustment)));
+  }
+  get averageFactorConfidence():number|null{
+    if(!this.factors.length)return null;
+    return Math.round(this.factors.reduce((v,f)=>v+f.confidence,0)/this.factors.length*100);
+  }
+  get assessmentSource():string{return this.assessment?.sourceMode||'—';}
+  get situationSummary():string{
+    if(!this.assessment)return '';
+    const top=[...this.factors].sort((a,b)=>b.severity-a.severity).slice(0,2);
+    const names=top.map(f=>this.copy(f.label,f.labelAr)).join(' / ');
+    return this.lang.isArabic
+      ?'تُظهر مؤشرات A01/A02 المحفوظة ارتفاعًا نسبيًا في '+names+
+        '. التصنيف المتوقع من قواعد المتصفح المنشورة '+this.riskLabel+'، والأولوية المتوقعة '+this.projectedPriority+
+        '. الدرجة الأصلية المحفوظة مستقلة، ولا يمثل هذا قرارًا تشغيليًا معتمدًا.'
+      :'Saved A01/A02 signals identify '+names+' as the strongest observed severities. '+
+        'The browser-published policy projects '+this.riskLevel+' risk and '+
+        this.projectedPriority+' priority. The original Oracle assessment is unchanged. '+
+        'This is a platform-calculated projection, not an agent recommendation or approved operational decision.';
+  }
+  guidanceName(g:GuidanceResult):string{return this.copy(g.title,g.titleAr);}
+  selectFactor(f:RiskFactor):void{this.selectedFactor=f;}
 }

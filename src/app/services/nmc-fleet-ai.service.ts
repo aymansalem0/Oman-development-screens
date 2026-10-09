@@ -35,7 +35,7 @@ export interface FleetAiSnapshot {
     failed: number;
   };
   scheduler?: {
-    mode:string;enabled:boolean;checkIntervalSeconds:number;
+    mode:string;enabled:boolean;enabledVessels:number;checkIntervalSeconds:number;
     lastTickAt:string|null;lastError:string|null;
     lastSelected:number;lastUnchanged:number;batchRunning:boolean;
   };
@@ -162,11 +162,30 @@ export interface FleetAiAssessment extends FleetAiVessel {
   ruleset: RiskEngineConfig;
   sourceNature:string; evidenceVerified:false; authoritative:false;
 }
+export interface FleetAiAnalytics {
+  status:'ok';
+  fleetSize:number;
+  assessments:Array<{
+    imo:string;assessmentId:string|null;assessedAt:string|null;
+    savedRiskScore:number;savedRiskLevel:string;
+    rulesetVersion:string|null;criticalOpenFinding:boolean;
+    factorSeverities:{movement:number;inspection:number;certificate:number;dataQuality:number;history:number};
+  }>;
+}
 @Injectable({providedIn:'root'})
 export class NmcFleetAiService {
   constructor(private readonly http:HttpClient){}
   snapshot():Observable<FleetAiSnapshot>{
     return this.http.get<FleetAiSnapshot>('/api/ai/fleet/status');
+  }
+  /** Fresh Oracle/JSON persisted snapshot; never invokes Airia or the scheduler. */
+  fetchSaved():Observable<FleetAiSnapshot & {fetchedFrom:string;fetchedAt:string}>{
+    return this.http.get<FleetAiSnapshot & {fetchedFrom:string;fetchedAt:string}>(
+      '/api/ai/fleet/saved-status');
+  }
+  /** Batch read-only validated A01/A02 signals for all saved vessels; avoids N+1 calls. */
+  analytics():Observable<FleetAiAnalytics>{
+    return this.http.get<FleetAiAnalytics>('/api/ai/fleet/analytics');
   }
   assessment(imo:string):Observable<FleetAiAssessment>{
     return this.http.get<FleetAiAssessment>('/api/ai/fleet/results/'+encodeURIComponent(imo));

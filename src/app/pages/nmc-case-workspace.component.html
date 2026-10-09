@@ -64,13 +64,13 @@
         </article>
         <article class="metric-card">
           <small>{{ copy('Post-inspection risk reassessment', 'إعادة تقييم المخاطر بعد المعاينة') }}</small>
-          <strong>{{ riskReassessmentPending ? copy('Pending', 'مطلوبة') : copy('Not performed', 'لم تُجرَ') }}</strong>
+          <strong>{{ riskReassessmentPending ? copy('Pending', 'مطلوبة') : copy('Not applicable yet', 'غير مطلوبة حاليًا') }}</strong>
           <span>{{ copy('No assumed risk reduction', 'لا يوجد تخفيض افتراضي للمخاطر') }}</span>
         </article>
         <article class="metric-card">
-          <small>{{ copy('Case progress', 'تقدم الحالة') }}</small>
+          <small>{{ copy('Task completion · not case readiness', 'إنجاز المهام · ليس جاهزية الإغلاق') }}</small>
           <strong>{{ progressPercent }}%</strong>
-          <span>{{ completedTasks }}/{{ tasks.length }} {{ copy('tasks complete', 'مهام مكتملة') }}</span>
+          <span>{{ completedTasks }}/{{ tasks.length }} {{ copy('approved A01 tasks completed', 'مهام A01 المعتمدة المكتملة') }}</span>
         </article>
         <article class="metric-card">
           <small>{{ copy('Open / escalated', 'مفتوحة / مصعدة') }}</small>
@@ -80,11 +80,16 @@
       </div>
     </section>
 
+    <div class="case-risk-reference" *ngIf="centralCase as linked">
+      <span>{{copy('Immutable source assessment','التقييم الأصلي غير القابل للتعديل')}}: {{linked.sourceAssessmentId || '—'}} · {{linked.sourceLevel}}</span>
+      <a [routerLink]="['/moei/nmc/vessel',linked.imo,'risk']">{{copy('View Full Risk Intelligence & Evidence →','عرض تفاصيل تحليل المخاطر والأدلة ←')}}</a>
+    </div>
     <section class="case-progress-strip">
       <div class="progress-head">
         <div>
-          <strong>{{ copy('Case progress', 'تقدم الحالة') }}</strong>
-          <p>{{ copy('Mandatory tasks must be completed before case resolution.', 'يجب استكمال المهام الإلزامية قبل إغلاق الحالة.') }}</p>
+          <strong>{{ copy('Approved A01 task completion', 'إنجاز المهام المعتمدة من A01 فقط') }}</strong>
+          <p>{{ copy('Task percentage does not include pending AI decisions or post-inspection risk verification.',
+              'نسبة إنجاز المهام لا تشمل قرارات AI المعلقة أو إعادة تقييم المخاطر بعد المعاينة.') }}</p>
         </div>
         <span>{{ progressPercent }}%</span>
       </div>
@@ -95,6 +100,56 @@
       </div>
     </section>
 
+
+    <section class="ai-action-panel" aria-label="Airia A01 action plan">
+      <div class="ai-action-heading">
+        <div>
+          <span class="section-kicker">{{ copy('AI ACTION PLANNING · AIRIA A01', 'تخطيط الإجراءات · Airia A01') }}</span>
+          <h3>{{ copy('Evidence-backed proposed case actions', 'إجراءات حالة مقترحة ومدعومة بالأدلة') }}</h3>
+          <p>{{ copy('A01 proposes. The NMC officer approves. Only accepted actions become tasks; approved inspection referrals enter Smart Inspection scheduling.',
+            'يقترح A01 ويعتمد موظف NMC. تتحول الإجراءات المقبولة فقط إلى مهام، وتدخل إحالات المعاينة المعتمدة إلى قائمة الجدولة.') }}</p>
+        </div>
+        <button *ngIf="!centralCase?.actionPlan" type="button" class="ai-plan-button"
+                [disabled]="centralBusy||caseStatus==='Resolved'" (click)="generateAiActions()">
+          ↻ {{ copy('Retry A01 recommendations', 'إعادة محاولة تحميل توصيات A01') }}
+        </button>
+      </div>
+      <div class="ai-plan-alert" *ngIf="!centralCase?.actionPlan">
+        {{ copy('A01 recommendations are prepared automatically when Create Maritime Case is confirmed. If this case was opened before the change or A01 failed, use Retry. No tasks are invented.',
+          'يتم إعداد توصيات A01 عند تأكيد إنشاء الحالة البحرية. إذا كانت الحالة قديمة أو فشل A01، استخدم إعادة المحاولة. لن ننشئ مهام افتراضية.') }}
+      </div>
+      <ng-container *ngIf="centralCase?.actionPlan as plan">
+        <p class="ai-plan-context">{{ plan.summary }} <small>{{ copy('Saved source risk', 'المخاطر الأصلية') }}: {{ plan.sourceScore }}/100 · {{ plan.sourceAssessmentId }}</small></p>
+        <div class="ai-action-rows">
+          <article class="ai-action-row" *ngFor="let action of plan.proposedActions">
+            <div class="ai-action-detail">
+              <div class="ai-action-title"><b>{{action.title}}</b>
+                <span class="ai-decision-state">{{action.decision}}</span></div>
+              <p>{{action.reason}}</p>
+              <small>A01 · {{action.actionType}} · {{action.ownerRole}} · {{action.priority}} ·
+                {{ copy('confidence', 'الثقة') }} {{(action.confidence*100)|number:'1.0-0'}}% ·
+                {{action.evidenceIds.join(', ')}}</small>
+              <p *ngIf="action.decisionNote">{{copy('Officer note','ملاحظة الموظف')}}: {{action.decisionNote}}</p>
+            </div>
+            <div *ngIf="action.decision==='PENDING'" class="ai-action-decisions">
+              <textarea [(ngModel)]="actionNotes[action.actionId]"
+                  [placeholder]="copy('Reason for Modify / Reject (required)', 'سبب التعديل أو الرفض (مطلوب)')"
+                  rows="2"></textarea>
+              <div class="ai-decision-buttons">
+                <button type="button" [disabled]="centralBusy" (click)="decideAiAction(action,'ACCEPT')">✓ {{copy('Accept','اعتماد')}}</button>
+                <button type="button" [disabled]="centralBusy" (click)="decideAiAction(action,'MODIFY')">{{copy('Accept with note','اعتماد بملاحظة')}}</button>
+                <button type="button" [disabled]="centralBusy" (click)="decideAiAction(action,'REJECT')">{{copy('Reject','رفض')}}</button>
+              </div>
+            </div>
+          </article>
+        </div>
+        <div class="ai-queue-note" *ngIf="centralCase?.inspectionRequests?.length">
+          {{copy('Approved inspection requests','طلبات المعاينة المعتمدة')}}:
+          <span *ngFor="let r of centralCase?.inspectionRequests">{{r.status}} · </span>
+          <a [routerLink]="['/moei/smart-inspection/candidates']">{{copy('Open Smart Inspection scheduling →','فتح جدول المعاينة الذكية ←')}}</a>
+        </div>
+      </ng-container>
+    </section>
     <section class="workspace-grid">
       <div class="left-column">
         <article class="panel task-panel">
@@ -107,6 +162,13 @@
             <span class="task-count">{{ tasks.length }} {{ copy('tasks', 'مهام') }}</span>
           </div>
 
+          <div class="ai-plan-alert" *ngIf="!tasks.length">
+            {{centralCase?.actionPlan
+              ?copy('No approved A01 tasks yet. Review the recommendations above; only accepted actions will appear here.',
+                    'لا توجد مهام معتمدة من A01 بعد. راجع التوصيات أعلاه؛ لن تظهر هنا إلا الإجراءات المعتمدة.')
+              :copy('Recommendations are not yet available. No historical or template tasks are displayed.',
+                    'التوصيات غير متاحة بعد؛ لن تظهر مهام قديمة أو ثابتة.')}}
+          </div>
           <div class="task-list">
             <article class="task-card" *ngFor="let task of tasks" [class.selected]="selectedTask?.id === task.id">
               <button type="button" class="task-main" (click)="openTask(task)">
@@ -134,15 +196,15 @@
 
               <div class="task-actions">
                 <button
-                  *ngIf="task.id === 'priority-inspection'"
+                  *ngIf="inspectionTask(task)"
                   type="button"
                   class="inspection-action"
-                  (click)="openSmartInspection()"
+                  (click)="openInspectionForTask(task)"
                 >
-                  ✓ {{ task.status === 'Completed' ? copy('View Inspection', 'عرض المعاينة') : copy('Open Inspection', 'فتح المعاينة') }}
+                  ✓ {{ task.status === 'Completed' ? copy('View Inspection', 'عرض المعاينة') : copy('Schedule / Open Inspection', 'جدولة / فتح المعاينة') }}
                 </button>
 
-                <ng-container *ngIf="task.id !== 'priority-inspection'">
+                <ng-container *ngIf="!inspectionTask(task)">
                   <button type="button" class="start" (click)="startTask(task)" [disabled]="centralBusy || caseStatus==='Resolved' || task.status === 'In Progress' || task.status === 'Completed' || task.status === 'Escalated'">
                     ▶ {{ copy('Start', 'بدء') }}
                   </button>
@@ -214,8 +276,10 @@
               <span class="section-kicker">{{ copy('RESOLUTION CONTROL', 'التحكم في الإغلاق') }}</span>
               <h3>{{ copy('Close case with evidence', 'إغلاق الحالة بالأدلة') }}</h3>
             </div>
-            <span class="ready-badge" [class.ready]="mandatoryComplete">
-              {{ mandatoryComplete ? copy('Ready', 'جاهزة') : copy('Not ready', 'غير جاهزة') }}
+            <span class="ready-badge" [class.ready]="readyForResolution||caseStatus==='Resolved'">
+              {{caseStatus==='Resolved'
+                ? copy('Closed','مغلقة')
+                : readyForResolution ? copy('Ready','جاهزة') : copy('Not ready','غير جاهزة')}}
             </span>
           </div>
 
@@ -228,11 +292,24 @@
                   <small>{{ completedTasks }}/{{ tasks.length }} {{ copy('tasks complete', 'مهام مكتملة') }}</small>
                 </p>
               </div>
-              <div>
-                <span>○</span>
+              <div [class.complete]="!!centralCase?.actionPlan&&pendingAiActionCount===0">
+                <span>{{centralCase?.actionPlan&&pendingAiActionCount===0?'✓':'○'}}</span>
                 <p>
-                  <strong>{{ copy('Post-inspection risk reassessment not recorded', 'لم يتم تسجيل إعادة تقييم المخاطر بعد المعاينة') }}</strong>
-                  <small>{{ copy('The original saved AI assessment remains unchanged; a new evidence-based evaluation is required.', 'يبقى تقييم AI الأصلي كما هو؛ ويلزم تقييم جديد بناءً على الأدلة.') }}</small>
+                  <strong>{{ copy('A01 proposals reviewed by an officer', 'اعتماد أو رفض جميع توصيات A01 بواسطة الموظف') }}</strong>
+                  <small>{{pendingAiActionCount}} {{ copy('decisions still pending', 'قرارات ما زالت معلقة') }}</small>
+                </p>
+              </div>
+              <div [class.complete]="!riskReassessmentPending">
+                <span>{{riskReassessmentPending?'○':'✓'}}</span>
+                <p>
+                  <strong>{{riskReassessmentPending
+                    ?copy('Post-inspection risk reassessment pending','إعادة تقييم المخاطر بعد المعاينة معلقة')
+                    :copy('No unreassessed inspection outcome','لا توجد معاينة مكتملة تنتظر إعادة التقييم')}}</strong>
+                  <small>{{riskReassessmentPending
+                    ?copy('The original saved risk remains unchanged. A verified A02 refresh and a new saved assessment are required before closure.',
+                       'المخاطر المحفوظة لم تتغير. يلزم تحديث A02 وتقييم مخاطر جديد ومحفوظ قبل الإغلاق.')
+                    :copy('Any future inspection outcome must undergo separate evidence-based reassessment.',
+                       'أي نتيجة معاينة مستقبلية تحتاج إلى إعادة تقييم مستقلة قائمة على الأدلة.')}}</small>
                 </p>
               </div>
             </div>
@@ -243,7 +320,7 @@
               'لخص نتيجة التحقق والإجراءات المكتملة وأي متطلبات مراقبة متبقية...'
             )"></textarea>
 
-            <button type="button" class="resolve-btn" (click)="resolveCase()" [disabled]="centralBusy || !mandatoryComplete || caseStatus === 'Resolved'">
+            <button type="button" class="resolve-btn" (click)="resolveCase()" [disabled]="centralBusy || !readyForResolution || caseStatus === 'Resolved'">
               ✓ {{ caseStatus === 'Resolved' ? copy('Case resolved', 'تم إغلاق الحالة') : copy('Resolve NMC Case', 'إغلاق الحالة بالمركز البحري') }}
             </button>
           </div>
@@ -295,7 +372,7 @@
 
     <div class="drawer-actions">
       <button
-        *ngIf="task.id === 'priority-inspection'"
+        *ngIf="inspectionTask(task)"
         type="button"
         class="inspection-action"
         (click)="closeTask(); openSmartInspection()"
@@ -303,7 +380,7 @@
         ✓ {{ task.status === 'Completed' ? copy('View Smart Inspection', 'عرض المعاينة الذكية') : copy('Open Smart Inspection', 'فتح المعاينة الذكية') }}
       </button>
 
-      <ng-container *ngIf="task.id !== 'priority-inspection'">
+      <ng-container *ngIf="!inspectionTask(task)">
         <button type="button" (click)="startTask(task)" [disabled]="task.status === 'In Progress' || task.status === 'Completed' || task.status === 'Escalated'">
           ▶ {{ copy('Start task', 'بدء المهمة') }}
         </button>

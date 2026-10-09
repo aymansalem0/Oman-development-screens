@@ -1,0 +1,134 @@
+<div class="guide-shell" [attr.dir]="lang.dir">
+  <header class="guide-topbar">
+    <div><span class="guide-kicker">{{copy('MOEI · NMC SETTINGS','وزارة الطاقة والبنية التحتية · إعدادات المركز البحري')}}</span>
+      <h1>{{copy('Operational Guidance Rules','إعدادات قواعد الإرشاد التشغيلي')}}</h1>
+      <p>{{copy('Configurable platform guidance from SAVED AI findings — no agent calls or tasks.',
+               'إرشادات قابلة للتهيئة من نتائج AI المحفوظة، دون استدعاءات جديدة أو إنشاء مهام.')}}</p>
+    </div>
+    <div class="guide-header-actions"><button (click)="toggleLanguage()">{{lang.isArabic?'English':'العربية'}}</button>
+      <a routerLink="/moei/nmc">{{copy('← Command Center','← مركز القيادة')}}</a></div>
+  </header>
+  <app-nmc-navigation></app-nmc-navigation>
+  <main class="guide-main">
+    <section class="guide-intro">
+      <div class="guide-stat"><strong>{{rules.length}}</strong><small>{{copy('Configured policy rules','قواعد مهيأة')}}</small></div>
+      <div class="guide-notice">{{copy('Advisory-only. Editing requires the editor key; publication requires supervisor approval. Case actions are separate and human-approved.',
+        'إرشادات فقط. التعديل بمفتاح المحرر، والنشر بموافقة المشرف. إجراءات الحالة منفصلة وتتطلب اعتماد الموظف.')}}</div>
+    </section>
+    <p *ngIf="loading" class="guide-feedback">{{copy('Loading policy registry…','جارٍ تحميل سجل القواعد…')}}</p>
+    <p *ngIf="error" class="guide-feedback error" role="alert">{{error}}</p>
+    <p *ngIf="message" class="guide-feedback success" role="status">{{message}}</p>
+    <div class="guide-layout">
+      <aside class="guide-card guide-list">
+        <div class="guide-card-header"><h2>{{copy('Policy Registry','سجل القواعد')}}</h2><button (click)="load()" [disabled]="loading">{{copy('Refresh','تحديث')}}</button></div>
+        <div class="guide-new-rule">
+          <strong>{{copy('Create New Rule Draft','إنشاء مسودة قاعدة جديدة')}}</strong>
+          <label>{{copy('Rule ID','معرف القاعدة')}}<input [(ngModel)]="newRuleId" placeholder="NMC-GUIDE-005"></label>
+          <label>{{copy('English title','الاسم بالإنجليزية')}}<input [(ngModel)]="newRuleTitle" maxlength="140"></label>
+          <label>{{copy('Arabic title','الاسم بالعربية')}}<input [(ngModel)]="newRuleTitleAr" maxlength="140"></label>
+          <button type="button" class="guide-primary" [disabled]="busy" (click)="createRule()">{{copy('+ Create Draft','+ إنشاء مسودة')}}</button>
+        </div>
+        <button *ngFor="let r of rules" class="guide-rule" [class.active]="selected?.id===r.id" (click)="select(r)">
+          <strong>{{lang.isArabic?(r.published?.titleAr||r.draft?.titleAr||r.id):(r.published?.title||r.draft?.title||r.id)}}</strong>
+          <small>{{r.id}} · {{r.publishedRevision ? 'Published v'+r.publishedRevision : 'Not published'}} · {{r.status}}</small>
+          <span class="guide-badge" *ngIf="r.draft">{{copy('DRAFT','مسودة')}}</span>
+        </button>
+      </aside>
+      <section class="guide-card guide-editor" *ngIf="selected as r">
+        <div class="guide-card-header">
+          <div><small>{{r.id}} · {{copy('Registry revision','إصدار السجل')}} {{r.revision}}</small><h2>{{copy('Rule Configuration','تهيئة القاعدة')}}</h2></div>
+          <span class="guide-badge" *ngIf="r.draft">{{copy('Unpublished draft','مسودة غير منشورة')}}</span>
+        </div>
+        <form *ngIf="draft as d" (ngSubmit)="saveDraft()">
+          <div class="guide-fields">
+            <label>{{copy('Guidance (English)','الإرشاد (الإنجليزية)')}}<input name="title" [(ngModel)]="d.title" maxlength="140" required></label>
+            <label>{{copy('Guidance (Arabic)','الإرشاد (العربية)')}}<input name="titleAr" [(ngModel)]="d.titleAr" maxlength="140" required></label>
+            <label>{{copy('Saved assessment field','الحقل المحفوظ في التقييم')}}
+              <select name="field" [(ngModel)]="d.condition.field" (ngModelChange)="onFieldChange()">
+                <option *ngFor="let field of availableFields" [value]="field.value">{{copy(field.en,field.ar)}}</option>
+              </select></label>
+            <label>{{copy('Comparison operator','عامل المقارنة')}}
+              <select name="operator" [(ngModel)]="d.condition.operator">
+                <option [value]="valueKind==='number'?'GTE':'EQUALS'">{{valueKind==='number'?'≥':'='}}</option>
+              </select></label>
+            <label>{{copy('Condition threshold','قيمة الشرط')}}
+              <input *ngIf="valueKind==='number'" name="numberValue" type="number"
+                     [(ngModel)]="d.condition.value" required min="0" max="100">
+              <select *ngIf="valueKind==='boolean'" name="booleanValue" [(ngModel)]="d.condition.value">
+                <option [ngValue]="true">True</option><option [ngValue]="false">False</option>
+              </select>
+              <select *ngIf="valueKind==='choice'" name="choiceValue" [(ngModel)]="d.condition.value">
+                <option *ngFor="let choice of choiceValues" [value]="choice">{{choice}}</option>
+              </select>
+            </label>
+            <label>{{copy('Guidance priority','أولوية الإرشاد')}}
+              <select name="priority" [(ngModel)]="d.priority">
+                <option *ngFor="let level of priorities" [value]="level">{{level}}</option>
+              </select></label>
+            <label>{{copy('Responsible role','الدور المسؤول')}}
+              <input name="ownerRole" [(ngModel)]="d.ownerRole" maxlength="56" required></label>
+            <label class="guide-checkbox"><input name="enabled" type="checkbox" [(ngModel)]="d.enabled">
+              {{copy('Active when published','تُفعّل عند النشر')}}</label>
+          </div>
+          <div class="guide-condition-builder">
+            <div class="guide-cond-header">
+              <strong>{{copy('Additional AND Conditions','شروط إضافية مرتبطة بـ AND')}}</strong>
+              <button type="button" [disabled]="(d.additionalConditions?.length||0)>=5" (click)="addCondition()">
+                + {{copy('Add Condition','إضافة شرط')}}</button>
+            </div>
+            <p>{{copy('Every condition must match the saved verified facts. At most six conditions per rule.',
+                     'يجب تحقق كل الشروط من الحقائق المحفوظة؛ الحد الأقصى ستة شروط لكل قاعدة.')}}</p>
+            <div class="guide-extra-condition" *ngFor="let c of d.additionalConditions||[];let i=index">
+              <span>AND</span>
+              <select [(ngModel)]="c.field" [name]="'extraField'+i" (ngModelChange)="onConditionFieldChanged(c)">
+                <option *ngFor="let option of availableFields" [value]="option.value">{{copy(option.en,option.ar)}}</option>
+              </select>
+              <span>{{kind(c.field)==='number'?'≥':'='}}</span>
+              <input *ngIf="kind(c.field)==='number'" type="number" [name]="'extraValueNumber'+i"
+                     [(ngModel)]="c.value" min="0" max="100">
+              <select *ngIf="kind(c.field)==='boolean'" [name]="'extraValueBoolean'+i" [(ngModel)]="c.value">
+                <option [ngValue]="true">True</option><option [ngValue]="false">False</option>
+              </select>
+              <select *ngIf="kind(c.field)==='choice'" [name]="'extraValueChoice'+i" [(ngModel)]="c.value">
+                <option *ngFor="let x of choices(c.field)" [value]="x">{{x}}</option>
+              </select>
+              <button type="button" (click)="removeCondition(i)" [attr.aria-label]="copy('Remove condition','حذف الشرط')">×</button>
+            </div>
+          </div>
+          <div class="guide-actions">
+            <button class="guide-primary" type="submit" [disabled]="busy">{{copy('Save Draft','حفظ المسودة')}}</button>
+            <button type="button" [disabled]="busy||!r.draft" (click)="publish()">{{copy('Publish (Supervisor)','نشر (المشرف)')}}</button>
+          </div>
+        </form>
+        <div class="guide-current" *ngIf="r.published as published; else unpublished">
+          <h3>{{copy('Currently Published Rule','القاعدة المنشورة حاليًا')}}</h3>
+          <p>{{published.condition.field}} {{published.condition.operator}} {{published.condition.value}}
+            → {{lang.isArabic?published.titleAr:published.title}}</p>
+          <small>v{{r.publishedRevision}} · {{published.priority}} · {{published.ownerRole}}</small>
+        </div>
+        <ng-template #unpublished>
+          <p class="guide-empty">{{copy('New draft: no guidance will appear until supervisor publication.',
+            'مسودة جديدة: لن يظهر أي إرشاد حتى اعتماد النشر من المشرف.')}}</p>
+        </ng-template>
+      </section>
+    </div>
+    <div class="guide-lower">
+      <section class="guide-card guide-test">
+        <div class="guide-card-header"><h2>{{copy('Test Published Rules — Read Only','اختبار القواعد المنشورة — للقراءة فقط')}}</h2></div>
+        <p>{{copy('Tests saved vessel evidence. No agent invocation, case or task.',
+                 'اختبار أدلة السفينة المحفوظة؛ دون استدعاء AI أو إنشاء حالات أو مهام.')}}</p>
+        <div class="guide-actions"><input [(ngModel)]="testImo" placeholder="IMO" maxlength="7" aria-label="Vessel IMO">
+          <button type="button" class="guide-primary" [disabled]="busy" (click)="testSaved()">{{copy('Test Rules','اختبار القواعد')}}</button></div>
+        <div class="guide-test-result" *ngFor="let result of testResults">{{result}}</div>
+        <div *ngIf="!testResults.length" class="guide-empty">{{copy('No matched results yet','لا توجد نتائج مطابقة حتى الآن')}}</div>
+      </section>
+      <section class="guide-card guide-audit">
+        <div class="guide-card-header"><h2>{{copy('Rule Audit Trail','سجل مراجعات القواعد')}}</h2></div>
+        <div class="guide-audit-row" *ngFor="let event of history">
+          <strong>{{event.action}}</strong> · v{{event.revision}} · {{event.role}}
+          <small>{{event.at | date:'medium'}}</small>
+        </div>
+      </section>
+    </div>
+  </main>
+</div>

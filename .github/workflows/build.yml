@@ -21,6 +21,11 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      - name: Verify deterministic Docker fleet-evidence build
+        # Uses the same adapter command that failed inside the ai-proxy Docker image.
+        # Runs offline: no Oracle, Airia or backend service required.
+        run: node ./ai-proxy/build-fleet-evidence.mjs
+
       - name: Build
         run: npm run build
 

@@ -367,6 +367,12 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
     };
 
     this.buildOperationalData();
+    this.subscriptions.add(this.riskEngine.config$.subscribe(()=>{
+      if(this.storedAi){
+        this.applyStoredAiView();
+        if(this.map){this.map.remove();this.map=undefined;setTimeout(()=>this.initMap(),0);}
+      }
+    }));
     this.loadExternalPsc();
     this.loadStoredAi();
 
@@ -464,8 +470,17 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
 
   private applyStoredAiView(): void {
     if (!this.storedAi) return;
-    this.vessel.riskScore = this.storedAi.score ?? this.vessel.riskScore;
-    this.vessel.riskLevel = this.storedAi.level ?? this.vessel.riskLevel;
+    // Current central Oracle policy is effective across all views;
+    // the original saved A01/A02 assessment remains immutable in storedAi.
+    const signalKeys=['movement','inspection','certificate','dataQuality','history'] as const;
+    const severities=Object.fromEntries(signalKeys.map(key=>[
+      key,this.storedAi!.signals.find(signal=>signal.factor===key)?.severity
+    ])) as {movement:number;inspection:number;certificate:number;dataQuality:number;history:number};
+    const projected=this.riskEngine.centralReady?
+      this.riskEngine.evaluateFromAiSignals(this.vessel,severities):null;
+    this.vessel.riskScore = projected?.score ?? this.storedAi.score ?? this.vessel.riskScore;
+    this.vessel.riskLevel = projected?.level ?? this.storedAi.level ?? this.vessel.riskLevel;
+    this.vessel.risk=this.vessel.riskScore;
     const sources: Record<string, string> = {
       movement: 'AIS / Movement',
       inspection: 'Inspection',
@@ -480,7 +495,9 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
       dataQuality: 'Data quality risk signal',
       history: 'Vessel inspection and operator history'
     };
-    const weights = this.storedAi.ruleset?.weights as unknown as Record<string, number> | undefined;
+    const weights = this.riskEngine.centralReady?
+      (this.riskEngine.config.weights as unknown as Record<string, number>):
+      (this.storedAi.ruleset?.weights as unknown as Record<string, number> | undefined);
     this.riskFactors = this.storedAi.signals.map(signal => {
       const weight = weights?.[signal.factor] ?? 0;
       return {
