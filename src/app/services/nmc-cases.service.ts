@@ -140,6 +140,29 @@ export class NmcCasesService {
     if(error?.message==='ACTION_CANCELLED')
       return ar?'تم إلغاء العملية.':'Action cancelled.';
     const code=error?.error?.error||'';
+    // Action metadata is a safe, bounded diagnostic (type/id and position only).
+    // The backend never sends the full Airia response or maritime evidence.
+    const details=error?.error?.details;
+    const actionNumber=Number.isInteger(details?.actionIndex)&&details.actionIndex>=1
+      ?details.actionIndex:'?';
+    if(code==='A01_ACTION_TYPE_UNSUPPORTED'){
+      const type=String(details?.actionType||'(missing)').slice(0,80);
+      return ar
+        ?`رفض A01 نوع الإجراء ${type} في البند رقم ${actionNumber}. يجب مطابقة نوع الإجراء مع قائمة الأنواع المعتمدة لدى المنصة، ولم تُنشأ مهام.`
+        :`A01 action #${actionNumber} has unsupported actionType: "${type}". Align the Airia pipeline action type with the platform contract. No tasks were created.`;
+    }
+    if(code==='A01_ACTION_ID_INVALID'){
+      const id=String(details?.actionId||'(missing)').slice(0,80);
+      return ar
+        ?`معرف إجراء A01 غير صالح في البند رقم ${actionNumber}: "${id}". يُقبل معرف لاتيني آمن بطول 1-60 حرفًا.`
+        :`A01 action #${actionNumber} has an invalid actionId: "${id}". Use a 1-60 character alphanumeric identifier.`;
+    }
+    if(code==='A01_ACTION_ID_DUPLICATE'){
+      const id=String(details?.actionId||'(missing)').slice(0,80);
+      return ar
+        ?`كرر A01 معرف الإجراء "${id}" عند البند رقم ${actionNumber}. يجب أن يكون لكل إجراء معرف فريد.`
+        :`A01 action #${actionNumber} duplicates normalized actionId "${id}". Each proposal must have a unique ID.`;
+    }
     const messages:Record<string,[string,string]>={
       CASE_SCHEMA_NOT_READY:['Case database migration 004 is required.','يجب تطبيق تحديث قاعدة البيانات رقم 004.'],
       CASE_STORE_UNAVAILABLE:['Case service is unavailable.','خدمة إدارة الحالات غير متاحة.'],
