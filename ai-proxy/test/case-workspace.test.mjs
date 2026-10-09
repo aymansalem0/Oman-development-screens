@@ -134,6 +134,58 @@ test('A01 rejects unknown actions and normalized duplicate IDs with precise, saf
     /A01_ACTION_ID_INVALID/);
 });
 
+test('A01 VERIFY_DEFICIENCY_CLOSURE becomes a reviewed evidence-backed task, not an inspection or auto-closure',async()=>{
+  const db=setup();
+  try {
+    let row=await opened(db);
+    const originalScore=row.sourceScore;
+    const valid=normalizeA01Actions({
+      assessmentId:'AIRIA-A01-REAL-EXAMPLE',
+      summary:'Follow up historical inspection deficiency',
+      evidence:[{
+        type:'INSPECTION',
+        evidenceIds:['INS-2026-01301','INVALID-UNVERIFIED-REF']
+      }],
+      proposedActions:[{
+        actionId:'verify_deficiency_closure',
+        actionType:'VERIFY_DEFICIENCY_CLOSURE',
+        priority:'HIGH',confidence:0.92,requiresHumanApproval:true
+      }]
+    },{
+      imo,assessmentId:row.sourceAssessmentId,score:row.sourceScore,
+      level:row.sourceLevel,configVersion:'v1',signals
+    });
+    const proposed=valid.proposedActions[0];
+    assert.equal(proposed.actionId,'verify-deficiency-closure');
+    assert.equal(proposed.actionType,'VERIFY_DEFICIENCY_CLOSURE');
+    assert.equal(proposed.title,'Verify evidence of deficiency closure');
+    assert.equal(proposed.ownerRole,'COMPLIANCE_OFFICER');
+    assert.deepEqual(proposed.evidenceIds,['INS-2026-01301']);
+    row=await db.cases.saveActionPlan(row.id,row.version,valid);
+    assert.equal(row.tasks.length,0);
+    assert.equal((await db.cases.listInspectionRequests()).length,0);
+    row=await db.cases.decideAction(row.id,row.version,proposed.actionId,'ACCEPT');
+    assert.equal(row.tasks.length,1);
+    assert.equal(row.tasks[0].actionType,'VERIFY_DEFICIENCY_CLOSURE');
+    assert.equal(row.tasks[0].status,'Assigned');
+    assert.equal(row.tasks[0].provenance,'AIRIA_A01_HUMAN_APPROVED');
+    assert.deepEqual(row.inspectionRequests,[]);
+    assert.equal(row.inspectionOutcome,null);
+    assert.equal(row.sourceScore,originalScore);
+    // A01 cannot claim closure without a validated inspection evidence reference.
+    assert.throws(()=>normalizeA01Actions({
+      proposedActions:[{
+        actionId:'unverified-closure',actionType:'VERIFY_DEFICIENCY_CLOSURE',
+        priority:'HIGH',confidence:0.92,requiresHumanApproval:true,
+        evidenceIds:['INS-NOT-PRESENT']
+      }]
+    },{
+      imo,assessmentId:row.sourceAssessmentId,score:row.sourceScore,
+      level:row.sourceLevel,configVersion:'v1',signals
+    }),/A01_ACTION_EVIDENCE_MISSING/);
+  } finally {db.close();}
+});
+
 test('A01 plan cannot be published twice and does not create tasks before human approval',async()=>{
  const db=setup();
  try{
