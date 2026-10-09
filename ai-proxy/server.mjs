@@ -2,6 +2,7 @@ import { createServer } from 'node:http';
 import { getPscVessel, getPscHealth } from './psc-reader.mjs';
 import { FleetAssessmentManager } from './fleet-ai.mjs';
 import { FleetAutoScheduler } from './fleet-scheduler.mjs';
+import { DashboardWorkspace, DashboardError } from './dashboard-workspace.mjs';
 
 const port = Number(process.env.PORT || 3000);
 const apiKey = (process.env.AIRIA_MENA_KEY || '').trim();
@@ -37,6 +38,7 @@ const repository=dbMode==='oracle'
   ? new (await import('./oracle-store.mjs')).OracleIntelligenceStore()
   : null;
 const fleet=new FleetAssessmentManager({executeAgent:fleetAgentCall,getPscVessel,repository});
+const dashboards=new DashboardWorkspace({mode:dbMode,oracleRepository:repository});
 const scheduler=new FleetAutoScheduler({fleet,getPscVessel,
   enabled:autoEnabled && Boolean(apiKey),intervalMs:autoInterval,
   maxVessels:process.env.NMC_FLEET_AUTO_MAX_VESSELS || 420,
@@ -120,6 +122,52 @@ const server = createServer(async (req, res) => {
       return respond(res,data?200:404,data||{error:'UNKNOWN_VESSEL'});
     }catch{return respond(res,503,{error:'FLEET_HISTORY_UNAVAILABLE'});}
   }
+  // Dashboard read operations remain independent of Airia and Fleet scheduler.
+  // Writes require a server-managed access key. Role labels are shared-key
+  // permissions, not end-user identity. Integrate real IAM before production.
+  if (path === '/api/ai/dashboards' || path.startsWith('/api/ai/dashboards/')) {
+    const match=/^\/api\/ai\/dashboards(?:\/([a-zA-Z0-9_-]{1,100})(?:\/(publish|revisions))?)?$/.exec(path);
+    if(!match)return respond(res,404,{error:'NOT_FOUND'});
+    const [,id,action]=match;
+    try{
+      if(req.method==='GET'){
+        if(!id)return respond(res,200,{status:'ok',dashboards:await dashboards.list()});
+        if(action==='revisions')return respond(res,200,{status:'ok',revisions:await dashboards.revisions(id)});
+        if(action)return respond(res,404,{error:'NOT_FOUND'});
+        const item=await dashboards.get(id);
+        return respond(res,item?200:404,item?{status:'ok',dashboard:item}:{error:'DASHBOARD_NOT_FOUND'});
+      }
+      if(req.method==='POST'&&!id&&!action){
+        dashboards.assertRole(req,'EDITOR');
+        const body=await requestJson(req,1024*128);
+        return respond(res,201,{status:'ok',dashboard:await dashboards.create(body.dashboard)});
+      }
+      if(req.method==='PUT'&&id&&!action){
+        dashboards.assertRole(req,'EDITOR');
+        const body=await requestJson(req,1024*128);
+        return respond(res,200,{status:'ok',dashboard:await dashboards.save(id,body.dashboard)});
+      }
+      if(req.method==='POST'&&id&&action==='publish'){
+        dashboards.assertRole(req,'PUBLISHER');
+        const body=await requestJson(req,1024*16);
+        return respond(res,200,{status:'ok',dashboard:await dashboards.publish(id,body.version)});
+      }
+      if(req.method==='DELETE'&&id&&!action){
+        dashboards.assertRole(req,'EDITOR');
+        const body=await requestJson(req,1024*16);
+        await dashboards.archive(id,body.version);
+        return respond(res,200,{status:'ok'});
+      }
+      return respond(res,405,{error:'METHOD_NOT_ALLOWED'});
+    }catch(error){
+      if(error instanceof DashboardError)return respond(res,error.status,{error:error.code});
+      if(Number.isInteger(error?.status)&&error.status>=400&&error.status<500)
+        return respond(res,error.status,{error:'INVALID_REQUEST'});
+      console.error('[nmc-dashboard] request failure');
+      return respond(res,503,{error:'DASHBOARD_STORE_UNAVAILABLE'});
+    }
+  }
+
   // Fleet mutation is internal to the Node scheduler; the dashboard is read-only.
   if (path === '/api/ai/fleet/start' || path === '/api/ai/fleet/cancel') {
     return respond(res,405,{error:'AUTONOMOUS_FLEET_ONLY'});
