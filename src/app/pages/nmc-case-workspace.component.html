@@ -143,15 +143,15 @@
                 </button>
 
                 <ng-container *ngIf="task.id !== 'priority-inspection'">
-                  <button type="button" class="start" (click)="startTask(task)" [disabled]="task.status === 'In Progress' || task.status === 'Completed' || task.status === 'Escalated'">
+                  <button type="button" class="start" (click)="startTask(task)" [disabled]="centralBusy || caseStatus==='Resolved' || task.status === 'In Progress' || task.status === 'Completed' || task.status === 'Escalated'">
                     ▶ {{ copy('Start', 'بدء') }}
                   </button>
-                  <button type="button" class="complete" (click)="completeTask(task)" [disabled]="task.status === 'Completed'">
+                  <button type="button" class="complete" (click)="completeTask(task)" [disabled]="centralBusy || caseStatus==='Resolved' || task.status === 'Completed'">
                     ✓ {{ copy('Complete', 'استكمال') }}
                   </button>
                 </ng-container>
 
-                <button type="button" class="escalate" (click)="escalateTask(task)" [disabled]="task.status === 'Completed' || task.status === 'Escalated'">
+                <button type="button" class="escalate" (click)="escalateTask(task)" [disabled]="centralBusy || caseStatus==='Resolved' || task.status === 'Completed' || task.status === 'Escalated'">
                   ↑ {{ copy('Escalate', 'تصعيد') }}
                 </button>
               </div>
@@ -243,7 +243,7 @@
               'لخص نتيجة التحقق والإجراءات المكتملة وأي متطلبات مراقبة متبقية...'
             )"></textarea>
 
-            <button type="button" class="resolve-btn" (click)="resolveCase()" [disabled]="!mandatoryComplete || caseStatus === 'Resolved'">
+            <button type="button" class="resolve-btn" (click)="resolveCase()" [disabled]="centralBusy || !mandatoryComplete || caseStatus === 'Resolved'">
               ✓ {{ caseStatus === 'Resolved' ? copy('Case resolved', 'تم إغلاق الحالة') : copy('Resolve NMC Case', 'إغلاق الحالة بالمركز البحري') }}
             </button>
           </div>
