@@ -25,6 +25,12 @@
           <span class="nav-icon">▦</span>
           <span class="nav-label">{{ copy('Command Center', 'مركز القيادة') }}</span>
         </a>
+        <a class="nav-link" routerLink="/moei/nmc/dashboards"
+           [class.active]="isDashboards" [attr.aria-current]="isDashboards ? 'page' : null"
+           [title]="copy('Dashboards', 'لوحات المعلومات')">
+          <span class="nav-icon">▥</span>
+          <span class="nav-label">{{ copy('Dashboards', 'لوحات المعلومات') }}</span>
+        </a>
         <a class="nav-link" [routerLink]="vesselRoute" [class.active]="isVessel360"
            [attr.aria-current]="isVessel360 ? 'page' : null" [title]="vesselHint">
           <span class="nav-icon">⌖</span>

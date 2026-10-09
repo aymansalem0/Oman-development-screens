@@ -98,6 +98,9 @@ const server = createServer(async (req, res) => {
   if (req.method === 'GET' && path === '/api/ai/fleet/status') {
     return respond(res,200,{...fleet.snapshot(),storageMode:dbMode,persistenceHealthy:fleet.persistenceHealthy,scheduler:scheduler.status()});
   }
+  if (req.method === 'GET' && path === '/api/ai/fleet/analytics') {
+    return respond(res, 200, fleet.analytics());
+  }
   const fleetResultMatch = /^\/api\/ai\/fleet\/results\/(\d{7})$/.exec(path);
   if (req.method === 'GET' && fleetResultMatch) {
     const record=fleet.getVesselResult(fleetResultMatch[1]);

@@ -161,6 +161,38 @@ export class FleetAssessmentManager {
         lastCheckedAt:v.lastCheckedAt,nextCheckAt:v.nextCheckAt,refreshFailure:v.refreshFailure||null}]))};
   }
   getVesselResult(imo){return VALID_IMOS.has(imo)?(this.results[imo]||null):null;}
+  /**
+   * Read-only dashboard facts from stored, validated A01/A02 factor severities.
+   * No agent execution and no recalculation of persisted historical assessments.
+   * Ruleset what-if scores are calculated by the consumer's deterministic engine.
+   */
+  analytics(){
+    const factors=['movement','inspection','certificate','dataQuality','history'];
+    const records=Object.values(this.results).filter(row=>
+      VALID_IMOS.has(row.imo)&&row.status==='COMPLETED');
+    const assessments=[];
+    for(const row of records){
+      if(!Array.isArray(row.signals)||row.signals.length!==5)continue;
+      const values={};
+      for(const key of factors){
+        const matches=row.signals.filter(s=>s?.factor===key);
+        if(matches.length!==1||!Number.isFinite(matches[0].severity)||
+           matches[0].severity<0||matches[0].severity>100)break;
+        values[key]=matches[0].severity;
+      }
+      if(factors.some(key=>!Object.hasOwn(values,key)))continue;
+      assessments.push({
+        imo:row.imo,assessmentId:row.assessmentId||null,
+        assessedAt:row.assessedAt||null,
+        savedRiskScore:row.score,
+        savedRiskLevel:row.level,
+        rulesetVersion:row.configVersion||null,
+        criticalOpenFinding:Boolean(row.criticalOpenFinding),
+        factorSeverities:values
+      });
+    }
+    return {status:'ok',fleetSize:420,assessments};
+  }
   start(input){
     if(this.job?.status==='RUNNING')throw new Error('FLEET_JOB_ALREADY_RUNNING');
     if(!input||!Array.isArray(input.vessels)||input.vessels.length<1||
