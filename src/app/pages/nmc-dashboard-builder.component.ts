@@ -6,7 +6,7 @@ import { Subscription } from 'rxjs';
 import { LanguageService } from '../services/language.service';
 import { NmcNavigationComponent } from '../components/nmc-navigation.component';
 import {
-  DASHBOARD_METRICS, DashboardDefinition, DashboardMetric, DashboardTemplateKind,
+  DASHBOARD_METRICS, DASHBOARD_MENU_PLACEMENTS, DashboardDefinition, DashboardMetric, DashboardTemplateKind,
   DashboardWidget, DashboardWidgetKind, NmcDashboardStoreService
 } from '../services/nmc-dashboard-store.service';
 import {
@@ -14,6 +14,7 @@ import {
 } from '../services/nmc-dashboard-data.service';
 import { NmcRiskEngineService } from '../services/nmc-risk-engine.service';
 import { NmcDashboardWorkspaceService, DashboardRevision } from '../services/nmc-dashboard-workspace.service';
+import { NmcDashboardNavigationService } from '../services/nmc-dashboard-navigation.service';
 
 type BarRow={name:string;count:number;percent:number};
 
@@ -26,6 +27,7 @@ type BarRow={name:string;count:number;percent:number};
 })
 export class NmcDashboardBuilderComponent implements OnInit,OnDestroy {
   readonly catalog=DASHBOARD_METRICS;
+  readonly menuPlacements=DASHBOARD_MENU_PLACEMENTS;
   readonly widgetKinds: Array<{id:DashboardWidgetKind;en:string;ar:string;icon:string}>=[
     {id:'kpi',en:'KPI Card',ar:'بطاقة مؤشر',icon:'▦'},
     {id:'bar',en:'Distribution Chart',ar:'رسم توزيعي',icon:'▥'},
@@ -65,7 +67,8 @@ export class NmcDashboardBuilderComponent implements OnInit,OnDestroy {
     public readonly store:NmcDashboardStoreService,
     private readonly data:NmcDashboardDataService,
     private readonly riskEngine:NmcRiskEngineService,
-    private readonly workspace:NmcDashboardWorkspaceService
+    private readonly workspace:NmcDashboardWorkspaceService,
+    private readonly dashboardNavigation:NmcDashboardNavigationService
   ){}
 
   ngOnInit():void {
@@ -97,6 +100,7 @@ export class NmcDashboardBuilderComponent implements OnInit,OnDestroy {
         this.subs.add(req);
       } else {
         this.dashboard=id?this.store.get(id):null;
+        if(this.dashboard&&!this.dashboard.menuPlacement)this.dashboard.menuPlacement='NMC_CENTER';
         if(id&&!this.dashboard)void this.router.navigate(['/moei/nmc/dashboards']);
       }
     }));
@@ -229,6 +233,7 @@ export class NmcDashboardBuilderComponent implements OnInit,OnDestroy {
       next:()=>{
         this.sharedBusy=false;
         this.loadShared();
+        this.dashboardNavigation.refresh();
         this.sharedError=this.copy('Dashboard published successfully.','تم نشر لوحة المعلومات بنجاح.');
       },
       error:error=>{
