@@ -60,23 +60,34 @@ export class NmcOperationalGuidanceAdminComponent implements OnInit{
     this.testResults=[];this.history=[];
     if(rule)this.api.history(rule.id).subscribe({next:x=>this.history=x.history,error:()=>this.history=[]});
   }
-  get valueKind():string{
-    const field=this.draft?.condition.field||'';
+  get valueKind():string{return this.kind(this.draft?.condition.field);}
+  get choiceValues():string[]{return this.choices(this.draft?.condition.field);}
+  kind(field?:GuidanceField):'boolean'|'choice'|'number'{
     if(field==='criticalOpenFinding'||field==='dataConflictDetected')return 'boolean';
     if(field==='riskLevel'||field==='operationalPriority')return 'choice';
     return 'number';
   }
-  get choiceValues():string[]{
-    return this.draft?.condition.field==='riskLevel'
-      ?['Normal','Watch','High','Critical']:['Routine','Enhanced Monitoring','Priority Review'];
+  choices(field?:GuidanceField):string[]{
+    return field==='riskLevel'?['Normal','Watch','High','Critical']:
+      ['Routine','Enhanced Monitoring','Priority Review'];
   }
-  onFieldChange():void{
-    if(!this.draft)return;
-    const field=this.draft.condition.field;
-    this.draft.condition.operator=field.endsWith('Severity')||field==='riskScore'?'GTE':'EQUALS';
-    this.draft.condition.value=field==='criticalOpenFinding'||field==='dataConflictDetected'?true:
+  onConditionFieldChanged(c:GuidancePolicy['condition']):void{
+    const field=c.field;
+    c.operator=this.kind(field)==='number'?'GTE':'EQUALS';
+    c.value=this.kind(field)==='boolean'?true:
       field==='riskLevel'?'Watch':field==='operationalPriority'?'Priority Review':75;
   }
+  onFieldChange():void{
+    if(this.draft)this.onConditionFieldChanged(this.draft.condition);
+  }
+  addCondition():void{
+    if(!this.draft)return;
+    this.draft.additionalConditions??=[];
+    if(this.draft.additionalConditions.length>=5)return;
+    this.draft.additionalConditions.push({field:'inspectionSeverity',operator:'GTE',value:75});
+  }
+  removeCondition(index:number):void{this.draft?.additionalConditions?.splice(index,1);}
+
   createRule():void{
     if(this.busy)return;
     const policy:GuidancePolicy={
