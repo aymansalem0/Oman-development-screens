@@ -135,6 +135,36 @@
       <p class="db-message" *ngIf="saveMessage">{{saveMessage}}</p>
       <p class="db-error" *ngIf="dataError">{{dataError}}</p>
 
+      <div *ngIf="viewOnly" class="db-view-filters">
+        <strong>{{copy('Filter results','تصفية النتائج')}}</strong>
+        <label>{{copy('Risk','المخاطر')}}
+          <select [(ngModel)]="board.filters.risk" (ngModelChange)="tablePage=1">
+            <option value="All">{{copy('All','الكل')}}</option>
+            <option value="Normal">{{copy('Normal','طبيعي')}}</option>
+            <option value="Watch">{{copy('Watch','مراقبة')}}</option>
+            <option value="High">{{copy('High','مرتفع')}}</option>
+            <option value="Critical">{{copy('Critical','حرج')}}</option>
+            <option value="Pending">{{copy('Pending','لم يتم التقييم')}}</option>
+          </select>
+        </label>
+        <label>{{copy('Type','النوع')}}
+          <select [(ngModel)]="board.filters.type" (ngModelChange)="tablePage=1">
+            <option value="All">{{copy('All','الكل')}}</option>
+            <option *ngFor="let type of types" [value]="type">{{type}}</option>
+          </select>
+        </label>
+        <label>{{copy('Flag','العلم')}}
+          <select [(ngModel)]="board.filters.flag" (ngModelChange)="tablePage=1">
+            <option value="All">{{copy('All','الكل')}}</option>
+            <option *ngFor="let flag of flags" [value]="flag">{{flag}}</option>
+          </select>
+        </label>
+        <label>{{copy('Vessel search','بحث عن سفينة')}}
+          <input [(ngModel)]="board.filters.search" (ngModelChange)="tablePage=1"
+                 [placeholder]="copy('Name or IMO','الاسم أو IMO')">
+        </label>
+      </div>
+
       <div class="db-layout" [class.db-view-layout]="viewOnly">
         <aside class="db-designer" *ngIf="!viewOnly">
           <section class="db-panel">
