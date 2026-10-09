@@ -185,7 +185,7 @@
               <th>{{ copy('Port / ETA', 'الميناء / ETA') }}</th>
               <th>{{ copy('Regime', 'نظام المعاينة') }}</th>
               <th>{{ copy('Eligibility', 'الأهلية') }}</th>
-              <th>{{ copy('NMC risk', 'مخاطر NMC') }}</th>
+              <th>{{ copy('Synthetic fixture risk', 'مخاطر البيانات التجريبية') }}</th>
               <th>{{ copy('Rule priority', 'أولوية القواعد') }}</th>
               <th></th>
             </tr>
@@ -216,7 +216,7 @@
               <td>
                 <div class="risk-cell">
                   <strong>{{ candidate.vessel.risk }}</strong>
-                  <span>{{ candidate.nmcReferral?.riskLevel || copy('Shared snapshot', 'لقطة مشتركة') }}</span>
+                  <span>{{ copy('Fixture only · not saved AI risk', 'بيانات تجريبية وليست المخاطر المحفوظة من AI') }}</span>
                 </div>
               </td>
               <td>
