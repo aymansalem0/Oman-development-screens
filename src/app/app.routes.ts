@@ -10,6 +10,7 @@ import { NmcCaseWorkspaceComponent } from './pages/nmc-case-workspace.component'
 import { NmcSmartInspectionComponent } from './pages/nmc-smart-inspection.component';
 import { NmcRiskConfigurationAdminComponent } from './pages/nmc-risk-configuration-admin.component';
 import { NmcDataQualityConfigurationComponent } from './pages/nmc-data-quality-configuration.component';
+import { NmcOperationalGuidanceAdminComponent } from './pages/nmc-operational-guidance-admin.component';
 import { ActivityClassificationMappingComponent } from './pages/activity-classification-mapping.component';
 import { SmartInspectionCandidateCenterComponent } from './pages/smart-inspection-candidate-center.component';
 import { NmcDashboardBuilderComponent } from './pages/nmc-dashboard-builder.component';
@@ -31,9 +32,10 @@ export const routes: Routes = [
   { path: 'moei/nmc/dashboards/:id', component: NmcDashboardBuilderComponent },
   { path: 'moei/nmc/admin/risk-configuration', component: NmcRiskConfigurationAdminComponent },
   { path: 'moei/nmc/admin/data-quality', component: NmcDataQualityConfigurationComponent },
+  { path: 'moei/nmc/admin/operational-guidance', component: NmcOperationalGuidanceAdminComponent },
   { path: 'moei/nmc/vessel/:imo/smart-inspection', component: NmcSmartInspectionComponent },
   { path: 'moei/nmc/vessel/:imo/case', component: NmcCaseWorkspaceComponent },
-  { path: 'moei/nmc/vessel/:imo/ai-assessment', component: NmcAiSituationAssessmentComponent },
+  { path: 'moei/nmc/vessel/:imo/ai-assessment', component: NmcRiskExplainabilityComponent },
   { path: 'moei/nmc/vessel/:imo/risk', component: NmcRiskExplainabilityComponent },
   { path: 'moei/nmc/vessel/:imo', component: NmcVessel360Component },
   { path: '**', redirectTo: base }
