@@ -11,6 +11,7 @@ import { NmcVesselProfile, RiskLevel } from '../data/nmc-vessel-catalog';
 import { LanguageService } from '../services/language.service';
 import {
   NmcRiskEngineService,
+  CentralPolicyVersion,
   RiskCalculationMode,
   RiskEngineConfig,
   RiskFactorKey,
@@ -51,6 +52,16 @@ export class NmcRiskConfigurationAdminComponent implements OnInit, OnDestroy {
   impactRows: ImpactRow[] = [];
   validationErrors: string[] = [];
   publishedMessage = '';
+  publicationError='';
+  publishing=false;
+  policyHistory:CentralPolicyVersion[]=[];
+  historyLoading=false;
+  private publisherAccessKey='';
+  private dirtyDraft=false;
+  get policyReady():boolean{return this.riskEngine.centralReady&&!!this.riskEngine.activeVersion;}
+  get activeRevision():number{return this.riskEngine.activeVersion?.revision||0;}
+  get priorBrowserDraft():boolean{return !!this.riskEngine.legacyBrowserDraft;}
+
 
   readonly factorKeys: RiskFactorKey[] = [
     'movement',
@@ -92,7 +103,48 @@ export class NmcRiskConfigurationAdminComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     this.loadPublished();
+    this.subscriptions.add(this.riskEngine.config$.subscribe(()=>{
+      if(!this.riskEngine.centralReady)return;
+      const next=this.riskEngine.config;
+      if(this.published?.version===next.version)return;
+      this.published=next;
+      if(!this.dirtyDraft)this.draft=this.riskEngine.cloneConfig(next);
+      this.validationErrors=this.riskEngine.validate(this.draft);
+      this.rebuildPreview();
+      this.loadVersionHistory();
+    }));
+    this.loadVersionHistory();
     this.loadSavedAssessments();
+  }
+  loadVersionHistory():void{
+    this.historyLoading=true;
+    this.subscriptions.add(this.riskEngine.history().subscribe({
+      next:list=>{this.policyHistory=list;this.historyLoading=false;},
+      error:()=>{this.historyLoading=false;}
+    }));
+  }
+  describeVersionDiff(entry:CentralPolicyVersion):string{
+    const previous=this.policyHistory.find(x=>x.revision===entry.previousRevision);
+    if(!previous)return this.copy('Initial central baseline','النسخة المركزية الأساسية');
+    const changes:string[]=[];
+    if(entry.config.mode!==previous.config.mode)changes.push('Mode: '+previous.config.mode+' → '+entry.config.mode);
+    const a=previous.config.thresholds,b=entry.config.thresholds;
+    if(a.watch!==b.watch||a.high!==b.high||a.critical!==b.critical)
+      changes.push('Thresholds: '+[a.watch,a.high,a.critical].join('/')+' → '+
+        [b.watch,b.high,b.critical].join('/'));
+    for(const k of this.factorKeys)if(entry.config.weights[k]!==previous.config.weights[k])
+      changes.push(k+': '+previous.config.weights[k]+'% → '+entry.config.weights[k]+'%');
+    if(entry.config.name!==previous.config.name)changes.push('Model name updated');
+    return changes.join(' · ')||this.copy('Metadata-only update','تعديل البيانات الوصفية فقط');
+  }
+  importBrowserDraft():void{
+    const previous=this.riskEngine.legacyBrowserDraft;
+    if(!previous)return;
+    if(!window.confirm(this.copy(
+      'Import previous browser Risk Settings as an UNPUBLISHED draft? The central active policy remains unchanged until supervisor approval.',
+      'استيراد إعدادات المخاطر القديمة بالمتصفح كمسودة غير منشورة؟ ستبقى القواعد المركزية دون تغيير حتى اعتماد المشرف.')))return;
+    this.draft=this.riskEngine.cloneConfig(previous);
+    this.dirtyDraft=true;this.updateDraft();
   }
   ngOnDestroy():void{this.subscriptions.unsubscribe();}
   reloadSaved():void{this.loadSavedAssessments();}
@@ -171,7 +223,10 @@ export class NmcRiskConfigurationAdminComponent implements OnInit, OnDestroy {
   }
 
   get canPublish(): boolean {
-    return this.validationErrors.length === 0 && this.totalWeight === 100;
+    return this.policyReady&&!this.publishing&&
+      this.validationErrors.length === 0 && this.totalWeight === 100 &&
+      this.draft.changeReason.trim().length>=10 &&
+      this.draft.publishedBy.trim().length>=3;
   }
 
   get currentModeLabel(): string {
@@ -221,6 +276,7 @@ export class NmcRiskConfigurationAdminComponent implements OnInit, OnDestroy {
   }
 
   updateDraft(): void {
+    this.dirtyDraft=true;
     this.publishedMessage = '';
     this.validationErrors = this.riskEngine.validate(this.draft);
     this.rebuildPreview();
@@ -247,6 +303,7 @@ export class NmcRiskConfigurationAdminComponent implements OnInit, OnDestroy {
   loadPublished(): void {
     this.published = this.riskEngine.config;
     this.draft = this.riskEngine.cloneConfig(this.published);
+    this.dirtyDraft=false;
     this.validationErrors = this.riskEngine.validate(this.draft);
     this.rebuildPreview();
   }
@@ -254,7 +311,9 @@ export class NmcRiskConfigurationAdminComponent implements OnInit, OnDestroy {
   discardChanges(): void {
     this.draft = this.riskEngine.cloneConfig(this.published);
     this.publishedMessage = '';
-    this.updateDraft();
+    this.dirtyDraft=false;
+    this.validationErrors=this.riskEngine.validate(this.draft);
+    this.rebuildPreview();
   }
 
   resetDraftToDefaults(): void {
@@ -266,16 +325,43 @@ export class NmcRiskConfigurationAdminComponent implements OnInit, OnDestroy {
   }
 
   publish(): void {
-    this.validationErrors = this.riskEngine.validate(this.draft);
-    if (this.validationErrors.length) return;
-
-    this.published = this.riskEngine.publish(this.draft);
-    this.draft = this.riskEngine.cloneConfig(this.published);
-    this.rebuildPreview();
-    this.publishedMessage = this.copy(
-      `Saved in this browser only. Recalculated the impact preview using ${this.savedInputs.length} saved A01/A02 assessments. The Oracle fleet, alerts, cases and other users are unchanged.`,
-      `تم حفظ الإعدادات في هذا المتصفح فقط، مع إعادة حساب معاينة التأثير على ${this.savedInputs.length} تقييم A01/A02 محفوظ. لم تتغير بيانات Oracle أو التنبيهات أو الحالات أو إعدادات المستخدمين الآخرين.`
-    );
+    this.validationErrors=this.riskEngine.validate(this.draft);
+    if(!this.canPublish)return;
+    const count=this.savedInputs.length;
+    if(!window.confirm(this.copy(
+      'Publish a NEW centrally active Oracle risk-policy version for all users? Recalculate '+count+
+        ' saved AI assessments WITHOUT running agents; keep prior versions, audit and cases?',
+      'نشر إصدار مخاطر جديد نشط مركزيًا في Oracle لكل المستخدمين وإعادة حساب '+count+
+        ' تقييم AI محفوظ دون استدعاء الوكلاء، مع الاحتفاظ بتاريخ الإصدارات والحالات؟')))return;
+    if(!this.publisherAccessKey)
+      this.publisherAccessKey=window.prompt('Risk Policy supervisor publishing key (this browser tab only)')?.trim()||'';
+    if(!this.publisherAccessKey)return;
+    this.publishing=true;this.publicationError='';this.publishedMessage='';
+    this.subscriptions.add(this.riskEngine.publishCentral(this.draft,this.activeRevision,
+      this.publisherAccessKey).subscribe({
+      next:response=>{
+        this.publishing=false;this.dirtyDraft=false;
+        this.published=this.riskEngine.cloneConfig(response.published.config);
+        this.draft=this.riskEngine.cloneConfig(this.published);
+        this.rebuildPreview();
+        this.loadVersionHistory();
+        this.publishedMessage=this.copy(
+          'Central version '+response.published.policyRef+' is ACTIVE. '+response.published.projectionCount+
+          ' saved assessments were projected; previous versions remain in History. No AI calls.',
+          'الإصدار المركزي '+response.published.policyRef+' أصبح نشطًا. تم حساب '+
+          response.published.projectionCount+' تقييم محفوظ؛ الإصدارات السابقة في السجل. دون استدعاءات AI.'
+        );
+      },
+      error:e=>{
+        this.publishing=false;
+        if(e?.status===403)this.publisherAccessKey='';
+        const code=e?.error?.error||'RISK_POLICY_PUBLISH_FAILED';
+        this.publicationError=this.copy(
+          'Central publication failed: '+code+'. The draft was preserved. Refresh policy and retry after checking the migration and key.',
+          'فشل النشر المركزي: '+code+'. تم الاحتفاظ بالمسودة. راجع الإصدار الحالي والهجرة ومفتاح المشرف.');
+        this.riskEngine.refreshCentral();
+      }
+    }));
   }
 
   private evaluateSaved(vessel:NmcVesselProfile,assessment:FleetAiAssessment,config:RiskEngineConfig){
