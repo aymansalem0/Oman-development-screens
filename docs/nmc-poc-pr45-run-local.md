@@ -182,6 +182,18 @@ The original `/#/moei/nmc/admin/risk-configuration` screen saved rules to **brow
 
 Safe frontend-only deploy for this change: pull the branch, `docker compose $compose build nmc`, then `docker compose $compose up -d --no-deps --force-recreate nmc`. Do not rebuild Oracle, rerun Migration 006 or issue Airia requests for a classification-only change.
 
+### Alerts & Notifications: risk policy live eligibility (browser preview)
+
+This change also updates `/#/moei/nmc/alerts` so risk settings changes affect what is displayed **in that browser**. The current policy and corresponding A01/A02 evidence projection are shown in a visible banner. The page refreshes from the persisted Oracle alert API every 15 seconds (or with Refresh), and rechecks its risk eligibility. An alert that no longer meets `High/Critical` thresholds is hidden from the **Active** view and its local KPI counters; it remains visible, flagged as locally not applicable, under **All**, with its unmodified Oracle audit and any linked maritime case.
+
+**SAFETY:** An open critical inspection finding independently keeps the alert eligible even if the weighted score is Watch or Normal. The current MV Gulf Horizon alert is one such example. Never auto-close a safety-related alert or case solely because a score threshold changed.
+
+The Command Center's active-alert count and the sidebar's unread count use the same **browser-only eligibility projection** for consistency. No paid A01/A02 calls run for a refresh. Missing or invalid AI inputs fail open so safety alerts are not accidentally hidden.
+
+**LIMITATION:** Risk Management settings are still saved to the browser's `localStorage` rather than a centrally published Oracle Risk Policy. Consequently the backend persisted Alert state / audit stays unchanged, browser-independent users may see different active projections, and the server scanner still uses the original saved risk + independent critical finding. This is a read-only display projection, **not** permanent deletion or an authoritative policy-driven reconciliation. Fully central alert suppression, new rule-triggered alerts, and server-wide distribution require a separately approved versioned Oracle risk-policy migration, backend compatibility/reconciliation workflow and explicit business governance for alerts with cases. No past cases are silently deleted.
+
+Safe deployment: `docker compose $compose build nmc` then `docker compose $compose up -d --no-deps --force-recreate nmc`. Oracle, migrations and ai-proxy are not touched by this frontend-only increment. Test with an existing saved HIGH alert without an independent critical finding: raise High/Critical settings above its projected score, and confirm it disappears from Active but remains under All; then restore settings to confirm it reappears. MV Gulf Horizon remains Critical if its independent critical open finding is present.
+
 ### Quick PowerShell verification
 
 ~~~powershell
