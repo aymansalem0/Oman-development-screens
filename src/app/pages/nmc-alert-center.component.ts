@@ -50,8 +50,8 @@ export class NmcAlertCenterComponent implements OnInit,OnDestroy{
   private requestVersion=0;
   private readonly onRiskStorage=(event:StorageEvent):void=>{
     if(event.key==='moei-nmc-risk-engine-config:v1'){
+      // config$ subscription is responsible for evaluation after reading the new policy.
       this.riskEngine.syncPublishedFromStorage();
-      this.evaluateLocalPolicy();
     }
   };
 
@@ -104,7 +104,6 @@ export class NmcAlertCenterComponent implements OnInit,OnDestroy{
     const source=this.overview;
     const config=this.policyConfig;
     const request=++this.requestVersion;
-    this.policyResults.clear();
     if(!source||!config)return;
     if(this.riskEngine.validate(config).length){
       this.policyLoading=false;
@@ -114,7 +113,7 @@ export class NmcAlertCenterComponent implements OnInit,OnDestroy{
     }
     const candidateImos=[...new Set(source.alerts.filter(a=>a.status!=='RESOLVED')
       .map(a=>a.imo))];
-    if(!candidateImos.length){this.policyLoading=false;this.policyError='';return;}
+    if(!candidateImos.length){this.policyResults.clear();this.policyLoading=false;this.policyError='';return;}
     this.policyLoading=true;this.policyError='';
     this.subs.add(forkJoin(candidateImos.map(imo=>
       this.fleet.assessment(imo).pipe(
@@ -125,6 +124,7 @@ export class NmcAlertCenterComponent implements OnInit,OnDestroy{
       next:rows=>{
         if(this.requestVersion!==request)return;
         this.policyLoading=false;
+        this.policyResults.clear();
         let missing=0;
         for(const {imo,assessment} of rows){
           const vessel=getOperationalVesselByImo(imo);
