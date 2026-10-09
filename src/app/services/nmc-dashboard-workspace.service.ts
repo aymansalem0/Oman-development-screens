@@ -1,9 +1,15 @@
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpErrorResponse, HttpHeaders } from '@angular/common/http';
 import { Observable, catchError, throwError } from 'rxjs';
-import { DashboardDefinition } from './nmc-dashboard-store.service';
+import { DashboardDefinition, DashboardMenuPlacement } from './nmc-dashboard-store.service';
 
 interface DashboardListResponse {status:'ok';dashboards:DashboardDefinition[];}
+export interface PublishedDashboardMenuItem {
+  id:string;title:string;menuPlacement:DashboardMenuPlacement;
+}
+interface PublishedDashboardMenuResponse {
+  status:'ok';dashboards:PublishedDashboardMenuItem[];
+}
 interface DashboardOneResponse {status:'ok';dashboard:DashboardDefinition;}
 export interface DashboardRevision {version:number;action:string;role:string;at:string;}
 interface DashboardRevisionsResponse {status:'ok';revisions:DashboardRevision[];}
@@ -15,6 +21,11 @@ export class NmcDashboardWorkspaceService {
   private publisherKey='';
 
   constructor(private readonly http:HttpClient){}
+
+  /** Lists published dashboard links only; never includes drafts or widget data. */
+  publishedMenu():Observable<PublishedDashboardMenuResponse>{
+    return this.http.get<PublishedDashboardMenuResponse>(this.root+'/published');
+  }
 
   list():Observable<DashboardListResponse>{
     return this.http.get<DashboardListResponse>(this.root);
