@@ -186,6 +186,33 @@ test('A01 VERIFY_DEFICIENCY_CLOSURE becomes a reviewed evidence-backed task, not
   } finally {db.close();}
 });
 
+test('A01 review reopens legacy pending-verification cases without deleting historical tasks',async()=>{
+  const db=setup();
+  try {
+    let row=await opened(db);
+    // Historical row from an earlier POC build; preserve task provenance.
+    const snapshot=db.cases._load();
+    snapshot.cases[row.id].tasks=[{
+      id:'legacy-verify',status:'Completed',assignedRole:'COMPLIANCE_OFFICER',
+      mandatory:true,evidenceIds:['CERT-SC-9328471']
+    }];
+    snapshot.cases[row.id].status='PENDING_VERIFICATION';
+    db.cases._write(snapshot);
+    row=await db.cases.get(row.id);
+    assert.equal(row.status,'PENDING_VERIFICATION');
+    row=await db.cases.saveActionPlan(row.id,row.version,plan(row));
+    assert.equal(row.status,'IN_PROGRESS');
+    assert.equal(row.tasks.length,1);
+    assert.equal(row.tasks[0].id,'legacy-verify');
+    assert.equal(row.tasks[0].status,'Completed');
+    assert.equal(row.actionPlan.proposedActions.length,3);
+    await assert.rejects(
+      ()=>db.cases.resolve(row.id,row.version,'Reviewed','SUPERVISOR'),
+      /CASE_ACTION_DECISIONS_PENDING/);
+    assert.equal((await db.cases.get(row.id)).tasks.length,1);
+  } finally {db.close();}
+});
+
 test('A01 plan cannot be published twice and does not create tasks before human approval',async()=>{
  const db=setup();
  try{
@@ -249,6 +276,15 @@ test('Scheduling is explicit, role-side and optimistic version-locked; inspectio
    assert.equal(row.tasks.find(t=>t.id==='priority-inspection').status,'Completed');
    assert.equal(row.sourceScore,91);
    assert.equal((await db.cases.history(row.id))[0].action,'INSPECTION_RECORDED');
+   row=await db.cases.decideAction(row.id,row.version,'verify-certificate','REJECT',
+     'Resolved in this linked inspection follow-up');
+   row=await db.cases.decideAction(row.id,row.version,'enhanced-monitoring','REJECT',
+     'Monitoring not required after officer review');
+   assert.equal(row.status,'IN_PROGRESS');
+   await assert.rejects(
+     ()=>db.cases.resolve(row.id,row.version,'All pass on inspection','SUPERVISOR'),
+     /CASE_RISK_REASSESSMENT_PENDING/);
+   assert.equal((await db.cases.get(row.id)).sourceScore,91);
  }finally{db.close();}
 });
 test('Human supervisor closes only when mandatory actions are completed',async()=>{
