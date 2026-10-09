@@ -317,6 +317,26 @@ export class NmcDashboardBuilderComponent implements OnInit,OnDestroy {
    * Republish from the designer after the central revision was saved.
    * Never publish unsaved local changes or an out-of-date shared revision.
    */
+  /** Compare the actual published content, not unrelated browser draft version. */
+  private sameDashboardDesign(a:DashboardDefinition,b:DashboardDefinition):boolean {
+    if(a.title!==b.title||a.description!==b.description||
+       (a.menuPlacement||'NMC_CENTER')!==(b.menuPlacement||'NMC_CENTER')||
+       a.widgets.length!==b.widgets.length)return false;
+    for(const key of ['risk','type','flag','search'] as const){
+      if(a.filters[key]!==b.filters[key])return false;
+    }
+    return a.widgets.every((widget,index)=>{
+      const other=b.widgets[index];
+      return widget.id===other.id&&widget.type===other.type&&
+        widget.metric===other.metric&&widget.title===other.title&&
+        widget.span===other.span&&
+        (widget.type!=='bar'||(
+          (widget.chartType||'horizontalBar')===(other.chartType||'horizontalBar')&&
+          (widget.palette||'maritime')===(other.palette||'maritime')
+        ));
+    });
+  }
+
   republishCurrent():void {
     const board=this.dashboard;
     if(!board?.publishedParentId||this.viewOnly||this.sharedBusy)return;
@@ -329,10 +349,11 @@ export class NmcDashboardBuilderComponent implements OnInit,OnDestroy {
     }
     const shared=this.getShared(board.id);
     if(!shared||shared.status!=='DRAFT'||
-       this.sharedVersions.get(board.id)!==shared.version){
+       this.sharedVersions.get(board.id)!==shared.version||
+       !this.sameDashboardDesign(board,shared)){
       this.saveMessage=this.copy(
-        'Refresh the shared workspace and save your revision before republishing.',
-        'حدّث المساحة المشتركة واحفظ الإصدار قبل إعادة النشر.'
+        'The central revision differs from this editor. Review it and save changes to the shared workspace before republishing.',
+        'نسخة المساحة المشتركة مختلفة عن التعديلات الحالية. راجعها واحفظ التغييرات مركزيًا قبل إعادة النشر.'
       );
       this.loadShared();
       return;
