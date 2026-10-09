@@ -7,6 +7,7 @@ export interface FleetAiVessel {
   imo: string;
   status: 'COMPLETED' | 'FAILED';
   score?: number;
+  assessmentId?: string;
   level?: 'Normal' | 'Watch' | 'High' | 'Critical';
   operationalPriority?: 'Priority Review' | 'Enhanced Monitoring' | 'Routine';
   criticalOpenFinding?: boolean;
@@ -45,6 +46,26 @@ export interface FleetAiSnapshot {
   };
   results: Record<string,FleetAiVessel>;
 }
+export interface FleetAiHistory {
+  imo: string;
+  assessments: Array<{
+    ASSESSMENT_ID: string;
+    RISK_SCORE: number;
+    RISK_LEVEL: string;
+    OPERATIONAL_PRIORITY: string;
+    RULESET_VERSION: string;
+    ASSESSED_AT: string;
+  }>;
+  events: Array<{
+    EVENT_TYPE: string;
+    EVENT_DESCRIPTION: string | null;
+    PREVIOUS_RISK_SCORE: number | null;
+    NEW_RISK_SCORE: number | null;
+    OCCURRED_AT: string;
+  }>;
+  dataNature: 'SYNTHETIC_POC_NOT_OFFICIAL';
+}
+
 export interface FleetAiAssessment extends FleetAiVessel {
   signals: Array<{factor:string;severity:number;confidence:number;sourceAgent:string;evidenceIds:string[];reason:string}>;
   pscSummary: {inspections:number;deficiencies:number;openDeficiencies:number;detentions:number};
@@ -59,6 +80,9 @@ export class NmcFleetAiService {
   }
   assessment(imo:string):Observable<FleetAiAssessment>{
     return this.http.get<FleetAiAssessment>('/api/ai/fleet/results/'+encodeURIComponent(imo));
+  }
+  history(imo:string):Observable<FleetAiHistory>{
+    return this.http.get<FleetAiHistory>('/api/ai/fleet/history/'+encodeURIComponent(imo));
   }
 
 }
