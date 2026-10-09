@@ -13,6 +13,7 @@ import { NmcRiskEngineService } from '../services/nmc-risk-engine.service';
 import { NmcVesselEvidenceService } from '../services/nmc-vessel-evidence.service';
 import { NmcExternalPscService, NmcExternalPscRecord } from '../services/nmc-external-psc.service';
 import { NmcFleetAiService, FleetAiAssessment, FleetAiHistory, FleetAiIntelligence } from '../services/nmc-fleet-ai.service';
+import { NmcDataQualityConfigService, QualityPolicyImpact, projectQuality } from '../services/nmc-data-quality-config.service';
 
 interface SourceStatus {
   name: string;
@@ -139,6 +140,7 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
   storedAiIntelligence: FleetAiIntelligence | null = null;
   intelligenceStatus: 'loading' | 'available' | 'unavailable' = 'loading';
   qualityExpanded = false;
+  qualityLocalPreview: QualityPolicyImpact | null = null;
   storedAiStatus: 'loading' | 'available' | 'not-assessed' | 'error' = 'loading';
   private readonly subscriptions = new Subscription();
 
@@ -159,7 +161,8 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
     private riskEngine: NmcRiskEngineService,
     private vesselEvidence: NmcVesselEvidenceService,
     private externalPscService: NmcExternalPscService,
-    private readonly fleetAiService: NmcFleetAiService
+    private readonly fleetAiService: NmcFleetAiService,
+    public readonly qualityPolicy: NmcDataQualityConfigService
   ) {}
 
   copy(en: string, ar: string): string {
@@ -433,10 +436,13 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
           return;
         }
         this.storedAiIntelligence=result;
+        this.qualityLocalPreview=result.quality.breakdown
+          ?projectQuality(result.quality.breakdown,this.qualityPolicy.config):null;
         this.intelligenceStatus='available';
       },
       error: () => {
         this.storedAiIntelligence=null;
+        this.qualityLocalPreview=null;
         this.intelligenceStatus='unavailable';
       }
     }));
