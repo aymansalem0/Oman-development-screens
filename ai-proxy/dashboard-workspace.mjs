@@ -195,6 +195,13 @@ export class DashboardWorkspace {
     const published=await this.get(id);
     if(!published)throw new DashboardError('DASHBOARD_NOT_FOUND',404);
     if(published.status!=='PUBLISHED')throw new DashboardError('DASHBOARD_NOT_PUBLISHED',409);
+    // Resume an existing in-progress revision instead of creating duplicate
+    // drafts whenever Edit Published is selected again.
+    const drafts=await this.list();
+    const existing=drafts.find(row=>
+      row.status==='DRAFT'&&row.publishedParentId===id&&
+      row.basePublishedVersion===published.version);
+    if(existing)return clone(existing);
     const draftId='edit-'+randomUUID();
     const draft={
       ...normalize(published,{id:draftId,status:'DRAFT',version:1}),
@@ -241,9 +248,23 @@ export class DashboardWorkspace {
     if(published.version!==baseVersion)
       throw new DashboardError('DASHBOARD_PUBLISHED_VERSION_CONFLICT',409);
     if(current.version!==version)throw new DashboardError('DASHBOARD_VERSION_CONFLICT',409);
+    // No-op or unsaved revisions must never report "Published" just
+    // because they incremented the version. Revisions are saved centrally
+    // at version >= 2, and their actual business content must differ.
+    if(current.version<=1)
+      throw new DashboardError('DASHBOARD_REVISION_NOT_SAVED',409);
     const next=normalize(current,{
       id:parentId,status:'PUBLISHED',version:published.version+1
     });
+    const normalizedLive=normalize(published,{
+      id:parentId,status:'PUBLISHED',version:published.version
+    });
+    const contentOf=row=>JSON.stringify({
+      title:row.title,description:row.description,
+      menuPlacement:row.menuPlacement,widgets:row.widgets,filters:row.filters
+    });
+    if(contentOf(next)===contentOf(normalizedLive))
+      throw new DashboardError('DASHBOARD_REVISION_UNCHANGED',409);
     // Retire the working draft only after the published row has been updated.
     const retired={...current,status:'ARCHIVED',version:current.version+1,updatedAt:now()};
 

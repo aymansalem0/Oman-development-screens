@@ -259,13 +259,18 @@ test('stale edit does not overwrite newer published version',async()=>{
   try{
     const first=await workspace.create(sample('conflict-test'));
     const published=await workspace.publish(first.id,first.version);
-    const editorA=await workspace.startPublishedEdit(published.id);
-    const editorB=await workspace.startPublishedEdit(published.id);
-    await workspace.publish(editorA.id,editorA.version);
-    await assert.rejects(()=>workspace.publish(editorB.id,editorB.version),
+    const editor=await workspace.startPublishedEdit(published.id);
+    const updated=await workspace.save(editor.id,{...editor,title:'Revised title'});
+    // A manager relocates the live dashboard while the linked draft is open.
+    const moved=await workspace.movePublished(published.id,'SETTINGS',published.version);
+    await assert.rejects(()=>workspace.publish(updated.id,updated.version),
       /DASHBOARD_PUBLISHED_VERSION_CONFLICT/);
-    assert.equal((await workspace.get(editorB.id)).status,'DRAFT');
-    assert.equal((await workspace.get(published.id)).version,published.version+1);
+    assert.equal((await workspace.get(editor.id)).status,'DRAFT');
+    const unchangedLive=await workspace.get(published.id);
+    assert.equal(unchangedLive.version,published.version+1);
+    assert.equal(unchangedLive.title,published.title);
+    assert.equal(unchangedLive.menuPlacement,'SETTINGS');
+    assert.equal(moved.id,published.id);
   }finally{close();}
 });
 
@@ -282,5 +287,88 @@ test('tampering with revision parent in save body is ignored',async()=>{
     assert.equal(updated.publishedParentId,pub.id);
     assert.equal(updated.basePublishedVersion,pub.version);
     assert.equal((await workspace.get(pub.id)).status,'PUBLISHED');
+  }finally{close();}
+});
+
+
+test('editing a published dashboard twice resumes the same central revision instead of duplicating it',async()=>{
+  const {workspace,close}=setup();
+  try{
+    const created=await workspace.create(sample('original-once'));
+    const published=await workspace.publish(created.id,created.version);
+    const draftA=await workspace.startPublishedEdit(published.id);
+    const draftB=await workspace.startPublishedEdit(published.id);
+    assert.equal(draftA.id,draftB.id);
+    assert.equal((await workspace.list()).length,2); // one live + one working revision
+    const changed=await workspace.save(draftA.id,{...draftA,title:'Revised Risk View'});
+    const resumed=await workspace.startPublishedEdit(published.id);
+    assert.equal(resumed.id,draftA.id);
+    assert.equal(resumed.title,changed.title);
+    assert.equal(resumed.version,changed.version);
+    assert.equal((await workspace.publishedMenu()).length,1);
+  }finally{close();}
+});
+
+test('republish rejects an unsaved revision and does not increment live version',async()=>{
+  const {workspace,close}=setup();
+  try{
+    const original=await workspace.create(sample('unsaved-revision'));
+    const live=await workspace.publish(original.id,original.version);
+    const draft=await workspace.startPublishedEdit(live.id);
+    await assert.rejects(()=>workspace.publish(draft.id,draft.version),
+      /DASHBOARD_REVISION_NOT_SAVED/);
+    const unchanged=await workspace.get(live.id);
+    assert.equal(unchanged.version,live.version);
+    assert.deepEqual(unchanged.widgets,live.widgets);
+    assert.equal((await workspace.get(draft.id)).status,'DRAFT');
+  }finally{close();}
+});
+
+test('saving an unchanged revision cannot produce fake republished versions',async()=>{
+  const {workspace,close}=setup();
+  try{
+    const original=await workspace.create(sample('unchanged-content'));
+    const live=await workspace.publish(original.id,original.version);
+    const draft=await workspace.startPublishedEdit(live.id);
+    const saved=await workspace.save(draft.id,draft);
+    await assert.rejects(()=>workspace.publish(saved.id,saved.version),
+      /DASHBOARD_REVISION_UNCHANGED/);
+    const remaining=await workspace.get(live.id);
+    assert.equal(remaining.version,live.version);
+    assert.deepEqual(remaining.widgets,live.widgets);
+    assert.equal((await workspace.revisions(live.id)).length,2);
+  }finally{close();}
+});
+
+test('republish updates exact existing published content and original URL after central save',async()=>{
+  const {workspace,opts,close}=setup();
+  try{
+    const original=await workspace.create({
+      ...sample('preserved-url'),
+      widgets:[{id:'w-one',type:'bar',metric:'byRisk',title:'Fleet Risk',
+        span:'full',chartType:'horizontalBar',palette:'maritime'}]
+    });
+    const live=await workspace.publish(original.id,original.version);
+    const draft=await workspace.startPublishedEdit(live.id);
+    const newDesign=await workspace.save(draft.id,{
+      ...draft,title:'Maritime Risk Monitoring Updated',
+      widgets:[{...draft.widgets[0],title:'New Critical Risk Doughnut',
+        chartType:'donut',palette:'vibrant'}]
+    });
+    const prior=await workspace.get(original.id);
+    assert.equal(prior.title,live.title);
+    assert.equal(prior.widgets[0].chartType,'horizontalBar');
+    const next=await workspace.publish(newDesign.id,newDesign.version);
+    const anotherBrowserStore=new DashboardWorkspace(opts);
+    const viewed=await anotherBrowserStore.get(original.id);
+    assert.equal(next.id,original.id);
+    assert.equal(viewed.id,original.id);
+    assert.equal(viewed.title,'Maritime Risk Monitoring Updated');
+    assert.equal(viewed.widgets[0].title,'New Critical Risk Doughnut');
+    assert.equal(viewed.widgets[0].chartType,'donut');
+    assert.equal(viewed.widgets[0].palette,'vibrant');
+    assert.equal(viewed.version,live.version+1);
+    assert.equal((await anotherBrowserStore.publishedMenu())[0].id,original.id);
+    assert.equal((await anotherBrowserStore.revisions(original.id))[0].action,'PUBLISHED');
   }finally{close();}
 });

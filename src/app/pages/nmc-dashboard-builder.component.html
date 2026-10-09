@@ -35,7 +35,7 @@
       </div>
       <p class="db-message" *ngIf="saveMessage">{{saveMessage}}</p>
       <div class="db-manage-grid">
-        <article class="db-board-card" *ngFor="let item of dashboards">
+        <article class="db-board-card" *ngFor="let item of personalDashboards">
           <div class="db-board-top"><div class="db-board-icon">▦</div><span class="db-chip">{{copy('Draft','مسودة')}}</span></div>
           <h3>{{item.title}}</h3>
           <p>{{item.description || copy('Custom maritime dashboard','لوحة معلومات بحرية مخصصة')}}</p>
@@ -46,7 +46,7 @@
             <button class="db-danger" type="button" (click)="remove(item.id)">{{copy('Delete','حذف')}}</button>
           </div>
         </article>
-        <div class="db-empty" *ngIf="!dashboards.length">
+        <div class="db-empty" *ngIf="!personalDashboards.length">
           <div class="db-empty-symbol">▥</div>
           <h3>{{copy('Start with a new dashboard','ابدأ بإنشاء لوحة معلومات جديدة')}}</h3>
           <button class="db-primary" type="button" (click)="create()">{{copy('Create Dashboard','إنشاء لوحة معلومات')}}</button>
@@ -65,7 +65,7 @@
 
         <p class="db-message" *ngIf="sharedError">{{sharedError}}</p>
         <div class="db-manage-grid">
-          <article class="db-board-card" *ngFor="let shared of sharedDashboards">
+          <article class="db-board-card" *ngFor="let shared of managedSharedDashboards">
             <div class="db-board-top">
               <div class="db-board-icon">▥</div>
               <span class="db-chip" [class.db-chip-published]="shared.status==='PUBLISHED'">
@@ -75,6 +75,9 @@
             <h3>{{shared.title}}</h3>
             <p>{{shared.description||copy('Maritime decision support dashboard','لوحة معلومات لدعم القرار البحري')}}</p>
             <div class="db-board-meta">{{shared.widgets.length}} {{copy('widgets','مؤشرات')}} · {{copy('Version','إصدار')}} {{shared.version}}</div>
+            <p class="db-revision-hint" *ngIf="linkedRevisionFor(shared)">
+              {{copy('Unpublished changes in progress','تعديلات غير منشورة قيد العمل')}}
+            </p>
             <p *ngIf="shared.publishedParentId" class="db-revision-hint">
               {{copy('Changes to an existing published dashboard · awaiting republish',
                       'تعديلات على لوحة منشورة · في انتظار إعادة النشر')}}
@@ -99,8 +102,13 @@
               <button *ngIf="shared.status==='PUBLISHED'" class="db-primary" type="button"
                       (click)="viewPublished(shared)">{{copy('View Dashboard','عرض لوحة المعلومات')}} ↗</button>
               <button *ngIf="shared.status==='PUBLISHED'" class="db-outline db-edit-live" type="button"
-                      (click)="editPublished(shared)" [disabled]="sharedBusy">
-                ✎ {{copy('Edit Published','تعديل المنشورة')}}
+                      (click)="continuePublishedEdit(shared)" [disabled]="sharedBusy">
+                ✎ {{linkedRevisionFor(shared)?copy('Continue Editing','استكمال التعديل'):copy('Edit Published','تعديل المنشورة')}}
+              </button>
+              <button *ngIf="shared.status==='PUBLISHED'&&linkedRevisionFor(shared)" class="db-primary" type="button"
+                      (click)="republishPending(shared)"
+                      [disabled]="sharedBusy||(linkedRevisionFor(shared)?.version||0)<=1">
+                ↻ {{copy('Republish Changes','إعادة نشر التغييرات')}}
               </button>
               <button class="db-outline" type="button" (click)="openShared(shared)">
                 {{shared.status==='PUBLISHED'?copy('Use as Template','استخدام كنموذج'):copy('Edit Shared Draft','تعديل المسودة')}}
@@ -114,7 +122,7 @@
                       *ngIf="shared.status==='DRAFT'" [disabled]="sharedBusy">{{copy('Archive','أرشفة')}}</button>
             </div>
           </article>
-          <div class="db-empty" *ngIf="!sharedDashboards.length">
+          <div class="db-empty" *ngIf="!managedSharedDashboards.length">
             <div class="db-empty-symbol">▥</div>
             <h3>{{copy('No shared dashboards yet','لا توجد لوحات مشتركة بعد')}}</h3>
             <p>{{copy('Save a dashboard to the workspace from the designer.','احفظ لوحة معلومات في المساحة المشتركة من المصمم.')}}</p>
