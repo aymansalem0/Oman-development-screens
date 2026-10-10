@@ -143,7 +143,9 @@ export class SiCandidateWorkbenchComponent implements OnInit{
       'PORT_STATE_CONTROL':'تفتيش دولة الميناء',
       'FOCUSED_INSPECTION':'معاينة مركزة',
       'UAE_SERVICE_INSPECTION':'معاينة خدمة بحرية',
-      'FOLLOW_UP_INSPECTION':'معاينة متابعة'
+      'FOLLOW_UP_INSPECTION':'معاينة متابعة',
+      'High':'مرتفع','Critical':'حرج','Watch':'مراقبة','Normal':'عادي',
+      'APPROVE':'اعتماد','DEFER':'تأجيل','REJECT':'رفض'
     };
     return this.lang.isArabic?(labels[x]||x.replaceAll('_',' ')):x.replaceAll('_',' ');
   }
