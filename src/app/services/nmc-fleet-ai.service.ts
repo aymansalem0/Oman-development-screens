@@ -93,6 +93,17 @@ export interface FleetAiIntelligence {
       completenessPercent: number;
       consistencyPercent: number | null;
       evidenceLinkagePercent: number | null;
+      documentConsistencyPercent?: number | null;
+      a03DocumentCount?: number;
+      a03Disagreements?: number;
+      documentComparisons?: Array<{
+        field:string;sourceValue:string;documentValue:string;evidenceId:string;
+        documentType:string;status:'MATCHED'|'MISMATCH';reviewStatus:string;
+      }>;
+      documentComparison?: {
+        available:boolean;compared:number;matched:number;mismatched:number;
+        consistencyPercent:number|null;documentCount:number;evidenceIds:string[];
+      };
       provenanceMetadataPercent: number;
       comparedFields: number;
       missingFieldSides: number;
