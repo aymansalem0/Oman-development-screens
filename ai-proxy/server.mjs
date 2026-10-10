@@ -52,6 +52,37 @@ async function fleetAgentCall(agent,input) {
   const raw=await upstream.text();
   try {return JSON.parse(raw);} catch {throw new Error('AIRIA_RESPONSE_INVALID_JSON');}
 }
+/**
+ * A03 document uploads use the partner-documented multipart pipeline route.
+ * Explicit opt-out AIRIA_A03_TRANSPORT=inline retains the text-only POC path.
+ * Only ONE Airia call is attempted; no automatic fallback/retry.
+ */
+async function a03AgentCall(payload) {
+  const {attachment,...input}=payload;
+  if(process.env.AIRIA_A03_TRANSPORT==='inline'||
+     !attachment||attachment.mimeType!=='application/pdf')
+    return fleetAgentCall('a03',input);
+  if(!apiKey)throw new Error('AIRIA_NOT_CONFIGURED');
+  if(!pipelines.a03)throw new Error('AIRIA_PIPELINE_NOT_CONFIGURED');
+  if(!agentAllowed('a03'))throw new Error('AIRIA_AGENT_DISABLED');
+  if(!Buffer.isBuffer(attachment.bytes)||!attachment.bytes.length)
+    throw new Error('A03_DOCUMENT_ATTACHMENT_MISSING');
+  const form=new FormData();
+  form.set('userInput',JSON.stringify(input));
+  form.set('file',new Blob([attachment.bytes],{type:'application/pdf'}),
+    attachment.fileName);
+  const upstream=await fetch(runtime.get('AIRIA_BASE_URL')+
+    '/v1/PipelineExecution/Multipart/'+pipelines.a03,{
+    method:'POST',
+    headers:{'X-API-KEY':apiKey,'User-Agent':'moei-nmc-adapter/1.0'},
+    body:form,
+    signal:AbortSignal.timeout(timeoutMs)
+  });
+  if(!upstream.ok)throw new Error('AIRIA_A03_REQUEST_FAILED_'+upstream.status);
+  const raw=await upstream.text();
+  try{return JSON.parse(raw);}catch{throw new Error('AIRIA_A03_RESPONSE_INVALID_JSON');}
+}
+
 const dbMode=(process.env.NMC_DB_MODE || 'json').toLowerCase();
 if(!['json','oracle'].includes(dbMode))throw new Error('NMC_DB_MODE_UNSUPPORTED');
 const repository=dbMode==='oracle'
@@ -60,7 +91,7 @@ const repository=dbMode==='oracle'
 let guidance;
 let riskPolicy;
 const documents=new DriveDocumentIntelligence({mode:dbMode,oracleRepository:repository,
-  executeA03:async input=>fleetAgentCall('a03',input),
+  executeA03:a03AgentCall,
   enabled:runtime.get('NMC_A03_ENABLED')&&Boolean(apiKey)});
 const fleet=new FleetAssessmentManager({executeAgent:fleetAgentCall,getPscVessel,repository,
   approvedDocuments:async imo=>documents.ready?documents.approvedFor(imo):[],
