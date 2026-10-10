@@ -10,7 +10,7 @@
   box-shadow:0 8px 22px rgba(15,118,110,.18);flex-shrink:0}
 .maritime-eyebrow{color:#0f766e;font-size:9px;letter-spacing:1.4px;font-weight:800;
   text-transform:uppercase}
-.maritime-brand h1{font-size:17px;margin:2px 0 0;color:#17324d;line-height:1.25}
+.maritime-brand h1{font-size:16px;margin:2px 0 0;color:#17324d;line-height:1.25}
 .maritime-brand p{margin:3px 0 0;color:#8191a4;font-size:10px}
 .maritime-status{display:flex;align-items:center;flex-direction:column;gap:5px;
   text-align:center;min-width:0}
@@ -37,7 +37,7 @@
 .maritime-officer strong{display:block;color:#27445f;font-size:10px}
 .maritime-officer small{display:block;color:#97a4b3;font-size:8px;margin-top:3px}
 .maritime-platform-footer{display:flex;justify-content:space-between;align-items:center;
-  flex-wrap:wrap;gap:11px;padding:17px 24px;padding-inline-start:240px;margin:0;background:#fff;
+  flex-wrap:wrap;gap:11px;padding:17px 24px;padding-inline-start:264px;margin:0;background:#fff;
   border-top:1px solid #e4ecef;color:#698296;font-size:10px;line-height:1.6;
   position:relative;z-index:3}
 .maritime-platform-footer strong{color:#26536b;font-weight:800}
