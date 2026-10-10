@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync,rmSync,readFileSync} from 'node:fs';
+import {mkdtempSync,rmSync,readFileSync,writeFileSync} from 'node:fs';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 import {CentralRiskPolicy,calculateRiskPolicy,validateRiskConfig} from '../risk-policy.mjs';
@@ -112,4 +112,29 @@ test('published risk factor snapshots preserve source references and explain cal
   assert.deepEqual(p.factorSnapshot.factors[0].evidenceIds,['movement-synthetic']);
   assert.equal(Math.round(p.factorSnapshot.weightedSubtotal+
     p.factorSnapshot.modeAdjustment),p.riskScore);
+});
+
+test('old risk policy projections are explained only when saved source assessment exactly matches',async()=>{
+  const dir=mkdtempSync(join(tmpdir(),'nmc-risk-legacy-'));
+  try{
+    const file=join(dir,'risk.json'),fleet={results:{'9328471':assessment}};
+    const svc=new CentralRiskPolicy({mode:'json',file,fleet});
+    await svc.initialize();
+    await svc.publish({expectedRevision:1,config:baseline,
+      reason:'Legacy publication for backwards compatibility',publishedBy:'NMC Supervisor'});
+    const data=JSON.parse(readFileSync(file,'utf8'));
+    delete data.projections[0].factorSnapshot;
+    writeFileSync(file,JSON.stringify(data));
+    const reloaded=new CentralRiskPolicy({mode:'json',file,fleet});
+    await reloaded.initialize();
+    const old=(await reloaded.projectionHistory('9328471'))[0];
+    assert.equal(old.factorSnapshotReconstructed,true);
+    assert.equal(old.factorSnapshot.clampedAndRoundedScore,old.riskScore);
+    const changed={results:{'9328471':{...assessment,assessmentId:'SOME-OTHER-ASSESSMENT'}}};
+    const nonmatching=new CentralRiskPolicy({mode:'json',file,fleet:changed});
+    await nonmatching.initialize();
+    const unavailable=(await nonmatching.projectionHistory('9328471'))[0];
+    assert.equal(unavailable.factorSnapshot,null);
+    assert.equal(unavailable.factorSnapshotReconstructed,false);
+  }finally{rmSync(dir,{recursive:true,force:true});}
 });
