@@ -20,8 +20,8 @@
   <main class="rx-main">
     <section class="hero-card">
       <div class="vessel-summary">
-        <div class="vessel-kicker">{{copy('SAVED A01/A02 EVIDENCE · LOCAL POLICY PROJECTION · SYNTHETIC POC',
-         'أدلة A01/A02 المحفوظة · حساب وفق إعدادات المتصفح · نموذج تجريبي')}}</div>
+        <div class="vessel-kicker">{{copy('SAVED AI RISK EVIDENCE · CENTRALLY PUBLISHED POLICY · SYNTHETIC POC',
+         'أدلة مخاطر AI المحفوظة · سياسة مركزية منشورة · نموذج تجريبي')}}</div>
         <h2>{{vessel?.name || copy('Vessel not found','السفينة غير موجودة')}}</h2>
         <div class="identity-row" *ngIf="vessel as v">
           <span>IMO {{v.imo}}</span><span>{{v.flag}}</span><span>{{v.type}}</span><span>{{v.destination}}</span>
@@ -35,16 +35,17 @@
       <div class="hero-metrics">
         <button type="button" class="metric-card risk projected-risk-card current-risk-button"
                 [ngClass]="riskClass" (click)="openCurrentRisk()" [disabled]="!factors.length"
-                [attr.aria-label]="copy('Open current risk factor analysis','فتح تحليل عوامل المخاطر الحالية')">
-          <small>{{copy('CURRENT PUBLISHED RISK · CLICK TO ANALYZE',
-                       'المخاطر الحالية المنشورة · اضغط لعرض التحليل')}}</small>
+                [attr.aria-label]="copy('Review available risk evidence','مراجعة أدلة المخاطر المتاحة')">
+          <small>{{riskScore===null
+            ?copy('CURRENT POLICY · A03 EVIDENCE REQUIRED','السياسة الحالية · تحتاج أدلة A03')
+            :copy('CURRENT PUBLISHED RISK · CLICK TO ANALYZE','المخاطر الحالية المنشورة · عرض التفاصيل')}}</small>
           <strong>{{riskScore===null?'—':riskScore}}</strong>
           <span>{{riskLabel}} · {{activeRiskConfig?.version||'—'}}</span>
         </button>
-        <div class="metric-card source-risk-card">
+        <div class="metric-card source-risk-card" [ngClass]="sourceRiskClass">
           <small>{{copy('Original stored assessment (unchanged)','التقييم الأصلي المحفوظ (دون تعديل)')}}</small>
-          <strong>{{sourceRiskScore===null?'—':sourceRiskScore}}</strong>
-          <span>{{sourceRiskLevel}} · {{assessment?.configVersion||'—'}}</span>
+          <strong>{{sourceRiskScore===null?'—':sourceRiskScore}}<small *ngIf="sourceRiskScore!==null">/100</small></strong>
+          <span>{{sourceRiskLabel}} · {{assessment?.configVersion||'—'}}</span>
         </div>
         <div class="metric-card">
           <small>{{copy('Projected priority · advisory','الأولوية المتوقعة · استرشادية')}}</small>
@@ -56,6 +57,81 @@
           <strong>{{averageFactorConfidence===null?'—':averageFactorConfidence+'%'}}</strong>
           <span>{{copy('Not verified source confidence','ليست ثقة اعتماد المصادر')}}</span>
         </div>
+      </div>
+    </section>
+
+    <section class="risk-decision-panel" *ngIf="assessment as a"
+             [class.projection-blocked]="riskScore===null" aria-label="Risk assessment status and next steps">
+      <div class="decision-summary">
+        <span class="decision-eyebrow">{{copy('WHAT THE SAVED AI ASSESSMENT TELLS US','ما الذي نعرفه من تقييم AI المحفوظ')}}</span>
+        <div class="decision-score-row">
+          <div class="decision-score" [ngClass]="sourceRiskClass">
+            <strong>{{a.score}}<small>/100</small></strong>
+            <span>{{sourceRiskLabel}}</span>
+          </div>
+          <div class="decision-interpretation">
+            <strong>{{sourceRiskLevel==='Watch'
+              ?copy('Watch — monitoring required by the ORIGINAL risk ruleset','مراقبة — وفق قواعد المخاطر الأصلية')
+              :copy('Recorded risk under the ORIGINAL saved policy','المخاطر المسجلة وفق السياسة الأصلية المحفوظة')}}</strong>
+            <p>{{copy('Original ruleset','السياسة الأصلية')}}: {{a.configVersion}}
+              · {{copy('Category range','حدود التصنيف')}}: {{originalClassRange}}/100
+              · {{copy('Assessed','وقت التقييم')}}: {{a.assessedAt|date:'medium'}}</p>
+            <p class="decision-provenance">{{copy('Historical saved AI result, not the current risk projection. Synthetic POC; not a regulatory decision.',
+                       'نتيجة AI تاريخية محفوظة وليست حساب المخاطر الحالي. نموذج تجريبي وليس قرارًا تنظيميًا.')}}</p>
+          </div>
+        </div>
+        <button type="button" class="decision-view-evidence" (click)="openCurrentRisk()"
+                [disabled]="!factors.length">
+          {{copy('View all recorded risk factors & evidence ↓','عرض جميع عوامل المخاطر والأدلة المسجلة ↓')}}
+        </button>
+      </div>
+      <div class="decision-drivers">
+        <strong>{{copy('Main recorded risk contributors','أبرز العوامل المساهمة في المخاطر المحفوظة')}}</strong>
+        <div class="decision-driver" *ngFor="let d of savedRiskDrivers">
+          <span>{{d.label}}</span>
+          <div class="decision-driver-track" aria-hidden="true">
+            <i [style.width.%]="d.severity"></i>
+          </div>
+          <b>{{d.severity}}/100</b>
+          <small>{{copy('weight','الوزن')}} {{d.weight}}% · {{d.evidenceCount}} {{copy('refs','مرجع')}}</small>
+        </div>
+        <p>{{copy('Ranked using ORIGINAL saved weights; shows recorded signal severity, not new agent calls.',
+                   'الترتيب وفق الأوزان الأصلية المحفوظة ويعرض شدة المؤشرات المسجلة دون استدعاءات جديدة للوكلاء.')}}</p>
+      </div>
+      <div class="decision-next">
+        <strong>{{riskScore===null
+          ?copy('Why the CURRENT risk is not available','لماذا درجة المخاطر الحالية غير متاحة؟')
+          :copy('CURRENT policy result','نتيجة السياسة الحالية')}}</strong>
+        <p *ngIf="missingRequiredA03">
+          {{copy('Published policy','السياسة المنشورة')}} {{activeRiskConfig?.version||'—'}}
+          {{copy('assigns','تخصص')}} {{activeRiskConfig?.weights?.documentIntegrity}}%
+          {{copy('to A03 Document Integrity, but this assessment has no validated A03 risk signal. No current score can be calculated safely.',
+                 'لعامل اتساق المستندات A03، لكن هذا التقييم لا يحتوي على مؤشر مخاطر A03 صالح. لا يمكن احتساب درجة حالية بأمان.')}}
+        </p>
+        <p *ngIf="riskScore===null&&!missingRequiredA03">{{projectionNotice}}</p>
+        <p *ngIf="riskScore!==null">
+          {{copy('Current published risk','المخاطر وفق السياسة الحالية')}}:
+          <b>{{riskScore}}/100 · {{riskLabel}}</b>.
+          {{copy('Derived from the original saved risk signals without rerunning AI.',
+                   'محسوبة من المؤشرات المحفوظة دون إعادة تشغيل AI.')}}
+        </p>
+        <div class="decision-actions" *ngIf="vessel as v">
+          <a class="decision-action primary" [routerLink]="['/moei/nmc/vessel',v.imo]"
+             [queryParams]="{tab:'documents'}">
+            {{copy('1 · Open Vessel Documents / A03','١ · فتح مستندات السفينة / A03')}}
+          </a>
+          <a class="decision-action" [routerLink]="['/moei/nmc/vessel',v.imo]"
+             [queryParams]="{tab:'inspection'}">
+            {{copy('Review inspection evidence','مراجعة أدلة المعاينة')}}
+          </a>
+          <a class="decision-action" routerLink="/moei/nmc/admin/risk-configuration">
+            {{copy('Review published risk policy','مراجعة سياسة المخاطر المنشورة')}}
+          </a>
+        </div>
+        <small *ngIf="missingRequiredA03">
+          {{copy('Review the vessel documents, analyze and approve A03 evidence where appropriate, then perform a separately authorized reassessment to generate a new current score. A03/AI requests may incur costs. Viewing this page never starts an agent.',
+                 'راجع مستندات السفينة وحلل أدلة A03 واعتمدها عند اللزوم، ثم نفّذ إعادة تقييم منفصلة بتفويض واضح للحصول على درجة حالية جديدة. قد تكون استدعاءات AI مدفوعة. فتح هذه الصفحة لا يشغّل أي وكيل.')}}
+        </small>
       </div>
     </section>
 
