@@ -166,3 +166,18 @@ test('A03 rejects an overlong IMO instead of truncating it to match the selected
   const malformed={...normalized(),extracted:{...normalized().extracted,imo:IMO+'777'}};
   assert.throws(()=>validateA03(malformed,excerpt,IMO),/A03_IMO_INVALID/);
 });
+
+test('A03 tampering suspicion cannot be approved even with a reviewer',async()=>{
+  const a=fixture({fakeResult:{...normalized(),providerDetails:{tamperSuspected:true}}});
+  try{
+    const draft=await a.store.analyze(IMO,FILE,{actor:'Inspector X',confirmCost:true});
+    assert.equal(draft.status,'DRAFT_REVIEW');
+    assert.equal(draft.providerDetails.tamperSuspected,true);
+    await assert.rejects(
+      ()=>a.store.review(IMO,FILE,{actor:'Inspector X',decision:'APPROVE',
+        reason:'Attempt to approve suspicious document',expectedVersion:draft.version}),
+      /DOCUMENT_TAMPER_SUSPECTED_REVIEW_REQUIRED/
+    );
+    assert.equal((await a.store.approvedFor(IMO)).length,0);
+  }finally{a.close();}
+});
