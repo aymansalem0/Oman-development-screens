@@ -229,9 +229,12 @@
             <div class="attention-main">
               <div class="attention-title">
                 <strong>{{ vessel.name }}</strong>
-                <span class="risk-chip" [ngClass]="riskClass(vessel.risk,vessel.imo)">
+                <a class="risk-chip risk-inspect-link" [ngClass]="riskClass(vessel.risk,vessel.imo)"
+                   [routerLink]="['/moei/nmc/vessel',vessel.imo,'risk']"
+                   (click)="$event.stopPropagation()"
+                   [attr.aria-label]="copy('Analyze current risk factors for '+vessel.name,'تحليل المخاطر الحالية للسفينة '+vessel.name)">
                   {{ riskLabel(vessel.risk,vessel.imo) }} · {{ riskDisplay(vessel) }}
-                </span>
+                </a>
               </div>
 
               <p>{{ vesselTypeLabel(vessel.type) }} · {{ flagLabel(vessel.flag) }} · {{ zoneLabel(vessel.zone) }}</p>
@@ -339,11 +342,13 @@
             <p>IMO {{ v.imo }} · MMSI {{ v.mmsi }}</p>
           </div>
 
-          <div class="big-risk" [ngClass]="riskClass(v.risk,v.imo)">
-            <small>{{ copy('RISK', 'المخاطر') }}</small>
+          <a class="big-risk risk-inspect-link" [ngClass]="riskClass(v.risk,v.imo)"
+             [routerLink]="['/moei/nmc/vessel',v.imo,'risk']"
+             [attr.aria-label]="copy('Open current risk factor analysis','فتح تحليل عوامل المخاطر الحالية')">
+            <small>{{ copy('CURRENT RISK · OPEN ANALYSIS', 'المخاطر الحالية · افتح التحليل') }}</small>
             <strong>{{ riskDisplay(v) }}</strong>
             <span>{{ riskLabel(v.risk,v.imo) }}</span>
-          </div>
+          </a>
         </div>
 
         <div class="vessel-data-grid">
