@@ -63,6 +63,9 @@
           {{ copy('Last scheduler cycle', 'آخر دورة للجدولة') }}: {{ checked | date:'medium' }}
         </span>
       </div>
+      <p *ngIf="fleetSnapshot?.scheduler?.blockedFailedVessels as blocked" class="fleet-error" role="status">
+        {{blocked}} previous Fleet AI failures are skipped while retryFailed is disabled.
+      </p>
       <p *ngIf="fleetError" class="fleet-error">{{ fleetError }}</p>
     </section>
 
