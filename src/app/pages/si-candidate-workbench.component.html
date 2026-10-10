@@ -1,30 +1,30 @@
-<div class="si-layout">
+<div class="si-layout" [attr.dir]="lang.dir">
   <app-nmc-navigation></app-nmc-navigation>
   <main class="si-workbench">
     <header class="si-hero">
       <div>
-        <small>MOEI · SMART INSPECTION · STEPS 00–04</small>
-        <h1>Inspection Candidate &amp; Targeting Center</h1>
+        <small>{{copy("MOEI · SMART INSPECTION · STEPS 00–04","وزارة الطاقة والبنية التحتية · المعاينة الذكية · المراحل ٠٠–٠٤")}}</small>
+        <h1>{{copy("Inspection Candidate & Targeting Center","مركز ترشيح المعاينات والاستهداف")}}</h1>
         <p>مركز مرشحي المعاينة والاستهداف · All active vessels · Provenance-first decisions · No automatic AI calls</p>
       </div>
       <div class="hero-actions">
-        <a routerLink="/moei/nmc">NMC Command Center</a>
-        <a routerLink="/moei/smart-inspection/scheduling">Electronic Scheduling ↗</a>
-        <button type="button" (click)="refresh()" [disabled]="loading||busy">↻ Refresh</button>
+        <a routerLink="/moei/nmc">{{copy("NMC Command Center","مركز القيادة البحري")}}</a>
+        <a routerLink="/moei/smart-inspection/scheduling">{{copy("Electronic Scheduling ↗","الجدولة الإلكترونية ↗")}}</a>
+        <button type="button" (click)="refresh()" [disabled]="loading||busy">{{copy("↻ Refresh","↻ تحديث")}}</button>
       </div>
     </header>
 
     <p *ngIf="error" class="notice error" role="alert">{{error}}</p>
     <p *ngIf="success" class="notice success" role="status">{{success}}</p>
-    <p *ngIf="loading" class="notice">Loading saved NMC referrals, source events and current risk projections…</p>
-    <p *ngIf="busy" class="notice">Saving centrally — please wait…</p>
+    <p *ngIf="loading" class="notice">{{copy("Loading saved NMC referrals, source events and current risk projections…","جارٍ تحميل إحالات المركز البحري وأحداث المصادر وتقييمات المخاطر المحفوظة…")}}</p>
+    <p *ngIf="busy" class="notice">{{copy("Saving centrally — please wait…","جارٍ الحفظ مركزيًا، يرجى الانتظار…")}}</p>
 
     <section *ngIf="dashboard as d" class="stats" aria-label="Dynamic targeting statistics">
-      <article><small>ACTIVE VESSELS EVALUATED</small><strong>{{d.summary.evaluatedPopulation}}</strong><span>Fleet snapshot {{short(d.fleetSnapshotId)}}</span></article>
-      <article><small>SAVED OFFICIAL RISK PROJECTIONS</small><strong>{{d.summary.assessedRiskVessels}}</strong><span>{{d.summary.evaluatedPopulation-d.summary.assessedRiskVessels}} missing risk; no fabricated scores</span></article>
-      <article><small>TRACEABLE CANDIDATES</small><strong>{{d.summary.candidates}}</strong><span>Derived from saved source events</span></article>
-      <article><small>PENDING OFFICER REVIEW</small><strong>{{d.summary.pendingReview}}</strong><span>Human approval required</span></article>
-      <article><small>CREATED SI CASES</small><strong>{{d.summary.inspectionsCreated}}</strong><span>Audit-linked, not yet scheduled</span></article>
+      <article><small>{{copy("ACTIVE VESSELS EVALUATED","السفن النشطة المشمولة بالفحص")}}</small><strong>{{d.summary.evaluatedPopulation}}</strong><span>Fleet snapshot {{short(d.fleetSnapshotId)}}</span></article>
+      <article><small>{{copy("SAVED OFFICIAL RISK PROJECTIONS","تقييمات المخاطر المحفوظة")}}</small><strong>{{d.summary.assessedRiskVessels}}</strong><span>{{d.summary.evaluatedPopulation-d.summary.assessedRiskVessels}} missing risk; no fabricated scores</span></article>
+      <article><small>{{copy("TRACEABLE CANDIDATES","المرشحون القابلون للتتبع")}}</small><strong>{{d.summary.candidates}}</strong><span>{{copy("Derived from saved source events","مستخرجة من أحداث المصادر المحفوظة")}}</span></article>
+      <article><small>{{copy("PENDING OFFICER REVIEW","بانتظار مراجعة الموظف")}}</small><strong>{{d.summary.pendingReview}}</strong><span>{{copy("Human approval required","تتطلب اعتمادًا بشريًا")}}</span></article>
+      <article><small>{{copy("CREATED SI CASES","حالات المعاينة المنشأة")}}</small><strong>{{d.summary.inspectionsCreated}}</strong><span>{{copy("Audit-linked, not yet scheduled","مرتبطة بسجل التدقيق ولم تُجدول بعد")}}</span></article>
     </section>
     <div *ngIf="dashboard as d" class="meta-line">
       <span>Targeting Rules v{{d.policy.version}}</span>
@@ -36,39 +36,39 @@
     </div>
 
     <section class="si-panel workflow">
-      <header><h2>01 · Live Candidate Queue</h2><p>Only approved NMC referrals or explicitly recorded POC source events appear. Different inspection regimes remain separate.</p></header>
+      <header><h2>{{copy("01 · Live Candidate Queue","٠١ · قائمة مرشحي المعاينة")}}</h2><p>{{copy("Only approved NMC referrals or explicitly recorded POC source events appear. Different inspection regimes remain separate.","تظهر الإحالات المعتمدة من المركز البحري أو أحداث المصادر التجريبية المسجلة فقط. يظل كل نظام معاينة منفصلًا.")}}</p></header>
       <div class="filters">
-        <input type="search" [(ngModel)]="search" placeholder="Search IMO, vessel, source reference…" aria-label="Search candidates"/>
+        <input type="search" [(ngModel)]="search" [placeholder]="copy('Search IMO, vessel, source reference…','ابحث برقم IMO أو السفينة أو مرجع المصدر…')" [attr.aria-label]="copy('Search candidates','بحث المرشحين')"/>
         <select [(ngModel)]="sourceFilter" aria-label="Source filter">
-          <option value="ALL">All sources</option>
-          <option value="NMC_CASE">Approved NMC referral</option>
-          <option value="SERVICE_REQUEST">POC service event</option>
-          <option value="PSC_PORT_CALL">POC PSC port call</option>
+          <option value="ALL">{{copy("All sources","كل المصادر")}}</option>
+          <option value="NMC_CASE">{{copy("Approved NMC referral","إحالة معتمدة من المركز البحري")}}</option>
+          <option value="SERVICE_REQUEST">{{copy("POC service event","حدث خدمة تجريبي")}}</option>
+          <option value="PSC_PORT_CALL">{{copy("POC PSC port call","نداء ميناء تجريبي لتفتيش دولة الميناء")}}</option>
         </select>
         <select [(ngModel)]="statusFilter" aria-label="Status filter">
-          <option value="ALL">All workflow statuses</option>
-          <option value="PENDING_REVIEW">Pending Review</option>
-          <option value="DEFERRED">Deferred</option>
-          <option value="REJECTED">Rejected</option>
-          <option value="INSPECTION_CREATED">Inspection Created</option>
-          <option value="EXTERNALLY_SCHEDULED">Already NMC Scheduled</option>
+          <option value="ALL">{{copy("All workflow statuses","كل حالات سير العمل")}}</option>
+          <option value="PENDING_REVIEW">{{copy("Pending Review","بانتظار المراجعة")}}</option>
+          <option value="DEFERRED">{{copy("Deferred","مؤجلة")}}</option>
+          <option value="REJECTED">{{copy("Rejected","مرفوضة")}}</option>
+          <option value="INSPECTION_CREATED">{{copy("Inspection Created","تم إنشاء المعاينة")}}</option>
+          <option value="EXTERNALLY_SCHEDULED">{{copy("Already NMC Scheduled","مجدولة مسبقًا في المركز البحري")}}</option>
         </select>
       </div>
       <div class="table-scroll">
         <table>
-          <thead><tr><th>Vessel / IMO</th><th>Inspection Regime</th><th>Source &amp; provenance</th><th>NMC Risk</th><th>Eligibility</th><th>Priority</th><th>Workflow</th><th></th></tr></thead>
+          <thead><tr><th>{{copy("Vessel / IMO","السفينة / رقم IMO")}}</th><th>{{copy("Inspection Regime","نظام المعاينة")}}</th><th>{{copy("Source & provenance","المصدر وأصل البيانات")}}</th><th>{{copy("NMC Risk","مخاطر المركز البحري")}}</th><th>{{copy("Eligibility","الأهلية")}}</th><th>{{copy("Priority","الأولوية")}}</th><th>{{copy("Workflow","سير العمل")}}</th><th></th></tr></thead>
           <tbody>
             <tr *ngFor="let c of candidates;trackBy:trackKey" [class.active]="selectedKey===c.key">
               <td><strong>{{c.vesselName}}</strong><small>IMO {{c.imo}} · {{c.flag}} · {{c.vesselType}}</small></td>
               <td>{{statusText(c.regime)}}</td>
               <td><span *ngFor="let e of c.events" class="source-pill">{{statusText(e.sourceType)}} · {{e.provenance==='POC_SIMULATOR'?'SIMULATED':'NMC APPROVED'}}</span></td>
-              <td><strong *ngIf="c.currentRisk as risk">{{risk.score}}/100 · {{risk.level}}</strong><span *ngIf="!c.currentRisk" class="pending">NOT ASSESSED</span></td>
+              <td><strong *ngIf="c.currentRisk as risk">{{risk.score}}/100 · {{risk.level}}</strong><span *ngIf="!c.currentRisk" class="pending">{{copy("NOT ASSESSED","لم تُقيّم")}}</span></td>
               <td><span class="tag" [class.manual]="c.eligibility==='MANUAL_REVIEW'">{{statusText(c.eligibility)}}</span></td>
               <td>{{statusText(c.priority)}}</td>
               <td><span class="status">{{statusText(c.status)}}</span></td>
-              <td><button type="button" (click)="select(c)">Review →</button></td>
+              <td><button type="button" (click)="select(c)">{{copy("Review →","مراجعة →")}}</button></td>
             </tr>
-            <tr *ngIf="!candidates.length"><td colspan="8" class="empty">No matching persisted candidates. Zero is valid; no artificial inspection quota or auto-created cases.</td></tr>
+            <tr *ngIf="!candidates.length"><td colspan="8" class="empty">{{copy("No matching persisted candidates. Zero is valid; no artificial inspection quota or auto-created cases.","لا توجد حالات ترشيح محفوظة مطابقة. لا يتم إنشاء حالات أو أعداد معاينة افتراضية.")}}</td></tr>
           </tbody>
         </table>
       </div>
@@ -76,75 +76,75 @@
 
     <div class="lower-grid">
       <section class="si-panel" *ngIf="selected as c">
-        <header><h2>02 · Officer Decision</h2><p>IMO {{c.imo}} · {{statusText(c.regime)}} · {{c.eligibility}}</p></header>
+        <header><h2>{{copy("02 · Officer Decision","٠٢ · قرار الموظف")}}</h2><p>IMO {{c.imo}} · {{statusText(c.regime)}} · {{c.eligibility}}</p></header>
         <div class="source-detail">
           <div *ngFor="let e of c.events">
             <strong>{{statusText(e.sourceType)}} · {{e.sourceEventId}}</strong>
             <small>Reference: {{e.sourceReference}} · {{e.provenance}} · {{e.approval}}</small>
             <small>Evidence refs: {{e.evidenceIds.length?e.evidenceIds.join(', '):'none supplied'}}</small>
           </div>
-          <p><strong>Rules:</strong> {{c.reasons.join(' · ')}}</p>
+          <p><strong>{{copy("Rules:","القواعد:")}}</strong> {{c.reasons.join(' · ')}}</p>
           <p *ngIf="c.currentRisk">Risk source assessment: {{c.currentRisk.assessmentId}} · NMC Policy v{{c.currentRisk.policyRevision}}</p>
           <p *ngIf="c.lastDecision">Last decision: {{c.lastDecision.action}} by {{c.lastDecision.actor}} · {{c.lastDecision.at|date:'short'}} · {{c.lastDecision.note}}</p>
-          <p *ngIf="c.inspectionCase"><strong>Inspection Case:</strong> {{c.inspectionCase.id}} · {{c.inspectionCase.status}}</p>
-          <a *ngIf="c.inspectionCase" class="prepare-link" [routerLink]="['/moei/smart-inspection/preparation',c.inspectionCase.id]">Open Preparation &amp; A04 Dossier →</a>
+          <p *ngIf="c.inspectionCase"><strong>{{copy("Inspection Case:","حالة المعاينة:")}}</strong> {{c.inspectionCase.id}} · {{c.inspectionCase.status}}</p>
+          <a *ngIf="c.inspectionCase" class="prepare-link" [routerLink]="['/moei/smart-inspection/preparation',c.inspectionCase.id]">{{copy("Open Preparation & A04 Dossier →","فتح التحضير وملف A04 →")}}</a>
         </div>
         <ng-container *ngIf="c.status!=='INSPECTION_CREATED'&&c.status!=='EXTERNALLY_SCHEDULED'">
-          <label>Decision rationale <span class="required">*</span><textarea [(ngModel)]="decisionNote" rows="3" maxlength="500" placeholder="State the reason and legal/business basis; never substitute AI judgment"></textarea></label>
+          <label>{{copy("Decision rationale","مبررات القرار")}} <span class="required">*</span><textarea [(ngModel)]="decisionNote" rows="3" maxlength="500" [placeholder]="copy('State the decision justification','اكتب مبررات القرار والأساس الإداري أو التنظيمي')"></textarea></label>
           <div class="decision-actions">
-            <button class="primary" type="button" [disabled]="busy" (click)="decide('APPROVE')">Approve &amp; Create SI Case</button>
-            <button type="button" [disabled]="busy" (click)="decide('DEFER')">Defer</button>
-            <button type="button" [disabled]="busy" (click)="decide('REJECT')">Reject</button>
+            <button class="primary" type="button" [disabled]="busy" (click)="decide('APPROVE')">{{copy("Approve & Create SI Case","اعتماد وإنشاء حالة معاينة")}}</button>
+            <button type="button" [disabled]="busy" (click)="decide('DEFER')">{{copy("Defer","تأجيل")}}</button>
+            <button type="button" [disabled]="busy" (click)="decide('REJECT')">{{copy("Reject","رفض")}}</button>
           </div>
-          <p class="hint">Approval requires a supervisor Publisher key; no Airia execution, regulatory determination or automatic scheduling.</p>
+          <p class="hint">{{copy("Approval requires a supervisor Publisher key; no Airia execution, regulatory determination or automatic scheduling.","يتطلب الاعتماد صلاحية المشرف. لا يتم تشغيل Airia أو اتخاذ قرار تنظيمي أو جدولة المعاينة تلقائيًا.")}}</p>
         </ng-container>
-        <p *ngIf="c.status==='EXTERNALLY_SCHEDULED'" class="notice">This NMC referral has already been scheduled. No duplicate SI case will be created.</p>
+        <p *ngIf="c.status==='EXTERNALLY_SCHEDULED'" class="notice">{{copy("This NMC referral has already been scheduled. No duplicate SI case will be created.","هذه الإحالة مجدولة بالفعل في المركز البحري؛ لن تُنشأ حالة معاينة مكررة.")}}</p>
       </section>
 
       <section class="si-panel">
-        <header><h2>03 · Operator &amp; Access</h2><p>Permission checks are enforced server-side. Keys stay in memory and are never stored in the browser.</p></header>
-        <label>Operator / reviewer <input [(ngModel)]="reviewer" autocomplete="off" placeholder="Business user name"/></label>
-        <label>Editor key <input type="password" [(ngModel)]="editorKey" autocomplete="off"/></label>
-        <label>Supervisor / Publisher key <input type="password" [(ngModel)]="publisherKey" autocomplete="off"/></label>
-        <p class="hint">Editor: source event, defer/reject, impact preview. Publisher: approve/create case, publish rules.</p>
+        <header><h2>{{copy("03 · Operator & Access","٠٣ · المستخدم والصلاحيات")}}</h2><p>{{copy("Permission checks are enforced server-side. Keys stay in memory and are never stored in the browser.","يتم التحقق من الصلاحيات على الخادم. تبقى المفاتيح في الذاكرة ولا تُحفظ في المتصفح.")}}</p></header>
+        <label>{{copy("Operator / reviewer","المستخدم / المراجع")}} <input [(ngModel)]="reviewer" autocomplete="off" [placeholder]="copy('Business user name','اسم مستخدم الأعمال')"/></label>
+        <label>{{copy("Editor key","مفتاح المحرر")}} <input type="password" [(ngModel)]="editorKey" autocomplete="off"/></label>
+        <label>{{copy("Supervisor / Publisher key","مفتاح المشرف / الناشر")}} <input type="password" [(ngModel)]="publisherKey" autocomplete="off"/></label>
+        <p class="hint">{{copy("Editor: source event, defer/reject, impact preview. Publisher: approve/create case, publish rules.","المحرر: تسجيل الأحداث والتأجيل والرفض ومعاينة الأثر. الناشر: الاعتماد وإنشاء الحالات ونشر القواعد.")}}</p>
       </section>
 
       <section class="si-panel">
-        <header><h2>04 · POC Source Event Intake</h2><p>Simulated service or PSC event, never represented as verified official data.</p></header>
+        <header><h2>{{copy("04 · POC Source Event Intake","٠٤ · استقبال أحداث المصادر التجريبية")}}</h2><p>{{copy("Simulated service or PSC event, never represented as verified official data.","حدث خدمة أو نداء ميناء تجريبي ولا يمثل بيانات حكومية رسمية موثقة.")}}</p></header>
         <div class="form-grid">
-          <label>Source<select [(ngModel)]="eventForm.sourceType" (ngModelChange)="onEventSourceChange()">
-            <option value="SERVICE_REQUEST">Simulated Service Request</option>
-            <option value="PSC_PORT_CALL">Simulated PSC Port Call</option>
+          <label>{{copy("Source","المصدر")}}<select [(ngModel)]="eventForm.sourceType" (ngModelChange)="onEventSourceChange()">
+            <option value="SERVICE_REQUEST">{{copy("Simulated Service Request","طلب خدمة تجريبي")}}</option>
+            <option value="PSC_PORT_CALL">{{copy("Simulated PSC Port Call","نداء ميناء PSC تجريبي")}}</option>
           </select></label>
-          <label>Source event ID<input [(ngModel)]="eventForm.sourceEventId" placeholder="SR-POC-001"/></label>
-          <label>Reference<input [(ngModel)]="eventForm.sourceReference" placeholder="Source request / port call ID"/></label>
-          <label>Vessel IMO<input [(ngModel)]="eventForm.imo" inputmode="numeric" maxlength="7" placeholder="7-digit IMO"/></label>
-          <label>Port<input [(ngModel)]="eventForm.port" placeholder="Port name"/></label>
-          <label>ETA (optional)<input [(ngModel)]="eventForm.eta" placeholder="2026-10-15T08:00"/></label>
-          <label>Source review state<select [(ngModel)]="eventForm.sourceApprovalStatus">
-            <option value="UNVERIFIED">Unverified mock event</option>
-            <option value="SOURCE_REVIEWED">Source manually reviewed (POC only)</option>
+          <label>{{copy("Source event ID","معرف الحدث")}}<input [(ngModel)]="eventForm.sourceEventId" placeholder="SR-POC-001"/></label>
+          <label>{{copy("Reference","المرجع")}}<input [(ngModel)]="eventForm.sourceReference" placeholder="Source request / port call ID"/></label>
+          <label>{{copy("Vessel IMO","رقم IMO للسفينة")}}<input [(ngModel)]="eventForm.imo" inputmode="numeric" maxlength="7" placeholder="7-digit IMO"/></label>
+          <label>{{copy("Port","الميناء")}}<input [(ngModel)]="eventForm.port" placeholder="Port name"/></label>
+          <label>{{copy("ETA (optional)","وقت الوصول المتوقع (اختياري)")}}<input [(ngModel)]="eventForm.eta" placeholder="2026-10-15T08:00"/></label>
+          <label>{{copy("Source review state","حالة مراجعة المصدر")}}<select [(ngModel)]="eventForm.sourceApprovalStatus">
+            <option value="UNVERIFIED">{{copy("Unverified mock event","حدث تجريبي غير موثق")}}</option>
+            <option value="SOURCE_REVIEWED">{{copy("Source manually reviewed (POC only)","مصدر تمت مراجعته يدويًا (تجريبي)")}}</option>
           </select></label>
-          <label>Context<input [(ngModel)]="eventForm.note" maxlength="500" placeholder="Business context"/></label>
+          <label>{{copy("Context","السياق")}}<input [(ngModel)]="eventForm.note" maxlength="500" [placeholder]="copy('Business context','سياق العمل')"/></label>
         </div>
-        <button class="primary" type="button" [disabled]="busy" (click)="addEvent()">Save Simulated Event</button>
-        <p class="hint">Both types remain MANUAL_REVIEW even when marked source-reviewed. A source event alone never creates an inspection case.</p>
+        <button class="primary" type="button" [disabled]="busy" (click)="addEvent()">{{copy("Save Simulated Event","حفظ الحدث التجريبي")}}</button>
+        <p class="hint">{{copy("Both types remain MANUAL_REVIEW even when marked source-reviewed. A source event alone never creates an inspection case.","يظل النوعان خاضعين للمراجعة اليدوية حتى بعد مراجعة المصدر، ولا يؤدي الحدث وحده إلى إنشاء حالة معاينة.")}}</p>
       </section>
 
       <section class="si-panel">
-        <header><h2>05 · Configurable Priority &amp; Impact</h2><p>Versioned priority threshold only. Statutory PSC/service eligibility is NOT auto-published.</p></header>
+        <header><h2>{{copy("05 · Configurable Priority & Impact","٠٥ · إعداد الأولوية ومعاينة الأثر")}}</h2><p>{{copy("Versioned priority threshold only. Statutory PSC/service eligibility is NOT auto-published.","يتم إصدار حدود الأولوية فقط. لا تُنشر قواعد الأهلية التنظيمية تلقائيًا.")}}</p></header>
         <p *ngIf="dashboard">Published ruleset v{{dashboard.policy.version}} · {{dashboard.policy.config.riskPriorityThreshold}}/100 priority threshold</p>
-        <label>Proposed priority threshold (0–100)<input type="number" min="0" max="100" step="1" [(ngModel)]="threshold" (ngModelChange)="impact=null"/></label>
-        <div class="decision-actions"><button type="button" [disabled]="busy" (click)="previewRules()">Preview fleet impact</button></div>
+        <label>{{copy("Proposed priority threshold (0–100)","حد الأولوية المقترح (٠–١٠٠)")}}<input type="number" min="0" max="100" step="1" [(ngModel)]="threshold" (ngModelChange)="impact=null"/></label>
+        <div class="decision-actions"><button type="button" [disabled]="busy" (click)="previewRules()">{{copy("Preview fleet impact","معاينة أثر التغيير على الأسطول")}}</button></div>
         <div *ngIf="impact as p" class="impact">
           <strong>{{p.affectedCandidateCount}} affected candidate(s)</strong>
           <small>{{p.evaluatedPopulation}} active vessels evaluated · {{p.unevaluatedRiskVessels}} with no saved risk</small>
           <p>Impacted IMOs: {{p.affectedImos.length?p.affectedImos.join(', '):'none'}}</p>
-          <small>Changes PRIORITY only. No AI calls, no case rewrite, no legal eligibility change.</small>
+          <small>{{copy("Changes PRIORITY only. No AI calls, no case rewrite, no legal eligibility change.","يتغير ترتيب الأولوية فقط دون استدعاءات AI أو تعديل الحالات أو الأهلية التنظيمية.")}}</small>
         </div>
-        <label>Business justification<input [(ngModel)]="policyReason" placeholder="Why adjust the priority threshold?"/></label>
-        <button class="primary" type="button" [disabled]="busy||!impact" (click)="publishRules()">Publish Priority Version</button>
-        <p class="hint">Current/open cases retain their approval evidence and original scoring references.</p>
+        <label>{{copy("Business justification","التبرير الإداري")}}<input [(ngModel)]="policyReason" [placeholder]="copy('Why adjust the priority threshold?','لماذا تريد تغيير حد الأولوية؟')"/></label>
+        <button class="primary" type="button" [disabled]="busy||!impact" (click)="publishRules()">{{copy("Publish Priority Version","نشر إصدار جديد للأولوية")}}</button>
+        <p class="hint">{{copy("Current/open cases retain their approval evidence and original scoring references.","تحتفظ الحالات المفتوحة بأدلة الاعتماد ومراجع التقييم الأصلية.")}}</p>
       </section>
     </div>
   </main>
