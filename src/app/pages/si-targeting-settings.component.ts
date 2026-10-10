@@ -18,7 +18,7 @@ import {SiCandidateTargetingService,SiDashboard,SiImpact,SiPriorityWeights,SiTar
         <header class="heading">
           <div>
             <small>{{copy('SETTINGS / SMART INSPECTION','الإعدادات / المعاينة الذكية')}}</small>
-            <h1>{{copy('Targeting & Priority Rules','قواعد الاستهداف والأولوية')}}</h1>
+            <h1>{{copy('Inspection Execution Priority Rules','قواعد أولوية تنفيذ المعاينات')}}</h1>
             <p>{{copy('Versioned operational priority configuration and fleet impact preview. The rules do not change statutory eligibility, inspection approvals or NMC risk scores.',
               'إعداد أولوية التشغيل مع نسخ محفوظة ومعاينة أثرها على الأسطول. لا تغيّر القواعد الأهلية التنظيمية أو قرارات الاعتماد أو نتائج المخاطر.')}}</p>
           </div>
