@@ -13,6 +13,12 @@ const metadata={
   webViewLink:'https://drive.google.com/file/d/'+FILE+'/view'
 };
 const normalized=()=>({
+  documentEntries:[
+    {imo:IMO,documentType:'Certificate of Registry',
+      certificateNumber:'CR-2026-784',issuingAuthority:'Flag Registry',
+      issueDate:null,expiryDate:'2028-05-17',status:'ACTIVE',
+      evidenceQuotes:['Certificate of Registry No CR-2026-784']}
+  ],
   extracted:{imo:IMO,vesselName:null,documentType:'Certificate of Registry',
     certificateNumber:'CR-2026-784',issuingAuthority:'Flag Registry',
     issueDate:null,expiryDate:'2028-05-17'},
@@ -26,7 +32,7 @@ function fixture({fakeResult=normalized(),fileModified=metadata.modifiedTime}={}
     calls.push({path,q});
     if(path==='files'){
       if(q.q.includes(ROOT))return {files:[
-        {id:DIR,name:'IMO '+IMO,mimeType:'application/vnd.google-apps.folder'},
+        {id:DIR,name:IMO+' - MV Gulf Horizon',mimeType:'application/vnd.google-apps.folder'},
         {id:'anotherImoFolder12345',name:'IMO 9123456',
           mimeType:'application/vnd.google-apps.folder'}]};
       if(q.q.includes(DIR))return {files:[{...metadata,modifiedTime:mutated}]};
@@ -64,6 +70,7 @@ test('explicit A03 run captures cited fields, then human APPROVE exposes reviewe
     const result=await a.store.analyze(IMO,FILE,{actor:'Inspector X',confirmCost:true});
     assert.equal(result.status,'DRAFT_REVIEW');
     assert.equal(result.extracted.imo,IMO);
+    assert.equal(result.documentEntries.length,1);
     assert.equal(result.authenticityVerified,false);
     assert.equal(a.agentCalls(),1);
     assert.equal((await a.store.approvedFor(IMO)).length,0);
@@ -77,6 +84,7 @@ test('explicit A03 run captures cited fields, then human APPROVE exposes reviewe
     assert.equal(rows.length,1);
     assert.ok(rows[0].evidenceId.startsWith('GDOC-'));
     assert.equal(rows[0].expiryDate,'2028-05-17');
+    assert.equal(rows[0].documentEntries[0].documentType,'Certificate of Registry');
     assert.equal(rows[0].source,'GOOGLE_DRIVE_A03_HUMAN_REVIEWED_NOT_AUTHENTICATED');
     assert.equal((await new DriveDocumentIntelligence(a.args).savedFor(IMO))[0].status,'APPROVED');
     await assert.rejects(()=>a.store.analyze(IMO,FILE,{actor:'Inspector X',confirmCost:true}),
