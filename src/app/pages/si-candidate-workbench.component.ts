@@ -104,6 +104,7 @@ export class SiCandidateWorkbenchComponent implements OnInit{
         this.dashboard=data;
         if(!data.candidates.some(x=>x.key===this.selectedKey))this.selectedKey='';
         this.loading=false;
+        if(this.editorKey.trim()&&!this.priorityBusy)this.refreshAiStatus();
       },error:e=>{this.loading=false;this.showError(e);}
     });
   }
