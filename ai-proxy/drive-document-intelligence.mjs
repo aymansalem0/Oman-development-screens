@@ -201,6 +201,56 @@ export class DriveDocumentIntelligence {
         source:'GOOGLE_DRIVE_A03_HUMAN_REVIEWED_NOT_AUTHENTICATED'
       })).slice(0,30);
   }
+  /** A03 drafts with verified verbatim citations may enter advisory risk analysis.
+   * Only exact current Drive versions are available; approval is separate.
+   */
+  async riskEvidenceFor(imo){
+    const rows=await this.savedFor(imo);
+    if(!rows.some(r=>['DRAFT_REVIEW','APPROVED'].includes(r.status)))return [];
+    const listing=await this.list(imo); // fail closed if Drive unavailable
+    if(listing.status!=='ok')return [];
+    const current=new Map(listing.documents.map(f=>[f.fileId,f.modifiedTime]));
+    return rows.filter(d=>['DRAFT_REVIEW','APPROVED'].includes(d.status)&&
+      d.extracted?.imo===imo&&
+      current.get(d.fileId)===d.analyzedModifiedTime&&
+      d.sourceModifiedTime===d.analyzedModifiedTime&&
+      Array.isArray(d.evidenceQuotes)&&d.evidenceQuotes.length)
+      .map(d=>({evidenceId:documentEvidenceId(d.fileId),
+        documentId:d.id,sourceFileId:d.fileId,
+        sourceModifiedTime:d.sourceModifiedTime,
+        analyzedModifiedTime:d.analyzedModifiedTime,
+        vesselImo:imo,fileName:d.fileName,
+        type:d.extracted.documentType,
+        certificateNumber:d.extracted.certificateNumber,
+        issuer:d.extracted.issuingAuthority,
+        expiryDate:d.extracted.expiryDate,
+        evidenceQuotes:d.evidenceQuotes,documentEntries:d.documentEntries||[],
+        confidence:d.confidence,reviewStatus:d.status,
+        source:'A03_PROVISIONAL_OR_REVIEWED_SYNTHETIC_DOCUMENT',
+        authenticityVerified:false})).slice(0,30);
+  }
+  /** Called only inside the opt-in automatic fleet job, never on page load.
+   * At most one unseen/modified file per vessel per tick (bounded Airia cost).
+   */
+  async syncForRisk(imo,{autoEnabled=false}={}){
+    if(autoEnabled){
+      if(!this.enabled)throw new DocumentError('A03_NOT_ENABLED',503);
+      const listing=await this.list(imo);
+      if(listing.status!=='ok')throw new DocumentError('GOOGLE_DRIVE_NOT_CONFIGURED',503);
+      const target=listing.documents.find(d=>['NOT_ANALYZED','SOURCE_CHANGED'].includes(d.savedStatus));
+      if(target){
+        await this.analyze(imo,target.fileId,{actor:'NMC_A03_SCHEDULER',
+          confirmCost:true});
+      }
+    }
+    return this.riskEvidenceFor(imo);
+  }
+  async fingerprint(imo){
+    const listing=await this.list(imo);
+    if(listing.status!=='ok')return 'NO_DRIVE_CONFIGURATION';
+    return listing.documents.map(d=>d.fileId+':'+d.modifiedTime+':'+d.savedStatus)
+      .sort().join('|');
+  }
   async record(current,next,action,actor){
     this.ensureReady();
     if(this.mode==='json'){
