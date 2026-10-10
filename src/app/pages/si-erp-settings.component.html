@@ -1,78 +1,78 @@
-<div class="erp-layout">
+<div class="erp-layout" [attr.dir]="lang.dir">
   <app-nmc-navigation></app-nmc-navigation>
   <main class="erp-main">
     <header class="erp-hero">
       <div>
-        <small>MOEI · SETTINGS · SMART INSPECTION</small>
-        <h1>ERP Integration Simulator</h1>
+        <small>{{copy("MOEI · SETTINGS · SMART INSPECTION","وزارة الطاقة والبنية التحتية · الإعدادات · المعاينة الذكية")}}</small>
+        <h1>{{copy("ERP Integration Simulator","محاكاة تكامل ERP")}}</h1>
         <p>إعدادات محاكاة الربط مع نظام الموارد البشرية ERP · Workforce &amp; inspection scheduling master data</p>
       </div>
       <div class="hero-actions">
-        <a routerLink="/moei/smart-inspection/scheduling">← Electronic Scheduling</a>
-        <a routerLink="/moei/smart-inspection/candidates">Candidate Center</a>
-        <button type="button" (click)="refresh()" [disabled]="busy||loading">↻ Refresh</button>
+        <a routerLink="/moei/smart-inspection/scheduling">{{copy("← Electronic Scheduling","← الجدولة الإلكترونية")}}</a>
+        <a routerLink="/moei/smart-inspection/candidates">{{copy("Candidate Center","مركز مرشحي المعاينة")}}</a>
+        <button type="button" (click)="refresh()" [disabled]="busy||loading">{{copy("↻ Refresh","↻ تحديث")}}</button>
       </div>
     </header>
     <div class="notice error" role="alert" *ngIf="error">{{error}}</div>
     <div class="notice success" role="status" *ngIf="success">{{success}}</div>
-    <div class="notice info" *ngIf="loading">Loading current workforce snapshot…</div>
+    <div class="notice info" *ngIf="loading">{{copy("Loading current workforce snapshot…","جارٍ تحميل بيانات القوى العاملة الحالية…")}}</div>
 
     <section class="metrics">
-      <article><small>ERP SOURCE</small><strong>{{erp?.ready?'SNAPSHOT ACTIVE':'NOT CONFIGURED'}}</strong><span>POC Excel simulator · no live ERP connection</span></article>
-      <article><small>INSPECTORS</small><strong>{{erp?.counts?.['Inspectors']??0}}</strong><span>Validated workforce records</span></article>
-      <article><small>PORTS</small><strong>{{erp?.counts?.['Ports']??0}}</strong><span>Valid master records</span></article>
-      <article><small>IMPORT DATE</small><strong class="date">{{erp?.importedAt?(erp?.importedAt|date:'short'):'—'}}</strong><span>Snapshot {{short(erp?.snapshotId)}}</span></article>
+      <article><small>{{copy("ERP SOURCE","مصدر ERP")}}</small><strong>{{erp?.ready?'SNAPSHOT ACTIVE':'NOT CONFIGURED'}}</strong><span>{{copy("POC Excel simulator · no live ERP connection","محاكاة Excel تجريبية · لا يوجد ربط مباشر مع ERP")}}</span></article>
+      <article><small>{{copy("INSPECTORS","المفتشون")}}</small><strong>{{erp?.counts?.['Inspectors']??0}}</strong><span>{{copy("Validated workforce records","بيانات القوى العاملة التي تم التحقق منها")}}</span></article>
+      <article><small>{{copy("PORTS","الموانئ")}}</small><strong>{{erp?.counts?.['Ports']??0}}</strong><span>{{copy("Valid master records","بيانات أساسية معتمدة بعد التحقق")}}</span></article>
+      <article><small>{{copy("IMPORT DATE","تاريخ الاستيراد")}}</small><strong class="date">{{erp?.importedAt?(erp?.importedAt|date:'short'):'—'}}</strong><span>Snapshot {{short(erp?.snapshotId)}}</span></article>
     </section>
 
     <div class="columns">
       <section class="erp-panel">
-        <header><small>01 / SIMULATION SOURCE</small><h2>ERP Connection Settings</h2>
-          <p>This module simulates a read-only ERP workforce integration. Excel represents the external ERP feed; it does not create a real ERP connection.</p>
+        <header><small>{{copy("01 / SIMULATION SOURCE","٠١ / مصدر المحاكاة")}}</small><h2>{{copy("ERP Connection Settings","إعدادات الربط مع ERP")}}</h2>
+          <p>{{copy("This module simulates a read-only ERP workforce integration. Excel represents the external ERP feed; it does not create a real ERP connection.","تحاكي هذه الشاشة قراءة بيانات القوى العاملة من ERP. يمثل ملف Excel تغذية النظام الخارجي ولا ينشئ اتصالًا فعليًا به.")}}</p>
         </header>
         <div class="configuration">
-          <div><span>Connector Mode</span><strong>EXCEL_POC_SIMULATOR</strong></div>
-          <div><span>Source System</span><strong>ERP — Workforce / Inspector Management</strong></div>
-          <div><span>Delivery Method</span><strong>Validated XLSX → Preview → Explicit Commit</strong></div>
-          <div><span>Timezone</span><strong>Asia/Dubai (UTC+04:00)</strong></div>
-          <div><span>Destination</span><strong>Persisted POC snapshot · no ERP write-back</strong></div>
+          <div><span>{{copy("Connector Mode","وضع الربط")}}</span><strong>{{copy("EXCEL_POC_SIMULATOR","محاكي Excel التجريبي")}}</strong></div>
+          <div><span>{{copy("Source System","النظام المصدر")}}</span><strong>{{copy("ERP — Workforce / Inspector Management","ERP — إدارة القوى العاملة والمفتشين")}}</strong></div>
+          <div><span>{{copy("Delivery Method","طريقة تبادل البيانات")}}</span><strong>{{copy("Validated XLSX → Preview → Explicit Commit","ملف Excel معتمد → معاينة → تأكيد الاستيراد")}}</strong></div>
+          <div><span>{{copy("Timezone","المنطقة الزمنية")}}</span><strong>{{copy("Asia/Dubai (UTC+04:00)","آسيا/دبي (UTC+04:00)")}}</strong></div>
+          <div><span>{{copy("Destination","الوجهة")}}</span><strong>{{copy("Persisted POC snapshot · no ERP write-back","نسخة تجريبية محفوظة · دون تعديل ERP")}}</strong></div>
         </div>
         <div class="notice info">
-          No Oracle migration required. The ERP snapshot is stored separately from NMC case, assessment and risk-policy history. Uploading Excel never triggers AI.
+          {{copy("No Oracle migration required. The ERP snapshot is stored separately from NMC case, assessment and risk-policy history. Uploading Excel never triggers AI.","لا يلزم تعديل Oracle. تُحفظ بيانات ERP التجريبية منفصلة عن تاريخ الحالات والتقييمات والمخاطر. لا يؤدي رفع Excel إلى تشغيل AI.")}}
         </div>
-        <label>Editor / integration administrator key
-          <input type="password" [(ngModel)]="editorKey" autocomplete="off" placeholder="Required for Preview and Commit"/>
+        <label>{{copy("Editor / integration administrator key","مفتاح المحرر / مسؤول التكامل")}}
+          <input type="password" [(ngModel)]="editorKey" autocomplete="off" [placeholder]="copy('Required for Preview and Commit','مطلوب للمعاينة واعتماد الاستيراد')"/>
         </label>
         <div *ngIf="erp?.ready" class="counts">
-          <h3>Currently active ERP snapshot</h3>
+          <h3>{{copy("Currently active ERP snapshot","نسخة بيانات ERP النشطة حاليًا")}}</h3>
           <div *ngFor="let c of countPairs"><span>{{c.name}}</span><strong>{{c.value}}</strong></div>
         </div>
       </section>
 
       <section class="erp-panel">
-        <header><small>02 / WORKFORCE DATA IMPORT</small><h2>ERP Excel Workbook</h2>
-          <p>Upload the POC ERP workbook. All 11 required sheet names and the exact headers in <b>row 4</b> are checked, followed by references, dates, roles and booking consistency.</p>
+        <header><small>{{copy("02 / WORKFORCE DATA IMPORT","٠٢ / استيراد بيانات القوى العاملة")}}</small><h2>{{copy("ERP Excel Workbook","ملف بيانات ERP بصيغة Excel")}}</h2>
+          <p>{{copy("Upload the POC ERP workbook. All 11 required sheet names and the exact headers in","ارفع ملف ERP التجريبي. يتم التحقق من أسماء أوراق العمل الإحدى عشرة وعناوين الأعمدة في")}} <b>{{copy("row 4","الصف الرابع")}}</b> {{copy("are checked, followed by references, dates, roles and booking consistency.","ثم التحقق من المراجع والتواريخ والصلاحيات والحجوزات.")}}</p>
         </header>
         <div class="upload-box">
-          <label for="erp-file">Select ERP workbook (.xlsx, maximum 3 MB)</label>
+          <label for="erp-file">{{copy("Select ERP workbook (.xlsx, maximum 3 MB)","اختر ملف ERP بصيغة Excel (بحد أقصى ٣ ميجابايت)")}}</label>
           <input id="erp-file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             [disabled]="busy" (change)="uploadExcel($event)"/>
           <small *ngIf="fileName">Selected: {{fileName}} ({{fileSize/1024|number:'1.0-1'}} KB)</small>
-          <small>Excel data is not saved until <strong>Commit ERP Snapshot</strong> is clicked.</small>
+          <small>{{copy("Excel data is not saved until","لا تُحفظ بيانات Excel حتى الضغط على")}} <strong>{{copy("Commit ERP Snapshot","اعتماد نسخة بيانات ERP")}}</strong> {{copy("is clicked.",".")}}</small>
         </div>
         <div *ngIf="pendingImport as preview" class="preview">
           <h3>✓ Import Preview Passed — Not Committed</h3>
           <p>Pending snapshot: {{short(preview.snapshotId)}} · Expires {{preview.expiresAt|date:'shortTime'}}</p>
           <div class="preview-grid"><span *ngFor="let pair of preview.counts|keyvalue">{{pair.key}}: <strong>{{pair.value}}</strong></span></div>
-          <p class="hint">POC simulation only. Existing imported workforce data will be replaced only after confirmation.</p>
-          <button class="primary" type="button" (click)="commitExcel()" [disabled]="busy">Commit ERP Snapshot</button>
+          <p class="hint">{{copy("POC simulation only. Existing imported workforce data will be replaced only after confirmation.","المحاكاة تجريبية. لا تُستبدل بيانات القوى العاملة المستوردة إلا بعد تأكيد المستخدم.")}}</p>
+          <button class="primary" type="button" (click)="commitExcel()" [disabled]="busy">{{copy("Commit ERP Snapshot","اعتماد نسخة بيانات ERP")}}</button>
         </div>
         <div class="required-sheets">
-          <h3>Workbook Structure — 11 required worksheets</h3>
+          <h3>{{copy("Workbook Structure — 11 required worksheets","هيكل الملف — ١١ ورقة عمل مطلوبة")}}</h3>
           <div><code *ngFor="let name of requiredSheets">{{name}}</code></div>
-          <p>Headers in row 4, records starting row 5. Do not rename tabs or headers. Import supports conventional Excel files and valid namespace-prefixed SpreadsheetML workbooks.</p>
+          <p>{{copy("Headers in row 4, records starting row 5. Do not rename tabs or headers. Import supports conventional Excel files and valid namespace-prefixed SpreadsheetML workbooks.","العناوين في الصف الرابع والبيانات من الصف الخامس. لا تغيّر أسماء الأوراق أو الأعمدة. يدعم النظام ملفات Excel القياسية والتنسيق المعتمد للملفات ذات البادئات.")}}</p>
         </div>
       </section>
     </div>
-    <footer>MOEI Smart Inspection POC · ERP simulation only · Source data remains auditable and separate from national maritime assessments.</footer>
+    <footer>{{copy("MOEI Smart Inspection POC · ERP simulation only · Source data remains auditable and separate from national maritime assessments.","محاكاة المعاينة الذكية · بيانات ERP تجريبية وقابلة للتدقيق ومنفصلة عن التقييمات البحرية الوطنية.")}}</footer>
   </main>
 </div>
