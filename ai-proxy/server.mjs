@@ -71,16 +71,29 @@ async function a03AgentCall(payload) {
   form.set('userInput',JSON.stringify(input));
   form.set('file',new Blob([attachment.bytes],{type:'application/pdf'}),
     attachment.fileName);
-  const upstream=await fetch(runtime.get('AIRIA_BASE_URL')+
-    '/v1/PipelineExecution/Multipart/'+pipelines.a03,{
-    method:'POST',
-    headers:{'X-API-KEY':apiKey,'User-Agent':'moei-nmc-adapter/1.0'},
-    body:form,
-    signal:AbortSignal.timeout(timeoutMs)
-  });
-  if(!upstream.ok)throw new Error('AIRIA_A03_REQUEST_FAILED_'+upstream.status);
-  const raw=await upstream.text();
-  try{return JSON.parse(raw);}catch{throw new Error('AIRIA_A03_RESPONSE_INVALID_JSON');}
+  let upstream;
+  try{
+    upstream=await fetch(runtime.get('AIRIA_BASE_URL')+
+      '/v1/PipelineExecution/Multipart/'+pipelines.a03,{
+      method:'POST',
+      headers:{'X-API-KEY':apiKey,'User-Agent':'moei-nmc-adapter/1.0'},
+      body:form,
+      signal:AbortSignal.timeout(timeoutMs)
+    });
+  }catch(error){
+    // Never log credentials, request body, source PDF or upstream error messages.
+    const timeout=error?.name==='TimeoutError'||error?.name==='AbortError';
+    throw new DocumentError(timeout?'AIRIA_A03_TIMEOUT':'AIRIA_A03_NETWORK_UNAVAILABLE',502);
+  }
+  if(!upstream.ok){
+    await upstream.body?.cancel().catch(()=>{});
+    throw new DocumentError('AIRIA_A03_HTTP_'+upstream.status,502);
+  }
+  let raw;
+  try{raw=await upstream.text();}
+  catch{throw new DocumentError('AIRIA_A03_RESPONSE_READ_FAILED',502);}
+  try{return JSON.parse(raw);}
+  catch{throw new DocumentError('AIRIA_A03_RESPONSE_INVALID_JSON',502);}
 }
 
 const dbMode=(process.env.NMC_DB_MODE || 'json').toLowerCase();
