@@ -122,6 +122,10 @@ export class NmcNavigationComponent implements OnInit, OnDestroy {
   get isErpIntegrationSettings(): boolean {
     return this.currentPath === '/moei/smart-inspection/settings/erp';
   }
+  get isCandidateSourceSettings(): boolean {
+    return this.currentPath==='/moei/smart-inspection/settings/sources' ||
+      this.currentPath.startsWith('/moei/smart-inspection/settings/sources/');
+  }
   get isInspectionTargetingSettings(): boolean {
     return this.currentPath === '/moei/smart-inspection/settings/targeting';
   }
@@ -178,7 +182,7 @@ export class NmcNavigationComponent implements OnInit, OnDestroy {
       this.settingsExpanded = true;
       this.nmcSettingsExpanded = true;
     }
-    if (this.isErpIntegrationSettings || this.isInspectionTargetingSettings) {
+    if (this.isErpIntegrationSettings || this.isInspectionTargetingSettings || this.isCandidateSourceSettings) {
       this.settingsExpanded = true;
       this.inspectionSettingsExpanded = true;
     }
