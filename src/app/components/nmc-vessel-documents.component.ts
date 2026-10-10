@@ -87,6 +87,19 @@ import {NmcDocumentsService,VesselDriveListing,VesselDriveDoc} from '../services
                   <td>{{section.certificateNumber||'—'}}</td>
                   <td>{{section.status||'—'}}</td>
                   <td>{{section.expiryDate||'—'}}</td>
+                </tr>
+                <tr *ngIf="compareToVessel360(section) as comparison" class="doc-compare-row">
+                  <td colspan="4">
+                    {{tr('Vessel 360 synthetic baseline comparison','مقارنة بيانات Vessel 360 التجريبية')}}
+                    · {{tr('Registered number','الرقم المسجل')}}: {{comparison.localNumber}}
+                    · {{tr('Recorded expiry','الانتهاء المسجل')}}: {{comparison.localExpiry}}
+                    <strong *ngIf="comparison.numberConflict||comparison.expiryConflict" class="doc-compare-warning">
+                      ⚠ {{tr('Disagreement requiring human verification','اختلاف يستلزم التحقق البشري')}}
+                    </strong>
+                    <span *ngIf="!comparison.numberConflict&&!comparison.expiryConflict">✓
+                      {{tr('Values match (not authenticity proof)','القيم متطابقة (ليس توثيقًا للأصالة)')}}
+                    </span>
+                  </td>
                 </tr></tbody>
               </table>
               <p>{{tr('Each section is inferred from the PDF text; citations are retained in the reviewed evidence record.',
@@ -164,6 +177,8 @@ import {NmcDocumentsService,VesselDriveListing,VesselDriveDoc} from '../services
     .doc-approved-text{font-size:11px;color:#178457}
     .doc-sections{margin:15px 0;padding:12px;background:#f8fbfc;border:1px solid #e3eff0;border-radius:10px}
     .doc-sections h4{font-size:12px;margin:0 0 12px;color:#275771}
+    .doc-compare-row td{background:#f6fbf9;color:#527384;font-size:10px;line-height:1.7}
+    .doc-compare-warning{color:#b05c20;font-weight:800;margin-inline-start:8px}
     .doc-sections p{font-size:10px;color:#698595}
     .doc-section-table{width:100%;border-collapse:collapse;font-size:11px}
     .doc-section-table th,.doc-section-table td{padding:9px;border-bottom:1px solid #dfecef;text-align:start}
@@ -175,11 +190,29 @@ import {NmcDocumentsService,VesselDriveListing,VesselDriveDoc} from '../services
 })
 export class NmcVesselDocumentsComponent implements OnChanges,OnDestroy {
   @Input() imo='';
+  @Input() certificates:ReadonlyArray<{type:string;number:string;expiry:string;status:string}>=[];
   listing:VesselDriveListing|null=null;
   busy=false;loading=false;error='';message='';actor='';reason='';
   private readonly subs=new Subscription();
   constructor(private readonly documents:NmcDocumentsService,public lang:LanguageService){}
   tr(en:string,ar:string){return this.lang.pick(en,ar);}
+  /**
+   * Deterministic synthetic Vessel 360 vs document-pack comparison.
+   * Never asserts which value is true and never changes saved certificates.
+   */
+  compareToVessel360(section:{documentType:string;certificateNumber:string|null;expiryDate:string|null}):
+    {localNumber:string;localExpiry:string;numberConflict:boolean;expiryConflict:boolean}|null{
+    const type=section.documentType.toLowerCase();
+    const keyword=['construction','equipment','radio','security'].find(x=>type.includes(x));
+    if(!keyword)return null;
+    const record=this.certificates.find(x=>x.type.toLowerCase().includes(keyword));
+    if(!record)return null;
+    const expiry=new Date(record.expiry);
+    const iso=Number.isFinite(expiry.getTime())?expiry.toISOString().slice(0,10):'';
+    return {localNumber:record.number,localExpiry:iso||record.expiry,
+      numberConflict:Boolean(section.certificateNumber&&section.certificateNumber!==record.number),
+      expiryConflict:Boolean(section.expiryDate&&iso&&section.expiryDate!==iso)};
+  }
   state(s:string):string{
     const labels:Record<string,[string,string]>={
       NOT_ANALYZED:['Not analyzed','لم يُحلل'],
