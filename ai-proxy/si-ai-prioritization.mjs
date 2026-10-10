@@ -67,7 +67,7 @@ function factorSignals(candidate,clock,priorityPolicy){
     x=>priorityPolicy.sourceTriggerScores[x]).filter(Number.isFinite));
   const eta=candidate.events.map(e=>e.eta)
     .filter(x=>typeof x==='string'&&x.length>=16)
-    .map(x=>Date.parse(x.length===16?x+':00Z':x)).filter(Number.isFinite).sort((a,b)=>a-b)[0];
+    .map(x=>Date.parse(x.length===16?x+':00+04:00':x)).filter(Number.isFinite).sort((a,b)=>a-b)[0];
   const hours=eta===undefined?null:(eta-clock)/3600000;
   const deadline=hours===null?null:hours<0?90:hours<=24?85:hours<=72?65:30;
   return {risk,trigger,history:null,deadline,urgency:null};
