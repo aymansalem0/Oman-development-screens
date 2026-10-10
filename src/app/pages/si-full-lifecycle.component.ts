@@ -5,7 +5,7 @@ import {ActivatedRoute,RouterLink} from '@angular/router';
 import {NmcNavigationComponent} from '../components/nmc-navigation.component';
 import {LanguageService} from '../services/language.service';
 import {
- SiLifecycleService,SiLifecycleCase,SiLifecycleView,SiLifecycleRecord,SiInspectionCheck,SiCorrection
+ SiLifecycleService,SiLifecycleCase,SiLifecycleView,SiLifecycleRecord,SiInspectionCheck,SiCorrection,SiLifecycleVersion
 } from '../services/si-lifecycle.service';
 
 interface DraftCheck extends SiInspectionCheck{evidenceText:string;}
@@ -37,6 +37,7 @@ export class SiFullLifecycleComponent implements OnInit{
  ];
  caseId='';cases:SiLifecycleCase[]=[];view:SiLifecycleView|null=null;
  loading=false;busy=false;error='';success='';search='';
+ historyBusy=false;historyError='';versions:SiLifecycleVersion[]=[];showVersions=false;
  operator='';editorKey='';publisherKey='';reason='';
  inspector='';port='Jebel Ali';visitLocal='';assignmentMode:'POC_MANUAL'|'NMC_SCHEDULED'='POC_MANUAL';
  scopeChosen:string[]=[];draftChecks:DraftCheck[]=[];reportSummary='';
@@ -95,6 +96,16 @@ export class SiFullLifecycleComponent implements OnInit{
     next:r=>{this.view=r;this.loading=false;this.hydrate();},
     error:e=>this.fail(e)});
   }
+ }
+ loadHistory():void{
+  if(!this.editorKey.trim()||!this.caseId)return;
+  if(this.showVersions){this.showVersions=false;return;}
+  this.historyBusy=true;this.historyError='';
+  this.api.history(this.caseId,this.editorKey.trim()).subscribe({
+    next:r=>{this.versions=r.versions;this.historyBusy=false;this.showVersions=true;},
+    error:e=>{this.historyBusy=false;this.historyError=
+      e?.error?.error||this.copy('Unable to read audit history','تعذر قراءة سجل تاريخ المعاينة');}
+  });
  }
  private hydrate(){
   const r=this.record;if(!r)return;
