@@ -45,10 +45,17 @@
         [class.selected]="source===s.key">
         <div class="card-head"><span>⇧</span><span class="pill excel">{{copy('EXCEL · POC','Excel · تجريبي')}}</span></div>
         <h3>{{copy(s.en,s.ar)}}</h3>
-        <p>{{copy('Upload a distinct workbook, preview records and commit verified rows for officer review.',
-          'ارفع ملف Excel مستقلًا، وعاين السجلات ثم اعتمد البيانات الصالحة لمراجعة الموظف.')}}</p>
-        <strong>{{status?.excelSources?.[s.key]?.candidateVessels??'—'}}</strong>
-        <small>{{copy('Candidate vessels from source','سفن مرشحة من هذا المصدر')}}</small>
+        <p>{{s.key==='PSC_PORT_CALL'
+          ?copy('Import PSC arrival events to the targeting pool. The quota/selection stage decides which enter Candidate Center.',
+                'استورد إخطارات PSC إلى قائمة الاستهداف؛ والحصة وقرار الاختيار يحددان ما ينتقل إلى مركز المرشحين.')
+          :copy('Upload service requests for officer review in Candidate Center.',
+                'ارفع طلبات الخدمات لإتاحتها للمراجعة في مركز المرشحين.')}}</p>
+        <strong>{{s.key==='PSC_PORT_CALL'
+          ?(status?.excelSources?.[s.key]?.importedEvents??'—')
+          :(status?.excelSources?.[s.key]?.candidateVessels??'—')}}</strong>
+        <small>{{s.key==='PSC_PORT_CALL'
+          ?copy('Imported Port Call EVENTS (not automatically selected)','أحداث وصول مستوردة (لا تُختار تلقائيًا)')
+          :copy('Candidate vessels from source','سفن مرشحة من هذا المصدر')}}</small>
       </a>
     </section>
 
