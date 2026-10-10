@@ -5,8 +5,8 @@
   "type": "module",
   "scripts": {
     "start": "node server.mjs",
-    "check": "node --check nmc-action-plan.mjs && node --check case-workspace.mjs && node --check alert-workspace.mjs && node --check dashboard-workspace.mjs && node --check server.mjs && node --check psc-reader.mjs && node --check fleet-ai.mjs && node --check fleet-scheduler.mjs && node --check operational-guidance.mjs && node --check risk-policy.mjs && node --check si-erp-workforce.mjs && node --check si-electronic-scheduling.mjs && node --check tools/apply-risk-007.mjs && node --check oracle-store.mjs",
-    "test": "node --test test/dashboard-workspace.test.mjs test/alert-workspace.test.mjs test/case-workspace.test.mjs test/operational-guidance.test.mjs test/risk-policy.test.mjs test/fleet-saved-snapshot.test.mjs test/fleet-scheduler.test.mjs test/si-electronic-scheduling.test.mjs"
+    "check": "node --check nmc-action-plan.mjs && node --check case-workspace.mjs && node --check alert-workspace.mjs && node --check dashboard-workspace.mjs && node --check server.mjs && node --check psc-reader.mjs && node --check fleet-ai.mjs && node --check fleet-scheduler.mjs && node --check operational-guidance.mjs && node --check risk-policy.mjs && node --check si-erp-workforce.mjs && node --check si-electronic-scheduling.mjs && node --check si-candidate-targeting.mjs && node --check tools/apply-risk-007.mjs && node --check oracle-store.mjs",
+    "test": "node --test test/dashboard-workspace.test.mjs test/alert-workspace.test.mjs test/case-workspace.test.mjs test/operational-guidance.test.mjs test/risk-policy.test.mjs test/fleet-saved-snapshot.test.mjs test/fleet-scheduler.test.mjs test/si-electronic-scheduling.test.mjs test/si-candidate-targeting.test.mjs"
   },
   "engines": {
     "node": ">=20"
