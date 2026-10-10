@@ -172,3 +172,30 @@ test('quota policy cannot contain invalid scope, rate or duplicate port override
       e=>e.code==='SI_SELECTION_POLICY_INVALID');
   }finally{w.cleanup();}
 });
+
+test('two distinct selected Port Calls for the same IMO consume two slots but create one vessel row',async()=>{
+  const w=setup();
+  try{
+    for(let i=0;i<10;i++)await w.targeting.receiveEvent(
+      psc(i,{imo:i<2?vessels[0].imo:vessels[i].imo}));
+    await w.selection.publish({
+      expectedVersion:1,
+      config:{period:'MONTHLY',scope:'NATIONAL',ratePercent:30,
+        portOverrides:[],mandatoryOutsideQuota:true},
+      publishedBy:'PSC Supervisor',reason:'POC multi-arrival event count acceptance'
+    });
+    const p=await w.selection.pool();
+    assert.equal(p.summary.buckets[0].targetCount,3);
+    const matching=p.items.filter(x=>x.imo===vessels[0].imo);
+    assert.equal(matching.length,2);
+    for(const item of matching)await w.selection.decide(request(item.eventKey,2));
+    const after=await w.selection.pool();
+    assert.equal(after.summary.selectedPortCalls,2);
+    const d=await w.targeting.dashboard();
+    assert.equal(d.summary.bySource.PSC_PORT_CALL,1);
+    assert.equal(d.summary.candidates,1);
+    assert.equal(d.summary.candidateVessels,1);
+    assert.equal(d.vesselCandidates[0].sourceEvents.length,2);
+    assert.equal(d.vesselCandidates[0].sourceTypes.length,1);
+  }finally{w.cleanup();}
+});
