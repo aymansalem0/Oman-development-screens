@@ -80,6 +80,13 @@
         <span class="nav-chevron">{{smartInspectionExpanded ? '⌄' : '›'}}</span>
       </button>
       <div class="nav-children" id="si-main-submenu" [hidden]="!smartInspectionExpanded">
+        <a class="nav-link" routerLink="/moei/smart-inspection/lifecycle"
+           [class.active]="isInspectionLifecycle"
+           [attr.aria-current]="isInspectionLifecycle?'page':null"
+           [title]="copy('Full Inspection Lifecycle','دورة المعاينة الكاملة')">
+          <span class="nav-icon">◷</span>
+          <span class="nav-label">{{copy('Full Inspection Lifecycle','دورة المعاينة الكاملة')}}</span>
+        </a>
         <a class="nav-link" routerLink="/moei/smart-inspection/psc-targeting"
            [class.active]="isPscTargetingPool"
            [attr.aria-current]="isPscTargetingPool?'page':null"
