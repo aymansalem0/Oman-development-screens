@@ -8,10 +8,12 @@ import {dirname} from 'node:path';
 import oracledb from 'oracledb';
 const copy=x=>JSON.parse(JSON.stringify(x));
 const iso=()=>new Date().toISOString();
-const keySet=['movement','inspection','certificate','dataQuality','history'];
+const coreKeys=['movement','inspection','certificate','dataQuality','history'];
+const keySet=[...coreKeys,'documentIntegrity'];
+const weightOf=(c,key)=>key==='documentIntegrity'?Number(c.weights?.documentIntegrity||0):c.weights?.[key];
 const baseline={
   version:'NMC Risk Ruleset 1.0',name:'National Maritime Risk Model',mode:'weighted',
-  weights:{movement:25,inspection:28,certificate:20,dataQuality:14,history:13},
+  weights:{movement:25,inspection:28,certificate:20,dataQuality:14,history:13,documentIntegrity:0},
   thresholds:{watch:45,high:65,critical:85},
   publishedAt:null,publishedBy:'SYSTEM INITIAL BASELINE',
   changeReason:'Initial central baseline; previous browser policies are NOT auto-imported.'
@@ -27,7 +29,7 @@ export function validateRiskConfig(c){
      !['weighted','conservative','max-signal'].includes(c.mode)||
      typeof c.name!=='string'||!c.name.trim()||c.name.length>140)
     throw new RiskPolicyError('RISK_POLICY_INVALID');
-  const numbers=keySet.map(k=>c.weights[k]);
+  const numbers=keySet.map(k=>weightOf(c,k));
   if(numbers.some(x=>!Number.isInteger(x)||x<0||x>100)||
      numbers.reduce((a,b)=>a+b,0)!==100)throw new RiskPolicyError('RISK_WEIGHTS_INVALID');
   const {watch,high,critical}=c.thresholds;
@@ -35,7 +37,7 @@ export function validateRiskConfig(c){
      watch<1||watch>=high||high>=critical||critical>100)
     throw new RiskPolicyError('RISK_THRESHOLDS_INVALID');
   return {name:c.name.trim(),mode:c.mode,
-    weights:Object.fromEntries(keySet.map(k=>[k,c.weights[k]])),
+    weights:Object.fromEntries(keySet.map(k=>[k,weightOf(c,k)])),
     thresholds:{watch,high,critical}};
 }
 function validateDraftConfig(value){
@@ -43,8 +45,8 @@ function validateDraftConfig(value){
      !['weighted','conservative','max-signal'].includes(value.mode)||
      typeof value.name!=='string'||value.name.length>140)
     throw new RiskPolicyError('RISK_DRAFT_INVALID',422);
-  if(keySet.some(k=>!Number.isInteger(value.weights[k])||
-     value.weights[k]<0||value.weights[k]>100)||
+  if(keySet.some(k=>!Number.isInteger(weightOf(value,k))||
+     weightOf(value,k)<0||weightOf(value,k)>100)||
      !['watch','high','critical'].every(k=>
        Number.isInteger(value.thresholds[k])&&value.thresholds[k]>=0&&value.thresholds[k]<=100))
     throw new RiskPolicyError('RISK_DRAFT_INVALID',422);
@@ -53,14 +55,15 @@ function validateDraftConfig(value){
 export function calculateRiskPolicy(row,config,revision){
   const signals=row?.signals||[];
   const severities={};
-  for(const key of keySet){
+  const activeKeys=[...coreKeys,...(weightOf(config,'documentIntegrity')>0?['documentIntegrity']:[])];
+  for(const key of activeKeys){
     const rows=signals.filter(s=>s.factor===key);
     if(rows.length!==1||!Number.isFinite(rows[0].severity)||
        rows[0].severity<0||rows[0].severity>100)return null;
     severities[key]=rows[0].severity;
   }
-  const weighted=keySet.reduce((n,key)=>n+severities[key]*config.weights[key],0)/100;
-  const highest=Math.max(...Object.values(severities));
+  const weighted=activeKeys.reduce((n,key)=>n+severities[key]*weightOf(config,key),0)/100;
+  const highest=Math.max(...activeKeys.map(k=>severities[k]));
   let raw=weighted;
   if(config.mode==='conservative')raw+=Math.max(0,highest-raw)*.28;
   if(config.mode==='max-signal')raw=raw*.68+highest*.32;
@@ -71,10 +74,10 @@ export function calculateRiskPolicy(row,config,revision){
     modeAdjustment:Number((raw-weighted).toFixed(6)),
     clampedAndRoundedScore:score,
     rulesetVersion:config.version,
-    factors:keySet.map(key=>{
+    factors:activeKeys.map(key=>{
       const signal=signals.find(s=>s.factor===key);
-      return {key,severity:severities[key],weight:config.weights[key],
-        weightedContribution:Number((severities[key]*config.weights[key]/100).toFixed(6)),
+      return {key,severity:severities[key],weight:weightOf(config,key),
+        weightedContribution:Number((severities[key]*weightOf(config,key)/100).toFixed(6)),
         evidenceIds:signal.evidenceIds||[],sourceAgent:signal.sourceAgent||null,
         confidence:signal.confidence??null,reason:signal.reason||null};
     })
