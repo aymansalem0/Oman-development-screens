@@ -2565,8 +2565,8 @@ button, a { font: inherit; }
 
 /* Shared NMC navigation: preserve the Vessel 360 responsive reading area. */
 @media (min-width: 1221px) {
-  .v360-shell .v360-main { margin-left: 216px; margin-right: 0; max-width: calc(100% - 216px); }
-  .v360-shell.rtl .v360-main { margin-left: 0; margin-right: 216px; }
+  .v360-shell .v360-main { margin-left: 240px; margin-right: 0; max-width: calc(100% - 240px); }
+  .v360-shell.rtl .v360-main { margin-left: 0; margin-right: 240px; }
 }
 @media (min-width: 961px) and (max-width: 1220px) {
   .v360-shell .v360-main { margin-left: 66px; margin-right: 0; max-width: calc(100% - 66px); }
