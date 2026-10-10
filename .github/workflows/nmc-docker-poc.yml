@@ -29,7 +29,7 @@ jobs:
           node --test ai-proxy/test/oracle-bind-names.test.mjs
           node --test ai-proxy/test/data-quality.test.mjs
           mkdir -p /tmp/psc-adapter
-          cp ai-proxy/psc-reader.mjs ai-proxy/fleet-ai.mjs ai-proxy/data-quality.mjs tools/psc/psc-fixtures.mjs src/app/data/nmc-vessel-catalog.ts src/app/data/nmc-expanded-vessel-catalog.ts /tmp/psc-adapter/
+          cp ai-proxy/psc-reader.mjs ai-proxy/fleet-ai.mjs ai-proxy/data-quality.mjs ai-proxy/document-risk-evidence.mjs tools/psc/psc-fixtures.mjs src/app/data/nmc-vessel-catalog.ts src/app/data/nmc-expanded-vessel-catalog.ts /tmp/psc-adapter/
           cp ai-proxy/test/psc-reader.test.mjs /tmp/psc-adapter/test-psc.mjs
           sed -i "s@'../psc-reader.mjs'@'./psc-reader.mjs'@" /tmp/psc-adapter/test-psc.mjs
           node --test /tmp/psc-adapter/test-psc.mjs
