@@ -970,3 +970,10 @@ a, button { font: inherit; }
 .historical-factor-row{display:grid;grid-template-columns:minmax(80px,1fr) repeat(3,minmax(80px,1fr));gap:10px;padding:5px 0;border-top:1px dashed #e3edf2;font-size:10px;color:#607589;}
 .historical-factor-row strong{color:#1b766f;}
 @media(max-width:760px){.historical-factor-row{grid-template-columns:repeat(2,minmax(0,1fr));}}
+
+
+/* NMC bilingual ministry branding (never mirror emblem under RTL). */
+.rx-ministry-logo{flex-shrink:0}
+.brand-block{min-width:0}
+@media(max-width:1400px){.rx-topbar .brand-block>div{display:none}}
+@media(max-width:960px){.rx-topbar{min-height:82px;padding-inline:12px}}
