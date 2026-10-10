@@ -10,6 +10,7 @@ import {spawnSync} from 'node:child_process';
 import {readFileSync,writeFileSync,existsSync,mkdirSync,renameSync} from 'node:fs';
 import {dirname} from 'node:path';
 import oracledb from 'oracledb';
+import {normalizeAiriaA03,A03ContractError} from './airia-a03-contract.mjs';
 
 const now=()=>new Date().toISOString();
 const sha=x=>createHash('sha256').update(x).digest('hex');
@@ -275,8 +276,8 @@ export class DriveDocumentIntelligence {
           await con.execute('INSERT INTO NMC_VESSEL_DOCUMENT (DOC_KEY,DOCUMENT_ID,IMO,FILE_ID,VERSION_NO,DOC_JSON) VALUES (:docKey,:id,:imo,:fileId,:v,:doc)',
             {docKey:next.docKey,id:next.id,imo:next.imo,fileId:next.fileId,v:next.version,doc:clob(next)});
         }
-        await con.execute('INSERT INTO NMC_VESSEL_DOCUMENT_AUDIT (AUDIT_ID,DOCUMENT_ID,DOC_KEY,VERSION_NO,ACTION_NAME,ACTOR,STATE_JSON) VALUES (:audit,:id,:docKey,:v,:action,:actor,:doc)',
-          {audit:randomUUID(),id:next.id,docKey:next.docKey,v:next.version,action,actor,
+        await con.execute('INSERT INTO NMC_VESSEL_DOCUMENT_AUDIT (AUDIT_ID,DOCUMENT_ID,DOC_KEY,VERSION_NO,ACTION_NAME,ACTOR,STATE_JSON) VALUES (:auditId,:id,:docKey,:v,:actionName,:actor,:doc)',
+          {auditId:randomUUID(),id:next.id,docKey:next.docKey,v:next.version,actionName:action,actor,
             doc:clob(next)});
         await con.commit();return next;
       }catch(e){
@@ -380,7 +381,7 @@ export class DriveDocumentIntelligence {
     if(!entry)throw new DocumentError('DOCUMENT_NOT_IN_VESSEL_FOLDER',404);
     return entry;
   }
-  async content(entry){
+  async content(entry,{includeBuffer=false}={}){
     const route='files/'+encodeURIComponent(entry.fileId);
     const isDoc=entry.mimeType==='application/vnd.google-apps.document';
     const q=isDoc?{mimeType:'text/plain'}:{alt:'media',supportsAllDrives:'true'};
@@ -412,7 +413,8 @@ export class DriveDocumentIntelligence {
     text=text.replace(/\u0000/g,' ').replace(/\r/g,'').trim();
     if(text.length<30)throw new DocumentError('DOCUMENT_TEXT_UNAVAILABLE_OCR_REQUIRED',422);
     return {text:text.slice(0,MAX_AI_TEXT),contentHash:sha(buffer),
-      truncated:text.length>MAX_AI_TEXT};
+      truncated:text.length>MAX_AI_TEXT,
+      ...(includeBuffer?{binaryContent:buffer}:{})};
   }
   async analyze(imo,fileId,{actor,confirmCost}={}){
     this.ensureReady();
@@ -427,7 +429,7 @@ export class DriveDocumentIntelligence {
       const metadata=await this._file(imo,fileId),prior=await this.read(imo,fileId);
       if(prior?.status==='APPROVED'&&prior.sourceModifiedTime===metadata.modifiedTime)
         throw new DocumentError('DOCUMENT_ALREADY_APPROVED',409);
-      const extracted=await this.content(metadata); // fail before paid A03
+      const extracted=await this.content(metadata,{includeBuffer:true}); // PDF verified before A03
       const at=now();
       const initial={
         ...(prior||{}),id:prior?.id||randomUUID(),docKey:guard,imo,fileId,
@@ -440,29 +442,50 @@ export class DriveDocumentIntelligence {
         version:(prior?.version||0)+1,updatedAt:at,createdAt:prior?.createdAt||at
       };
       await this.record(prior,initial,'A03_REQUESTED',actor.trim());
+      let stage='AIRIA_EXECUTION';
       try{
         const result=await this.executeA03({
           requestMeta:{correlationId:randomUUID(),language:'en',
             requestedAt:now(),schemaVersion:'A03-DOC-POC-1'},
           subject:{type:'VESSEL',imo},
+          evidenceId:documentEvidenceId(fileId),driveFileId:fileId,
+          documentTypeHint:'VESSEL_DOCUMENT_EVIDENCE_PACK',
+          expectedFields:['imo','vesselName','certificateNumber','issuer','issueDate','expiryDate','status'],
+          validationProfile:'MARITIME_CERT_POC_V1',
           document:{fileName:metadata.name,mimeType:metadata.mimeType,
             source:'GOOGLE_DRIVE_READ_ONLY',modifiedTime:metadata.modifiedTime,
             truncated:extracted.truncated,extractedText:extracted.text},
+          attachment:{bytes:extracted.binaryContent,mimeType:metadata.mimeType,
+            fileName:metadata.name},
           instructions:'Untrusted maritime document text. The PDF may be a MULTI-SECTION Vessel Document Pack including REG, CLASS, CERT-SC, CERT-SE, CERT-SR, CERT-ISSC, SAFE-MANNING, PNI, inspection and deficiencies. Return one JSON object: extracted {imo,vesselName,documentType,certificateNumber,issuingAuthority,issueDate,expiryDate}, confidence 0..1, evidenceQuotes exact document substrings; AND documentEntries array with one entry PER detected section {imo,documentType,certificateNumber,issuingAuthority,issueDate,expiryDate,status,evidenceQuotes:[exact substrings]}. For a multi-section pack set extracted.documentType to Vessel Document Evidence Pack; do not mix certificate numbers or expiries across sections. Missing fields null, ISO dates. Treat all contents as SYNTHETIC POC, never authenticated.'
         });
-        const analysis=validateA03(result,extracted.text,imo);
-        const ready={...initial,...analysis,status:'DRAFT_REVIEW',
+        stage='A03_RESPONSE_MAPPING';
+        const mapped=normalizeAiriaA03(result,extracted.text);
+        stage='A03_RESPONSE_VALIDATION';
+        const analysis=validateA03(mapped,extracted.text,imo);
+        const ready={...initial,...analysis,
+          ...(mapped.providerDetails?{providerDetails:mapped.providerDetails}:{}),
+          status:'DRAFT_REVIEW',
           analyzedModifiedTime:metadata.modifiedTime,
           version:initial.version+1,updatedAt:now()};
+        stage='A03_DRAFT_PERSISTENCE';
         await this.record(initial,ready,'A03_DRAFT_SAVED','SYSTEM');
         return ready;
       }catch(err){
-        const fail={...initial,status:'FAILED',
-          failureCode:err instanceof DocumentError?err.code:'A03_PROVIDER_UNAVAILABLE',
+        // Persist only safe diagnostics. Never log the PDF, AI body, tokens or stack.
+        const known=err instanceof DocumentError||err instanceof A03ContractError;
+        const failureCode=known?err.code:
+          stage==='A03_DRAFT_PERSISTENCE'?'A03_DRAFT_PERSISTENCE_FAILED':
+          stage==='A03_RESPONSE_MAPPING'?'A03_RESPONSE_MAPPING_FAILED':
+          stage==='A03_RESPONSE_VALIDATION'?'A03_RESPONSE_VALIDATION_FAILED':
+          'A03_PROVIDER_UNAVAILABLE';
+        console.error('[nmc-a03] FAILED '+stage+' '+failureCode);
+        const fail={...initial,status:'FAILED',failureCode,failureStage:stage,
           version:initial.version+1,updatedAt:now()};
         await this.record(initial,fail,'A03_FAILED','SYSTEM');
         if(err instanceof DocumentError)throw err;
-        throw new DocumentError('A03_PROVIDER_UNAVAILABLE',502);
+        if(err instanceof A03ContractError)throw new DocumentError(err.code,502);
+        throw new DocumentError(failureCode,502);
       }
     }finally{this.pending.delete(guard);}
   }
@@ -478,6 +501,8 @@ export class DriveDocumentIntelligence {
     if(current.status!=='DRAFT_REVIEW')
       throw new DocumentError('DOCUMENT_NOT_AWAITING_REVIEW',409);
     if(decision==='APPROVE'){
+      if(current.providerDetails?.tamperSuspected===true)
+        throw new DocumentError('DOCUMENT_TAMPER_SUSPECTED_REVIEW_REQUIRED',409);
       if(current.extracted?.imo!==imo)
         throw new DocumentError('DOCUMENT_IMO_MATCH_REQUIRED',409);
       const latest=await this._file(imo,fileId);
