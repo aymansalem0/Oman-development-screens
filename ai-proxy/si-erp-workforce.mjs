@@ -119,20 +119,19 @@ export async function parseErpExcel(buffer){
   if(!Buffer.isBuffer(buffer)||buffer.length<200||buffer.length>3*1024*1024)
     throw new SiError('ERP_FILE_SIZE_INVALID',413);
   if(buffer.toString('hex',0,4)!=='504b0304')throw new SiError('ERP_XLSX_REQUIRED');
-  let book;
-  try{
-    book=new ExcelJS.Workbook();
-    await book.xlsx.load(buffer);
-  }catch(originalError){
+  let book=new ExcelJS.Workbook();
+  let initialError=null;
+  try{await book.xlsx.load(buffer);}
+  catch(e){initialError=e;}
+  if(initialError||!book.getWorksheet('Ports')){
+    // ExcelJS may fail or silently return zero sheets for namespaced root XML.
     try{
-      // Compatibility fallback, not a bypass of required sheet headers,
-      // formula rejection, workforce constraints, or source-reference checks.
       const normalized=await normalizeNamespacedXlsx(buffer);
       book=new ExcelJS.Workbook();
       await book.xlsx.load(normalized);
     }catch{
       console.error('[si-erp] XLSX_PARSE_UNSUPPORTED_OR_CORRUPT',
-        String(originalError?.message||'').slice(0,180));
+        String(initialError?.message||'namespaced workbook unsupported').slice(0,180));
       throw new SiError('ERP_INVALID_XLSX');
     }
   }
