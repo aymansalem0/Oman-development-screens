@@ -412,6 +412,16 @@ const server = createServer(async (req, res) => {
           return respond(res,200,await siPreparation.review(caseId,await requestJson(req,2048)));
         return respond(res,405,{error:'METHOD_NOT_ALLOWED'});
       }
+      const templateRoute=/^\/api\/si\/v1\/candidate-sources\/template\/(SERVICE_REQUEST|PSC_PORT_CALL)$/.exec(path);
+      if(req.method==='GET'&&templateRoute){
+        const bytes=await siSourceImports.template(templateRoute[1]);
+        res.writeHead(200,{
+          'Content-Type':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          'Content-Disposition':'attachment; filename="SI_'+templateRoute[1]+'_POC_Template.xlsx"',
+          'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'
+        });
+        return res.end(bytes);
+      }
       if(req.method==='GET'&&path==='/api/si/v1/candidate-sources'){
         dashboards.assertRole(req,'EDITOR');
         return respond(res,200,await siSourceImports.status());
