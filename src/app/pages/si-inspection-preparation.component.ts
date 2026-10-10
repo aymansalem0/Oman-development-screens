@@ -109,7 +109,20 @@ export class SiInspectionPreparationComponent implements OnInit{
         error:e=>this.fail(e)
       });
   }
-  itemLabel(id:string):string{return this.names[id]||id;}
+  itemLabel(id:string):string{
+    if(!this.lang.isArabic)return this.names[id]||id;
+    const ar:Record<string,string>={
+      'fire-safety':'السلامة من الحريق والمخالفات السابقة',
+      'certificates':'الشهادات الإلزامية',
+      'navigation':'الملاحة والجسر',
+      'lifesaving':'معدات إنقاذ الأرواح',
+      'pollution':'منع التلوث',
+      'manning':'الطاقم والحد الأدنى للتشغيل',
+      'hull-machinery':'البدن والآلات',
+      'security':'الأمن والتحكم في الدخول'
+    };
+    return ar[id]||this.names[id]||id;
+  }
   countFocus(id:string):string{
     return this.saved?.dossier?.checklistFocus.find(x=>x.existingItemId===id)?.focus||'BASE';
   }
