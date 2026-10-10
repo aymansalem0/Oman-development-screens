@@ -171,7 +171,8 @@ export class NmcRiskExplainabilityComponent implements OnInit,OnDestroy {
       this.projectedRisk=null;this.factors=[];
       return; // Never present fallback browser defaults as the active central policy.
     }
-    const valid=this.factorOrder.every(key=>
+    const valid=this.factorOrder.filter(key=>key!=='documentIntegrity'||
+      Number(config.weights.documentIntegrity||0)>0).every(key=>
       row.signals.filter(signal=>signal.factor===key&&
         Number.isFinite(signal.severity)&&signal.severity>=0&&signal.severity<=100).length===1);
     if(!valid||this.riskEngine.validate(config).length){
