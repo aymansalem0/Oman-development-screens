@@ -5,7 +5,7 @@ import {FormsModule} from '@angular/forms';
 import {RouterLink} from '@angular/router';
 import {NmcNavigationComponent} from '../components/nmc-navigation.component';
 import {SiCandidate,SiCandidateStatus,SiCandidateTargetingService,
-  SiDashboard,SiVesselCandidate,SiPriorityStatus,SiPriorityPreview,SiPriorityRun,SiPriorityRecommendation}
+  SiDashboard,SiVesselCandidate,SiPriorityStatus,SiPriorityPreview,SiPriorityRun,SiPriorityRecommendation,SiPriorityPreviewItem}
   from '../services/si-candidate-targeting.service';
 
 type SourceFilter='ALL'|'NMC_CASE'|'SERVICE_REQUEST'|'PSC_PORT_CALL';
@@ -25,6 +25,30 @@ export class SiCandidateWorkbenchComponent implements OnInit{
   priorityStatus:SiPriorityStatus|null=null;
   priorityPreview:SiPriorityPreview|null=null;
   priorityBusy=false;aiError='';aiSuccess='';confirmAiCost=false;
+  /** The rule preview also groups workflows by IMO: one visible vessel row. */
+  get rulePreviewVessels():{
+    imo:string;vesselName:string;minRank:number;regimes:string[];
+    workflows:SiPriorityPreviewItem[]
+  }[]{
+    const vessels=new Map<string,{
+      imo:string;vesselName:string;minRank:number;regimes:string[];
+      workflows:SiPriorityPreviewItem[]
+    }>();
+    const byKey=new Map((this.dashboard?.candidates||[]).map(c=>[c.key,c]));
+    for(const item of this.priorityPreview?.items||[]){
+      const workflow=byKey.get(item.candidateKey);
+      let vessel=vessels.get(item.imo);
+      if(!vessel){
+        vessel={imo:item.imo,vesselName:item.vesselName,
+          minRank:item.ruleRank,regimes:[],workflows:[]};
+        vessels.set(item.imo,vessel);
+      }
+      vessel.minRank=Math.min(vessel.minRank,item.ruleRank);
+      if(workflow&&!vessel.regimes.includes(workflow.regime))vessel.regimes.push(workflow.regime);
+      vessel.workflows.push(item);
+    }
+    return [...vessels.values()].sort((a,b)=>a.minRank-b.minRank||a.imo.localeCompare(b.imo));
+  }
   get savedAiRun():SiPriorityRun|null{
     const r=this.priorityStatus?.latest;
     return r?.status==='SUCCEEDED'&&!r.isStale?r:null;
