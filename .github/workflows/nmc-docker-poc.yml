@@ -2,9 +2,9 @@ name: NMC Docker POC validation
 
 on:
   push:
-    branches: ['feature/nmc-*', 'feature/si-*']
+    branches: ['feature/nmc-*', 'feature/si-*', 'feature/moei-*']
   pull_request:
-    branches: [main, feature/smart-inspection-poc, 'feature/nmc-*', 'feature/si-*']
+    branches: [main, feature/smart-inspection-poc, 'feature/nmc-*', 'feature/si-*', 'feature/moei-*']
   workflow_dispatch:
 
 jobs:
