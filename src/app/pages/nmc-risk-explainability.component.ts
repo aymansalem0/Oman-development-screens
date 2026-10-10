@@ -47,6 +47,8 @@ export class NmcRiskExplainabilityComponent implements OnInit,OnDestroy {
   // immutable Oracle assessment and audit history must NEVER be relabeled as recalculated.
   activeRiskConfig:RiskEngineConfig|null=null;
   projectedRisk:RiskEvaluation|null=null;
+  factorViewSource:'CURRENT'|'SAVED'='CURRENT';
+  projectionNotice='';
   riskHistory:HistoricalRiskProjection[]=[];
   historyLoading=false;
   historyError='';
@@ -84,7 +86,7 @@ export class NmcRiskExplainabilityComponent implements OnInit,OnDestroy {
     this.subscriptions.add(this.route.paramMap.subscribe(params=>{
       const imo=params.get('imo')||'';
       this.vessel=getOperationalVesselByImo(imo);
-      this.assessment=null;this.projectedRisk=null;
+      this.assessment=null;this.projectedRisk=null;this.projectionNotice='';
       this.factors=[];this.selectedFactor=undefined;
       this.guidanceItems=[];this.linkedCase=null;
       this.riskHistory=[];this.historyError='';
@@ -119,6 +121,7 @@ export class NmcRiskExplainabilityComponent implements OnInit,OnDestroy {
         // Rebuild from the five SAVED A01/A02 severities using the currently
         // configured risk model; the source Oracle score remains unchanged.
         this.assessment=row;
+        this.assessmentError='';
         this.updatePolicyProjection();
       },
       error:()=>{if(this.vessel?.imo!==imo)return;
@@ -165,39 +168,49 @@ export class NmcRiskExplainabilityComponent implements OnInit,OnDestroy {
         this.guidanceError=this.guidance.message(e,this.lang.isArabic);}
     }));
   }
-  /** Scoring policy projection is recomputed from persisted AI evidence, NEVER fixture calibration. */
+  /**
+   * The CURRENT central risk policy may require a sixth A03 signal that an
+   * older saved A01/A02 assessment does not have. In that situation never
+   * invent a current score, but ALWAYS show the saved original factor trace.
+   * This also keeps source-assessed Watch vessels visible for human review.
+   */
   private updatePolicyProjection():void{
     const row=this.assessment,config=this.activeRiskConfig,vessel=this.vessel;
-    if(!row||!config||!vessel||!this.riskEngine.centralReady){
-      this.projectedRisk=null;this.factors=[];
-      return; // Never present fallback browser defaults as the active central policy.
+    this.projectedRisk=null;
+    this.projectionNotice='';
+    if(!row||!vessel){this.factors=[];this.selectedFactor=undefined;return;}
+    const core=this.factorOrder.filter(key=>key!=='documentIntegrity');
+    const hasValidSignal=(key:FactorKey):boolean=>
+      row.signals.filter(s=>s.factor===key&&Number.isFinite(s.severity)&&
+        s.severity>=0&&s.severity<=100).length===1;
+    const validCore=core.every(hasValidSignal);
+    const needsDocument=Number(config?.weights?.documentIntegrity||0)>0;
+    const validPolicy=Boolean(config&&this.riskEngine.centralReady&&
+      this.riskEngine.validate(config).length===0);
+    const canProject=validCore&&validPolicy&&(!needsDocument||hasValidSignal('documentIntegrity'));
+    if(canProject&&config){
+      const required=this.factorOrder.filter(key=>key!=='documentIntegrity'||needsDocument);
+      const severities=Object.fromEntries(required.map(key=>
+        [key,row.signals.find(s=>s.factor===key)!.severity])) as Record<RiskFactorKey,number>;
+      this.projectedRisk=this.riskEngine.evaluateFromAiSignals(vessel,severities,config);
+    }else{
+      this.projectionNotice=!validCore?
+        this.copy('Some original A01/A02 risk factors are missing or invalid. Only recorded, individually valid signals are displayed; no current policy score is inferred.',
+          'بعض عوامل A01/A02 الأصلية غير متوفرة أو غير صالحة. تُعرض الإشارات المحفوظة الصالحة فقط ولا يتم افتراض درجة للسياسة الحالية.') :
+        needsDocument&&!hasValidSignal('documentIntegrity')?
+          this.copy('The currently published risk policy requires A03 Document Integrity evidence, which is missing from this saved assessment. Current risk is UNAVAILABLE; the original saved risk and its factors are shown unchanged.',
+            'السياسة المنشورة حاليًا تشترط دليل اتساق مستندات A03 وهو غير موجود في هذا التقييم. المخاطر الحالية غير متاحة؛ تُعرض المخاطر والعوامل الأصلية المحفوظة دون تغيير.') :
+          this.copy('The current published risk policy is unavailable or invalid. The original saved risk and supported factors are still available for review.',
+            'السياسة المنشورة حاليًا غير متاحة أو غير صالحة. تبقى درجة المخاطر الأصلية والعوامل المحفوظة متاحة للمراجعة.');
     }
-    const valid=this.factorOrder.filter(key=>key!=='documentIntegrity'||
-      Number(config.weights.documentIntegrity||0)>0).every(key=>
-      row.signals.filter(signal=>signal.factor===key&&
-        Number.isFinite(signal.severity)&&signal.severity>=0&&signal.severity<=100).length===1);
-    if(!valid||this.riskEngine.validate(config).length){
-      this.projectedRisk=null;this.factors=[];
-      this.assessmentError=this.copy(
-        'Cannot project risk: saved factor evidence or the published browser policy is invalid.',
-        'لا يمكن حساب المخاطر: أدلة العوامل المحفوظة أو قواعد المتصفح غير صالحة.');
-      return;
-    }
-    const required=this.factorOrder.filter(key=>key!=='documentIntegrity'||
-      Number(config.weights.documentIntegrity||0)>0);
-    if(required.some(key=>!row.signals.some(s=>s.factor===key&&Number.isFinite(s.severity)))){
-      this.assessmentError=this.copy(
-        'The current six-factor policy requires A03 evidence not present in this saved assessment. No risk score is inferred.',
-        'السياسة الحالية تتطلب أدلة A03 غير الموجودة بالتقييم المحفوظ؛ لن نفترض درجة مخاطر.');
-      this.projectedRisk=null;this.factors=[];return;
-    }
-    const severities=Object.fromEntries(required.map(key=>
-      [key,row.signals.find(signal=>signal.factor===key)!.severity])) as Record<RiskFactorKey,number>;
-    this.projectedRisk=this.riskEngine.evaluateFromAiSignals(vessel,severities,config);
+    // Never apply new weights to old factors if a complete current policy
+    // projection is impossible. Keep original ruleset contributions distinct.
+    this.factorViewSource=canProject?'CURRENT':'SAVED';
+    const weights=canProject?config?.weights:row.ruleset?.weights;
     const previous=this.selectedFactor?.id;
-    this.factors=this.factorOrder.filter(id=>row.signals.some(s=>s.factor===id)).map(id=>{
-      const signal=row.signals.find(x=>x.factor===id)!;
-      const weight=Number(config.weights[id]||0);
+    this.factors=this.factorOrder.filter(hasValidSignal).map(id=>{
+      const signal=row.signals.find(s=>s.factor===id)!;
+      const weight=Number(weights?.[id]||0);
       return {
         id,label:this.factorLabels[id][0],labelAr:this.factorLabels[id][1],
         severity:signal.severity,weight,
@@ -207,10 +220,11 @@ export class NmcRiskExplainabilityComponent implements OnInit,OnDestroy {
         reason:signal.reason||'',sourceAgent:signal.sourceAgent
       };
     });
-    this.selectedFactor=this.factors.find(x=>x.id===previous)||this.factors[0];
+    this.selectedFactor=this.factors.find(f=>f.id===previous)||this.factors[0];
+    this.assessmentError='';
   }
   get riskScore():number|null{return this.projectedRisk?.score??null;}
-  get riskLevel():string{return this.projectedRisk?.level||'Pending';}
+  get riskLevel():string{return this.projectedRisk?.level||(this.assessment?'Unavailable':'Pending');}
   get sourceRiskScore():number|null{return this.assessment?.score??null;}
   get sourceRiskLevel():string{return this.assessment?.level||'Pending';}
   get policyChanged():boolean{
@@ -231,7 +245,8 @@ export class NmcRiskExplainabilityComponent implements OnInit,OnDestroy {
   get riskLabel():string{
     const values:Record<string,[string,string]>={
       Normal:['Normal','طبيعي'],Watch:['Watch','مراقبة'],
-      High:['High','مرتفع'],Critical:['Critical','حرج'],Pending:['Pending','بانتظار التقييم']
+      High:['High','مرتفع'],Critical:['Critical','حرج'],Pending:['Pending','بانتظار التقييم'],
+      Unavailable:['Unavailable','غير متاحة']
     };
     const labels=values[this.riskLevel]||values['Pending'];
     return this.copy(labels[0],labels[1]);
@@ -255,7 +270,8 @@ export class NmcRiskExplainabilityComponent implements OnInit,OnDestroy {
     return this.copy(pair[0],pair[1]);
   }
   get totalContribution():number{return this.factors.reduce((n,f)=>n+f.contribution,0);}
-  get calculationMode():string{return this.activeRiskConfig?.mode||'weighted';}
+  get calculationMode():string{return (this.factorViewSource==='CURRENT'?this.activeRiskConfig?.mode:
+    this.assessment?.ruleset?.mode)||'weighted';}
   get modeAdjustment():number{
     if(!this.factors.length)return 0;
     const weighted=this.totalContribution;
@@ -274,6 +290,12 @@ export class NmcRiskExplainabilityComponent implements OnInit,OnDestroy {
   get assessmentSource():string{return this.assessment?.sourceMode||'—';}
   get situationSummary():string{
     if(!this.assessment)return '';
+    if(!this.projectedRisk){
+      return this.copy('The original saved AI assessment remains '+this.sourceRiskLevel+
+        ' ('+this.sourceRiskScore+'/100). A current policy projection is unavailable; no new risk is inferred.',
+        'التقييم الأصلي المحفوظ ما زال '+this.sourceRiskLevel+' ('+this.sourceRiskScore+
+        '/100). حساب السياسة الحالية غير متاح؛ لم نفترض درجة مخاطر جديدة.');
+    }
     const top=[...this.factors].sort((a,b)=>b.severity-a.severity).slice(0,2);
     const names=top.map(f=>this.copy(f.label,f.labelAr)).join(' / ');
     return this.lang.isArabic
