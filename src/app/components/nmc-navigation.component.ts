@@ -23,6 +23,8 @@ export class NmcNavigationComponent implements OnInit, OnDestroy {
   nmcExpanded = true;
   smartInspectionExpanded = true;
   settingsExpanded = true;
+  nmcSettingsExpanded = true;
+  inspectionSettingsExpanded = true;
   nmcDashboardsExpanded = true;
   smartDashboardsExpanded = true;
   settingsDashboardsExpanded = true;
@@ -120,10 +122,29 @@ export class NmcNavigationComponent implements OnInit, OnDestroy {
   get isErpIntegrationSettings(): boolean {
     return this.currentPath === '/moei/smart-inspection/settings/erp';
   }
-  get isCase(): boolean { return this.currentPath.endsWith('/case'); }
-  get isSmartInspection(): boolean {
-    return this.currentPath.includes('/smart-inspection') && !this.isErpIntegrationSettings;
+  get isInspectionTargetingSettings(): boolean {
+    return this.currentPath === '/moei/smart-inspection/settings/targeting';
   }
+  get isInspectionCandidates(): boolean {
+    return this.currentPath === '/moei/smart-inspection/candidates' ||
+      this.currentPath === '/moei/smart-inspection/candidates/demo';
+  }
+  get isInspectionPreparation(): boolean {
+    return this.currentPath === '/moei/smart-inspection/preparation' ||
+      this.currentPath.startsWith('/moei/smart-inspection/preparation/');
+  }
+  get isInspectionScheduling(): boolean {
+    return this.currentPath === '/moei/smart-inspection/scheduling';
+  }
+  get isInspectionWorkbench(): boolean {
+    return /^\/moei\/nmc\/vessel\/\d{7}\/smart-inspection$/.test(this.currentPath);
+  }
+  get inspectionWorkbenchRoute(): string {
+    return this.selectedImo
+      ? '/moei/nmc/vessel/' + this.selectedImo + '/smart-inspection'
+      : '/moei/nmc';
+  }
+  get isCase(): boolean { return this.currentPath.endsWith('/case'); }
   get isRiskConfig(): boolean {
     return this.currentPath === '/moei/nmc/admin/risk-configuration';
   }
@@ -146,6 +167,21 @@ export class NmcNavigationComponent implements OnInit, OnDestroy {
       try { localStorage.setItem(this.selectedKey, imo); }
       catch { /* Optional navigation convenience. */ }
     }
+    // Keep the active screen visible in its section when routing from a
+    // bookmarked deep link or from NMC Vessel 360.
+    if (this.isInspectionCandidates || this.isInspectionPreparation ||
+        this.isInspectionScheduling || this.isInspectionWorkbench) {
+      this.smartInspectionExpanded = true;
+    }
+    if (this.isRiskConfig || this.isQualityConfig || this.isGuidanceConfig ||
+        this.isDashboardManager) {
+      this.settingsExpanded = true;
+      this.nmcSettingsExpanded = true;
+    }
+    if (this.isErpIntegrationSettings || this.isInspectionTargetingSettings) {
+      this.settingsExpanded = true;
+      this.inspectionSettingsExpanded = true;
+    }
     this.expandSelectedDashboard();
   }
 
@@ -160,6 +196,7 @@ export class NmcNavigationComponent implements OnInit, OnDestroy {
       this.smartDashboardsExpanded = true;
     } else {
       this.settingsExpanded = true;
+      this.nmcSettingsExpanded = true;
       this.settingsDashboardsExpanded = true;
     }
   }
