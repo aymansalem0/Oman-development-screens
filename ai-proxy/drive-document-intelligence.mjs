@@ -63,7 +63,7 @@ export function validateA03(raw,sourceText,expectedImo){
   if(!Number.isFinite(confidence)||confidence<0||confidence>1)
     throw new DocumentError('A03_CONFIDENCE_INVALID',502);
   const extracted={
-    imo:safe(d.imo).slice(0,7)||null,
+    imo:typeof d.imo==='string'?d.imo.trim()||null:null,
     vesselName:safe(d.vesselName)||null,
     documentType:safe(d.documentType)||null,
     certificateNumber:safe(d.certificateNumber)||null,
