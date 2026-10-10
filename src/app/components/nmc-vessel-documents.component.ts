@@ -72,6 +72,26 @@ import {NmcDocumentsService,VesselDriveListing,VesselDriveDoc} from '../services
               <span><small>{{tr('Issue date','تاريخ الإصدار')}}</small><b>{{e.issueDate||'—'}}</b></span>
               <span><small>{{tr('Expiry date','تاريخ الانتهاء')}}</small><b>{{e.expiryDate||'—'}}</b></span>
             </div>
+            <div *ngIf="a.documentEntries?.length" class="doc-sections">
+              <h4>{{tr('Sections inside vessel document pack','الأقسام المستخرجة من حزمة مستندات السفينة')}}
+                ({{a.documentEntries?.length}})</h4>
+              <table class="doc-section-table">
+                <thead><tr>
+                  <th>{{tr('Document / record','المستند / السجل')}}</th>
+                  <th>{{tr('Reference','المرجع')}}</th>
+                  <th>{{tr('Status','الحالة')}}</th>
+                  <th>{{tr('Expiry','الانتهاء')}}</th>
+                </tr></thead>
+                <tbody><tr *ngFor="let section of a.documentEntries">
+                  <td>{{section.documentType}}</td>
+                  <td>{{section.certificateNumber||'—'}}</td>
+                  <td>{{section.status||'—'}}</td>
+                  <td>{{section.expiryDate||'—'}}</td>
+                </tr></tbody>
+              </table>
+              <p>{{tr('Each section is inferred from the PDF text; citations are retained in the reviewed evidence record.',
+                      'كل قسم مستخرج من نص PDF، وتُحفظ النصوص الداعمة داخل سجل الأدلة الذي تمت مراجعته.')}}</p>
+            </div>
             <p class="doc-warning" *ngIf="a.conflicts?.length">
               ⚠ {{tr('Review these discrepancies','راجع هذه التعارضات')}}:
               <span *ngFor="let issue of a.conflicts">{{issue.reason}} ({{issue.documentValue}}) · </span>
@@ -142,6 +162,12 @@ import {NmcDocumentsService,VesselDriveListing,VesselDriveDoc} from '../services
     .doc-review{display:flex;align-items:flex-end;flex-wrap:wrap;gap:10px;margin-top:16px;padding:14px;background:#f6faf9;border-radius:10px}
     .doc-review small{width:100%;color:#647f88;font-size:10px;line-height:1.6}
     .doc-approved-text{font-size:11px;color:#178457}
+    .doc-sections{margin:15px 0;padding:12px;background:#f8fbfc;border:1px solid #e3eff0;border-radius:10px}
+    .doc-sections h4{font-size:12px;margin:0 0 12px;color:#275771}
+    .doc-sections p{font-size:10px;color:#698595}
+    .doc-section-table{width:100%;border-collapse:collapse;font-size:11px}
+    .doc-section-table th,.doc-section-table td{padding:9px;border-bottom:1px solid #dfecef;text-align:start}
+    .doc-section-table th{background:#f0f7f8;color:#4d7382;font-weight:800}
     blockquote{font-size:11px;border-inline-start:3px solid #a6d8ca;margin:9px 0;padding:6px 10px;background:#f6fbfa;color:#526f7d}
     details summary{font-size:11px;cursor:pointer;margin-top:12px}
     @media(max-width:760px){.doc-fields{grid-template-columns:repeat(2,minmax(0,1fr))}.docs-heading{flex-direction:column}.doc-top{flex-wrap:wrap}}
