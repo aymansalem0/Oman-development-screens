@@ -1126,3 +1126,13 @@ button, input, select { font: inherit; }
 .risk-inspect-link:hover,.risk-inspect-link:focus-visible{box-shadow:0 0 0 2px rgba(15,118,110,.3);outline-offset:2px;}
 a.risk-chip{display:inline-flex;align-items:center;}
 a.big-risk{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;}
+
+
+/* Provisional six-factor scores never imply completed A03 document assessment. */
+.risk-preview-badge{display:inline-flex;align-items:center;border:1px solid #e7c982;
+  border-radius:999px;background:#fff4d5;color:#85611b;padding:4px 8px;
+  font-size:9px;font-weight:850;line-height:1.35}
+.risk-preview-note{font-weight:720;color:#996b17}
+.risk-preview-chip{display:inline-block;margin-inline-start:7px;padding:2px 5px;
+  border-radius:5px;background:#fff0c1;color:#835c12;font-size:8px;
+  font-weight:800;white-space:normal}
