@@ -8,6 +8,7 @@ export interface SiCandidateEvent{
   eventKey:string;sourceType:'NMC_CASE'|'SERVICE_REQUEST'|'PSC_PORT_CALL';
   sourceEventId:string;sourceReference:string;provenance:string;
   approval:string;evidenceIds:string[];
+  importFile?:string|null;importBatchId?:string|null;importExcelRow?:number|null;
 }
 export interface SiCandidate{
   key:string;imo:string;vesselName:string;flag:string;vesselType:string;
