@@ -364,6 +364,14 @@ export class FleetAssessmentManager {
       this.executeAgent('a02',{...base,requestedSignals:AGENT_FACTORS.a02})
     ]);
     const validated=verifyFleetSignals(a01,a02,ids,psc.evidenceIds,psc.inspections.length>0);
+    // Do not score the same documentary discrepancy twice inside risk.
+    // A02 may use approved/provisional A03 evidence for certificate compliance,
+    // but its dataQuality severity must cite OTHER structured/PSC gaps.
+    // The separately stored structural Data Quality calculation still includes
+    // A03 comparisons at 15% for visibility.
+    if(docFactor&&validated.find(s=>s.factor==='dataQuality')?.evidenceIds
+      .some(id=>documentIds.includes(id)))
+      throw new Error('FLEET_A03_DOCUMENT_RISK_DOUBLE_COUNT');
     // Add a non-LLM document factor from citation-validated A03 outputs.
     // A01/A02 supply their original five factors; the deterministic NMC
     // engine calculates the sixth without inventing a model score.
