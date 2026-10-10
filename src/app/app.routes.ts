@@ -12,6 +12,7 @@ import { NmcDataQualityConfigurationComponent } from './pages/nmc-data-quality-c
 import { NmcOperationalGuidanceAdminComponent } from './pages/nmc-operational-guidance-admin.component';
 import { ActivityClassificationMappingComponent } from './pages/activity-classification-mapping.component';
 import { SmartInspectionCandidateCenterComponent } from './pages/smart-inspection-candidate-center.component';
+import { SiElectronicSchedulingComponent } from './pages/si-electronic-scheduling.component';
 import { NmcDashboardBuilderComponent } from './pages/nmc-dashboard-builder.component';
 import { NmcAlertCenterComponent } from './pages/nmc-alert-center.component';
 
@@ -24,6 +25,7 @@ export const routes: Routes = [
   { path: 'dashboard/appointment-availability', component: YearlyAvailabilityComponent },
   { path: 'dashboard/master-data/activity-classification-mapping', component: ActivityClassificationMappingComponent },
   { path: 'moei/smart-inspection/candidates', component: SmartInspectionCandidateCenterComponent },
+  { path: 'moei/smart-inspection/scheduling', component: SiElectronicSchedulingComponent },
   { path: 'moei/nmc', component: NmcCommandCenterComponent },
   { path: 'moei/nmc/alerts', component: NmcAlertCenterComponent },
   { path: 'moei/nmc/dashboards', component: NmcDashboardBuilderComponent },

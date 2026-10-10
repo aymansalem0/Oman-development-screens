@@ -8,6 +8,8 @@ import { NmcCaseWorkspace, NmcCaseError } from './case-workspace.mjs';
 import { normalizeA01Actions, ActionPlanError } from './nmc-action-plan.mjs';
 import { OperationalGuidance, GuidanceError } from './operational-guidance.mjs';
 import { CentralRiskPolicy, RiskPolicyError } from './risk-policy.mjs';
+import { ErpWorkforceStore, SiError } from './si-erp-workforce.mjs';
+import { SiElectronicScheduler } from './si-electronic-scheduling.mjs';
 
 const port = Number(process.env.PORT || 3000);
 const apiKey = (process.env.AIRIA_MENA_KEY || '').trim();
@@ -56,6 +58,10 @@ riskPolicy=new CentralRiskPolicy({mode:dbMode,oracleRepository:repository,fleet}
 const dashboards=new DashboardWorkspace({mode:dbMode,oracleRepository:repository});
 const alerts=new NmcAlertWorkspace({mode:dbMode,oracleRepository:repository});
 const cases=new NmcCaseWorkspace({mode:dbMode,oracleRepository:repository,alerts});
+// Independent POC scheduling workspace; ONLY confirmed existing NMC referrals
+// are written through the established Oracle-backed case API.
+const siErp=new ErpWorkforceStore();
+const siScheduling=new SiElectronicScheduler({erp:siErp,cases});
 const actionPlanRuns=new Set(); // process-local duplicate A01 invocation guard; version-lock remains authoritative
 const alertScanEnabled=process.env.NMC_ALERT_SCAN_ENABLED!=='false';
 const alertScanIntervalMs=Math.max(15000,Number(process.env.NMC_ALERT_SCAN_SECONDS||30)*1000);
@@ -365,6 +371,83 @@ const server = createServer(async (req, res) => {
         return respond(res,error.status,{error:error.code});
       console.error('[nmc-guidance] API_FAILURE');
       return respond(res,503,{error:'GUIDANCE_UNAVAILABLE'});
+    }
+  }
+
+  // Smart Inspection ERP Excel Simulator + Electronic Scheduling (Phase 1).
+  // GET operations never trigger Airia/AI, and only explicit confirmed bookings
+  // update an existing, human-approved NMC referral.
+  if(path==='/api/si/erp'||path.startsWith('/api/si/erp/')||
+     path==='/api/si/scheduling'||path.startsWith('/api/si/scheduling/')){
+    try{
+      if(req.method==='GET'&&path==='/api/si/erp/status')
+        return respond(res,200,{status:'ok',...siErp.status()});
+      if(req.method==='POST'&&path==='/api/si/erp/import/preview'){
+        dashboards.assertRole(req,'EDITOR');
+        const payload=await requestJson(req,4*1024*1024+4096);
+        return respond(res,200,await siErp.previewBase64(payload.workbookBase64));
+      }
+      if(req.method==='POST'&&path==='/api/si/erp/import/commit'){
+        dashboards.assertRole(req,'EDITOR');
+        const payload=await requestJson(req,4096);
+        return respond(res,200,{status:'ok',workforce:siErp.commit(payload.snapshotId)});
+      }
+      if(req.method==='GET'&&path==='/api/si/erp/inspectors'){
+        dashboards.assertRole(req,'EDITOR');
+        return respond(res,200,{status:'ok',inspectors:siErp.requireSnapshot().data.Inspectors});
+      }
+      if(req.method==='GET'&&path==='/api/si/erp/ports')
+        return respond(res,200,{status:'ok',ports:siErp.requireSnapshot().data.Ports});
+      if(req.method==='GET'&&path==='/api/si/scheduling/policy')
+        return respond(res,200,{status:'ok',policy:siScheduling.getPolicy()});
+      if(req.method==='GET'&&path==='/api/si/scheduling/policy/history')
+        return respond(res,200,{status:'ok',history:siScheduling.history()});
+      if(req.method==='POST'&&path==='/api/si/scheduling/policy/publish'){
+        dashboards.assertRole(req,'PUBLISHER');
+        return respond(res,200,{status:'ok',policy:siScheduling.publishPolicy(
+          await requestJson(req,16384))});
+      }
+      if(req.method==='GET'&&path==='/api/si/scheduling/referrals')
+        return respond(res,200,{status:'ok',referrals:await siScheduling.referrals()});
+      if(req.method==='GET'&&path==='/api/si/scheduling/proposals')
+        return respond(res,200,{status:'ok',proposals:siScheduling.list()});
+      if(req.method==='POST'&&path==='/api/si/scheduling/proposals'){
+        dashboards.assertRole(req,'EDITOR');
+        const proposal=await siScheduling.propose(await requestJson(req,8192));
+        // Fully electronic: a published policy may automatically confirm an
+        // eligible NMC referral without any additional browser approval click.
+        // The engine rechecks constraints immediately before writing the case.
+        const auto=proposal.options[0]?.approval==='AUTO_ELIGIBLE';
+        if(auto){
+          const confirmed=await siScheduling.confirm({proposalId:proposal.id,
+            optionId:proposal.options[0].optionId,allowManual:false});
+          return respond(res,201,{status:'ok',
+            proposal:{...proposal,status:'CONFIRMED',confirmed:confirmed.booking},
+            autoConfirmed:true});
+        }
+        return respond(res,201,{status:'ok',proposal,autoConfirmed:false});
+      }
+      const confirmation=/^\/api\/si\/scheduling\/proposals\/([a-f0-9-]{36})\/confirm$/.exec(path);
+      if(req.method==='POST'&&confirmation){
+        const body=await requestJson(req,4096);
+        const proposal=siScheduling.state.proposals.find(x=>x.id===confirmation[1]);
+        const option=proposal?.options?.find(x=>x.optionId===body.optionId);
+        // IMPORTANT: manual approval requires the separate publisher/supervisor key.
+        const manual=option?.approval==='MANUAL_APPROVAL_REQUIRED';
+        dashboards.assertRole(req,manual?'PUBLISHER':'EDITOR');
+        return respond(res,200,await siScheduling.confirm({
+          proposalId:confirmation[1],optionId:body.optionId,allowManual:manual
+        }));
+      }
+      return respond(res,405,{error:'METHOD_NOT_ALLOWED'});
+    }catch(error){
+      if(error instanceof SiError||error instanceof DashboardError)
+        return respond(res,error.status,{error:error.code});
+      if(Number.isInteger(error?.status)&&error.status>=400&&error.status<500)
+        return respond(res,error.status,{error:'SI_REQUEST_INVALID'});
+      console.error('[si-scheduling] REQUEST_FAILED code='+
+        (/^ORA-\d{5}$/.test(String(error?.code))?error.code:'UNAVAILABLE'));
+      return respond(res,503,{error:'SI_SCHEDULING_UNAVAILABLE'});
     }
   }
 

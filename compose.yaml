@@ -30,6 +30,10 @@ services:
       NMC_ALERT_ESCALATE_MINUTES: ${NMC_ALERT_ESCALATE_MINUTES:-15}
       NMC_ALERT_STORE_PATH: /data/nmc-alert-workspace.json
       NMC_CASE_STORE_PATH: /data/nmc-case-workspace.json
+      # Smart Inspection POC: ERP Excel snapshots and scheduling proposals in volume.
+      # Does not modify Oracle schema, fleet assessments or NMC case history.
+      SI_ERP_STORE_PATH: /data/si-erp-workforce.json
+      SI_SCHEDULING_STORE_PATH: /data/si-scheduling-poc.json
       # 'oracle' requires compose.oracle.yaml, NMC_AI user and V1 migration.
       NMC_DB_MODE: ${NMC_DB_MODE:-json}
       NMC_DB_CONNECT_STRING: ${NMC_DB_CONNECT_STRING:-oracle-free-23:1521/freepdb1}
