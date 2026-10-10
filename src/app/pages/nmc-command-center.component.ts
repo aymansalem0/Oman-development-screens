@@ -496,6 +496,13 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
   get attentionCount():number{return this.allAttentionVessels.length;}
   get highRiskCount():number{return (this.fleetSnapshot?.counts.high ?? 0)+(this.fleetSnapshot?.counts.critical ?? 0);}
   get criticalCount():number{return this.fleetSnapshot?.counts.critical ?? 0;}
+  get provisionalRiskCount():number{
+    return Object.values(this.fleetSnapshot?.results||{})
+      .filter(r=>this.hasSavedScore(r)&&r.riskProvisional===true).length;
+  }
+  isProvisionalRisk(imo:string):boolean{
+    return this.fleetSnapshot?.results[imo]?.riskProvisional===true;
+  }
   riskLevel(score:number, imo?:string):RiskLevel|'Pending'{
     if(score<0)return 'Pending';
     const saved=imo?this.fleetSnapshot?.results[imo]:undefined;
