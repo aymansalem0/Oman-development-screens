@@ -28,6 +28,7 @@ export interface NmcInspectionReferral {
   priority:string;reason:string;evidenceIds:string[];sourceScore:number;
   sourceAssessmentId:string|null;port:string|null;scheduledAt:string|null;
   inspector:string|null;createdAt:string;version:number;caseStatus?:string;
+  scheduledEndAt?:string|null;durationMinutes?:number;scheduledBy?:string|null;
   sourceLevel?:string;
 }
 export interface NmcCentralDecision {
@@ -92,13 +93,23 @@ export class NmcCasesService {
     return this.mutate(this.path(current.id)+'/actions/'+encodeURIComponent(actionId)+'/decision',
       {version:current.version,decision,note},false);
   }
-  inspectionReferrals():Observable<{status:'ok';requests:NmcInspectionReferral[]}>{
-    return this.http.get<{status:'ok';requests:NmcInspectionReferral[]}>('/api/ai/inspection-referrals');
+  inspectionReferrals():Observable<{status:'ok';requests:NmcInspectionReferral[];
+      summary:{pending:number;upcoming:number;completed:number;elapsedUncompleted:number}}>{
+    return this.http.get<{status:'ok';requests:NmcInspectionReferral[];
+      summary:{pending:number;upcoming:number;completed:number;elapsedUncompleted:number}}>('/api/ai/inspection-referrals');
+  }
+  inspectionAvailability(scheduledAt:string,port:string,inspector:string,durationMinutes:number):
+      Observable<{status:'ok';available:boolean;conflictCount:number;
+        slot:{scheduledAt:string;scheduledEndAt:string;durationMinutes:number;port:string;inspector:string}}>{
+    const params=new URLSearchParams({scheduledAt,port,inspector,durationMinutes:String(durationMinutes)});
+    return this.http.get<{status:'ok';available:boolean;conflictCount:number;
+      slot:{scheduledAt:string;scheduledEndAt:string;durationMinutes:number;port:string;inspector:string}}>(
+      '/api/ai/inspection-schedule/availability?'+params.toString());
   }
   scheduleInspection(current:NmcCentralCase,requestId:string,
-    scheduledAt:string,port:string,inspector:string):Observable<CaseResponse>{
+    scheduledAt:string,port:string,inspector:string,durationMinutes=60):Observable<CaseResponse>{
     return this.mutate(this.path(current.id)+'/inspections/'+encodeURIComponent(requestId)+'/schedule',
-      {version:current.version,scheduledAt,port,inspector},false);
+      {version:current.version,scheduledAt,port,inspector,durationMinutes},false);
   }
   task(current:NmcCentralCase,taskId:string,action:'START'|'COMPLETE'|'ESCALATE',note=''):Observable<CaseResponse>{
     return this.mutate(this.path(current.id)+'/task',
@@ -185,6 +196,7 @@ export class NmcCasesService {
       CASE_ACTION_ALREADY_DECIDED:['This AI proposal has already been decided.','تم اتخاذ قرار بشأن هذا الاقتراح بالفعل.'],
       CASE_INSPECTION_NOT_SCHEDULED:['Schedule the inspection from Smart Inspection before submitting its results.','يجب جدولة المعاينة في المعاينة الذكية قبل تسجيل النتائج.'],
       CASE_INSPECTION_SCHEDULE_CONFLICT:['Inspection request was already scheduled; refresh the queue.','تمت جدولة طلب المعاينة. حدث القائمة.'],
+      INSPECTION_INSPECTOR_SLOT_CONFLICT:['Inspector/team is already assigned to an overlapping inspection. Choose a different time or team.','المعاين أو الفريق مرتبط بمعاينة أخرى في نفس الفترة. اختر موعدًا أو فريقًا مختلفًا.'],
       CASE_SCHEDULE_INVALID:['Select a future date/time, inspection port and inspector.','حدد موعدًا مستقبليًا وميناءً ومعاينًا.'],
       A01_ACTION_PLAN_UNAVAILABLE:['Airia A01 action plan call failed. Nothing was created.','تعذر تنفيذ خطة إجراءات Airia A01؛ لم يتم إنشاء أي شيء.'],
       AIRIA_NOT_CONFIGURED:['Airia API is not configured for the POC.','لم يتم إعداد اتصال Airia لهذا الاختبار.'],
