@@ -45,7 +45,7 @@ export interface SiLifecycleCase{
   findings:number;actions:number;
 }
 export interface SiLifecycleView{
-  status:string;inspectionCase:{id:string;imo:string;regime:string;approvedBy:string};
+  status:string;inspectionCase:{id:string;imo:string;regime:string;approvedBy:string;nmcReferralId?:string|null};
   preparation:{status:string;version:number;stale:boolean;baseChecklistIds:string[];
     dossier:{focusAreas:unknown[];suggestedAdditionalItems:{title:string;reason:string}[]}|null;
     provenance:string;externalDocumentsVerified:boolean};
