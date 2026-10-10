@@ -5,7 +5,8 @@ import {FormsModule} from '@angular/forms';
 import {RouterLink} from '@angular/router';
 import {NmcNavigationComponent} from '../components/nmc-navigation.component';
 import {SiCandidate,SiCandidateStatus,SiCandidateTargetingService,
-  SiDashboard} from '../services/si-candidate-targeting.service';
+  SiDashboard,SiPriorityStatus,SiPriorityPreview,SiPriorityRun,SiPriorityRecommendation}
+  from '../services/si-candidate-targeting.service';
 
 type SourceFilter='ALL'|'NMC_CASE'|'SERVICE_REQUEST'|'PSC_PORT_CALL';
 type StatusFilter='ALL'|SiCandidateStatus;
@@ -21,6 +22,77 @@ export class SiCandidateWorkbenchComponent implements OnInit{
   sourceFilter:SourceFilter='ALL';statusFilter:StatusFilter='ALL';search='';
   selectedKey='';
   reviewer='';decisionNote='';editorKey='';publisherKey='';
+  priorityStatus:SiPriorityStatus|null=null;
+  priorityPreview:SiPriorityPreview|null=null;
+  priorityBusy=false;aiError='';aiSuccess='';confirmAiCost=false;
+  get savedAiRun():SiPriorityRun|null{
+    const r=this.priorityStatus?.latest;
+    return r?.status==='SUCCEEDED'&&!r.isStale?r:null;
+  }
+  get rankingMap():Map<string,SiPriorityRecommendation>{
+    return new Map((this.savedAiRun?.recommendations||[]).map(r=>[r.candidateKey,r]));
+  }
+  aiRecommendation(candidate:SiCandidate|null):SiPriorityRecommendation|null{
+    return candidate?(this.rankingMap.get(candidate.key)||null):null;
+  }
+  ruleRank(candidate:SiCandidate):number|null{
+    return this.priorityPreview?.items.find(x=>x.candidateKey===candidate.key)?.ruleRank||null;
+  }
+  refreshAiStatus():void{
+    if(!this.editorKey.trim()){
+      this.aiError=this.copy('Editor key is required to view saved AI ranking.',
+        'مطلوب مفتاح المحرر لعرض ترتيب AI المحفوظ.');return;
+    }
+    this.priorityBusy=true;this.aiError='';
+    this.api.prioritizationStatus(this.editorKey.trim()).subscribe({
+      next:r=>{this.priorityStatus=r;this.priorityBusy=false;},
+      error:e=>this.aiFailure(e)
+    });
+  }
+  previewPriority():void{
+    if(!this.editorKey.trim()){
+      this.aiError=this.copy('Enter Editor key before priority preview.',
+        'أدخل مفتاح المحرر قبل معاينة الأولوية.');return;
+    }
+    this.priorityBusy=true;this.aiError='';this.aiSuccess='';this.confirmAiCost=false;
+    this.api.prioritizationPreview(this.editorKey.trim()).subscribe({
+      next:r=>{
+        this.priorityPreview=r;this.priorityBusy=false;
+        this.aiSuccess=this.copy('Rule order preview ready. No AI call made.',
+          'تم تجهيز ترتيب القواعد دون تشغيل AI.');
+        this.refreshAiStatus();
+      },
+      error:e=>this.aiFailure(e)
+    });
+  }
+  runAiPriority():void{
+    if(!this.priorityPreview||!this.confirmAiCost||!this.editorKey.trim()||
+      !this.reviewer.trim()||this.priorityBusy)return;
+    if(!window.confirm(this.copy(
+      'Call the paid SI-P01 Airia pipeline ONCE for the current candidate snapshot? The result is advisory only.',
+      'تشغيل وكيل SI-P01 على Airia مرة واحدة مع احتمال تكلفة تشغيل؟ النتيجة استشارية فقط.')))return;
+    this.priorityBusy=true;this.aiError='';this.aiSuccess='';
+    this.api.runPrioritization(this.editorKey.trim(),{
+      actor:this.reviewer.trim(),expectedSnapshotHash:this.priorityPreview.snapshotHash,
+      confirmCost:true
+    }).subscribe({
+      next:r=>{
+        this.priorityBusy=false;this.priorityPreview=null;this.confirmAiCost=false;
+        this.aiSuccess=this.copy('AI recommendations saved for human review.',
+          'تم حفظ توصيات AI للمراجعة البشرية.');
+        this.refreshAiStatus();
+      },error:e=>{
+        this.aiFailure(e);
+        this.refreshAiStatus();
+      }
+    });
+  }
+  private aiFailure(e:unknown):void{
+    const x=e as {error?:{error?:string};status?:number};
+    this.aiError=x?.error?.error||'SI_P01_UNAVAILABLE';
+    this.priorityBusy=false;this.aiSuccess='';
+  }
+
   constructor(private readonly api:SiCandidateTargetingService,public readonly lang:LanguageService){}
   copy(en:string,ar:string):string{return this.lang.pick(en,ar);}
   ngOnInit():void{this.refresh();}
@@ -32,16 +104,20 @@ export class SiCandidateWorkbenchComponent implements OnInit{
         this.dashboard=data;
         if(!data.candidates.some(x=>x.key===this.selectedKey))this.selectedKey='';
         this.loading=false;
+        if(this.editorKey.trim()&&!this.priorityBusy)this.refreshAiStatus();
       },error:e=>{this.loading=false;this.showError(e);}
     });
   }
   get candidates():SiCandidate[]{
     const term=this.search.toLowerCase().trim();
+    const rank=this.rankingMap;
     return (this.dashboard?.candidates||[]).filter(c=>
       (this.sourceFilter==='ALL'||c.events.some(e=>e.sourceType===this.sourceFilter))&&
       (this.statusFilter==='ALL'||c.status===this.statusFilter)&&
       (!term||[c.imo,c.vesselName,c.flag,c.regime,
-        ...c.events.map(e=>e.sourceReference)].some(s=>String(s||'').toLowerCase().includes(term))));
+        ...c.events.map(e=>e.sourceReference)].some(s=>String(s||'').toLowerCase().includes(term))))
+      .sort((a,b)=>(rank.get(a.key)?.effectiveRank??99999)-
+        (rank.get(b.key)?.effectiveRank??99999));
   }
   get selected():SiCandidate|null{
     return this.dashboard?.candidates.find(c=>c.key===this.selectedKey)||null;
@@ -93,7 +169,9 @@ export class SiCandidateWorkbenchComponent implements OnInit{
       'UAE_SERVICE_INSPECTION':'معاينة خدمة بحرية',
       'FOLLOW_UP_INSPECTION':'معاينة متابعة',
       'High':'مرتفع','Critical':'حرج','Watch':'مراقبة','Normal':'عادي',
-      'APPROVE':'اعتماد','DEFER':'تأجيل','REJECT':'رفض'
+      'APPROVE':'اعتماد','DEFER':'تأجيل','REJECT':'رفض',
+      'REVIEW_REQUIRED':'تتطلب مراجعة',
+      'SUCCEEDED':'مكتمل','FAILED':'فشل'
     };
     return this.lang.isArabic?(labels[x]||x.replaceAll('_',' ')):x.replaceAll('_',' ');
   }

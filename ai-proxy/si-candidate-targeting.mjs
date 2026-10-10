@@ -16,13 +16,45 @@ const isImo=x=>typeof x==='string'&&/^\d{7}$/.test(x);
 const safeText=(x,n=120)=>typeof x==='string'&&x.trim().length&&x.trim().length<=n?x.trim():null;
 const allowedRegimes=['FOCUSED_INSPECTION','FOLLOW_UP_INSPECTION','PORT_STATE_CONTROL','UAE_SERVICE_INSPECTION'];
 const validSource=['SERVICE_REQUEST','PSC_PORT_CALL'];
-const defaultRules=Object.freeze({riskPriorityThreshold:65,includeMissingRiskInReview:true});
+// Ministry-configurable weights for *inspection scheduling priority*, never NMC risk.
+export const SI_P01_DEFAULT=Object.freeze({
+  weights:{risk:30,trigger:25,history:20,deadline:15,urgency:10},
+  approvedNmcFirst:true,
+  missingRiskAction:'REVIEW_REQUIRED',
+  sourceTriggerScores:{NMC_CASE:90,SERVICE_REQUEST:55,PSC_PORT_CALL:65}
+});
+export function getSiPrioritySettings(config){
+  const p=config?.prioritization||SI_P01_DEFAULT;
+  const keys=['risk','trigger','history','deadline','urgency'];
+  if(!p||!p.weights||p.approvedNmcFirst!==true||
+    p.missingRiskAction!=='REVIEW_REQUIRED'||keys.some(k=>
+      !Number.isInteger(p.weights[k])||p.weights[k]<0||p.weights[k]>100)||
+    keys.reduce((sum,k)=>sum+p.weights[k],0)!==100||
+    Object.keys(p.weights).sort().join('|')!==keys.sort().join('|'))
+    throw new SiTargetingError('SI_P01_POLICY_WEIGHTS_INVALID',422);
+  const sourceKeys=['NMC_CASE','SERVICE_REQUEST','PSC_PORT_CALL'];
+  const trigger=p.sourceTriggerScores||SI_P01_DEFAULT.sourceTriggerScores;
+  if(!trigger||sourceKeys.some(k=>!Number.isInteger(trigger[k])||
+       trigger[k]<0||trigger[k]>100)||
+     Object.keys(trigger).sort().join('|')!==sourceKeys.sort().join('|'))
+    throw new SiTargetingError('SI_P01_TRIGGER_SCORES_INVALID',422);
+  return {weights:Object.fromEntries(keys.map(k=>[k,p.weights[k]])),
+    approvedNmcFirst:true,missingRiskAction:'REVIEW_REQUIRED',
+    sourceTriggerScores:Object.fromEntries(sourceKeys.map(k=>[k,trigger[k]]))};
+}
+const defaultRules=Object.freeze({
+  riskPriorityThreshold:65,includeMissingRiskInReview:true,
+  prioritization:SI_P01_DEFAULT
+});
 function validateRules(value){
   if(!value||!Number.isInteger(value.riskPriorityThreshold)||
     value.riskPriorityThreshold<0||value.riskPriorityThreshold>100||
     value.includeMissingRiskInReview!==true)return null;
-  return {riskPriorityThreshold:value.riskPriorityThreshold,
-    includeMissingRiskInReview:true};
+  try{
+    return {riskPriorityThreshold:value.riskPriorityThreshold,
+      includeMissingRiskInReview:true,
+      prioritization:getSiPrioritySettings(value)};
+  }catch{return null;}
 }
 function jsonWrite(path,data){
   mkdirSync(dirname(path),{recursive:true});
@@ -225,7 +257,11 @@ export class SiCandidateTargeting{
           evidenceIds:e.payload.evidenceIds,
           importFile:e.sourceImport?.fileName||null,
           importBatchId:e.sourceImport?.batchId||null,
-          importExcelRow:e.sourceImport?.excelRow||null})),
+          importExcelRow:e.sourceImport?.excelRow||null,
+          port:e.payload.port||null,
+          eta:e.payload.eta||null,
+          contextNote:e.payload.note||null,
+          originalSourceRow:e.sourceImport?.sourceRow||null})),
         inspectionCase,lastDecision};
     }).sort((a,b)=>
       (a.status==='PENDING_REVIEW'?0:1)-(b.status==='PENDING_REVIEW'?0:1)||
@@ -255,9 +291,14 @@ export class SiCandidateTargeting{
     const impacted=data.candidates.filter(c=>c.currentRisk&&
       (c.currentRisk.score>=data.policy.config.riskPriorityThreshold)!==
       (c.currentRisk.score>=newThreshold));
+    const aiSettingsChanged=JSON.stringify(getSiPrioritySettings(parsed))!==
+      JSON.stringify(getSiPrioritySettings(data.policy.config));
     return {status:'PREVIEW',fleetSnapshotId:data.fleetSnapshotId,
       evaluatedPopulation:data.summary.evaluatedPopulation,rulesetVersion:data.policy.version,
       affectedImos:[...new Set(impacted.map(c=>c.imo))],affectedCandidateCount:impacted.length,
+      potentialRankingCandidates:aiSettingsChanged?
+        data.candidates.filter(c=>c.status==='PENDING_REVIEW').length:0,
+      aiSettingsChanged,requiresManualAiRerun:aiSettingsChanged,
       unevaluatedRiskVessels:data.summary.evaluatedPopulation-data.summary.assessedRiskVessels,
       warning:'PRIORITY_ONLY_NO_LEGAL_ELIGIBILITY_CHANGE_NO_AI'};
   }

@@ -12,6 +12,7 @@ import { ErpWorkforceStore, SiError } from './si-erp-workforce.mjs';
 import { SiElectronicScheduler } from './si-electronic-scheduling.mjs';
 import { SiCandidateTargeting, SiTargetingError } from './si-candidate-targeting.mjs';
 import { SiSourceExcelImport } from './si-source-excel-import.mjs';
+import { SiAiPrioritization, SiPriorityError } from './si-ai-prioritization.mjs';
 import { SiInspectionPreparation, SiPreparationError } from './si-inspection-preparation.mjs';
 
 const port = Number(process.env.PORT || 3000);
@@ -27,11 +28,13 @@ const pipelines = Object.freeze({
   a01: process.env.AIRIA_A01_PIPELINE_ID || '86904bc8-e552-4172-aaa8-1a79cbb9539d',
   a02: process.env.AIRIA_A02_PIPELINE_ID || '73708937-ba16-47e3-b404-55cc0a54b159',
   a03: process.env.AIRIA_A03_PIPELINE_ID || '603d32f6-2f5f-42a8-a592-77af571a2480',
-  a04: process.env.AIRIA_A04_PIPELINE_ID || 'bad751da-0e11-48fd-861d-5bde1afbbd8d'
+  a04: process.env.AIRIA_A04_PIPELINE_ID || 'bad751da-0e11-48fd-861d-5bde1afbbd8d',
+  p01: process.env.AIRIA_SI_P01_PIPELINE_ID || null
 });
 
 async function fleetAgentCall(agent,input) {
   if (!apiKey) throw new Error('AIRIA_NOT_CONFIGURED');
+  if (!pipelines[agent]) throw new Error('AIRIA_PIPELINE_NOT_CONFIGURED');
   const upstream=await fetch(baseUrl+'/v1/PipelineExecution/'+pipelines[agent],{
     method:'POST',
     headers:{'X-API-KEY':apiKey,'Content-Type':'application/json','User-Agent':'moei-nmc-fleet/1.0'},
@@ -69,6 +72,12 @@ const siTargeting=new SiCandidateTargeting({mode:dbMode,oracleRepository:reposit
   cases,riskPolicy,bundles:JSON.parse((await import('node:fs')).readFileSync(
     new URL('./fleet-bundles.json',import.meta.url),'utf8'))});
 const siSourceImports=new SiSourceExcelImport({targeting:siTargeting});
+const siPriority=new SiAiPrioritization({
+  targeting:siTargeting,mode:dbMode,oracleRepository:repository,
+  executeAgent:async input=>fleetAgentCall('p01',input),
+  enabled:process.env.SI_P01_ENABLED==='true'&&
+    Boolean(apiKey)&&Boolean(pipelines.p01)
+});
 const siPreparation=new SiInspectionPreparation({mode:dbMode,oracleRepository:repository,
   targeting:siTargeting,riskPolicy,
   bundles:siTargeting.bundles,
@@ -434,6 +443,26 @@ const server = createServer(async (req, res) => {
         dashboards.assertRole(req,'EDITOR');
         return respond(res,201,await siSourceImports.commit(await requestJson(req,2048)));
       }
+      // SI-P01 is an explicitly requested, paid advisory. Nothing automatically
+      // invokes it on GET, source Excel import or Targeting Settings publication.
+      if(path==='/api/si/v1/prioritization'||path.startsWith('/api/si/v1/prioritization/')){
+        if(req.method==='GET'&&path==='/api/si/v1/prioritization'){
+          dashboards.assertRole(req,'EDITOR');
+          return respond(res,200,await siPriority.status());
+        }
+        if(req.method==='GET'&&path==='/api/si/v1/prioritization/history'){
+          dashboards.assertRole(req,'EDITOR');
+          return respond(res,200,{status:'ok',runs:await siPriority.history(15)});
+        }
+        if(req.method==='POST'&&path==='/api/si/v1/prioritization/preview'){
+          dashboards.assertRole(req,'EDITOR');
+          return respond(res,200,await siPriority.preview());
+        }
+        if(req.method==='POST'&&path==='/api/si/v1/prioritization/run'){
+          dashboards.assertRole(req,'EDITOR');
+          return respond(res,201,await siPriority.run(await requestJson(req,2048)));
+        }
+      }
       if(req.method==='GET'&&path==='/api/si/v1/candidates/dashboard')
         return respond(res,200,await siTargeting.dashboard());
       if(req.method==='GET'&&path==='/api/si/v1/rules')
@@ -462,7 +491,7 @@ const server = createServer(async (req, res) => {
       }
       return respond(res,405,{error:'METHOD_NOT_ALLOWED'});
     }catch(e){
-      if(e instanceof SiPreparationError||e instanceof SiTargetingError||e instanceof DashboardError)
+      if(e instanceof SiPriorityError||e instanceof SiPreparationError||e instanceof SiTargetingError||e instanceof DashboardError)
         return respond(res,e.status,{error:e.code});
       if(Number.isInteger(e?.status)&&e.status>=400&&e.status<500)
         return respond(res,e.status,{error:'SI_REQUEST_INVALID'});
@@ -894,6 +923,8 @@ try{
   }
   try{await siTargeting.initialize();}
   catch(error){console.error('[si-targeting] SI_MIGRATION_009_REQUIRED - candidate API disabled');}
+  try{await siPriority.initialize();}
+  catch(error){console.error('[si-prioritization] SI_MIGRATION_011_REQUIRED - SI-P01 advisory disabled');}
   try{await siPreparation.initialize();}
   catch(error){console.error('[si-preparation] SI_MIGRATION_010_REQUIRED - A04 dossier disabled');}
   try{await guidance.initialize();}
