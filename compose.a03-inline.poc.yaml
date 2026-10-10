@@ -1,0 +1,9 @@
+# Opt-in workaround for Airia A03 Multipart HTTP 400 in the local NMC POC.
+# This transport sends the verified, extracted PDF text as JSON to the standard
+# PipelineExecution API. It does NOT upload the original PDF or process images.
+# Use only for text-readable documents; keep human review and evidence checks.
+# Add AFTER compose.yaml / compose.google-drive.yaml / compose.oracle.yaml.
+services:
+  ai-proxy:
+    environment:
+      AIRIA_A03_TRANSPORT: inline
