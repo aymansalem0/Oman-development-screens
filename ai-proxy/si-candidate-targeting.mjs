@@ -184,7 +184,8 @@ export class SiCandidateTargeting{
     const last=new Map(decisions.map(d=>[d.candidateKey,d]));
     const cases=new Map(state.cases.map(c=>[c.candidateKey,c]));
     const list=[...groups.values()].map(group=>{
-      const vessel=byImo.get(group.imo),risk=risks.get(group.imo)||null,
+      const bundle=byImo.get(group.imo),vessel=bundle.inlineContext?.vessel||bundle,
+        risk=risks.get(group.imo)||null,
         nmc=group.events.some(e=>e.payload.sourceType==='NMC_CASE'),
         booked=group.events.some(e=>e.payload.nmcStatus==='SCHEDULED'),
         lastDecision=last.get(group.key)||null,inspectionCase=cases.get(group.key)||null;
@@ -199,7 +200,7 @@ export class SiCandidateTargeting{
         lastDecision?.action==='DEFER'?'DEFERRED':
         lastDecision?.action==='REJECT'?'REJECTED':'PENDING_REVIEW';
       return {key:group.key,imo:group.imo,
-        vesselName:vessel.vesselName||vessel.name||vessel.shipName||('IMO '+group.imo),
+        vesselName:vessel.name||vessel.vesselName||vessel.shipName||('IMO '+group.imo),
         flag:vessel.flag||'',vesselType:vessel.vesselType||vessel.type||'',
         regime:group.regime,eligibility,priority,reasons,status,
         currentRisk:risk?{score:risk.riskScore,level:risk.riskLevel,
