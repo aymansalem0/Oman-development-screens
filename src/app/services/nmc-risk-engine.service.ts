@@ -366,8 +366,19 @@ export class NmcRiskEngineService {
     const errors: string[] = [];
     const totalWeight = Object.values(config.weights).reduce((sum, value) => sum + Number(value || 0), 0);
 
-    if (Math.round(totalWeight) !== 100) {
-      errors.push('Risk factor weights must total 100%.');
+    if (Object.values(config.weights).some(value =>
+      !Number.isInteger(value) || value < 0 || value > 100)) {
+      errors.push('Each risk factor weight must be a whole percentage between 0 and 100.');
+    }
+    if (totalWeight !== 100) {
+      errors.push('Risk factor weights must total exactly 100%.');
+    }
+    if (!['weighted','conservative','max-signal'].includes(config.mode)) {
+      errors.push('Calculation mode is not valid.');
+    }
+    if (![config.thresholds.watch,config.thresholds.high,config.thresholds.critical]
+      .every(Number.isInteger)) {
+      errors.push('Risk thresholds must be whole numbers.');
     }
 
     if (
