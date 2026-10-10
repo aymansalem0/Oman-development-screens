@@ -89,7 +89,7 @@ test('namespace repair does not bypass authorization-grade sheet or reference va
     zip.file(n,data.replace(/<(\/?)((?:[A-Za-z][\w.-]*))(?=[\s/>])/g,
       '<$1x:$2').replace('xmlns="'+ns+'"','xmlns:x="'+ns+'"'));
   }
-  await assert.rejects(()=>parseErpExcel(Buffer.from(zip.generateAsync?await zip.generateAsync({type:'nodebuffer'}):'')),
+  await assert.rejects(()=>parseErpExcel(await zip.generateAsync({type:'nodebuffer'})),
     e=>e.code==='ERP_UNKNOWN_HOME_PORT');
 });
 test('ERP workbook headers, snapshot preview and commit, only explicit commit persists',async()=>{
