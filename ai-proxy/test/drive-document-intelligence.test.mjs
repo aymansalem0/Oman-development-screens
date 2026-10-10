@@ -181,3 +181,39 @@ test('A03 tampering suspicion cannot be approved even with a reviewer',async()=>
     assert.equal((await a.store.approvedFor(IMO)).length,0);
   }finally{a.close();}
 });
+
+test('A03 HTTP errors remain distinguishable from schema errors without retry',async()=>{
+  const a=fixture();
+  try{
+    a.store.executeA03=async()=>{throw new DocumentError('AIRIA_A03_HTTP_415',502);};
+    await assert.rejects(
+      ()=>a.store.analyze(IMO,FILE,{actor:'Inspector X',confirmCost:true}),
+      /AIRIA_A03_HTTP_415/
+    );
+    const [saved]=await a.store.savedFor(IMO);
+    assert.equal(saved.status,'FAILED');
+    assert.equal(saved.version,2);
+    assert.equal(saved.failureCode,'AIRIA_A03_HTTP_415');
+    assert.equal(saved.failureStage,'AIRIA_EXECUTION');
+    assert.equal((await a.store.approvedFor(IMO)).length,0);
+  }finally{a.close();}
+});
+
+test('A03 reports a separate draft-persistence error after a valid response',async()=>{
+  const a=fixture();
+  const record=a.store.record.bind(a.store);
+  a.store.record=async(current,next,action,actor)=>{
+    if(action==='A03_DRAFT_SAVED')throw new Error('SIMULATED_DRAFT_WRITE_FAILURE');
+    return record(current,next,action,actor);
+  };
+  try{
+    await assert.rejects(
+      ()=>a.store.analyze(IMO,FILE,{actor:'Inspector X',confirmCost:true}),
+      /A03_DRAFT_PERSISTENCE_FAILED/
+    );
+    const [saved]=await a.store.savedFor(IMO);
+    assert.equal(saved.failureCode,'A03_DRAFT_PERSISTENCE_FAILED');
+    assert.equal(saved.failureStage,'A03_DRAFT_PERSISTENCE');
+    assert.equal(saved.status,'FAILED');
+  }finally{a.close();}
+});
