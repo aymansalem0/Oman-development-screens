@@ -129,7 +129,8 @@ test('PSC and service feeds for same IMO become separate candidate regimes',asyn
 test('wrong sheet, unknown IMO and formulas fail closed without partial commit',async()=>{
   const w=makeWorkspace();
   try{
-    await assert.rejects(()=>pv(w.service,await excel('PSC_PORT_CALL',[pscRow()]),
+    const wrongSheet=await excel('PSC_PORT_CALL',[pscRow()]);
+    await assert.rejects(()=>pv(w.service,wrongSheet,
       'SERVICE_REQUEST','mismatch.xlsx'),e=>e.code==='SI_XLSX_SHEET_REQUIRED_SERVICE_REQUESTS');
     const bad=await pv(w.service,await excel('SERVICE_REQUEST',
       [svcRow('SR-OK'),svcRow('SR-BAD','9999999')]),'SERVICE_REQUEST','invalid.xlsx');
