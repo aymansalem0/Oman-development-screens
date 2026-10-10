@@ -262,7 +262,8 @@
       <button type="button" [class.active]="activeTab === 'sources'" (click)="setTab('sources')">{{ copy('Data Sources', 'مصادر البيانات') }}</button>
     </nav>
 
-<app-nmc-vessel-documents *ngIf="activeTab==='documents'" [imo]="vessel.imo"></app-nmc-vessel-documents>
+<app-nmc-vessel-documents *ngIf="activeTab==='documents'"
+      [imo]="vessel.imo" [certificates]="certificates"></app-nmc-vessel-documents>
     <section class="overview-layout" *ngIf="activeTab === 'overview'">
       <div class="left-column">
         <article class="panel summary-panel">
