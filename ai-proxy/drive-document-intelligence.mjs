@@ -178,7 +178,16 @@ export class DriveDocumentIntelligence {
   }
   async approvedFor(imo){
     const docs=await this.savedFor(imo);
+    if(!docs.some(d=>d.status==='APPROVED'))return [];
+    // Verify current Google Drive version at every A02/A04 handoff.
+    // A previous human approval never authorizes a modified/deleted Drive file.
+    let current;
+    try{current=await this.list(imo);}
+    catch{return [];} // fail closed: do not inject stale documents into agents
+    if(current.status!=='ok')return [];
+    const fresh=new Map(current.documents.map(x=>[x.fileId,x.modifiedTime]));
     return docs.filter(d=>d.status==='APPROVED'&&
+      fresh.get(d.fileId)===d.sourceModifiedTime&&
       d.extracted?.imo===imo&&d.sourceModifiedTime===d.analyzedModifiedTime)
       .map(d=>({
         evidenceId:documentEvidenceId(d.fileId),documentId:d.id,
