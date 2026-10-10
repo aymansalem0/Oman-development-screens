@@ -77,7 +77,7 @@ test('major deficiency: evidence, correction, verification, failed follow-up and
     await h.step('APPROVE_REPORT','Supervisor',withReason);
     const r0=await h.store.saved(CASE);
     assert.equal(r0.findings.length,1);
-    await assert.rejects(h.step('CLOSE','Supervisor',withReason),e=>e.code==='SI_LIFECYCLE_STAGE_CONFLICT');
+    await assert.rejects(h.step('CLOSE','Supervisor',withReason),e=>e.code==='SI_CORRECTIVE_ACTIONS_NOT_CLOSED');
     await h.step('ISSUE_ACTIONS','Supervisor',{
       ...withReason,actions:[{findingId:r0.findings[0].id,owner:'Action Owner',
         dueDate:'2026-11-01',instruction:'Replace damaged hose'}]});
