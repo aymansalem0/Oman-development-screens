@@ -1,3 +1,4 @@
+import {LanguageService} from '../services/language.service';
 import {CommonModule} from '@angular/common';
 import {Component,OnInit} from '@angular/core';
 import {FormsModule} from '@angular/forms';
@@ -27,7 +28,8 @@ export class SiInspectionPreparationComponent implements OnInit{
     'hull-machinery':'Hull & Machinery',
     security:'Security and Access'
   };
-  constructor(private route:ActivatedRoute,private api:SiPreparationService){}
+  constructor(private route:ActivatedRoute,private api:SiPreparationService,public readonly lang:LanguageService){}
+  copy(en:string,ar:string):string{return this.lang.pick(en,ar);}
   ngOnInit():void{this.id=this.route.snapshot.paramMap.get('caseId')||'';}
   get saved(){return this.data?.saved||null;}
   get prepared():boolean{return Boolean(this.saved);}
