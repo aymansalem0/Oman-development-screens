@@ -1,0 +1,70 @@
+:host{display:block}
+.maritime-topbar{position:fixed;top:0;right:0;left:0;z-index:42;height:82px;
+  display:grid;grid-template-columns:minmax(225px,1fr) auto minmax(245px,1fr);
+  align-items:center;gap:20px;padding:0 24px;background:rgba(255,255,255,.97);
+  border-bottom:1px solid #e7edf3;box-shadow:0 4px 18px rgba(23,50,77,.06);
+  backdrop-filter:blur(14px);color:#17324d}
+.maritime-brand{display:flex;align-items:center;gap:13px;min-width:0}
+.maritime-mark{width:44px;height:44px;border-radius:14px;display:grid;place-items:center;
+  background:linear-gradient(145deg,#0f766e,#0ea5a0);color:#fff;font-size:19px;
+  box-shadow:0 8px 22px rgba(15,118,110,.18);flex-shrink:0}
+.maritime-eyebrow{color:#0f766e;font-size:9px;letter-spacing:1.4px;font-weight:800;
+  text-transform:uppercase}
+.maritime-brand h1{font-size:17px;margin:2px 0 0;color:#17324d;line-height:1.25}
+.maritime-brand p{margin:3px 0 0;color:#8191a4;font-size:10px}
+.maritime-status{display:flex;align-items:center;flex-direction:column;gap:5px;
+  text-align:center;min-width:0}
+.maritime-context,.maritime-live{display:inline-flex;align-items:center;gap:8px;
+  border:1px solid #ccefe8;background:#ecfdf9;color:#0f766e;border-radius:999px;
+  padding:7px 12px;font-size:9px;font-weight:800;letter-spacing:.6px}
+.maritime-live.paused{background:#fff7ed;color:#b45309;border-color:#fed7aa}
+.maritime-status small,.maritime-clock{font-size:9px;color:#93a1b2}
+.maritime-pulse{width:8px;height:8px;border-radius:50%;background:#14b8a6;
+  box-shadow:0 0 0 3px rgba(20,184,166,.15)}
+.maritime-actions{display:flex;align-items:center;justify-content:flex-end;gap:10px}
+.maritime-language{border:1px solid #dce5ed;border-radius:10px;background:#fff;
+  color:#506579;padding:10px 13px;font-size:11px;font-weight:750;cursor:pointer;
+  white-space:nowrap}
+.maritime-language:hover{border-color:#9fd9d2;color:#0f766e;background:#f4fffc}
+.maritime-alerts{position:relative;display:grid;place-items:center;text-decoration:none;
+  width:38px;height:38px;border:1px solid #e2e9ef;border-radius:10px;background:#fff;
+  color:#486173;font-size:18px}
+.maritime-alerts b{position:absolute;right:-4px;top:-5px;min-width:17px;height:17px;
+  background:#ef5b5b;color:#fff;border-radius:99px;padding:2px 4px;font-size:9px;text-align:center}
+.maritime-officer{display:flex;gap:8px;align-items:center;white-space:nowrap}
+.maritime-avatar{display:grid;place-items:center;width:34px;height:34px;border-radius:11px;
+  background:#e8f7f5;border:1px solid #cbeae5;color:#0f766e;font-size:10px;font-weight:800}
+.maritime-officer strong{display:block;color:#27445f;font-size:10px}
+.maritime-officer small{display:block;color:#97a4b3;font-size:8px;margin-top:3px}
+.maritime-platform-footer{display:flex;justify-content:space-between;align-items:center;
+  flex-wrap:wrap;gap:11px;padding:17px 24px 17px 240px;margin:0;background:#fff;
+  border-top:1px solid #e4ecef;color:#698296;font-size:10px;line-height:1.6;
+  position:relative;z-index:3}
+.maritime-platform-footer strong{color:#26536b;font-weight:800}
+.maritime-platform-footer a{color:#0c806f;text-decoration:none;font-weight:800}
+:host-context([dir="rtl"]) .maritime-platform-footer{padding:17px 240px 17px 24px}
+:host-context([dir="rtl"]) .maritime-brand,:host-context([dir="rtl"]) .maritime-actions{direction:rtl}
+:host-context([dir="rtl"]) .maritime-alerts b{right:auto;left:-4px}
+@media(min-width:961px) and (max-width:1220px){
+  .maritime-platform-footer{padding-inline-start:90px}
+  :host-context([dir="rtl"]) .maritime-platform-footer{padding-inline-start:90px}
+}
+@media(max-width:960px){
+  .maritime-topbar{padding:0 16px 0 64px;grid-template-columns:minmax(0,1fr) auto;gap:12px}
+  :host-context([dir="rtl"]) .maritime-topbar{padding:0 64px 0 16px}
+  .maritime-status{display:none}
+  .maritime-officer{display:none}
+  .maritime-platform-footer,:host-context([dir="rtl"]) .maritime-platform-footer{
+    padding:17px 20px}
+}
+@media(max-width:540px){
+  .maritime-topbar{padding-inline:58px 12px;height:82px}
+  :host-context([dir="rtl"]) .maritime-topbar{padding-inline:58px 12px}
+  .maritime-brand h1{font-size:13px}
+  .maritime-brand p{display:none}
+  .maritime-mark{width:36px;height:36px;font-size:17px}
+  .maritime-eyebrow{font-size:8px}
+  .maritime-alerts{display:none}
+  .maritime-language{padding:8px;font-size:10px}
+  .maritime-platform-footer{font-size:9px}
+}
