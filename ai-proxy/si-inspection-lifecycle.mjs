@@ -75,6 +75,12 @@ export class SiInspectionLifecycle{
       const state=this.readJson(),current=state[id]||null;
       if((current?.version||0)!==(before?.version||0))
         fails('SI_LIFECYCLE_VERSION_CONFLICT',409);
+      // Keep previous complete state versions in the local demonstrator too.
+      // The snapshot excludes prior history to prevent recursive amplification.
+      const {revisionHistory:_ignored,...snapshot}=after;
+      after.revisionHistory=[...(before?.revisionHistory||[]),
+        {version:after.version,at:after.updatedAt,action,actor:str(actor,120),
+          reason:str(reason,500),snapshot:clone(snapshot)}];
       state[id]=after;this.writeJson(state);return;
     }
     return this.db(async con=>{
@@ -91,15 +97,27 @@ export class SiInspectionLifecycle{
             {id,v:after.version,doc:jsonClob(after)});
         }
         await con.execute(`INSERT INTO SI_INSPECTION_LIFECYCLE_AUDIT
-          (AUDIT_ID,CASE_ID,VERSION_NO,ACTION_NAME,ACTOR,REASON)
-          VALUES (:id,:caseId,:v,:action,:actor,:reason)`,
-          {id:randomUUID(),caseId:id,v:after.version,action,actor,reason:str(reason,500)});
+          (AUDIT_ID,CASE_ID,VERSION_NO,ACTION_NAME,ACTOR,REASON,STATE_JSON)
+          VALUES (:id,:caseId,:v,:action,:actor,:reason,:state)`,
+          {id:randomUUID(),caseId:id,v:after.version,action,actor,
+            reason:str(reason,500),state:jsonClob(after)});
         await con.commit();
       }catch(e){
         await con.rollback();
         if(e.code==='ORA-00001')fails('SI_LIFECYCLE_VERSION_CONFLICT',409);
         throw e;
       }
+    });
+  }
+  async history(id){
+    await this.reference(id);
+    this.assertReady();
+    if(this.mode==='json')return {status:'ok',versions:(await this.saved(id))?.revisionHistory||[]};
+    return this.db(async con=>{
+      const r=await con.execute(`SELECT STATE_JSON FROM SI_INSPECTION_LIFECYCLE_AUDIT
+        WHERE CASE_ID=:id ORDER BY VERSION_NO`,{id},
+        {outFormat:oracledb.OUT_FORMAT_OBJECT});
+      return {status:'ok',versions:r.rows.map(row=>JSON.parse(row.STATE_JSON))};
     });
   }
   async reference(id){
@@ -302,12 +320,16 @@ export class SiInspectionLifecycle{
         case 'RETURN_REPORT':{
           requireStage('REPORT_PENDING_REVIEW');
           if(reason.length<8)fails('SI_RETURN_REASON_REQUIRED');
+          if(str(actor,120)===next.report.submittedBy)
+            fails('SI_REPORT_REVIEW_REQUIRES_INDEPENDENT_SUPERVISOR',403);
           next.report.status='RETURNED';next.report.supervisor=str(actor,120);
           next.report.returnReason=reason;next.stage='REPORT_RETURNED';break;
         }
         case 'APPROVE_REPORT':{
           requireStage('REPORT_PENDING_REVIEW');
           if(reason.length<8)fails('SI_APPROVAL_REASON_REQUIRED');
+          if(str(actor,120)===next.report.submittedBy)
+            fails('SI_REPORT_REVIEW_REQUIRES_INDEPENDENT_SUPERVISOR',403);
           next.report.status='APPROVED';next.report.supervisor=str(actor,120);
           next.report.approvedAt=now();next.report.approvalReason=reason;
           next.stage='REPORT_APPROVED';break;
@@ -350,6 +372,8 @@ export class SiInspectionLifecycle{
           const item=next.actions.find(x=>x.id===data.actionId);
           if(!item||item.status!=='PENDING_VERIFICATION'||!['ACCEPT','REJECT'].includes(data.decision)||
             reason.length<8)fails('SI_VERIFICATION_INVALID',409);
+          if(str(actor,120)===item.owner)
+            fails('SI_ACTION_INDEPENDENT_VERIFICATION_REQUIRED',403);
           item.status=data.decision==='ACCEPT'?'VERIFIED':'REJECTED';
           item.review={decision:data.decision,reason,by:str(actor,120),at:now()};
           item.history.push({at:now(),by:actor,event:item.status});
@@ -361,6 +385,8 @@ export class SiInspectionLifecycle{
           if(!['DESK_REVIEW','ON_SITE'].includes(data.mode)||
             !['PASS','FAIL'].includes(data.result)||reason.length<8)
             fails('SI_FOLLOW_UP_FIELDS_REQUIRED');
+          if(!Array.isArray(data.evidenceRefs)||!data.evidenceRefs.some(x=>str(x,180)))
+            fails('SI_FOLLOW_UP_EVIDENCE_REQUIRED');
           next.followUps.push({id:randomUUID(),mode:data.mode,result:data.result,
             note:reason,inspector:str(actor,120),at:now(),
             evidenceRefs:Array.isArray(data.evidenceRefs)?
