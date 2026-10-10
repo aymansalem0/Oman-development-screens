@@ -68,3 +68,48 @@ test('Oracle risk policy binds avoid reserved SQL keywords that block central se
   assert.match(source,/:b_published_by/);
   assert.match(source,/:b_risk_level/);
 });
+
+test('save draft is durable and never changes active score; publish reuses the same AI factors',async()=>{
+  const dir=mkdtempSync(join(tmpdir(),'nmc-risk-draft-'));
+  try{
+    const file=join(dir,'workspace.json');
+    const fleet={results:{'9328471':assessment}};
+    const svc=new CentralRiskPolicy({mode:'json',file,fleet});
+    await svc.initialize();
+    const initial=await svc.projectCurrent();
+    const proposed={...baseline,
+      weights:{movement:35,inspection:18,certificate:20,dataQuality:14,history:13}};
+    const draft=await svc.saveDraft({config:proposed,
+      expectedRevision:1,expectedDraftRevision:0,updatedBy:'Business Risk Editor'});
+    assert.equal(draft.draftRevision,1);
+    assert.equal((await svc.active()).revision,1);
+    assert.equal((await svc.projectCurrent()).projections[0].riskScore,
+      initial.projections[0].riskScore);
+    const restarted=new CentralRiskPolicy({mode:'json',file,fleet});
+    await restarted.initialize();
+    assert.equal((await restarted.draft()).config.weights.movement,35);
+    await assert.rejects(restarted.saveDraft({config:proposed,
+      expectedRevision:1,expectedDraftRevision:0,updatedBy:'Business Risk Editor'}),
+      e=>e.code==='RISK_DRAFT_VERSION_CONFLICT');
+    const published=await restarted.publish({expectedRevision:1,config:proposed,
+      reason:'Approved factor weighting change for fleet',publishedBy:'NMC Supervisor'});
+    assert.equal(published.revision,2);
+    const p=(await restarted.vessel('9328471'));
+    assert.equal(p.factorSnapshot.factors.find(f=>f.key==='inspection').severity,82);
+    assert.equal(p.factorSnapshot.factors.find(f=>f.key==='inspection').weight,18);
+    assert.equal(p.factorSnapshot.factors.find(f=>f.key==='inspection').weightedContribution,14.76);
+    const timeline=await restarted.projectionHistory('9328471');
+    assert.equal(timeline[0].factorSnapshot.clampedAndRoundedScore,p.riskScore);
+    assert.equal((await restarted.draft()).baseRevision,1);
+    assert.equal(assessment.signals.find(x=>x.factor==='inspection').severity,82);
+  }finally{rmSync(dir,{recursive:true,force:true});}
+});
+test('published risk factor snapshots preserve source references and explain calculation-mode adjustment',()=>{
+  const revised={...baseline,mode:'max-signal'};
+  const p=calculateRiskPolicy(assessment,revised,3);
+  assert.equal(p.factorSnapshot.calculationMode,'max-signal');
+  assert.equal(p.factorSnapshot.factors.length,5);
+  assert.deepEqual(p.factorSnapshot.factors[0].evidenceIds,['movement-synthetic']);
+  assert.equal(Math.round(p.factorSnapshot.weightedSubtotal+
+    p.factorSnapshot.modeAdjustment),p.riskScore);
+});
