@@ -37,10 +37,11 @@ export class NmcDataQualityConfigurationComponent implements OnInit,OnDestroy {
   }
   ngOnDestroy():void {this.sub?.unsubscribe();}
   copy(en:string,ar:string):string {return this.lang.pick(en,ar);}
-  metricLabel(key:QualityMetricKey):string {
-    const v:Record<QualityMetricKey,[string,string]>={
+  metricLabel(key:QualityMetricKey|'documentConsistency'):string {
+    const v:Record<QualityMetricKey|'documentConsistency',[string,string]>={
       completeness:['Completeness','الاكتمال'],consistency:['Consistency','التطابق'],
-      evidenceLinkage:['Evidence linkage','ربط الأدلة'],provenance:['Source metadata','بيانات المصدر']};
+      evidenceLinkage:['Evidence linkage','ربط الأدلة'],provenance:['Source metadata','بيانات المصدر'],
+      documentConsistency:['A03 document consistency','اتساق مستندات A03']};
     return this.copy(...v[key]);
   }
   fieldLabel(key:QualityIdentityField):string {
