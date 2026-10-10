@@ -296,8 +296,11 @@ export class SiPscSelection{
         const locked=await con.execute(`SELECT DOC_JSON FROM SI_PSC_SELECTION_POLICY
           WHERE VERSION_NO=(SELECT MAX(VERSION_NO) FROM SI_PSC_SELECTION_POLICY)
           FOR UPDATE`,[],{outFormat:oracledb.OUT_FORMAT_OBJECT});
-        const state=await this._state();
-        state.policies[state.policies.length-1]=JSON.parse(locked.rows[0].DOC_JSON);
+        const all=await con.execute(
+          'SELECT DOC_JSON FROM SI_PSC_SELECTION_DECISION ORDER BY CREATED_AT',[],
+          {outFormat:oracledb.OUT_FORMAT_OBJECT});
+        const state={policies:[JSON.parse(locked.rows[0].DOC_JSON)],
+          decisions:all.rows.map(x=>JSON.parse(x.DOC_JSON))};
         const record=await apply(state,async decision=>{
           await con.execute(`INSERT INTO SI_PSC_SELECTION_DECISION
             (DECISION_ID,EVENT_KEY,IMO,ACTION,DOC_JSON)
