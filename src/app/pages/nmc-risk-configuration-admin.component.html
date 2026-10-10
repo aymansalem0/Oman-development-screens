@@ -58,13 +58,13 @@
         {{copy('Import Legacy Browser Settings as Draft','استيراد إعدادات المتصفح السابقة كمسودة')}}</button>
     </div>
     <div class="success-banner" *ngIf="draftSaveMessage"><span>✓</span><strong>{{draftSaveMessage}}</strong></div>
-    <div class="validation-banner" role="alert" *ngIf="draftError"><strong>{{draftError}}</strong></div>
+    <div class="validation-banner" role="alert" *ngIf="draftError"><span>!</span><strong>{{draftError}}</strong></div>
     <div class="validation-banner" role="alert" *ngIf="draftStale">
-      <strong>{{copy('Saved draft belongs to a previous published revision. It was not applied automatically. Review current policy before resaving.',
+      <span>!</span><strong>{{copy('Saved draft belongs to a previous published revision. It was not applied automatically. Review current policy before resaving.',
         'المسودة المحفوظة تخص إصدارًا منشورًا سابقًا ولم تُطبق تلقائيًا. راجع الإعدادات النشطة قبل الحفظ مجددًا.')}}</strong>
     </div>
     <div class="validation-banner" role="alert" *ngIf="publicationError">
-      <strong>{{publicationError}}</strong>
+      <span>!</span><strong>{{publicationError}}</strong>
     </div>
     <div class="success-banner" *ngIf="publishedMessage">
       <span>✓</span>
