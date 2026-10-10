@@ -46,6 +46,11 @@ services:
       NMC_DRIVE_ROOT_FOLDER_ID: ${NMC_DRIVE_ROOT_FOLDER_ID:-}
       NMC_DRIVE_CREDENTIALS_PATH: /run/secrets/nmc-drive-google.json
       NMC_DOCUMENT_STORE_PATH: /data/nmc-document-intelligence.json
+      NMC_RUNTIME_SETTINGS_STORE_PATH: /data/nmc-runtime-settings.json
+      NMC_A01_ENABLED: ${NMC_A01_ENABLED:-true}
+      NMC_A02_ENABLED: ${NMC_A02_ENABLED:-true}
+      # A03 automation is disabled until Publisher enables it from Runtime Settings.
+      NMC_A03_AUTO_ENABLED: ${NMC_A03_AUTO_ENABLED:-false}
       # 'oracle' requires compose.oracle.yaml, NMC_AI user and V1 migration.
       NMC_DB_MODE: ${NMC_DB_MODE:-json}
       NMC_DB_CONNECT_STRING: ${NMC_DB_CONNECT_STRING:-oracle-free-23:1521/freepdb1}
