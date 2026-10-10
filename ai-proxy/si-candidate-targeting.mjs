@@ -222,7 +222,10 @@ export class SiCandidateTargeting{
           eventKey:e.eventKey,sourceType:e.payload.sourceType,
           sourceEventId:e.payload.sourceEventId,sourceReference:e.payload.sourceReference,
           provenance:e.payload.provenance,approval:e.payload.sourceApprovalStatus,
-          evidenceIds:e.payload.evidenceIds})),
+          evidenceIds:e.payload.evidenceIds,
+          importFile:e.sourceImport?.fileName||null,
+          importBatchId:e.sourceImport?.batchId||null,
+          importExcelRow:e.sourceImport?.excelRow||null})),
         inspectionCase,lastDecision};
     }).sort((a,b)=>
       (a.status==='PENDING_REVIEW'?0:1)-(b.status==='PENDING_REVIEW'?0:1)||
