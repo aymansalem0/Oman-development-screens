@@ -383,7 +383,7 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
     this.loadStoredAi();
 
     const requestedTab = this.route.snapshot.queryParamMap.get('tab');
-    if (requestedTab && ['overview','movement','compliance','inspection','external-psc','certificates','sources'].includes(requestedTab)) {
+    if (requestedTab && ['overview','movement','compliance','inspection','external-psc','certificates','documents','sources'].includes(requestedTab)) {
       this.activeTab = requestedTab;
     }
   }
