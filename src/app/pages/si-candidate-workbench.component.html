@@ -5,10 +5,12 @@
       <div>
         <small>{{copy("MOEI · SMART INSPECTION · STEPS 00–04","وزارة الطاقة والبنية التحتية · المعاينة الذكية · المراحل ٠٠–٠٤")}}</small>
         <h1>{{copy("Inspection Candidate & Targeting Center","مركز ترشيح المعاينات والاستهداف")}}</h1>
-        <p>{{copy('All active vessels · Traceable decisions · No automatic AI calls','كل السفن النشطة · قرارات قابلة للتتبع · دون استدعاءات AI تلقائية')}}</p>
+        <p>{{copy('Only selected/approved inspection workflows · One row per IMO · No automatic AI calls',
+'مسارات المعاينة المختارة أو المعتمدة فقط · صف واحد لكل IMO · دون تشغيل AI تلقائي')}}</p>
       </div>
       <div class="hero-actions">
         <a routerLink="/moei/nmc">{{copy("NMC Command Center","مركز القيادة البحري")}}</a>
+        <a routerLink="/moei/smart-inspection/psc-targeting">{{copy('PSC Targeting Pool ↗','قائمة استهداف PSC ↗')}}</a>
         <a routerLink="/moei/smart-inspection/scheduling">{{copy("Electronic Scheduling ↗","الجدولة الإلكترونية ↗")}}</a>
         <button type="button" (click)="refresh()" [disabled]="loading||busy">{{copy("↻ Refresh","↻ تحديث")}}</button>
       </div>
@@ -37,9 +39,9 @@
 
     <section class="si-panel ai-ranking-panel">
       <header>
-        <h2>{{copy('AI Inspection Prioritization · SI-P01','ترتيب أولويات المعاينة بالذكاء الاصطناعي · SI-P01')}}</h2>
-        <p>{{copy('Published business criteria establish hard priority tiers. SI-P01 can recommend and explain the order within each tier; official NMC Risk and officer approvals are never changed.',
-          'تحدد قواعد الأعمال المنشورة مستويات الأولوية الملزمة، ويقترح SI-P01 ترتيب المرشحين داخل كل مستوى مع توضيح الأسباب دون تغيير مخاطر NMC الرسمية أو قرارات الموظف.')}}</p>
+        <h2>{{copy('Stage 2 · Approved Inspection Execution Priority · SI-P01','المرحلة الثانية · ترتيب تنفيذ المعاينات المعتمدة · SI-P01')}}</h2>
+        <p>{{copy('Only Publisher-approved inspection CASES enter SI-P01 execution ranking. Pending candidates and non-selected Port Calls are excluded. SI-P01 cannot alter NMC Risk or inspection approvals.',
+          'يُرتّب SI-P01 حالات المعاينة المعتمدة من المشرف فقط؛ وتُستبعد إخطارات الوصول غير المختارة والمرشحون بانتظار الاعتماد. لا يغيّر مخاطر NMC أو قرارات الموظف.')}}</p>
       </header>
       <div class="ai-controls">
         <button type="button" (click)="previewPriority()" [disabled]="priorityBusy||loading||!dashboard">
@@ -59,7 +61,7 @@
         <span>{{copy('Airia SI-P01','وكيل Airia SI-P01')}}:
           <strong>{{info.enabled?copy('ENABLED','مفعّل'):copy('DISABLED — setup required','غير مفعّل — يلزم الإعداد')}}</strong>
         </span>
-        <span>{{copy('Pending candidates','المرشحون بانتظار المراجعة')}}: {{info.preview.eligibleCount}}</span>
+        <span>{{copy('Approved inspection cases','حالات المعاينة المعتمدة')}}: {{info.preview.eligibleCount}}</span>
         <span>{{copy('Settings version','إصدار الإعدادات')}}: v{{info.preview.policyVersion}}</span>
         <span *ngIf="info.latest" [class.ai-stale]="info.latest.isStale">
           {{copy('Last run','آخر تشغيل')}}: {{info.latest.completedAt|date:'short'}}
@@ -68,8 +70,8 @@
         </span>
       </div>
       <div *ngIf="priorityPreview as p" class="rule-preview">
-        <h3>{{copy('Rule-Based Candidate Ranking Preview','معاينة ترتيب المرشحين وفق القواعد')}}</h3>
-        <p>{{p.eligibleCount}} {{copy('open candidates · Rules v','مرشح بانتظار المراجعة · إصدار القواعد')}}{{p.policyVersion}}
+        <h3>{{copy('Rule-Based Approved Inspection Order','الترتيب المبدئي للمعاينات المعتمدة')}}</h3>
+        <p>{{p.eligibleCount}} {{copy('approved SI cases · Rules v','حالة معاينة معتمدة · إصدار القواعد')}}{{p.policyVersion}}
           · {{copy('No AI call has been made','لم يتم تشغيل AI')}}</p>
         <p>{{rulePreviewVessels.length}} {{copy('unique candidate vessels, with',
           'سفينة مرشحة بدون تكرار، تضم')}} {{p.eligibleCount}}
@@ -103,8 +105,8 @@
           'تُحسب الدرجة الأولية من الأدلة المتاحة فقط، ولا تُعامل المخاطر غير المتوفرة كصفر. هذه الدرجة ليست تقييم مخاطر NMC الرسمي.')}}</p>
         <div class="ai-run-actions">
           <label class="ai-cost"><input type="checkbox" [(ngModel)]="confirmAiCost"/>
-            {{copy('I authorize one potentially billable SI-P01 Airia request (max 100 open candidates).',
-              'أوافق صراحة على استدعاء واحد لوكيل SI-P01 قد يترتب عليه تكلفة (حتى ١٠٠ مرشح مفتوح).')}}
+            {{copy('I authorize one potentially billable SI-P01 Airia request (max 100 approved inspections).',
+              'أوافق صراحة على استدعاء واحد لوكيل SI-P01 قد يترتب عليه تكلفة (حتى ١٠٠ معاينة معتمدة).')}}
           </label>
           <button type="button" class="primary"
             [disabled]="priorityBusy||!confirmAiCost||!reviewer.trim()||!p.eligibleCount||p.eligibleCount>100||!priorityStatus?.enabled"
@@ -290,8 +292,8 @@
 
       <section class="si-panel">
         <header><h2>{{copy('04 · Candidate Data Sources','٠٤ · مصادر بيانات المرشحين')}}</h2>
-          <p>{{copy('NMC remains live-connected. Service Requests and PSC Port Calls now enter the queue through validated Excel imports managed in Inspection Settings.',
-            'تظل إحالات NMC متصلة مباشرة، بينما تُستورد طلبات الخدمات وإخطارات نداء الموانئ من Excel بعد التحقق من البيانات ضمن إعدادات المعاينات.')}}</p></header>
+          <p>{{copy('NMC referrals enter directly; Service Requests enter after Excel import; PSC Port Calls remain in the targeting pool until explicitly selected by a Publisher under the monthly quota.',
+            'تدخل إحالات NMC مباشرة وطلبات الخدمات بعد الاستيراد، لكن إخطارات PSC تظل بقائمة الاستهداف حتى يعتمد المشرف اختيارها ضمن الحصة الشهرية.')}}</p></header>
         <div class="source-overview">
           <p><strong>{{copy('NMC','المركز البحري')}}:</strong>
             {{dashboard?.summary?.bySource?.['NMC_CASE']||0}}
@@ -301,7 +303,7 @@
             {{copy('candidate vessels from Excel','سفن مرشحة من Excel')}}</p>
           <p><strong>{{copy('PSC Port Calls','إخطارات نداء الموانئ')}}:</strong>
             {{dashboard?.summary?.bySource?.['PSC_PORT_CALL']||0}}
-            {{copy('candidate vessels from Excel','سفن مرشحة من Excel')}}</p>
+            {{copy('selected PSC inspection workflows only','مسارات PSC التي تم اختيارها فقط')}}</p>
         </div>
         <a class="settings-link" routerLink="/moei/smart-inspection/settings/sources">
           ⇧ {{copy('Manage Candidate Excel Sources','إدارة مصادر بيانات الترشيح من Excel')}} →

@@ -46,10 +46,18 @@ function context({enabled=true,output=okResponse}={}){
   return {targeting,prioritization,calls:()=>calls,
     cleanup:()=>rmSync(dir,{recursive:true,force:true})};
 }
+async function approveAll(targeting){
+  const dashboard=await targeting.dashboard();
+  for(const c of dashboard.candidates.filter(x=>x.status==='PENDING_REVIEW')){
+    await targeting.decide({candidateKey:c.key,imo:c.imo,action:'APPROVE',
+      actor:'POC Inspection Supervisor',note:'Human approval before SI-P01 execution ranking'});
+  }
+}
 test('preview is deterministic, saved-source-only and never calls P01',async()=>{
   const w=context();
   try{
     await w.targeting.receiveEvent(source());
+    await approveAll(w.targeting);
     const preview=await w.prioritization.preview();
     assert.equal(preview.status,'RULE_PREVIEW_ONLY_NO_AI');
     assert.equal(preview.eligibleCount,2);
@@ -67,6 +75,7 @@ test('explicit single call persists AI rank but NMC-approved hard tier remains f
   const w=context();
   try{
     await w.targeting.receiveEvent(source());
+    await approveAll(w.targeting);
     const p=await w.prioritization.preview();
     const run=await w.prioritization.run({
       actor:'Inspection Supervisor',confirmCost:true,
@@ -85,6 +94,7 @@ test('saved run is stable across refresh, never updates NMC or creates cases',as
   const w=context();
   try{
     await w.targeting.receiveEvent(source());
+    await approveAll(w.targeting);
     const p=await w.prioritization.preview();
     const before=await w.targeting.dashboard();
     await w.prioritization.run({actor:'Auditor',confirmCost:true,expectedSnapshotHash:p.snapshotHash});
@@ -93,7 +103,7 @@ test('saved run is stable across refresh, never updates NMC or creates cases',as
     assert.equal((await w.prioritization.history()).length,1);
     const after=await w.targeting.dashboard();
     assert.deepEqual(after.candidates,before.candidates);
-    assert.equal(after.summary.inspectionsCreated,0);
+    assert.equal(after.summary.inspectionsCreated,2);
     assert.equal(w.calls(),1);
   }finally{w.cleanup();}
 });
@@ -101,8 +111,14 @@ test('stale fingerprint blocks paid call before execution and flags prior run',a
   const w=context();
   try{
     await w.targeting.receiveEvent(source());
+    await approveAll(w.targeting);
     const p=await w.prioritization.preview();
     await w.targeting.receiveEvent(source('SR-02',vessels[2].imo));
+    // Pending source events never enter SI-P01: no stale flag or extra paid
+    // input until this new inspection case has been approved.
+    const unchanged=await w.prioritization.preview();
+    assert.equal(unchanged.snapshotHash,p.snapshotHash);
+    await approveAll(w.targeting);
     await assert.rejects(()=>w.prioritization.run({
       actor:'Officer',confirmCost:true,expectedSnapshotHash:p.snapshotHash
     }),e=>e.code==='SI_P01_SOURCE_CHANGED_REPREVIEW');
@@ -136,6 +152,7 @@ test('disabled, no consent, malformed output and fabricated refs fail closed',as
     }))
   })});
   try{
+    await approveAll(f.targeting);
     const p=await f.prioritization.preview();
     await assert.rejects(()=>f.prioritization.run({actor:'Officer',
       confirmCost:false,expectedSnapshotHash:p.snapshotHash}),
@@ -153,6 +170,7 @@ test('disabled, no consent, malformed output and fabricated refs fail closed',as
 test('missing-saved-risk cannot be represented as risk zero or fake assessment',async()=>{
   const w=context();
   try{
+    await approveAll(w.targeting);
     const p=await w.prioritization.preview();
     assert.equal(p.items.length,1);
     assert.equal(p.items[0].risk,null);
@@ -180,6 +198,22 @@ test('settings reject invalid weights, and new publish retains unchanged source 
     assert.equal(out.config.prioritization.weights.history,25);
     assert.deepEqual((await w.targeting.dashboard()).candidates[0].currentRisk,
       before.candidates[0].currentRisk);
+    assert.equal(w.calls(),0);
+  }finally{w.cleanup();}
+});
+
+test('SI-P01 never prioritizes selected-but-unapproved or raw port calls',async()=>{
+  const w=context();
+  try{
+    await w.targeting.receiveEvent(source());
+    let p=await w.prioritization.preview();
+    assert.equal(p.eligibleCount,0);
+    await w.targeting.decide({candidateKey:(await w.targeting.dashboard()).candidates[0].key,
+      imo:vessels[0].imo,action:'APPROVE',actor:'PSC Supervisor',
+      note:'Approve one SI case, not the NMC case'});
+    p=await w.prioritization.preview();
+    assert.equal(p.eligibleCount,1);
+    assert.equal(p.items[0].imo,vessels[0].imo);
     assert.equal(w.calls(),0);
   }finally{w.cleanup();}
 });

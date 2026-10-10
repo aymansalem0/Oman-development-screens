@@ -12,6 +12,7 @@ import { ErpWorkforceStore, SiError } from './si-erp-workforce.mjs';
 import { SiElectronicScheduler } from './si-electronic-scheduling.mjs';
 import { SiCandidateTargeting, SiTargetingError } from './si-candidate-targeting.mjs';
 import { SiSourceExcelImport } from './si-source-excel-import.mjs';
+import { SiPscSelection, SiSelectionError } from './si-psc-selection.mjs';
 import { SiAiPrioritization, SiPriorityError } from './si-ai-prioritization.mjs';
 import { SiInspectionPreparation, SiPreparationError } from './si-inspection-preparation.mjs';
 
@@ -72,6 +73,8 @@ const siTargeting=new SiCandidateTargeting({mode:dbMode,oracleRepository:reposit
   cases,riskPolicy,bundles:JSON.parse((await import('node:fs')).readFileSync(
     new URL('./fleet-bundles.json',import.meta.url),'utf8'))});
 const siSourceImports=new SiSourceExcelImport({targeting:siTargeting});
+const siPscSelection=new SiPscSelection({targeting:siTargeting,mode:dbMode,oracleRepository:repository});
+siTargeting.pscSelection=siPscSelection;
 const siPriority=new SiAiPrioritization({
   targeting:siTargeting,mode:dbMode,oracleRepository:repository,
   executeAgent:async input=>fleetAgentCall('p01',input),
@@ -463,6 +466,31 @@ const server = createServer(async (req, res) => {
           return respond(res,201,await siPriority.run(await requestJson(req,2048)));
         }
       }
+      if(req.method==='GET'&&path==='/api/si/v1/psc-selection/pool'){
+        dashboards.assertRole(req,'EDITOR');
+        const params=new URL(req.url||'/', 'http://localhost').searchParams;
+        const selectedPeriod=params.get('period');
+        const selectedPort=params.get('port');
+        return respond(res,200,await siPscSelection.pool({
+          period:selectedPeriod||null,port:selectedPort||null}));
+      }
+      if(req.method==='GET'&&path==='/api/si/v1/psc-selection/policy'){
+        dashboards.assertRole(req,'EDITOR');
+        return respond(res,200,{status:'ok',policy:await siPscSelection.policy()});
+      }
+      if(req.method==='POST'&&path==='/api/si/v1/psc-selection/policy/preview'){
+        dashboards.assertRole(req,'EDITOR');
+        const input=await requestJson(req,8192);
+        return respond(res,200,await siPscSelection.previewPolicy(input.config));
+      }
+      if(req.method==='POST'&&path==='/api/si/v1/psc-selection/policy/publish'){
+        dashboards.assertRole(req,'PUBLISHER');
+        return respond(res,201,{status:'ok',policy:await siPscSelection.publish(await requestJson(req,8192))});
+      }
+      if(req.method==='POST'&&path==='/api/si/v1/psc-selection/decision'){
+        dashboards.assertRole(req,'PUBLISHER');
+        return respond(res,201,{status:'ok',decision:await siPscSelection.decide(await requestJson(req,4096))});
+      }
       if(req.method==='GET'&&path==='/api/si/v1/candidates/dashboard')
         return respond(res,200,await siTargeting.dashboard());
       if(req.method==='GET'&&path==='/api/si/v1/rules')
@@ -491,7 +519,7 @@ const server = createServer(async (req, res) => {
       }
       return respond(res,405,{error:'METHOD_NOT_ALLOWED'});
     }catch(e){
-      if(e instanceof SiPriorityError||e instanceof SiPreparationError||e instanceof SiTargetingError||e instanceof DashboardError)
+      if(e instanceof SiSelectionError||e instanceof SiPriorityError||e instanceof SiPreparationError||e instanceof SiTargetingError||e instanceof DashboardError)
         return respond(res,e.status,{error:e.code});
       if(Number.isInteger(e?.status)&&e.status>=400&&e.status<500)
         return respond(res,e.status,{error:'SI_REQUEST_INVALID'});
@@ -923,6 +951,8 @@ try{
   }
   try{await siTargeting.initialize();}
   catch(error){console.error('[si-targeting] SI_MIGRATION_009_REQUIRED - candidate API disabled');}
+  try{await siPscSelection.initialize();}
+  catch(error){console.error('[si-selection] SI_MIGRATION_012_REQUIRED - PSC targeting/candidate API disabled');}
   try{await siPriority.initialize();}
   catch(error){console.error('[si-prioritization] SI_MIGRATION_011_REQUIRED - SI-P01 advisory disabled');}
   try{await siPreparation.initialize();}

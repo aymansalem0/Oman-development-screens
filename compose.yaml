@@ -34,6 +34,7 @@ services:
       # Does not modify Oracle schema, fleet assessments or NMC case history.
       SI_ERP_STORE_PATH: /data/si-erp-workforce.json
       SI_SCHEDULING_STORE_PATH: /data/si-scheduling-poc.json
+      SI_SELECTION_STORE_PATH: /data/si-psc-selection.json
       # A04 may incur paid AI requests. It NEVER runs on page load.
       # Explicitly opt in after API contract acceptance and source evidence review.
       SI_A04_ENABLED: ${SI_A04_ENABLED:-false}

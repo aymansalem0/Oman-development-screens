@@ -16,7 +16,8 @@ const clone=x=>JSON.parse(JSON.stringify(x));
 const now=()=>new Date().toISOString();
 const clob=x=>({type:oracledb.DB_TYPE_CLOB,val:JSON.stringify(x)});
 const safe=x=>typeof x==='string'?x.trim():'';
-const openStatus=new Set(['PENDING_REVIEW']);
+// Stage 2: execution ranking only AFTER a Publisher created an SI case.
+const openStatus=new Set(['INSPECTION_CREATED']);
 export class SiPriorityError extends Error{
   constructor(code,status=400){super(code);this.code=code;this.status=status;}
 }
@@ -93,7 +94,8 @@ function scoreCandidate(candidate,config,clock){
     candidate.currentRisk?.score>=config.riskPriorityThreshold?1:
     candidate.currentRisk?2:3;
   return {
-    candidateKey:candidate.key,imo:candidate.imo,vesselName:candidate.vesselName,
+    candidateKey:candidate.key,inspectionCaseId:candidate.inspectionCase?.id||null,
+    imo:candidate.imo,vesselName:candidate.vesselName,
     inspectionRegime:candidate.regime,eligibility:candidate.eligibility,
     sourceEvents:candidate.events.map(e=>({
       sourceType:e.sourceType,eventKey:e.eventKey,reference:e.sourceReference,
@@ -107,7 +109,7 @@ function scoreCandidate(candidate,config,clock){
 }
 export function buildSiPrioritySnapshot(dashboard,clock=Date.now()){
   const policy=getSiPrioritySettings(dashboard.policy.config);
-  const items=dashboard.candidates.filter(c=>openStatus.has(c.status))
+  const items=dashboard.candidates.filter(c=>openStatus.has(c.status)&&Boolean(c.inspectionCase?.id))
     .map(c=>scoreCandidate(c,dashboard.policy.config,clock));
   const ordered=[...items].sort((a,b)=>a.protectedTier-b.protectedTier||
     (b.provisionalScore??-1)-(a.provisionalScore??-1)||
@@ -121,8 +123,10 @@ export function buildSiPrioritySnapshot(dashboard,clock=Date.now()){
   const fingerprint=sha({
     policyVersion:dashboard.policy.version,policy,
     riskPolicyRevision:dashboard.riskPolicyRevision,fleetSnapshotId:dashboard.fleetSnapshotId,
-    candidates:dashboard.candidates.map(c=>({
-      key:c.key,status:c.status,eligibility:c.eligibility,priority:c.priority,
+    candidates:dashboard.candidates.filter(c=>
+      openStatus.has(c.status)&&Boolean(c.inspectionCase?.id)).map(c=>({
+      key:c.key,inspectionCaseId:c.inspectionCase.id,
+      status:c.status,eligibility:c.eligibility,priority:c.priority,
       regime:c.regime,currentRisk:c.currentRisk,
       arrivalTimingBand:arrivalBands.get(c.key)??null,
       events:c.events.map(e=>({eventKey:e.eventKey,sourceType:e.sourceType,
@@ -230,7 +234,7 @@ export class SiAiPrioritization{
       const snapshot=buildSiPrioritySnapshot(await this.targeting.dashboard(),this.clock());
       if(snapshot.snapshotHash!==request.expectedSnapshotHash)
         throw new SiPriorityError('SI_P01_SOURCE_CHANGED_REPREVIEW',409);
-      if(!snapshot.items.length)throw new SiPriorityError('SI_P01_NO_PENDING_CANDIDATES',422);
+      if(!snapshot.items.length)throw new SiPriorityError('SI_P01_NO_APPROVED_INSPECTIONS',422);
       if(snapshot.items.length>100)
         throw new SiPriorityError('SI_P01_BATCH_LIMIT_100_REQUIRES_SCOPING',422);
       const base={id:randomUUID(),actor:request.actor.trim(),
@@ -239,6 +243,7 @@ export class SiAiPrioritization{
         fleetSnapshotId:snapshot.fleetSnapshotId,
         snapshotHash:snapshot.snapshotHash,
         rules:snapshot.policy,requestedCandidates:snapshot.items.length,
+        inputScope:'APPROVED_INSPECTION_CASES_ONLY',
         source:'AIRIA_SI_P01_UNVERIFIED_ADVISORY',
         approvedNmcFirst:true,humanDecisionRequired:true};
       let run;
@@ -251,10 +256,10 @@ export class SiAiPrioritization{
           policy:{version:snapshot.policyVersion,...snapshot.policy},
           riskPolicyRevision:snapshot.riskPolicyRevision,
           snapshotHash:snapshot.snapshotHash,
-          candidates:snapshot.items.map(({candidateKey,imo,vesselName,inspectionRegime,eligibility,
+          candidates:snapshot.items.map(({candidateKey,inspectionCaseId,imo,vesselName,inspectionRegime,eligibility,
             sourceEvents,risk,rulePriority,protectedTier,provisionalScore,availableWeight,
             factors,missingData,allowedEvidence,ruleRank})=>({
-              candidateKey,imo,vesselName,inspectionRegime,eligibility,sourceEvents,risk,
+              candidateKey,inspectionCaseId,imo,vesselName,inspectionRegime,eligibility,sourceEvents,risk,
               rulePriority,protectedTier,provisionalScore,availableWeight,
               factors,missingData,allowedEvidence,ruleRank
             }))

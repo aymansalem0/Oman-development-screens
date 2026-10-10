@@ -78,6 +78,7 @@ export class SiCandidateTargeting{
     this.imoSet=new Set(this.bundles.map(x=>String(x.imo)));
     this.fleetSnapshotId='SI-FLEET-'+hash(this.bundles.map(v=>String(v.imo)).sort().join('|')).slice(0,16);
     this.ready=mode==='json';
+    this.pscSelection=null; // Injected targeting gate; source imports stay in PSC pool.
   }
   _load(){
     if(!existsSync(this.file))return {events:[],decisions:[],cases:[],
@@ -214,12 +215,24 @@ export class SiCandidateTargeting{
           nmcCaseId:r.caseId,sourceAssessmentId:r.sourceAssessmentId}
       }));
   }
-  _evaluate(state,referrals,risks,rules){
+  _evaluate(state,referrals,risks,rules,selectedPscKeys=null){
     const byImo=new Map(this.bundles.map(x=>[String(x.imo),x]));
     const groups=new Map();
     const events=[...state.events,...this._eventsForNmc(referrals)];
     for(const e of events){
       const p=e.payload;if(!byImo.has(p.imo))continue;
+      if(p.sourceType==='PSC_PORT_CALL'&&selectedPscKeys){
+        // Keep pre-migration PSC approvals/cases visible as historical
+        // workflows; newly imported PSC events require explicit selection.
+        const legacyKey=hash(p.imo+'|'+p.requestedRegime);
+        // A historical (pre-quota) case must not automatically unlock
+        // newly arriving Port Calls for the same vessel and regime.
+        const legacyHandled=state.cases.some(c=>c.candidateKey===legacyKey&&
+          e.createdAt<=(c.createdAt||''))||
+          state.decisions.some(d=>d.candidateKey===legacyKey&&
+          e.createdAt<=(d.at||''));
+        if(!selectedPscKeys.has(e.eventKey)&&!legacyHandled)continue;
+      }
       const groupKey=hash(p.imo+'|'+p.requestedRegime);
       if(!groups.has(groupKey))groups.set(groupKey,{key:groupKey,imo:p.imo,
         regime:p.requestedRegime,events:[]});
@@ -327,7 +340,12 @@ export class SiCandidateTargeting{
     if(!this.riskPolicy.ready)throw new SiTargetingError('SI_RISK_POLICY_NOT_READY',503);
     const projection=await this.riskPolicy.projectCurrent();
     const risks=new Map(projection.projections.filter(p=>p?.sourceAssessmentId).map(p=>[p.imo,p]));
-    const policy=state.rules.at(-1),candidates=this._evaluate(state,referrals,risks,policy.config);
+    // PSC events remain in an independent targeting pool until a Publisher
+    // explicitly selects them. NMC approved referrals and Service Requests
+    // retain their existing independent business pathways.
+    const selectedPscKeys=this.pscSelection?await this.pscSelection.selectedEventKeys():null;
+    const policy=state.rules.at(-1),candidates=this._evaluate(
+      state,referrals,risks,policy.config,selectedPscKeys);
     const vesselCandidates=this._vesselCandidates(candidates);
     const summary={evaluatedPopulation:this.bundles.length,assessedRiskVessels:risks.size,
       candidateVessels:vesselCandidates.length,
