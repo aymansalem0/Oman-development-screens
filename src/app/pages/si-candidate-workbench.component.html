@@ -269,16 +269,16 @@
           <p *ngIf="c.inspectionCase"><strong>{{copy("Inspection Case:","حالة المعاينة:")}}</strong> {{c.inspectionCase.id}} · {{c.inspectionCase.status}}</p>
           <a *ngIf="c.inspectionCase" class="prepare-link" [routerLink]="['/moei/smart-inspection/preparation',c.inspectionCase.id]">{{copy("Open Preparation & A04 Dossier →","فتح التحضير وملف A04 →")}}</a>
         </div>
-        <ng-container *ngIf="c.status!=='INSPECTION_CREATED'&&c.status!=='EXTERNALLY_SCHEDULED'">
+        <ng-container *ngIf="c.status!=='INSPECTION_CREATED'">
           <label>{{copy("Decision rationale","مبررات القرار")}} <span class="required">*</span><textarea [(ngModel)]="decisionNote" rows="3" maxlength="500" [placeholder]="copy('State the decision justification','اكتب مبررات القرار والأساس الإداري أو التنظيمي')"></textarea></label>
           <div class="decision-actions">
-            <button class="primary" type="button" [disabled]="busy" (click)="decide('APPROVE')">{{copy("Approve & Create SI Case","اعتماد وإنشاء حالة معاينة")}}</button>
-            <button type="button" [disabled]="busy" (click)="decide('DEFER')">{{copy("Defer","تأجيل")}}</button>
-            <button type="button" [disabled]="busy" (click)="decide('REJECT')">{{copy("Reject","رفض")}}</button>
+            <button class="primary" type="button" [disabled]="busy" (click)="decide('APPROVE')">{{c.status==='EXTERNALLY_SCHEDULED'?copy('Link Scheduled NMC Referral to SI Case','ربط إحالة NMC المجدولة بحالة معاينة'):copy('Approve & Create SI Case','اعتماد وإنشاء حالة معاينة')}}</button>
+            <button *ngIf="c.status!=='EXTERNALLY_SCHEDULED'" type="button" [disabled]="busy" (click)="decide('DEFER')">{{copy("Defer","تأجيل")}}</button>
+            <button *ngIf="c.status!=='EXTERNALLY_SCHEDULED'" type="button" [disabled]="busy" (click)="decide('REJECT')">{{copy("Reject","رفض")}}</button>
           </div>
           <p class="hint">{{copy("Approval requires a supervisor Publisher key; no Airia execution, regulatory determination or automatic scheduling.","يتطلب الاعتماد صلاحية المشرف. لا يتم تشغيل Airia أو اتخاذ قرار تنظيمي أو جدولة المعاينة تلقائيًا.")}}</p>
         </ng-container>
-        <p *ngIf="c.status==='EXTERNALLY_SCHEDULED'" class="notice">{{copy("This NMC referral has already been scheduled. No duplicate SI case will be created.","هذه الإحالة مجدولة بالفعل في المركز البحري؛ لن تُنشأ حالة معاينة مكررة.")}}</p>
+        <p *ngIf="c.status==='EXTERNALLY_SCHEDULED'" class="notice">{{copy("This approved NMC referral has an existing booking. Supervisor may link it to ONE SI execution case; no new NMC schedule or second visit is created.","لدى إحالة NMC المعتمدة موعد قائم. يمكن للمشرف ربطها بحالة تنفيذ SI واحدة، دون إنشاء موعد جديد أو زيارة ثانية.")}}</p>
         </ng-container>
       </section>
 
