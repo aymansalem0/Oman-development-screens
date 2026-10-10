@@ -110,6 +110,19 @@ export class SiCandidateTargeting{
   async policy(){
     const state=await this._state();return copy(state.rules.at(-1));
   }
+  /** Only business-approved SI cases may enter the AI dossier workflow. */
+  async inspectionCase(id){
+    if(typeof id!=='string'||!/^[a-f0-9-]{36}$/i.test(id))
+      throw new SiTargetingError('SI_CASE_ID_INVALID',422);
+    this.assertReady();
+    if(this.mode==='json')return copy(this._load().cases.find(c=>c.id===id)||null);
+    return this._db(async con=>{
+      const r=await con.execute(
+        'SELECT DOC_JSON FROM SI_INSPECTION_CASE WHERE CASE_ID=:id',
+        {id},{outFormat:oracledb.OUT_FORMAT_OBJECT});
+      return r.rows.length?JSON.parse(r.rows[0].DOC_JSON):null;
+    });
+  }
   _validateEvent(input){
     if(!input||!validSource.includes(input.sourceType)||!isImo(input.imo)||
       !this.imoSet.has(input.imo)||!allowedRegimes.includes(input.requestedRegime)||
