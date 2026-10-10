@@ -4,7 +4,7 @@ import {FormsModule} from '@angular/forms';
 import {RouterLink} from '@angular/router';
 import {NmcNavigationComponent} from '../components/nmc-navigation.component';
 import {LanguageService} from '../services/language.service';
-import {SiCandidateTargetingService,SiDashboard,SiImpact} from '../services/si-candidate-targeting.service';
+import {SiCandidateTargetingService,SiDashboard,SiImpact,SiPriorityWeights,SiTargetingPolicyConfig} from '../services/si-candidate-targeting.service';
 
 /** Targeting priority belongs to Inspection Settings; no legal rules are edited here. */
 @Component({
@@ -44,6 +44,33 @@ import {SiCandidateTargetingService,SiDashboard,SiImpact} from '../services/si-c
             <label>{{copy('Proposed priority threshold (0–100)','حد الأولوية المقترح (٠–١٠٠)')}}
               <input type="number" min="0" max="100" step="1" [(ngModel)]="threshold" (ngModelChange)="impact=null"/>
             </label>
+            <div class="priority-settings">
+              <h3>{{copy('AI Prioritization Criteria — Published Weights','معايير ترتيب المعاينات باستخدام AI — الأوزان المنشورة')}}</h3>
+              <p>{{copy('Configure the operational priority criteria sent to SI-P01. All five weights must total 100%. These do not modify official NMC Risk or legal eligibility.',
+                'حدد معايير ترتيب الأولوية التشغيلية التي تُرسل للوكيل SI-P01. يجب أن يكون مجموع الأوزان ١٠٠٪ دون تغيير مخاطر NMC الرسمية أو الأهلية القانونية.')}}</p>
+              <div class="weights-grid">
+                <label>{{copy('Saved Vessel Risk','مخاطر السفينة المحفوظة')}} %
+                  <input type="number" min="0" max="100" [(ngModel)]="weights.risk" (ngModelChange)="impact=null"/>
+                </label>
+                <label>{{copy('Inspection Trigger','سبب ترشيح المعاينة')}} %
+                  <input type="number" min="0" max="100" [(ngModel)]="weights.trigger" (ngModelChange)="impact=null"/>
+                </label>
+                <label>{{copy('Inspection History','سجل المعاينات')}} %
+                  <input type="number" min="0" max="100" [(ngModel)]="weights.history" (ngModelChange)="impact=null"/>
+                </label>
+                <label>{{copy('Inspection Deadline','موعد المعاينة')}} %
+                  <input type="number" min="0" max="100" [(ngModel)]="weights.deadline" (ngModelChange)="impact=null"/>
+                </label>
+                <label>{{copy('Operational Urgency','الاستعجال التشغيلي')}} %
+                  <input type="number" min="0" max="100" [(ngModel)]="weights.urgency" (ngModelChange)="impact=null"/>
+                </label>
+              </div>
+              <p [class.invalid]="weightTotal!==100"><strong>{{copy('Total','الإجمالي')}}: {{weightTotal}}%</strong> ·
+                {{copy('NMC-approved referrals remain first; missing risk requires manual review. Missing factors are never fabricated.',
+                  'تظل إحالات NMC المعتمدة أولًا، وتحتاج المخاطر الناقصة مراجعة بشرية. لا يتم اختلاق عوامل غير متوفرة.')}}</p>
+              <p class="hint">{{copy('Illustrative POC weighting, not a Ministry-approved statutory targeting model.',
+                'أوزان تجريبية وليست نموذج استهداف تنظيميًا معتمدًا من الوزارة.')}}</p>
+            </div>
             <label>{{copy('Editor key','مفتاح المحرر')}}
               <input type="password" [(ngModel)]="editorKey" autocomplete="off"/>
             </label>
@@ -105,6 +132,12 @@ import {SiCandidateTargetingService,SiDashboard,SiImpact} from '../services/si-c
     label{font-size:12px;font-weight:750;color:#385c6e;display:block;margin:18px 0}
     input,textarea{display:block;width:100%;box-sizing:border-box;margin:8px 0 0;
       padding:11px 12px;border:1px solid #cbdce4;border-radius:9px;color:#1c435a;font:inherit}
+    .priority-settings{margin:17px 0;border:1px solid #dbe9eb;padding:16px;border-radius:10px;background:#f5faf9}
+    .priority-settings h3{font-size:14px;color:#18516b;margin:0 0 8px}
+    .priority-settings p{font-size:11px;margin:10px 0;line-height:1.55}
+    .priority-settings p.invalid strong{color:#b63a2b}
+    .weights-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 11px}
+    @media(max-width:600px){.weights-grid{grid-template-columns:1fr}}
     .primary{padding:11px 14px;background:#087b93;border:1px solid #087b93;color:white;
       font-size:12px;border-radius:8px;font-weight:800;cursor:pointer}
     button:disabled{opacity:.5;cursor:not-allowed}
@@ -122,13 +155,24 @@ export class SiTargetingSettingsComponent implements OnInit{
   dashboard:SiDashboard|null=null;impact:SiImpact|null=null;
   loading=false;busy=false;error='';success='';
   threshold=65;reviewer='';reason='';editorKey='';publisherKey='';
+  weights:SiPriorityWeights={risk:30,trigger:25,history:20,deadline:15,urgency:10};
+  get weightTotal():number{return Object.values(this.weights).reduce((sum,x)=>sum+Number(x||0),0);}
+  private proposedConfig():SiTargetingPolicyConfig{
+    return {riskPriorityThreshold:Number(this.threshold),
+      includeMissingRiskInReview:true,
+      prioritization:{weights:{...this.weights},approvedNmcFirst:true,
+        missingRiskAction:'REVIEW_REQUIRED'}};
+  }
   constructor(private readonly api:SiCandidateTargetingService,public readonly lang:LanguageService){}
   copy(en:string,ar:string){return this.lang.pick(en,ar);}
   ngOnInit():void{this.refresh();}
   refresh():void{
     this.loading=true;this.error='';this.impact=null;
     this.api.dashboard().subscribe({
-      next:d=>{this.dashboard=d;this.threshold=d.policy.config.riskPriorityThreshold;this.loading=false;},
+      next:d=>{this.dashboard=d;this.threshold=d.policy.config.riskPriorityThreshold;
+        this.weights={...(d.policy.config.prioritization?.weights||
+          {risk:30,trigger:25,history:20,deadline:15,urgency:10})};
+        this.loading=false;},
       error:e=>{this.showError(e);this.loading=false;}
     });
   }
@@ -142,9 +186,12 @@ export class SiTargetingSettingsComponent implements OnInit{
     if(!Number.isInteger(Number(this.threshold))||Number(this.threshold)<0||Number(this.threshold)>100){
       this.error=this.copy('Threshold must be an integer from 0 to 100','يجب أن يكون الحد عددًا صحيحًا بين ٠ و١٠٠');return;
     }
+    if(this.weightTotal!==100||Object.values(this.weights).some(x=>!Number.isInteger(Number(x))||Number(x)<0||Number(x)>100)){
+      this.error=this.copy('All criterion weights must be integers totaling 100%.',
+        'يجب أن تكون الأوزان أعدادًا صحيحة ومجموعها ١٠٠٪.');return;
+    }
     this.busy=true;this.error='';this.impact=null;this.success='';
-    this.api.preview({riskPriorityThreshold:Number(this.threshold),
-      includeMissingRiskInReview:true},this.editorKey.trim()).subscribe({
+    this.api.preview(this.proposedConfig(),this.editorKey.trim()).subscribe({
       next:impact=>{this.impact=impact;this.busy=false;},
       error:e=>this.showError(e)
     });
@@ -159,8 +206,7 @@ export class SiTargetingSettingsComponent implements OnInit{
       'Publish a new targeting priority version? NMC risk, AI assessments and legal eligibility stay unchanged.',
       'نشر إصدار جديد للأولوية؟ لن تتغير تقييمات المخاطر أو نتائج AI أو الأهلية القانونية.')))return;
     this.busy=true;this.error='';
-    this.api.publish({config:{riskPriorityThreshold:Number(this.threshold),
-      includeMissingRiskInReview:true},expectedVersion:this.dashboard.policy.version,
+    this.api.publish({config:this.proposedConfig(),expectedVersion:this.dashboard.policy.version,
       publishedBy:this.reviewer.trim(),reason:this.reason.trim()},
       this.publisherKey.trim()).subscribe({
       next:()=>{
