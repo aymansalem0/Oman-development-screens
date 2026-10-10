@@ -119,6 +119,8 @@ export class SiInspectionPreparationComponent implements OnInit{
       'APPROVED':'معتمد',
       'REJECTED':'مرفوض',
       'FAILED':'فشل',
+      'APPROVE':'اعتماد',
+      'REJECT':'رفض',
       'ENABLED':'مفعّل',
       'DISABLED':'غير مفعّل',
       'High':'مرتفع',
