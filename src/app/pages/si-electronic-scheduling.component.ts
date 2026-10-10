@@ -3,6 +3,7 @@ import {Component,OnInit} from '@angular/core';
 import {FormsModule} from '@angular/forms';
 import {HttpClient,HttpHeaders} from '@angular/common/http';
 import {RouterLink} from '@angular/router';
+import {NmcNavigationComponent} from '../components/nmc-navigation.component';
 import {NmcInspectionReferral} from '../services/nmc-cases.service';
 import {getOperationalVesselByImo} from '../data/nmc-expanded-vessel-catalog';
 
@@ -34,7 +35,7 @@ interface SiPolicy{
 }
 @Component({
   selector:'app-si-electronic-scheduling',standalone:true,
-  imports:[CommonModule,FormsModule,RouterLink],
+  imports:[CommonModule,FormsModule,RouterLink,NmcNavigationComponent],
   templateUrl:'./si-electronic-scheduling.component.html',
   styleUrl:'./si-electronic-scheduling.component.css'
 })
