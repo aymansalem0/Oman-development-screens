@@ -144,7 +144,7 @@ export class CentralRiskPolicy{
       this.ready=true;
     }catch(e){
       if(e instanceof RiskPolicyError)throw e;
-      throw new RiskPolicyError('RISK_POLICY_SCHEMA_NOT_READY',503,e);
+      throw new RiskPolicyError('RISK_POLICY_SCHEMA_NOT_READY',503);
     }
   }
   requireReady(){if(!this.ready)throw new RiskPolicyError('RISK_POLICY_SCHEMA_NOT_READY',503,e);}
