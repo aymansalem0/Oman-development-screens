@@ -419,7 +419,7 @@ const server = createServer(async (req, res) => {
         dashboards.assertRole(req,'EDITOR');
         return respond(res,200,await siLifecycle.list());
       }
-      const lifecyclePath=/^\\/api\\/si\\/v1\\/lifecycle\\/([0-9a-f-]{36})(?:\\/(actions))?$/.exec(path);
+      const lifecyclePath=/^\/api\/si\/v1\/lifecycle\/([0-9a-f-]{36})(?:\/(actions))?$/.exec(path);
       if(lifecyclePath){
         const id=lifecyclePath[1],suffix=lifecyclePath[2];
         if(req.method==='GET'&&!suffix){
