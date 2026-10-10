@@ -5,10 +5,12 @@
       <div>
         <small>{{copy("MOEI · SMART INSPECTION · STEPS 00–04","وزارة الطاقة والبنية التحتية · المعاينة الذكية · المراحل ٠٠–٠٤")}}</small>
         <h1>{{copy("Inspection Candidate & Targeting Center","مركز ترشيح المعاينات والاستهداف")}}</h1>
-        <p>{{copy('All active vessels · Traceable decisions · No automatic AI calls','كل السفن النشطة · قرارات قابلة للتتبع · دون استدعاءات AI تلقائية')}}</p>
+        <p>{{copy('Only selected/approved inspection workflows · One row per IMO · No automatic AI calls',
+'مسارات المعاينة المختارة أو المعتمدة فقط · صف واحد لكل IMO · دون تشغيل AI تلقائي')}}</p>
       </div>
       <div class="hero-actions">
         <a routerLink="/moei/nmc">{{copy("NMC Command Center","مركز القيادة البحري")}}</a>
+        <a routerLink="/moei/smart-inspection/psc-targeting">{{copy('PSC Targeting Pool ↗','قائمة استهداف PSC ↗')}}</a>
         <a routerLink="/moei/smart-inspection/scheduling">{{copy("Electronic Scheduling ↗","الجدولة الإلكترونية ↗")}}</a>
         <button type="button" (click)="refresh()" [disabled]="loading||busy">{{copy("↻ Refresh","↻ تحديث")}}</button>
       </div>
@@ -290,8 +292,8 @@
 
       <section class="si-panel">
         <header><h2>{{copy('04 · Candidate Data Sources','٠٤ · مصادر بيانات المرشحين')}}</h2>
-          <p>{{copy('NMC remains live-connected. Service Requests and PSC Port Calls now enter the queue through validated Excel imports managed in Inspection Settings.',
-            'تظل إحالات NMC متصلة مباشرة، بينما تُستورد طلبات الخدمات وإخطارات نداء الموانئ من Excel بعد التحقق من البيانات ضمن إعدادات المعاينات.')}}</p></header>
+          <p>{{copy('NMC referrals enter directly; Service Requests enter after Excel import; PSC Port Calls remain in the targeting pool until explicitly selected by a Publisher under the monthly quota.',
+            'تدخل إحالات NMC مباشرة وطلبات الخدمات بعد الاستيراد، لكن إخطارات PSC تظل بقائمة الاستهداف حتى يعتمد المشرف اختيارها ضمن الحصة الشهرية.')}}</p></header>
         <div class="source-overview">
           <p><strong>{{copy('NMC','المركز البحري')}}:</strong>
             {{dashboard?.summary?.bySource?.['NMC_CASE']||0}}
@@ -301,7 +303,7 @@
             {{copy('candidate vessels from Excel','سفن مرشحة من Excel')}}</p>
           <p><strong>{{copy('PSC Port Calls','إخطارات نداء الموانئ')}}:</strong>
             {{dashboard?.summary?.bySource?.['PSC_PORT_CALL']||0}}
-            {{copy('candidate vessels from Excel','سفن مرشحة من Excel')}}</p>
+            {{copy('selected PSC inspection workflows only','مسارات PSC التي تم اختيارها فقط')}}</p>
         </div>
         <a class="settings-link" routerLink="/moei/smart-inspection/settings/sources">
           ⇧ {{copy('Manage Candidate Excel Sources','إدارة مصادر بيانات الترشيح من Excel')}} →
