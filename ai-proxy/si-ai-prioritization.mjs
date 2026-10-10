@@ -94,7 +94,8 @@ function scoreCandidate(candidate,config,clock){
     candidate.currentRisk?.score>=config.riskPriorityThreshold?1:
     candidate.currentRisk?2:3;
   return {
-    candidateKey:candidate.key,imo:candidate.imo,vesselName:candidate.vesselName,
+    candidateKey:candidate.key,inspectionCaseId:candidate.inspectionCase?.id||null,
+    imo:candidate.imo,vesselName:candidate.vesselName,
     inspectionRegime:candidate.regime,eligibility:candidate.eligibility,
     sourceEvents:candidate.events.map(e=>({
       sourceType:e.sourceType,eventKey:e.eventKey,reference:e.sourceReference,
@@ -122,8 +123,10 @@ export function buildSiPrioritySnapshot(dashboard,clock=Date.now()){
   const fingerprint=sha({
     policyVersion:dashboard.policy.version,policy,
     riskPolicyRevision:dashboard.riskPolicyRevision,fleetSnapshotId:dashboard.fleetSnapshotId,
-    candidates:dashboard.candidates.map(c=>({
-      key:c.key,status:c.status,eligibility:c.eligibility,priority:c.priority,
+    candidates:dashboard.candidates.filter(c=>
+      openStatus.has(c.status)&&Boolean(c.inspectionCase?.id)).map(c=>({
+      key:c.key,inspectionCaseId:c.inspectionCase.id,
+      status:c.status,eligibility:c.eligibility,priority:c.priority,
       regime:c.regime,currentRisk:c.currentRisk,
       arrivalTimingBand:arrivalBands.get(c.key)??null,
       events:c.events.map(e=>({eventKey:e.eventKey,sourceType:e.sourceType,
@@ -253,10 +256,10 @@ export class SiAiPrioritization{
           policy:{version:snapshot.policyVersion,...snapshot.policy},
           riskPolicyRevision:snapshot.riskPolicyRevision,
           snapshotHash:snapshot.snapshotHash,
-          candidates:snapshot.items.map(({candidateKey,imo,vesselName,inspectionRegime,eligibility,
+          candidates:snapshot.items.map(({candidateKey,inspectionCaseId,imo,vesselName,inspectionRegime,eligibility,
             sourceEvents,risk,rulePriority,protectedTier,provisionalScore,availableWeight,
             factors,missingData,allowedEvidence,ruleRank})=>({
-              candidateKey,imo,vesselName,inspectionRegime,eligibility,sourceEvents,risk,
+              candidateKey,inspectionCaseId,imo,vesselName,inspectionRegime,eligibility,sourceEvents,risk,
               rulePriority,protectedTier,provisionalScore,availableWeight,
               factors,missingData,allowedEvidence,ruleRank
             }))
