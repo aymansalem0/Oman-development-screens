@@ -114,6 +114,11 @@ test('stale fingerprint blocks paid call before execution and flags prior run',a
     await approveAll(w.targeting);
     const p=await w.prioritization.preview();
     await w.targeting.receiveEvent(source('SR-02',vessels[2].imo));
+    // Pending source events never enter SI-P01: no stale flag or extra paid
+    // input until this new inspection case has been approved.
+    const unchanged=await w.prioritization.preview();
+    assert.equal(unchanged.snapshotHash,p.snapshotHash);
+    await approveAll(w.targeting);
     await assert.rejects(()=>w.prioritization.run({
       actor:'Officer',confirmCost:true,expectedSnapshotHash:p.snapshotHash
     }),e=>e.code==='SI_P01_SOURCE_CHANGED_REPREVIEW');
