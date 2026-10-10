@@ -154,3 +154,48 @@ test('published A03 weight recalculates only source assessments with a validated
   assert.equal(validateRiskConfig(baseline).weights.documentIntegrity,0);
   assert.equal(calculateRiskPolicy(assessment,baseline,1).factorSnapshot.factors.length,5);
 });
+
+test('legacy A03 zero POC preview is explicitly opt-in, risk-labeled and never source evidence',async()=>{
+  const policy={...baseline,weights:{movement:23,inspection:25,
+    certificate:18,dataQuality:13,history:11,documentIntegrity:10}};
+  const synthetic={...assessment,sourceNature:'SYNTHETIC_NOT_RIYADH_MOU'};
+  assert.equal(calculateRiskPolicy(synthetic,policy,4),null,
+    'Default must fail closed without A03');
+  const p=calculateRiskPolicy(synthetic,policy,4,{legacyA03ZeroPreview:true});
+  assert.ok(p);
+  assert.equal(p.provisional,true);
+  assert.equal(p.operationalDecisionAllowed,false);
+  assert.equal(p.provisionalReason,'A03_NOT_ASSESSED_ZERO_PLACEHOLDER');
+  assert.equal(p.factorSnapshot.factors.length,6);
+  const doc=p.factorSnapshot.factors.at(-1);
+  assert.equal(doc.key,'documentIntegrity');
+  assert.equal(doc.severity,0);
+  assert.equal(doc.weight,10);
+  assert.equal(doc.evidenceStatus,'NOT_ASSESSED');
+  assert.equal(doc.confidence,0);
+  assert.deepEqual(doc.evidenceIds,[]);
+  assert.equal(p.operationalPriority,'Pending A03 Evidence');
+  assert.equal(assessment.signals.length,5);
+  assert.equal(assessment.score,60);
+  const actualDoc={...synthetic,signals:[
+    ...synthetic.signals,{factor:'documentIntegrity',severity:57,
+      sourceAgent:'A03',confidence:0.7,evidenceIds:['GDOC-SYNTHETIC']} ]};
+  assert.equal(calculateRiskPolicy(actualDoc,policy,4)?.provisional,false);
+  assert.equal(calculateRiskPolicy({...synthetic,sourceNature:'VERIFIED_AUTHORITY'},
+    policy,4,{legacyA03ZeroPreview:true}),null);
+  const dir=mkdtempSync(join(tmpdir(),'nmc-policy-provisional-'));
+  try{
+    const file=join(dir,'risk.json');
+    const fleet={results:{'9328471':synthetic}};
+    const svc=new CentralRiskPolicy({mode:'json',file,fleet,legacyA03ZeroPreview:true});
+    await svc.initialize();
+    const resp=await svc.publish({expectedRevision:1,config:policy,
+      publishedBy:'NMC POC Operator',reason:'Exercise provisional zero under six factors'});
+    assert.equal(resp.projectionCount,1);
+    const current=await svc.projectCurrent();
+    assert.equal(current.assessed,0);
+    assert.equal(current.provisionalAssessed,1);
+    assert.equal(current.projections[0].provisional,true);
+    assert.equal((await svc.projectionHistory('9328471'))[0].factorSnapshot.provisional,1);
+  }finally{rmSync(dir,{recursive:true,force:true});}
+});
