@@ -18,6 +18,21 @@ export interface SiCandidate{
   inspectionCase:{id:string;status:string;createdAt:string;approvedBy:string}|null;
   lastDecision:{id:string;action:string;actor:string;note:string;at:string}|null;
 }
+/** One grid row per vessel IMO; individual regimes remain independent decisions. */
+export interface SiVesselCandidate{
+  imo:string;vesselName:string;flag:string;vesselType:string;
+  currentRisk:SiCandidate['currentRisk'];
+  candidateKeys:string[];regimes:SiRegime[];
+  sourceTypes:SiCandidateEvent['sourceType'][];
+  sourceEvents:SiCandidateEvent[];
+  workflows:{
+    candidateKey:string;regime:SiRegime;status:SiCandidateStatus;
+    eligibility:SiCandidate['eligibility'];priority:string;
+    eventCount:number;inspectionCaseId:string|null;
+  }[];
+  pendingWorkflows:number;createdWorkflows:number;scheduledWorkflows:number;
+  highestPriority:string;eligibility:SiCandidate['eligibility'];
+}
 export interface SiPriorityWeights{
   risk:number;trigger:number;history:number;deadline:number;urgency:number;
 }
@@ -37,8 +52,9 @@ export interface SiDashboard{
     evaluatedPopulation:number;assessedRiskVessels:number;candidates:number;
     pendingReview:number;inspectionsCreated:number;externalScheduled:number;
     bySource:Record<string,number>;
+    candidateVessels:number;pendingVessels:number;createdVessels:number;
   };
-  candidates:SiCandidate[];
+  candidates:SiCandidate[];vesselCandidates:SiVesselCandidate[];
 }
 export interface SiPriorityRecommendation{
   candidateKey:string;imo:string;vesselName:string;regime:string;

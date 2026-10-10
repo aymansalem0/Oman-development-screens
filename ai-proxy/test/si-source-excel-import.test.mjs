@@ -120,9 +120,22 @@ test('PSC and service feeds for same IMO become separate candidate regimes',asyn
     assert.equal(port.newEvents,1);
     await w.service.commit({previewId:port.previewId,sourceType:'PSC_PORT_CALL',actor:'Operator'});
     const q=(await w.targeting.dashboard()).candidates.filter(c=>c.imo===fleet[0].imo);
+    // Two separate statutory inspection workflows — but ONE physical vessel
+    // row for IMO 9100000, combining both independent Excel source events.
     assert.equal(q.length,2);
     assert.deepEqual(new Set(q.map(c=>c.regime)),
       new Set(['PORT_STATE_CONTROL','UAE_SERVICE_INSPECTION']));
+    const dashboard=await w.targeting.dashboard();
+    const unique=dashboard.vesselCandidates.filter(v=>v.imo===fleet[0].imo);
+    assert.equal(unique.length,1);
+    assert.equal(unique[0].sourceTypes.length,2);
+    assert.deepEqual(new Set(unique[0].sourceTypes),
+      new Set(['SERVICE_REQUEST','PSC_PORT_CALL']));
+    assert.equal(unique[0].sourceEvents.length,2);
+    assert.equal(unique[0].workflows.length,2);
+    assert.equal(unique[0].pendingWorkflows,2);
+    assert.equal(dashboard.summary.candidateVessels,2);
+    assert.equal(dashboard.summary.candidates,3);
     assert.ok(q.every(c=>c.eligibility==='MANUAL_REVIEW'));
   }finally{w.cleanup();}
 });

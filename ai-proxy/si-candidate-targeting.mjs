@@ -268,13 +268,71 @@ export class SiCandidateTargeting{
       (b.currentRisk?.score??-1)-(a.currentRisk?.score??-1)||a.imo.localeCompare(b.imo));
     return list;
   }
+  /**
+   * One display record per physical vessel (IMO). Never collapse underlying
+   * inspection-regime candidates, their case IDs or independent officer
+   * decisions: PSC and Service Requests are different statutory workflows.
+   * A single vessel may have multiple source events and multiple actions.
+   */
+  _vesselCandidates(candidates){
+    const vessels=new Map();
+    for(const c of candidates){
+      let item=vessels.get(c.imo);
+      if(!item){
+        item={imo:c.imo,vesselName:c.vesselName,flag:c.flag,
+          vesselType:c.vesselType,currentRisk:c.currentRisk,
+          candidateKeys:[],regimes:[],sourceTypes:[],sourceEvents:[],
+          workflows:[],pendingWorkflows:0,createdWorkflows:0,
+          scheduledWorkflows:0,highestPriority:'RISK_UNASSESSED',
+          eligibility:'MANUAL_REVIEW'};
+        vessels.set(c.imo,item);
+      }
+      item.candidateKeys.push(c.key);
+      if(!item.regimes.includes(c.regime))item.regimes.push(c.regime);
+      item.workflows.push({candidateKey:c.key,regime:c.regime,
+        status:c.status,eligibility:c.eligibility,priority:c.priority,
+        eventCount:c.events.length,
+        inspectionCaseId:c.inspectionCase?.id||null});
+      if(c.status==='PENDING_REVIEW')item.pendingWorkflows++;
+      if(c.status==='INSPECTION_CREATED')item.createdWorkflows++;
+      if(c.status==='EXTERNALLY_SCHEDULED')item.scheduledWorkflows++;
+      if(c.priority==='PRIORITY')item.highestPriority='PRIORITY';
+      else if(c.priority==='STANDARD'&&item.highestPriority!=='PRIORITY')
+        item.highestPriority='STANDARD';
+      if(c.eligibility==='MANDATORY')item.eligibility='MANDATORY';
+      for(const e of c.events){
+        if(!item.sourceTypes.includes(e.sourceType))item.sourceTypes.push(e.sourceType);
+        if(!item.sourceEvents.some(existing=>existing.eventKey===e.eventKey))
+          item.sourceEvents.push(e);
+      }
+    }
+    const sourceOrder=['NMC_CASE','SERVICE_REQUEST','PSC_PORT_CALL'];
+    const regimeOrder=['FOCUSED_INSPECTION','UAE_SERVICE_INSPECTION',
+      'PORT_STATE_CONTROL','FOLLOW_UP_INSPECTION'];
+    for(const item of vessels.values()){
+      item.sourceTypes.sort((a,b)=>sourceOrder.indexOf(a)-sourceOrder.indexOf(b));
+      item.regimes.sort((a,b)=>regimeOrder.indexOf(a)-regimeOrder.indexOf(b));
+      item.workflows.sort((a,b)=>regimeOrder.indexOf(a.regime)-regimeOrder.indexOf(b.regime));
+      item.sourceEvents.sort((a,b)=>sourceOrder.indexOf(a.sourceType)-
+        sourceOrder.indexOf(b.sourceType)||
+        a.sourceReference.localeCompare(b.sourceReference));
+    }
+    return [...vessels.values()].sort((a,b)=>b.pendingWorkflows-a.pendingWorkflows||
+      Number(b.eligibility==='MANDATORY')-Number(a.eligibility==='MANDATORY')||
+      (b.currentRisk?.score??-1)-(a.currentRisk?.score??-1)||
+      a.imo.localeCompare(b.imo));
+  }
   async dashboard(){
     const state=await this._state(),referrals=await this.cases.listInspectionRequests();
     if(!this.riskPolicy.ready)throw new SiTargetingError('SI_RISK_POLICY_NOT_READY',503);
     const projection=await this.riskPolicy.projectCurrent();
     const risks=new Map(projection.projections.filter(p=>p?.sourceAssessmentId).map(p=>[p.imo,p]));
     const policy=state.rules.at(-1),candidates=this._evaluate(state,referrals,risks,policy.config);
+    const vesselCandidates=this._vesselCandidates(candidates);
     const summary={evaluatedPopulation:this.bundles.length,assessedRiskVessels:risks.size,
+      candidateVessels:vesselCandidates.length,
+      pendingVessels:vesselCandidates.filter(v=>v.pendingWorkflows>0).length,
+      createdVessels:vesselCandidates.filter(v=>v.createdWorkflows>0).length,
       candidates:candidates.length,pendingReview:candidates.filter(x=>x.status==='PENDING_REVIEW').length,
       inspectionsCreated:candidates.filter(x=>x.status==='INSPECTION_CREATED').length,
       externalScheduled:candidates.filter(x=>x.status==='EXTERNALLY_SCHEDULED').length,
@@ -282,7 +340,7 @@ export class SiCandidateTargeting{
         [s,candidates.filter(x=>x.events.some(e=>e.sourceType===s)).length]))};
     return {status:'ok',source:'PERSISTED_NMC_AND_POC_EVENTS',fleetSnapshotId:this.fleetSnapshotId,
       evaluatedAt:iso(),policy:{version:policy.version,config:policy.config},
-      riskPolicyRevision:projection.policyRevision,summary,candidates};
+      riskPolicyRevision:projection.policyRevision,summary,candidates,vesselCandidates};
   }
   async previewRules(config){
     const parsed=validateRules(config);

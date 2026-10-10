@@ -89,3 +89,26 @@ button:disabled{opacity:.55;cursor:not-allowed}
 .ai-explain code{display:inline-block;padding:5px 7px;margin:4px;border-radius:5px;
   background:#e5f0f4;color:#23667b;direction:ltr;unicode-bidi:isolate;font-size:10px}
 @media(max-width:700px){.ai-controls{flex-direction:column}.ai-run-actions{align-items:stretch;flex-direction:column}}
+
+/* One visible candidate row per IMO; display sources as unique badges. */
+.source-pill small{display:block;margin-top:3px;font-size:9px;color:#628094}
+.regime-pill{display:block;background:#e8f7f5;border:1px solid #c7e9df;color:#0e695f;
+  border-radius:7px;padding:5px 7px;margin:4px 0;font-size:10px;font-weight:800}
+.vessel-source-summary{border:1px solid #d7e7ec;background:#f6fbfd;padding:13px 15px;
+  margin:0 0 13px;border-radius:10px;overflow-wrap:anywhere}
+.vessel-source-summary strong,.regime-selection>strong{font-size:12px;color:#18546a}
+.vessel-source-summary p{font-size:11px;color:#57778a;margin:8px 0 0}
+.regime-selection{padding:15px;border:1px solid #c8e8de;border-radius:10px;
+  background:#effaf6;margin-bottom:15px}
+.regime-selection p.hint{margin:7px 0 12px}
+.regime-actions{display:flex;flex-wrap:wrap;gap:8px}
+.regime-actions button{background:#fff;color:#35677b;border:1px solid #a9d2d1;
+  border-radius:9px;padding:11px 13px;cursor:pointer;font-size:11px;font-weight:800;
+  text-align:start;min-width:155px}
+.regime-actions button small{display:block;color:#7795a1;margin-top:5px}
+.regime-actions button.selected-regime{background:#0d7787;color:#fff;border-color:#0d7787;
+  box-shadow:0 2px 8px #1c9e9b25}
+.regime-actions button.selected-regime small{color:#e1fbf4}
+.selected-regime{font-size:12px;color:#355e70;margin:9px 0 14px}
+:host-context([dir="rtl"]) th{text-align:right}
+:host-context([dir="rtl"]) .regime-actions button{text-align:right}
