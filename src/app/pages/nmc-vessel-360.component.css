@@ -2577,3 +2577,10 @@ button, a { font: inherit; }
     margin-left: 0; margin-right: 0; max-width: none; padding-top: 54px;
   }
 }
+
+
+/* Shared bilingual UAE MOEI identity; same 82px navigation alignment. */
+.v360-ministry-logo{flex-shrink:0}
+.brand-block{min-width:0}
+@media(max-width:1420px){.v360-topbar .brand-block>div{display:none}}
+@media(max-width:960px){.v360-topbar{min-height:82px;padding-inline:14px}}
