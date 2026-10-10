@@ -13,10 +13,10 @@ import {NmcDocumentsService,VesselDriveListing,VesselDriveDoc} from '../services
   <section class="docs-shell" aria-label="Vessel documents and A03">
     <div class="docs-heading">
       <div>
-        <small class="kicker">A03 · GOOGLE DRIVE DOCUMENT INTELLIGENCE</small>
+        <small class="kicker">A03 · GOOGLE DRIVE DOCUMENT INTELLIGENCE · SYNTHETIC POC</small>
         <h3>{{tr('Vessel Documents & AI Analysis','مستندات السفينة والتحليل الذكي')}}</h3>
-        <p>{{tr('Google Drive documents by exact IMO. AI extracts are provisional until you review them; they are not proof of certificate authenticity.',
-                 'مستندات Google Drive المرتبطة برقم IMO. استخراج AI مبدئي ولا يُعد إثباتًا لأصالة الشهادات قبل مراجعتها من المختص.')}}</p>
+        <p>{{tr('Synthetic POC document packs from Google Drive, matched by IMO. A03 extraction and human approval do not authenticate the issuing authority or change NMC risk.',
+                 'حزم مستندات تجريبية من Google Drive مرتبطة برقم IMO. تحليل A03 والمراجعة البشرية لا يثبتان أصالة الشهادات ولا يغيران مخاطر المركز البحري.')}}</p>
       </div>
       <button class="doc-secondary" type="button" [disabled]="busy" (click)="refresh()">
         ↻ {{tr('Refresh documents','تحديث المستندات')}}</button>
