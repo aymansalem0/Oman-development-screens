@@ -117,7 +117,13 @@ export class SiInspectionLifecycle{
       const r=await con.execute(`SELECT STATE_JSON FROM SI_INSPECTION_LIFECYCLE_AUDIT
         WHERE CASE_ID=:id ORDER BY VERSION_NO`,{id},
         {outFormat:oracledb.OUT_FORMAT_OBJECT});
-      return {status:'ok',versions:r.rows.map(row=>JSON.parse(row.STATE_JSON))};
+      return {status:'ok',versions:r.rows.map(row=>{
+        const snapshot=JSON.parse(row.STATE_JSON);
+        const event=snapshot.audit?.at(-1)||{};
+        return {version:snapshot.version,at:snapshot.updatedAt,
+          action:event.action||'',actor:event.actor||'',reason:event.reason||'',
+          snapshot};
+      })};
     });
   }
   async reference(id){
