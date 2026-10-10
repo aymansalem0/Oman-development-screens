@@ -1,0 +1,168 @@
+<div class="si-layout" [attr.dir]="lang.dir">
+  <app-nmc-navigation></app-nmc-navigation>
+  <main class="sources-main">
+    <header class="page-heading">
+      <div>
+        <small>{{copy('MOEI · SMART INSPECTION · SOURCE INTEGRATIONS','وزارة الطاقة والبنية التحتية · المعاينة الذكية · تكامل المصادر')}}</small>
+        <h1>{{copy('Inspection Candidate Data Sources','مصادر بيانات مرشحي المعاينات')}}</h1>
+        <p>{{copy('One central candidate queue, multiple traceable source feeds. NMC stays a live authoritative connection; external sources are Excel POC simulations.',
+          'قائمة مرشحين مركزية واحدة من عدة مصادر قابلة للتتبع. تظل إحالات المركز البحري اتصالًا مباشرًا؛ والمصادر الخارجية محاكاة عبر Excel.')}}</p>
+      </div>
+      <div class="head-actions">
+        <a routerLink="/moei/smart-inspection/candidates">{{copy('Candidate Center','مركز الترشيح')}}</a>
+        <button type="button" (click)="refresh()" [disabled]="busy||loading">{{copy('Refresh','تحديث')}}</button>
+      </div>
+    </header>
+
+    <p *ngIf="error" class="notice error" role="alert">{{error}}</p>
+    <p *ngIf="success" class="notice success" role="status">{{success}}</p>
+    <p *ngIf="loading" class="notice">{{copy('Loading source imports and approved NMC referrals…','جارٍ تحميل المصادر وإحالات NMC المعتمدة…')}}</p>
+    <section class="access panel">
+      <div>
+        <h2>{{copy('Source Administrator','مسؤول مصادر البيانات')}}</h2>
+        <p>{{copy('Editor permission required for Excel Preview, Commit and import history. The key is kept in memory only.',
+          'يلزم مفتاح المحرر لمعاينة ملفات Excel واعتماد الاستيراد وعرض السجل. يبقى المفتاح في الذاكرة فقط.')}}</p>
+      </div>
+      <label>{{copy('Editor key','مفتاح المحرر')}}
+        <input type="password" [(ngModel)]="editorKey" autocomplete="off"/>
+      </label>
+      <button class="primary" type="button" (click)="refresh()" [disabled]="busy||loading">
+        {{copy('Load Sources','تحميل المصادر')}}
+      </button>
+    </section>
+
+    <section class="source-cards" aria-label="Candidate sources">
+      <a class="source-card" routerLink="/moei/smart-inspection/settings/sources/nmc"
+        [class.selected]="source==='NMC_CASE'">
+        <div class="card-head"><span>◈</span><span class="pill live">{{copy('LIVE NMC','مباشر من NMC')}}</span></div>
+        <h3>{{copy('NMC Approved Referrals','إحالات NMC المعتمدة')}}</h3>
+        <p>{{copy('Connected to the saved NMC case workspace. No Excel and no source replacement.',
+          'اتصال مباشر بحالات NMC المحفوظة والمعتمدة. لا يوجد رفع Excel أو استبدال بيانات.')}}</p>
+        <strong>{{status?.nmc?.currentReferrals??'—'}}</strong>
+        <small>{{copy('Current approved referrals','الإحالات المعتمدة الحالية')}}</small>
+      </a>
+      <a *ngFor="let s of sources" class="source-card" [routerLink]="link(s.key)"
+        [class.selected]="source===s.key">
+        <div class="card-head"><span>⇧</span><span class="pill excel">{{copy('EXCEL · POC','Excel · تجريبي')}}</span></div>
+        <h3>{{copy(s.en,s.ar)}}</h3>
+        <p>{{copy('Upload a distinct workbook, preview records and commit verified rows for officer review.',
+          'ارفع ملف Excel مستقلًا، وعاين السجلات ثم اعتمد البيانات الصالحة لمراجعة الموظف.')}}</p>
+        <strong>{{status?.excelSources?.[s.key]?.candidateVessels??'—'}}</strong>
+        <small>{{copy('Candidate vessels from source','سفن مرشحة من هذا المصدر')}}</small>
+      </a>
+    </section>
+
+    <section class="panel detail" *ngIf="source==='NMC_CASE'">
+      <div class="section-header"><small>{{copy('SOURCE 01 / NMC','المصدر ٠١ / NMC')}}</small>
+        <h2>{{copy('Live National Maritime Center Integration','التكامل المباشر مع المركز البحري الوطني')}}</h2></div>
+      <div class="notice info">
+        {{copy('NMC is already integrated. Only existing human-approved inspection referrals are read directly; the Excel importer cannot inject, overwrite or delete NMC cases.',
+          'تكامل NMC قائم بالفعل. تُقرأ إحالات المعاينة المعتمدة بشريًا من النظام مباشرة؛ ولا يمكن لاستيراد Excel إضافة إحالات NMC أو تعديلها أو حذفها.')}}
+      </div>
+      <a class="action-link" routerLink="/moei/smart-inspection/candidates">
+        {{copy('View NMC candidates in operational queue →','عرض مرشحي NMC في قائمة التشغيل ←')}}
+      </a>
+    </section>
+
+    <section class="panel detail" *ngIf="source&&source!=='NMC_CASE'">
+      <div class="section-header">
+        <small>{{copy('EXCEL SOURCE IMPORT · NOT AN OFFICIAL GOVERNMENT FEED',
+          'استيراد مصدر Excel · ليس تغذية حكومية رسمية')}}</small>
+        <h2>{{nameFor(source)}}</h2>
+        <p>{{copy('This upload creates POC source events only. Events remain UNVERIFIED and MANUAL_REVIEW until an officer makes a separate approval decision.',
+          'ينشئ الاستيراد أحداث مصدر تجريبية فقط؛ وتظل غير موثقة وتحتاج مراجعة بشرية حتى يصدر الموظف قرارًا منفصلًا.')}}</p>
+      </div>
+
+      <div class="upload-grid">
+        <div class="import-block">
+          <h3>{{copy('01 · Source Template','٠١ · نموذج المصدر')}}</h3>
+          <p>{{copy('Every source has a different workbook layout. Use the template for the selected source only.',
+            'لكل مصدر نموذج Excel مختلف. استخدم نموذج المصدر المختار فقط.')}}</p>
+          <a class="action-link" [href]="templateUrl" target="_blank" rel="noopener">
+            ↓ {{copy('Download ','تحميل نموذج ')}}{{sheetName}}.xlsx
+          </a>
+          <div class="fields" *ngIf="activeDefinition">
+            <strong>{{copy('Required worksheet','ورقة العمل المطلوبة')}}: {{activeDefinition.sheet}}</strong>
+            <small>{{copy('Headers in row 1, data from row 2','العناوين في الصف الأول والبيانات من الصف الثاني')}}</small>
+            <code *ngFor="let c of activeDefinition.fields">{{c}}</code>
+          </div>
+        </div>
+
+        <div class="import-block">
+          <h3>{{copy('02 · Upload & Preview','٠٢ · رفع ومعاينة')}}</h3>
+          <p>{{copy('Only XLSX, max 2 MB / 1000 rows. Preview performs fleet IMO matching, required field, duplicate and cross-source checks without saving.',
+            'ملف XLSX فقط بحد ٢ ميجابايت و١٠٠٠ صف. تتحقق المعاينة من IMO والحقول المطلوبة والتكرارات دون حفظ.')}}</p>
+          <label>{{copy('Source Excel workbook','ملف Excel للمصدر')}}
+            <input type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+              [disabled]="busy" (change)="selectFile($event)"/>
+          </label>
+          <span *ngIf="selectedName" class="muted">{{selectedName}} · {{selectedSize/1024|number:'1.0-1'}} KB</span>
+          <p class="hint">{{copy('Selecting a file runs a read-only preview. Nothing reaches Candidate Queue before Commit.',
+            'اختيار الملف يُجري معاينة دون حفظ. لا تصل البيانات لقائمة المرشحين قبل الاعتماد.')}}</p>
+        </div>
+      </div>
+
+      <section class="preview" *ngIf="preview as p">
+        <h3>{{copy('03 · Import Preview','٠٣ · معاينة نتائج الاستيراد')}}
+          <span class="pill" [class.passed]="p.canCommit">{{p.status}}</span>
+        </h3>
+        <div class="metrics">
+          <div><small>{{copy('Read rows','الصفوف المقروءة')}}</small><strong>{{p.totalRows}}</strong></div>
+          <div><small>{{copy('New source events','أحداث جديدة')}}</small><strong>{{p.newEvents}}</strong></div>
+          <div><small>{{copy('Already imported','مستوردة مسبقًا')}}</small><strong>{{p.replayedEvents}}</strong></div>
+          <div><small>{{copy('Validation issues','أخطاء التحقق')}}</small><strong>{{p.issues.length}}</strong></div>
+        </div>
+        <div *ngIf="p.issues.length" class="issues">
+          <h4>{{copy('Correct these rows, then upload again','صحّح هذه الصفوف ثم أعد رفع الملف')}}</h4>
+          <p *ngFor="let issue of p.issues">
+            {{copy('Row','الصف')}} {{issue.row}} — {{issue.code}} {{issue.detail}}
+          </p>
+        </div>
+        <div class="table-scroll" *ngIf="p.sample.length">
+          <table><thead><tr>
+            <th>{{copy('Excel Row','صف Excel')}}</th><th>IMO</th>
+            <th>{{copy('Source Reference','مرجع المصدر')}}</th><th>{{copy('Port','الميناء')}}</th>
+          </tr></thead><tbody>
+            <tr *ngFor="let row of p.sample"><td>{{row.row}}</td><td>{{row.imo}}</td>
+              <td>{{row.reference}}</td><td>{{row.port}}</td></tr>
+          </tbody></table>
+        </div>
+        <div class="commit-area" *ngIf="p.canCommit">
+          <label>{{copy('Import operator / reviewer','مسؤول الاستيراد / المراجع')}}
+            <input [(ngModel)]="actor" maxlength="120" autocomplete="off"
+              [placeholder]="copy('Your name for the audit trail','اسمك في سجل التدقيق')"/>
+          </label>
+          <button type="button" class="primary" (click)="commit()" [disabled]="!readyToCommit">
+            {{copy('Commit Excel Source Events','اعتماد أحداث مصدر Excel')}}
+          </button>
+          <small>{{copy('Preview expires at','تنتهي صلاحية المعاينة في')}}
+            {{p.expiresAt|date:'mediumTime'}}.
+            {{copy('Existing NMC referrals and Risk Assessments are never modified.',
+              'لا تتغير إحالات NMC أو تقييمات المخاطر أبدًا.')}}</small>
+        </div>
+      </section>
+
+      <section class="last-import" *ngIf="activeDefinition?.lastImport as last">
+        <strong>{{copy('Last committed import','آخر استيراد معتمد')}}</strong>
+        <span>{{last.fileName}} · {{last.importedAt|date:'medium'}} ·
+          {{last.importedCount}} {{copy('events','أحداث')}}</span>
+      </section>
+    </section>
+
+    <section class="panel history" *ngIf="status?.recentBatches?.length">
+      <h2>{{copy('Recent Excel Source Imports','آخر عمليات استيراد مصادر Excel')}}</h2>
+      <div class="table-scroll">
+        <table><thead><tr>
+          <th>{{copy('Source','المصدر')}}</th><th>{{copy('Workbook','الملف')}}</th>
+          <th>{{copy('Operator','المستخدم')}}</th><th>{{copy('Imported At','تاريخ الاستيراد')}}</th>
+          <th>{{copy('Events','الأحداث')}}</th>
+        </tr></thead><tbody>
+          <tr *ngFor="let b of status?.recentBatches">
+            <td>{{b.sourceType}}</td><td>{{b.fileName}}</td><td>{{b.actor}}</td>
+            <td>{{b.importedAt|date:'medium'}}</td><td>{{b.importedCount}}</td>
+          </tr>
+        </tbody></table>
+      </div>
+    </section>
+  </main>
+</div>
