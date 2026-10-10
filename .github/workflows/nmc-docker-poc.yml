@@ -2,9 +2,9 @@ name: NMC Docker POC validation
 
 on:
   push:
-    branches: ['feature/nmc-*']
+    branches: ['feature/nmc-*', 'feature/si-*']
   pull_request:
-    branches: [main, feature/smart-inspection-poc]
+    branches: [main, feature/smart-inspection-poc, 'feature/nmc-*', 'feature/si-*']
   workflow_dispatch:
 
 jobs:
@@ -43,6 +43,9 @@ jobs:
           curl --fail --silent --show-error http://127.0.0.1:4200/ | grep -qi '<html'
           curl --fail --silent --show-error http://127.0.0.1:4200/api/ai/health | grep -q '"aiConfigured":false'
           curl --fail --silent --show-error http://127.0.0.1:4200/api/ai/fleet/status | grep -q '"fleetSize":420'
+          curl --fail --silent --show-error http://127.0.0.1:4200/api/si/v1/candidates/dashboard | grep -q '"evaluatedPopulation":420'
+          curl --fail --silent --show-error http://127.0.0.1:4200/api/si/v1/rules | grep -q '"riskPriorityThreshold":65'
+          test "$(curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:4200/api/si/v1/candidates/source-events)" = "503"
           test "$(curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:4200/api/ai/fleet/start)" = "405"
           curl --fail --silent --show-error http://127.0.0.1:4200/api/ai/psc/health | grep -q '"sourceMode":"snapshot"'
           curl --fail --silent --show-error http://127.0.0.1:4200/api/ai/psc/vessels/9328471 | grep -q '"sourceMode":"LOCAL_FIXTURE_SNAPSHOT"'
