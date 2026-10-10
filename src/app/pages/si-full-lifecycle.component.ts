@@ -63,6 +63,20 @@ export class SiFullLifecycleComponent implements OnInit{
     (c.status!=='NOT_APPLICABLE'||c.naReason.trim())&&
     (c.status!=='DEFICIENCY'||(c.note.trim()&&
       (c.severity==='MINOR'||c.evidenceText.trim()))));}
+ get checksDirty():boolean{
+  const current=this.record?.checks||[];
+  return JSON.stringify(this.draftChecks.map(c=>({
+   id:c.id,status:c.status,severity:c.status==='DEFICIENCY'?c.severity:null,
+   note:c.note,naReason:c.naReason,
+   evidenceRefs:c.evidenceText.split(',').map(x=>x.trim()).filter(Boolean)
+  })))!==JSON.stringify(current.map(c=>({
+   id:c.id,status:c.status,severity:c.severity,note:c.note,naReason:c.naReason,evidenceRefs:c.evidenceRefs
+  })));
+ }
+ toggleScope(title:string,selected:boolean){
+  if(selected&&!this.scopeChosen.includes(title))this.scopeChosen.push(title);
+  if(!selected)this.scopeChosen=this.scopeChosen.filter(x=>x!==title);
+ }
  get findCounts():{all:number;critical:number;major:number}{
   const f=this.record?.findings||[];
   return {all:f.length,critical:f.filter(x=>x.severity==='CRITICAL').length,
