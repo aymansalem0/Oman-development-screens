@@ -17,18 +17,29 @@ import {SiPscSelectionService,PscQuotaConfig,PscQuotaPolicy}
         <h1>{{copy('PSC Inspection Targeting & Quota Settings','إعدادات استهداف وحصص تفتيش دولة الميناء')}}</h1>
         <p>{{copy('Stage 1: configure the percentage of eligible Port Calls reviewed for selection. This does not rank already-approved inspections and does not change NMC Risk.',
           'المرحلة الأولى: حدد نسبة إخطارات الوصول المؤهلة للاختيار للمعاينة. هذا لا يرتب المعاينات المعتمدة ولا يغيّر مخاطر NMC.')}}</p></div>
-        <a routerLink="/moei/smart-inspection/psc-targeting">{{copy('Open Targeting Pool →','فتح قائمة الاستهداف ←')}}</a>
+        <div class="header-actions">
+          <button type="button" (click)="load()" [disabled]="busy"
+            [attr.aria-label]="copy('Refresh published PSC quota','تحديث الحصة المنشورة لـ PSC')">
+            ↻ {{copy('Refresh Published Policy','تحديث السياسة المنشورة')}}
+          </button>
+          <a routerLink="/moei/smart-inspection/psc-targeting">{{copy('Open Targeting Pool →','فتح قائمة الاستهداف ←')}}</a>
+        </div>
       </header>
-      <section class="card keys">
-        <label>{{copy('Editor key','مفتاح المحرر')}}
-          <input type="password" [(ngModel)]="editorKey" autocomplete="off"/></label>
-        <label>{{copy('Publisher key','مفتاح المشرف')}}
-          <input type="password" [(ngModel)]="publisherKey" autocomplete="off"/></label>
-        <button (click)="load()" [disabled]="busy">{{copy('Load Published Quota','تحميل الحصة المنشورة')}}</button>
-      </section>
+
       <p class="alert err" *ngIf="error" role="alert">{{error}}</p>
       <p class="alert ok" *ngIf="success" role="status">{{success}}</p>
       <p class="alert" *ngIf="busy">{{copy('Processing…','جارٍ المعالجة…')}}</p>
+      <section *ngIf="!policy&&!busy&&!error" class="card load-hint">
+        <strong>{{copy('PSC quota policy is being loaded','جارٍ تجهيز سياسة حصص PSC')}}</strong>
+        <p class="hint">{{copy('The published settings will appear automatically. No credentials are needed just to view them.',
+          'ستظهر الإعدادات المنشورة تلقائيًا، ولا تحتاج إلى إدخال مفاتيح لمجرد الاطلاع عليها.')}}</p>
+      </section>
+      <section *ngIf="!policy&&!busy&&error" class="card load-hint">
+        <strong>{{copy('Published PSC quota could not be loaded','تعذر تحميل سياسة حصص PSC المنشورة')}}</strong>
+        <p class="hint">{{copy('Verify the backend is running and Oracle migration 012 is applied. Reload after resolving the issue.',
+          'تحقق من تشغيل الخدمة الخلفية وتطبيق ترحيل Oracle رقم 012، ثم أعد التحميل بعد حل المشكلة.')}}</p>
+        <button type="button" (click)="load()">{{copy('Retry Loading Policy','إعادة محاولة التحميل')}}</button>
+      </section>
       <section class="card" *ngIf="policy as p">
         <div class="section-head"><h2>{{copy('01 · Monthly Selection Policy','٠١ · سياسة الاختيار الشهرية')}}</h2>
           <span class="badge">{{copy('PUBLISHED VERSION','إصدار منشور')}} v{{p.version}}</span></div>
@@ -74,6 +85,17 @@ import {SiPscSelectionService,PscQuotaConfig,PscQuotaPolicy}
         </div>
         <p class="protected">{{copy('Safety guard: approved NMC referrals and Maritime Service Requests are NOT limited by PSC quota. There is no automatic AI selection or legal determination.',
           'ضابط حماية: إحالات NMC المعتمدة وطلبات الخدمات البحرية ليست ضمن حصة PSC. لا يوجد اختيار تلقائي بواسطة AI أو حكم تنظيمي.')}}</p>
+        <section class="edit-access">
+          <h3>{{copy('Preview & Approval Access','صلاحيات المعاينة والاعتماد')}}</h3>
+          <p class="hint">{{copy('The published policy is visible automatically. Enter an Editor key only to preview changes; a Publisher key is required only when publishing a new version.',
+            'تظهر السياسة المنشورة تلقائيًا. استخدم مفتاح المحرر فقط لمعاينة أثر التعديلات، ومفتاح المشرف فقط لاعتماد ونشر إصدار جديد.')}}</p>
+          <div class="keys">
+            <label>{{copy('Editor key · Preview','مفتاح المحرر · معاينة الأثر')}}
+              <input type="password" [(ngModel)]="editorKey" autocomplete="off"/></label>
+            <label>{{copy('Publisher key · Publish','مفتاح المشرف · النشر')}}
+              <input type="password" [(ngModel)]="publisherKey" autocomplete="off"/></label>
+          </div>
+        </section>
         <div class="actions">
           <button class="primary" (click)="previewPolicy()" [disabled]="busy">
             {{copy('Preview Quota Impact (No AI)','معاينة أثر الحصة (بدون AI)')}}</button>
@@ -123,7 +145,14 @@ import {SiPscSelectionService,PscQuotaConfig,PscQuotaPolicy}
     header a{color:#086d78;text-decoration:none;font-size:12px;font-weight:800;
       border:1px solid #b8dcd9;background:white;padding:10px;border-radius:8px;white-space:nowrap}
     .card{margin:15px 0;padding:20px;background:white;border:1px solid #d7e6ed;border-radius:12px}
-    .keys{display:flex;flex-wrap:wrap;gap:12px;align-items:end}
+    .keys{display:flex;flex-wrap:wrap;gap:12px;align-items:end;margin-top:13px}
+    .edit-access{margin-top:18px;border:1px solid #cce8e3;border-radius:10px;
+      padding:15px;background:#f5fbf9}
+    .edit-access h3{margin:0 0 6px;color:#0c706b}
+    .header-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+    .header-actions button{white-space:nowrap}
+    .load-hint{background:#f8fcfb;border-color:#cfe2dd}
+    .load-hint strong{color:#15526b;font-size:13px}
     label{display:block;font-size:11px;font-weight:800;color:#3e697d;min-width:200px}
     input,select,textarea{border:1px solid #c4dae3;border-radius:8px;padding:10px;
       box-sizing:border-box;width:100%;margin-top:7px;font:inherit;font-size:12px;background:white}
@@ -162,18 +191,20 @@ export class SiPscQuotaSettingsComponent implements OnInit{
     selectionRate:number;targetCount:number;selectedCount:number;overQuota:boolean}[]}|null=null;
   editorKey='';publisherKey='';reviewer='';reason='';busy=false;error='';success='';
   constructor(private readonly api:SiPscSelectionService,public readonly lang:LanguageService){}
-  ngOnInit(){}
+  ngOnInit():void{this.load();}
   copy(en:string,ar:string){return this.lang.pick(en,ar);}
   changed():void{this.impact=null;this.success='';}
   addPort():void{this.config.portOverrides.push({port:'',ratePercent:this.config.ratePercent});this.changed();}
   removePort(i:number):void{this.config.portOverrides.splice(i,1);this.changed();}
   get hasOverQuota(){return Boolean(this.impact?.summary.some(x=>x.overQuota));}
   load():void{
-    if(!this.editorKey.trim()){this.error=this.copy('Editor key required','مطلوب مفتاح المحرر');return;}
+    if(this.busy)return;
     this.busy=true;this.error='';
-    this.api.policy(this.editorKey.trim()).subscribe({
+    this.api.policy().subscribe({
       next:r=>{this.policy=r.policy;this.config=JSON.parse(JSON.stringify(r.policy.config));
-        this.impact=null;this.busy=false;},error:e=>this.fail(e)
+        this.impact=null;this.busy=false;},error:e=>{
+          this.policy=null;this.fail(e);
+        }
     });
   }
   previewPolicy():void{
@@ -199,9 +230,11 @@ export class SiPscQuotaSettingsComponent implements OnInit{
       config:this.config,expectedVersion:this.policy.version,
       publishedBy:this.reviewer.trim(),reason:this.reason.trim()
     }).subscribe({
-      next:()=>{this.busy=false;this.reason='';
-        this.success=this.copy('Quota policy published. Refresh to see the new version.',
-          'تم نشر سياسة الحصص الجديدة. حدّث الشاشة لعرض الإصدار.');this.load();},
+      next:r=>{this.busy=false;this.reason='';
+        this.policy=r.policy;this.config=JSON.parse(JSON.stringify(r.policy.config));
+        this.impact=null;this.error='';
+        this.success=this.copy('PSC quota policy published successfully.',
+          'تم نشر سياسة حصص PSC بنجاح.');},
       error:e=>this.fail(e)
     });
   }
