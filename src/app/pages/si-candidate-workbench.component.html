@@ -157,10 +157,9 @@
               <td><strong>{{v.vesselName}}</strong>
                 <small>IMO {{v.imo}} · {{v.flag}} · {{v.vesselType}}</small></td>
               <td>
-                <span *ngFor="let source of v.sourceTypes" class="source-pill">
-                  {{statusText(source)}}
-                  <small>{{v.sourceEvents.length}} {{copy('total source events','حدث مصدر إجمالًا')}}</small>
-                </span>
+                <span *ngFor="let source of v.sourceTypes" class="source-pill">{{statusText(source)}}</span>
+                <small>{{v.sourceTypes.length}} {{copy('sources','مصادر')}}
+                  · {{v.sourceEvents.length}} {{copy('events','أحداث')}}</small>
               </td>
               <td>
                 <span *ngFor="let regime of v.regimes" class="regime-pill">{{statusText(regime)}}</span>
