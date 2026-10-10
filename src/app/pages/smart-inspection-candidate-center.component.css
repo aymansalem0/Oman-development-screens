@@ -1,8 +1,6 @@
 :host {
-  position: fixed;
-  inset: 0;
-  z-index: 10000;
-  overflow: auto;
+  /* The legacy demo is a routed page, not a full-screen overlay. */
+  position: relative;
   display: block;
   min-height: 100vh;
   background: #f4f8fb;
@@ -290,3 +288,7 @@ button, input, select, a { font: inherit; }
 .referral-form button:disabled{opacity:.6;cursor:wait}
 .referral-history{margin-top:14px;background:#eaf4f6;border-radius:9px;padding:10px;color:#3f6870}
 @media(max-width:800px){.referral-top{align-items:stretch;flex-direction:column}.referral-cards{grid-template-columns:1fr}}
+
+/* Shared maritime sidebar stays visible beside the legacy demo route. */
+.si-layout { display: flex; min-height: 100vh; }
+.si-layout > .candidate-shell { flex: 1; min-width: 0; }
