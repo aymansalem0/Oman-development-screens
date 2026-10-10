@@ -125,7 +125,28 @@ export class SiCandidateWorkbenchComponent implements OnInit{
       error:e=>this.showError(e)
     });
   }
-  statusText(x:string):string{return x.replaceAll('_',' ');}
+  statusText(x:string):string{
+    const labels:Record<string,string>={
+      'PENDING_REVIEW':'بانتظار المراجعة',
+      'DEFERRED':'مؤجلة',
+      'REJECTED':'مرفوضة',
+      'INSPECTION_CREATED':'تم إنشاء المعاينة',
+      'EXTERNALLY_SCHEDULED':'مجدولة مسبقًا',
+      'MANUAL_REVIEW':'تتطلب مراجعة بشرية',
+      'MANDATORY':'إلزامية',
+      'PRIORITY':'ذات أولوية',
+      'STANDARD':'عادية',
+      'RISK_UNASSESSED':'بدون تقييم مخاطر',
+      'NMC_CASE':'إحالة المركز البحري',
+      'SERVICE_REQUEST':'طلب خدمة',
+      'PSC_PORT_CALL':'نداء ميناء PSC',
+      'PORT_STATE_CONTROL':'تفتيش دولة الميناء',
+      'FOCUSED_INSPECTION':'معاينة مركزة',
+      'UAE_SERVICE_INSPECTION':'معاينة خدمة بحرية',
+      'FOLLOW_UP_INSPECTION':'معاينة متابعة'
+    };
+    return this.lang.isArabic?(labels[x]||x.replaceAll('_',' ')):x.replaceAll('_',' ');
+  }
   short(id:string|null|undefined):string{return (id||'—').slice(0,12);}
   trackKey(_:number,c:SiCandidate):string{return c.key;}
 }
