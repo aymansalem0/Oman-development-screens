@@ -126,3 +126,150 @@ test('critical unacknowledged alerts automatically escalate after configured bus
     assert.equal((await store.history(current.id))[0].role,'SYSTEM');
   }finally{close();}
 });
+
+
+function published(row,revision){
+  return {...row,riskPolicyRevision:revision,configVersion:'Published NMC policy '+revision};
+}
+
+test('published High to Critical makes one new notification and permanently dims the previous one',async()=>{
+  const {store,opts,close}=setup();
+  try{
+    const imo='9417731';
+    await store.scanFleet(fleet({[imo]:published(assessed(imo,'High',74,false),10)}));
+    const original=(await store.list())[0];
+    const changed=published(assessed(imo,'Critical',88,false),11);
+    assert.deepEqual(await store.scanFleet(fleet({[imo]:changed})),{created:1,escalated:0});
+    const list=await store.list();
+    assert.equal(list.length,2);
+    const old=list.find(a=>a.id===original.id);
+    const recent=list.find(a=>a.id!==original.id);
+    assert.equal(old.status,'SUPERSEDED');
+    assert.equal(old.severity,'HIGH');
+    assert.equal(old.triggeringRiskLevel,'High');
+    assert.equal(old.supersededByRiskLevel,'Critical');
+    assert.equal(old.supersededByPolicyRevision,11);
+    assert.equal(recent.status,'OPEN');
+    assert.equal(recent.severity,'CRITICAL');
+    assert.equal(recent.triggeringRiskLevel,'Critical');
+    assert.equal((await store.overview()).summary.active,1);
+    assert.equal((await store.overview()).summary.unread,1);
+    assert.equal((await store.overview()).summary.superseded,1);
+    assert.equal((await store.history(original.id))[0].action,'SUPERSEDE');
+    assert.equal((await new NmcAlertWorkspace(opts).get(original.id)).status,'SUPERSEDED');
+    assert.equal((await store.scanFleet(fleet({[imo]:changed}))).created,0);
+  }finally{close();}
+});
+
+test('published risk rules that only change score or revision never create duplicate notification',async()=>{
+  const {store,close}=setup();
+  try{
+    const imo='9417731';
+    await store.scanFleet(fleet({[imo]:published(assessed(imo,'High',68,false),2)}));
+    const previous=(await store.list())[0];
+    for(const [revision,score] of [[3,73],[4,75],[5,65]]){
+      assert.equal((await store.scanFleet(fleet({
+        [imo]:published(assessed(imo,'High',score,false),revision)
+      }))).created,0);
+    }
+    assert.equal((await store.list()).length,1);
+    assert.equal((await store.get(previous.id)).status,'OPEN');
+  }finally{close();}
+});
+
+test('published downgrade High to Watch dims without creating notification; X persists but never deletes audit',async()=>{
+  const {store,opts,close}=setup();
+  try{
+    const imo='9417731';
+    await store.scanFleet(fleet({[imo]:published(assessed(imo,'High',70,false),7)}));
+    const original=(await store.list())[0];
+    assert.equal((await store.scanFleet(fleet({
+      [imo]:published(assessed(imo,'Watch',43,false),8)
+    }))).created,0);
+    let old=await store.get(original.id);
+    assert.equal(old.status,'SUPERSEDED');
+    assert.equal(old.supersededByRiskLevel,'Watch');
+    assert.equal((await store.overview()).summary.active,0);
+    await assert.rejects(
+      ()=>store.transition(original.id,'ACKNOWLEDGE',old.version,'should block','OPERATOR'),
+      /ALERT_TRANSITION_INVALID/);
+    await assert.rejects(
+      ()=>store.transition(original.id,'DISMISS',old.version,'','SUPERVISOR'),
+      /ALERT_OPERATOR_REQUIRED/);
+    old=await store.transition(original.id,'DISMISS',old.version,
+      'Hidden from operational inbox','OPERATOR');
+    assert.equal(old.status,'SUPERSEDED');
+    assert.ok(old.dismissedAt);
+    const db=new NmcAlertWorkspace(opts);
+    assert.equal((await db.overview()).summary.superseded,0);
+    assert.equal((await db.list()).length,1); // preserved historical record
+    assert.equal((await db.history(old.id))[0].action,'DISMISS');
+    assert.equal((await db.history(old.id))[1].action,'SUPERSEDE');
+    await assert.rejects(
+      ()=>db.transition(old.id,'DISMISS',old.version,'','OPERATOR'),
+      /ALERT_TRANSITION_INVALID/);
+  }finally{close();}
+});
+
+test('after dropping below High, a later published High band creates a fresh alert',async()=>{
+  const {store,close}=setup();
+  try{
+    const imo='9417731';
+    await store.scanFleet(fleet({[imo]:published(assessed(imo,'High',70,false),1)}));
+    await store.scanFleet(fleet({[imo]:published(assessed(imo,'Watch',40,false),2)}));
+    assert.equal((await store.scanFleet(fleet({
+      [imo]:published(assessed(imo,'High',73,false),3)
+    }))).created,1);
+    assert.equal((await store.list()).length,2);
+    assert.equal((await store.overview()).summary.active,1);
+  }finally{close();}
+});
+
+test('resolved alert stays closed under same band but changed published risk generates a new alert',async()=>{
+  const {store,close}=setup();
+  try{
+    const imo='9417731';
+    await store.scanFleet(fleet({[imo]:published(assessed(imo,'High',70,false),1)}));
+    let alert=(await store.list())[0];
+    alert=await store.transition(alert.id,'ACKNOWLEDGE',alert.version,'Received','OPERATOR');
+    await store.transition(alert.id,'RESOLVE',alert.version,'Supervisor completed review','SUPERVISOR');
+    assert.equal((await store.scanFleet(fleet({
+      [imo]:published(assessed(imo,'High',75,false),2)
+    }))).created,0);
+    assert.equal((await store.scanFleet(fleet({
+      [imo]:published(assessed(imo,'Critical',90,false),3)
+    }))).created,1);
+    assert.equal((await store.overview()).summary.active,1);
+  }finally{close();}
+});
+
+test('critical-open-finding independent trigger cannot be cleared by a lower numeric risk',async()=>{
+  const {store,close}=setup();
+  try{
+    const imo='9328471';
+    await store.scanFleet(fleet({[imo]:published(assessed(imo,'Watch',40,true),3)}));
+    const original=(await store.list())[0];
+    assert.equal(original.severity,'CRITICAL');
+    await store.scanFleet(fleet({[imo]:published(assessed(imo,'Normal',28,true),4)}));
+    const history=await store.list();
+    assert.equal(history.length,2); // risk band changed while critical trigger remains
+    assert.equal(history.filter(a=>a.status==='OPEN').length,1);
+    assert.equal(history.find(a=>a.id===original.id).status,'SUPERSEDED');
+    assert.equal(history.find(a=>a.status==='OPEN').severity,'CRITICAL');
+  }finally{close();}
+});
+
+test('missing or unavailable projected risks never auto-close an existing critical alert',async()=>{
+  const {store,close}=setup();
+  try{
+    const imo='9328471';
+    await store.scanFleet(fleet({[imo]:published(assessed(imo,'Critical',90,false),1)}));
+    await store.scanFleet(fleet({[imo]:{
+      ...published(assessed(imo,'Normal',20,false),2),
+      policyProjectionUnavailable:true
+    }}));
+    await store.scanFleet(fleet({[imo]:{...assessed(imo),status:'FAILED'}}));
+    assert.equal((await store.list()).length,1);
+    assert.equal((await store.list())[0].status,'OPEN');
+  }finally{close();}
+});
