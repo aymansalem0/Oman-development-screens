@@ -306,6 +306,17 @@ export class SiCandidateTargeting{
           item.sourceEvents.push(e);
       }
     }
+    const sourceOrder=['NMC_CASE','SERVICE_REQUEST','PSC_PORT_CALL'];
+    const regimeOrder=['FOCUSED_INSPECTION','UAE_SERVICE_INSPECTION',
+      'PORT_STATE_CONTROL','FOLLOW_UP_INSPECTION'];
+    for(const item of vessels.values()){
+      item.sourceTypes.sort((a,b)=>sourceOrder.indexOf(a)-sourceOrder.indexOf(b));
+      item.regimes.sort((a,b)=>regimeOrder.indexOf(a)-regimeOrder.indexOf(b));
+      item.workflows.sort((a,b)=>regimeOrder.indexOf(a.regime)-regimeOrder.indexOf(b.regime));
+      item.sourceEvents.sort((a,b)=>sourceOrder.indexOf(a.sourceType)-
+        sourceOrder.indexOf(b.sourceType)||
+        a.sourceReference.localeCompare(b.sourceReference));
+    }
     return [...vessels.values()].sort((a,b)=>b.pendingWorkflows-a.pendingWorkflows||
       Number(b.eligibility==='MANDATORY')-Number(a.eligibility==='MANDATORY')||
       (b.currentRisk?.score??-1)-(a.currentRisk?.score??-1)||
