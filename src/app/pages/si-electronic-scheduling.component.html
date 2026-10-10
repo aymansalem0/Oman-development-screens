@@ -19,7 +19,7 @@
       <div *ngIf="success" class="si-message success" role="status">{{success}}</div>
       <div *ngIf="busy" class="si-message pending" role="status">{{copy("Processing — please wait…","جارٍ المعالجة، يرجى الانتظار…")}}</div>
       <section class="si-kpis">
-        <article><span>{{copy("ERP SOURCE","مصدر ERP")}}</span><strong>{{erp?.ready?'EXCEL IMPORTED':'NOT IMPORTED'}}</strong><small>{{copy("Read-only ERP simulation","محاكاة قراءة بيانات ERP فقط")}}</small></article>
+        <article><span>{{copy("ERP SOURCE","مصدر ERP")}}</span><strong>{{erp?.ready?copy('EXCEL IMPORTED','تم استيراد Excel'):copy('NOT IMPORTED','لم يتم الاستيراد')}}</strong><small>{{copy("Read-only ERP simulation","محاكاة قراءة بيانات ERP فقط")}}</small></article>
         <article><span>{{copy("INSPECTORS","المفتشون")}}</span><strong>{{erp?.counts?.['Inspectors']??'—'}}</strong><small>{{copy("Validated workforce records","سجلات القوى العاملة المعتمدة بعد التحقق")}}</small></article>
         <article><span>{{copy("NMC REFERRALS","إحالات المركز البحري")}}</span><strong>{{referrals.length}}</strong><small>{{copy("Human-approved · awaiting schedule","معتمدة بشريًا وبانتظار الجدولة")}}</small></article>
         <article><span>{{copy("APPROVAL POLICY","سياسة الاعتماد")}}</span><strong>{{policy?.config?.approvalMode||'—'}}</strong><small>Revision {{policy?.revision||'—'}}</small></article>
@@ -30,7 +30,7 @@
           <header class="si-section-head"><div>
             <small>{{copy("01 / ERP SOURCE STATUS","٠١ / حالة مصدر ERP")}}</small>
             <h2>{{copy("Workforce & Inspector Availability","القوى العاملة وتوفر المفتشين")}}</h2>
-          </div><span class="si-badge">{{erp?.ready?'IMPORTED':'SETUP REQUIRED'}}</span></header>
+          </div><span class="si-badge">{{erp?.ready?copy('IMPORTED','تم الاستيراد'):copy('SETUP REQUIRED','يحتاج إعداد')}}</span></header>
           <p class="si-hint">{{copy("This screen uses a validated ERP workforce snapshot for scheduling. Upload, preview, commit and source integration settings are managed separately under","تستخدم الشاشة نسخة موارد ERP التي تم التحقق منها للجدولة. تتم إدارة الرفع والمعاينة والاعتماد والإعدادات من")}} <strong>{{copy("Settings → ERP Integration Simulator","الإعدادات ← محاكاة تكامل ERP")}}</strong>.</p>
           <div *ngIf="erp?.ready" class="si-imported">
             <div><span>{{copy("Source","المصدر")}}</span><strong>{{copy("POC ERP Excel Snapshot","نسخة ERP التجريبية")}}</strong></div>
