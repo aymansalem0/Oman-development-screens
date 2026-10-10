@@ -4,7 +4,7 @@ import {FormsModule} from '@angular/forms';
 import {HttpClient,HttpHeaders} from '@angular/common/http';
 import {RouterLink} from '@angular/router';
 import {NmcInspectionReferral} from '../services/nmc-cases.service';
-import {getOperationalVesselByImo} from '../data/nmc-vessel-catalog';
+import {getOperationalVesselByImo} from '../data/nmc-expanded-vessel-catalog';
 
 interface ErpStatus{
   ready:boolean;source:string;snapshotId:string|null;importedAt:string|null;
