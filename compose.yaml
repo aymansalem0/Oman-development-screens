@@ -37,6 +37,8 @@ services:
       # A04 may incur paid AI requests. It NEVER runs on page load.
       # Explicitly opt in after API contract acceptance and source evidence review.
       SI_A04_ENABLED: ${SI_A04_ENABLED:-false}
+      SI_P01_ENABLED: ${SI_P01_ENABLED:-false}
+      AIRIA_SI_P01_PIPELINE_ID: ${AIRIA_SI_P01_PIPELINE_ID:-}
       SI_PREPARATION_STORE_PATH: /data/si-preparations.json
       # 'oracle' requires compose.oracle.yaml, NMC_AI user and V1 migration.
       NMC_DB_MODE: ${NMC_DB_MODE:-json}
