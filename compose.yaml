@@ -41,6 +41,11 @@ services:
       SI_P01_ENABLED: ${SI_P01_ENABLED:-false}
       AIRIA_SI_P01_PIPELINE_ID: ${AIRIA_SI_P01_PIPELINE_ID:-}
       SI_PREPARATION_STORE_PATH: /data/si-preparations.json
+      # A03 Drive PDF extraction and agent calls are OFF until opt-in and approved.
+      NMC_A03_ENABLED: ${NMC_A03_ENABLED:-false}
+      NMC_DRIVE_ROOT_FOLDER_ID: ${NMC_DRIVE_ROOT_FOLDER_ID:-}
+      NMC_DRIVE_CREDENTIALS_PATH: /run/secrets/nmc-drive-google.json
+      NMC_DOCUMENT_STORE_PATH: /data/nmc-document-intelligence.json
       # 'oracle' requires compose.oracle.yaml, NMC_AI user and V1 migration.
       NMC_DB_MODE: ${NMC_DB_MODE:-json}
       NMC_DB_CONNECT_STRING: ${NMC_DB_CONNECT_STRING:-oracle-free-23:1521/freepdb1}

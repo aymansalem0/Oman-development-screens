@@ -114,10 +114,11 @@ function loadStore(){
   return {};
 }
 export class FleetAssessmentManager {
-  constructor({executeAgent,getPscVessel,repository=null,onAssessmentSaved=null}){
+  constructor({executeAgent,getPscVessel,repository=null,onAssessmentSaved=null,approvedDocuments=null}){
     this.executeAgent=executeAgent;
     this.onAssessmentSaved=onAssessmentSaved;
     this.getPscVessel=getPscVessel;
+    this.approvedDocuments=approvedDocuments;
     this.repository=repository;
     this.results=repository?{}:loadStore();
     this.persistenceHealthy=true;
@@ -321,8 +322,17 @@ export class FleetAssessmentManager {
     const psc=await this.getPscVessel(v.imo); // errors fail closed, never fall back from live to fixture.
     if(psc.authoritative!==false||psc.dataNature!=='SYNTHETIC_NOT_RIYADH_MOU'||
       !Array.isArray(psc.evidenceIds)||psc.imo!==v.imo)throw new Error('FLEET_PSC_PROVENANCE_INVALID');
-    const ids=[...v.evidenceIds,...psc.evidenceIds];
-    const context={...v.inlineContext,externalPsc:{
+    const approved=this.approvedDocuments?await this.approvedDocuments(v.imo):[];
+    // A03 extracts are human-reviewed advisories, not authenticated certificates.
+    const documentIds=approved.map(x=>x.evidenceId);
+    const ids=[...v.evidenceIds,...psc.evidenceIds,...documentIds];
+    const context={...v.inlineContext,
+      documentIntelligence:{
+        source:'GOOGLE_DRIVE_A03_HUMAN_REVIEWED_NOT_AUTHENTICATED',
+        items:approved,documentEvidenceIds:documentIds,
+        warning:'Document authenticity not verified. Human review is NOT validation by flag authority.'
+      },
+      externalPsc:{
       sourceSystem:psc.sourceSystem,sourceMode:psc.sourceMode,dataNature:psc.dataNature,
       authoritative:false,verifiedByAuthority:false,coverage:psc.coverage,
       retrievedAt:psc.retrievedAt,inspections:psc.inspections,deficiencies:psc.deficiencies,

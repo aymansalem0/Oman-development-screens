@@ -258,9 +258,12 @@
       <button type="button" [class.active]="activeTab === 'inspection'" (click)="setTab('inspection')">{{ copy('Inspection', 'المعاينة') }}</button>
       <button type="button" [class.active]="activeTab === 'external-psc'" (click)="setTab('external-psc')">{{ copy('External PSC', 'التفتيش الإقليمي التجريبي') }}</button>
       <button type="button" [class.active]="activeTab === 'certificates'" (click)="setTab('certificates')">{{ copy('Certificates', 'الشهادات') }}</button>
+       <button type="button" [class.active]="activeTab === 'documents'" (click)="setTab('documents')">✦ {{ copy('Documents / A03', 'المستندات / A03') }}</button>
       <button type="button" [class.active]="activeTab === 'sources'" (click)="setTab('sources')">{{ copy('Data Sources', 'مصادر البيانات') }}</button>
     </nav>
 
+<app-nmc-vessel-documents *ngIf="activeTab==='documents'"
+      [imo]="vessel.imo" [certificates]="certificates"></app-nmc-vessel-documents>
     <section class="overview-layout" *ngIf="activeTab === 'overview'">
       <div class="left-column">
         <article class="panel summary-panel">
