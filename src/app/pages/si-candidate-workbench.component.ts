@@ -5,7 +5,7 @@ import {FormsModule} from '@angular/forms';
 import {RouterLink} from '@angular/router';
 import {NmcNavigationComponent} from '../components/nmc-navigation.component';
 import {SiCandidate,SiCandidateStatus,SiCandidateTargetingService,
-  SiDashboard,SiPriorityStatus,SiPriorityPreview,SiPriorityRun,SiPriorityRecommendation}
+  SiDashboard,SiVesselCandidate,SiPriorityStatus,SiPriorityPreview,SiPriorityRun,SiPriorityRecommendation}
   from '../services/si-candidate-targeting.service';
 
 type SourceFilter='ALL'|'NMC_CASE'|'SERVICE_REQUEST'|'PSC_PORT_CALL';
@@ -20,7 +20,7 @@ export class SiCandidateWorkbenchComponent implements OnInit{
   loading=false;busy=false;error='';success='';
   dashboard:SiDashboard|null=null;
   sourceFilter:SourceFilter='ALL';statusFilter:StatusFilter='ALL';search='';
-  selectedKey='';
+  selectedKey='';selectedImo='';
   reviewer='';decisionNote='';editorKey='';publisherKey='';
   priorityStatus:SiPriorityStatus|null=null;
   priorityPreview:SiPriorityPreview|null=null;
@@ -102,27 +102,57 @@ export class SiCandidateWorkbenchComponent implements OnInit{
     this.api.dashboard().subscribe({
       next:data=>{
         this.dashboard=data;
-        if(!data.candidates.some(x=>x.key===this.selectedKey))this.selectedKey='';
+        if(!data.vesselCandidates.some(v=>v.imo===this.selectedImo)){
+          this.selectedImo='';this.selectedKey='';
+        }else if(!data.candidates.some(x=>x.key===this.selectedKey)){
+          this.selectedKey='';
+        }
         this.loading=false;
         if(this.editorKey.trim()&&!this.priorityBusy)this.refreshAiStatus();
       },error:e=>{this.loading=false;this.showError(e);}
     });
   }
-  get candidates():SiCandidate[]{
+  /** One visible row per IMO — sources/events accumulate on the vessel. */
+  get vessels():SiVesselCandidate[]{
     const term=this.search.toLowerCase().trim();
     const rank=this.rankingMap;
-    return (this.dashboard?.candidates||[]).filter(c=>
-      (this.sourceFilter==='ALL'||c.events.some(e=>e.sourceType===this.sourceFilter))&&
-      (this.statusFilter==='ALL'||c.status===this.statusFilter)&&
-      (!term||[c.imo,c.vesselName,c.flag,c.regime,
-        ...c.events.map(e=>e.sourceReference)].some(s=>String(s||'').toLowerCase().includes(term))))
-      .sort((a,b)=>(rank.get(a.key)?.effectiveRank??99999)-
-        (rank.get(b.key)?.effectiveRank??99999));
+    return (this.dashboard?.vesselCandidates||[]).filter(v=>
+      (this.sourceFilter==='ALL'||v.sourceTypes.includes(this.sourceFilter))&&
+      (this.statusFilter==='ALL'||v.workflows.some(w=>w.status===this.statusFilter))&&
+      (!term||[v.imo,v.vesselName,v.flag,v.vesselType,...v.regimes,
+        ...v.sourceEvents.map(e=>e.sourceReference)].some(text=>
+          String(text||'').toLowerCase().includes(term))))
+      .sort((a,b)=>{
+        const ar=Math.min(...a.candidateKeys.map(key=>rank.get(key)?.effectiveRank??99999));
+        const br=Math.min(...b.candidateKeys.map(key=>rank.get(key)?.effectiveRank??99999));
+        return ar-br||b.pendingWorkflows-a.pendingWorkflows||a.imo.localeCompare(b.imo);
+      });
+  }
+  get selectedVessel():SiVesselCandidate|null{
+    return this.dashboard?.vesselCandidates.find(v=>v.imo===this.selectedImo)||null;
   }
   get selected():SiCandidate|null{
     return this.dashboard?.candidates.find(c=>c.key===this.selectedKey)||null;
   }
-  select(c:SiCandidate):void{this.selectedKey=c.key;this.success='';this.decisionNote='';}
+  selectVessel(v:SiVesselCandidate):void{
+    this.selectedImo=v.imo;
+    // Never implicitly approve the wrong legal inspection regime.
+    this.selectedKey=v.candidateKeys.length===1?v.candidateKeys[0]:'';
+    this.success='';this.decisionNote='';
+  }
+  selectWorkflow(key:string):void{
+    if(!this.selectedVessel?.candidateKeys.includes(key))return;
+    this.selectedKey=key;this.decisionNote='';this.success='';
+  }
+  bestAiRecommendation(v:SiVesselCandidate):SiPriorityRecommendation|null{
+    const rankings=v.candidateKeys.map(key=>this.rankingMap.get(key))
+      .filter((r):r is SiPriorityRecommendation=>Boolean(r));
+    return rankings.sort((a,b)=>a.effectiveRank-b.effectiveRank)[0]||null;
+  }
+  getWorkflow(key:string):SiCandidate|null{
+    return this.dashboard?.candidates.find(c=>c.key===key)||null;
+  }
+  trackVessel(_:number,v:SiVesselCandidate):string{return v.imo;}
   private showError(e:unknown):void{
     const v=e as {error?:{error?:string};status?:number};
     this.error=v?.error?.error||'Request failed. Check API, Oracle migration 009 and access permissions.';
