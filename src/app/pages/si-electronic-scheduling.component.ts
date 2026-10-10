@@ -42,7 +42,6 @@ interface SiPolicy{
 export class SiElectronicSchedulingComponent implements OnInit{
   busy=false;error='';success='';
   erp:ErpStatus|null=null;
-  pendingImport:{snapshotId:string;counts:Record<string,number>;warnings:string[]}|null=null;
   ports:Port[]=[];referrals:NmcInspectionReferral[]=[];
   policy:SiPolicy|null=null;
   draft:SiPolicy['config']|null=null;
@@ -104,38 +103,6 @@ export class SiElectronicSchedulingComponent implements OnInit{
     if(e?.status===403){this.editorKey='';this.publisherKey='';}
     this.error=e?.error?.error||'Operation unavailable. Check backend and access key.';
     this.success='';this.busy=false;
-  }
-  async uploadExcel(event:Event):Promise<void>{
-    const files=(event.target as HTMLInputElement).files;
-    const file=files?.[0];
-    if(!file)return;
-    const headers=this.headers();
-    if(!headers)return;
-    if(file.size>3*1024*1024){this.error='Excel must be smaller than 3 MB.';return;}
-    this.busy=true;this.error='';this.success='';this.pendingImport=null;
-    try{
-      const base64=await new Promise<string>((resolve,reject)=>{
-        const reader=new FileReader();
-        reader.onload=()=>resolve(String(reader.result||'').split(',')[1]||'');
-        reader.onerror=()=>reject(new Error('ERP_FILE_READ_FAILED'));
-        reader.readAsDataURL(file);
-      });
-      this.http.post<{snapshotId:string;counts:Record<string,number>;warnings:string[]}>(
-        this.api+'/erp/import/preview',{workbookBase64:base64},{headers}).subscribe({
-          next:r=>{this.pendingImport=r;this.busy=false;this.success='Workbook validated. Review totals and commit import.';},
-          error:e=>this.showError(e)
-        });
-    }catch(e){this.showError(e);}
-  }
-  commitExcel():void{
-    if(!this.pendingImport)return;
-    const headers=this.headers();if(!headers)return;
-    const token=this.pendingImport.snapshotId;
-    this.busy=true;this.error='';
-    this.http.post(this.api+'/erp/import/commit',{snapshotId:token},{headers}).subscribe({
-      next:()=>{this.busy=false;this.pendingImport=null;this.success='ERP workforce snapshot imported.';this.refresh();},
-      error:e=>this.showError(e)
-    });
   }
   generate():void{
     if(!this.erp?.ready){this.error='Import ERP Excel first.';return;}
