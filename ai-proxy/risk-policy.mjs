@@ -91,6 +91,14 @@ export function calculateRiskPolicy(row,config,revision){
     originalScore:row.score,originalLevel:row.level,factorSnapshot,
     dataNature:'SYNTHETIC_POC_NOT_REGULATORY'};
 }
+/** Legacy policy rows may be read-only reconstructed only from the EXACT same
+ * immutable source assessment ID and the historic published config. Never guess
+ * when the source assessment has changed or the stored score does not match. */
+function explainLegacyProjection(source,config,record){
+  if(!source||!config||source.assessmentId!==record.sourceAssessmentId)return null;
+  const projected=calculateRiskPolicy(source,config,record.policyRevision);
+  return projected?.riskScore===record.riskScore?projected.factorSnapshot:null;
+}
 const fromRow=r=>({revision:r.VERSION_NO,policyRef:r.POLICY_REF,
   previousRevision:r.PREVIOUS_VERSION_NO||null,config:JSON.parse(r.CONFIG_JSON),
   reason:r.CHANGE_REASON,publishedBy:r.PUBLISHED_BY,actorRole:r.ACTOR_ROLE,
@@ -335,24 +343,37 @@ export class CentralRiskPolicy{
     this.requireReady();
     if(this.mode==='json')return this.state.projections.filter(p=>p.imo===imo)
       .sort((a,b)=>b.policyRevision-a.policyRevision)
-      .map(p=>({...copy(p),policyRef:p.policyVersion,
-        factorSnapshot:p.factorSnapshot||null}));
+      .map(p=>{
+        const v=this.state.versions.find(v=>v.revision===p.policyRevision);
+        const reconstructed=!p.factorSnapshot?
+          explainLegacyProjection(this.fleet?.results?.[imo],v?.config,p):null;
+        return {...copy(p),policyRef:p.policyVersion||v?.policyRef,
+          factorSnapshot:p.factorSnapshot||reconstructed,
+          factorSnapshotReconstructed:!!reconstructed};
+      });
     return this.connection(async c=>{
       try{
         const q=await c.execute(`SELECT p.IMO,p.ASSESSMENT_ID,p.RISK_SCORE,p.RISK_LEVEL,
           p.OPERATIONAL_PRIORITY,p.CRITICAL_OPEN_FINDING,p.POLICY_VERSION_NO,
-          p.FACTOR_SNAPSHOT_JSON,v.POLICY_REF,v.CHANGE_REASON,${time('p.CALCULATED_AT')} CALCULATED_AT
+          p.FACTOR_SNAPSHOT_JSON,v.CONFIG_JSON,v.POLICY_REF,v.CHANGE_REASON,${time('p.CALCULATED_AT')} CALCULATED_AT
           FROM NMC_RISK_POLICY_PROJECTION p JOIN NMC_RISK_POLICY_VERSION v
           ON v.VERSION_NO=p.POLICY_VERSION_NO
           WHERE p.IMO=:imo ORDER BY p.POLICY_VERSION_NO DESC FETCH FIRST 200 ROWS ONLY`,
           {imo},{outFormat:oracledb.OUT_FORMAT_OBJECT});
-        return q.rows.map(r=>({imo:r.IMO,sourceAssessmentId:r.ASSESSMENT_ID,
+        return q.rows.map(r=>{
+        const base={imo:r.IMO,sourceAssessmentId:r.ASSESSMENT_ID,
           riskScore:r.RISK_SCORE,riskLevel:r.RISK_LEVEL,
           operationalPriority:r.OPERATIONAL_PRIORITY,
           criticalOpenFinding:r.CRITICAL_OPEN_FINDING==='Y',
           policyRevision:r.POLICY_VERSION_NO,policyRef:r.POLICY_REF,
-          reason:r.CHANGE_REASON,calculatedAt:r.CALCULATED_AT,
-          factorSnapshot:r.FACTOR_SNAPSHOT_JSON?JSON.parse(r.FACTOR_SNAPSHOT_JSON):null}));
+          reason:r.CHANGE_REASON,calculatedAt:r.CALCULATED_AT};
+        const recovered=!r.FACTOR_SNAPSHOT_JSON?
+          explainLegacyProjection(this.fleet?.results?.[imo],
+            JSON.parse(r.CONFIG_JSON),base):null;
+        return {...base,factorSnapshot:r.FACTOR_SNAPSHOT_JSON?
+          JSON.parse(r.FACTOR_SNAPSHOT_JSON):recovered,
+          factorSnapshotReconstructed:!!recovered};
+      });
       }catch{throw new RiskPolicyError('RISK_POLICY_HISTORY_UNAVAILABLE',503);}
     });
   }
