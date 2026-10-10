@@ -2,6 +2,7 @@ import {CommonModule} from '@angular/common';
 import {Component,EventEmitter,Input,Output} from '@angular/core';
 import {RouterLink} from '@angular/router';
 import {LanguageService} from '../services/language.service';
+import {NmcMinistryLogoComponent} from './nmc-ministry-logo.component';
 
 /**
  * Shared MOEI platform chrome for NMC and Smart Inspection.
@@ -12,13 +13,13 @@ import {LanguageService} from '../services/language.service';
 @Component({
   selector:'app-nmc-platform-header',
   standalone:true,
-  imports:[CommonModule,RouterLink],
+  imports:[CommonModule,RouterLink,NmcMinistryLogoComponent],
   template:`
     <header class="maritime-topbar" [attr.dir]="lang.dir"
        [attr.aria-label]="pick('MOEI maritime platform header','ترويسة المنصة البحرية لوزارة الطاقة والبنية التحتية')">
       <div class="maritime-brand">
-        <div class="maritime-mark" aria-hidden="true">⚓</div>
-        <div>
+        <app-nmc-ministry-logo class="maritime-ministry-logo"></app-nmc-ministry-logo>
+        <div class="maritime-brand-copy">
           <div class="maritime-eyebrow">{{pick('MOEI · Maritime Transformation','وزارة الطاقة والبنية التحتية · التحول البحري')}}</div>
           <h1>{{pick('MOEI Maritime Unified Platform','المنصة البحرية الموحدة لوزارة الطاقة والبنية التحتية')}}</h1>
           <p>{{area==='nmc'
