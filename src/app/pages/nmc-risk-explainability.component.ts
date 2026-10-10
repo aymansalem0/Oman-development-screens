@@ -26,8 +26,10 @@ interface HistoricalRiskProjection {
   factorSnapshot?:{
     calculationMode:string;weightedSubtotal:number;modeAdjustment:number;
     clampedAndRoundedScore:number;
+    provisional?:number|boolean;provisionalReason?:string;dataCoverage?:string;
     factors:Array<{key:string;severity:number;weight:number;
-      weightedContribution:number;sourceAgent?:string;reason?:string;evidenceIds?:string[]}>;
+      weightedContribution:number;sourceAgent?:string;reason?:string;
+      evidenceStatus?:'NOT_ASSESSED'|'RECORDED'|'UNAVAILABLE';evidenceIds?:string[]}>;
   }|null;
 }
 interface Threshold {
