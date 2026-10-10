@@ -37,7 +37,9 @@
                 [ngClass]="riskClass" (click)="openCurrentRisk()" [disabled]="!factors.length"
                 [attr.aria-label]="copy('Review available risk evidence','مراجعة أدلة المخاطر المتاحة')">
           <small>{{riskScore===null
-            ?copy('CURRENT POLICY · A03 EVIDENCE REQUIRED','السياسة الحالية · تحتاج أدلة A03')
+            ? (missingRequiredA03
+              ?copy('CURRENT POLICY · A03 EVIDENCE REQUIRED','السياسة الحالية · تحتاج أدلة A03')
+              :copy('CURRENT PUBLISHED RISK UNAVAILABLE','نتيجة السياسة الحالية غير متاحة'))
             :copy('CURRENT PUBLISHED RISK · CLICK TO ANALYZE','المخاطر الحالية المنشورة · عرض التفاصيل')}}</small>
           <strong>{{riskScore===null?'—':riskScore}}</strong>
           <span>{{riskLabel}} · {{activeRiskConfig?.version||'—'}}</span>
@@ -61,7 +63,7 @@
     </section>
 
     <section class="risk-decision-panel" *ngIf="assessment as a"
-             [class.projection-blocked]="riskScore===null" aria-label="Risk assessment status and next steps">
+             [class.projection-blocked]="riskScore===null" [attr.aria-label]="copy('Risk assessment status and next steps','حالة تقييم المخاطر والخطوات التالية')">
       <div class="decision-summary">
         <span class="decision-eyebrow">{{copy('WHAT THE SAVED AI ASSESSMENT TELLS US','ما الذي نعرفه من تقييم AI المحفوظ')}}</span>
         <div class="decision-score-row">
@@ -137,7 +139,7 @@
 
     <div *ngIf="busy" class="rx-notice">{{copy('Loading saved A01/A02 evidence…','جارٍ تحميل نتائج A01/A02 المحفوظة…')}}</div>
     <div *ngIf="assessmentError" class="rx-notice rx-warning" role="alert">{{assessmentError}}</div>
-    <div *ngIf="projectionNotice" class="rx-notice rx-warning" role="status">{{projectionNotice}}</div>
+
     <div *ngIf="!assessment && !busy" class="rx-notice">
       {{copy('No baseline or fabricated risk score is displayed. Return to Command Center and wait for a validated fleet assessment.',
              'لا نعرض درجة مخاطر افتراضية. ارجع إلى مركز القيادة وانتظر اكتمال تقييم المخاطر الموثق.')}}
