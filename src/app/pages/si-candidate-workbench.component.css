@@ -59,3 +59,33 @@ button:disabled{opacity:.55;cursor:not-allowed}
 .settings-link{display:inline-block;padding:11px 15px;margin-top:4px;border-radius:9px;
   background:#087d93;color:white;text-decoration:none;font-size:12px;font-weight:800}
 .settings-link:hover{background:#066a7e}
+
+/* SI-P01 advisory tiered ranking; MOEI shared white theme + bidi safe. */
+.ai-ranking-panel{border:1px solid #cae2ea;background:#fbfefd}
+.ai-controls{display:flex;flex-wrap:wrap;gap:10px;margin:15px 0 12px}
+.ai-controls button,.ai-controls a{border:1px solid #a4d3d6;border-radius:9px;
+  padding:10px 13px;background:#eefafa;color:#086e81;font-size:12px;
+  text-decoration:none;cursor:pointer;font-weight:800}
+.ai-info{display:flex;flex-wrap:wrap;gap:9px;margin:11px 0 16px}
+.ai-info span{background:#eaf3f5;padding:9px 11px;border-radius:8px;
+  color:#3b6a7c;font-size:11px}
+.ai-info .ai-stale{background:#fff1da;color:#a05a1b;font-weight:800}
+.rule-preview,.ai-output{border:1px solid #d4e8ec;background:#f5fbfc;
+  border-radius:10px;padding:17px;margin-top:13px}
+.rule-preview h3,.ai-output h3{color:#0e5973;font-size:15px;margin:0 0 10px}
+.rule-preview p,.ai-output p{color:#507588;font-size:11px;line-height:1.7}
+.ai-run-actions{border-top:1px solid #d7e9eb;margin-top:19px;padding-top:16px;
+  display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.ai-run-actions small{font-size:10px;color:#638496}
+.ai-cost{font-weight:750;color:#296277;font-size:12px;display:flex;align-items:center;gap:8px;
+  width:100%;cursor:pointer}
+.ai-cost input{width:16px;height:16px;flex:none}
+.ai-rank{display:inline-block;background:#e3f7ef;color:#176c52;
+  padding:4px 8px;border-radius:6px;font-size:12px}
+.ai-explain{margin-top:14px;padding:17px 15px;border:1px solid #cde4db;
+  background:#f2fbf6;border-radius:10px}
+.ai-explain h3{font-size:14px;color:#176b56;margin:0 0 10px}
+.ai-explain p{font-size:11px;color:#426878;line-height:1.65;overflow-wrap:anywhere}
+.ai-explain code{display:inline-block;padding:5px 7px;margin:4px;border-radius:5px;
+  background:#e5f0f4;color:#23667b;direction:ltr;unicode-bidi:isolate;font-size:10px}
+@media(max-width:700px){.ai-controls{flex-direction:column}.ai-run-actions{align-items:stretch;flex-direction:column}}
