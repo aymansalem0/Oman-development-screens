@@ -1,15 +1,15 @@
-# PR #56 — Smart Inspection SI-P01 AI Candidate Prioritization
+# Smart Inspection SI-P01 — Approved Inspection Execution Prioritization
 
 ## Business objective
 
-After importing Service/PSC candidate feeds and receiving **live approved NMC referrals**,
+After PSC source events pass a separate selection-quota stage (PR #59), and an officer / Publisher approves an Inspection Case,
 the existing Candidate & Targeting Center lets ministry officers:
 1. See official saved NMC risk **unchanged** (a missing risk stays missing).
 2. Configure and publish **inspection-specific** weighting and trigger reasons
    in Settings → Inspection Settings → Targeting & Priority Rules.
 3. Preview a **deterministic rule-based** priority order without spending AI tokens.
 4. Explicitly authorize **one paid** SI-P01 Airia analysis to suggest ordering
-   and evidence-backed explanations. Only pending review candidates are sent.
+   and evidence-backed explanations. **Only actual approved SI Inspection Cases are sent**; imported PSC Port Calls, merely selected PSC events and pending officer-review candidates remain excluded.
 5. Review a permanently saved, provenance-linked advisory ranking before
    human **Approve / Defer / Reject**; never auto-create inspection cases.
 
@@ -23,7 +23,7 @@ overturn that protected order, redefine legal eligibility or official NMC risk.
 
 ## Data contract
 
-Input to SI-P01: current **saved** candidate source events with IDs,
+Input to SI-P01: **approved SI inspection cases** and their saved source events with IDs,
 source references, port/ETA when available, vessel IMO/type, official NMC
 risk **if assessed**, source assessment ID, active published policy version,
 NMC risk revision, source provenance and exact allowed evidence references,
@@ -92,7 +92,7 @@ request/response contract with Airia, a real tenant pipeline ID and API key.
   deterministic tier/rule order and `snapshotHash` (no AI, no writes).
 - `POST /api/si/v1/prioritization/run` — Editor key, JSON:
   `{"actor":"Inspector Officer","confirmCost":true,"expectedSnapshotHash":"<preview SHA-256>"}`.
-  Explicit call requires <100 candidates, current snapshot and enabled pipeline.
+  Explicit call requires at most 100 approved SI inspection cases, current snapshot and enabled pipeline.
   On failure, saves FAILED run with no successful recommendation; do not retry
   blindly. A source/policy change before execution returns conflict without AI.
 - `GET /api/si/v1/prioritization/history` — Editor key: last 15 audit records.
@@ -205,9 +205,9 @@ Compose command. **Never use `docker compose down --volumes`**.
 1. Settings → Inspection Settings → Targeting & Priority Rules: adjust five
    weights (must total 100); edit per-source reason priorities; Editor
    previews; Supervisor publishes with reason. NMC Risk/AI scores unchanged.
-2. Candidate & Targeting Center: enter Editor key in Operator & Access.
+2. In PSC Targeting & Selection, select source Port Calls within the published quota, then approve Inspection Cases in Candidate Center. Enter Editor key in Operator & Access.
    Click `Preview Rule Order (No AI)`, verify no Airia usage and that the
-   known NMC approved referral retains protected tier.
+   approved NMC-origin inspection case retains protected tier.
 3. Verify **missing risk remains NULL**, not 0; partial score is clearly
    labeled provisional; no made-up inspection-history signal.
 4. With P01 off, disabled AI button and clear configuration message.
