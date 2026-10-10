@@ -130,9 +130,19 @@ export class SiInspectionLifecycle{
       ]};
   }
   async list(){
-    const d=await this.targeting.dashboard(),cases=d.candidates.filter(x=>
-      x.status==='INSPECTION_CREATED'&&Boolean(x.inspectionCase?.id));
     this.assertReady();
+    // A live targeting queue is not a historical ledger. Its NMC referrals
+    // disappear after resolution, so always read the *persisted* case registry.
+    const registry=await this.targeting.inspectionCaseRegistry();
+    let byCurrentCase=new Map();
+    try{
+      const dashboard=await this.targeting.dashboard();
+      byCurrentCase=new Map(dashboard.candidates
+        .filter(x=>x.inspectionCase?.id).map(x=>[x.inspectionCase.id,x]));
+    }catch{
+      // Registry still loads even if live NMC risk/PSC is temporarily down.
+    }
+    const eventMap=new Map(registry.events.map(x=>[x.eventKey,x]));
     let saved={};
     if(this.mode==='json')saved=this.readJson();
     else saved=await this.db(async con=>{
@@ -140,15 +150,23 @@ export class SiInspectionLifecycle{
         {outFormat:oracledb.OUT_FORMAT_OBJECT});
       return Object.fromEntries(r.rows.map(row=>[row.CASE_ID,JSON.parse(row.DOC_JSON)]));
     });
-    return {status:'ok',count:cases.length,cases:cases.map(x=>{
-      const current=saved[x.inspectionCase.id];
-      return {id:x.inspectionCase.id,imo:x.imo,vesselName:x.vesselName,
-        regime:x.regime,approvedBy:x.inspectionCase.approvedBy,
-        sourceEvents:x.events.map(e=>({source:e.sourceType,ref:e.sourceReference})),
-        risk:x.currentRisk,stage:current?.stage||'NOT_STARTED',
-        version:current?.version||0,updatedAt:current?.updatedAt||null,
+    const records=registry.cases.filter(x=>x.status==='CREATED').map(c=>{
+      const current=saved[c.id],live=byCurrentCase.get(c.id);
+      const bundle=this.targeting.bundles?.find(x=>x.imo===c.imo);
+      const vessel=bundle?.inlineContext?.vessel||{};
+      const refs=(c.sourceEventKeys||[]).map(key=>eventMap.get(key))
+        .filter(Boolean).map(e=>({source:e.payload.sourceType,ref:e.payload.sourceReference}));
+      if(c.nmcReferralId&&!refs.some(x=>x.source==='NMC_CASE'))
+        refs.push({source:'NMC_CASE',ref:c.nmcCaseId||c.nmcReferralId});
+      return {id:c.id,imo:c.imo,
+        vesselName:live?.vesselName||vessel.name||vessel.vesselName||('IMO '+c.imo),
+        regime:c.regime,approvedBy:c.approvedBy,
+        sourceEvents:refs,risk:live?.currentRisk||c.riskAtApproval||null,
+        stage:current?.stage||'NOT_STARTED',version:current?.version||0,
+        updatedAt:current?.updatedAt||c.createdAt||null,
         findings:current?.findings?.length||0,actions:current?.actions?.length||0};
-    })};
+    }).sort((a,b)=>String(b.updatedAt).localeCompare(String(a.updatedAt)));
+    return {status:'ok',count:records.length,cases:records};
   }
   async apply(id,payload={}){
     const {action,expectedVersion,actor,data={}}=payload;
