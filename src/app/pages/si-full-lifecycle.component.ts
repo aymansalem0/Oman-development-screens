@@ -149,11 +149,10 @@ export class SiFullLifecycleComponent implements OnInit{
  submitField(){
   if(!this.allChecksDone){this.error=this.copy('Complete all checks and mandatory evidence first.',
     'أكمل جميع بنود المعاينة والأدلة المطلوبة أولاً.');return;}
-  // Save before submission explicitly; prevent submitting old persisted checklist.
-  this.error=this.copy('Save current checklist first, then submit the inspection report.',
-    'احفظ نتائج القائمة أولاً، ثم أرسل تقرير المعاينة.');
+  if(this.checksDirty){this.error=this.copy('Save the checklist before submitting the report.',
+    'احفظ قائمة الفحص قبل إرسال التقرير.');return;}
+  this.run('SUBMIT_FIELD',{summary:this.reportSummary});
  }
- submitReport(){this.run('SUBMIT_FIELD',{summary:this.reportSummary});}
  issueActions(){this.run('ISSUE_ACTIONS',{actions:this.draftActions},true);}
  submitCorrection(x:SiCorrection){
   this.run('SUBMIT_ACTION',{actionId:x.id,
