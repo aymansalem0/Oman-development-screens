@@ -11,6 +11,7 @@ import {randomUUID,createHash} from 'node:crypto';
 import ExcelJS from 'exceljs';
 import oracledb from 'oracledb';
 import {SiTargetingError} from './si-candidate-targeting.mjs';
+import {normalizeNamespacedXlsx} from './si-erp-workforce.mjs';
 
 const sourceDefs=Object.freeze({
   SERVICE_REQUEST:{
@@ -125,12 +126,16 @@ export class SiSourceExcelImport{
   }
   async parse(source,buffer){
     const def=this.definition(source);
-    let book;
-    try{
-      book=new ExcelJS.Workbook();
-      await book.xlsx.load(buffer);
-    }catch{
-      throw new SiTargetingError('SI_XLSX_PARSE_FAILED',422);
+    let book=new ExcelJS.Workbook(),parseFailed=false;
+    try{await book.xlsx.load(buffer);}catch{parseFailed=true;}
+    if(parseFailed||!book.worksheets.length){
+      try{
+        const normalized=await normalizeNamespacedXlsx(buffer);
+        book=new ExcelJS.Workbook();
+        await book.xlsx.load(normalized);
+      }catch{
+        throw new SiTargetingError('SI_XLSX_PARSE_FAILED',422);
+      }
     }
     const sheet=book.getWorksheet(def.sheet);
     if(!sheet)throw new SiTargetingError('SI_XLSX_SHEET_REQUIRED_'+def.sheet,422);
