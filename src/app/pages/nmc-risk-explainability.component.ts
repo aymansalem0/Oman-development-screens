@@ -227,6 +227,59 @@ export class NmcRiskExplainabilityComponent implements OnInit,OnDestroy {
   get riskLevel():string{return this.projectedRisk?.level||(this.assessment?'Unavailable':'Pending');}
   get sourceRiskScore():number|null{return this.assessment?.score??null;}
   get sourceRiskLevel():string{return this.assessment?.level||'Pending';}
+
+  /** Read-only source assessment visibility: distinct from CURRENT projected risk. */
+  get sourceRiskClass():string{
+    const level=this.sourceRiskLevel.toLowerCase();
+    return ['watch','high','critical','normal'].includes(level)?level:'unavailable';
+  }
+  get sourceRiskLabel():string{
+    const labels:Record<string,[string,string]>={
+      Normal:['Normal','طبيعي'],Watch:['Watch','مراقبة'],
+      High:['High','مرتفع'],Critical:['Critical','حرج']
+    };
+    const pair=labels[this.sourceRiskLevel];
+    return pair?this.copy(pair[0],pair[1]):this.copy('Unavailable','غير متاح');
+  }
+  /** Never infer a new risk when A03 is required by the current policy. */
+  get missingRequiredA03():boolean{
+    return Boolean(this.assessment&&this.riskEngine.centralReady&&
+      Number(this.activeRiskConfig?.weights.documentIntegrity||0)>0&&
+      !this.assessment.signals.some(s=>s.factor==='documentIntegrity'&&
+        Number.isFinite(s.severity)&&s.severity>=0&&s.severity<=100));
+  }
+  /** Top recorded contributing factors from the ORIGINAL assessment weights only. */
+  get savedRiskDrivers():Array<{label:string;factor:string;severity:number;weight:number;
+      contribution:number;evidenceCount:number}>{
+    const assessment=this.assessment;
+    if(!assessment)return [];
+    const weights=assessment.ruleset?.weights;
+    const values=assessment.signals.filter(s=>Number.isFinite(s.severity)&&
+      s.severity>=0&&s.severity<=100&&this.factorOrder.includes(s.factor as FactorKey))
+      .map(s=>{
+        const factor=s.factor as FactorKey;
+        const weight=Number(weights?.[factor]||0);
+        return {
+          label:this.copy(...this.factorLabels[factor]),
+          factor, severity:s.severity,weight,
+          contribution:Number((s.severity*weight/100).toFixed(2)),
+          evidenceCount:s.evidenceIds?.length||0
+        };
+      });
+    return values.sort((a,b)=>b.contribution-a.contribution).slice(0,3);
+  }
+  /** Ranges shown here belong to the saved ORIGINAL ruleset, not the new policy. */
+  get originalClassRange():string{
+    const config=this.assessment?.ruleset?.thresholds;
+    if(!config)return '—';
+    const {watch,high,critical}=config;
+    if(this.sourceRiskLevel==='Normal')return '0–'+(watch-1);
+    if(this.sourceRiskLevel==='Watch')return watch+'–'+(high-1);
+    if(this.sourceRiskLevel==='High')return high+'–'+(critical-1);
+    if(this.sourceRiskLevel==='Critical')return critical+'–100';
+    return '—';
+  }
+
   get policyChanged():boolean{
     const original=this.assessment?.ruleset,current=this.activeRiskConfig;
     if(!original||!current)return false;
