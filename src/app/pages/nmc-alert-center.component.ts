@@ -4,6 +4,7 @@ import {FormsModule} from '@angular/forms';
 import {Router,RouterLink} from '@angular/router';
 import {Subscription} from 'rxjs';
 import {NmcNavigationComponent} from '../components/nmc-navigation.component';
+import {NmcMinistryLogoComponent} from '../components/nmc-ministry-logo.component';
 import {LanguageService} from '../services/language.service';
 import {getOperationalVesselByImo} from '../data/nmc-expanded-vessel-catalog';
 import {NmcFleetAiService,FleetAiSnapshot} from '../services/nmc-fleet-ai.service';
@@ -24,7 +25,7 @@ interface RiskCandidate {
 @Component({
   selector:'app-nmc-alert-center',
   standalone:true,
-  imports:[CommonModule,FormsModule,RouterLink,NmcNavigationComponent],
+  imports:[CommonModule,FormsModule,RouterLink,NmcNavigationComponent,NmcMinistryLogoComponent],
   templateUrl:'./nmc-alert-center.component.html',
   styleUrl:'./nmc-alert-center.component.css'
 })
