@@ -63,7 +63,7 @@ test('no-findings case: controlled end-to-end stage transitions and closure',asy
     assert.equal(snapshot.record.stage,'CLOSED');
     assert.equal(snapshot.record.report.aiGenerated,false);
     assert.equal(snapshot.record.closure.nmcRiskRecalculated,false);
-    assert.equal(snapshot.record.audit.length,7);
+    assert.equal(snapshot.record.audit.length,8);
     await assert.rejects(h.step('START_FIELD','Inspector'),e=>e.code==='SI_LIFECYCLE_ALREADY_CLOSED');
   }finally{h.cleanup();}
 });
