@@ -68,6 +68,39 @@ export class SiSourceExcelImport{
       throw new SiTargetingError('SI_XLSX_UNKNOWN_SOURCE',404);
     return sourceDefs[source];
   }
+  async template(source){
+    const def=this.definition(source),book=new ExcelJS.Workbook();
+    book.creator='MOEI Maritime Unified Platform — POC Only';
+    const info=book.addWorksheet('README');
+    info.addRow(['MOEI SMART INSPECTION — SOURCE-SPECIFIC POC XLSX TEMPLATE']);
+    info.addRow(['Source',def.display]);
+    info.addRow(['Usage','Import under Settings > Inspection Settings > Candidate Source Imports']);
+    info.addRow(['Source authority','POC SIMULATOR — UNVERIFIED; officer review is mandatory']);
+    info.addRow(['NMC live referrals','Cannot be uploaded or overwritten by Excel']);
+    info.addRow(['Sheet required',def.sheet]);
+    info.addRow(['Headers','Row 1 exactly; records begin at row 2']);
+    info.addRow(['Date examples','Service Request: YYYY-MM-DD; PSC ETA: YYYY-MM-DDTHH:mm (Dubai local)']);
+    info.addRow(['File limit','2 MB, up to 1000 records; formulas forbidden']);
+    info.getColumn(1).width=34;info.getColumn(2).width=86;
+    const sheet=book.addWorksheet(def.sheet);
+    sheet.addRow(def.fields);
+    const imo=this.targeting.bundles[0]?.imo;
+    if(imo){
+      sheet.addRow(source==='SERVICE_REQUEST'
+        ?['SR-POC-001','UAE-SVC-POC-001',imo,'Jebel Ali','2026-10-10',
+          'Initial maritime inspection','POC test case — replace with source export']
+        :['PSC-POC-001','UAE-PORT-POC-001',imo,'Jebel Ali','2026-10-15T08:00',
+          'Port call inspection','POC test case — replace with source export']);
+    }
+    sheet.views=[{state:'frozen',ySplit:1}];
+    def.fields.forEach((x,i)=>{sheet.getColumn(i+1).width=x==='notes'?48:Math.max(18,x.length+6)});
+    const first=sheet.getRow(1);first.height=28;
+    first.eachCell(cell=>{cell.font={bold:true,color:{argb:'FFFFFFFF'}};
+      cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF075C72'}};
+      cell.alignment={vertical:'middle'};});
+    sheet.autoFilter={from:'A1',to:sheet.getRow(1).getCell(def.fields.length).address};
+    return Buffer.from(await book.xlsx.writeBuffer());
+  }
   async status(){
     const state=await this.targeting._state();
     const batches=new Map();
