@@ -291,9 +291,14 @@ export class SiCandidateTargeting{
     const impacted=data.candidates.filter(c=>c.currentRisk&&
       (c.currentRisk.score>=data.policy.config.riskPriorityThreshold)!==
       (c.currentRisk.score>=newThreshold));
+    const aiSettingsChanged=JSON.stringify(getSiPrioritySettings(parsed))!==
+      JSON.stringify(getSiPrioritySettings(data.policy.config));
     return {status:'PREVIEW',fleetSnapshotId:data.fleetSnapshotId,
       evaluatedPopulation:data.summary.evaluatedPopulation,rulesetVersion:data.policy.version,
       affectedImos:[...new Set(impacted.map(c=>c.imo))],affectedCandidateCount:impacted.length,
+      potentialRankingCandidates:aiSettingsChanged?
+        data.candidates.filter(c=>c.status==='PENDING_REVIEW').length:0,
+      aiSettingsChanged,requiresManualAiRerun:aiSettingsChanged,
       unevaluatedRiskVessels:data.summary.evaluatedPopulation-data.summary.assessedRiskVessels,
       warning:'PRIORITY_ONLY_NO_LEGAL_ELIGIBILITY_CHANGE_NO_AI'};
   }
