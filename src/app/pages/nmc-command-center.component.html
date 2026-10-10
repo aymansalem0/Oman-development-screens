@@ -1,38 +1,7 @@
 <div class="nmc-shell" [class.rtl]="lang.isArabic" [attr.dir]="lang.dir">
-  <header class="nmc-topbar">
-    <div class="brand-block">
-      <div class="brand-mark">⚓</div>
-      <div>
-        <div class="eyebrow">{{ copy('MOEI · Maritime Transformation', 'وزارة الطاقة والبنية التحتية · التحول البحري') }}</div>
-        <h1>{{ copy('National Maritime Center', 'المركز البحري الوطني') }}</h1>
-        <p>{{ copy('Operational picture · Maritime situational awareness', 'الصورة التشغيلية · الوعي البحري بالموقف') }}</p>
-      </div>
-    </div>
-
-    <div class="topbar-status">
-      <div class="live-pill" [class.paused]="!feedLive">
-        <span class="pulse-dot"></span>
-        {{ feedLive ? copy('SIMULATED AIS / LRIT FEED', 'تغذية AIS / LRIT تجريبية') : copy('FEED PAUSED', 'التغذية متوقفة') }}
-      </div>
-      <span class="clock">{{ formattedNow }}</span>
-    </div>
-
-    <div class="topbar-actions">
-      <button type="button" class="language-btn" (click)="toggleLanguage()">{{ lang.isArabic ? 'English' : 'العربية' }}</button>
-      <a routerLink="/moei/nmc/alerts" class="icon-btn alerts-bell"
-         [attr.aria-label]="copy('Alerts & Notifications','التنبيهات والإشعارات')"
-         [title]="copy('Open Alerts & Notifications','فتح التنبيهات والإشعارات')">
-        🔔<b *ngIf="unreadAlertCount>0">{{unreadAlertCount}}</b>
-      </a>
-      <div class="user-chip">
-        <span class="user-avatar">NO</span>
-        <span>
-          <strong>{{ copy('NMC Officer', 'ضابط المركز البحري الوطني') }}</strong>
-          <small>{{ copy('Duty Operations', 'العمليات المناوبة') }}</small>
-        </span>
-      </div>
-    </div>
-  </header>
+  <app-nmc-platform-header area="nmc" [feedLive]="feedLive"
+     [clock]="formattedNow" [unreadAlerts]="unreadAlertCount"
+     (languageChanged)="refreshMapForLanguage()"></app-nmc-platform-header>
 
   <app-nmc-navigation></app-nmc-navigation>
 
@@ -400,4 +369,5 @@
       </div>
     </section>
   </main>
+  <app-nmc-platform-footer></app-nmc-platform-footer>
 </div>
