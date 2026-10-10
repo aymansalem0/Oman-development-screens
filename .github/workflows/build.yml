@@ -2,10 +2,10 @@ name: Angular Build
 
 on:
   push:
-    branches: [main, 'feature/nmc-*', 'feature/si-*']
+    branches: [main, 'feature/nmc-*', 'feature/si-*', 'feature/moei-*']
   workflow_dispatch:
   pull_request:
-    branches: [main, feature/smart-inspection-poc, 'feature/nmc-*', 'feature/si-*']
+    branches: [main, feature/smart-inspection-poc, 'feature/nmc-*', 'feature/si-*', 'feature/moei-*']
 
 jobs:
   build:
