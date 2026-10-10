@@ -62,12 +62,12 @@ export class NmcRiskConfigurationAdminComponent implements OnInit, OnDestroy {
   draftReady=false;
   draftSaving=false;
   draftSaveMessage='';
+  draftActorName='';
   draftError='';
   private editorAccessKey='';
   private draftRequested=false;
   get canSaveDraft():boolean{
-    return this.policyReady&&!this.draftSaving&&
-      !!this.draft?.name?.trim()&&this.draft?.publishedBy?.trim().length>=3;
+    return this.policyReady&&!this.draftSaving&&!!this.draft?.name?.trim();
   }
   get draftStale():boolean{
     return !!this.savedDraft&&this.savedDraft.baseRevision!==this.activeRevision;
@@ -146,6 +146,7 @@ export class NmcRiskConfigurationAdminComponent implements OnInit, OnDestroy {
     this.subscriptions.add(this.riskEngine.savedDraft().subscribe({
       next:draft=>{
         this.savedDraft=draft;this.draftReady=true;
+        this.draftActorName=draft?.updatedBy||this.draftActorName;
         if(draft&&draft.baseRevision===this.activeRevision&&!this.dirtyDraft){
           this.draft=this.riskEngine.cloneConfig(draft.config);
           this.validationErrors=this.riskEngine.validate(this.draft);
@@ -164,10 +165,13 @@ export class NmcRiskConfigurationAdminComponent implements OnInit, OnDestroy {
     if(!this.editorAccessKey)this.editorAccessKey=window.prompt(
       'Risk Draft editor key (this browser tab only)')?.trim()||'';
     if(!this.editorAccessKey)return;
+    if(!this.draftActorName.trim())
+      this.draftActorName=window.prompt('Name of the Risk Editor saving this draft')?.trim()||'';
+    if(this.draftActorName.trim().length<3)return;
     this.draftSaving=true;this.draftError='';this.draftSaveMessage='';
     this.subscriptions.add(this.riskEngine.saveCentralDraft(
       this.draft,this.activeRevision,this.savedDraft?.draftRevision||0,
-      this.draft.publishedBy,this.editorAccessKey).subscribe({
+      this.draftActorName,this.editorAccessKey).subscribe({
       next:draft=>{
         this.savedDraft=draft;this.draftReady=true;this.draftSaving=false;
         this.dirtyDraft=false;
