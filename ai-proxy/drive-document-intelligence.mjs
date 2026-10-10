@@ -290,8 +290,12 @@ export class DriveDocumentIntelligence {
     if(!folderOk(this.rootFolderId))
       return {status:'not_configured',imo,documents:[],driveConnected:false};
     const root=await this.folderChildren(this.rootFolderId);
-    const vesselDirs=root.filter(x=>x.mimeType==='application/vnd.google-apps.folder'&&
-      new RegExp('^(?:IMO[\\\\s_-]*)?'+imo+'(?:[\\\\s_-]*[-–][\\\\s_-]*[^/]{1,100})?$','i').test(String(x.name||'').trim()));
+    const vesselDirs=root.filter(x=>{
+      if(x.mimeType!=='application/vnd.google-apps.folder')return false;
+      const name=String(x.name||'').trim();
+      return name===imo||name.startsWith(imo+' - ')||
+        name==='IMO '+imo||name.startsWith('IMO '+imo+' - ');
+    });
     const direct=root.filter(x=>allowedTypes.has(x.mimeType)&&
       new RegExp('(?:^|[^0-9])'+imo+'(?:[^0-9]|$)').test(String(x.name||'')));
     let candidates=[...direct];
