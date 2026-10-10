@@ -117,6 +117,9 @@ export class NmcNavigationComponent implements OnInit, OnDestroy {
   }
   get isIntelligence(): boolean { return this.currentPath.endsWith('/ai-assessment')||this.currentPath.endsWith('/risk'); }
   get isGuidanceConfig():boolean{return this.currentPath==='/moei/nmc/admin/operational-guidance';}
+  get isErpIntegrationSettings(): boolean {
+    return this.currentPath === '/moei/smart-inspection/settings/erp';
+  }
   get isCase(): boolean { return this.currentPath.endsWith('/case'); }
   get isSmartInspection(): boolean { return this.currentPath.includes('/smart-inspection'); }
   get isRiskConfig(): boolean {
