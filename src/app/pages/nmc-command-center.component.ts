@@ -13,7 +13,7 @@ import { FormsModule } from '@angular/forms';
 import { Subscription } from 'rxjs';
 import { NmcFleetAiService, FleetAiSnapshot, FleetAiVessel } from '../services/nmc-fleet-ai.service';
 import { Router, RouterLink } from '@angular/router';
-import * as L from 'leaflet';
+import * as L from 'leaflet/dist/leaflet-src.esm.js';
 import {
   NmcVesselProfile,
   RiskLevel,
