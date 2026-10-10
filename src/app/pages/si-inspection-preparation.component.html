@@ -29,9 +29,9 @@
     <ng-container *ngIf="data as d">
       <div class="stats">
         <article><small>{{copy("INSPECTION / IMO","المعاينة / IMO")}}</small><strong>{{d.context.imo}}</strong><span>{{d.context.vessel.name}} · {{d.context.vessel.flag}}</span></article>
-        <article><small>{{copy("PREPARATION STATUS","حالة التحضير")}}</small><strong [class.warn]="d.stale">{{d.saved?.status||'NOT PREPARED'}}</strong><span>Revision {{d.saved?.version||0}}</span></article>
-        <article><small>{{copy("CURRENT NMC RISK","مخاطر المركز البحري الحالية")}}</small><strong *ngIf="d.context.risk as risk">{{risk.score}} / 100</strong><strong *ngIf="!d.context.risk" class="warn">{{copy("NO SAVED RISK","لا يوجد تقييم محفوظ")}}</strong><span>{{d.context.risk?.level||'Review only'}} · v{{d.context.risk?.policyRevision||'—'}}</span></article>
-        <article><small>{{copy("A04 PROVIDER ACCESS","حالة تشغيل وكيل A04")}}</small><strong>{{d.a04Enabled?'EXPLICITLY ENABLED':'DISABLED'}}</strong><span>{{copy("No AI on GET, prepare or review","لا يستدعى AI أثناء العرض أو التحضير أو المراجعة")}}</span></article>
+        <article><small>{{copy("PREPARATION STATUS","حالة التحضير")}}</small><strong [class.warn]="d.stale">{{statusLabel(d.saved?.status)}}</strong><span>Revision {{d.saved?.version||0}}</span></article>
+        <article><small>{{copy("CURRENT NMC RISK","مخاطر المركز البحري الحالية")}}</small><strong *ngIf="d.context.risk as risk">{{risk.score}} / 100</strong><strong *ngIf="!d.context.risk" class="warn">{{copy("NO SAVED RISK","لا يوجد تقييم محفوظ")}}</strong><span>{{d.context.risk?.level?statusLabel(d.context.risk?.level):copy('Review only','للمراجعة فقط')}} · v{{d.context.risk?.policyRevision||'—'}}</span></article>
+        <article><small>{{copy("A04 PROVIDER ACCESS","حالة تشغيل وكيل A04")}}</small><strong>{{d.a04Enabled?copy('EXPLICITLY ENABLED','مفعّل بعد موافقة صريحة'):copy('DISABLED','غير مفعّل')}}</strong><span>{{copy("No AI on GET, prepare or review","لا يستدعى AI أثناء العرض أو التحضير أو المراجعة")}}</span></article>
       </div>
       <div class="notice error" *ngIf="d.stale">
         {{copy("Source evidence or active NMC risk has changed since this preparation. Refresh preparation explicitly before any A04 or approval.","تغيرت أدلة المصدر أو تقييم المخاطر منذ التحضير. حدّث التحضير صراحة قبل تشغيل A04 أو الاعتماد.")}}
@@ -52,14 +52,14 @@
           <div><small>{{copy("Evidence bundle","حزمة الأدلة")}}</small><strong>{{d.context.bundleRef}}</strong></div>
         </div>
         <div class="evidence-panel">
-          <div class="info"><strong>{{d.context.evidenceManifestRefs.length}} referenced evidence IDs</strong><span>Source: synthetic NMC vessel bundle · {{d.context.externalDocumentsVerified?'Verified external documents':'NO authenticated external document PDFs'}}</span></div>
+          <div class="info"><strong>{{d.context.evidenceManifestRefs.length}} referenced evidence IDs</strong><span>Source: synthetic NMC vessel bundle · {{d.context.externalDocumentsVerified?copy('Verified external documents','مستندات خارجية موثّقة'):copy('NO authenticated external document PDFs','لا توجد نسخ مستندات خارجية موثّقة')}}</span></div>
           <div class="evidence-chips"><code *ngFor="let ev of d.context.evidenceManifestRefs">{{ev}}</code></div>
           <div><h3>{{copy("Open finding references","مراجع الملاحظات المفتوحة")}}</h3>
             <span class="muted" *ngIf="!d.context.openFindingRefs.length">{{copy("None asserted in the current source bundle","لا توجد مراجع مؤكدة في حزمة المصدر الحالية")}}</span>
             <code *ngFor="let ref of d.context.openFindingRefs" class="inline-code">{{ref}}</code></div>
         </div>
         <button class="primary" (click)="prepare()" [disabled]="busy||loading||d.saved?.status==='APPROVED'||d.saved?.status==='GENERATING'">
-          {{d.saved?'Refresh Preparation Snapshot':'Prepare Case — No AI Call'}}
+          {{d.saved?copy('Refresh Preparation Snapshot','تحديث بيانات التحضير'):copy('Prepare Case — No AI Call','تحضير الحالة دون تشغيل AI')}}
         </button>
         <p class="hint">{{copy("Preparation snapshots evidence, current central risk and mandatory checklist IDs; it never changes NMC risk or invokes Airia.","يحفظ التحضير لقطة من الأدلة والمخاطر الحالية وبنود المعاينة الإلزامية دون تغيير التقييم أو استدعاء Airia.")}}</p>
       </section>
