@@ -126,6 +126,7 @@
               <span class="traffic-profile-badge">
                 {{ correlatedProfileCount }} {{ copy('correlated vessel profiles', 'ملف سفينة مترابط') }}
               </span>
+              <span class="real-map-badge">{{assessedCount}} {{copy('AI assessed','تم تقييمها بواسطة AI')}}</span>
               <span class="risk-preview-badge" *ngIf="provisionalRiskCount>0">
                 {{provisionalRiskCount}} {{copy('PROVISIONAL RISK · A03 NOT ASSESSED','مخاطر مبدئية · A03 لم يُقيّم')}}
               </span>
