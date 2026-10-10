@@ -185,12 +185,12 @@ export class NmcAlertCenterComponent implements OnInit,OnDestroy{
             // Fail open for stale saved alerts: do not hide until matching
             // current Oracle source and complete saved A01/A02 evidence exist.
             assessment.assessmentId===expected.assessmentId&&
-            ['movement','inspection','certificate','dataQuality','history'].every(
-              factor=>Number.isFinite(sev[factor as keyof typeof sev])&&
-                sev[factor as keyof typeof sev]>=0&&
-                sev[factor as keyof typeof sev]<=100);
+            ['movement','inspection','certificate','dataQuality','history',
+             ...(Number(config.weights.documentIntegrity||0)>0?['documentIntegrity']:[])].every(
+              factor=>{const v=Number(sev[factor as keyof typeof sev]);
+                return Number.isFinite(v)&&v>=0&&v<=100;});
           if(!ready){missing++;continue;}
-          const projection=this.riskEngine.evaluateFromAiSignals(vessel!,sev!,config);
+          const projection=this.riskEngine.evaluateFromAiSignals(vessel!,sev! as Record<import('../services/nmc-risk-engine.service').RiskFactorKey,number>,config);
           const criticalFinding=expected.criticalOpenFinding===true;
           nextResults.set(imo,{
             eligible:criticalFinding||projection.level==='High'||projection.level==='Critical',
