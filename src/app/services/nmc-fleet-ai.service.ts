@@ -175,6 +175,18 @@ export interface FleetAiAnalytics {
 @Injectable({providedIn:'root'})
 export class NmcFleetAiService {
   constructor(private readonly http:HttpClient){}
+  policyRiskHistory(imo:string):Observable<{status:'ok';history:Array<{
+    imo:string;sourceAssessmentId:string;riskScore:number;riskLevel:string;
+    policyRevision:number;policyRef?:string;policyVersion?:string;reason?:string;
+    calculatedAt?:string;factorSnapshot?:{
+      calculationMode:string;weightedSubtotal:number;modeAdjustment:number;
+      clampedAndRoundedScore:number;
+      factors:Array<{key:string;severity:number;weight:number;weightedContribution:number;
+        sourceAgent?:string;reason?:string;evidenceIds?:string[]}>;
+    }|null;
+  }>}>{
+    return this.http.get<any>('/api/ai/risk-policy/vessels/'+encodeURIComponent(imo)+'/history');
+  }
   snapshot():Observable<FleetAiSnapshot>{
     return this.http.get<FleetAiSnapshot>('/api/ai/fleet/status');
   }
