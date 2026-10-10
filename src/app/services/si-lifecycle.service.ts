@@ -49,7 +49,10 @@ export interface SiLifecycleVersion {
   snapshot:SiLifecycleRecord;
 }
 export interface SiLifecycleView{
-  status:string;inspectionCase:{id:string;imo:string;regime:string;approvedBy:string;nmcReferralId?:string|null};
+  status:string;
+  nmcBooking:{id:string;status:string;inspector:string|null;port:string|null;
+    scheduledAt:string|null}|null;
+  inspectionCase:{id:string;imo:string;regime:string;approvedBy:string;nmcReferralId?:string|null};
   preparation:{status:string;version:number;stale:boolean;baseChecklistIds:string[];
     dossier:{focusAreas:unknown[];suggestedAdditionalItems:{title:string;reason:string}[]}|null;
     provenance:string;externalDocumentsVerified:boolean};
