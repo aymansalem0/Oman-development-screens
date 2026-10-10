@@ -1,3 +1,4 @@
+import {LanguageService} from '../services/language.service';
 import {CommonModule} from '@angular/common';
 import {Component,OnInit} from '@angular/core';
 import {FormsModule} from '@angular/forms';
@@ -30,7 +31,8 @@ export class SiCandidateWorkbenchComponent implements OnInit{
     sourceType:'SERVICE_REQUEST',sourceEventId:'',sourceReference:'',imo:'',port:'',eta:'',
     sourceApprovalStatus:'UNVERIFIED',note:''
   };
-  constructor(private readonly api:SiCandidateTargetingService){}
+  constructor(private readonly api:SiCandidateTargetingService,public readonly lang:LanguageService){}
+  copy(en:string,ar:string):string{return this.lang.pick(en,ar);}
   ngOnInit():void{this.refresh();}
   refresh():void{
     if(this.loading)return;
