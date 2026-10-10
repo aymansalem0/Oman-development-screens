@@ -496,7 +496,7 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
     const hasCore=signalKeys.every(key=>Number.isFinite(severities[key]));
     const projected=this.riskEngine.centralReady&&hasCore&&(!weightedDoc||doc)?
       this.riskEngine.evaluateFromAiSignals(this.vessel,{
-        ...severities,...(doc?{documentIntegrity:doc.severity}:{})}):null;
+        ...severities,...(doc?{documentIntegrity:doc.severity}:{})} as Record<import('../services/nmc-risk-engine.service').RiskFactorKey,number>):null;
     this.vessel.riskScore = projected?.score ?? this.storedAi.score ?? this.vessel.riskScore;
     this.vessel.riskLevel = projected?.level ?? this.storedAi.level ?? this.vessel.riskLevel;
     this.vessel.risk=this.vessel.riskScore;
