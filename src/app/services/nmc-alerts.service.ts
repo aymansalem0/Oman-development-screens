@@ -1,14 +1,11 @@
 import {Injectable} from '@angular/core';
 import {HttpClient,HttpHeaders} from '@angular/common/http';
-import {Observable,throwError,forkJoin,of} from 'rxjs';
-import {catchError,map,switchMap} from 'rxjs/operators';
-import {NmcFleetAiService,FleetAiAssessment} from './nmc-fleet-ai.service';
-import {NmcRiskEngineService,RiskFactorKey} from './nmc-risk-engine.service';
-import {getOperationalVesselByImo} from '../data/nmc-expanded-vessel-catalog';
+import {Observable,throwError} from 'rxjs';
+import {catchError} from 'rxjs/operators';
 
-export type AlertStatus='OPEN'|'ACKNOWLEDGED'|'IN_PROGRESS'|'ESCALATED'|'RESOLVED';
+export type AlertStatus='OPEN'|'ACKNOWLEDGED'|'IN_PROGRESS'|'ESCALATED'|'RESOLVED'|'SUPERSEDED';
 export type AlertSeverity='HIGH'|'CRITICAL';
-export type AlertAction='ACKNOWLEDGE'|'START_FOLLOW_UP'|'ESCALATE'|'RESOLVE';
+export type AlertAction='ACKNOWLEDGE'|'START_FOLLOW_UP'|'ESCALATE'|'RESOLVE'|'DISMISS';
 export interface NmcOperationalAlert {
   id:string;
   alertKey:string;
@@ -24,6 +21,17 @@ export interface NmcOperationalAlert {
   sourceLevel:string;
   sourceRulesetVersion:string|null;
   actionHint:string;
+  triggeredByPolicyVersion?:string|null;
+  triggeredByPolicyRevision?:number|null;
+  triggeringRiskScore?:number;
+  triggeringRiskLevel?:string;
+  triggeringRiskTrigger?:'RISK_BAND'|'CRITICAL_OPEN_FINDING';
+  supersededAt?:string;
+  supersededReason?:string;
+  supersededByPolicyRevision?:number|null;
+  supersededByRiskLevel?:string|null;
+  supersededByRiskScore?:number|null;
+  dismissedAt?:string;
   version:number;
   createdAt:string;
   updatedAt:string;
@@ -32,13 +40,14 @@ export interface NmcOperationalAlert {
 export interface NmcAlertSummary {
   total:number;active:number;open:number;acknowledged:number;
   inProgress:number;escalated:number;critical:number;high:number;unread:number;
+  superseded?:number;
 }
 export interface NmcAlertsOverview{
   status:'ok';alerts:NmcOperationalAlert[];summary:NmcAlertSummary;updatedAt:string;
 }
 export interface NmcAlertAudit{
   version:number;
-  action:'DETECTED'|AlertAction;
+  action:'DETECTED'|'SUPERSEDE'|AlertAction;
   role:'SYSTEM'|'OPERATOR'|'SUPERVISOR';
   note:string;at:string;
 }
@@ -47,61 +56,18 @@ export class NmcAlertsService {
   private readonly root='/api/ai/alerts';
   private operatorKey='';
   private supervisorKey='';
-  constructor(private readonly http:HttpClient,
-    private readonly fleet:NmcFleetAiService,
-    private readonly riskEngine:NmcRiskEngineService){}
+  constructor(private readonly http:HttpClient){}
 
   overview():Observable<NmcAlertsOverview>{
     return this.http.get<NmcAlertsOverview>(this.root);
   }
   /**
-   * UI-only eligibility projection for navigation/Command Center counts.
-   * DOES NOT resolve, suppress or delete persisted Oracle alerts.
-   * On incomplete evidence, fail open rather than hide a possible safety finding.
+   * Notification counts MUST follow centrally PUBLISHED risk rules.
+   * Browser-local draft/preview rules never dismiss or recolor authoritative
+   * alerts. The server reconciles supersession and issuance after publish.
    */
   overviewForBrowserPolicy():Observable<NmcAlertsOverview>{
-    return this.overview().pipe(switchMap(data=>{
-      const active=data.alerts.filter(a=>a.status!=='RESOLVED');
-      const imos=[...new Set(active.map(a=>a.imo))];
-      if(!imos.length)return of(data);
-      const config=this.riskEngine.config;
-      if(this.riskEngine.validate(config).length)return of(data);
-      return forkJoin(imos.map(imo=>this.fleet.assessment(imo).pipe(
-        map(assessment=>({imo,assessment})),
-        catchError(()=>of({imo,assessment:null as FleetAiAssessment|null}))
-      ))).pipe(map(rows=>{
-        const matches=new Map<string,{eligible:boolean;level:string}>();
-        const factorKeys:RiskFactorKey[]=['movement','inspection','certificate','dataQuality','history'];
-        for(const {imo,assessment} of rows){
-          const vessel=getOperationalVesselByImo(imo);
-          if(!assessment||!vessel||assessment.status!=='COMPLETED'||
-             !Array.isArray(assessment.signals)||
-             !factorKeys.every(f=>assessment.signals.filter(s=>
-               s.factor===f&&Number.isFinite(s.severity)&&s.severity>=0&&s.severity<=100).length===1))
-            continue;
-          const values=Object.fromEntries(assessment.signals.map(s=>
-            [s.factor,s.severity])) as Record<RiskFactorKey,number>;
-          const risk=this.riskEngine.evaluateFromAiSignals(vessel,values,config);
-          const critical=assessment.criticalOpenFinding===true;
-          matches.set(imo,{eligible:critical||risk.level==='High'||risk.level==='Critical',
-            level:critical?'Critical':risk.level});
-        }
-        const relevant=active.filter(a=>matches.get(a.imo)?.eligible!==false);
-        return {...data,summary:{
-          ...data.summary,
-          active:relevant.length,
-          open:relevant.filter(a=>a.status==='OPEN').length,
-          acknowledged:relevant.filter(a=>a.status==='ACKNOWLEDGED').length,
-          inProgress:relevant.filter(a=>a.status==='IN_PROGRESS').length,
-          escalated:relevant.filter(a=>a.status==='ESCALATED').length,
-          unread:relevant.filter(a=>a.status==='OPEN'||a.status==='ESCALATED').length,
-          critical:relevant.filter(a=>matches.get(a.imo)?.level==='Critical'||
-            (!matches.has(a.imo)&&a.severity==='CRITICAL')).length,
-          high:relevant.filter(a=>matches.get(a.imo)?.level==='High'||
-            (!matches.has(a.imo)&&a.severity==='HIGH')).length
-        }};
-      }),catchError(()=>of(data)));
-    }));
+    return this.overview();
   }
   history(id:string):Observable<{status:'ok';history:NmcAlertAudit[]}>{
     return this.http.get<{status:'ok';history:NmcAlertAudit[]}>(
@@ -124,7 +90,7 @@ export class NmcAlertsService {
     }
     const slug:Record<AlertAction,string>={
       ACKNOWLEDGE:'acknowledge',START_FOLLOW_UP:'follow-up',
-      ESCALATE:'escalate',RESOLVE:'resolve'
+      ESCALATE:'escalate',RESOLVE:'resolve',DISMISS:'dismiss'
     };
     return this.http.post<{status:'ok';alert:NmcOperationalAlert}>(
       this.root+'/'+encodeURIComponent(alert.id)+'/'+slug[action],
@@ -146,6 +112,7 @@ export class NmcAlertsService {
       ALERT_STORE_UNAVAILABLE:['Alert service is unavailable.','خدمة التنبيهات غير متاحة حاليًا.'],
       ALERT_VERSION_CONFLICT:['Alert changed in another session. Refresh and retry.','تم تغيير التنبيه في جلسة أخرى. حدّث البيانات وأعد المحاولة.'],
       ALERT_TRANSITION_INVALID:['This action is not permitted in the current alert state.','هذا الإجراء غير مسموح في الحالة الحالية للتنبيه.'],
+      ALERT_OPERATOR_REQUIRED:['Operator authorization is required.','يلزم تصريح الموظف لإخفاء التنبيه.'],
       ALERT_RESOLUTION_NOTE_REQUIRED:['Resolution reason is required.','يجب إدخال سبب إغلاق التنبيه.'],
       ALERT_SUPERVISOR_REQUIRED:['Supervisor approval is required.','يتطلب الإجراء موافقة المشرف.'],
       DASHBOARD_ACCESS_DENIED:['Incorrect access key.','مفتاح الصلاحية غير صحيح.'],
