@@ -17,6 +17,7 @@ import { SiAiPrioritization, SiPriorityError } from './si-ai-prioritization.mjs'
 import { SiInspectionPreparation, SiPreparationError } from './si-inspection-preparation.mjs';
 import { SiInspectionLifecycle, SiLifecycleError } from './si-inspection-lifecycle.mjs';
 import { DriveDocumentIntelligence, DocumentError } from './drive-document-intelligence.mjs';
+import {buildA03MultipartUserInput,summarizeA03HttpFailure} from './airia-a03-multipart.mjs';
 import { RuntimeSettings, RuntimeSettingsError } from './runtime-settings.mjs';
 
 const port = Number(process.env.PORT || 3000);
@@ -68,7 +69,7 @@ async function a03AgentCall(payload) {
   if(!Buffer.isBuffer(attachment.bytes)||!attachment.bytes.length)
     throw new Error('A03_DOCUMENT_ATTACHMENT_MISSING');
   const form=new FormData();
-  form.set('userInput',JSON.stringify(input));
+  form.set('userInput',JSON.stringify(buildA03MultipartUserInput(input)));
   form.set('file',new Blob([attachment.bytes],{type:'application/pdf'}),
     attachment.fileName);
   let upstream;
@@ -86,7 +87,11 @@ async function a03AgentCall(payload) {
     throw new DocumentError(timeout?'AIRIA_A03_TIMEOUT':'AIRIA_A03_NETWORK_UNAVAILABLE',502);
   }
   if(!upstream.ok){
-    await upstream.body?.cancel().catch(()=>{});
+    let errorBody='';
+    try{errorBody=(await upstream.text()).slice(0,16384);}catch{}
+    const diagnostic=summarizeA03HttpFailure(upstream.status,errorBody,
+      upstream.headers.get('content-type')||'');
+    console.error('[nmc-a03] UPSTREAM_HTTP_FAILURE '+JSON.stringify(diagnostic));
     throw new DocumentError('AIRIA_A03_HTTP_'+upstream.status,502);
   }
   let raw;
