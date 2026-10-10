@@ -98,3 +98,23 @@ test('SI-P01 weights and trigger priorities follow NMC Risk slider + compact num
   const server=read('ai-proxy/server.mjs');
   assert.match(server,/SiAiPrioritization/);
 });
+
+
+test('PSC quota settings auto-load published policy; credentials guard changes, not initial display',()=>{
+  const screen=read('src/app/pages/si-psc-quota-settings.component.ts');
+  const api=read('src/app/services/si-psc-selection.service.ts');
+  const server=read('ai-proxy/server.mjs');
+  assert.match(screen,/ngOnInit\(\):void\{this\.load\(\);\}/);
+  assert.match(screen,/this\.api\.policy\(\)\.subscribe\(/);
+  assert.match(screen,/\*ngIf="policy as p"/);
+  assert.match(screen,/Preview & Approval Access/);
+  assert.match(screen,/this\.api\.preview\(this\.editorKey\.trim\(\),config\)/);
+  assert.match(screen,/this\.api\.publish\(this\.publisherKey\.trim\(\),/);
+  assert.match(screen,/\*ngIf="!policy&&!busy&&error"/);
+  assert.match(api,/policy\(\):Observable/);
+  assert.match(api,/this\.base\+'\/policy'\);/);
+  assert.match(server,/GET'&&path==='\/api\/si\/v1\/psc-selection\/policy'\)[\s\S]{0,380}siPscSelection\.policy\(\)/);
+  assert.match(server,/POST'&&path==='\/api\/si\/v1\/psc-selection\/policy\/preview'\)\{\s*dashboards\.assertRole\(req,'EDITOR'\)/);
+  assert.match(server,/POST'&&path==='\/api\/si\/v1\/psc-selection\/policy\/publish'\)\{\s*dashboards\.assertRole\(req,'PUBLISHER'\)/);
+  assert.match(server,/POST'&&path==='\/api\/si\/v1\/psc-selection\/decision'\)\{\s*dashboards\.assertRole\(req,'PUBLISHER'\)/);
+});

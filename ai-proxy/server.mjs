@@ -475,7 +475,9 @@ const server = createServer(async (req, res) => {
           period:selectedPeriod||null,port:selectedPort||null}));
       }
       if(req.method==='GET'&&path==='/api/si/v1/psc-selection/policy'){
-        dashboards.assertRole(req,'EDITOR');
+        // Published business settings are read-only and visible to platform
+        // users (like NMC risk policy). Preview still needs EDITOR;
+        // publishing, quotas and event decisions remain role-protected.
         return respond(res,200,{status:'ok',policy:await siPscSelection.policy()});
       }
       if(req.method==='POST'&&path==='/api/si/v1/psc-selection/policy/preview'){
