@@ -127,6 +127,13 @@
           <span class="nav-label">{{copy('Data Quality Management','إدارة جودة البيانات')}}</span>
         </a>
 
+        <a class="nav-link" routerLink="/moei/smart-inspection/settings/erp"
+           [class.active]="isErpIntegrationSettings"
+           [attr.aria-current]="isErpIntegrationSettings?'page':null"
+           [title]="copy('ERP Integration Simulator','إعدادات تكامل ERP التجريبي')">
+          <span class="nav-icon">⇄</span>
+          <span class="nav-label">{{copy('ERP Integration Simulator','محاكاة الربط مع ERP')}}</span>
+        </a>
         <a class="nav-link" routerLink="/moei/nmc/admin/operational-guidance"
            [class.active]="isGuidanceConfig" [attr.aria-current]="isGuidanceConfig?'page':null"
            [title]="copy('Operational Guidance Rules','قواعد الإرشاد التشغيلي')">
