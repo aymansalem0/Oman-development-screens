@@ -70,7 +70,7 @@ a,button,input,textarea { font:inherit; }
 }
 
 .nmc-sidebar {
-  position:fixed; left:0; top:82px; bottom:0; width:216px; z-index:25;
+  position:fixed; left:0; top:82px; bottom:0; width:240px; z-index:25;
   padding:20px 12px 16px; background:#fff; border-right:1px solid #e6edf3; overflow-y:auto;
 }
 .sidebar-section-label {
@@ -102,7 +102,7 @@ a,button,input,textarea { font:inherit; }
   box-shadow:0 0 0 4px #eaf9ef;
 }
 
-.inspection-main { margin-left:216px; padding:106px 24px 34px; }
+.inspection-main { margin-left:240px; padding:106px 24px 34px; }
 
 .inspection-hero,.inheritance-panel,.panel {
   background:#fff; border:1px solid #e3ebf0;
@@ -275,7 +275,7 @@ a,button,input,textarea { font:inherit; }
 .inspection-shell.rtl .nmc-sidebar {
   left:auto; right:0; border-right:0; border-left:1px solid #e6edf3;
 }
-.inspection-shell.rtl .inspection-main { margin-left:0; margin-right:216px; }
+.inspection-shell.rtl .inspection-main { margin-left:0; margin-right:240px; }
 .inspection-shell.rtl .nav-item { text-align:right; }
 .inspection-shell.rtl .nav-item.active {
   background:linear-gradient(270deg,#eaf9f6,#f5fcfb);
