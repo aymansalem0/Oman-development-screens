@@ -17,9 +17,7 @@
       <div class="top-actions">
         <a routerLink="/moei/smart-inspection/scheduling" style="display:inline-flex;align-items:center;border-radius:8px;background:#057c95;color:#fff;padding:10px 13px;text-decoration:none;font-size:12px;font-weight:800">⚙ Electronic Scheduling / الجدولة الإلكترونية</a>
         <span class="population-chip">420 {{ copy('shared vessels', 'سفينة مشتركة') }}</span>
-        <button type="button" class="language-btn" (click)="toggleLanguage()">
-          {{ lang.isArabic ? 'English' : 'العربية' }}
-        </button>
+        <!-- Language switch belongs to the shared NMC platform header. -->
       </div>
     </header>
   
