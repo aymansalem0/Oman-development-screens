@@ -64,6 +64,8 @@ const documents=new DriveDocumentIntelligence({mode:dbMode,oracleRepository:repo
   enabled:runtime.get('NMC_A03_ENABLED')&&Boolean(apiKey)});
 const fleet=new FleetAssessmentManager({executeAgent:fleetAgentCall,getPscVessel,repository,
   approvedDocuments:async imo=>documents.ready?documents.approvedFor(imo):[],
+  documentEvidence:async imo=>documents.ready?
+    documents.syncForRisk(imo,{autoEnabled:runtime.get('NMC_A03_AUTO_ENABLED')}):[],
   onAssessmentSaved:async row=>{
     try{await guidance?.materialize(row.imo);}
     catch{console.error('[nmc-guidance] RESULT_MATERIALIZATION_FAILED');}
@@ -168,6 +170,13 @@ async function effectiveFleetSnapshot(snapshot){
     activePolicyRef:active.policyRef,riskPolicyStatus:'ACTIVE'};
 }
 const scheduler=new FleetAutoScheduler({fleet,getPscVessel,
+  getRiskConfig:async()=>{
+    if(!riskPolicy.ready)throw new Error('RISK_POLICY_NOT_READY');
+    const published=await riskPolicy.active();
+    return {...published.config,version:published.config.version||published.policyRef};
+  },
+  getDocumentFingerprint:async imo=>documents.ready?
+    documents.fingerprint(imo):'A03_NOT_READY',
   enabled:runtime.get('NMC_FLEET_AUTO_ENABLED')&&Boolean(apiKey),
   intervalMs:runtime.get('NMC_FLEET_REFRESH_SECONDS')*1000,
   maxVessels:runtime.get('NMC_FLEET_AUTO_MAX_VESSELS'),
