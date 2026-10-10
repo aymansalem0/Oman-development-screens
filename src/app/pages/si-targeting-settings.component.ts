@@ -95,6 +95,10 @@ import {SiCandidateTargetingService,SiDashboard,SiImpact,SiPriorityWeights,SiTar
               <strong>{{p.affectedCandidateCount}} {{copy('affected candidates','مرشح تأثر بالتغيير')}}</strong>
               <p>{{p.evaluatedPopulation}} {{copy('active vessels','سفينة نشطة')}} ·
                 {{p.unevaluatedRiskVessels}} {{copy('without saved NMC risk','بدون تقييم مخاطر محفوظ')}}</p>
+              <p *ngIf="p.aiSettingsChanged">
+                <strong>{{p.potentialRankingCandidates}} {{copy('pending candidates may be reordered','مرشح مفتوح قد يتغير ترتيبه')}}</strong>
+                · {{copy('Publishing does NOT call AI. Re-run SI-P01 explicitly when the settings are effective.',
+                  'نشر الإعدادات لا يشغّل AI؛ يجب تشغيل SI-P01 يدويًا بعد النشر.')}}</p>
               <p>{{copy('Affected IMO numbers','أرقام IMO المتأثرة')}}:
                 {{p.affectedImos.length?p.affectedImos.join(', '):copy('None','لا يوجد')}}</p>
               <small>{{copy('Preview does not call AI or change eligibility. Publish only after review.',
