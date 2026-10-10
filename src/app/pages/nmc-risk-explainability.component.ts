@@ -17,6 +17,17 @@ interface RiskFactor {
   severity:number;weight:number;contribution:number;confidence:number;
   evidenceIds:string[];reason:string;sourceAgent:string;
 }
+interface HistoricalRiskProjection {
+  imo:string;sourceAssessmentId:string;riskScore:number;riskLevel:string;
+  policyRevision:number;policyRef?:string;policyVersion?:string;
+  reason?:string;calculatedAt?:string;
+  factorSnapshot?:{
+    calculationMode:string;weightedSubtotal:number;modeAdjustment:number;
+    clampedAndRoundedScore:number;
+    factors:Array<{key:string;severity:number;weight:number;
+      weightedContribution:number;sourceAgent?:string;reason?:string;evidenceIds?:string[]}>;
+  }|null;
+}
 interface Threshold {
   key:string;min:number;max:number;width:number;
 }
@@ -30,10 +41,13 @@ export class NmcRiskExplainabilityComponent implements OnInit,OnDestroy {
   private readonly subscriptions=new Subscription();
   vessel?:NmcVesselProfile;
   assessment:FleetAiAssessment|null=null;
-  // The local Risk Management settings apply only to this browser's policy projection;
+  // The local Risk Management settings apply only to this centrally published model;
   // immutable Oracle assessment and audit history must NEVER be relabeled as recalculated.
   activeRiskConfig:RiskEngineConfig|null=null;
   projectedRisk:RiskEvaluation|null=null;
+  riskHistory:HistoricalRiskProjection[]=[];
+  historyLoading=false;
+  historyError='';
   factors:RiskFactor[]=[];
   selectedFactor?:RiskFactor;
   guidanceItems:GuidanceResult[]=[];
@@ -61,6 +75,7 @@ export class NmcRiskExplainabilityComponent implements OnInit,OnDestroy {
     this.subscriptions.add(this.riskEngine.config$.subscribe(policy=>{
       this.activeRiskConfig=policy;
       this.updatePolicyProjection();
+      if(this.vessel)this.loadRiskHistory();
     }));
     window.addEventListener('storage',this.onPolicyStorageChange);
     this.subscriptions.add(this.route.paramMap.subscribe(params=>{
@@ -69,8 +84,10 @@ export class NmcRiskExplainabilityComponent implements OnInit,OnDestroy {
       this.assessment=null;this.projectedRisk=null;
       this.factors=[];this.selectedFactor=undefined;
       this.guidanceItems=[];this.linkedCase=null;
+      this.riskHistory=[];this.historyError='';
       if(!this.vessel){this.assessmentError='Unknown vessel IMO';this.busy=false;return;}
       this.refresh();
+      this.loadRiskHistory();
     }));
   }
   ngOnDestroy():void{
@@ -113,6 +130,28 @@ export class NmcRiskExplainabilityComponent implements OnInit,OnDestroy {
       error:()=>{if(this.vessel?.imo===imo)this.linkedCase=null;}
     }));
   }
+  loadRiskHistory():void{
+    if(!this.vessel)return;
+    const imo=this.vessel.imo;
+    this.historyLoading=true;this.historyError='';
+    this.subscriptions.add(this.fleet.policyRiskHistory(imo).subscribe({
+      next:response=>{
+        if(this.vessel?.imo!==imo)return;
+        this.historyLoading=false;this.riskHistory=response.history||[];
+      },
+      error:e=>{
+        if(this.vessel?.imo!==imo)return;
+        this.historyLoading=false;this.historyError=e?.error?.error||'RISK_HISTORY_UNAVAILABLE';
+      }
+    }));
+  }
+  openCurrentRisk():void{
+    if(!this.factors.length)return;
+    this.selectedFactor=this.factors[0];
+    document.getElementById('current-risk-factors')?.scrollIntoView({
+      behavior:'smooth',block:'start'
+    });
+  }
   loadGuidance():void{
     if(!this.vessel)return;
     this.guidanceBusy=true;this.guidanceError='';
@@ -147,7 +186,8 @@ export class NmcRiskExplainabilityComponent implements OnInit,OnDestroy {
       return {
         id,label:this.factorLabels[id][0],labelAr:this.factorLabels[id][1],
         severity:signal.severity,weight,
-        contribution:signal.severity*weight/100,
+        contribution:this.projectedRisk?.factors.find(f=>f.key===id)?.rawContribution
+          ??signal.severity*weight/100,
         confidence:signal.confidence,evidenceIds:signal.evidenceIds||[],
         reason:signal.reason||'',sourceAgent:signal.sourceAgent
       };
@@ -223,10 +263,10 @@ export class NmcRiskExplainabilityComponent implements OnInit,OnDestroy {
     const names=top.map(f=>this.copy(f.label,f.labelAr)).join(' / ');
     return this.lang.isArabic
       ?'تُظهر مؤشرات A01/A02 المحفوظة ارتفاعًا نسبيًا في '+names+
-        '. التصنيف المتوقع من قواعد المتصفح المنشورة '+this.riskLabel+'، والأولوية المتوقعة '+this.projectedPriority+
+        '. التصنيف المتوقع من قواعد المخاطر المركزية المنشورة '+this.riskLabel+'، والأولوية المتوقعة '+this.projectedPriority+
         '. الدرجة الأصلية المحفوظة مستقلة، ولا يمثل هذا قرارًا تشغيليًا معتمدًا.'
       :'Saved A01/A02 signals identify '+names+' as the strongest observed severities. '+
-        'The browser-published policy projects '+this.riskLevel+' risk and '+
+        'The centrally published policy projects '+this.riskLevel+' risk and '+
         this.projectedPriority+' priority. The original Oracle assessment is unchanged. '+
         'This is a platform-calculated projection, not an agent recommendation or approved operational decision.';
   }
