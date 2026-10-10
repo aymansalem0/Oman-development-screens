@@ -1,0 +1,383 @@
+<div class="si-layout" [attr.dir]="lang.dir">
+  <app-nmc-navigation></app-nmc-navigation>
+  <main class="lifecycle">
+    <header class="hero">
+      <div><small>MOEI · SMART INSPECTION · END-TO-END POC V1</small>
+        <h1>{{copy('Full Inspection Lifecycle','دورة المعاينة الكاملة')}}</h1>
+        <p>{{copy('Trace every inspection from selection through planning, field evidence, reports, corrective actions and controlled closure.',
+          'تتبّع كل معاينة من الاختيار والتخطيط إلى التنفيذ والأدلة والتقارير والإجراءات التصحيحية والإغلاق المنضبط.')}}</p>
+      </div>
+      <div class="hero-actions">
+        <a routerLink="/moei/smart-inspection/psc-targeting">{{copy('PSC Selection','اختيار PSC')}}</a>
+        <a routerLink="/moei/smart-inspection/candidates">{{copy('Candidate Center','مركز الترشيح')}}</a>
+        <a routerLink="/moei/smart-inspection/preparation">{{copy('Preparation / A04','التحضير / A04')}}</a>
+        <a routerLink="/moei/smart-inspection/scheduling">{{copy('Scheduling','الجدولة')}}</a>
+        <a routerLink="/moei/smart-inspection/lifecycle">{{copy('All Cases','كل المعاينات')}}</a>
+      </div>
+    </header>
+
+    <section class="access card">
+      <label>{{copy('Officer / inspector name','اسم الموظف / المفتش')}}
+        <input [(ngModel)]="operator" [placeholder]="copy('Enter exact inspector or reviewer name','أدخل اسم المفتش أو المراجع')" autocomplete="off" /></label>
+      <label>{{copy('Editor key (protected inspection records)','مفتاح المحرر (السجلات المحمية)')}}
+        <input type="password" [(ngModel)]="editorKey" autocomplete="off" /></label>
+      <label>{{copy('Supervisor / Publisher key','مفتاح المشرف / الناشر')}}
+        <input type="password" [(ngModel)]="publisherKey" autocomplete="off" /></label>
+      <button class="primary" type="button" (click)="load()" [disabled]="busy||loading">
+        {{loading?copy('Loading…','جارٍ التحميل…'):copy('Load / Refresh','تحميل / تحديث')}}</button>
+    </section>
+
+    <div class="message error" *ngIf="error" role="alert">{{error}}</div>
+    <div class="message success" *ngIf="success" role="status">{{success}}</div>
+    <div class="message" *ngIf="busy">{{copy('Saving and auditing the action…','جارٍ الحفظ والتدقيق…')}}</div>
+
+    <section class="card context" *ngIf="!caseId">
+      <div class="section-title"><div>
+        <small>00 · START HERE</small>
+        <h2>{{copy('Approved Inspection Cases','حالات المعاينة المعتمدة')}}</h2>
+        <p>{{copy('Only Publisher-approved SI inspection cases are shown. No hardcoded sample vessels and no automatic Airia invocation.',
+          'تظهر حالات المعاينة المعتمدة فقط، دون قائمة سفن ثابتة أو تشغيل تلقائي للذكاء الاصطناعي.')}}</p>
+      </div><strong class="counter">{{cases.length}}</strong></div>
+      <input class="search" [(ngModel)]="search"
+        [placeholder]="copy('Search IMO, vessel, regime or lifecycle stage','ابحث برقم IMO أو اسم السفينة أو نوع المعاينة أو المرحلة')" />
+      <div class="table-wrap" *ngIf="cases.length">
+        <table><thead><tr>
+          <th>{{copy('Vessel / IMO','السفينة / IMO')}}</th>
+          <th>{{copy('Inspection Regime','نوع المعاينة')}}</th>
+          <th>{{copy('Source Events','المصادر المرتبطة')}}</th>
+          <th>{{copy('Saved NMC Risk','المخاطر المحفوظة')}}</th>
+          <th>{{copy('Lifecycle Stage','مرحلة دورة المعاينة')}}</th>
+          <th>{{copy('Action','الإجراء')}}</th>
+        </tr></thead><tbody>
+          <tr *ngFor="let c of visibleCases;trackBy:track">
+            <td><strong>{{c.vesselName}}</strong><small>{{c.imo}}</small></td>
+            <td>{{c.regime.replaceAll('_',' ')}}</td>
+            <td><span class="chip" *ngFor="let e of c.sourceEvents">{{e.source}}</span></td>
+            <td>{{c.risk?c.risk.score+'/100 · '+c.risk.level:copy('NOT ASSESSED','غير مقيمة')}}</td>
+            <td><span class="state">{{stageLabel(c.stage)}}</span></td>
+            <td><a class="action-link" [routerLink]="['/moei/smart-inspection/lifecycle',c.id]">
+              {{copy('Open Full Cycle →','فتح الدورة الكاملة ←')}}</a></td>
+          </tr>
+        </tbody></table>
+      </div>
+      <div class="empty" *ngIf="!cases.length">
+        {{copy('Load the list with Editor key, or approve candidates first.',
+          'حمّل القائمة بمفتاح المحرر أو اعتمد المرشحين أولاً.')}}
+      </div>
+    </section>
+
+    <ng-container *ngIf="caseId">
+      <div class="case-banner card">
+        <div><small>{{copy('INSPECTION CASE ID','معرف حالة المعاينة')}}</small>
+          <strong class="mono">{{caseId}}</strong>
+          <span *ngIf="view as v">{{v.inspectionCase.regime}} · IMO {{v.inspectionCase.imo}} ·
+            {{copy('Approved by','المعتمد بواسطة')}} {{v.inspectionCase.approvedBy}}</span>
+        </div>
+        <div><small>{{copy('CURRENT STAGE','المرحلة الحالية')}}</small>
+          <strong class="stage">{{stageLabel(stage)}}</strong>
+          <span>{{copy('Saved revision','الإصدار المحفوظ')}} {{record?.version||0}}</span>
+        </div>
+      </div>
+
+      <section class="card">
+        <div class="section-title"><div><small>END-TO-END MAP</small>
+          <h2>{{copy('11 Business Stages · One Traceable Journey','١١ مرحلة أعمال · رحلة واحدة قابلة للتتبع')}}</h2>
+          <p>{{copy('Detailed 17-step scenario is mapped in the V1 design document. Cards below connect the existing modules and new execution ledger.',
+            'السيناريو التفصيلي المكون من ١٧ خطوة موضح في وثيقة V1، والبطاقات أدناه تربط الوحدات الحالية بسجل التنفيذ الجديد.')}}</p>
+        </div></div>
+        <div class="step-grid">
+          <div class="step" *ngFor="let step of steps">
+            <b>{{step[0]}}</b><span>{{copy(step[1],step[2])}}</span>
+          </div>
+        </div>
+      </section>
+
+      <div class="limitations" *ngIf="view as v">
+        <strong>{{copy('Evidence & compliance guardrails','ضوابط الأدلة والامتثال')}}</strong>
+        <p>{{copy('Lifecycle V1 records auditable POC operations. It does not fabricate NMC risk, verified image analysis, uploaded evidence, AI-generated reports or legal enforcement. Source data status remains explicit.',
+          'تسجل النسخة عمليات تجريبية قابلة للتدقيق، ولا تختلق تقييم مخاطر NMC أو تحليل صور معتمدًا أو رفع مستندات فعليًا أو تقارير AI أو إجراءات إنفاذ قانونية. وتظل حالة كل مصدر واضحة.')}}</p>
+        <p>{{copy('Current preparation','حالة التحضير الحالية')}}: <b>{{v.preparation.status}}</b>
+          · {{copy('Data source','مصدر البيانات')}}: {{v.preparation.provenance}}
+          · {{copy('External documents verified','التحقق من المستندات الخارجية')}}:
+          <b>{{v.preparation.externalDocumentsVerified?'YES':'NO'}}</b></p>
+      </div>
+
+      <section class="card" *ngIf="view">
+        <div class="section-title"><div><small>01–04 · SELECT / APPROVE / PREPARE</small>
+          <h2>{{copy('Inspection Targeting and Pre-Inspection Dossier','الاستهداف وملف التحضير')}}</h2>
+          <p>{{copy('NMC/Service/PSC originate the candidate. The authorized officer approves the SI case. Prepare immutable base checks and optional A04 focus.',
+            'تنشأ الترشيحات من NMC أو طلب الخدمة أو PSC، ثم يعتمد المسؤول حالة المعاينة ويُحضّر البنود الأساسية وتوصيات A04 الاختيارية.')}}</p>
+        </div></div>
+        <div class="links-row">
+          <a routerLink="/moei/smart-inspection/psc-targeting">{{copy('PSC Quota / Selection','حصة واختيار PSC')}}</a>
+          <a routerLink="/moei/smart-inspection/candidates">{{copy('Approved Case / SI-P01','الحالة المعتمدة / SI-P01')}}</a>
+          <a [routerLink]="['/moei/smart-inspection/preparation',caseId]">{{copy('Prepare / A04 Dossier','تحضير / ملف A04')}}</a>
+        </div>
+        <div class="inline-banner" *ngIf="view.preparation.stale">
+          {{copy('Preparation stale: refresh dossier before starting the inspection.',
+            'ملف التحضير قديم: يجب تحديثه قبل بدء المعاينة.')}}</div>
+        <button type="button" class="primary" *ngIf="!record" [disabled]="!view.readyForInitialization||busy"
+          (click)="run('INITIALIZE')">
+          {{copy('Create End-to-End Inspection Ledger','إنشاء سجل دورة المعاينة')}}</button>
+        <p class="hint" *ngIf="!record">{{copy('Requires an approved SI case and a saved, non-stale deterministic preparation. A04 is optional, never silently invoked.',
+          'يتطلب حالة معتمدة وتحضيرًا محفوظًا غير منتهي الصلاحية. تشغيل A04 اختياري ولا يحدث تلقائيًا.')}}</p>
+      </section>
+
+      <section class="card" *ngIf="record as r">
+        <div class="section-title"><div><small>05 · CONFIGURABLE SCOPE</small>
+          <h2>{{copy('Dynamic Inspection Scope & Mandatory Checklist','نطاق المعاينة الديناميكي والقائمة الإلزامية')}}</h2>
+          <p>{{copy('Mandatory base checklist remains intact. Reviewed AI suggestions are optional additions only.',
+            'تظل قائمة الفحص الإلزامية ثابتة؛ والاقتراحات الذكية التي تمت مراجعتها إضافات اختيارية فقط.')}}</p>
+        </div></div>
+        <div class="chips"><span class="chip mandatory" *ngFor="let c of r.checks">
+          {{c.id}} · {{c.mandatory?copy('Mandatory','إلزامي'):copy('Reviewed additional','إضافة معتمدة')}}</span></div>
+        <div *ngIf="stage==='PREPARATION_READY'">
+          <div class="suggestions" *ngIf="view?.preparation?.dossier?.suggestedAdditionalItems?.length && canSelectScope">
+            <h3>{{copy('Optional A04 suggestions','اقتراحات A04 الاختيارية')}}</h3>
+            <label *ngFor="let suggestion of view?.preparation?.dossier?.suggestedAdditionalItems">
+              <input type="checkbox" [checked]="scopeChosen.includes(suggestion.title)"
+                (change)="toggleScope(suggestion.title,$any($event.target).checked)" />
+              {{suggestion.title}} · <small>{{suggestion.reason}}</small>
+            </label>
+            <button type="button" (click)="addScope()" [disabled]="busy">
+              {{copy('Save Selected Extras','حفظ الإضافات المختارة')}}</button>
+          </div>
+          <label class="reason">{{copy('Approval reason (8+ characters)','سبب الاعتماد (٨ أحرف على الأقل)')}}
+            <textarea [(ngModel)]="reason" rows="2"></textarea></label>
+          <button class="primary" type="button" [disabled]="busy||!prepared"
+            (click)="run('APPROVE_SCOPE',{},true)">{{copy('Supervisor · Approve Scope','المشرف · اعتماد النطاق')}}</button>
+        </div>
+        <p class="ok" *ngIf="r.scopeApprovedBy">{{copy('Approved by','اعتمده')}} {{r.scopeApprovedBy}}</p>
+      </section>
+
+      <section class="card" *ngIf="record as r">
+        <div class="section-title"><div><small>06 · SCHEDULING / ERP</small>
+          <h2>{{copy('Inspection Assignment & Scheduling','توزيع المفتشين والجدولة')}}</h2>
+          <p>{{copy('For NMC-origin cases a centrally CONFIRMED NMC referral is required. Other origins use clearly marked POC manual assignments until ERP integration is completed.',
+            'تتطلب معاينات NMC إحالة مجدولة ومعتمدة مركزيًا. وتستخدم المصادر الأخرى تكليفًا تجريبيًا يدويًا واضحًا لحين اكتمال ربط ERP.')}}</p>
+        </div></div>
+        <div class="inline-banner" *ngIf="view?.nmcBooking as booking">
+          {{copy('NMC saved booking','حجز NMC المحفوظ')}}:
+          <strong>{{booking.status}}</strong>
+          · {{booking.inspector||'—'}} · {{booking.port||'—'}}
+          · {{booking.scheduledAt?(booking.scheduledAt|date:'medium':'+0400'):'—'}} UAE
+          {{copy('· The assignment must match the saved NMC booking.','· يجب أن يطابق التكليف حجز NMC المحفوظ.')}}
+        </div>
+        <a routerLink="/moei/smart-inspection/scheduling" class="action-link">
+          {{copy('Open Existing ERP Scheduling →','فتح نظام الجدولة الحالي ←')}}</a>
+        <div *ngIf="stage==='SCOPE_APPROVED'" class="form-grid">
+          <label>{{copy('Inspector Name','اسم المفتش')}}<input [(ngModel)]="inspector" /></label>
+          <label>{{copy('Port / Location','الميناء / الموقع')}}<input [(ngModel)]="port" /></label>
+          <label>{{copy('Visit Date & Time · UAE Local','تاريخ ووقت الزيارة بتوقيت الإمارات')}}
+            <input type="datetime-local" [(ngModel)]="visitLocal" /></label>
+          <label>{{copy('Scheduling Source','مصدر الجدولة')}}
+            <select [(ngModel)]="assignmentMode">
+              <option value="POC_MANUAL">POC_MANUAL · {{copy('Not ERP-confirmed','غير مؤكدة من ERP')}}</option>
+              <option value="NMC_SCHEDULED">NMC_SCHEDULED · {{copy('Confirmed referral required','تتطلب إحالة مؤكدة')}}</option>
+            </select></label>
+          <button class="primary" type="button" [disabled]="busy"
+            (click)="run('ASSIGN',{inspector:inspector,port:port,startLocal:visitLocal,mode:assignmentMode})">
+            {{copy('Save Controlled Assignment','حفظ التكليف المنضبط')}}</button>
+        </div>
+        <div class="data-grid" *ngIf="r.assignment as a">
+          <span><small>{{copy('Assigned Inspector','المفتش المكلف')}}</small><strong>{{a.inspector}}</strong></span>
+          <span><small>{{copy('Visit','موعد الزيارة')}}</small><strong>{{a.startLocal}}</strong></span>
+          <span><small>{{copy('Port','الميناء')}}</small><strong>{{a.port}}</strong></span>
+          <span><small>{{copy('Verified status','حالة تأكيد المصدر')}}</small><strong>{{a.operationalValidity}}</strong></span>
+        </div>
+      </section>
+
+      <section class="card" *ngIf="record as r">
+        <div class="section-title"><div><small>07–08 · INSPECTOR FIELD WORKSPACE</small>
+          <h2>{{copy('Field Checklist, Evidence and Deficiencies','قائمة المعاينة الميدانية والأدلة والملاحظات')}}</h2>
+          <p>{{copy('Inspector starts the field session, completes each item, records auditable observations and evidence references. Photo/video upload, offline sync, voice and CV are planned enhancements, not falsely shown as operational.',
+            'يبدأ المفتش الجلسة ويكمل البنود ويسجل الملاحظات ومراجع الأدلة. ورفع الصور والفيديو والعمل دون اتصال والتعرف الصوتي وتحليل الصور تحسينات لاحقة غير مقدمة على أنها منفذة.')}}</p>
+        </div></div>
+        <button class="primary" type="button" *ngIf="stage==='ASSIGNED'"
+          (click)="run('START_FIELD')" [disabled]="busy">
+          {{copy('Inspector · Start Field Inspection','المفتش · بدء المعاينة الميدانية')}}</button>
+        <div class="table-wrap" *ngIf="stage==='IN_FIELD'||stage==='REPORT_RETURNED'">
+          <table class="checks"><thead><tr>
+            <th>{{copy('Checklist Item','البند')}}</th><th>{{copy('Result','النتيجة')}}</th>
+            <th>{{copy('Severity','الخطورة')}}</th><th>{{copy('Notes / N/A Justification','الملاحظات / سبب عدم الانطباق')}}</th>
+            <th>{{copy('Evidence Reference(s)','مراجع الأدلة')}}</th>
+          </tr></thead><tbody>
+            <tr *ngFor="let c of draftChecks;trackBy:track">
+              <td><b>{{c.title||c.id}}</b><small>{{c.mandatory?copy('Mandatory','إلزامي'):copy('Extra','إضافي')}}</small></td>
+              <td><select [(ngModel)]="c.status">
+                <option value="PENDING">{{copy('Pending','لم تتم')}}</option>
+                <option value="PASS">{{copy('Pass','مستوفٍ')}}</option>
+                <option value="DEFICIENCY">{{copy('Deficiency','ملاحظة')}}</option>
+                <option value="NOT_APPLICABLE">{{copy('Not applicable','لا ينطبق')}}</option>
+              </select></td>
+              <td><select [(ngModel)]="c.severity" [disabled]="c.status!=='DEFICIENCY'">
+                <option [ngValue]="null">—</option>
+                <option value="MINOR">{{copy('Minor','بسيطة')}}</option>
+                <option value="MAJOR">{{copy('Major','كبيرة')}}</option>
+                <option value="CRITICAL">{{copy('Critical','حرجة')}}</option>
+              </select></td>
+              <td><textarea rows="2" [(ngModel)]="c.note"
+                  [placeholder]="copy('Observation / finding','الملاحظة')"></textarea>
+                <input *ngIf="c.status==='NOT_APPLICABLE'" [(ngModel)]="c.naReason"
+                  [placeholder]="copy('Mandatory N/A reason','سبب عدم الانطباق إلزامي')" /></td>
+              <td><input [(ngModel)]="c.evidenceText"
+                [placeholder]="copy('Evidence IDs, separated by commas','معرفات أدلة تفصلها فاصلة')" /></td>
+            </tr>
+          </tbody></table>
+          <label class="reason">{{copy('Report summary by inspector','ملخص التقرير بمعرفة المفتش')}}
+            <textarea [(ngModel)]="reportSummary" rows="3"></textarea></label>
+          <div class="actions">
+            <button type="button" class="secondary" (click)="updateChecks()" [disabled]="busy">
+              {{copy('1 · Save Checklist to Central Ledger','١ · حفظ القائمة في السجل المركزي')}}</button>
+            <button type="button" class="primary" (click)="submitField()" [disabled]="busy||!allChecksDone||checksDirty">
+              {{copy('2 · Submit Deterministic Inspection Report','٢ · إرسال تقرير المعاينة')}}</button>
+          </div>
+          <p class="hint">{{copy('For Major/Critical deficiency, record a note AND at least one evidence reference. These are reference IDs, not uploaded files.',
+            'الملاحظات الكبيرة والحرجة تتطلب وصفًا ومرجع دليل واحدًا على الأقل، وهذه معرفات فقط وليست ملفات مرفوعة.')}}</p>
+        </div>
+        <div class="data-grid" *ngIf="r.startedAt">
+          <span><small>{{copy('Started','بدأت')}}</small><strong>{{r.startedAt|date:'short'}}</strong></span>
+          <span><small>{{copy('Completed','انتهت')}}</small><strong>{{r.completedAt?(r.completedAt|date:'short'):'—'}}</strong></span>
+          <span><small>{{copy('Findings','الملاحظات')}}</small><strong>{{findCounts.all}}</strong></span>
+          <span><small>{{copy('Major / Critical','كبيرة / حرجة')}}</small><strong>{{findCounts.major}} / {{findCounts.critical}}</strong></span>
+        </div>
+      </section>
+
+      <section class="card" *ngIf="record?.report as report">
+        <div class="section-title"><div><small>09 · REPORT / QUALITY GATE</small>
+          <h2>{{copy('Inspection Report & Supervisor Decision','تقرير المعاينة وقرار المشرف')}}</h2>
+          <p>{{copy('Generated deterministically from saved inspector records; AI_GENERATED=false until a real, validated report agent is integrated.',
+            'يُنشأ من سجلات المفتش المحفوظة بطريقة حتمية، وليس بالذكاء الاصطناعي حتى يتم دمج وكيل تقارير حقيقي ومعتمد.')}}</p>
+        </div></div>
+        <div class="report-summary"><span class="state">{{report.status}}</span><span>{{report.summary}}</span>
+          <small>{{copy('Evidence basis','أساس الأدلة')}}: {{report.source}} · AI: {{report.aiGenerated}}</small></div>
+        <div class="table-wrap" *ngIf="record?.findings?.length">
+          <table><thead><tr><th>{{copy('Finding','الملاحظة')}}</th>
+            <th>{{copy('Severity','الخطورة')}}</th><th>{{copy('Description','التفاصيل')}}</th>
+            <th>{{copy('Evidence refs','الأدلة')}}</th></tr></thead><tbody>
+            <tr *ngFor="let f of record?.findings">
+              <td>{{f.title}}</td><td><span class="state">{{f.severity}}</span></td>
+              <td>{{f.description}}</td><td>{{f.evidenceRefs.join(', ')||'—'}}</td>
+            </tr>
+          </tbody></table>
+        </div>
+        <div *ngIf="stage==='REPORT_PENDING_REVIEW'">
+          <label class="reason">{{copy('Supervisor review justification','مبررات مراجعة المشرف')}}
+            <textarea [(ngModel)]="reason" rows="2"></textarea></label>
+          <div class="actions">
+            <button class="primary" type="button" (click)="run('APPROVE_REPORT',{},true)" [disabled]="busy">
+              {{copy('Approve Inspection Report','اعتماد التقرير')}}</button>
+            <button type="button" (click)="run('RETURN_REPORT',{},true)" [disabled]="busy">
+              {{copy('Return to Inspector for Correction','إعادة التقرير للمفتش')}}</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="card" *ngIf="record as r">
+        <div class="section-title"><div><small>10 · CORRECTIVE ACTIONS / FOLLOW-UP</small>
+          <h2>{{copy('Deficiency Correction, Evidence and Verification','تصحيح الملاحظات والأدلة والتحقق')}}</h2>
+          <p>{{copy('A separate action for every recorded deficiency. Closure is blocked until actions are verified and a documented follow-up passes.',
+            'إجراء مستقل لكل ملاحظة مسجلة. يمنع الإغلاق حتى التحقق من جميع الإجراءات واجتياز متابعة موثقة.')}}</p>
+        </div></div>
+        <div *ngIf="stage==='REPORT_APPROVED'&&r.findings.length">
+          <div class="action-form" *ngFor="let a of draftActions">
+            <strong>{{a.findingId}}</strong>
+            <label>{{copy('Responsible Person','المسؤول')}}<input [(ngModel)]="a.owner" /></label>
+            <label>{{copy('Due Date','تاريخ الاستحقاق')}}<input type="date" [(ngModel)]="a.dueDate" /></label>
+            <label>{{copy('Corrective Instruction','تعليمات التصحيح')}}<input [(ngModel)]="a.instruction" /></label>
+          </div>
+          <label class="reason">{{copy('Supervisor decision reason','سبب قرار المشرف')}}
+            <textarea [(ngModel)]="reason" rows="2"></textarea></label>
+          <button class="primary" type="button" (click)="issueActions()" [disabled]="busy">
+            {{copy('Issue Corrective Actions','إصدار الإجراءات التصحيحية')}}</button>
+        </div>
+        <div class="action-form" *ngFor="let x of r.actions;trackBy:track">
+          <div class="action-heading"><strong>{{x.findingId}}</strong>
+            <span class="state">{{x.status}}</span></div>
+          <small>{{copy('Owner','المسؤول')}}: {{x.owner}} · {{copy('Due','الاستحقاق')}}: {{x.dueDate}} · {{x.instruction}}</small>
+          <div *ngIf="x.status==='OPEN'||x.status==='REJECTED'">
+            <label>{{copy('Correction Evidence IDs (comma separated)','معرفات أدلة التصحيح (تفصلها فاصلة)')}}
+              <input [(ngModel)]="correctionEvidence[x.id]" /></label>
+            <button type="button" (click)="submitCorrection(x)" [disabled]="busy">
+              {{copy('Action Owner · Submit Evidence','المسؤول · إرسال أدلة التصحيح')}}</button>
+          </div>
+          <div *ngIf="x.status==='PENDING_VERIFICATION'">
+            <label>{{copy('Supervisor Verification','تحقق المشرف')}}
+              <select [(ngModel)]="correctionDecision[x.id]">
+                <option value="ACCEPT">{{copy('Accept','قبول')}}</option>
+                <option value="REJECT">{{copy('Reject','رفض')}}</option>
+              </select></label>
+            <label class="reason">{{copy('Verification justification','مبررات التحقق')}}
+              <textarea [(ngModel)]="reason" rows="2"></textarea></label>
+            <button type="button" class="primary" (click)="verifyCorrection(x)" [disabled]="busy">
+              {{copy('Verify Action','التحقق من الإجراء')}}</button>
+          </div>
+        </div>
+        <div *ngIf="stage==='FOLLOW_UP_PENDING'">
+          <div class="form-grid">
+            <label>{{copy('Follow-up Method','طريقة المتابعة')}}<select [(ngModel)]="followMode">
+              <option value="DESK_REVIEW">{{copy('Desk review','مراجعة مستندية')}}</option>
+              <option value="ON_SITE">{{copy('On-site verification','تحقق ميداني')}}</option>
+            </select></label>
+            <label>{{copy('Outcome','النتيجة')}}<select [(ngModel)]="followResult">
+              <option value="PASS">{{copy('Pass','مستوفاة')}}</option>
+              <option value="FAIL">{{copy('Fail – further action required','غير مستوفاة')}}</option>
+            </select></label>
+            <label>{{copy('Evidence References','مراجع الأدلة')}}
+              <input [(ngModel)]="followEvidence" /></label>
+          </div>
+          <label class="reason">{{copy('Follow-up review notes','ملاحظات المتابعة')}}
+            <textarea [(ngModel)]="reason" rows="2"></textarea></label>
+          <button class="primary" type="button" (click)="followUp()" [disabled]="busy">
+            {{copy('Record Supervisor Follow-up','تسجيل نتيجة المتابعة')}}</button>
+        </div>
+        <div class="data-grid" *ngIf="r.followUps.length">
+          <span *ngFor="let f of r.followUps"><small>{{f.mode}} · {{f.at|date:'short'}}</small>
+            <strong>{{f.result}}</strong><small>{{f.note}}</small></span>
+        </div>
+      </section>
+
+      <section class="card" *ngIf="record as r">
+        <div class="section-title"><div><small>11 · CLOSURE / COMPLIANCE HANDOFF</small>
+          <h2>{{copy('Supervised Inspection Closure','إغلاق المعاينة تحت إشراف المسؤول')}}</h2>
+          <p>{{copy('Approved report + cleared corrective actions + passing follow-up (when findings exist). Closure never changes the official NMC risk score.',
+            'تقرير معتمد وإجراءات تصحيحية تم التحقق منها ومتابعة ناجحة عند وجود ملاحظات. لا يغيّر الإغلاق درجة المخاطر الرسمية للمركز البحري.')}}</p>
+        </div></div>
+        <div *ngIf="stage==='REPORT_APPROVED'&&!r.findings.length || stage==='READY_TO_CLOSE'">
+          <label class="reason">{{copy('Supervisor closure reason','مبررات الإغلاق من المشرف')}}
+            <textarea [(ngModel)]="reason" rows="2"></textarea></label>
+          <button class="primary" type="button" (click)="run('CLOSE',{},true)" [disabled]="busy">
+            {{copy('Close Inspection Case','إغلاق حالة المعاينة')}}</button>
+        </div>
+        <div class="close-message" *ngIf="r.closure as closed">
+          <h3>{{copy('Closed with an auditable decision','مغلقة بقرار قابل للتدقيق')}}</h3>
+          <p>{{closed.by}} · {{closed.at|date:'medium'}} · {{closed.reason}}</p>
+          <p>{{copy('NMC re-assessment and cross-domain regulatory actions are NOT automatically executed in this POC.',
+            'إعادة تقييم مخاطر NMC وإجراءات التنظيم عبر المجالات لم تُنفذ تلقائياً في هذه النسخة التجريبية.')}}</p>
+        </div>
+        <div class="audit">
+          <h3>{{copy('Workflow Audit Events & Saved Versions','أحداث التدقيق ونسخ المعاينة المحفوظة')}}</h3>
+          <button type="button" class="secondary" [disabled]="historyBusy||busy" (click)="loadHistory()">
+            {{showVersions?copy('Hide Version History','إخفاء سجل النسخ'):copy('Inspect Saved Versions','مراجعة النسخ التاريخية')}}</button>
+          <div class="message error" *ngIf="historyError">{{historyError}}</div>
+          <div class="audit-snapshots" *ngIf="showVersions">
+            <div class="audit-item" *ngFor="let entry of versions">
+              <b>v{{entry.version}} · {{entry.action}}</b>
+              <span>{{entry.actor}} · {{entry.at|date:'medium'}}</span>
+              <small>{{entry.reason||'—'}} · {{copy('State','الحالة')}}: {{stageLabel(entry.snapshot.stage)}}</small>
+              <small *ngIf="entry.snapshot.report">{{copy('Preserved report','نسخة التقرير المحفوظة')}}:
+                {{entry.snapshot.report.status}} · {{entry.snapshot.report.summary}}</small>
+              <small *ngIf="entry.snapshot.findings.length">{{copy('Findings in version','الملاحظات في النسخة')}}:
+                {{entry.snapshot.findings.length}}</small>
+            </div>
+          </div>
+          <div class="audit-item" *ngFor="let x of r.audit">
+            <b>v{{x.version}} · {{x.action}}</b>
+            <span>{{x.actor}} · {{x.at|date:'medium'}}</span>
+            <small>{{x.reason||'—'}}</small>
+          </div>
+        </div>
+      </section>
+    </ng-container>
+  </main>
+</div>

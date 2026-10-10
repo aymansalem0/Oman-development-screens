@@ -194,3 +194,34 @@ test('same IMO across NMC, Service and PSC has one vessel row, three source type
     );
   }finally{w.cleanup();}
 });
+
+test('pre-scheduled approved NMC referral links to one SI case without booking another visit',async()=>{
+  const sourceReferral={
+    id:'f7a41375-25c2-47e0-b1f8-e27df23c20ab',
+    caseId:'16c53cb1-5b19-43c1-9596-5ccbc27e90e2',
+    imo:fleet[0].imo,status:'SCHEDULED',caseStatus:'IN_PROGRESS',
+    createdAt:'2026-10-10T11:00:00Z',reason:'Human-approved NMC referral',
+    evidenceIds:['SAVED-NMC-001'],sourceAssessmentId:'ASSESSMENT-001',
+    scheduledAt:'2026-10-15T06:00:00Z',inspector:'Inspector',port:'JEA'
+  };
+  const w=workspace({referrals:[sourceReferral]});
+  try{
+    const candidate=(await w.subject.dashboard()).candidates[0];
+    assert.equal(candidate.status,'EXTERNALLY_SCHEDULED');
+    await assert.rejects(w.subject.decide({
+      candidateKey:candidate.key,imo:candidate.imo,action:'DEFER',
+      actor:'Officer',note:'Cannot defer previously booked visit'
+    }),e=>e.code==='SI_CANDIDATE_ALREADY_HANDLED');
+    const approved=await w.subject.decide({
+      candidateKey:candidate.key,imo:candidate.imo,action:'APPROVE',
+      actor:'Supervisor',note:'Link existing authorized NMC booking to SI execution'
+    });
+    assert.equal(approved.inspectionCase.nmcReferralId,sourceReferral.id);
+    assert.equal(approved.inspectionCase.nmcCaseId,sourceReferral.caseId);
+    assert.equal((await w.subject.inspectionCaseRegistry()).cases.length,1);
+    await assert.rejects(w.subject.decide({
+      candidateKey:candidate.key,imo:candidate.imo,action:'APPROVE',
+      actor:'Supervisor',note:'Duplicate should fail'
+    }),e=>e.code==='SI_CANDIDATE_ALREADY_HANDLED');
+  }finally{w.cleanup();}
+});

@@ -56,6 +56,9 @@ import {SiCandidate,SiCandidateTargetingService} from '../services/si-candidate-
                   <td><code>{{c.inspectionCase?.id}}</code></td>
                   <td><a class="open" [routerLink]="['/moei/smart-inspection/preparation',c.inspectionCase?.id]">
                     {{copy('Open Preparation →','فتح التحضير ←')}}
+                  </a>
+                  <a class="open" [routerLink]="['/moei/smart-inspection/lifecycle',c.inspectionCase?.id]">
+                    {{copy('Full Cycle →','دورة المعاينة ←')}}
                   </a></td>
                 </tr>
               </tbody>

@@ -122,6 +122,10 @@ export class NmcNavigationComponent implements OnInit, OnDestroy {
   get isErpIntegrationSettings(): boolean {
     return this.currentPath === '/moei/smart-inspection/settings/erp';
   }
+  get isInspectionLifecycle():boolean{
+    return this.currentPath==='/moei/smart-inspection/lifecycle'||
+      this.currentPath.startsWith('/moei/smart-inspection/lifecycle/');
+  }
   get isPscTargetingPool():boolean{
     return this.currentPath==='/moei/smart-inspection/psc-targeting';
   }

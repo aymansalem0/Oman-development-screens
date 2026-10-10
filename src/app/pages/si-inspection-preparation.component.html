@@ -8,6 +8,7 @@
       </div>
       <div class="hero-actions">
         <a routerLink="/moei/smart-inspection/candidates">{{copy("← Candidate Center","← مركز مرشحي المعاينة")}}</a>
+        <a [routerLink]="['/moei/smart-inspection/lifecycle',id]">{{copy('Continue Full Inspection Cycle →','استكمال دورة المعاينة الكاملة ←')}}</a>
         <button (click)="load()" [disabled]="busy||loading">{{copy("↻ Refresh","↻ تحديث")}}</button>
       </div>
     </header>
