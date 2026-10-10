@@ -4,7 +4,7 @@
  * recalculate any official stored assessment, or modify vessel risk.
  * Oracle schema is additive and must be migrated manually by the owner.
  */
-import {randomUUID} from 'node:crypto';
+import {randomUUID,createHash} from 'node:crypto';
 import {mkdirSync,existsSync,readFileSync,writeFileSync,renameSync} from 'node:fs';
 import {dirname} from 'node:path';
 import oracledb from 'oracledb';
@@ -15,8 +15,19 @@ const validId=id=>typeof id==='string'&&/^[a-f0-9-]{36}$/i.test(id);
 const validImo=imo=>typeof imo==='string'&&/^\d{7}$/.test(imo);
 const jsonClob=value=>({val:JSON.stringify(value),type:oracledb.DB_TYPE_CLOB});
 const stamp=column=>`TO_CHAR(${column} AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.FF3"Z"')`;
-const allowedActions=['ACKNOWLEDGE','START_FOLLOW_UP','ESCALATE','RESOLVE'];
-const isActive=row=>row.status!=='RESOLVED';
+const allowedActions=['ACKNOWLEDGE','START_FOLLOW_UP','ESCALATE','RESOLVE','SUPERSEDE','DISMISS'];
+const isActive=row=>!['RESOLVED','SUPERSEDED'].includes(row.status);
+const triggerFor=row=>row.criticalOpenFinding===true?'CRITICAL_OPEN_FINDING':'RISK_BAND';
+const severityFor=row=>row.criticalOpenFinding===true||row.level==='Critical'?'CRITICAL':
+  row.level==='High'?'HIGH':null;
+const alertSignature=row=>JSON.stringify({
+  severity:severityFor(row),riskLevel:row.level,trigger:triggerFor(row)
+});
+const storedSignature=row=>JSON.stringify({
+  severity:row.severity,riskLevel:row.triggeringRiskLevel||row.sourceLevel,
+  trigger:row.triggeringRiskTrigger||
+    (String(row.detail||'').includes('critical open inspection finding')?'CRITICAL_OPEN_FINDING':'RISK_BAND')
+});
 
 export class NmcAlertError extends Error{
   constructor(code,status=400){super(code);this.code=code;this.status=status;}
@@ -88,10 +99,11 @@ export class NmcAlertWorkspace {
     }
     const summary={
       total:alerts.length,active:0,open:0,acknowledged:0,
-      inProgress:0,escalated:0,critical:0,high:0,unread:0
+      inProgress:0,escalated:0,critical:0,high:0,unread:0,
+      superseded:alerts.filter(a=>a.status==='SUPERSEDED'&&!a.dismissedAt).length
     };
     for(const a of alerts){
-      if(!isActive(a)||a.policyApplicable===false)continue;
+      if(!isActive(a)||a.dismissedAt||a.policyApplicable===false)continue;
       summary.active++;
       if(a.status==='OPEN'){summary.open++;summary.unread++;}
       if(a.status==='ACKNOWLEDGED')summary.acknowledged++;
@@ -106,9 +118,12 @@ export class NmcAlertWorkspace {
   }
 
   /**
-   * Scan the fleet snapshot already available in server RAM (persisted AI
-   * assessments only). Dedupe by IMO+band, ignoring browser-only rule changes.
-   * If not assessed: NEVER create an alert or invent risk evidence.
+   * Reconcile persisted notifications against the centrally PUBLISHED risk policy.
+   * A new risk classification supersedes the old alert (dimmed until dismissed);
+   * ineligible vessels only supersede. Saved assessments, official NMC cases and
+   * human decisions are never mutated. Unassessed / unavailable data fail open.
+   * Stable signatures prevent repeated notifications when policy revisions do
+   * NOT change the actual risk level or critical-finding trigger.
    */
   async scanFleet(snapshot){
     if(this.running)return {skipped:true};
@@ -116,23 +131,53 @@ export class NmcAlertWorkspace {
     let created=0,escalated=0;
     try{
       const current=await this.list();
-      const byKey=new Set(current.map(row=>row.alertKey));
-      const alreadyActive=new Set(current.filter(a=>a.status!=='RESOLVED').map(a=>a.imo));
+      const byImo=new Map();
+      for(const item of current){
+        const entries=byImo.get(item.imo)||[];
+        entries.push(item);
+        byImo.set(item.imo,entries);
+      }
       for(const row of Object.values(snapshot?.results||{})){
-        if(row?.status!=='COMPLETED'||!validImo(row.imo)||!Number.isFinite(row.score))continue;
-        const critical=row.level==='Critical'||row.criticalOpenFinding===true;
-        const high=row.level==='High';
-        if(!critical&&!high)continue;
-        const severity=critical?'CRITICAL':'HIGH';
-        const alertKey=`AI_RISK:${row.imo}:${severity}`;
-        if(byKey.has(alertKey)||alreadyActive.has(row.imo))continue;
+        if(row?.status!=='COMPLETED'||!validImo(row.imo)||
+           !Number.isFinite(row.score)||!['Normal','Watch','High','Critical'].includes(row.level)||
+           row.policyProjectionUnavailable===true)continue;
+        const severity=severityFor(row);
+        const signature=alertSignature(row);
+        const history=byImo.get(row.imo)||[];
+        const active=history.filter(isActive);
+        for(const previous of active){
+          if(storedSignature(previous)===signature)continue;
+          const explanation=severity?
+            'Published risk classification changed from '+previous.triggeringRiskLevel+
+            ' to '+row.level+' ('+previous.severity+' → '+severity+').':
+            'Published risk classification is '+row.level+
+            '; alert no longer meets High/Critical criteria.';
+          const next=await this.transition(previous.id,'SUPERSEDE',previous.version,
+            explanation,'SYSTEM',{
+              newRiskLevel:row.level,newRiskScore:row.score,
+              policyRevision:row.riskPolicyRevision||null
+            });
+          Object.assign(previous,next);
+        }
+        // One visible active notification per vessel. A stable band after a
+        // policy edit does not create duplicates or re-open an operator-resolved
+        // alert. A *different* eligible band does create a new event.
+        if(!severity||active.some(a=>isActive(a)))continue;
+        const latest=history[0];
+        if(latest?.status==='RESOLVED'&&storedSignature(latest)===signature)continue;
         const sourceId=typeof row.assessmentId==='string'?
           row.assessmentId.slice(0,100):null;
-        const title=critical?'Critical maritime risk requires review':
+        // Unique across revisions and assessment snapshots, stable across scans.
+        // Human-resolution of the same risk classification never generates
+        // another event just because the rules were republished unchanged.
+        const sourceTag=createHash('sha256').update(sourceId||'NO_ASSESSMENT').digest('hex').slice(0,12);
+        const policyRevision=Number.isInteger(row.riskPolicyRevision)?row.riskPolicyRevision:0;
+        const alertKey=`AI_RISK:${row.imo}:${severity}:P${policyRevision}:A${sourceTag}`;
+        const title=severity==='CRITICAL'?'Critical maritime risk requires review':
           'High maritime risk requires review';
-        const detail=row.criticalOpenFinding
-          ?'A completed AI assessment identifies a critical open inspection finding.'
-          :'A completed AI assessment exceeds the operational risk monitoring band.';
+        const detail=row.criticalOpenFinding?
+          'A completed AI assessment identifies a critical open inspection finding.':
+          'A completed AI assessment exceeds the operational risk monitoring band.';
         const item={
           id:randomUUID(),alertKey,imo:row.imo,
           severity,status:'OPEN',assignedRole:'NMC_OFFICER',
@@ -144,14 +189,20 @@ export class NmcAlertWorkspace {
           triggeredByPolicyVersion:row.configVersion||null,
           triggeredByPolicyRevision:row.riskPolicyRevision||null,
           triggeringRiskScore:row.score,triggeringRiskLevel:row.level,
+          triggeringRiskTrigger:triggerFor(row),
           title,detail,actionHint:'Review vessel evidence and decide follow-up',
           version:1,createdAt:now(),updatedAt:now(),
           provenance:'SYNTHETIC_POC_NON_REGULATORY'
         };
         const inserted=await this._insert(item);
-        if(inserted){byKey.add(alertKey);alreadyActive.add(row.imo);created++;}
+        if(inserted){
+          created++;
+          history.unshift(item);
+          byImo.set(row.imo,history);
+        }
       }
-      // Business monitoring threshold, not an MOEI contractual SLA.
+      // Business monitoring threshold, not a contractual SLA. Superseded,
+      // dismissed and previously resolved notifications are never escalated.
       for(const item of await this.list()){
         if(item.status!=='OPEN'||item.severity!=='CRITICAL')continue;
         const age=Date.now()-new Date(item.createdAt).getTime();
@@ -200,7 +251,7 @@ export class NmcAlertWorkspace {
     });
   }
 
-  async transition(id,action,expectedVersion,note='',role='OPERATOR'){
+  async transition(id,action,expectedVersion,note='',role='OPERATOR',context=null){
     if(!validId(id))throw new NmcAlertError('ALERT_ID_INVALID');
     if(!allowedActions.includes(action))throw new NmcAlertError('ALERT_ACTION_INVALID');
     if(!Number.isInteger(expectedVersion)||expectedVersion<1)
@@ -208,6 +259,10 @@ export class NmcAlertWorkspace {
     if(typeof note!=='string'||note.length>500)throw new NmcAlertError('ALERT_NOTE_INVALID');
     if(action==='RESOLVE'&&!note.trim())
       throw new NmcAlertError('ALERT_RESOLUTION_NOTE_REQUIRED');
+    if(action==='SUPERSEDE'&&(role!=='SYSTEM'||!note.trim()))
+      throw new NmcAlertError('ALERT_SYSTEM_ACTION_REQUIRED',403);
+    if(action==='DISMISS'&&role!=='OPERATOR')
+      throw new NmcAlertError('ALERT_OPERATOR_REQUIRED',403);
     const nextState=current=>{
       if(!current)throw new NmcAlertError('ALERT_NOT_FOUND',404);
       if(current.version!==expectedVersion)
@@ -216,9 +271,12 @@ export class NmcAlertWorkspace {
         ACKNOWLEDGE:['OPEN'],
         START_FOLLOW_UP:['ACKNOWLEDGED','ESCALATED'],
         ESCALATE:['OPEN','ACKNOWLEDGED','IN_PROGRESS'],
-        RESOLVE:['ACKNOWLEDGED','IN_PROGRESS','ESCALATED']
+        RESOLVE:['ACKNOWLEDGED','IN_PROGRESS','ESCALATED'],
+        SUPERSEDE:['OPEN','ACKNOWLEDGED','IN_PROGRESS','ESCALATED'],
+        DISMISS:['SUPERSEDED']
       };
-      if(!allowed[action].includes(current.status))
+      if(!allowed[action].includes(current.status)||
+         (action==='DISMISS'&&current.dismissedAt))
         throw new NmcAlertError('ALERT_TRANSITION_INVALID',409);
       if(action==='RESOLVE'&&current.severity==='CRITICAL'&&role!=='SUPERVISOR')
         throw new NmcAlertError('ALERT_SUPERVISOR_REQUIRED',403);
@@ -226,11 +284,21 @@ export class NmcAlertWorkspace {
         ACKNOWLEDGE:'ACKNOWLEDGED',
         START_FOLLOW_UP:'IN_PROGRESS',
         ESCALATE:'ESCALATED',
-        RESOLVE:'RESOLVED'
+        RESOLVE:'RESOLVED',
+        SUPERSEDE:'SUPERSEDED',
+        DISMISS:'SUPERSEDED'
       }[action];
+      const at=now();
       return {...current,status,
         assignedRole:action==='ESCALATE'?'NMC_SUPERVISOR':current.assignedRole,
-        version:current.version+1,updatedAt:now()};
+        ...(action==='SUPERSEDE'?{
+          supersededAt:at,supersededReason:note.trim(),
+          supersededByPolicyRevision:context?.policyRevision??null,
+          supersededByRiskLevel:context?.newRiskLevel??null,
+          supersededByRiskScore:context?.newRiskScore??null
+        }:{}),
+        ...(action==='DISMISS'?{dismissedAt:at}:{}),
+        version:current.version+1,updatedAt:at};
     };
     if(this.mode==='json'){
       const db=this._load();const next=nextState(db.alerts[id]);

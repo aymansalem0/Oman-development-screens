@@ -103,12 +103,12 @@ async function scanExistingFleetForAlerts(){
       const byImo=new Map(projected.projections.map(p=>[p.imo,p]));
       effective={...original,results:Object.fromEntries(Object.entries(original.results).map(([imo,row])=>{
         const p=byImo.get(imo);
-        return [imo,p?{
+        return [imo,p&&p.sourceAssessmentId===row.assessmentId?{
           ...row,score:p.riskScore,level:p.riskLevel,
           operationalPriority:p.operationalPriority,criticalOpenFinding:p.criticalOpenFinding,
           configVersion:projected.policyRef,riskPolicyRevision:projected.policyRevision,
           sourceAiScore:row.score,sourceAiLevel:row.level,aiRulesetVersion:row.configVersion
-        }:row];
+        }:{...row,policyProjectionUnavailable:true}];
       }))};
     }
     const result=await alerts.scanFleet(effective);
@@ -351,8 +351,9 @@ const server = createServer(async (req, res) => {
         dashboards.assertRole(req,'PUBLISHER');
         const body=await requestJson(req,16384);
         const published=await riskPolicy.publish(body);
-        // No external AI; risk version takes effect immediately on the server.
-        // Scanner does not duplicate any active vessel alert or mutate existing cases.
+        // No external AI; the published risk policy is authoritative.
+        // Scanner now SUPERSEDES outdated alerts, creates new events for a new
+        // High/Critical classification, and retains old case/audit history.
         if(alertScanEnabled)await scanExistingFleetForAlerts();
         return respond(res,201,{status:'ok',published});
       }
@@ -766,7 +767,7 @@ const server = createServer(async (req, res) => {
   // Shared POC editor/publisher secrets stand in for operator/supervisor
   // authorization until an authenticated IAM solution is installed.
   if(path==='/api/ai/alerts'||path.startsWith('/api/ai/alerts/')){
-    const match=/^\/api\/ai\/alerts(?:\/([a-fA-F0-9-]{36})(?:\/(history|acknowledge|follow-up|escalate|resolve))?)?$/.exec(path);
+    const match=/^\/api\/ai\/alerts(?:\/([a-fA-F0-9-]{36})(?:\/(history|acknowledge|follow-up|escalate|resolve|dismiss))?)?$/.exec(path);
     if(!match)return respond(res,404,{error:'ALERT_NOT_FOUND'});
     const [,id,action]=match;
     try{
@@ -783,14 +784,16 @@ const server = createServer(async (req, res) => {
       if(req.method==='POST'&&id&&action){
         const operations={
           acknowledge:'ACKNOWLEDGE','follow-up':'START_FOLLOW_UP',
-          escalate:'ESCALATE',resolve:'RESOLVE'
+          escalate:'ESCALATE',resolve:'RESOLVE',dismiss:'DISMISS'
         };
         if(!operations[action])return respond(res,405,{error:'METHOD_NOT_ALLOWED'});
         const supervisor=action==='resolve';
         dashboards.assertRole(req,supervisor?'PUBLISHER':'EDITOR');
         const body=await requestJson(req,4096);
         const updated=await alerts.transition(id,operations[action],
-          body.version,body.note||'',supervisor?'SUPERVISOR':'OPERATOR');
+          body.version,action==='dismiss'?
+            'Dismissed superseded notification from operational inbox.':
+            body.note||'',supervisor?'SUPERVISOR':'OPERATOR');
         return respond(res,200,{status:'ok',alert:updated});
       }
       return respond(res,405,{error:'METHOD_NOT_ALLOWED'});

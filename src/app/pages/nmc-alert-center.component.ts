@@ -14,7 +14,7 @@ import {
 } from '../services/nmc-alerts.service';
 import {NmcCasesService,NmcCentralCase} from '../services/nmc-cases.service';
 
-type StatusFilter='ACTIVE'|'ALL'|'OPEN'|'ESCALATED'|'RESOLVED';
+type StatusFilter='ACTIVE'|'ALL'|'OPEN'|'ESCALATED'|'SUPERSEDED'|'RESOLVED';
 type RiskLevel='Normal'|'Watch'|'High'|'Critical';
 interface RiskCandidate {
   imo:string;assessmentId:string;score:number;level:'High'|'Critical';
@@ -152,7 +152,7 @@ export class NmcAlertCenterComponent implements OnInit,OnDestroy{
       /^[0-9]{7}$/.test(row.imo));
     const imos=[...new Set([
       ...assessed.map(row=>row.imo),
-      ...source.alerts.filter(a=>a.status!=='RESOLVED').map(a=>a.imo)
+      ...source.alerts.filter(a=>a.status!=='RESOLVED'&&a.status!=='SUPERSEDED').map(a=>a.imo)
     ])];
     this.riskPopulation={monitored:snapshot.counts.total,assessed:assessed.length,
       projected:0,pending:snapshot.counts.total-assessed.length,
@@ -216,7 +216,7 @@ export class NmcAlertCenterComponent implements OnInit,OnDestroy{
           critical:levels.Critical,scoreSum:sum,
           averageScore:matched?Math.round(sum/matched*10)/10:0
         };
-        const activeImos=new Set(source.alerts.filter(a=>a.status!=='RESOLVED').map(a=>a.imo));
+        const activeImos=new Set(source.alerts.filter(a=>a.status!=='RESOLVED'&&a.status!=='SUPERSEDED').map(a=>a.imo));
         this.projectedCandidates.splice(0);
         for(const [imo,p] of nextResults){
           if(!p.eligible||activeImos.has(imo)||!latestByImo.has(imo))continue;
@@ -248,49 +248,46 @@ export class NmcAlertCenterComponent implements OnInit,OnDestroy{
   policyFor(item:NmcOperationalAlert){
     return this.policyResults.get(item.imo);
   }
+  /** Archived notifications retain the severity/level they actually reported. */
   displaySeverity(item:NmcOperationalAlert):AlertSeverity{
-    const band=this.policyFor(item)?.level;
-    if(band==='Critical')return 'CRITICAL';
-    if(band==='High')return 'HIGH';
     return item.severity;
   }
   alertHeadline(item:NmcOperationalAlert):string{
-    if(this.policyFor(item)?.reason==='CRITICAL_OPEN_FINDING')return this.copy(
+    if(item.triggeringRiskTrigger==='CRITICAL_OPEN_FINDING')return this.copy(
       'Critical open maritime finding requires review',
-      'ملاحظة بحرية حرجة مفتوحة تستلزم المراجعة'
-    );
-    return this.displaySeverity(item)==='CRITICAL'
+      'ملاحظة بحرية حرجة مفتوحة تستلزم المراجعة');
+    return item.severity==='CRITICAL'
       ?this.copy('Critical maritime risk requires review','مخاطر بحرية حرجة تستلزم المراجعة')
       :this.copy('High maritime risk requires review','مخاطر بحرية مرتفعة تستلزم المراجعة');
   }
   triggerDescription(item:NmcOperationalAlert):string{
-    const policy=this.policyFor(item);
-    if(policy?.reason==='CRITICAL_OPEN_FINDING')return this.copy(
-      'Critical open finding — requires human follow-up regardless of the composite risk threshold.',
-      'ملاحظة حرجة مفتوحة — تستلزم متابعة بشرية بغض النظر عن حدود تصنيف درجة المخاطر.'
-    );
-    if(policy)return this.copy(
-      'Current Risk Settings project '+policy.score+'/100 · '+policy.level+
-        '. The original source assessment remains saved in Oracle.',
-      'تنتج إعدادات المخاطر الحالية درجة '+policy.score+'/100 · '+policy.level+
-        '. التقييم الأصلي محفوظ في Oracle دون تغيير.'
-    );
-    return this.copy('Saved risk alert; projected policy eligibility is not independently verified.',
-      'تنبيه مخاطر محفوظ؛ لم يتم التحقق من مطابقته للإعدادات الحالية بشكل مستقل.');
+    const was=`${item.triggeringRiskScore??item.sourceScore}/100 · ${item.triggeringRiskLevel||item.sourceLevel}`;
+    if(this.isPolicySuperseded(item)){
+      const next=item.supersededByRiskLevel||'—';
+      return this.copy(
+        'Outdated after published Risk Rules change: '+was+' → '+next+
+          '. Previous alert retained for audit.',
+        'تنبيه قديم بعد نشر تعديل قواعد المخاطر: '+was+' ← '+next+
+          '. تم الاحتفاظ بالتنبيه السابق لسجل التدقيق.');
+    }
+    if(item.triggeringRiskTrigger==='CRITICAL_OPEN_FINDING')return this.copy(
+      'Critical open finding requires review even if the numerical risk is lower. Saved alert assessment: '+was,
+      'ملاحظة حرجة مفتوحة تتطلب المراجعة حتى لو انخفضت درجة المخاطر. التقييم وقت التنبيه: '+was);
+    return this.copy('Risk classification when this notification was issued: '+was,
+      'تصنيف المخاطر وقت إصدار هذا التنبيه: '+was);
   }
   isPolicySuperseded(item:NmcOperationalAlert):boolean{
-    return item.status!=='RESOLVED'&&this.policyResults.get(item.imo)?.eligible===false;
+    return item.status==='SUPERSEDED';
   }
   get hiddenByLocalPolicy():number{
-    return (this.overview?.alerts||[]).filter(a=>this.isPolicySuperseded(a)).length;
+    return (this.overview?.alerts||[]).filter(a=>a.status==='SUPERSEDED'&&!a.dismissedAt).length;
   }
   get policySummary(){
     const source=this.overview?.alerts||[];
-    const matching=source.filter(a=>a.status!=='RESOLVED'&&!this.isPolicySuperseded(a));
-    const critical=matching.filter(a=>this.displaySeverity(a)==='CRITICAL').length;
+    const matching=source.filter(a=>!['RESOLVED','SUPERSEDED'].includes(a.status));
     return {
       active:matching.length,
-      critical,
+      critical:matching.filter(a=>a.severity==='CRITICAL').length,
       projectedNew:this.projectedCandidates.length,
       projectedCritical:this.projectedCandidates.filter(a=>a.level==='Critical').length,
       eligibleTotal:matching.length+this.projectedCandidates.length,
@@ -344,12 +341,13 @@ export class NmcAlertCenterComponent implements OnInit,OnDestroy{
   get alertsFiltered():NmcOperationalAlert[]{
     const search=this.query.trim().toLowerCase();
     return (this.overview?.alerts||[]).filter(alert=>{
+      if(alert.dismissedAt)return false;
       const status=this.filter==='ALL'||(
         this.filter==='ACTIVE'?alert.status!=='RESOLVED':alert.status===this.filter);
       const matches=!search||[
         alert.imo,alert.title,alert.detail,alert.sourceAssessmentId||''
       ].some(value=>value.toLowerCase().includes(search));
-      return status&&matches&&(this.filter==='ALL'||!this.isPolicySuperseded(alert));
+      return status&&matches;
     });
   }
   statusText(value:AlertStatus):string{
@@ -358,7 +356,8 @@ export class NmcAlertCenterComponent implements OnInit,OnDestroy{
       ACKNOWLEDGED:['Acknowledged','تم الاستلام'],
       IN_PROGRESS:['In progress','قيد المتابعة'],
       ESCALATED:['Escalated','تم التصعيد'],
-      RESOLVED:['Resolved','مغلق']
+      RESOLVED:['Resolved','مغلق'],
+      SUPERSEDED:['Outdated · Dimmed','قديم · معتم']
     };
     const row=labels[value];return this.copy(row[0],row[1]);
   }
@@ -370,11 +369,13 @@ export class NmcAlertCenterComponent implements OnInit,OnDestroy{
       ACKNOWLEDGE:['Acknowledge','استلام التنبيه'],
       START_FOLLOW_UP:['Start follow-up','بدء المتابعة'],
       ESCALATE:['Escalate to supervisor','تصعيد للمشرف'],
-      RESOLVE:['Resolve alert','إغلاق التنبيه']
+      RESOLVE:['Resolve alert','إغلاق التنبيه'],
+      DISMISS:['Remove from inbox','إزالة من القائمة']
     };
     const pair=labels[value];return this.copy(pair[0],pair[1]);
   }
   allowed(item:NmcOperationalAlert,action:AlertAction):boolean{
+    if(action==='DISMISS')return item.status==='SUPERSEDED'&&!item.dismissedAt;
     if(action==='ACKNOWLEDGE')return item.status==='OPEN';
     if(action==='START_FOLLOW_UP')
       return item.status==='ACKNOWLEDGED'||item.status==='ESCALATED';
@@ -411,6 +412,25 @@ export class NmcAlertCenterComponent implements OnInit,OnDestroy{
       }
     }));
   }
+  dismiss(item:NmcOperationalAlert):void{
+    if(this.busy||!this.allowed(item,'DISMISS'))return;
+    this.busy=item.id;this.error='';this.success='';
+    this.subs.add(this.alerts.act(item,'DISMISS','').subscribe({
+      next:()=>{
+        this.busy='';
+        if(this.selectedId===item.id){this.selectedId='';this.audit=[];}
+        this.success=this.copy(
+          'Outdated notification removed from the inbox. Its audit history remains saved.',
+          'تم إزالة التنبيه القديم من القائمة مع الاحتفاظ بسجل التدقيق.');
+        this.refresh(false);
+      },
+      error:error=>{
+        this.busy='';
+        this.error=this.alerts.readableError(error,this.lang.isArabic);
+        if(error?.status===409)this.refresh(false);
+      }
+    }));
+  }
   toggleDetails(item:NmcOperationalAlert):void{
     if(this.selectedId===item.id){this.selectedId='';this.audit=[];return;}
     this.selectedId=item.id;this.loadHistory(item.id);
@@ -428,7 +448,9 @@ export class NmcAlertCenterComponent implements OnInit,OnDestroy{
       ACKNOWLEDGE:['Acknowledged','تم استلام التنبيه'],
       START_FOLLOW_UP:['Follow-up started','بدأت المتابعة'],
       ESCALATE:['Escalated','تم التصعيد'],
-      RESOLVE:['Resolved','تم الإغلاق']
+      RESOLVE:['Resolved','تم الإغلاق'],
+      SUPERSEDE:['Superseded by risk policy','تم استبداله لتغير قواعد المخاطر'],
+      DISMISS:['Dismissed from inbox','تمت إزالته من القائمة']
     };
     const pair=labels[action];return pair?this.copy(pair[0],pair[1]):action;
   }

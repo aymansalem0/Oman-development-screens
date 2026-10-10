@@ -22,8 +22,8 @@
       <div>
         <span class="eyebrow">{{copy('MARITIME SITUATIONAL AWARENESS','الوعي بالموقف البحري')}}</span>
         <h2>{{copy('Alerts & Notifications','التنبيهات والإشعارات')}}</h2>
-        <p>{{copy('Saved operational alerts with a live eligibility preview from browser Risk Settings. Historical audit and linked cases remain untouched.',
-                  'تنبيهات تشغيلية محفوظة مع معاينة مطابقة أحدث إعدادات المخاطر بالمتصفح؛ يظل السجل والحالات المرتبطة دون تغيير.')}}</p>
+        <p>{{copy('Published Risk Rules issue new alerts when risk classification changes. Outdated alerts are dimmed until removed; history and linked cases remain saved.',
+                  'تنشئ قواعد المخاطر المنشورة تنبيهًا جديدًا عند تغيير تصنيف السفينة؛ تصبح التنبيهات القديمة معتمة حتى إزالتها من القائمة، مع بقاء السجل والحالات المرتبطة.')}}</p>
       </div>
       <div class="heading-actions">
         <span class="update-time" *ngIf="overview">{{copy('Updated','آخر تحديث')}}: {{overview.updatedAt|date:'shortTime'}}</span>
@@ -95,14 +95,14 @@
           {{policyConfig?.thresholds?.critical}}
         </p>
         <p>
-          {{copy('Risk alerts removed from ACTIVE VIEW by current projection',
-                 'التنبيهات المُخفاة من العرض النشط وفق توقع المخاطر الحالي')}}:
+          {{copy('Outdated notifications after published Risk Rules',
+                 'التنبيهات القديمة بعد نشر تعديل قواعد المخاطر')}}:
           <b>{{projectionReady?hiddenByLocalPolicy:'—'}}</b> ·
           {{copy('New high/critical candidates not yet in Oracle',
                  'مرشحات مخاطر مرتفعة/حرجة جديدة لم تُسجل في Oracle')}}:
           <b>{{projectionReady?projectedCandidates.length:'—'}}</b> ·
-          {{copy('Original saved alerts remain in Oracle and are visible under All. Unresolved critical findings always remain in review.',
-                 'التنبيهات الأصلية محفوظة في Oracle ويمكن عرضها من «الكل». تظل الملاحظات الحرجة المفتوحة بحاجة إلى مراجعة دائمًا.')}}
+          {{copy('Outdated notifications remain dimmed in the inbox until you press ×. Removing from view never deletes Oracle history. Critical open findings remain reviewable.',
+                 'تظل التنبيهات القديمة ظاهرة بلون معتم حتى الضغط على ×. إزالتها من العرض لا تحذف تاريخها من Oracle؛ تظل الملاحظات الحرجة المفتوحة قيد المراجعة.')}}
         </p>
         <small>{{copy('This is not central policy publication or automatic legal resolution. Risk changes cannot silently close a linked maritime case.',
                        'هذه معاينة محلية وليست نشرًا مركزيًا أو إغلاقًا رسميًا تلقائيًا. لا يتم إغلاق الحالات البحرية المرتبطة دون اعتماد.')}}</small>
@@ -140,8 +140,8 @@
       <div class="toolbar">
         <div>
           <h3>{{copy('Operational Alert Inbox','صندوق التنبيهات التشغيلية')}}</h3>
-          <p>{{copy('Eligible active alerts reflect current browser Risk Settings; policy-ineligible records remain accessible in All / Activity History.',
-                   'تعرض التنبيهات النشطة المطابقة لإعدادات مخاطر المتصفح؛ وتظل السجلات غير المطابقة متاحة في «الكل» وسجل الأنشطة.')}}</p>
+          <p>{{copy('Active notifications follow centrally published Risk Rules. Superseded notifications stay dimmed until removed with ×.',
+                   'تتبع التنبيهات النشطة قواعد المخاطر المنشورة مركزيًا، وتظل التنبيهات المستبدلة معتمة حتى إزالتها باستخدام ×.')}}</p>
         </div>
         <div class="controls">
           <label class="search">
@@ -156,6 +156,7 @@
               <option value="ALL">{{copy('All','الكل')}}</option>
               <option value="OPEN">{{copy('New','جديدة')}}</option>
               <option value="ESCALATED">{{copy('Escalated','مصعّدة')}}</option>
+              <option value="SUPERSEDED">{{copy('Outdated / Dimmed','قديمة / معتمة')}}</option>
               <option value="RESOLVED">{{copy('Resolved','مغلقة')}}</option>
             </select>
           </label>
@@ -173,6 +174,12 @@
       <article *ngFor="let alert of alertsFiltered" class="alert-card"
                [class.critical]="displaySeverity(alert)==='CRITICAL'"
                [class.local-superseded]="isPolicySuperseded(alert)">
+        <button *ngIf="isPolicySuperseded(alert)" type="button"
+                class="alert-dismiss" [disabled]="!!busy"
+                (click)="dismiss(alert)"
+                [title]="copy('Remove outdated notification from inbox (audit retained)',
+                               'إزالة التنبيه القديم من القائمة مع الاحتفاظ بالسجل')"
+                [attr.aria-label]="copy('Remove outdated notification','إزالة التنبيه القديم')">×</button>
         <div class="alert-main">
           <div class="alert-symbol" [class.high]="displaySeverity(alert)==='HIGH'">
             {{displaySeverity(alert)==='CRITICAL'?'!':'▲'}}
@@ -183,7 +190,7 @@
                 {{severityText(displaySeverity(alert))}}
               </span>
               <span *ngIf="isPolicySuperseded(alert)" class="local-suppressed-pill">
-                {{copy('Not applicable under local Risk Settings','غير مطابق لإعدادات المخاطر المحلية')}}
+                {{copy('Outdated — risk classification changed','قديم — تغير تصنيف المخاطر')}}
               </span>
               <span class="status" [attr.data-status]="alert.status">{{statusText(alert.status)}}</span>
               <span class="muted">{{alert.createdAt|date:'medium'}}</span>
@@ -193,7 +200,7 @@
             <div class="facts">
               <span><b>IMO</b> {{alert.imo}}</span>
               <span *ngIf="policyFor(alert) as policy" class="projected-main-risk">
-                <b>{{copy('Current Risk Projection','المخاطر المتوقعة الحالية')}}</b>
+                <b>{{copy('Current Risk Preview','معاينة المخاطر الحالية')}}</b>
                 {{policy.score}}/100 · {{policy.level}}
               </span>
               <span><b>{{copy('Original Oracle risk','المخاطر الأصلية في Oracle')}}</b>
@@ -226,8 +233,12 @@
           </button>
         </div>
         <div *ngIf="isPolicySuperseded(alert)" class="local-superseded-note">
-          {{copy('Hidden from Active by local policy comparison. This is not a persisted resolution; original alert, audit history and linked cases are retained.',
-                   'مخفي من «نشط» بعد مقارنة الإعدادات المحلية، لكنه ليس إغلاقًا مسجلًا. التنبيه وسجله وحالاته المرتبطة محفوظة.')}}
+          {{copy('This alert was superseded by a published risk classification change. You can remove it from the inbox with ×; linked maritime cases, previous decisions and audit history are preserved.',
+                  'تم استبدال هذا التنبيه بعد تغيير تصنيف المخاطر وفق القواعد المنشورة. يمكنك إزالته من القائمة باستخدام ×، مع الاحتفاظ بالحالات البحرية المرتبطة والقرارات السابقة وسجل التدقيق.')}}
+          <small *ngIf="alert.supersededByRiskLevel">
+            {{copy('New risk classification','التصنيف الجديد')}}:
+            {{alert.supersededByRiskScore}}/100 · {{alert.supersededByRiskLevel}}
+          </small>
         </div>
         <div class="decision-panel" *ngIf="alert.status!=='RESOLVED'&&!isPolicySuperseded(alert)">
           <label>{{copy('Operator note / resolution reason','ملاحظة الموظف / سبب الإغلاق')}}
