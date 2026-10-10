@@ -16,7 +16,7 @@ function hashOf(v,psc){
     internal:v.inlineContext,evidenceIds:v.evidenceIds,
     psc:{inspections:psc.inspections,deficiencies:psc.deficiencies,detentions:psc.detentions,
       coverage:psc.coverage,sourceMode:psc.sourceMode,datasetVersion:psc.datasetVersion},
-    ruleset:DEFAULT_FLEET_RULESET
+    driveFingerprint:'NOT_CONFIGURED',ruleset:DEFAULT_FLEET_RULESET
   })).digest('hex');
 }
 function mockFleet(){
@@ -108,4 +108,62 @@ test('staged automatic deployment checks only first vessel, never sends a paid r
   assert.equal(lookups,1);
   assert.equal(scheduler.status().enabledVessels,1);
   assert.equal(scheduler.status().retryFailed,false);
+});
+
+test('missing Google Drive is an optional source: schedule A01/A02 without marking failed',async()=>{
+  const fleet=mockFleet(),v=bundles[0];
+  const scheduler=new FleetAutoScheduler({
+    fleet,enabled:true,bundles,maxVessels:1,
+    getPscVessel:async imo=>getPsc(imo),
+    getDocumentFingerprint:async()=>{throw new Error('GOOGLE_TOKEN_REQUEST_FAILED_403');}
+  });
+  await scheduler.tick();
+  assert.equal(fleet.batches.length,1);
+  assert.equal(fleet.batches[0].vessels[0].imo,v.imo);
+  assert.equal(fleet.results[v.imo],undefined);
+  assert.equal(scheduler.status().lastDocumentSourceUnavailable,1);
+  assert.equal(scheduler.status().lastError,null);
+  assert.equal(scheduler.status().lastSelected,1);
+});
+test('published document integrity weight FAILS CLOSED when Google Drive unavailable',async()=>{
+  const fleet=mockFleet(),v=bundles[0];
+  const config={...DEFAULT_FLEET_RULESET,weights:{
+    movement:23,inspection:25,certificate:18,dataQuality:13,history:11,documentIntegrity:10}};
+  const scheduler=new FleetAutoScheduler({
+    fleet,enabled:true,bundles,maxVessels:1,
+    getRiskConfig:async()=>config,
+    getPscVessel:async imo=>getPsc(imo),
+    getDocumentFingerprint:async()=>{throw new Error('GOOGLE_TOKEN_REQUEST_FAILED_403');}
+  });
+  await scheduler.tick();
+  assert.equal(fleet.batches.length,0);
+  assert.equal(fleet.results[v.imo].reasonCode,'A03_DRIVE_METADATA_UNAVAILABLE');
+  assert.equal(fleet.results[v.imo].status,'FAILED');
+  assert.equal(scheduler.status().blockedFailedVessels,1);
+  assert.equal(fleet.persistCount,1);
+});
+test('even when A03 is optional, failed paid assessments are never retried without consent',async()=>{
+  const fleet=mockFleet(),v=bundles[0];
+  fleet.results[v.imo]={imo:v.imo,status:'FAILED',reasonCode:'GOOGLE_DRIVE_NOT_CONFIGURED',
+    nextCheckAt:new Date(Date.now()-10000).toISOString()};
+  const scheduler=new FleetAutoScheduler({
+    fleet,enabled:true,bundles,maxVessels:1,retryFailed:false,
+    getPscVessel:async()=>{throw new Error('UNEXPECTED_PSC');},
+    getDocumentFingerprint:async()=>{throw new Error('UNEXPECTED_DRIVE');}
+  });
+  await scheduler.tick();
+  assert.equal(fleet.batches.length,0);
+  assert.equal(scheduler.status().blockedFailedVessels,1);
+  assert.equal(scheduler.status().lastSelected,0);
+});
+test('missing Drive root is reported and optional when no A03 risk weight exists',async()=>{
+  const fleet=mockFleet(),scheduler=new FleetAutoScheduler({
+    fleet,enabled:true,bundles,maxVessels:1,
+    getPscVessel:async imo=>getPsc(imo),
+    getDocumentFingerprint:async()=> 'NO_DRIVE_CONFIGURATION'
+  });
+  await scheduler.tick();
+  assert.equal(fleet.batches.length,1);
+  assert.equal(scheduler.status().lastDocumentSourceNotConfigured,1);
+  assert.equal(scheduler.status().lastSelected,1);
 });

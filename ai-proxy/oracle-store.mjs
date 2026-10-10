@@ -7,7 +7,8 @@ const mask = 'YYYY-MM-DD"T"HH24:MI:SS.FF3TZH:TZM';
 const time = name => `TO_CHAR(${name} AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.FF3"Z"')`;
 const utc = v => v ? new Date(v).toISOString().replace('Z', '+00:00') : null;
 const jsonClob = value => ({val:JSON.stringify(value??null),type:oracledb.DB_TYPE_CLOB});
-const sourceId = id => id.startsWith('PSC-SIM-')||id.startsWith('DET-PSC-SIM-') ?
+const sourceId = id => id.startsWith('GDOC-')?'A03_GOOGLE_DRIVE_SIM':
+  id.startsWith('PSC-SIM-')||id.startsWith('DET-PSC-SIM-') ?
   'PSC_GOOGLE_SIM' : 'NMC_INTERNAL_SIM';
 
 export class OracleIntelligenceStore {
@@ -64,7 +65,8 @@ export class OracleIntelligenceStore {
         operator:String(v.operator||'Unknown').slice(0,250)};}));
       for(const [id,name,cls] of [
         ['NMC_INTERNAL_SIM','NMC Vessel 360 synthetic fixture','INTERNAL_SIMULATION'],
-        ['PSC_GOOGLE_SIM','Google Sheets synthetic PSC dataset','EXTERNAL_SIMULATION']]){
+        ['PSC_GOOGLE_SIM','Google Sheets synthetic PSC dataset','EXTERNAL_SIMULATION'],
+        ['A03_GOOGLE_DRIVE_SIM','Google Drive A03 synthetic maritime evidence packs','EXTERNAL_SIMULATION']]){
         await con.execute(`MERGE INTO NMC_DATA_SOURCE d
           USING(SELECT :id SOURCE_ID,:name SOURCE_NAME,:cls SOURCE_CLASS FROM DUAL) s
           ON(d.SOURCE_ID=s.SOURCE_ID)
@@ -207,7 +209,8 @@ export class OracleIntelligenceStore {
           {id,evidenceId,source:sourceId(evidenceId)});
       }
       stage='AI_EXECUTION';
-      for(const agent of ['A01','A02']){
+      for(const agent of ['A01','A02',
+        ...(row.signals.some(s=>s.factor==='documentIntegrity')?['A03']:[])]){
         await con.execute(`INSERT INTO NMC_AI_EXECUTION(
           EXECUTION_ID,ASSESSMENT_ID,AGENT_CODE,EXECUTION_STATUS)
           VALUES(:executionId,:assessmentId,:agent,'SIGNALS_VALIDATED')`,

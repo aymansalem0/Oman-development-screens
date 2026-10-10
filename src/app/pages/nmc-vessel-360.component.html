@@ -1,7 +1,7 @@
 <div class="v360-shell" [class.provenance-open]="!!selectedProvenance" [class.rtl]="lang.isArabic" [attr.dir]="lang.dir">
   <header class="v360-topbar">
     <div class="brand-block">
-      <div class="brand-mark">⚓</div>
+      <app-nmc-ministry-logo class="v360-ministry-logo"></app-nmc-ministry-logo>
       <div>
         <div class="eyebrow">{{ copy('MOEI Maritime Unified Platform', 'المنصة البحرية الموحدة لوزارة الطاقة والبنية التحتية') }}</div>
         <h1>{{ copy('Vessel 360', 'الملف الشامل للسفينة') }}</h1>
@@ -70,8 +70,28 @@
         <span><small>{{ copy('Risk / Priority', 'المخاطر / الأولوية') }}</small><b>{{ ai.score }}/100 · {{ ai.operationalPriority }}</b></span>
         <span><small>{{ copy('Assessment ID', 'رقم التقييم') }}</small><b [title]="ai.assessmentId">{{ ai.assessmentId }}</b></span>
         <span><small>{{ copy('Assessed at (UTC)', 'وقت التقييم (UTC)') }}</small><b>{{ ai.assessedAt || '—' }}</b></span>
-        <span><small>{{ copy('Five evidence-linked factors', 'خمسة عوامل مرتبطة بالأدلة') }}</small><b>{{ ai.signals.length }} · A01 / A02</b></span>
+        <span><small>{{ copy('Evidence-linked risk factors (A01/A02/A03)', 'عوامل المخاطر المرتبطة بالأدلة (A01/A02/A03)') }}</small><b>{{ ai.signals.length }} · {{ ai.signals.length === 6 ? 'A01 / A02 / A03' : 'A01 / A02' }}</b></span>
       </div>
+    </section>
+
+    <section class="v360-risk-state-note" *ngIf="storedAi as ai"
+             [class.v360-watch-note]="vessel.riskLevel==='Watch'" role="status">
+      <strong *ngIf="vessel.riskLevel==='Watch'">
+        {{copy('WATCH · Enhanced monitoring', 'مراقبة · متابعة معززة')}}
+      </strong>
+      <span *ngIf="vessel.riskLevel==='Watch'">
+        {{copy('This assessed vessel is in Watch status. It remains visible in Vessel 360 and the Command Center Watch filter.',
+               'هذه السفينة المقيمة في حالة مراقبة، وتظل ظاهرة في ملف السفينة 360 وفلتر المراقبة بمركز القيادة.')}}
+      </span>
+      <span *ngIf="displayedRiskBasis==='ORIGINAL_SAVED'">
+        {{copy('Current published risk cannot be projected from this assessment. Displaying ORIGINAL stored classification and score:',
+               'يتعذر تطبيق سياسة المخاطر المنشورة حاليًا على هذا التقييم. يُعرض التصنيف والنتيجة الأصلية المحفوظة:')}}
+        <strong>{{ai.score}}/100 · {{ai.level}} · {{ai.configVersion}}</strong>
+      </span>
+      <span *ngIf="displayedRiskBasis==='CURRENT_PUBLISHED'">
+        {{copy('Classification calculated from saved evidence under the CURRENT published risk policy.',
+               'التصنيف محسوب من الأدلة المحفوظة وفق سياسة المخاطر المنشورة الحالية.')}}
+      </span>
     </section>
 
     <section class="v360-structural-quality panel" *ngIf="storedAi" role="region"
@@ -115,17 +135,43 @@
         <div class="v360-quality-peek" *ngIf="intelligence.quality.breakdown as summary">
           <span>{{ copy('Completeness', 'الاكتمال') }} <b>{{ summary.completenessPercent }}%</b></span>
           <span>{{ copy('Consistency', 'الاتساق') }} <b>{{ summary.consistencyPercent === null ? '—' : summary.consistencyPercent + '%' }}</b></span>
+          <span *ngIf="summary.documentConsistencyPercent !== undefined && summary.documentConsistencyPercent !== null">
+            {{ copy('A03 document consistency', 'اتساق مستندات A03') }} <b>{{ summary.documentConsistencyPercent }}%</b>
+            · {{ copy('Document differences', 'اختلافات المستندات') }}: {{ summary.a03Disagreements || 0 }}</span>
           <span>{{ copy('Evidence linkage', 'ربط الأدلة') }} <b>{{ summary.evidenceLinkagePercent === null ? '—' : summary.evidenceLinkagePercent + '%' }}</b></span>
           <span>{{ copy('Compared identity fields', 'حقول الهوية المقارنة') }} <b>{{ summary.comparedFields }}</b></span>
           <span>{{ copy('Persisted field differences', 'اختلافات الحقول المحفوظة') }} <b>{{ intelligence.conflicts.length }}</b></span>
         </div>
+        <section class="v360-quality-detail-card" *ngIf="intelligence.quality.breakdown as summary">
+          <ng-container *ngIf="summary.documentComparisons?.length">
+            <h4>✦ {{ copy('A03 Maritime Documents · Cross-Source Comparison','مقارنة مستندات A03 البحرية مع المصادر الأخرى') }}</h4>
+            <p>{{ copy('Only citation-validated synthetic Google Drive text is compared with the saved Vessel 360 synthetic certificate baseline. A disagreement requires review; this does not establish which source is correct or certify a document.',
+              'تتم مقارنة نصوص Google Drive التجريبية المدعومة باستشهادات A03 ببيانات شهادات Vessel 360 التجريبية المحفوظة. الاختلاف يحتاج مراجعة ولا يثبت أي المصدرين صحيح أو أن المستند أصلي.') }}</p>
+            <div class="v360-quality-scroll"><table class="v360-quality-source-table">
+              <thead><tr><th>{{copy('Field','الحقل')}}</th>
+                <th>{{copy('Vessel 360','بيانات Vessel 360')}}</th>
+                <th>{{copy('A03 Google Drive','نتيجة A03 من Google Drive')}}</th>
+                <th>{{copy('Match','التطابق')}}</th>
+                <th>{{copy('Evidence','الدليل')}}</th></tr></thead>
+              <tbody><tr *ngFor="let row of summary.documentComparisons">
+                <td>{{row.field}}</td><td>{{row.sourceValue}}</td>
+                <td>{{row.documentValue}}</td><td>
+                  {{row.status==='MATCHED'?copy('Matched','متطابق'):copy('Mismatch · review','مختلف · للمراجعة')}}</td>
+                <td class="v360-quality-mono">{{row.evidenceId}}</td>
+              </tr></tbody>
+            </table></div>
+            <small>{{copy('Document evidence count','عدد المستندات ذات أدلة')}}: {{summary.a03DocumentCount}} ·
+              {{copy('A03 mismatches','اختلافات A03')}}: {{summary.a03Disagreements}}</small>
+          </ng-container>
+        </section>
         <p class="v360-quality-state" *ngIf="intelligence.quality.status !== 'CALCULATED'">
           {{ copy('Structural quality not calculated for this saved assessment. A no-AirIA retrospective check is available.', 'لم تُحسب الجودة الهيكلية لهذا التقييم المحفوظ بعد. يمكن إجراء فحص لاحق دون استدعاء Airia.') }}
         </p>
         <div class="v360-quality-deep-dive" *ngIf="qualityExpanded && intelligence.quality.breakdown as summary">
           <section class="v360-quality-detail-card">
             <h4>{{ copy('Saved Oracle calculation · policy at time of scoring', 'معادلة Oracle المحفوظة · إعدادات وقت الاحتساب') }}</h4>
-            <p>{{ copy('The current POC assigns 35% to completeness, 30% to consistency, 20% to evidence linkage, and 15% to metadata. These are configurable-policy candidates—not model-learned, statistically calibrated, or approved regulatory weights.', 'أوزان النموذج التجريبي حالياً: 35% للاكتمال، و30% للاتساق، و20% لربط الأدلة، و15% لبيانات المصدر. هذه أوزان مقترحة قابلة للمراجعة وليست أوزاناً مستنتجة إحصائياً أو معتمدة تنظيمياً.') }}</p>
+            <p>{{ copy('Without A03, the baseline structural score uses 35/30/20/15. When A03 document comparisons exist, 15% of the quality mix is reserved for source-grounded document consistency; the original four metrics proportionally share 85%. All remain POC policy heuristics, not certified data confidence.',
+'دون مستندات A03 نستخدم أوزان الجودة 35/30/20/15. وعند وجود مقارنات A03 تخصص نسبة 15% لاتساق المستندات بينما تتوزع 85% على المقاييس الأربعة الأخرى. هذا تقييم هيكلي تجريبي وليس ثقة معتمدة في البيانات.') }}</p>
             <p class="v360-quality-missing" *ngIf="!summary.calculationSteps?.length">{{ copy('Detailed audit inputs were not saved in this version. Run the no-Airia quality backfill again to record real source values and evidence links.', 'تفاصيل الحساب لم تكن محفوظة في الإصدار السابق. أعد تشغيل حساب الجودة دون استدعاء Airia لتخزين قيم المصادر وروابط الأدلة الفعلية.') }}</p>
             <div class="v360-quality-scroll" *ngIf="summary.calculationSteps?.length">
               <table class="v360-quality-source-table">
@@ -1032,7 +1078,7 @@
       </article>
     </section>
 
-    <section class="single-tab panel" *ngIf="activeTab !== 'overview' && activeTab !== 'certificates' && activeTab !== 'inspection' && activeTab !== 'compliance' && activeTab !== 'sources'">
+    <section class="single-tab panel" *ngIf="activeTab === 'movement'">
       <div class="single-tab-head">
         <div>
           <span class="section-kicker">{{ activeTab | uppercase }}</span>

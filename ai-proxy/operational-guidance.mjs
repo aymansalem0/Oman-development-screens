@@ -184,7 +184,7 @@ export class OperationalGuidance{
   async evaluate(imo){
     const record=this.fleet?.getVesselResult(imo);
     if(!record||record.status!=='COMPLETED'||!record.assessmentId||
-       !Array.isArray(record.signals)||record.signals.length!==5)
+       !Array.isArray(record.signals)||![5,6].includes(record.signals.length))
       throw new GuidanceError('GUIDANCE_ASSESSMENT_NOT_FOUND',404);
     const rules=await this.list();
     const byFactor=Object.fromEntries(record.signals.map(s=>[s.factor,s]));

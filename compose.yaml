@@ -14,6 +14,9 @@ services:
       # Set NMC_FLEET_AUTO_ENABLED=true once after reviewing potential Airia costs.
       NMC_FLEET_AUTO_ENABLED: ${NMC_FLEET_AUTO_ENABLED:-false}
       NMC_FLEET_REFRESH_SECONDS: ${NMC_FLEET_REFRESH_SECONDS:-3600}
+      # POC ONLY: opt-in provisional risk projection for legacy SYNTHETIC
+      # five-factor assessments. A03=0 means NOT ASSESSED, never verified clean.
+      NMC_POC_LEGACY_A03_ZERO_PREVIEW: ${NMC_POC_LEGACY_A03_ZERO_PREVIEW:-false}
       # Safe staged rollout: first run with MAX_VESSELS=1, inspect 2 Airia requests.
       NMC_FLEET_AUTO_MAX_VESSELS: ${NMC_FLEET_AUTO_MAX_VESSELS:-420}
       NMC_FLEET_AUTO_RETRY_FAILED: ${NMC_FLEET_AUTO_RETRY_FAILED:-false}
@@ -46,6 +49,11 @@ services:
       NMC_DRIVE_ROOT_FOLDER_ID: ${NMC_DRIVE_ROOT_FOLDER_ID:-}
       NMC_DRIVE_CREDENTIALS_PATH: /run/secrets/nmc-drive-google.json
       NMC_DOCUMENT_STORE_PATH: /data/nmc-document-intelligence.json
+      NMC_RUNTIME_SETTINGS_STORE_PATH: /data/nmc-runtime-settings.json
+      NMC_A01_ENABLED: ${NMC_A01_ENABLED:-true}
+      NMC_A02_ENABLED: ${NMC_A02_ENABLED:-true}
+      # A03 automation is disabled until Publisher enables it from Runtime Settings.
+      NMC_A03_AUTO_ENABLED: ${NMC_A03_AUTO_ENABLED:-false}
       # 'oracle' requires compose.oracle.yaml, NMC_AI user and V1 migration.
       NMC_DB_MODE: ${NMC_DB_MODE:-json}
       NMC_DB_CONNECT_STRING: ${NMC_DB_CONNECT_STRING:-oracle-free-23:1521/freepdb1}

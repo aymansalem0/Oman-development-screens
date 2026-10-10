@@ -12,3 +12,11 @@
 @media (max-width: 960px) {
   .qa-shell main, .qa-shell[dir="rtl"] main { margin: 0; max-width: none; padding-top: 56px; }
 }
+
+
+/* Keep Data Quality management on the same bilingual ministry visual identity. */
+.qa-brand{display:flex;align-items:center;gap:12px;min-width:0}
+.qa-brand-copy{min-width:0}
+.qa-ministry-logo{flex-shrink:0}
+@media(max-width:1160px){.qa-brand-copy{display:none}}
+@media(max-width:960px){.qa-top{min-height:82px}}

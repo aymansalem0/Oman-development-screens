@@ -70,6 +70,25 @@ export function projectQuality(
     metric('provenance',checks.length===3?provenanceScore:null,
       cfg.weights.provenance,validChecks,3)
   ];
+  // The browser's four editable weights are relative within the non-document
+  // 85% when a grounded A03 comparison exists. Its fixed 15% is separately
+  // displayed, never fabricated when the document is unavailable.
+  const hasA03=Number.isFinite(breakdown.documentConsistencyPercent)&&
+    Boolean(breakdown.documentComparison?.available);
+  if(hasA03){
+    for(const m of measures){
+      m.weightPercent=Math.round(m.weightPercent*85)/100;
+      m.rawContribution=m.percent===null?null:
+        Math.round(m.percent*m.weightPercent)/100;
+    }
+    const d=breakdown.documentComparison!;
+    measures.push({
+      key:'documentConsistency',label:'Grounded A03 document consistency',
+      percent:breakdown.documentConsistencyPercent!,
+      weightPercent:15,numerator:d.matched,denominator:d.compared,
+      rawContribution:Math.round(breakdown.documentConsistencyPercent!*15)/100
+    });
+  }
   const insufficient=missingConfigured || !both.length || !links.length ||
     checks.length!==3 || measures.some(s=>s.percent===null);
   const raw=insufficient?null:Math.round(measures.reduce(

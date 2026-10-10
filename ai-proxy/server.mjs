@@ -17,10 +17,13 @@ import { SiAiPrioritization, SiPriorityError } from './si-ai-prioritization.mjs'
 import { SiInspectionPreparation, SiPreparationError } from './si-inspection-preparation.mjs';
 import { SiInspectionLifecycle, SiLifecycleError } from './si-inspection-lifecycle.mjs';
 import { DriveDocumentIntelligence, DocumentError } from './drive-document-intelligence.mjs';
+import { RuntimeSettings, RuntimeSettingsError } from './runtime-settings.mjs';
 
 const port = Number(process.env.PORT || 3000);
 const apiKey = (process.env.AIRIA_MENA_KEY || '').trim();
-const baseUrl = (process.env.AIRIA_BASE_URL || 'https://api.mena.airia.ai').replace(/\/$/, '');
+const runtime=new RuntimeSettings();
+runtime.load();
+const agentAllowed=agent=>{const k={a01:'NMC_A01_ENABLED',a02:'NMC_A02_ENABLED',a03:'NMC_A03_ENABLED',a04:'SI_A04_ENABLED',p01:'SI_P01_ENABLED'}[agent];return k?runtime.get(k):false;};
 const timeoutMs = Math.min(180000, Math.max(1000, Number(process.env.AIRIA_TIMEOUT_MS || 120000)));
 const maxBytes = 1024 * 1024; // Single agent call body.
 const autoEnabled = process.env.NMC_FLEET_AUTO_ENABLED === 'true';
@@ -38,7 +41,8 @@ const pipelines = Object.freeze({
 async function fleetAgentCall(agent,input) {
   if (!apiKey) throw new Error('AIRIA_NOT_CONFIGURED');
   if (!pipelines[agent]) throw new Error('AIRIA_PIPELINE_NOT_CONFIGURED');
-  const upstream=await fetch(baseUrl+'/v1/PipelineExecution/'+pipelines[agent],{
+  if (!agentAllowed(agent)) throw new Error('AIRIA_AGENT_DISABLED');
+  const upstream=await fetch(runtime.get('AIRIA_BASE_URL')+'/v1/PipelineExecution/'+pipelines[agent],{
     method:'POST',
     headers:{'X-API-KEY':apiKey,'Content-Type':'application/json','User-Agent':'moei-nmc-fleet/1.0'},
     body:JSON.stringify({userInput:JSON.stringify(input),asyncOutput:false}),
@@ -57,9 +61,11 @@ let guidance;
 let riskPolicy;
 const documents=new DriveDocumentIntelligence({mode:dbMode,oracleRepository:repository,
   executeA03:async input=>fleetAgentCall('a03',input),
-  enabled:process.env.NMC_A03_ENABLED==='true'&&Boolean(apiKey)});
+  enabled:runtime.get('NMC_A03_ENABLED')&&Boolean(apiKey)});
 const fleet=new FleetAssessmentManager({executeAgent:fleetAgentCall,getPscVessel,repository,
   approvedDocuments:async imo=>documents.ready?documents.approvedFor(imo):[],
+  documentEvidence:async imo=>documents.ready?
+    documents.syncForRisk(imo,{autoEnabled:runtime.get('NMC_A03_AUTO_ENABLED')}):[],
   onAssessmentSaved:async row=>{
     try{await guidance?.materialize(row.imo);}
     catch{console.error('[nmc-guidance] RESULT_MATERIALIZATION_FAILED');}
@@ -84,7 +90,7 @@ siTargeting.pscSelection=siPscSelection;
 const siPriority=new SiAiPrioritization({
   targeting:siTargeting,mode:dbMode,oracleRepository:repository,
   executeAgent:async input=>fleetAgentCall('p01',input),
-  enabled:process.env.SI_P01_ENABLED==='true'&&
+  enabled:runtime.get('SI_P01_ENABLED')&&
     Boolean(apiKey)&&Boolean(pipelines.p01)
 });
 const siPreparation=new SiInspectionPreparation({mode:dbMode,oracleRepository:repository,
@@ -92,12 +98,18 @@ const siPreparation=new SiInspectionPreparation({mode:dbMode,oracleRepository:re
   approvedDocuments:async imo=>documents.ready?documents.approvedFor(imo):[],
   bundles:siTargeting.bundles,
   executeA04:async input=>fleetAgentCall('a04',input),
-  enabled:process.env.SI_A04_ENABLED==='true'&&Boolean(apiKey)});
+  enabled:runtime.get('SI_A04_ENABLED')&&Boolean(apiKey)});
 const siLifecycle=new SiInspectionLifecycle({mode:dbMode,oracleRepository:repository,
   targeting:siTargeting,preparation:siPreparation,cases});
 const actionPlanRuns=new Set(); // process-local duplicate A01 invocation guard; version-lock remains authoritative
-const alertScanEnabled=process.env.NMC_ALERT_SCAN_ENABLED!=='false';
-const alertScanIntervalMs=Math.max(15000,Number(process.env.NMC_ALERT_SCAN_SECONDS||30)*1000);
+let alertScanTimer=null;
+function rescheduleAlertScan(){
+  if(alertScanTimer){clearInterval(alertScanTimer);alertScanTimer=null;}
+  if(!runtime.get('NMC_ALERT_SCAN_ENABLED'))return;
+  alertScanTimer=setInterval(()=>void scanExistingFleetForAlerts(),runtime.get('NMC_ALERT_SCAN_SECONDS')*1000);
+  alertScanTimer.unref?.();
+  void scanExistingFleetForAlerts();
+}
 async function scanExistingFleetForAlerts(){
   try{
     // Only saved A01/A02 signals; central published risk policy is authoritative
@@ -106,10 +118,14 @@ async function scanExistingFleetForAlerts(){
     let effective=original;
     if(riskPolicy.ready){
       const projected=await riskPolicy.projectCurrent();
-      const byImo=new Map(projected.projections.map(p=>[p.imo,p]));
+      // Provisional A03=0 is NOT evidence; it must never create, escalate or
+      // resolve maritime alerts as though it were a verified current score.
+      const byImo=new Map(projected.projections.filter(p=>!p.provisional).map(p=>[p.imo,p]));
       effective={...original,results:Object.fromEntries(Object.entries(original.results).map(([imo,row])=>{
         const p=byImo.get(imo);
-        return [imo,p&&p.sourceAssessmentId===row.assessmentId?{
+        const provisional=projected.projections.find(x=>x.imo===imo&&x.provisional);
+        return [imo,provisional?{...row,policyProjectionUnavailable:true,
+          provisionalOnly:true}:p&&p.sourceAssessmentId===row.assessmentId?{
           ...row,score:p.riskScore,level:p.riskLevel,
           operationalPriority:p.operationalPriority,criticalOpenFinding:p.criticalOpenFinding,
           configVersion:projected.policyRef,riskPolicyRevision:projected.policyRevision,
@@ -142,9 +158,13 @@ async function effectiveFleetSnapshot(snapshot){
         sourceAiConfigVersion:row.configVersion,
         score:p.riskScore,level:p.riskLevel,
         operationalPriority:p.operationalPriority,
+        riskProvisional:Boolean(p.provisional),
+        a03EvidenceStatus:p.provisional?'NOT_ASSESSED': 'ASSESSED',
+        operationalDecisionAllowed:!p.provisional,
         configVersion:active.policyRef,
         activePolicyRevision:active.policyRevision,
-        scoringSource:'CURRENT_CENTRAL_RISK_POLICY'};
+        scoringSource:p.provisional?
+          'PROVISIONAL_POC_A03_ZERO_NOT_ASSESSED':'CURRENT_CENTRAL_RISK_POLICY'};
     }else results[imo]={...row,
       scoringSource:row.status==='COMPLETED'?'ORIGINAL_AI_ASSESSMENT_UNPROJECTED':null};
     const current=results[imo];
@@ -158,9 +178,31 @@ async function effectiveFleetSnapshot(snapshot){
     activePolicyRef:active.policyRef,riskPolicyStatus:'ACTIVE'};
 }
 const scheduler=new FleetAutoScheduler({fleet,getPscVessel,
-  enabled:autoEnabled && Boolean(apiKey),intervalMs:autoInterval,
-  maxVessels:process.env.NMC_FLEET_AUTO_MAX_VESSELS || 420,
-  retryFailed:process.env.NMC_FLEET_AUTO_RETRY_FAILED === 'true'});
+  getRiskConfig:async()=>{
+    if(!riskPolicy.ready)throw new Error('RISK_POLICY_NOT_READY');
+    const published=await riskPolicy.active();
+    return {...published.config,version:published.config.version||published.policyRef};
+  },
+  getDocumentFingerprint:async imo=>documents.ready?
+    documents.fingerprint(imo):'A03_NOT_READY',
+  enabled:runtime.get('NMC_FLEET_AUTO_ENABLED')&&Boolean(apiKey),
+  intervalMs:runtime.get('NMC_FLEET_REFRESH_SECONDS')*1000,
+  maxVessels:runtime.get('NMC_FLEET_AUTO_MAX_VESSELS'),
+  retryFailed:runtime.get('NMC_FLEET_AUTO_RETRY_FAILED')});
+function applyRuntimeSettings(){
+  scheduler.stop();
+  scheduler.enabled=runtime.get('NMC_FLEET_AUTO_ENABLED')&&
+    runtime.get('NMC_A01_ENABLED')&&runtime.get('NMC_A02_ENABLED')&&Boolean(apiKey);
+  scheduler.intervalMs=runtime.get('NMC_FLEET_REFRESH_SECONDS')*1000;
+  scheduler.maxVessels=runtime.get('NMC_FLEET_AUTO_MAX_VESSELS');
+  scheduler.retryFailed=runtime.get('NMC_FLEET_AUTO_RETRY_FAILED');
+  alerts.escalationMinutes=runtime.get('NMC_ALERT_ESCALATE_MINUTES');
+  documents.enabled=runtime.get('NMC_A03_ENABLED')&&Boolean(apiKey);
+  siPreparation.enabled=runtime.get('SI_A04_ENABLED')&&Boolean(apiKey);
+  siPriority.enabled=runtime.get('SI_P01_ENABLED')&&Boolean(apiKey)&&Boolean(pipelines.p01);
+  if(server.listening){scheduler.start();rescheduleAlertScan();}
+}
+runtime.onChange=applyRuntimeSettings;
 
 function respond(res, status, payload) {
   const body = JSON.stringify(payload);
@@ -217,7 +259,7 @@ async function prepareCaseA01Actions(caseId,version){
           const source=fleet.getVesselResult(existing.imo);
           if(!source||source.status!=='COMPLETED'||
             source.score!==existing.sourceScore||source.level!==existing.sourceLevel||
-            !Array.isArray(source.signals)||source.signals.length!==5)
+            !Array.isArray(source.signals)||![5,6].includes(source.signals.length))
             throw new NmcCaseError('CASE_SOURCE_ASSESSMENT_UNAVAILABLE',409);
           // Older PR42 alerts omitted the assessment ID from the snapshot.
           // Reconcile ONLY when the persisted alert timestamp/ruleset and current
@@ -273,6 +315,21 @@ async function prepareCaseA01Actions(caseId,version){
 const server = createServer(async (req, res) => {
   const path = new URL(req.url || '/', 'http://localhost').pathname;
 
+  if(path==='/api/ai/admin/runtime-settings'){
+    if(req.method==='GET')return respond(res,200,runtime.publicView());
+    if(req.method==='PUT'){
+      try{
+        dashboards.assertRole(req,'PUBLISHER');
+        const input=await requestJson(req,12288);
+        return respond(res,200,await runtime.publish(input));
+      }catch(error){
+        if(error instanceof RuntimeSettingsError||error instanceof DashboardError)
+          return respond(res,error.status,{error:error.code});
+        return respond(res,400,{error:'RUNTIME_SETTINGS_BAD_REQUEST'});
+      }
+    }
+    return respond(res,405,{error:'METHOD_NOT_ALLOWED'});
+  }
   if (req.method === 'GET' && path === '/api/ai/health') {
     const db=repository?await repository.health():{mode:'json',ready:true};
     return respond(res, db.ready?200:503, {
@@ -780,7 +837,9 @@ const server = createServer(async (req, res) => {
       if(req.method==='GET'){
         if(!id){
           const projection=riskPolicy.ready?await riskPolicy.projectCurrent():null;
-          return respond(res,200,await alerts.overview(projection));
+          const alertEligible=projection?{...projection,
+            projections:projection.projections.filter(p=>!p.provisional)}:null;
+          return respond(res,200,await alerts.overview(alertEligible));
         }
         if(action==='history')return respond(res,200,{status:'ok',history:await alerts.history(id)});
         if(action)return respond(res,404,{error:'ALERT_NOT_FOUND'});
@@ -958,6 +1017,7 @@ const server = createServer(async (req, res) => {
   if (!apiKey) return respond(res, 503, { error: 'AIRIA_NOT_CONFIGURED', message: 'Set AIRIA_MENA_KEY in the local .env file.' });
 
   const agent = match[1].toLowerCase();
+  if(!agentAllowed(agent))return respond(res,403,{error:'AIRIA_AGENT_DISABLED',agent});
   let input;
   try {
     const parsed = await requestJson(req);
@@ -971,7 +1031,7 @@ const server = createServer(async (req, res) => {
 
   try {
     // Airia requires userInput to be a JSON-serialized STRING, not a nested object.
-    const upstream = await fetch(`${baseUrl}/v1/PipelineExecution/${pipelines[agent]}`, {
+    const upstream = await fetch(`${runtime.get('AIRIA_BASE_URL')}/v1/PipelineExecution/${pipelines[agent]}`, {
       method: 'POST',
       headers: {
         'X-API-KEY': apiKey,
@@ -1047,11 +1107,7 @@ try{
   }
   server.listen(port,'0.0.0.0',()=>{
     console.log(`NMC AI proxy listening on ${port}; mode=${dbMode}; fleet-auto=${scheduler.enabled}`);
-    if(scheduler.enabled)scheduler.start();
-    if(alertScanEnabled){
-      void scanExistingFleetForAlerts();
-      setInterval(()=>void scanExistingFleetForAlerts(),alertScanIntervalMs);
-    }
+    applyRuntimeSettings();
   });
 }catch(error){
   // Fail closed: no AI requests if Oracle schema / credentials are not ready.

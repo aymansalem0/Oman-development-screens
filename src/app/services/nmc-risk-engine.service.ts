@@ -5,7 +5,7 @@ import { map, tap } from 'rxjs/operators';
 import { NmcVesselProfile, RiskLevel } from '../data/nmc-vessel-catalog';
 import { NMC_OPERATIONAL_VESSELS } from '../data/nmc-expanded-vessel-catalog';
 
-export type RiskFactorKey = 'movement' | 'inspection' | 'certificate' | 'dataQuality' | 'history';
+export type RiskFactorKey = 'movement' | 'inspection' | 'certificate' | 'dataQuality' | 'history' | 'documentIntegrity';
 export type RiskCalculationMode = 'weighted' | 'conservative' | 'max-signal';
 
 export interface RiskWeights {
@@ -14,6 +14,7 @@ export interface RiskWeights {
   certificate: number;
   dataQuality: number;
   history: number;
+  documentIntegrity: number;
 }
 
 export interface RiskThresholds {
@@ -79,7 +80,8 @@ const DEFAULT_CONFIG: RiskEngineConfig = {
     inspection: 28,
     certificate: 20,
     dataQuality: 14,
-    history: 13
+    history: 13,
+    documentIntegrity: 0
   },
   thresholds: {
     watch: 45,
@@ -187,7 +189,9 @@ export class NmcRiskEngineService {
   }
 
   cloneConfig(config: RiskEngineConfig): RiskEngineConfig {
-    return JSON.parse(JSON.stringify(config)) as RiskEngineConfig;
+    const copy=JSON.parse(JSON.stringify(config)) as RiskEngineConfig;
+    copy.weights.documentIntegrity=Number(copy.weights.documentIntegrity||0);
+    return copy;
   }
 
   publish(_config: RiskEngineConfig): RiskEngineConfig {
@@ -265,8 +269,9 @@ export class NmcRiskEngineService {
     config: RiskEngineConfig = this.configSubject.value
   ): RiskEvaluation {
     const keys: RiskFactorKey[] = ['movement', 'inspection', 'certificate', 'dataQuality', 'history'];
+    if(Number(config.weights.documentIntegrity||0)>0)keys.push('documentIntegrity');
     if (!keys.every(key => Number.isFinite(severities[key]) && severities[key] >= 0 && severities[key] <= 100)) {
-      throw new Error('All five AI risk severities must be finite numbers from 0 to 100.');
+      throw new Error('Missing required validated A03 document-integrity signal; no risk projection can be calculated.');
     }
 
     let score = this.weightedScore(severities, config.weights);
@@ -429,7 +434,9 @@ export class NmcRiskEngineService {
         deterministic(7, 21, 10) * 0.75 +
         (age > 20 ? 5 : age > 15 ? 3 : 0),
         0, 100
-      )
+      ),
+      documentIntegrity: 0 // No A03 evidence in local fixtures; zero weight by default. Never claim verified quality.
+
     };
   }
 

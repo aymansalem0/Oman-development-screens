@@ -970,3 +970,74 @@ a, button { font: inherit; }
 .historical-factor-row{display:grid;grid-template-columns:minmax(80px,1fr) repeat(3,minmax(80px,1fr));gap:10px;padding:5px 0;border-top:1px dashed #e3edf2;font-size:10px;color:#607589;}
 .historical-factor-row strong{color:#1b766f;}
 @media(max-width:760px){.historical-factor-row{grid-template-columns:repeat(2,minmax(0,1fr));}}
+
+
+/* NMC bilingual ministry branding (never mirror emblem under RTL). */
+.rx-ministry-logo{flex-shrink:0}
+.brand-block{min-width:0}
+@media(max-width:1400px){.rx-topbar .brand-block>div{display:none}}
+@media(max-width:960px){.rx-topbar{min-height:82px;padding-inline:12px}}
+
+
+/* Decision-first saved AI risk summary: source score NEVER masquerades as current policy. */
+.risk-decision-panel{
+  margin-top:13px;display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr) minmax(0,1.25fr);
+  border:1px solid #d7e5ee;border-radius:15px;background:#fff;overflow:hidden;
+  box-shadow:0 5px 18px rgba(23,50,77,.045);
+}
+.risk-decision-panel>div{min-width:0;padding:18px 20px}
+.risk-decision-panel>div+div{border-inline-start:1px solid #e7eef4}
+.decision-eyebrow{display:block;margin:0 0 13px;color:#53718b;font-size:10px;font-weight:850;letter-spacing:.55px}
+.decision-score-row{display:flex;align-items:center;gap:14px}
+.decision-score{display:flex;flex:0 0 112px;flex-direction:column;align-items:center;justify-content:center;
+  min-height:102px;padding:12px;border:1px solid #d3e8e4;border-radius:13px;background:#eff9f5}
+.decision-score strong{font-size:36px;line-height:1.05;color:#0c7e74}
+.decision-score strong small{font-size:12px;color:#7b96a0}
+.decision-score span{margin-top:5px;font-size:12px;font-weight:800;color:#0c7e74}
+.decision-score.watch{background:#fff6dc;border-color:#eed59b}
+.decision-score.watch strong,.decision-score.watch span{color:#90600b}
+.decision-score.high{background:#fff1e5;border-color:#f3caac}
+.decision-score.high strong,.decision-score.high span{color:#c66c1c}
+.decision-score.critical{background:#ffeded;border-color:#f5baba}
+.decision-score.critical strong,.decision-score.critical span{color:#c83b45}
+.metric-card.source-risk-card.watch{border-color:#eed59b;background:#fff8e5}
+.metric-card.source-risk-card.watch>strong,.metric-card.source-risk-card.watch>span{color:#976b0c}
+.metric-card.source-risk-card.high{border-color:#f3caac;background:#fff4e9}
+.metric-card.source-risk-card.high>strong,.metric-card.source-risk-card.high>span{color:#c56c15}
+.metric-card.source-risk-card.critical{border-color:#f5baba;background:#ffefef}
+.metric-card.source-risk-card.critical>strong,.metric-card.source-risk-card.critical>span{color:#ca3e48}
+.metric-card.source-risk-card>strong>small{display:inline;font-size:11px;font-weight:700}
+.decision-interpretation{min-width:0}
+.decision-interpretation strong{display:block;color:#173e55;font-size:12px;line-height:1.5}
+.decision-interpretation p{margin:7px 0;color:#567287;font-size:11px;line-height:1.55}
+.decision-interpretation .decision-provenance{font-size:10px;color:#8d98a5}
+.decision-view-evidence{margin-top:14px;padding:10px 13px;color:#0c756e;border:1px solid #afe0d8;
+  border-radius:9px;background:#effbf8;font-size:11px;font-weight:780;cursor:pointer}
+.decision-view-evidence:hover{background:#daf4ed}
+.decision-view-evidence:disabled{opacity:.55;cursor:not-allowed}
+.decision-drivers>strong,.decision-next>strong{display:block;margin-bottom:14px;color:#173e55;font-size:12px;line-height:1.5}
+.decision-driver{display:grid;grid-template-columns:minmax(0,1fr) 76px 54px;align-items:center;gap:7px 9px;
+  padding:8px 0;border-bottom:1px solid #eef2f5}
+.decision-driver>span{font-size:11px;color:#486078;font-weight:680;min-width:0}
+.decision-driver>b{font-size:11px;color:#174b60;text-align:end}
+.decision-driver>small{grid-column:1/-1;color:#899ba9;font-size:9px}
+.decision-driver-track{height:8px;border-radius:8px;background:#edf2f5;overflow:hidden}
+.decision-driver-track i{display:block;height:100%;background:#d3a343;border-radius:8px}
+.decision-drivers>p{margin:12px 0 0;color:#8294a3;font-size:10px;line-height:1.65}
+.decision-next{background:#f7fbfd}
+.risk-decision-panel.projection-blocked .decision-next{background:#fffaf1}
+.decision-next>p{margin:0 0 13px;color:#6b5741;font-size:11px;line-height:1.7}
+.decision-actions{display:flex;flex-wrap:wrap;gap:7px;margin:10px 0 12px}
+.decision-action{display:inline-flex;align-items:center;min-height:35px;max-width:100%;
+  border:1px solid #d2e1e7;border-radius:8px;padding:8px 11px;text-decoration:none;
+  color:#42627b;background:#fff;font-size:10px;font-weight:750;line-height:1.4}
+.decision-action.primary{background:#0f766e;color:white;border-color:#0f766e}
+.decision-action:hover{border-color:#0c8279}
+.decision-next>small{display:block;color:#8b7050;font-size:10px;line-height:1.65}
+@media(max-width:1360px){.risk-decision-panel{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .risk-decision-panel .decision-next{grid-column:1/-1;border-inline-start:0;border-top:1px solid #e7eef4}}
+@media(max-width:780px){.risk-decision-panel{grid-template-columns:minmax(0,1fr)}
+  .risk-decision-panel>div+div,.risk-decision-panel .decision-next{
+    grid-column:auto;border-inline-start:0;border-top:1px solid #e7eef4}
+  .decision-score-row{flex-wrap:wrap}.decision-score{flex-basis:105px}
+  .risk-decision-panel>div{padding:15px}}

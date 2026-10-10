@@ -40,7 +40,7 @@
 
     <section class="case-hero">
       <div class="case-identity">
-        <span class="case-kicker">{{centralCase?.status==='RESOLVED'?copy('RESOLVED MARITIME CASE','حالة بحرية مغلقة'):copy('ACTIVE MARITIME CASE','حالة بحرية نشطة')}}</span>
+        <span class="case-kicker">{{centralCase.status==='RESOLVED'?copy('RESOLVED MARITIME CASE','حالة بحرية مغلقة'):copy('ACTIVE MARITIME CASE','حالة بحرية نشطة')}}</span>
         <div class="case-title-row">
           <div>
             <h2>{{ caseId }}</h2>
@@ -51,7 +51,7 @@
 
         <div class="case-context">
           <span>{{ copy('Case owner', 'مالك الحالة') }}: <strong>{{copy('NMC Duty Officer', 'ضابط مناوبة المركز البحري')}}</strong></span>
-          <span>{{ copy('Opened', 'تاريخ الفتح') }}: <strong>{{centralCase?.createdAt|date:'medium'}}</strong></span>
+          <span>{{ copy('Opened', 'تاريخ الفتح') }}: <strong>{{centralCase.createdAt|date:'medium'}}</strong></span>
           <span>{{ copy('Source', 'المصدر') }}: <strong>{{ copy('AI assessment + human approval', 'تقييم الذكاء الاصطناعي + اعتماد بشري') }}</strong></span>
         </div>
       </div>
@@ -109,16 +109,16 @@
           <p>{{ copy('A01 proposes. The NMC officer approves. Only accepted actions become tasks; approved inspection referrals enter Smart Inspection scheduling.',
             'يقترح A01 ويعتمد موظف NMC. تتحول الإجراءات المقبولة فقط إلى مهام، وتدخل إحالات المعاينة المعتمدة إلى قائمة الجدولة.') }}</p>
         </div>
-        <button *ngIf="!centralCase?.actionPlan" type="button" class="ai-plan-button"
+        <button *ngIf="!centralCase.actionPlan" type="button" class="ai-plan-button"
                 [disabled]="centralBusy||caseStatus==='Resolved'" (click)="generateAiActions()">
           ↻ {{ copy('Retry A01 recommendations', 'إعادة محاولة تحميل توصيات A01') }}
         </button>
       </div>
-      <div class="ai-plan-alert" *ngIf="!centralCase?.actionPlan">
+      <div class="ai-plan-alert" *ngIf="!centralCase.actionPlan">
         {{ copy('A01 recommendations are prepared automatically when Create Maritime Case is confirmed. If this case was opened before the change or A01 failed, use Retry. No tasks are invented.',
           'يتم إعداد توصيات A01 عند تأكيد إنشاء الحالة البحرية. إذا كانت الحالة قديمة أو فشل A01، استخدم إعادة المحاولة. لن ننشئ مهام افتراضية.') }}
       </div>
-      <ng-container *ngIf="centralCase?.actionPlan as plan">
+      <ng-container *ngIf="centralCase.actionPlan as plan">
         <p class="ai-plan-context">{{ plan.summary }} <small>{{ copy('Saved source risk', 'المخاطر الأصلية') }}: {{ plan.sourceScore }}/100 · {{ plan.sourceAssessmentId }}</small></p>
         <div class="ai-action-rows">
           <article class="ai-action-row" *ngFor="let action of plan.proposedActions">
@@ -143,9 +143,9 @@
             </div>
           </article>
         </div>
-        <div class="ai-queue-note" *ngIf="centralCase?.inspectionRequests?.length">
+        <div class="ai-queue-note" *ngIf="centralCase.inspectionRequests?.length">
           {{copy('Approved inspection requests','طلبات المعاينة المعتمدة')}}:
-          <span *ngFor="let r of centralCase?.inspectionRequests">{{r.status}} · </span>
+          <span *ngFor="let r of centralCase.inspectionRequests">{{r.status}} · </span>
           <a [routerLink]="['/moei/smart-inspection/candidates']">{{copy('Open Smart Inspection scheduling →','فتح جدول المعاينة الذكية ←')}}</a>
         </div>
       </ng-container>
@@ -163,7 +163,7 @@
           </div>
 
           <div class="ai-plan-alert" *ngIf="!tasks.length">
-            {{centralCase?.actionPlan
+            {{centralCase.actionPlan
               ?copy('No approved A01 tasks yet. Review the recommendations above; only accepted actions will appear here.',
                     'لا توجد مهام معتمدة من A01 بعد. راجع التوصيات أعلاه؛ لن تظهر هنا إلا الإجراءات المعتمدة.')
               :copy('Recommendations are not yet available. No historical or template tasks are displayed.',
@@ -292,8 +292,8 @@
                   <small>{{ completedTasks }}/{{ tasks.length }} {{ copy('tasks complete', 'مهام مكتملة') }}</small>
                 </p>
               </div>
-              <div [class.complete]="!!centralCase?.actionPlan&&pendingAiActionCount===0">
-                <span>{{centralCase?.actionPlan&&pendingAiActionCount===0?'✓':'○'}}</span>
+              <div [class.complete]="!!centralCase.actionPlan&&pendingAiActionCount===0">
+                <span>{{centralCase.actionPlan&&pendingAiActionCount===0?'✓':'○'}}</span>
                 <p>
                   <strong>{{ copy('A01 proposals reviewed by an officer', 'اعتماد أو رفض جميع توصيات A01 بواسطة الموظف') }}</strong>
                   <small>{{pendingAiActionCount}} {{ copy('decisions still pending', 'قرارات ما زالت معلقة') }}</small>

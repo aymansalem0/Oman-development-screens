@@ -14,6 +14,12 @@ export interface FleetAiVessel {
   assessedAt?: string;
   sourceMode?: 'GOOGLE_SHEETS_LIVE' | 'LOCAL_FIXTURE_SNAPSHOT';
   configVersion?: string;
+  riskProvisional?: boolean;
+  a03EvidenceStatus?: 'NOT_ASSESSED'|'ASSESSED';
+  scoringSource?: string;
+  sourceAiScore?: number;
+  sourceAiLevel?: 'Normal'|'Watch'|'High'|'Critical';
+  operationalDecisionAllowed?: boolean;
   reasonCode?: string;
   lastCheckedAt?: string;
   nextCheckAt?: string;
@@ -37,7 +43,9 @@ export interface FleetAiSnapshot {
   scheduler?: {
     mode:string;enabled:boolean;enabledVessels:number;checkIntervalSeconds:number;
     lastTickAt:string|null;lastError:string|null;
-    lastSelected:number;lastUnchanged:number;batchRunning:boolean;
+    lastSelected:number;lastUnchanged:number;
+    blockedFailedVessels?:number;lastDocumentSourceUnavailable?:number;
+    lastDocumentSourceNotConfigured?:number;batchRunning:boolean;
   };
   job: null | {
     id:string;status:'RUNNING'|'COMPLETED'|'CANCELLED';
@@ -48,7 +56,7 @@ export interface FleetAiSnapshot {
 }
 /** How the synthetic data-quality engine reached its persisted structural score. */
 export interface FleetAiQualityStep {
-  key: 'completeness' | 'consistency' | 'evidenceLinkage' | 'provenance';
+  key: 'completeness' | 'consistency' | 'evidenceLinkage' | 'provenance' | 'documentConsistency';
   label: string;
   percent: number | null;
   weightPercent: number;
@@ -93,6 +101,17 @@ export interface FleetAiIntelligence {
       completenessPercent: number;
       consistencyPercent: number | null;
       evidenceLinkagePercent: number | null;
+      documentConsistencyPercent?: number | null;
+      a03DocumentCount?: number;
+      a03Disagreements?: number;
+      documentComparisons?: Array<{
+        field:string;sourceValue:string;documentValue:string;evidenceId:string;
+        documentType:string;status:'MATCHED'|'MISMATCH';reviewStatus:string;
+      }>;
+      documentComparison?: {
+        available:boolean;compared:number;matched:number;mismatched:number;
+        consistencyPercent:number|null;documentCount:number;evidenceIds:string[];
+      };
       provenanceMetadataPercent: number;
       comparedFields: number;
       missingFieldSides: number;
@@ -169,7 +188,7 @@ export interface FleetAiAnalytics {
     imo:string;assessmentId:string|null;assessedAt:string|null;
     savedRiskScore:number;savedRiskLevel:string;
     rulesetVersion:string|null;criticalOpenFinding:boolean;
-    factorSeverities:{movement:number;inspection:number;certificate:number;dataQuality:number;history:number};
+    factorSeverities:{movement:number;inspection:number;certificate:number;dataQuality:number;history:number;documentIntegrity?:number};
   }>;
 }
 @Injectable({providedIn:'root'})

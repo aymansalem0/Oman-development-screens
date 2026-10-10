@@ -1,4 +1,5 @@
 import { NmcNavigationComponent } from '../components/nmc-navigation.component';
+import { NmcMinistryLogoComponent } from '../components/nmc-ministry-logo.component';
 import {CommonModule} from '@angular/common';
 import {Component,OnDestroy,OnInit} from '@angular/core';
 import {FormsModule} from '@angular/forms';
@@ -10,7 +11,7 @@ import {NmcDataQualityConfigService,QualityDemoPolicy,QualityMetricKey,QualityId
   QualityPolicyImpact,QUALITY_METRICS,QUALITY_ID_FIELDS,projectQuality} from '../services/nmc-data-quality-config.service';
 
 @Component({selector:'app-nmc-data-quality-configuration',standalone:true,
-  imports: [CommonModule,FormsModule,RouterLink, NmcNavigationComponent],
+  imports: [CommonModule,FormsModule,RouterLink, NmcNavigationComponent, NmcMinistryLogoComponent],
   templateUrl:'./nmc-data-quality-configuration.component.html',
   styleUrl:'./nmc-data-quality-configuration.component.css'})
 export class NmcDataQualityConfigurationComponent implements OnInit,OnDestroy {
@@ -37,10 +38,11 @@ export class NmcDataQualityConfigurationComponent implements OnInit,OnDestroy {
   }
   ngOnDestroy():void {this.sub?.unsubscribe();}
   copy(en:string,ar:string):string {return this.lang.pick(en,ar);}
-  metricLabel(key:QualityMetricKey):string {
-    const v:Record<QualityMetricKey,[string,string]>={
+  metricLabel(key:QualityMetricKey|'documentConsistency'):string {
+    const v:Record<QualityMetricKey|'documentConsistency',[string,string]>={
       completeness:['Completeness','الاكتمال'],consistency:['Consistency','التطابق'],
-      evidenceLinkage:['Evidence linkage','ربط الأدلة'],provenance:['Source metadata','بيانات المصدر']};
+      evidenceLinkage:['Evidence linkage','ربط الأدلة'],provenance:['Source metadata','بيانات المصدر'],
+      documentConsistency:['A03 document consistency','اتساق مستندات A03']};
     return this.copy(...v[key]);
   }
   fieldLabel(key:QualityIdentityField):string {

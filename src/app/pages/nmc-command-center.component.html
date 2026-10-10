@@ -63,6 +63,9 @@
           {{ copy('Last scheduler cycle', 'آخر دورة للجدولة') }}: {{ checked | date:'medium' }}
         </span>
       </div>
+      <p *ngIf="fleetSnapshot?.scheduler?.blockedFailedVessels as blocked" class="fleet-error" role="status">
+        {{blocked}} {{copy('previous Fleet AI failures remain skipped while retries are disabled.', 'سفينة فشل تقييمها سابقًا ولا يعاد تشغيلها طالما إعادة المحاولة متوقفة.')}}
+      </p>
       <p *ngIf="fleetError" class="fleet-error">{{ fleetError }}</p>
     </section>
 
@@ -123,6 +126,10 @@
               <span class="traffic-profile-badge">
                 {{ correlatedProfileCount }} {{ copy('correlated vessel profiles', 'ملف سفينة مترابط') }}
               </span>
+              <span class="real-map-badge">{{assessedCount}} {{copy('AI assessed','تم تقييمها بواسطة AI')}}</span>
+              <span class="risk-preview-badge" *ngIf="provisionalRiskCount>0">
+                {{provisionalRiskCount}} {{copy('PROVISIONAL RISK · A03 NOT ASSESSED','مخاطر مبدئية · A03 لم يُقيّم')}}
+              </span>
             </div>
             <p>
               {{ copy(
@@ -142,6 +149,14 @@
               />
             </label>
 
+            <select [(ngModel)]="assessmentFilter" (ngModelChange)="onFilterChange()"
+                    class="assessment-filter"
+                    [attr.aria-label]="copy('Filter by AI assessment status', 'تصفية حسب حالة التقييم بالذكاء الاصطناعي')">
+              <option value="All">{{copy('All assessments','جميع حالات التقييم')}}</option>
+              <option value="Assessed">{{copy('AI Assessed Only','تم تقييمها بالذكاء الاصطناعي فقط')}} ({{assessedCount}})</option>
+              <option value="Pending">{{copy('Not AI assessed','لم تُقيّم بعد بالذكاء الاصطناعي')}} ({{pendingCount}})</option>
+            </select>
+
             <select [(ngModel)]="riskFilter" (ngModelChange)="onFilterChange()" [attr.aria-label]="copy('Filter by risk', 'تصفية حسب المخاطر')">
               <option value="All">{{ copy('All', 'الكل') }}</option>
               <option value="Critical">{{ copy('Critical', 'حرج') }}</option>
@@ -157,8 +172,24 @@
           </div>
         </div>
 
+        <p class="map-filter-summary" role="status">
+          {{visibleMapCount}} / {{correlatedProfileCount}}
+          {{copy('vessels shown on map', 'سفينة ظاهرة على الخريطة')}}
+          <span *ngIf="provisionalRiskCount>0" class="risk-preview-note">
+            · {{copy('Provisional scores use A03=0 as a NOT ASSESSED placeholder and are not valid for maritime enforcement.',
+                     'الدرجات المبدئية تستخدم صفرًا مؤقتًا لعامل A03 بمعنى لم يتم تقييمه، ولا تصلح لقرارات الرقابة البحرية.')}}
+          </span>
+          <span *ngIf="assessmentFilter==='Assessed'"> · {{copy('Completed saved A01/A02 assessments only','تقييمات A01/A02 المحفوظة والمكتملة فقط')}}</span>
+          <span *ngIf="assessmentFilter==='Pending'"> · {{copy('Includes pending and failed assessments','تشمل التقييمات المعلقة والفاشلة')}}</span>
+        </p>
         <div class="map-stage">
           <div #mapContainer class="real-map" dir="ltr"></div>
+          <div class="map-overlay map-assessed-empty" *ngIf="assessmentFilter==='Assessed'&&visibleMapCount===0"
+               role="status">
+            <strong>{{copy('No AI-assessed vessels to display yet','لا توجد سفن مكتملة التقييم بالذكاء الاصطناعي لعرضها حتى الآن')}}</strong>
+            <span>{{copy('This filter only shows successfully saved A01/A02 assessments. Failed and pending vessels are not counted.',
+                         'يعرض هذا الفلتر تقييمات A01/A02 المكتملة والمحـفوظة فقط، ولا يشمل السفن المعلقة أو الفاشلة.')}}</span>
+          </div>
 
           <div class="map-overlay map-legend">
             <span><i class="dot critical"></i> {{ copy('Critical', 'حرج') }}</span>
@@ -203,6 +234,9 @@
                    (click)="$event.stopPropagation()"
                    [attr.aria-label]="copy('Analyze current risk factors for '+vessel.name,'تحليل المخاطر الحالية للسفينة '+vessel.name)">
                   {{ riskLabel(vessel.risk,vessel.imo) }} · {{ riskDisplay(vessel) }}
+                  <small *ngIf="isProvisionalRisk(vessel.imo)" class="risk-preview-chip">
+                    {{copy('PROVISIONAL · A03 NOT ASSESSED','مبدئي · A03 لم يُقيّم')}}
+                  </small>
                 </a>
               </div>
 

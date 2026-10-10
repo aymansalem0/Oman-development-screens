@@ -13,7 +13,7 @@ import { FormsModule } from '@angular/forms';
 import { Subscription } from 'rxjs';
 import { NmcFleetAiService, FleetAiSnapshot, FleetAiVessel } from '../services/nmc-fleet-ai.service';
 import { Router, RouterLink } from '@angular/router';
-import * as L from 'leaflet';
+import * as L from 'leaflet/dist/leaflet-src.esm.js';
 import {
   NmcVesselProfile,
   RiskLevel,
@@ -46,6 +46,7 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
 
   searchTerm = '';
   riskFilter = 'All';
+  assessmentFilter: 'All' | 'Assessed' | 'Pending' = 'Assessed';
   typeFilter = 'All';
   feedLive = true;
   selectedVessel?: NmcVesselProfile;
@@ -421,10 +422,17 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
       const matchesSearch = !query || [vessel.name, vessel.imo, vessel.destination, vessel.flag]
         .some(value => value.toLowerCase().includes(query));
       const matchesRisk = this.riskFilter === 'All' || this.riskLevel(vessel.risk, vessel.imo) === this.riskFilter;
+      // An AI-assessed vessel requires a COMPLETED, validated saved A01/A02
+      // assessment. Synthetic baseline risk and failed jobs never qualify.
+      const assessed = this.hasSavedScore(this.fleetResult(vessel));
+      const matchesAssessment = this.assessmentFilter === 'All' ||
+        (this.assessmentFilter === 'Assessed' ? assessed : !assessed);
       const matchesType = this.typeFilter === 'All' || vessel.type === this.typeFilter;
-      return matchesSearch && matchesRisk && matchesType;
+      return matchesSearch && matchesRisk && matchesAssessment && matchesType;
     });
   }
+
+  get visibleMapCount(): number { return this.filteredVessels.length; }
 
   get allAttentionVessels(): NmcVesselProfile[] {
     return [...this.vessels]
@@ -488,6 +496,13 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
   get attentionCount():number{return this.allAttentionVessels.length;}
   get highRiskCount():number{return (this.fleetSnapshot?.counts.high ?? 0)+(this.fleetSnapshot?.counts.critical ?? 0);}
   get criticalCount():number{return this.fleetSnapshot?.counts.critical ?? 0;}
+  get provisionalRiskCount():number{
+    return Object.values(this.fleetSnapshot?.results||{})
+      .filter(r=>this.hasSavedScore(r)&&r.riskProvisional===true).length;
+  }
+  isProvisionalRisk(imo:string):boolean{
+    return this.fleetSnapshot?.results[imo]?.riskProvisional===true;
+  }
   riskLevel(score:number, imo?:string):RiskLevel|'Pending'{
     if(score<0)return 'Pending';
     const saved=imo?this.fleetSnapshot?.results[imo]:undefined;
@@ -531,12 +546,19 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
   }
 
   onFilterChange(): void {
+    // Do not leave an out-of-filter vessel's route or Vessel 360 action
+    // visible when the operator chooses AI Assessed Only.
+    if(this.selectedVessel&&!this.filteredVessels.some(v=>v.id===this.selectedVessel?.id)){
+      this.selectedVessel=undefined;
+      this.lastInteractiveVesselId=undefined;
+      this.drawSelectedTrack();
+    }
     this.refreshMapMarkers();
   }
 
   resetMapView(): void {
     // Map reset is presentation-only: do not clear saved risk, case state or chosen vessel.
-    this.searchTerm='';this.riskFilter='All';this.typeFilter='All';
+    this.searchTerm='';this.riskFilter='All';this.assessmentFilter='All';this.typeFilter='All';
     this.resetMapBounds();
     this.refreshMapMarkers();
     this.drawSelectedTrack();

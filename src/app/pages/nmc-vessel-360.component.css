@@ -2577,3 +2577,23 @@ button, a { font: inherit; }
     margin-left: 0; margin-right: 0; max-width: none; padding-top: 54px;
   }
 }
+
+
+/* Shared bilingual UAE MOEI identity; same 82px navigation alignment. */
+.v360-ministry-logo{flex-shrink:0}
+.brand-block{min-width:0}
+@media(max-width:1420px){.v360-topbar .brand-block>div{display:none}}
+@media(max-width:960px){.v360-topbar{min-height:82px;padding-inline:14px}}
+
+
+/* Display the explicitly sourced Watch and saved-vs-published risk state. */
+.v360-risk-state-note {
+  display:flex; flex-wrap:wrap; align-items:center; gap:7px 12px;
+  margin:0 0 14px; padding:11px 14px;
+  border:1px solid #d9e7f0; border-radius:11px;
+  background:#f3f9fd; color:#4d6680;
+  font-size:10px; line-height:1.55;
+}
+.v360-risk-state-note strong {color:#193f57;}
+.v360-risk-state-note.v360-watch-note {background:#fff9ea; border-color:#f1d892; color:#8d661a;}
+.v360-risk-state-note.v360-watch-note strong {color:#87621a;}

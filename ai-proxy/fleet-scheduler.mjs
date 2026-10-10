@@ -17,13 +17,14 @@ const MAX_BATCH=12;
 const capVessels=value=>Math.max(1,Math.min(420,Number.isFinite(Number(value))?Math.floor(Number(value)):420));
 export const DEFAULT_FLEET_RULESET=Object.freeze({
   version:'NMC Risk Ruleset 1.0',mode:'weighted',
-  weights:{movement:25,inspection:28,certificate:20,dataQuality:14,history:13},
+  weights:{movement:25,inspection:28,certificate:20,dataQuality:14,history:13,documentIntegrity:0},
   thresholds:{watch:45,high:65,critical:85}
 });
 
 export class FleetAutoScheduler {
-  constructor({fleet,getPscVessel,enabled=false,bundles=null,intervalMs=HOUR,config=DEFAULT_FLEET_RULESET,maxVessels=420,retryFailed=false}){
+  constructor({fleet,getPscVessel,getRiskConfig=null,getDocumentFingerprint=null,enabled=false,bundles=null,intervalMs=HOUR,config=DEFAULT_FLEET_RULESET,maxVessels=420,retryFailed=false}){
     this.fleet=fleet;this.getPscVessel=getPscVessel;
+    this.getRiskConfig=getRiskConfig;this.getDocumentFingerprint=getDocumentFingerprint;
     this.enabled=enabled;
     this.intervalMs=Math.max(60000,Number(intervalMs)||HOUR);
     this.config=config;
@@ -36,6 +37,7 @@ export class FleetAutoScheduler {
     this.runningTick=false;this.timer=null;
     this.lastTickAt=null;this.lastError=null;
     this.lastSelected=0;this.lastUnchanged=0;
+    this.lastDocumentSourceUnavailable=0;this.lastDocumentSourceNotConfigured=0;
   }
   status(){
     return {
@@ -45,6 +47,12 @@ export class FleetAutoScheduler {
       startupMode:'SERVER_SIDE_BACKGROUND',noDashboardAgentExecution:true,
       lastTickAt:this.lastTickAt,lastError:this.lastError,
       lastSelected:this.lastSelected,lastUnchanged:this.lastUnchanged,
+      blockedFailedVessels:this.retryFailed?0:
+        this.bundles.slice(0,this.maxVessels)
+          .filter(v=>this.fleet.results[v.imo]?.status==='FAILED'||
+            Boolean(this.fleet.results[v.imo]?.refreshFailure)).length,
+      lastDocumentSourceUnavailable:this.lastDocumentSourceUnavailable,
+      lastDocumentSourceNotConfigured:this.lastDocumentSourceNotConfigured,
       batchRunning:this.fleet.job?.status==='RUNNING'
     };
   }
@@ -62,8 +70,10 @@ export class FleetAutoScheduler {
     if(!this.enabled||this.fleet.persistenceHealthy===false||this.runningTick||this.fleet.job?.status==='RUNNING')return;
     this.runningTick=true;
     this.lastTickAt=new Date().toISOString();this.lastSelected=0;this.lastUnchanged=0;
+    this.lastDocumentSourceUnavailable=0;this.lastDocumentSourceNotConfigured=0;
     try{
       const now=Date.now();
+      const activeConfig=this.getRiskConfig?await this.getRiskConfig():this.config;
       // Complete missing/failing vessels before refreshing previously completed ones.
       const candidates=this.bundles.slice(0,this.maxVessels).filter(v=>{
         const row=this.fleet.results[v.imo];
@@ -93,12 +103,36 @@ export class FleetAutoScheduler {
         if(psc.imo!==v.imo||psc.authoritative!==false||
            psc.dataNature!=='SYNTHETIC_NOT_RIYADH_MOU')
           {await this.noteFailure(v.imo,'PSC_PROVENANCE_INVALID');continue;}
+        // Drive metadata is read-only. A03 runs only later, inside the
+        // selected paid assessment. New/modified documents invalidate hash.
+        let driveFingerprint='NOT_CONFIGURED';
+        const documentsRequired=Number(activeConfig.weights?.documentIntegrity||0)>0;
+        try{if(this.getDocumentFingerprint)
+          driveFingerprint=await this.getDocumentFingerprint(v.imo);}
+        catch{
+          if(documentsRequired){
+            await this.noteFailure(v.imo,'A03_DRIVE_METADATA_UNAVAILABLE');
+            continue;
+          }
+          // The optional Drive connector can go offline independently of
+          // PSC, A01 and A02. A stable marker ensures that restoration causes
+          // a new fingerprint at the next scheduled refresh.
+          driveFingerprint='A03_DRIVE_METADATA_UNAVAILABLE';
+          this.lastDocumentSourceUnavailable++;
+        }
+        if(driveFingerprint==='NO_DRIVE_CONFIGURATION'){
+          this.lastDocumentSourceNotConfigured++;
+          if(documentsRequired){
+            await this.noteFailure(v.imo,'DOCUMENT_INTEGRITY_EVIDENCE_REQUIRED');
+            continue;
+          }
+        }
         const hash=createHash('sha256').update(JSON.stringify({
           internal:v.inlineContext,
           evidenceIds:v.evidenceIds,
           psc:{inspections:psc.inspections,deficiencies:psc.deficiencies,detentions:psc.detentions,
             coverage:psc.coverage,sourceMode:psc.sourceMode,datasetVersion:psc.datasetVersion},
-          ruleset:this.config
+          driveFingerprint,ruleset:activeConfig
         })).digest('hex');
         if(previous?.status==='COMPLETED'&&previous?.inputHash===hash){
           previous.lastCheckedAt=new Date().toISOString();
@@ -112,7 +146,7 @@ export class FleetAutoScheduler {
       if(this.lastUnchanged)await this.fleet.persist();
       this.lastSelected=selected.length;
       if(selected.length){
-        this.fleet.start({vessels:selected,config:this.config});
+        this.fleet.start({vessels:selected,config:activeConfig});
       }
       this.lastError=null;
     }catch(error){

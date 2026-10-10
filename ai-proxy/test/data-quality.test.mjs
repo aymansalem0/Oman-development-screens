@@ -107,3 +107,39 @@ test('the evidence trace records unknown IDs without pretending they are verifie
  assert.equal(out.breakdown.evidenceReferencesLinked,1);
  assert.equal(out.breakdown.evidenceReferencesTotal,2);
 });
+
+test('A03 source-grounded document comparisons reduce saved structural quality and create traceable conflicts',()=>{
+  const data=base();
+  data.bundle.inlineContext.certificates=[{
+    type:'Cargo Ship Safety Construction Certificate',
+    number:'CSC-9328471-2026',expiry:'11 Feb 2031'
+  }];
+  const record={vesselImo:'9328471',
+    evidenceId:'GDOC-0123456789abcdef0123',reviewStatus:'DRAFT_REVIEW',
+    sourceModifiedTime:'2026-10-10T00:00:00Z',
+    analyzedModifiedTime:'2026-10-10T00:00:00Z',
+    documentEntries:[{documentType:'Cargo Ship Safety Construction Certificate',
+      certificateNumber:'SC-284711',expiryDate:'2026-11-02'}]
+  };
+  data.documents=[record];
+  data.signals.push({factor:'documentIntegrity',sourceAgent:'A03',
+    evidenceIds:['GDOC-0123456789abcdef0123']});
+  const out=evaluateDataQuality(data);
+  assert.equal(out.calculationVersion,'NMC Structural Quality 2.0 A03');
+  assert.equal(out.breakdown.documentConsistencyPercent,0);
+  assert.equal(out.breakdown.a03Disagreements,2);
+  assert.equal(out.breakdown.a03DocumentCount,1);
+  assert.equal(out.disagreements.length,2);
+  assert.ok(out.disagreements.every(c=>c.sourceBEvidenceId==='GDOC-0123456789abcdef0123'));
+  assert.ok(out.qualityScore<75);
+  assert.equal(out.breakdown.calculationSteps.find(s=>s.key==='documentConsistency').weightPercent,15);
+  assert.equal(out.breakdown.evidenceLinkages.at(-1).source,'A03_DRIVE_SYNTHETIC');
+  // The comparison is synthetic provenance only and never asserts a flag-state verified certificate.
+  assert.equal(out.breakdown.verifiedByAuthority,false);
+});
+test('missing A03 evidence leaves quality at baseline V1 (unknown, not artificially perfect)',()=>{
+  const out=evaluateDataQuality({...base(),documents:[]});
+  assert.equal(out.calculationVersion,'NMC Structural Quality 1.0');
+  assert.equal(out.breakdown.documentConsistencyPercent,null);
+  assert.equal(out.breakdown.a03DocumentCount,0);
+});

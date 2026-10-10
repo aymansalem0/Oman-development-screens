@@ -4,6 +4,7 @@ import {FormsModule} from '@angular/forms';
 import {Router,RouterLink} from '@angular/router';
 import {Subscription} from 'rxjs';
 import {NmcNavigationComponent} from '../components/nmc-navigation.component';
+import {NmcMinistryLogoComponent} from '../components/nmc-ministry-logo.component';
 import {LanguageService} from '../services/language.service';
 import {getOperationalVesselByImo} from '../data/nmc-expanded-vessel-catalog';
 import {NmcFleetAiService,FleetAiSnapshot} from '../services/nmc-fleet-ai.service';
@@ -24,7 +25,7 @@ interface RiskCandidate {
 @Component({
   selector:'app-nmc-alert-center',
   standalone:true,
-  imports:[CommonModule,FormsModule,RouterLink,NmcNavigationComponent],
+  imports:[CommonModule,FormsModule,RouterLink,NmcNavigationComponent,NmcMinistryLogoComponent],
   templateUrl:'./nmc-alert-center.component.html',
   styleUrl:'./nmc-alert-center.component.css'
 })
@@ -185,12 +186,12 @@ export class NmcAlertCenterComponent implements OnInit,OnDestroy{
             // Fail open for stale saved alerts: do not hide until matching
             // current Oracle source and complete saved A01/A02 evidence exist.
             assessment.assessmentId===expected.assessmentId&&
-            ['movement','inspection','certificate','dataQuality','history'].every(
-              factor=>Number.isFinite(sev[factor as keyof typeof sev])&&
-                sev[factor as keyof typeof sev]>=0&&
-                sev[factor as keyof typeof sev]<=100);
+            ['movement','inspection','certificate','dataQuality','history',
+             ...(Number(config.weights.documentIntegrity||0)>0?['documentIntegrity']:[])].every(
+              factor=>{const v=Number(sev[factor as keyof typeof sev]);
+                return Number.isFinite(v)&&v>=0&&v<=100;});
           if(!ready){missing++;continue;}
-          const projection=this.riskEngine.evaluateFromAiSignals(vessel!,sev!,config);
+          const projection=this.riskEngine.evaluateFromAiSignals(vessel!,sev! as Record<import('../services/nmc-risk-engine.service').RiskFactorKey,number>,config);
           const criticalFinding=expected.criticalOpenFinding===true;
           nextResults.set(imo,{
             eligible:criticalFinding||projection.level==='High'||projection.level==='Critical',

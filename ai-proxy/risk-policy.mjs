@@ -8,10 +8,12 @@ import {dirname} from 'node:path';
 import oracledb from 'oracledb';
 const copy=x=>JSON.parse(JSON.stringify(x));
 const iso=()=>new Date().toISOString();
-const keySet=['movement','inspection','certificate','dataQuality','history'];
+const coreKeys=['movement','inspection','certificate','dataQuality','history'];
+const keySet=[...coreKeys,'documentIntegrity'];
+const weightOf=(c,key)=>key==='documentIntegrity'?Number(c.weights?.documentIntegrity||0):c.weights?.[key];
 const baseline={
   version:'NMC Risk Ruleset 1.0',name:'National Maritime Risk Model',mode:'weighted',
-  weights:{movement:25,inspection:28,certificate:20,dataQuality:14,history:13},
+  weights:{movement:25,inspection:28,certificate:20,dataQuality:14,history:13,documentIntegrity:0},
   thresholds:{watch:45,high:65,critical:85},
   publishedAt:null,publishedBy:'SYSTEM INITIAL BASELINE',
   changeReason:'Initial central baseline; previous browser policies are NOT auto-imported.'
@@ -27,7 +29,7 @@ export function validateRiskConfig(c){
      !['weighted','conservative','max-signal'].includes(c.mode)||
      typeof c.name!=='string'||!c.name.trim()||c.name.length>140)
     throw new RiskPolicyError('RISK_POLICY_INVALID');
-  const numbers=keySet.map(k=>c.weights[k]);
+  const numbers=keySet.map(k=>weightOf(c,k));
   if(numbers.some(x=>!Number.isInteger(x)||x<0||x>100)||
      numbers.reduce((a,b)=>a+b,0)!==100)throw new RiskPolicyError('RISK_WEIGHTS_INVALID');
   const {watch,high,critical}=c.thresholds;
@@ -35,7 +37,7 @@ export function validateRiskConfig(c){
      watch<1||watch>=high||high>=critical||critical>100)
     throw new RiskPolicyError('RISK_THRESHOLDS_INVALID');
   return {name:c.name.trim(),mode:c.mode,
-    weights:Object.fromEntries(keySet.map(k=>[k,c.weights[k]])),
+    weights:Object.fromEntries(keySet.map(k=>[k,weightOf(c,k)])),
     thresholds:{watch,high,critical}};
 }
 function validateDraftConfig(value){
@@ -43,24 +45,36 @@ function validateDraftConfig(value){
      !['weighted','conservative','max-signal'].includes(value.mode)||
      typeof value.name!=='string'||value.name.length>140)
     throw new RiskPolicyError('RISK_DRAFT_INVALID',422);
-  if(keySet.some(k=>!Number.isInteger(value.weights[k])||
-     value.weights[k]<0||value.weights[k]>100)||
+  if(keySet.some(k=>!Number.isInteger(weightOf(value,k))||
+     weightOf(value,k)<0||weightOf(value,k)>100)||
      !['watch','high','critical'].every(k=>
        Number.isInteger(value.thresholds[k])&&value.thresholds[k]>=0&&value.thresholds[k]<=100))
     throw new RiskPolicyError('RISK_DRAFT_INVALID',422);
   return copy(value); // Incomplete weights/threshold order may be saved; publish still validates.
 }
-export function calculateRiskPolicy(row,config,revision){
+export function calculateRiskPolicy(row,config,revision,{legacyA03ZeroPreview=false}={}){
   const signals=row?.signals||[];
   const severities={};
-  for(const key of keySet){
+  const activeKeys=[...coreKeys,...(weightOf(config,'documentIntegrity')>0?['documentIntegrity']:[])];
+  let provisional=false;
+  for(const key of activeKeys){
     const rows=signals.filter(s=>s.factor===key);
+    if(key==='documentIntegrity'&&rows.length===0&&legacyA03ZeroPreview&&
+       row?.sourceNature==='SYNTHETIC_NOT_RIYADH_MOU'){
+      // Explicit opt-in POC assumption only. Zero means NOT ASSESSED, not
+      // verified-clean documents. Original Oracle assessment stays immutable.
+      severities[key]=0;provisional=true;continue;
+    }
     if(rows.length!==1||!Number.isFinite(rows[0].severity)||
        rows[0].severity<0||rows[0].severity>100)return null;
+    if(key==='documentIntegrity'&&rows[0].sourceAgent==='A03_NOT_ASSESSED_ZERO_PLACEHOLDER'){
+      if(!legacyA03ZeroPreview)return null;
+      provisional=true;
+    }
     severities[key]=rows[0].severity;
   }
-  const weighted=keySet.reduce((n,key)=>n+severities[key]*config.weights[key],0)/100;
-  const highest=Math.max(...Object.values(severities));
+  const weighted=activeKeys.reduce((n,key)=>n+severities[key]*weightOf(config,key),0)/100;
+  const highest=Math.max(...activeKeys.map(k=>severities[k]));
   let raw=weighted;
   if(config.mode==='conservative')raw+=Math.max(0,highest-raw)*.28;
   if(config.mode==='max-signal')raw=raw*.68+highest*.32;
@@ -71,24 +85,35 @@ export function calculateRiskPolicy(row,config,revision){
     modeAdjustment:Number((raw-weighted).toFixed(6)),
     clampedAndRoundedScore:score,
     rulesetVersion:config.version,
-    factors:keySet.map(key=>{
+    provisional:provisional?1:0,
+    provisionalReason:provisional?'A03_NOT_ASSESSED_ZERO_PLACEHOLDER':null,
+    dataCoverage:provisional?'5_OF_6_FACTORS':'ALL_REQUIRED_FACTORS',
+    factors:activeKeys.map(key=>{
       const signal=signals.find(s=>s.factor===key);
-      return {key,severity:severities[key],weight:config.weights[key],
-        weightedContribution:Number((severities[key]*config.weights[key]/100).toFixed(6)),
-        evidenceIds:signal.evidenceIds||[],sourceAgent:signal.sourceAgent||null,
-        confidence:signal.confidence??null,reason:signal.reason||null};
+      const placeholder=provisional&&key==='documentIntegrity';
+      return {key,severity:severities[key],weight:weightOf(config,key),
+        weightedContribution:Number((severities[key]*weightOf(config,key)/100).toFixed(6)),
+        evidenceIds:placeholder?[]:(signal?.evidenceIds||[]),
+        sourceAgent:placeholder?'A03_NOT_ASSESSED_ZERO_PLACEHOLDER':(signal?.sourceAgent||null),
+        confidence:placeholder?0:(signal?.confidence??null),
+        evidenceStatus:placeholder?'NOT_ASSESSED':(signal?'RECORDED':'UNAVAILABLE'),
+        reason:placeholder?'Zero is a POC calculation placeholder for missing A03 evidence, NOT proof of clean documents.':(signal?.reason||null)};
     })
   };
   const t=config.thresholds;
   const level=score>=t.critical?'Critical':score>=t.high?'High':
     score>=t.watch?'Watch':'Normal';
   const criticalOpenFinding=row.criticalOpenFinding===true;
-  const operationalPriority=criticalOpenFinding||level==='Critical'?'Priority Review':
+  const operationalPriority=provisional?'Pending A03 Evidence':
+    criticalOpenFinding||level==='Critical'?'Priority Review':
     level==='High'?'Enhanced Monitoring':'Routine';
   return {imo:row.imo,sourceAssessmentId:row.assessmentId,
     riskScore:score,riskLevel:level,operationalPriority,
     criticalOpenFinding,policyVersion:config.version,policyRevision:revision,
-    originalScore:row.score,originalLevel:row.level,factorSnapshot,
+    originalScore:row.score,originalLevel:row.level,
+    provisional,provisionalReason:provisional?'A03_NOT_ASSESSED_ZERO_PLACEHOLDER':null,
+    operationalDecisionAllowed:!provisional,
+    factorSnapshot,
     dataNature:'SYNTHETIC_POC_NOT_REGULATORY'};
 }
 /** Legacy policy rows may be read-only reconstructed only from the EXACT same
@@ -104,8 +129,11 @@ const fromRow=r=>({revision:r.VERSION_NO,policyRef:r.POLICY_REF,
   reason:r.CHANGE_REASON,publishedBy:r.PUBLISHED_BY,actorRole:r.ACTOR_ROLE,
   publishedAt:r.PUBLISHED_AT});
 export class CentralRiskPolicy{
-  constructor({mode='oracle',oracleRepository=null,fleet=null,file=storeFile}={}){
+  constructor({mode='oracle',oracleRepository=null,fleet=null,file=storeFile,
+    legacyA03ZeroPreview=process.env.NMC_POC_LEGACY_A03_ZERO_PREVIEW==='true'}={}){
     this.mode=mode;this.oracle=oracleRepository;this.fleet=fleet;this.file=file;
+    // Disabled by default: explicitly enabled for the isolated synthetic POC.
+    this.legacyA03ZeroPreview=legacyA03ZeroPreview;
     this.state=null;this.ready=false;
   }
   async connection(fn){
@@ -272,7 +300,8 @@ export class CentralRiskPolicy{
       const config={...clean,version:'NMC Risk Ruleset 1.'+(rev-1),
         publishedAt:at,publishedBy:request.publishedBy.trim(),
         changeReason:request.reason.trim()};
-      const projections=source.map(r=>calculateRiskPolicy(r,config,rev)).filter(Boolean).map(p=>({...p,calculatedAt:at}));
+      const projections=source.map(r=>calculateRiskPolicy(r,config,rev,{
+        legacyA03ZeroPreview:this.legacyA03ZeroPreview})).filter(Boolean).map(p=>({...p,calculatedAt:at}));
       return {revision:rev,policyRef:config.version,
         previousRevision:previous.revision,config,reason:config.changeReason,
         publishedBy:config.publishedBy,actorRole:'PUBLISHER',
@@ -327,11 +356,14 @@ export class CentralRiskPolicy{
     const projections=[];
     for(const row of Object.values(this.fleet?.results||{})){
       if(row.status!=='COMPLETED'||!row.assessmentId)continue;
-      const p=calculateRiskPolicy(row,active.config,active.revision);
+      const p=calculateRiskPolicy(row,active.config,active.revision,{
+        legacyA03ZeroPreview:this.legacyA03ZeroPreview});
       if(p)projections.push(p);
     }
     return {status:'ok',policyRevision:active.revision,policyRef:active.policyRef,
-      publishedAt:active.publishedAt,assessed:projections.length,
+      publishedAt:active.publishedAt,
+      assessed:projections.filter(p=>!p.provisional).length,
+      provisionalAssessed:projections.filter(p=>p.provisional).length,
       projections,provenance:'SYNTHETIC_POC_SAVED_AI_FACTORS'};
   }
   async vessel(imo){
@@ -381,7 +413,8 @@ export class CentralRiskPolicy{
   async materializeCurrent(savedRow){
     if(!this.ready||!savedRow?.assessmentId)return;
     const active=await this.active();
-    const p=calculateRiskPolicy(savedRow,active.config,active.revision);
+    const p=calculateRiskPolicy(savedRow,active.config,active.revision,{
+      legacyA03ZeroPreview:this.legacyA03ZeroPreview});
     if(!p)return;
     p.calculatedAt=iso();
     if(this.mode==='json'){

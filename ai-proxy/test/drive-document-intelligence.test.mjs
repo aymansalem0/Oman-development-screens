@@ -142,3 +142,27 @@ test('rejects malformed A03 object contract and missing quotes',()=>{
   assert.throws(()=>validateA03({result:'garbage'},excerpt,IMO),
     /A03_RESPONSE_CONTRACT_UNVERIFIED/);
 });
+
+test('opt-in A03 automatic scan only analyzes one changed file, then reuses evidence with no further paid calls',async()=>{
+  const a=fixture();
+  try{
+    const docs=await a.store.syncForRisk(IMO,{autoEnabled:true});
+    assert.equal(a.agentCalls(),1);
+    assert.equal(docs.length,1);
+    assert.equal(docs[0].reviewStatus,'DRAFT_REVIEW');
+    assert.equal(docs[0].authenticityVerified,false);
+    await a.store.syncForRisk(IMO,{autoEnabled:true});
+    assert.equal(a.agentCalls(),1);
+    const fingerprint=await a.store.fingerprint(IMO);
+    assert.equal(typeof fingerprint,'string');
+    a.modify('2026-10-10T15:00:00.000Z');
+    const next=await a.store.syncForRisk(IMO,{autoEnabled:true});
+    assert.equal(a.agentCalls(),2);
+    assert.equal(next.length,1);
+  }finally{a.close();}
+});
+
+test('A03 rejects an overlong IMO instead of truncating it to match the selected vessel',()=>{
+  const malformed={...normalized(),extracted:{...normalized().extracted,imo:IMO+'777'}};
+  assert.throws(()=>validateA03(malformed,excerpt,IMO),/A03_IMO_INVALID/);
+});

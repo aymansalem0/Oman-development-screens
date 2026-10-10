@@ -5,9 +5,10 @@
   border-bottom:1px solid #e7edf3;box-shadow:0 4px 18px rgba(23,50,77,.06);
   backdrop-filter:blur(14px);color:#17324d}
 .maritime-brand{display:flex;align-items:center;gap:13px;min-width:0}
-.maritime-mark{width:44px;height:44px;border-radius:14px;display:grid;place-items:center;
-  background:linear-gradient(145deg,#0f766e,#0ea5a0);color:#fff;font-size:19px;
-  box-shadow:0 8px 22px rgba(15,118,110,.18);flex-shrink:0}
+.maritime-ministry-logo{display:inline-flex;flex-shrink:0}
+.maritime-brand-copy{min-width:0}
+@media(max-width:1370px){.maritime-brand-copy{display:none}}
+
 .maritime-eyebrow{color:#0f766e;font-size:9px;letter-spacing:1.4px;font-weight:800;
   text-transform:uppercase}
 .maritime-brand h1{font-size:16px;margin:2px 0 0;color:#17324d;line-height:1.25}
@@ -59,7 +60,6 @@
   :host-context([dir="rtl"]) .maritime-topbar{padding-inline:58px 12px}
   .maritime-brand h1{font-size:13px}
   .maritime-brand p{display:none}
-  .maritime-mark{width:36px;height:36px;font-size:17px}
   .maritime-eyebrow{font-size:8px}
   .maritime-alerts{display:none}
   .maritime-language{padding:8px;font-size:10px}

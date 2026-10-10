@@ -1,17 +1,18 @@
 import { NmcNavigationComponent } from '../components/nmc-navigation.component';
+import { NmcMinistryLogoComponent } from '../components/nmc-ministry-logo.component';
 import { NmcVesselDocumentsComponent } from '../components/nmc-vessel-documents.component';
 import { CommonModule } from '@angular/common';
 import { AfterViewInit, Component, ElementRef, OnDestroy, OnInit, ViewChild } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { Subscription } from 'rxjs';
-import * as L from 'leaflet';
+import * as L from 'leaflet/dist/leaflet-src.esm.js';
 import {
   NmcVesselProfile,
   SEA_ROUTES
 } from '../data/nmc-vessel-catalog';
 import { NMC_OPERATIONAL_VESSELS, getOperationalVesselByImo } from '../data/nmc-expanded-vessel-catalog';
 import { LanguageService } from '../services/language.service';
-import { NmcRiskEngineService } from '../services/nmc-risk-engine.service';
+import { NmcRiskEngineService, RiskFactorKey } from '../services/nmc-risk-engine.service';
 import { NmcVesselEvidenceService } from '../services/nmc-vessel-evidence.service';
 import { NmcExternalPscService, NmcExternalPscRecord } from '../services/nmc-external-psc.service';
 import { NmcFleetAiService, FleetAiAssessment, FleetAiHistory, FleetAiIntelligence } from '../services/nmc-fleet-ai.service';
@@ -110,7 +111,7 @@ interface Vessel360View extends NmcVesselProfile {
 @Component({
   selector: 'app-nmc-vessel-360',
   standalone: true,
-  imports: [CommonModule, RouterLink, NmcNavigationComponent, NmcVesselDocumentsComponent],
+  imports: [CommonModule, RouterLink, NmcNavigationComponent, NmcVesselDocumentsComponent, NmcMinistryLogoComponent],
   templateUrl: './nmc-vessel-360.component.html',
   styleUrl: './nmc-vessel-360.component.css'
 })
@@ -138,6 +139,7 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
   // Oracle-sourced AI data is read-only, provisional and explicitly separated
   // from the deterministic vessel/certificate/AIS fixtures.
   storedAi: FleetAiAssessment | null = null;
+  displayedRiskBasis:'CURRENT_PUBLISHED'|'ORIGINAL_SAVED'|'FIXTURE'='FIXTURE';
   storedAiHistory: FleetAiHistory | null = null;
   storedAiIntelligence: FleetAiIntelligence | null = null;
   intelligenceStatus: 'loading' | 'available' | 'unavailable' = 'loading';
@@ -188,7 +190,8 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
       completeness: ['Data completeness', 'اكتمال البيانات'],
       consistency: ['Cross-source consistency', 'اتساق المصادر'],
       evidenceLinkage: ['Evidence linkage', 'ربط الأدلة'],
-      provenance: ['Source metadata coverage', 'اكتمال بيانات تعريف المصدر']
+      provenance: ['Source metadata coverage', 'اكتمال بيانات تعريف المصدر'],
+      documentConsistency: ['A03 document cross-source consistency', 'اتساق مستندات A03 مع المصادر الأخرى']
     };
     const v = labels[key];
     return v ? this.copy(v[0], v[1]) : key;
@@ -212,6 +215,8 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
         return this.copy(
           'Current V1 rule: score 100 when sourceSystem, datasetVersion and retrievedAt all exist; otherwise score 60. This checks metadata availability, not the source authority.',
           'قاعدة النسخة الحالية: 100 عند توافر sourceSystem وdatasetVersion وretrievedAt جميعاً؛ وإلا 60. هذا فحص لتوافر بيانات تعريف المصدر وليس اعتماد المصدر.');
+      case 'documentConsistency':
+        return this.copy('Grounded A03 maritime-document fields compared with synthetic Vessel 360 certificates; document authenticity is NOT verified.', 'مقارنة حقول مستندات A03 المدعومة بالنص مع بيانات الشهادات التجريبية في Vessel 360 دون إثبات أصالة المستند.');
       default: return '';
     }
   }
@@ -378,7 +383,7 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
     this.loadStoredAi();
 
     const requestedTab = this.route.snapshot.queryParamMap.get('tab');
-    if (requestedTab && ['overview','movement','compliance','inspection','external-psc','certificates','sources'].includes(requestedTab)) {
+    if (requestedTab && ['overview','movement','compliance','inspection','external-psc','certificates','documents','sources'].includes(requestedTab)) {
       this.activeTab = requestedTab;
     }
   }
@@ -400,15 +405,25 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
     this.storedAiStatus = 'loading';
     this.subscriptions.add(this.fleetAiService.assessment(this.vessel.imo).subscribe({
       next: assessment => {
-        const keys = new Set((assessment.signals || []).map(signal => signal.factor));
-        const expected = ['movement', 'inspection', 'certificate', 'dataQuality', 'history'];
+        const signals = assessment.signals || [];
+        const core = ['movement', 'inspection', 'certificate', 'dataQuality', 'history'];
+        const allowed = new Set([...core, 'documentIntegrity']);
+        // A03 adds a SIXTH optional documentIntegrity signal. Previously the
+        // entire valid assessment (including Watch vessels) was rejected unless
+        // keys.size === 5, leaving Vessel 360 showing only fixture data.
+        const validSignals = [5, 6].includes(signals.length) &&
+          signals.every(signal => allowed.has(signal.factor) &&
+            Number.isFinite(signal.severity) &&
+            signal.severity >= 0 && signal.severity <= 100) &&
+          new Set(signals.map(signal => signal.factor)).size === signals.length &&
+          core.every(key => signals.some(signal => signal.factor === key)) &&
+          (signals.length === 5 || signals.some(s => s.factor === 'documentIntegrity'));
         if (assessment.imo !== this.vessel.imo ||
             assessment.status !== 'COMPLETED' ||
             assessment.authoritative !== false ||
             assessment.sourceNature !== 'SYNTHETIC_NOT_RIYADH_MOU' ||
             !Number.isFinite(assessment.score) ||
-            !assessment.assessmentId ||
-            keys.size !== 5 || !expected.every(key => keys.has(key))) {
+            !assessment.assessmentId || !validSignals) {
           this.storedAiStatus = 'error';
           return;
         }
@@ -477,8 +492,13 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
     const severities=Object.fromEntries(signalKeys.map(key=>[
       key,this.storedAi!.signals.find(signal=>signal.factor===key)?.severity
     ])) as {movement:number;inspection:number;certificate:number;dataQuality:number;history:number};
-    const projected=this.riskEngine.centralReady?
-      this.riskEngine.evaluateFromAiSignals(this.vessel,severities):null;
+    const doc=this.storedAi.signals.find(s=>s.factor==='documentIntegrity');
+    const weightedDoc=Number(this.riskEngine.config.weights.documentIntegrity||0)>0;
+    const hasCore=signalKeys.every(key=>Number.isFinite(severities[key]));
+    const projected=this.riskEngine.centralReady&&hasCore&&(!weightedDoc||doc)?
+      this.riskEngine.evaluateFromAiSignals(this.vessel,{
+        ...severities,...(doc?{documentIntegrity:doc.severity}:{})} as Record<RiskFactorKey,number>):null;
+    this.displayedRiskBasis=projected?'CURRENT_PUBLISHED':'ORIGINAL_SAVED';
     this.vessel.riskScore = projected?.score ?? this.storedAi.score ?? this.vessel.riskScore;
     this.vessel.riskLevel = projected?.level ?? this.storedAi.level ?? this.vessel.riskLevel;
     this.vessel.risk=this.vessel.riskScore;
@@ -769,7 +789,11 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private isAtLeast(level: 'Watch' | 'High' | 'Critical'): boolean {
-    const thresholds = this.storedAi?.ruleset?.thresholds || this.riskEngine.config.thresholds;
+    // A reclassified Watch vessel uses CURRENT published thresholds; an
+    // unprojectable A03-dependent case displays ORIGINAL stored thresholds.
+    const thresholds = this.displayedRiskBasis==='CURRENT_PUBLISHED'
+      ?this.riskEngine.config.thresholds
+      :this.storedAi?.ruleset?.thresholds||this.riskEngine.config.thresholds;
     const score = this.vessel.riskScore;
     if (level === 'Critical') return score >= thresholds.critical;
     if (level === 'High') return score >= thresholds.high;
