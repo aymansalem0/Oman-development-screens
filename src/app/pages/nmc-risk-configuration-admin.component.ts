@@ -84,7 +84,8 @@ export class NmcRiskConfigurationAdminComponent implements OnInit, OnDestroy {
     'inspection',
     'certificate',
     'dataQuality',
-    'history'
+    'history',
+    'documentIntegrity'
   ];
 
   readonly modes: Array<{value: RiskCalculationMode; en: string; ar: string; descriptionEn: string; descriptionAr: string}> = [
@@ -241,7 +242,7 @@ export class NmcRiskConfigurationAdminComponent implements OnInit, OnDestroy {
               if(!vessel||!assessment||assessment.status!=='COMPLETED'||
                  assessment.authoritative!==false||!Number.isFinite(assessment.score)||
                  !assessment.assessmentId||!Array.isArray(assessment.signals)||
-                 !this.factorKeys.every(key=>assessment.signals.filter(x=>
+                 !this.factorKeys.filter(key=>key!=='documentIntegrity').every(key=>assessment.signals.filter(x=>
                    x.factor===key&&Number.isFinite(x.severity)).length===1))return [];
               return [{vessel,assessment}];
             });
@@ -310,7 +311,8 @@ export class NmcRiskConfigurationAdminComponent implements OnInit, OnDestroy {
       inspection: ['Inspection & deficiencies', 'المعاينات والملاحظات'],
       certificate: ['Certificates & regulatory status', 'الشهادات والحالة التنظيمية'],
       dataQuality: ['Data quality & source conflicts', 'جودة البيانات وتعارض المصادر'],
-      history: ['Vessel / operator history', 'السجل التاريخي للسفينة / المشغل']
+      history: ['Vessel / operator history', 'السجل التاريخي للسفينة / المشغل'],
+      documentIntegrity: ['Document integrity (A03)', 'اتساق المستندات (A03)']
     };
     return this.copy(labels[key][0], labels[key][1]);
   }
@@ -321,7 +323,8 @@ export class NmcRiskConfigurationAdminComponent implements OnInit, OnDestroy {
       inspection: ['Open deficiencies, inspection outcomes and technical exposure.', 'الملاحظات المفتوحة ونتائج المعاينة والتعرض الفني.'],
       certificate: ['Certificate validity, conditions and regulatory compliance signals.', 'صلاحية الشهادات وشروطها ومؤشرات الامتثال التنظيمي.'],
       dataQuality: ['Source confidence, completeness and unresolved data conflicts.', 'الثقة في المصادر واكتمال البيانات والتعارضات غير المحلولة.'],
-      history: ['Historical vessel, operator and recurring compliance patterns.', 'السجل التاريخي للسفينة والمشغل وأنماط الامتثال المتكررة.']
+      history: ['Historical vessel, operator and recurring compliance patterns.', 'السجل التاريخي للسفينة والمشغل وأنماط الامتثال المتكررة.'],
+      documentIntegrity: ['A03 citation-grounded cross-source document mismatches. Certificate expiry is counted by A02 only.', 'اختلافات مستندات A03 المدعومة بنصوص مصدرية. صلاحية الشهادات تدخل في عامل A02 فقط.']
     };
     return this.copy(labels[key][0], labels[key][1]);
   }
@@ -439,22 +442,27 @@ export class NmcRiskConfigurationAdminComponent implements OnInit, OnDestroy {
   }
 
   private evaluateSaved(vessel:NmcVesselProfile,assessment:FleetAiAssessment,config:RiskEngineConfig){
-    const severities=Object.fromEntries(this.factorKeys.map(key=>
-      [key,assessment.signals.find(signal=>signal.factor===key)!.severity])) as Record<RiskFactorKey,number>;
+    const keys=this.factorKeys.filter(key=>key!=='documentIntegrity'||
+      Number(config.weights.documentIntegrity||0)>0);
+    if(keys.some(key=>!assessment.signals.some(s=>s.factor===key&&Number.isFinite(s.severity))))
+      return null;
+    const severities=Object.fromEntries(keys.map(key=>
+      [key,assessment.signals.find(s=>s.factor===key)!.severity])) as Record<RiskFactorKey,number>;
     return this.riskEngine.evaluateFromAiSignals(vessel,severities,config);
   }
 
   private calculateSavedStats(config:RiskEngineConfig):RiskPopulationStats{
     const stats:RiskPopulationStats={normal:0,watch:0,high:0,critical:0,attention:0,averageScore:0};
-    let total=0;
+    let total=0,calculated=0;
     for(const {vessel,assessment} of this.savedInputs){
       const risk=this.evaluateSaved(vessel,assessment,config);
+      if(!risk)continue;
       stats[risk.level.toLowerCase() as 'normal'|'watch'|'high'|'critical']++;
       if(risk.level!=='Normal')stats.attention++;
-      total+=risk.score;
+      total+=risk.score;calculated++;
     }
-    stats.averageScore=this.savedInputs.length?
-      Math.round(total/this.savedInputs.length*10)/10:0;
+    stats.averageScore=calculated?
+      Math.round(total/calculated*10)/10:0;
     return stats;
   }
 
@@ -462,14 +470,15 @@ export class NmcRiskConfigurationAdminComponent implements OnInit, OnDestroy {
     if(!this.published||!this.draft)return;
     this.currentStats=this.calculateSavedStats(this.published);
     this.projectedStats=this.calculateSavedStats(this.draft);
-    this.impactRows=this.savedInputs.map(({vessel,assessment})=>{
+    this.impactRows=this.savedInputs.flatMap(({vessel,assessment})=>{
       const current=this.evaluateSaved(vessel,assessment,this.published);
       const projected=this.evaluateSaved(vessel,assessment,this.draft);
-      return {
+      if(!current||!projected)return [];
+      return [{
         vessel,currentScore:current.score,currentLevel:current.level,
         projectedScore:projected.score,projectedLevel:projected.level,
         delta:projected.score-current.score,changedLevel:current.level!==projected.level
-      };
+      }];
     }).sort((a,b)=>Number(b.changedLevel)-Number(a.changedLevel)||
       Math.abs(b.delta)-Math.abs(a.delta)||b.projectedScore-a.projectedScore).slice(0,12);
   }
