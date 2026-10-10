@@ -1,6 +1,6 @@
 <div class="qa-shell" [attr.dir]="lang.dir">
-<header class="qa-top"><div><small>MOEI Maritime Unified Platform</small><h1>{{copy('Data Quality Configuration','إعدادات جودة البيانات')}}</h1>
-<p>{{copy('Configurable POC calculation with live impact','احتساب تجريبي قابل للتعديل مع عرض الأثر فورًا')}}</p></div>
+<header class="qa-top"><div class="qa-brand"><app-nmc-ministry-logo class="qa-ministry-logo"></app-nmc-ministry-logo><div class="qa-brand-copy"><small>{{copy('MOEI Maritime Unified Platform','المنصة البحرية الموحدة لوزارة الطاقة والبنية التحتية')}}</small><h1>{{copy('Data Quality Configuration','إعدادات جودة البيانات')}}</h1>
+<p>{{copy('Configurable POC calculation with live impact','احتساب تجريبي قابل للتعديل مع عرض الأثر فورًا')}}</p></div></div>
 <nav><button (click)="lang.toggle()">{{lang.isArabic?'English':'العربية'}}</button><a [routerLink]="['/moei/nmc/vessel',imo]">{{copy('Back to Vessel 360','العودة إلى ملف السفينة')}}</a></nav></header>
 <app-nmc-navigation></app-nmc-navigation>
 <main>
