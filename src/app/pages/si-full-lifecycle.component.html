@@ -160,7 +160,7 @@
           {{copy('NMC saved booking','حجز NMC المحفوظ')}}:
           <strong>{{booking.status}}</strong>
           · {{booking.inspector||'—'}} · {{booking.port||'—'}}
-          · {{booking.scheduledAt?(booking.scheduledAt|date:'medium'):'—'}}
+          · {{booking.scheduledAt?(booking.scheduledAt|date:'medium':'+0400'):'—'}} UAE
           {{copy('· The assignment must match the saved NMC booking.','· يجب أن يطابق التكليف حجز NMC المحفوظ.')}}
         </div>
         <a routerLink="/moei/smart-inspection/scheduling" class="action-link">
