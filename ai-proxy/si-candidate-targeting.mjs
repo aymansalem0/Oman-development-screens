@@ -301,6 +301,7 @@ export class SiCandidateTargeting{
       decisionId:decision.id,rulesetVersion:decision.rulesetVersion,
       sourceEventKeys:decision.sourceEventKeys,nmcReferralId:candidate.events.find(x=>
         x.sourceType==='NMC_CASE')?.sourceEventId||null,
+      nmcCaseId:candidate.events.find(x=>x.sourceType==='NMC_CASE')?.sourceReference||null,
       evidenceIds:[...new Set(candidate.events.flatMap(x=>x.evidenceIds||[]))],
       riskAssessmentId:candidate.currentRisk?.assessmentId||null,
       riskAtApproval:candidate.currentRisk||null,
