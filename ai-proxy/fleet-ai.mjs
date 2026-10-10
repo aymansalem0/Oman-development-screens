@@ -10,12 +10,14 @@ import {dirname} from 'node:path';
 import {timingSafeEqual} from 'node:crypto';
 import {catalogFromNmcSource} from './psc-fixtures.mjs';
 import {evaluateDataQuality} from './data-quality.mjs';
+import {documentEvidenceChecks,documentIntegritySignal} from './document-risk-evidence.mjs';
 
 const baseTs=readFileSync(new URL('./nmc-vessel-catalog.ts',import.meta.url),'utf8');
 const extraTs=readFileSync(new URL('./nmc-expanded-vessel-catalog.ts',import.meta.url),'utf8');
 const catalogue=catalogFromNmcSource(baseTs,extraTs);
 const VALID_IMOS=new Set(catalogue.map(v=>v.imo));
 const FACTORS=['movement','inspection','certificate','dataQuality','history'];
+const OPTIONAL_FACTOR='documentIntegrity';
 const AGENT_FACTORS={a01:['movement','history'],a02:['inspection','certificate','dataQuality']};
 const DEFAULT_WEIGHTS={movement:25,inspection:28,certificate:20,dataQuality:14,history:13};
 const DEFAULT_THRESHOLDS={watch:45,high:65,critical:85};
@@ -42,7 +44,8 @@ const unpack=(input,depth=0)=>{
 };
 const normalizedConfig=(config)=>{
   if(!config||typeof config!=='object')throw new Error('INVALID_FLEET_RULESET');
-  const weights=Object.fromEntries(FACTORS.map(k=>[k,Number(config.weights?.[k])]));
+  const weights=Object.fromEntries([...FACTORS,OPTIONAL_FACTOR].map(k=>
+    [k,k===OPTIONAL_FACTOR?Number(config.weights?.[k]||0):Number(config.weights?.[k])]));
   const total=Object.values(weights).reduce((s,n)=>s+n,0);
   if(Object.values(weights).some(n=>!Number.isFinite(n)||n<0)||Math.abs(total-100)>0.01)
     throw new Error('INVALID_FLEET_WEIGHTS');
@@ -59,9 +62,12 @@ const normalizedConfig=(config)=>{
 export function evaluateFleetSignals(signals,config){
   const cfg=normalizedConfig(config);
   const values=Object.fromEntries(signals.map(s=>[s.factor,s.severity]));
-  if(FACTORS.some(k=>!Number.isFinite(values[k])))throw new Error('INCOMPLETE_FLEET_SIGNALS');
-  let score=FACTORS.reduce((sum,k)=>sum+values[k]*cfg.weights[k],0)/100;
-  const max=Math.max(...FACTORS.map(k=>values[k]));
+  const keys=cfg.weights.documentIntegrity>0?[...FACTORS,OPTIONAL_FACTOR]:FACTORS;
+  // A missing document may not be treated as a zero-risk factor.
+  if(keys.some(k=>!Number.isFinite(values[k])))
+    throw new Error('INCOMPLETE_FLEET_SIGNALS');
+  let score=keys.reduce((sum,k)=>sum+values[k]*cfg.weights[k],0)/100;
+  const max=Math.max(...keys.map(k=>values[k]));
   if(cfg.mode==='conservative')score+=Math.max(0,max-score)*0.28;
   if(cfg.mode==='max-signal')score=score*0.68+max*0.32;
   score=Math.round(clamp(score,0,100));
@@ -114,11 +120,12 @@ function loadStore(){
   return {};
 }
 export class FleetAssessmentManager {
-  constructor({executeAgent,getPscVessel,repository=null,onAssessmentSaved=null,approvedDocuments=null}){
+  constructor({executeAgent,getPscVessel,repository=null,onAssessmentSaved=null,approvedDocuments=null,documentEvidence=null}={}){
     this.executeAgent=executeAgent;
     this.onAssessmentSaved=onAssessmentSaved;
     this.getPscVessel=getPscVessel;
     this.approvedDocuments=approvedDocuments;
+    this.documentEvidence=documentEvidence;
     this.repository=repository;
     this.results=repository?{}:loadStore();
     this.persistenceHealthy=true;
@@ -183,7 +190,7 @@ export class FleetAssessmentManager {
       VALID_IMOS.has(row.imo)&&row.status==='COMPLETED');
     const assessments=[];
     for(const row of records){
-      if(!Array.isArray(row.signals)||row.signals.length!==5)continue;
+      if(!Array.isArray(row.signals)||![5,6].includes(row.signals.length))continue;
       const values={};
       for(const key of factors){
         const matches=row.signals.filter(s=>s?.factor===key);
@@ -322,14 +329,23 @@ export class FleetAssessmentManager {
     const psc=await this.getPscVessel(v.imo); // errors fail closed, never fall back from live to fixture.
     if(psc.authoritative!==false||psc.dataNature!=='SYNTHETIC_NOT_RIYADH_MOU'||
       !Array.isArray(psc.evidenceIds)||psc.imo!==v.imo)throw new Error('FLEET_PSC_PROVENANCE_INVALID');
-    const approved=this.approvedDocuments?await this.approvedDocuments(v.imo):[];
-    // A03 extracts are human-reviewed advisories, not authenticated certificates.
+    // A03 is a bounded, opt-in prerequisite of this fleet assessment.
+    // Already analyzed files are reused, drafts remain provisional.
+    const approved=this.documentEvidence?await this.documentEvidence(v.imo):
+      this.approvedDocuments?await this.approvedDocuments(v.imo):[];
+    const checks=documentEvidenceChecks({imo:v.imo,documents:approved,
+      certificates:v.inlineContext?.certificates||[]});
+    const docFactor=documentIntegritySignal(checks);
+    if(Number(cfg.weights?.documentIntegrity||0)>0&&!docFactor)
+      throw new Error('DOCUMENT_INTEGRITY_EVIDENCE_REQUIRED');
     const documentIds=approved.map(x=>x.evidenceId);
     const ids=[...v.evidenceIds,...psc.evidenceIds,...documentIds];
     const context={...v.inlineContext,
       documentIntelligence:{
         source:'GOOGLE_DRIVE_A03_HUMAN_REVIEWED_NOT_AUTHENTICATED',
         items:approved,documentEvidenceIds:documentIds,
+        documentConsistency:checks,approvalRequiredForOfficialUse:true,
+        certificatesAndExpiryBelongToA02:true,
         warning:'Document authenticity not verified. Human review is NOT validation by flag authority.'
       },
       externalPsc:{
@@ -347,9 +363,13 @@ export class FleetAssessmentManager {
       this.executeAgent('a01',{...base,requestedSignals:AGENT_FACTORS.a01}),
       this.executeAgent('a02',{...base,requestedSignals:AGENT_FACTORS.a02})
     ]);
-    const signals=verifyFleetSignals(a01,a02,ids,psc.evidenceIds,psc.inspections.length>0);
+    const validated=verifyFleetSignals(a01,a02,ids,psc.evidenceIds,psc.inspections.length>0);
+    // Add a non-LLM document factor from citation-validated A03 outputs.
+    // A01/A02 supply their original five factors; the deterministic NMC
+    // engine calculates the sixth without inventing a model score.
+    const signals=docFactor?[...validated,docFactor]:validated;
     const risk=evaluateFleetSignals(signals,cfg);
-    const quality=evaluateDataQuality({bundle:v,psc,signals});
+    const quality=evaluateDataQuality({bundle:v,psc,signals,documents:approved});
     const internal=v.inlineContext.deficiencies||[];
     const criticalOpen=internal.some(x=>x.status==='Open'&&x.severity==='Critical')||
       psc.deficiencies.some(x=>x.status==='OPEN'&&x.severity==='CRITICAL');
@@ -360,7 +380,12 @@ export class FleetAssessmentManager {
       operationalPriority:priority,criticalOpenFinding:criticalOpen,
       reviewedByHuman:false,authoritative:false,
       sourceMode:psc.sourceMode,pscSummary:psc.summary,
-      signals,quality,configVersion:risk.configVersion,ruleset:cfg,
+      signals,quality,documentEvidence:{
+        evidenceIds:documentIds,documentCount:approved.length,
+        comparison:checks,reviewedCount:approved.filter(d=>d.reviewStatus==='APPROVED').length,
+        provisionalCount:approved.filter(d=>d.reviewStatus==='DRAFT_REVIEW').length,
+        impactMethod:'EXPLAINABLE_RULES_NOT_LLM_OFFICIAL_SCORE'},
+      configVersion:risk.configVersion,ruleset:cfg,
       assessedAt:new Date().toISOString(),
       sourceNature:'SYNTHETIC_NOT_RIYADH_MOU',evidenceVerified:false,
       disclaimer:'Provisional simulation. Internal fixture conditions may reflect synthetic baseline. No regulatory action.'
