@@ -333,20 +333,42 @@ export class FleetAssessmentManager {
     const psc=await this.getPscVessel(v.imo); // errors fail closed, never fall back from live to fixture.
     if(psc.authoritative!==false||psc.dataNature!=='SYNTHETIC_NOT_RIYADH_MOU'||
       !Array.isArray(psc.evidenceIds)||psc.imo!==v.imo)throw new Error('FLEET_PSC_PROVENANCE_INVALID');
-    // A03 is a bounded, opt-in prerequisite of this fleet assessment.
-    // Already analyzed files are reused, drafts remain provisional.
-    const approved=this.documentEvidence?await this.documentEvidence(v.imo):
-      this.approvedDocuments?await this.approvedDocuments(v.imo):[];
+    // A03 is supplementary unless the PUBLISHED risk policy assigns a
+    // positive documentIntegrity weight. Do not let a missing Drive mount
+    // block lawful A01/A02 scoring under the published five-factor policy.
+    // Never reuse stale drafts, invent a zero-risk A03 factor, or change a
+    // completed assessment merely because the document source is unavailable.
+    const requireA03=Number(cfg.weights?.documentIntegrity||0)>0;
+    let approved=[],documentSourceStatus='NO_CURRENT_A03_EVIDENCE',documentSourceError=null;
+    try{
+      approved=this.documentEvidence?await this.documentEvidence(v.imo):
+        this.approvedDocuments?await this.approvedDocuments(v.imo):[];
+      if(!Array.isArray(approved))throw new Error('A03_EVIDENCE_INVALID');
+      if(approved.length)documentSourceStatus='AVAILABLE_PROVISIONAL_OR_REVIEWED';
+    }catch(error){
+      if(requireA03)throw new Error('DOCUMENT_INTEGRITY_EVIDENCE_REQUIRED');
+      // Missing A03 is UNKNOWN, not verified clean; attach a safe public
+      // diagnostic code to the persisted result so operators can investigate.
+      const code=String(error?.code||error?.message||'');
+      documentSourceError=/^[A-Z][A-Z0-9_]{1,95}$/.test(code)?
+        code:'A03_DOCUMENT_SOURCE_UNAVAILABLE';
+      documentSourceStatus='UNAVAILABLE';
+      console.warn('[nmc-a03] optional-source-unavailable imo='+v.imo+
+        ' reasonCode='+documentSourceError);
+      approved=[];
+    }
     const checks=documentEvidenceChecks({imo:v.imo,documents:approved,
       certificates:v.inlineContext?.certificates||[]});
     const docFactor=documentIntegritySignal(checks);
-    if(Number(cfg.weights?.documentIntegrity||0)>0&&!docFactor)
+    if(requireA03&&!docFactor)
       throw new Error('DOCUMENT_INTEGRITY_EVIDENCE_REQUIRED');
     const documentIds=approved.map(x=>x.evidenceId);
     const ids=[...v.evidenceIds,...psc.evidenceIds,...documentIds];
     const context={...v.inlineContext,
       documentIntelligence:{
-        source:'GOOGLE_DRIVE_A03_HUMAN_REVIEWED_NOT_AUTHENTICATED',
+        source:'GOOGLE_DRIVE_A03_PROVISIONAL_OR_REVIEWED_NOT_AUTHENTICATED',
+        availability:documentSourceStatus,
+        unavailableReasonCode:documentSourceError,
         items:approved,documentEvidenceIds:documentIds,
         documentConsistency:checks,approvalRequiredForOfficialUse:true,
         certificatesAndExpiryBelongToA02:true,
@@ -394,6 +416,8 @@ export class FleetAssessmentManager {
       sourceMode:psc.sourceMode,pscSummary:psc.summary,
       signals,quality,documentEvidence:{
         evidenceIds:documentIds,documentCount:approved.length,
+        availability:documentSourceStatus,
+        unavailableReasonCode:documentSourceError,
         comparison:checks,reviewedCount:approved.filter(d=>d.reviewStatus==='APPROVED').length,
         provisionalCount:approved.filter(d=>d.reviewStatus==='DRAFT_REVIEW').length,
         impactMethod:'EXPLAINABLE_RULES_NOT_LLM_OFFICIAL_SCORE'},
