@@ -40,7 +40,7 @@ function locate(value,level=0){
 }
 function sourceQuote(source,value) {
   if(!value||typeof value!=='string')return null;
-  const index=source.indexOf(value.trim());
+  const index=source.toLowerCase().indexOf(value.trim().toLowerCase());
   if(index<0)return null;
   const start=Math.max(0,index-45);
   const end=Math.min(source.length,index+value.trim().length+65);
@@ -52,6 +52,10 @@ const asDate=v=>{
   return x&&/^\d{4}-\d{2}-\d{2}$/.test(x)?x:null;
 };
 const val=(fields,name)=>clean(field(fields[name]));
+const fieldConfidence=v=>{
+  const n=Number(v&&typeof v==='object'?v.confidence:NaN);
+  return Number.isFinite(n)&&n>=0&&n<=1?n:null;
+};
 const allowedStatus=v=>clean(v)||'REVIEW_REQUIRED';
 
 export function normalizeAiriaA03(raw,sourceText){
@@ -94,6 +98,14 @@ export function normalizeAiriaA03(raw,sourceText){
     contract:'AIRIA_A03_V3_1',
     analysisId:clean(response.analysisId),
     classificationConfidence:confidence,
+    fieldConfidence:{
+      imo:fieldConfidence(fields.imo),
+      vesselName:fieldConfidence(fields.vesselName),
+      certificateNumber:fieldConfidence(fields.certificateNumber),
+      issuer:fieldConfidence(fields.issuer||fields.issuingAuthority),
+      issueDate:fieldConfidence(fields.issueDate),
+      expiryDate:fieldConfidence(fields.expiryDate)
+    },
     validationStatus,
     validationExceptions:Array.isArray(response.validation?.exceptions)?
       response.validation.exceptions.slice(0,12).map(clean).filter(Boolean):[],
