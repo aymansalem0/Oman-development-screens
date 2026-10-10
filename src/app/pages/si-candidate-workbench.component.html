@@ -82,6 +82,9 @@
             <strong>{{statusText(e.sourceType)}} · {{e.sourceEventId}}</strong>
             <small>{{copy('Reference','المرجع')}}: {{e.sourceReference}} · {{e.provenance}} · {{e.approval}}</small>
             <small>{{copy('Evidence references','مراجع الأدلة')}}: {{e.evidenceIds.length?e.evidenceIds.join(', '):copy('none supplied','غير متوفرة')}}</small>
+            <small *ngIf="e.importFile">{{copy('Excel source','مصدر Excel')}}: {{e.importFile}}
+              · {{copy('Row','الصف')}} {{e.importExcelRow}}
+              · {{copy('Batch','دفعة الاستيراد')}} {{e.importBatchId}}</small>
           </div>
           <p><strong>{{copy("Rules:","القواعد:")}}</strong> {{c.reasons.join(' · ')}}</p>
           <p *ngIf="c.currentRisk">{{copy('Risk source assessment','مرجع تقييم المخاطر')}}: {{c.currentRisk.assessmentId}} · {{copy('NMC Policy','سياسة المركز البحري')}} v{{c.currentRisk.policyRevision}}</p>
