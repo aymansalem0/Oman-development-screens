@@ -21,6 +21,7 @@ interface HistoricalRiskProjection {
   imo:string;sourceAssessmentId:string;riskScore:number;riskLevel:string;
   policyRevision:number;policyRef?:string;policyVersion?:string;
   reason?:string;calculatedAt?:string;
+  factorSnapshotReconstructed?:boolean;
   factorSnapshot?:{
     calculationMode:string;weightedSubtotal:number;modeAdjustment:number;
     clampedAndRoundedScore:number;
@@ -165,7 +166,10 @@ export class NmcRiskExplainabilityComponent implements OnInit,OnDestroy {
   /** Scoring policy projection is recomputed from persisted AI evidence, NEVER fixture calibration. */
   private updatePolicyProjection():void{
     const row=this.assessment,config=this.activeRiskConfig,vessel=this.vessel;
-    if(!row||!config||!vessel)return;
+    if(!row||!config||!vessel||!this.riskEngine.centralReady){
+      this.projectedRisk=null;this.factors=[];
+      return; // Never present fallback browser defaults as the active central policy.
+    }
     const valid=this.factorOrder.every(key=>
       row.signals.filter(signal=>signal.factor===key&&
         Number.isFinite(signal.severity)&&signal.severity>=0&&signal.severity<=100).length===1);
