@@ -48,9 +48,10 @@ export class SiPscSelectionService {
     return this.http.get<PscSelectionPool>(this.base+'/pool',
       {...this.hdr(key),params});
   }
-  policy(key:string):Observable<{status:string;policy:PscQuotaPolicy}>{
+  /** Read-only published quota is available without Editor credentials. */
+  policy():Observable<{status:string;policy:PscQuotaPolicy}>{
     return this.http.get<{status:string;policy:PscQuotaPolicy}>(
-      this.base+'/policy',this.hdr(key));
+      this.base+'/policy');
   }
   preview(key:string,config:PscQuotaConfig):Observable<{status:string;
     currentVersion:number;proposed:PscQuotaConfig;
