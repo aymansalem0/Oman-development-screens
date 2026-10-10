@@ -19,6 +19,7 @@ function harness({nmc=false}={}){
     mode:'json',file:join(folder,'state.json'),
     targeting:{
       inspectionCase:async()=>c,
+      inspectionCaseRegistry:async()=>({cases:[c],events:[]}),
       dashboard:async()=>({candidates:[{
         status:'INSPECTION_CREATED',imo:c.imo,regime:c.regime,vesselName:'Demo Vessel',
         currentRisk:null,events:[],inspectionCase:{id:CASE,approvedBy:'Supervisor'}}]})
@@ -86,11 +87,11 @@ test('major deficiency: evidence, correction, verification, failed follow-up and
       actionId:action.id,evidenceRefs:['PHOTO-001']}),e=>e.code==='SI_ACTION_OWNER_REQUIRED');
     await h.step('SUBMIT_ACTION','Action Owner',{actionId:action.id,evidenceRefs:['PHOTO-001']});
     await h.step('VERIFY_ACTION','Supervisor',{...withReason,actionId:action.id,decision:'ACCEPT'});
-    await h.step('RECORD_FOLLOW_UP','Supervisor',{...withReason,mode:'ON_SITE',result:'FAIL'});
+    await h.step('RECORD_FOLLOW_UP','Supervisor',{...withReason,mode:'ON_SITE',result:'FAIL',evidenceRefs:['FOLLOWUP-FAILED']});
     assert.equal((await h.store.saved(CASE)).stage,'ACTIONS_OPEN');
     await h.step('SUBMIT_ACTION','Action Owner',{actionId:action.id,evidenceRefs:['PHOTO-002']});
     await h.step('VERIFY_ACTION','Supervisor',{...withReason,actionId:action.id,decision:'ACCEPT'});
-    await h.step('RECORD_FOLLOW_UP','Supervisor',{...withReason,mode:'DESK_REVIEW',result:'PASS'});
+    await h.step('RECORD_FOLLOW_UP','Supervisor',{...withReason,mode:'DESK_REVIEW',result:'PASS',evidenceRefs:['FOLLOWUP-OK']});
     await h.step('CLOSE','Supervisor',withReason);
     assert.equal((await h.store.saved(CASE)).stage,'CLOSED');
     assert.equal((await h.store.saved(CASE)).followUps.length,2);
@@ -119,5 +120,63 @@ test('optimistic concurrency prevents an older browser from overwriting the case
     await assert.rejects(h.store.apply(CASE,{
       action:'APPROVE_SCOPE',expectedVersion:0,actor:'Supervisor',data:withReason
     }),e=>e.code==='SI_LIFECYCLE_VERSION_CONFLICT');
+  }finally{h.cleanup();}
+});
+
+test('closed case remains visible after NMC live candidate queue is empty',async()=>{
+  const h=harness({nmc:true});
+  try{
+    h.store.targeting.dashboard=async()=>({candidates:[]});
+    const before=await h.store.list();
+    assert.equal(before.cases.length,1);
+    assert.equal(before.cases[0].stage,'NOT_STARTED');
+    assert.equal(before.cases[0].imo,'9328471');
+    await start(h,true);
+    await h.step('SAVE_CHECKS','Inspector',{checks:results(false)});
+    await h.step('SUBMIT_FIELD','Inspector');
+    await h.step('APPROVE_REPORT','Supervisor',withReason);
+    await h.step('CLOSE','Supervisor',withReason);
+    const after=await h.store.list();
+    assert.equal(after.cases[0].stage,'CLOSED');
+    assert.equal(after.cases[0].id,CASE);
+  }finally{h.cleanup();}
+});
+
+test('report return preserves previous signed draft in auditable revision history',async()=>{
+  const h=harness();
+  try{
+    await start(h);
+    await h.step('SAVE_CHECKS','Inspector',{checks:results(false)});
+    await h.step('SUBMIT_FIELD','Inspector',{summary:'First report draft'});
+    await assert.rejects(h.step('RETURN_REPORT','Inspector',withReason),
+      e=>e.code==='SI_REPORT_REVIEW_REQUIRES_INDEPENDENT_SUPERVISOR');
+    await h.step('RETURN_REPORT','Supervisor',withReason);
+    await h.step('SAVE_CHECKS','Inspector',{checks:results(true)});
+    await h.step('SUBMIT_FIELD','Inspector',{summary:'Corrected report'});
+    const versions=(await h.store.history(CASE)).versions;
+    assert(versions.some(v=>v.snapshot?.report?.summary==='First report draft'));
+    assert(versions.some(v=>v.snapshot?.report?.summary==='Corrected report'));
+    assert.equal((await h.store.saved(CASE)).report.summary,'Corrected report');
+  }finally{h.cleanup();}
+});
+
+test('publisher cannot self-verify correction or approve their own submitted field report',async()=>{
+  const h=harness();
+  try{
+    await start(h);
+    await h.step('SAVE_CHECKS','Inspector',{checks:results(true)});
+    await h.step('SUBMIT_FIELD','Inspector');
+    await assert.rejects(h.step('APPROVE_REPORT','Inspector',withReason),
+      e=>e.code==='SI_REPORT_REVIEW_REQUIRES_INDEPENDENT_SUPERVISOR');
+    await h.step('APPROVE_REPORT','Supervisor',withReason);
+    const finding=(await h.store.saved(CASE)).findings[0];
+    await h.step('ISSUE_ACTIONS','Supervisor',{...withReason,actions:[{
+      findingId:finding.id,owner:'Supervisor',dueDate:'2026-11-01',
+      instruction:'Remediate issue'}]});
+    const actionId=(await h.store.saved(CASE)).actions[0].id;
+    await h.step('SUBMIT_ACTION','Supervisor',{actionId,evidenceRefs:['CORRECTION-X']});
+    await assert.rejects(h.step('VERIFY_ACTION','Supervisor',{
+      ...withReason,actionId,decision:'ACCEPT'}),
+      e=>e.code==='SI_ACTION_INDEPENDENT_VERIFICATION_REQUIRED');
   }finally{h.cleanup();}
 });
