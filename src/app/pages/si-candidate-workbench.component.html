@@ -5,7 +5,7 @@
       <div>
         <small>{{copy("MOEI · SMART INSPECTION · STEPS 00–04","وزارة الطاقة والبنية التحتية · المعاينة الذكية · المراحل ٠٠–٠٤")}}</small>
         <h1>{{copy("Inspection Candidate & Targeting Center","مركز ترشيح المعاينات والاستهداف")}}</h1>
-        <p>مركز مرشحي المعاينة والاستهداف · All active vessels · Provenance-first decisions · No automatic AI calls</p>
+        <p>{{copy('All active vessels · Traceable decisions · No automatic AI calls','كل السفن النشطة · قرارات قابلة للتتبع · دون استدعاءات AI تلقائية')}}</p>
       </div>
       <div class="hero-actions">
         <a routerLink="/moei/nmc">{{copy("NMC Command Center","مركز القيادة البحري")}}</a>
@@ -20,18 +20,18 @@
     <p *ngIf="busy" class="notice">{{copy("Saving centrally — please wait…","جارٍ الحفظ مركزيًا، يرجى الانتظار…")}}</p>
 
     <section *ngIf="dashboard as d" class="stats" aria-label="Dynamic targeting statistics">
-      <article><small>{{copy("ACTIVE VESSELS EVALUATED","السفن النشطة المشمولة بالفحص")}}</small><strong>{{d.summary.evaluatedPopulation}}</strong><span>Fleet snapshot {{short(d.fleetSnapshotId)}}</span></article>
-      <article><small>{{copy("SAVED OFFICIAL RISK PROJECTIONS","تقييمات المخاطر المحفوظة")}}</small><strong>{{d.summary.assessedRiskVessels}}</strong><span>{{d.summary.evaluatedPopulation-d.summary.assessedRiskVessels}} missing risk; no fabricated scores</span></article>
+      <article><small>{{copy("ACTIVE VESSELS EVALUATED","السفن النشطة المشمولة بالفحص")}}</small><strong>{{d.summary.evaluatedPopulation}}</strong><span>{{copy('Fleet snapshot','نسخة الأسطول')}} {{short(d.fleetSnapshotId)}}</span></article>
+      <article><small>{{copy("SAVED OFFICIAL RISK PROJECTIONS","تقييمات المخاطر المحفوظة")}}</small><strong>{{d.summary.assessedRiskVessels}}</strong><span>{{d.summary.evaluatedPopulation-d.summary.assessedRiskVessels}} {{copy('unassessed, no fabricated scores','لم تُقيّم مخاطرها ولا تُنشأ درجات افتراضية')}}</span></article>
       <article><small>{{copy("TRACEABLE CANDIDATES","المرشحون القابلون للتتبع")}}</small><strong>{{d.summary.candidates}}</strong><span>{{copy("Derived from saved source events","مستخرجة من أحداث المصادر المحفوظة")}}</span></article>
       <article><small>{{copy("PENDING OFFICER REVIEW","بانتظار مراجعة الموظف")}}</small><strong>{{d.summary.pendingReview}}</strong><span>{{copy("Human approval required","تتطلب اعتمادًا بشريًا")}}</span></article>
       <article><small>{{copy("CREATED SI CASES","حالات المعاينة المنشأة")}}</small><strong>{{d.summary.inspectionsCreated}}</strong><span>{{copy("Audit-linked, not yet scheduled","مرتبطة بسجل التدقيق ولم تُجدول بعد")}}</span></article>
     </section>
     <div *ngIf="dashboard as d" class="meta-line">
-      <span>Targeting Rules v{{d.policy.version}}</span>
-      <span>NMC Risk Policy v{{d.riskPolicyRevision}}</span>
-      <span>Evaluated {{d.evaluatedAt|date:'medium'}}</span>
-      <span>NMC referrals {{d.summary.bySource['NMC_CASE']||0}}</span>
-      <span>Service {{d.summary.bySource['SERVICE_REQUEST']||0}}</span>
+      <span>{{copy('Targeting Rules','قواعد الاستهداف')}} v{{d.policy.version}}</span>
+      <span>{{copy('NMC Risk Policy','سياسة مخاطر المركز البحري')}} v{{d.riskPolicyRevision}}</span>
+      <span>{{copy('Evaluated','تاريخ التقييم')}} {{d.evaluatedAt|date:'medium'}}</span>
+      <span>{{copy('NMC referrals','إحالات المركز البحري')}} {{d.summary.bySource['NMC_CASE']||0}}</span>
+      <span>{{copy('Service','الخدمات')}} {{d.summary.bySource['SERVICE_REQUEST']||0}}</span>
       <span>PSC {{d.summary.bySource['PSC_PORT_CALL']||0}}</span>
     </div>
 
@@ -61,8 +61,8 @@
             <tr *ngFor="let c of candidates;trackBy:trackKey" [class.active]="selectedKey===c.key">
               <td><strong>{{c.vesselName}}</strong><small>IMO {{c.imo}} · {{c.flag}} · {{c.vesselType}}</small></td>
               <td>{{statusText(c.regime)}}</td>
-              <td><span *ngFor="let e of c.events" class="source-pill">{{statusText(e.sourceType)}} · {{e.provenance==='POC_SIMULATOR'?'SIMULATED':'NMC APPROVED'}}</span></td>
-              <td><strong *ngIf="c.currentRisk as risk">{{risk.score}}/100 · {{risk.level}}</strong><span *ngIf="!c.currentRisk" class="pending">{{copy("NOT ASSESSED","لم تُقيّم")}}</span></td>
+              <td><span *ngFor="let e of c.events" class="source-pill">{{statusText(e.sourceType)}} · {{e.provenance==='POC_SIMULATOR'?copy('SIMULATED','تجريبي'):copy('NMC APPROVED','معتمد من المركز البحري')}}</span></td>
+              <td><strong *ngIf="c.currentRisk as risk">{{risk.score}}/100 · {{statusText(risk.level)}}</strong><span *ngIf="!c.currentRisk" class="pending">{{copy("NOT ASSESSED","لم تُقيّم")}}</span></td>
               <td><span class="tag" [class.manual]="c.eligibility==='MANUAL_REVIEW'">{{statusText(c.eligibility)}}</span></td>
               <td>{{statusText(c.priority)}}</td>
               <td><span class="status">{{statusText(c.status)}}</span></td>
@@ -76,16 +76,16 @@
 
     <div class="lower-grid">
       <section class="si-panel" *ngIf="selected as c">
-        <header><h2>{{copy("02 · Officer Decision","٠٢ · قرار الموظف")}}</h2><p>IMO {{c.imo}} · {{statusText(c.regime)}} · {{c.eligibility}}</p></header>
+        <header><h2>{{copy("02 · Officer Decision","٠٢ · قرار الموظف")}}</h2><p>IMO {{c.imo}} · {{statusText(c.regime)}} · {{statusText(c.eligibility)}}</p></header>
         <div class="source-detail">
           <div *ngFor="let e of c.events">
             <strong>{{statusText(e.sourceType)}} · {{e.sourceEventId}}</strong>
-            <small>Reference: {{e.sourceReference}} · {{e.provenance}} · {{e.approval}}</small>
-            <small>Evidence refs: {{e.evidenceIds.length?e.evidenceIds.join(', '):'none supplied'}}</small>
+            <small>{{copy('Reference','المرجع')}}: {{e.sourceReference}} · {{e.provenance}} · {{e.approval}}</small>
+            <small>{{copy('Evidence references','مراجع الأدلة')}}: {{e.evidenceIds.length?e.evidenceIds.join(', '):copy('none supplied','غير متوفرة')}}</small>
           </div>
           <p><strong>{{copy("Rules:","القواعد:")}}</strong> {{c.reasons.join(' · ')}}</p>
-          <p *ngIf="c.currentRisk">Risk source assessment: {{c.currentRisk.assessmentId}} · NMC Policy v{{c.currentRisk.policyRevision}}</p>
-          <p *ngIf="c.lastDecision">Last decision: {{c.lastDecision.action}} by {{c.lastDecision.actor}} · {{c.lastDecision.at|date:'short'}} · {{c.lastDecision.note}}</p>
+          <p *ngIf="c.currentRisk">{{copy('Risk source assessment','مرجع تقييم المخاطر')}}: {{c.currentRisk.assessmentId}} · {{copy('NMC Policy','سياسة المركز البحري')}} v{{c.currentRisk.policyRevision}}</p>
+          <p *ngIf="c.lastDecision">{{copy('Last decision','آخر قرار')}}: {{statusText(c.lastDecision.action)}} {{copy('by','بواسطة')}} {{c.lastDecision.actor}} · {{c.lastDecision.at|date:'short'}} · {{c.lastDecision.note}}</p>
           <p *ngIf="c.inspectionCase"><strong>{{copy("Inspection Case:","حالة المعاينة:")}}</strong> {{c.inspectionCase.id}} · {{c.inspectionCase.status}}</p>
           <a *ngIf="c.inspectionCase" class="prepare-link" [routerLink]="['/moei/smart-inspection/preparation',c.inspectionCase.id]">{{copy("Open Preparation & A04 Dossier →","فتح التحضير وملف A04 →")}}</a>
         </div>
@@ -133,13 +133,13 @@
 
       <section class="si-panel">
         <header><h2>{{copy("05 · Configurable Priority & Impact","٠٥ · إعداد الأولوية ومعاينة الأثر")}}</h2><p>{{copy("Versioned priority threshold only. Statutory PSC/service eligibility is NOT auto-published.","يتم إصدار حدود الأولوية فقط. لا تُنشر قواعد الأهلية التنظيمية تلقائيًا.")}}</p></header>
-        <p *ngIf="dashboard">Published ruleset v{{dashboard.policy.version}} · {{dashboard.policy.config.riskPriorityThreshold}}/100 priority threshold</p>
+        <p *ngIf="dashboard">{{copy('Published ruleset','إصدار القواعد المنشور')}} v{{dashboard.policy.version}} · {{dashboard.policy.config.riskPriorityThreshold}}/100 {{copy('priority threshold','حد الأولوية')}}</p>
         <label>{{copy("Proposed priority threshold (0–100)","حد الأولوية المقترح (٠–١٠٠)")}}<input type="number" min="0" max="100" step="1" [(ngModel)]="threshold" (ngModelChange)="impact=null"/></label>
         <div class="decision-actions"><button type="button" [disabled]="busy" (click)="previewRules()">{{copy("Preview fleet impact","معاينة أثر التغيير على الأسطول")}}</button></div>
         <div *ngIf="impact as p" class="impact">
-          <strong>{{p.affectedCandidateCount}} affected candidate(s)</strong>
-          <small>{{p.evaluatedPopulation}} active vessels evaluated · {{p.unevaluatedRiskVessels}} with no saved risk</small>
-          <p>Impacted IMOs: {{p.affectedImos.length?p.affectedImos.join(', '):'none'}}</p>
+          <strong>{{p.affectedCandidateCount}} {{copy('affected candidates','مرشح تأثر بالتغيير')}}</strong>
+          <small>{{p.evaluatedPopulation}} {{copy('active vessels evaluated','سفينة نشطة شملها الفحص')}} · {{p.unevaluatedRiskVessels}} {{copy('without saved risk','بدون تقييم مخاطر محفوظ')}}</small>
+          <p>{{copy('Affected IMO numbers','أرقام IMO المتأثرة')}}: {{p.affectedImos.length?p.affectedImos.join(', '):copy('none','لا يوجد')}}</p>
           <small>{{copy("Changes PRIORITY only. No AI calls, no case rewrite, no legal eligibility change.","يتغير ترتيب الأولوية فقط دون استدعاءات AI أو تعديل الحالات أو الأهلية التنظيمية.")}}</small>
         </div>
         <label>{{copy("Business justification","التبرير الإداري")}}<input [(ngModel)]="policyReason" [placeholder]="copy('Why adjust the priority threshold?','لماذا تريد تغيير حد الأولوية؟')"/></label>
