@@ -118,10 +118,14 @@ async function scanExistingFleetForAlerts(){
     let effective=original;
     if(riskPolicy.ready){
       const projected=await riskPolicy.projectCurrent();
-      const byImo=new Map(projected.projections.map(p=>[p.imo,p]));
+      // Provisional A03=0 is NOT evidence; it must never create, escalate or
+      // resolve maritime alerts as though it were a verified current score.
+      const byImo=new Map(projected.projections.filter(p=>!p.provisional).map(p=>[p.imo,p]));
       effective={...original,results:Object.fromEntries(Object.entries(original.results).map(([imo,row])=>{
         const p=byImo.get(imo);
-        return [imo,p&&p.sourceAssessmentId===row.assessmentId?{
+        const provisional=projected.projections.find(x=>x.imo===imo&&x.provisional);
+        return [imo,provisional?{...row,policyProjectionUnavailable:true,
+          provisionalOnly:true}:p&&p.sourceAssessmentId===row.assessmentId?{
           ...row,score:p.riskScore,level:p.riskLevel,
           operationalPriority:p.operationalPriority,criticalOpenFinding:p.criticalOpenFinding,
           configVersion:projected.policyRef,riskPolicyRevision:projected.policyRevision,
@@ -154,9 +158,13 @@ async function effectiveFleetSnapshot(snapshot){
         sourceAiConfigVersion:row.configVersion,
         score:p.riskScore,level:p.riskLevel,
         operationalPriority:p.operationalPriority,
+        riskProvisional:Boolean(p.provisional),
+        a03EvidenceStatus:p.provisional?'NOT_ASSESSED': 'ASSESSED',
+        operationalDecisionAllowed:!p.provisional,
         configVersion:active.policyRef,
         activePolicyRevision:active.policyRevision,
-        scoringSource:'CURRENT_CENTRAL_RISK_POLICY'};
+        scoringSource:p.provisional?
+          'PROVISIONAL_POC_A03_ZERO_NOT_ASSESSED':'CURRENT_CENTRAL_RISK_POLICY'};
     }else results[imo]={...row,
       scoringSource:row.status==='COMPLETED'?'ORIGINAL_AI_ASSESSMENT_UNPROJECTED':null};
     const current=results[imo];
@@ -829,7 +837,9 @@ const server = createServer(async (req, res) => {
       if(req.method==='GET'){
         if(!id){
           const projection=riskPolicy.ready?await riskPolicy.projectCurrent():null;
-          return respond(res,200,await alerts.overview(projection));
+          const alertEligible=projection?{...projection,
+            projections:projection.projections.filter(p=>!p.provisional)}:null;
+          return respond(res,200,await alerts.overview(alertEligible));
         }
         if(action==='history')return respond(res,200,{status:'ok',history:await alerts.history(id)});
         if(action)return respond(res,404,{error:'ALERT_NOT_FOUND'});
