@@ -80,6 +80,13 @@
         <span class="nav-chevron">{{smartInspectionExpanded ? '⌄' : '›'}}</span>
       </button>
       <div class="nav-children" id="si-main-submenu" [hidden]="!smartInspectionExpanded">
+        <a class="nav-link" routerLink="/moei/smart-inspection/psc-targeting"
+           [class.active]="isPscTargetingPool"
+           [attr.aria-current]="isPscTargetingPool?'page':null"
+           [title]="copy('PSC Targeting & Selection','استهداف واختيار معاينات PSC')">
+          <span class="nav-icon">◎</span>
+          <span class="nav-label">{{copy('PSC Targeting & Selection','استهداف واختيار PSC')}}</span>
+        </a>
         <a class="nav-link" routerLink="/moei/smart-inspection/candidates"
            [class.active]="isInspectionCandidates"
            [attr.aria-current]="isInspectionCandidates?'page':null"
@@ -203,6 +210,13 @@
           </button>
           <div class="nav-subchildren nav-settings-links" id="si-settings-children"
                [hidden]="!inspectionSettingsExpanded">
+            <a class="nav-link" routerLink="/moei/smart-inspection/settings/psc-quotas"
+               [class.active]="isPscQuotaSettings"
+               [attr.aria-current]="isPscQuotaSettings?'page':null"
+               [title]="copy('PSC Targeting Quotas','حصص استهداف معاينات PSC')">
+              <span class="nav-icon">◉</span>
+              <span class="nav-label">{{copy('PSC Selection Quotas','حصص اختيار PSC')}}</span>
+            </a>
             <a class="nav-link" routerLink="/moei/smart-inspection/settings/targeting"
                [class.active]="isInspectionTargetingSettings"
                [attr.aria-current]="isInspectionTargetingSettings?'page':null"
