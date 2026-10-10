@@ -20,7 +20,8 @@ const validSource=['SERVICE_REQUEST','PSC_PORT_CALL'];
 export const SI_P01_DEFAULT=Object.freeze({
   weights:{risk:30,trigger:25,history:20,deadline:15,urgency:10},
   approvedNmcFirst:true,
-  missingRiskAction:'REVIEW_REQUIRED'
+  missingRiskAction:'REVIEW_REQUIRED',
+  sourceTriggerScores:{NMC_CASE:90,SERVICE_REQUEST:55,PSC_PORT_CALL:65}
 });
 export function getSiPrioritySettings(config){
   const p=config?.prioritization||SI_P01_DEFAULT;
@@ -31,8 +32,15 @@ export function getSiPrioritySettings(config){
     keys.reduce((sum,k)=>sum+p.weights[k],0)!==100||
     Object.keys(p.weights).sort().join('|')!==keys.sort().join('|'))
     throw new SiTargetingError('SI_P01_POLICY_WEIGHTS_INVALID',422);
+  const sourceKeys=['NMC_CASE','SERVICE_REQUEST','PSC_PORT_CALL'];
+  const trigger=p.sourceTriggerScores||SI_P01_DEFAULT.sourceTriggerScores;
+  if(!trigger||sourceKeys.some(k=>!Number.isInteger(trigger[k])||
+       trigger[k]<0||trigger[k]>100)||
+     Object.keys(trigger).sort().join('|')!==sourceKeys.sort().join('|'))
+    throw new SiTargetingError('SI_P01_TRIGGER_SCORES_INVALID',422);
   return {weights:Object.fromEntries(keys.map(k=>[k,p.weights[k]])),
-    approvedNmcFirst:true,missingRiskAction:'REVIEW_REQUIRED'};
+    approvedNmcFirst:true,missingRiskAction:'REVIEW_REQUIRED',
+    sourceTriggerScores:Object.fromEntries(sourceKeys.map(k=>[k,trigger[k]]))};
 }
 const defaultRules=Object.freeze({
   riskPriorityThreshold:65,includeMissingRiskInReview:true,
