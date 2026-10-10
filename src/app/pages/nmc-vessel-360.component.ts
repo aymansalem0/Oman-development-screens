@@ -12,7 +12,7 @@ import {
 } from '../data/nmc-vessel-catalog';
 import { NMC_OPERATIONAL_VESSELS, getOperationalVesselByImo } from '../data/nmc-expanded-vessel-catalog';
 import { LanguageService } from '../services/language.service';
-import { NmcRiskEngineService } from '../services/nmc-risk-engine.service';
+import { NmcRiskEngineService, RiskFactorKey } from '../services/nmc-risk-engine.service';
 import { NmcVesselEvidenceService } from '../services/nmc-vessel-evidence.service';
 import { NmcExternalPscService, NmcExternalPscRecord } from '../services/nmc-external-psc.service';
 import { NmcFleetAiService, FleetAiAssessment, FleetAiHistory, FleetAiIntelligence } from '../services/nmc-fleet-ai.service';
@@ -496,7 +496,7 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
     const hasCore=signalKeys.every(key=>Number.isFinite(severities[key]));
     const projected=this.riskEngine.centralReady&&hasCore&&(!weightedDoc||doc)?
       this.riskEngine.evaluateFromAiSignals(this.vessel,{
-        ...severities,...(doc?{documentIntegrity:doc.severity}:{})} as Record<import('../services/nmc-risk-engine.service').RiskFactorKey,number>):null;
+        ...severities,...(doc?{documentIntegrity:doc.severity}:{})} as Record<RiskFactorKey,number>):null;
     this.vessel.riskScore = projected?.score ?? this.storedAi.score ?? this.vessel.riskScore;
     this.vessel.riskLevel = projected?.level ?? this.storedAi.level ?? this.vessel.riskLevel;
     this.vessel.risk=this.vessel.riskScore;
