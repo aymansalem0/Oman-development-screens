@@ -11,7 +11,7 @@ import {NmcRiskEngineService,RiskEngineConfig,RiskEvaluation,RiskFactorKey} from
 import {NmcOperationalGuidanceService,GuidanceResult} from '../services/nmc-operational-guidance.service';
 import {NmcCasesService,NmcCentralCase} from '../services/nmc-cases.service';
 
-type FactorKey='movement'|'inspection'|'certificate'|'dataQuality'|'history';
+type FactorKey='movement'|'inspection'|'certificate'|'dataQuality'|'history'|'documentIntegrity';
 interface RiskFactor {
   id:FactorKey;label:string;labelAr:string;
   severity:number;weight:number;contribution:number;confidence:number;
@@ -62,9 +62,10 @@ export class NmcRiskExplainabilityComponent implements OnInit,OnDestroy {
     inspection:['Inspection & deficiencies','التفتيش والملاحظات'],
     certificate:['Certificates & compliance','الشهادات والامتثال'],
     dataQuality:['Data quality','جودة البيانات'],
-    history:['Historical risk','المخاطر التاريخية']
+    history:['Historical risk','المخاطر التاريخية'],
+    documentIntegrity:['Document Integrity (A03)','اتساق المستندات (A03)']
   };
-  readonly factorOrder:FactorKey[]=['movement','inspection','certificate','dataQuality','history'];
+  readonly factorOrder:FactorKey[]=['movement','inspection','certificate','dataQuality','history','documentIntegrity'];
 
   constructor(private route:ActivatedRoute,public lang:LanguageService,
     private readonly fleet:NmcFleetAiService,
@@ -110,7 +111,7 @@ export class NmcRiskExplainabilityComponent implements OnInit,OnDestroy {
         this.busy=false;
         if(row.status!=='COMPLETED'||!row.assessmentId||
            typeof row.score!=='number'||!Number.isFinite(row.score)||
-           !Array.isArray(row.signals)||row.signals.length!==5){
+           !Array.isArray(row.signals)||![5,6].includes(row.signals.length)){
           this.assessmentError=this.copy('A valid saved A01/A02 assessment is not available.','لا يوجد تقييم A01/A02 صالح ومحفوظ.');
           return;
         }
@@ -180,13 +181,21 @@ export class NmcRiskExplainabilityComponent implements OnInit,OnDestroy {
         'لا يمكن حساب المخاطر: أدلة العوامل المحفوظة أو قواعد المتصفح غير صالحة.');
       return;
     }
-    const severities=Object.fromEntries(this.factorOrder.map(key=>
+    const required=this.factorOrder.filter(key=>key!=='documentIntegrity'||
+      Number(config.weights.documentIntegrity||0)>0);
+    if(required.some(key=>!row.signals.some(s=>s.factor===key&&Number.isFinite(s.severity)))){
+      this.assessmentError=this.copy(
+        'The current six-factor policy requires A03 evidence not present in this saved assessment. No risk score is inferred.',
+        'السياسة الحالية تتطلب أدلة A03 غير الموجودة بالتقييم المحفوظ؛ لن نفترض درجة مخاطر.');
+      this.projectedRisk=null;this.factors=[];return;
+    }
+    const severities=Object.fromEntries(required.map(key=>
       [key,row.signals.find(signal=>signal.factor===key)!.severity])) as Record<RiskFactorKey,number>;
     this.projectedRisk=this.riskEngine.evaluateFromAiSignals(vessel,severities,config);
     const previous=this.selectedFactor?.id;
-    this.factors=this.factorOrder.map(id=>{
+    this.factors=this.factorOrder.filter(id=>row.signals.some(s=>s.factor===id)).map(id=>{
       const signal=row.signals.find(x=>x.factor===id)!;
-      const weight=config.weights[id];
+      const weight=Number(config.weights[id]||0);
       return {
         id,label:this.factorLabels[id][0],labelAr:this.factorLabels[id][1],
         severity:signal.severity,weight,
