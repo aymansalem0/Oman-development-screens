@@ -84,7 +84,8 @@ function scoreCandidate(candidate,config,clock){
   const provisionalScore=availableWeight>0?
     Math.round(known.reduce((n,x)=>n+x.signal*x.weight,0)/availableWeight):null;
   const evidenceRefs=[...new Set([
-    ...candidate.events.map(e=>e.eventKey),
+    ...candidate.events.flatMap(e=>[e.eventKey,e.sourceEventId,e.sourceReference,
+      ...(e.evidenceIds||[])]),
     ...(candidate.currentRisk?.assessmentId?[candidate.currentRisk.assessmentId]:[])
   ])];
   const missingData=factors.filter(x=>x.signal===null).map(x=>'MISSING_'+x.key.toUpperCase());
