@@ -1,4 +1,5 @@
 import {NmcNavigationComponent} from '../components/nmc-navigation.component';
+import {NmcMinistryLogoComponent} from '../components/nmc-ministry-logo.component';
 import {CommonModule} from '@angular/common';
 import {Component,OnDestroy,OnInit} from '@angular/core';
 import {Subscription} from 'rxjs';
@@ -34,7 +35,7 @@ interface Threshold {
 }
 @Component({
   selector:'app-nmc-risk-explainability',standalone:true,
-  imports:[CommonModule,RouterLink,NmcNavigationComponent],
+  imports:[CommonModule,RouterLink,NmcNavigationComponent,NmcMinistryLogoComponent],
   templateUrl:'./nmc-risk-explainability.component.html',
   styleUrl:'./nmc-risk-explainability.component.css'
 })
