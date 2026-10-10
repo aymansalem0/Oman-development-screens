@@ -251,7 +251,7 @@ async function prepareCaseA01Actions(caseId,version){
           const source=fleet.getVesselResult(existing.imo);
           if(!source||source.status!=='COMPLETED'||
             source.score!==existing.sourceScore||source.level!==existing.sourceLevel||
-            !Array.isArray(source.signals)||source.signals.length!==5)
+            !Array.isArray(source.signals)||![5,6].includes(source.signals.length))
             throw new NmcCaseError('CASE_SOURCE_ASSESSMENT_UNAVAILABLE',409);
           // Older PR42 alerts omitted the assessment ID from the snapshot.
           // Reconcile ONLY when the persisted alert timestamp/ruleset and current
