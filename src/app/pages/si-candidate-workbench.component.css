@@ -55,3 +55,7 @@ button:disabled{opacity:.55;cursor:not-allowed}
 @media(max-width:1450px){.stats{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:1050px){.si-layout{display:block}.si-workbench{padding:18px}.lower-grid{grid-template-columns:1fr}.si-hero{flex-direction:column;align-items:start}.stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:620px){.stats{grid-template-columns:1fr}.filters,.form-grid{grid-template-columns:1fr}.si-hero h1{font-size:23px}}
+
+.settings-link{display:inline-block;padding:11px 15px;margin-top:4px;border-radius:9px;
+  background:#087d93;color:white;text-decoration:none;font-size:12px;font-weight:800}
+.settings-link:hover{background:#066a7e}
