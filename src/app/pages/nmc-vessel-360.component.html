@@ -74,6 +74,26 @@
       </div>
     </section>
 
+    <section class="v360-risk-state-note" *ngIf="storedAi as ai"
+             [class.v360-watch-note]="vessel.riskLevel==='Watch'" role="status">
+      <strong *ngIf="vessel.riskLevel==='Watch'">
+        {{copy('WATCH · Enhanced monitoring', 'مراقبة · متابعة معززة')}}
+      </strong>
+      <span *ngIf="vessel.riskLevel==='Watch'">
+        {{copy('This assessed vessel is in Watch status. It remains visible in Vessel 360 and the Command Center Watch filter.',
+               'هذه السفينة المقيمة في حالة مراقبة، وتظل ظاهرة في ملف السفينة 360 وفلتر المراقبة بمركز القيادة.')}}
+      </span>
+      <span *ngIf="displayedRiskBasis==='ORIGINAL_SAVED'">
+        {{copy('Current published risk cannot be projected from this assessment. Displaying ORIGINAL stored classification and score:',
+               'يتعذر تطبيق سياسة المخاطر المنشورة حاليًا على هذا التقييم. يُعرض التصنيف والنتيجة الأصلية المحفوظة:')}}
+        <strong>{{ai.score}}/100 · {{ai.level}} · {{ai.configVersion}}</strong>
+      </span>
+      <span *ngIf="displayedRiskBasis==='CURRENT_PUBLISHED'">
+        {{copy('Classification calculated from saved evidence under the CURRENT published risk policy.',
+               'التصنيف محسوب من الأدلة المحفوظة وفق سياسة المخاطر المنشورة الحالية.')}}
+      </span>
+    </section>
+
     <section class="v360-structural-quality panel" *ngIf="storedAi" role="region"
              [attr.aria-label]="copy('Verified-source limitations and data comparison', 'حدود التحقق من المصادر ومقارنة البيانات')">
       <div class="v360-quality-header">
