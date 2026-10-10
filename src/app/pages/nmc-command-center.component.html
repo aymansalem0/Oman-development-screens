@@ -149,8 +149,8 @@
                     class="assessment-filter"
                     [attr.aria-label]="copy('Filter by AI assessment status', 'تصفية حسب حالة التقييم بالذكاء الاصطناعي')">
               <option value="All">{{copy('All assessments','جميع حالات التقييم')}}</option>
-              <option value="Assessed">{{copy('AI Assessed Only','تم تقييمها بالذكاء الاصطناعي فقط')}}</option>
-              <option value="Pending">{{copy('Not AI assessed','لم تُقيّم بعد بالذكاء الاصطناعي')}}</option>
+              <option value="Assessed">{{copy('AI Assessed Only','تم تقييمها بالذكاء الاصطناعي فقط')}} ({{assessedCount}})</option>
+              <option value="Pending">{{copy('Not AI assessed','لم تُقيّم بعد بالذكاء الاصطناعي')}} ({{pendingCount}})</option>
             </select>
 
             <select [(ngModel)]="riskFilter" (ngModelChange)="onFilterChange()" [attr.aria-label]="copy('Filter by risk', 'تصفية حسب المخاطر')">
@@ -176,6 +176,12 @@
         </p>
         <div class="map-stage">
           <div #mapContainer class="real-map" dir="ltr"></div>
+          <div class="map-overlay map-assessed-empty" *ngIf="assessmentFilter==='Assessed'&&visibleMapCount===0"
+               role="status">
+            <strong>{{copy('No AI-assessed vessels to display yet','لا توجد سفن مكتملة التقييم بالذكاء الاصطناعي لعرضها حتى الآن')}}</strong>
+            <span>{{copy('This filter only shows successfully saved A01/A02 assessments. Failed and pending vessels are not counted.',
+                         'يعرض هذا الفلتر تقييمات A01/A02 المكتملة والمحـفوظة فقط، ولا يشمل السفن المعلقة أو الفاشلة.')}}</span>
+          </div>
 
           <div class="map-overlay map-legend">
             <span><i class="dot critical"></i> {{ copy('Critical', 'حرج') }}</span>
