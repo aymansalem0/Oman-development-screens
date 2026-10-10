@@ -182,7 +182,7 @@ export class SiSourceExcelImport{
         const key=eventKey(clean);
         if(withinFile.has(key)){issues.push(parseIssue(i,'SI_XLSX_DUPLICATE_EVENT'));continue;}
         withinFile.add(key);
-        out.push({row:i,key,payload:clean});
+        out.push({row:i,key,payload:clean,sourceRow:values});
       }catch(e){
         issues.push(parseIssue(i,e instanceof SiTargetingError?
           (this.targeting.imoSet.has(values.imo)?e.code:'SI_XLSX_UNKNOWN_FLEET_IMO'):
@@ -251,7 +251,7 @@ export class SiSourceExcelImport{
       fileSha256:p.sha256,actor:actor.trim(),importedAt:time};
     const events=fresh.map(x=>({
       id:randomUUID(),eventKey:x.key,createdAt:time,payload:x.payload,
-      sourceImport:{...audit,excelRow:x.row}
+      sourceImport:{...audit,excelRow:x.row,sourceRow:x.sourceRow}
     }));
     if(this.targeting.mode==='json'){
       // Snapshot is a single atomic JSON write and never partially imports rows.
