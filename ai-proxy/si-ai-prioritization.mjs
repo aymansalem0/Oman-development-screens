@@ -116,12 +116,15 @@ export function buildSiPrioritySnapshot(dashboard,clock=Date.now()){
   const byKey=new Map(ordered.map(x=>[x.candidateKey,x]));
   // Fingerprint deliberately excludes timestamp/ETA countdown and evaluatedAt:
   // stale when sources, approvals, settings or official risk change.
+  const arrivalBands=new Map(items.map(item=>[item.candidateKey,
+    item.factors.find(f=>f.key==='deadline')?.signal??null]));
   const fingerprint=sha({
     policyVersion:dashboard.policy.version,policy,
     riskPolicyRevision:dashboard.riskPolicyRevision,fleetSnapshotId:dashboard.fleetSnapshotId,
     candidates:dashboard.candidates.map(c=>({
       key:c.key,status:c.status,eligibility:c.eligibility,priority:c.priority,
       regime:c.regime,currentRisk:c.currentRisk,
+      arrivalTimingBand:arrivalBands.get(c.key)??null,
       events:c.events.map(e=>({eventKey:e.eventKey,sourceType:e.sourceType,
         sourceReference:e.sourceReference,eta:e.eta,port:e.port,
         importBatchId:e.importBatchId}))
