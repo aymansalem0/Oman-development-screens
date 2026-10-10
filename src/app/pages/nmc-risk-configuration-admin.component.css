@@ -359,3 +359,10 @@ a,button,input,textarea { font:inherit; }
 .risk-version-history .history-value-row b{color:#0f766e;font-weight:900;}
 .risk-version-history .history-value-row span:not(:first-child){overflow-wrap:anywhere;}
 .top-actions .secondary-btn:disabled{opacity:.5;cursor:not-allowed;}
+
+
+/* Localized ministry brand, consistent with the shared MOEI platform header. */
+.risk-ministry-logo{flex-shrink:0}
+.brand-block{min-width:0}
+@media(max-width:1490px){.admin-topbar .brand-block>div{display:none}}
+@media(max-width:960px){.admin-topbar{padding-inline:12px}}
