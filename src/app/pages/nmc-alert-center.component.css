@@ -11,7 +11,7 @@ button,input,select{font:inherit}
 .live-pill{display:flex;align-items:center;gap:7px;padding:8px 13px;background:#ebfaf5;border:1px solid #cdeee5;border-radius:50px;font-size:10px;color:#0d8070;font-weight:750}
 .live-pill i{height:7px;width:7px;border-radius:100%;background:#13ad81}
 .language{background:#fff;border:1px solid #d9e7ed;border-radius:8px;padding:9px 15px;font-size:11px;color:#395c6b;cursor:pointer}
-.alerts-main{margin-left:216px;padding:112px 32px 56px;max-width:1900px}
+.alerts-main{margin-left:240px;padding:112px 32px 56px;max-width:1900px}
 .breadcrumb{display:flex;align-items:center;gap:9px;color:#7e95a4;font-size:11px;margin-bottom:25px}
 .breadcrumb a{color:#0c877c;text-decoration:none}
 .heading{display:flex;justify-content:space-between;align-items:center;gap:20px;margin-bottom:23px}
@@ -87,7 +87,7 @@ button,input,select{font:inherit}
 .audit-row strong{font-size:11px;color:#2e5868}
 .audit-row p{font-size:10px;color:#7a93a0;margin:4px 0;line-height:1.6}
 .audit-row small{font-size:10px;color:#8097a5;white-space:nowrap}
-[dir="rtl"] .alerts-main{margin-left:0;margin-right:216px}
+[dir="rtl"] .alerts-main{margin-left:0;margin-right:240px}
 [dir="rtl"] .alert-card{border-left:1px solid #e3ecf0;border-right:4px solid #e4a044}
 [dir="rtl"] .alert-card.critical{border-right-color:#df4b56}
 [dir="rtl"] .actions{padding-left:0;padding-right:52px}
