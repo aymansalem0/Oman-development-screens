@@ -62,7 +62,8 @@ test('NMC source remains live, no Excel can inject its authoritative referrals',
     assert.equal(before.summary.bySource.NMC_CASE,1);
     await assert.rejects(()=>w.service.template('NMC_CASE'),
       e=>e.code==='SI_XLSX_UNKNOWN_SOURCE');
-    await assert.rejects(()=>pv(w.service,await excel('SERVICE_REQUEST',[svcRow()]),
+    const forgedSource=await excel('SERVICE_REQUEST',[svcRow()]);
+    await assert.rejects(()=>pv(w.service,forgedSource,
       'NMC_CASE','fake.xlsx'),e=>e.code==='SI_XLSX_UNKNOWN_SOURCE');
     const source=await w.service.status();
     assert.equal(source.nmc.mode,'LIVE_NMC_READ_ONLY');
