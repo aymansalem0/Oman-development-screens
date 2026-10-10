@@ -16,7 +16,7 @@ const clone=x=>JSON.parse(JSON.stringify(x));
 const hash=x=>createHash('sha256').update(JSON.stringify(x)).digest('hex');
 const doc=x=>({type:oracledb.DB_TYPE_CLOB,val:JSON.stringify(x)});
 const defaultPolicy={
-  period:'MONTHLY',scope:'PER_PORT',ratePercent:15,portOverrides:[],
+  period:'MONTHLY',scope:'NATIONAL',ratePercent:15,portOverrides:[],
   mandatoryOutsideQuota:true,
   publishedBy:'SYSTEM',reason:'Illustrative POC 15% PSC selection; not MOEI-approved'
 };
@@ -234,6 +234,14 @@ export class SiPscSelection{
       current.policies.push(next);this._save(current);
     }else await this._db(async con=>{
       try{
+        // Lock all policy versions against concurrent quota decisions so a
+        // new published rate cannot race a Publisher selecting Port Calls.
+        await con.execute('LOCK TABLE SI_PSC_SELECTION_POLICY IN EXCLUSIVE MODE');
+        const current=await con.execute(
+          'SELECT MAX(VERSION_NO) AS VERSION_NO FROM SI_PSC_SELECTION_POLICY',[],
+          {outFormat:oracledb.OUT_FORMAT_OBJECT});
+        if(Number(current.rows[0].VERSION_NO)!==expectedVersion)
+          throw new SiSelectionError('SI_SELECTION_POLICY_VERSION_CONFLICT',409);
         await con.execute(`INSERT INTO SI_PSC_SELECTION_POLICY (VERSION_NO,DOC_JSON)
           VALUES (:version,:doc)`,{version:next.version,doc:doc(next)});
         await con.commit();
