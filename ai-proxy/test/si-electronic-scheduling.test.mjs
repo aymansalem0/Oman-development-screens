@@ -4,6 +4,7 @@ import {mkdtempSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import ExcelJS from 'exceljs';
+import JSZip from 'jszip';
 import {parseErpExcel,ErpWorkforceStore} from '../si-erp-workforce.mjs';
 import {SiElectronicScheduler} from '../si-electronic-scheduling.mjs';
 
@@ -48,6 +49,50 @@ async function excelBuffer(rows=fixtures){
   }
   return Buffer.from(await workbook.xlsx.writeBuffer());
 }
+// Our public ERP Excel sample was exported as legal x:-prefixed SpreadsheetML.
+// ExcelJS 4.x rejects it before row/header validation. Exercise the same prefix
+// representation without committing a binary fixture to the source repository.
+async function namespacePrefixedExcelBuffer(){
+  const zip=await JSZip.loadAsync(await excelBuffer());
+  const ns='http://schemas.openxmlformats.org/spreadsheetml/2006/main';
+  const names=Object.keys(zip.files).filter(n=>
+    /^xl\/(?:workbook\.xml|styles\.xml|sharedStrings\.xml|worksheets\/sheet\d+\.xml)$/.test(n));
+  for(const name of names){
+    const data=await zip.file(name).async('string');
+    if(!data.includes('xmlns="'+ns+'"'))continue;
+    const withPrefixes=data.replace(/<(\/?)((?:[A-Za-z][\w.-]*))(?=[\s/>])/g,
+      '<$1x:$2').replace('xmlns="'+ns+'"','xmlns:x="'+ns+'"');
+    zip.file(name,withPrefixes);
+  }
+  return Buffer.from(await zip.generateAsync({type:'nodebuffer'}));
+}
+test('valid namespace-prefixed ERP XLSX imports all 11 worksheets despite ExcelJS prefix limitation',async()=>{
+  const input=await namespacePrefixedExcelBuffer();
+  const data=await parseErpExcel(input);
+  assert.equal(data.Ports[0].port_id,'JEA');
+  assert.equal(data.Inspectors.length,2);
+  assert.equal(data.Qualifications.length,2);
+  assert.equal(data.Shifts.length,10);
+  assert.equal(data.Bookings[0].booking_status,'CONFIRMED');
+  assert.equal(data.Ports[0].timezone,'Asia/Dubai');
+});
+test('namespace repair does not bypass authorization-grade sheet or reference validation',async()=>{
+  const rows=structuredClone(fixtures);
+  rows.Inspectors[0][5]='FAKE_PORT_ID';
+  // Rebuild similarly prefixed invalid content, then confirm the original
+  // reference/eligibility validation remains mandatory.
+  const zip=await JSZip.loadAsync(await excelBuffer(rows));
+  const ns='http://schemas.openxmlformats.org/spreadsheetml/2006/main';
+  for(const n of Object.keys(zip.files).filter(n=>/^xl\/(?:workbook\.xml|styles\.xml|sharedStrings\.xml|worksheets\/sheet\d+\.xml)$/.test(n))){
+    const data=await zip.file(n).async('string');
+    if(!data.includes('xmlns="'+ns+'"'))continue;
+    zip.file(n,data.replace(/<(\/?)((?:[A-Za-z][\w.-]*))(?=[\s/>])/g,
+      '<$1x:$2').replace('xmlns="'+ns+'"','xmlns:x="'+ns+'"'));
+  }
+  const invalidWorkbook=await zip.generateAsync({type:'nodebuffer'});
+  await assert.rejects(()=>parseErpExcel(invalidWorkbook),
+    e=>e.code==='ERP_UNKNOWN_HOME_PORT');
+});
 test('ERP workbook headers, snapshot preview and commit, only explicit commit persists',async()=>{
   const dir=mkdtempSync(join(tmpdir(),'si-erp-'));
   try{

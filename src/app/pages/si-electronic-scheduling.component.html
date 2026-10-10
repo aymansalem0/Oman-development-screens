@@ -27,27 +27,26 @@
   
       <div class="si-grid">
         <section class="si-panel">
-          <header class="si-section-head"><div><small>01 / ERP CONNECTOR</small><h2>ERP Workforce Excel Import</h2></div><span class="si-badge">POC SIMULATOR</span></header>
-          <p class="si-hint">ملف Excel يمثل بيانات مهندسي المعاينة، الموانئ، المؤهلات، الورديات، الإجازات والتكليفات الحالية. البيانات لا تُعدّل ERP الأصلي.</p>
-          <div class="si-file-row">
-            <label for="erp-file">Upload the ERP workbook (.xlsx)</label>
-            <input id="erp-file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-              (change)="uploadExcel($event)" [disabled]="busy"/>
-          </div>
-          <div *ngIf="pendingImport as p" class="si-preview">
-            <strong>✓ Validation passed — pending explicit commit</strong>
-            <span>Snapshot {{shortId(p.snapshotId)}}</span>
-            <div class="si-mini-chips"><span *ngFor="let kv of p.counts|keyvalue">{{kv.key}}: {{kv.value}}</span></div>
-            <button type="button" class="primary" [disabled]="busy" (click)="commitExcel()">Commit ERP Snapshot</button>
-          </div>
+          <header class="si-section-head"><div>
+            <small>01 / ERP SOURCE STATUS</small>
+            <h2>Workforce &amp; Inspector Availability</h2>
+          </div><span class="si-badge">{{erp?.ready?'IMPORTED':'SETUP REQUIRED'}}</span></header>
+          <p class="si-hint">This screen uses a validated ERP workforce snapshot for scheduling. Upload, preview, commit and source integration settings are managed separately under <strong>Settings → ERP Integration Simulator</strong>.</p>
           <div *ngIf="erp?.ready" class="si-imported">
-            <div><span>Imported</span><strong>{{erp?.importedAt|date:'medium'}}</strong></div>
-            <div><span>Snapshot</span><code>{{shortId(erp?.snapshotId)}}</code></div>
+            <div><span>Source</span><strong>POC ERP Excel Snapshot</strong></div>
+            <div><span>Last Import</span><strong>{{erp?.importedAt|date:'medium'}}</strong></div>
+            <div><span>Snapshot ID</span><code>{{shortId(erp?.snapshotId)}}</code></div>
             <div class="si-mini-chips"><span *ngFor="let kv of erp?.counts|keyvalue">{{kv.key}}: {{kv.value}}</span></div>
           </div>
-          <p class="si-note">No Oracle migration. POC workforce snapshots are stored separately from NMC historical assessments. No AI calls on upload.</p>
+          <div *ngIf="!erp?.ready" class="si-empty">
+            No ERP workforce snapshot is configured. Scheduling remains unavailable until an Integration Administrator validates and commits the ERP Excel in Settings.
+          </div>
+          <a routerLink="/moei/smart-inspection/settings/erp" class="erp-settings-link">
+            ⚙ Open ERP Integration Settings →
+          </a>
+          <p class="si-note">Read-only simulated external ERP feed. No direct writes to ERP, NMC Oracle risk/assessments or AI agents.</p>
         </section>
-  
+
         <section class="si-panel">
           <header class="si-section-head"><div><small>02 / NMC REFERRALS</small><h2>Inspection Scheduling Request</h2></div><span class="si-badge">{{referrals.length}} Pending</span></header>
           <label for="referral">Approved NMC Inspection Referral</label>

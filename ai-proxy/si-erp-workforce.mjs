@@ -7,6 +7,43 @@ import {readFileSync,writeFileSync,renameSync,mkdirSync,existsSync} from 'node:f
 import {dirname} from 'node:path';
 import {createHash} from 'node:crypto';
 import ExcelJS from 'exceljs';
+import JSZip from 'jszip';
+
+/**
+ * ExcelJS 4.x cannot read otherwise standards-compliant OOXML with the
+ * SpreadsheetML elements bound via <x:worksheet> / <x:workbook> prefixes.
+ * Some spreadsheet exporters (including our original POC template) emit
+ * exactly that legal namespace representation. Normalize XML names in-memory
+ * ONLY for that well-identified case; all business validation remains intact.
+ *
+ * Nothing is modified in the user's source file or stored before preview/commit.
+ */
+const SHEET_NS='http://schemas.openxmlformats.org/spreadsheetml/2006/main';
+async function normalizeNamespacedXlsx(buffer){
+  const zip=await JSZip.loadAsync(buffer,{checkCRC32:true});
+  const entries=Object.keys(zip.files);
+  if(entries.length>160)throw new SiError('ERP_INVALID_XLSX');
+  const parts=entries.filter(name=>/^xl\/(?:workbook\.xml|styles\.xml|sharedStrings\.xml|worksheets\/sheet\d+\.xml)$/.test(name));
+  if(!parts.includes('xl/workbook.xml')||parts.length<2)
+    throw new SiError('ERP_INVALID_XLSX');
+  let updated=0,total=0;
+  for(const name of parts){
+    const file=zip.file(name);
+    if(!file)continue;
+    const xml=await file.async('string');
+    total+=xml.length;
+    if(total>24*1024*1024)throw new SiError('ERP_INVALID_XLSX');
+    const startsWithPrefix=new RegExp('<x:(?:workbook|worksheet|styleSheet|sst)\\b').test(xml);
+    if(!startsWithPrefix||!xml.includes('xmlns:x="'+SHEET_NS+'"'))continue;
+    const fixed=xml.replace(/<(\/?)x:([A-Za-z][A-Za-z0-9_.-]*)/g,'<$1$2')
+      .replace('xmlns:x="'+SHEET_NS+'"','xmlns="'+SHEET_NS+'"');
+    zip.file(name,fixed);
+    updated++;
+  }
+  if(updated<2)throw new SiError('ERP_INVALID_XLSX');
+  return zip.generateAsync({type:'nodebuffer',compression:'DEFLATE',compressionOptions:{level:6}});
+}
+
 
 export class SiError extends Error{
   constructor(code,status=400){super(code);this.code=code;this.status=status;}
@@ -82,11 +119,22 @@ export async function parseErpExcel(buffer){
   if(!Buffer.isBuffer(buffer)||buffer.length<200||buffer.length>3*1024*1024)
     throw new SiError('ERP_FILE_SIZE_INVALID',413);
   if(buffer.toString('hex',0,4)!=='504b0304')throw new SiError('ERP_XLSX_REQUIRED');
-  let book;
-  try{
-    book=new ExcelJS.Workbook();
-    await book.xlsx.load(buffer);
-  }catch{throw new SiError('ERP_INVALID_XLSX');}
+  let book=new ExcelJS.Workbook();
+  let initialError=null;
+  try{await book.xlsx.load(buffer);}
+  catch(e){initialError=e;}
+  if(initialError||!book.getWorksheet('Ports')){
+    // ExcelJS may fail or silently return zero sheets for namespaced root XML.
+    try{
+      const normalized=await normalizeNamespacedXlsx(buffer);
+      book=new ExcelJS.Workbook();
+      await book.xlsx.load(normalized);
+    }catch{
+      console.error('[si-erp] XLSX_PARSE_UNSUPPORTED_OR_CORRUPT',
+        String(initialError?.message||'namespaced workbook unsupported').slice(0,180));
+      throw new SiError('ERP_INVALID_XLSX');
+    }
+  }
   const data={};
   for(const [name,headers] of Object.entries(TABLES)){
     const sheet=book.getWorksheet(name);

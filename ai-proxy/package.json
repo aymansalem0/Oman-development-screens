@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "oracledb": "^6.9.0",
-    "exceljs": "^4.4.0"
+    "exceljs": "^4.4.0",
+    "jszip": "^3.10.1"
   }
 }

@@ -31,3 +31,7 @@ button.primary{border:none;border-radius:9px;background:#007f9a;color:white;curs
 footer{text-align:center;font-size:11px;color:#8a9bad;margin-top:25px}
 @media(max-width:1050px){.si-header{align-items:flex-start;flex-direction:column}.si-grid{grid-template-columns:1fr}.si-policy-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:630px){.si-shell{padding:10px}.si-header{padding:18px}.si-brand h1{font-size:20px}.si-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.si-panel{padding:16px}.si-form-grid,.si-policy-grid{grid-template-columns:1fr}.si-decision,.si-policy-actions{align-items:stretch;flex-direction:column}.si-top-actions{width:100%}}
+
+/* Scheduling links to integration administration; no Excel upload on this screen. */
+.erp-settings-link{display:inline-flex;align-items:center;gap:8px;margin-top:18px;padding:11px 15px;background:#087e93;color:#fff;border-radius:9px;text-decoration:none;font-size:12px;font-weight:800}
+.erp-settings-link:hover{background:#07677a}
