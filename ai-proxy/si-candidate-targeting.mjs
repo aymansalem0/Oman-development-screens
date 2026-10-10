@@ -225,8 +225,12 @@ export class SiCandidateTargeting{
         // Keep pre-migration PSC approvals/cases visible as historical
         // workflows; newly imported PSC events require explicit selection.
         const legacyKey=hash(p.imo+'|'+p.requestedRegime);
-        const legacyHandled=state.cases.some(c=>c.candidateKey===legacyKey)||
-          state.decisions.some(d=>d.candidateKey===legacyKey);
+        // A historical (pre-quota) case must not automatically unlock
+        // newly arriving Port Calls for the same vessel and regime.
+        const legacyHandled=state.cases.some(c=>c.candidateKey===legacyKey&&
+          e.createdAt<=(c.createdAt||''))||
+          state.decisions.some(d=>d.candidateKey===legacyKey&&
+          e.createdAt<=(d.at||''));
         if(!selectedPscKeys.has(e.eventKey)&&!legacyHandled)continue;
       }
       const groupKey=hash(p.imo+'|'+p.requestedRegime);
