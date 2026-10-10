@@ -4,6 +4,7 @@ import {FormsModule} from '@angular/forms';
 import {HttpClient,HttpHeaders} from '@angular/common/http';
 import {RouterLink} from '@angular/router';
 import {NmcNavigationComponent} from '../components/nmc-navigation.component';
+import {NmcMinistryLogoComponent} from '../components/nmc-ministry-logo.component';
 import {LanguageService} from '../services/language.service';
 
 interface SettingDescriptor {
@@ -22,14 +23,14 @@ interface RuntimeSnapshot {
 @Component({
   selector:'app-nmc-runtime-settings',
   standalone:true,
-  imports:[CommonModule,FormsModule,RouterLink,NmcNavigationComponent],
+  imports:[CommonModule,FormsModule,RouterLink,NmcNavigationComponent,NmcMinistryLogoComponent],
   template:`
   <div class="runtime-shell" [attr.dir]="lang.dir">
     <!-- Match the established MOEI/NMC 82px white maritime platform top bar.
          Unified sidebar starts directly BELOW this header at the same 82px offset. -->
     <header class="runtime-topbar">
       <div class="brand-block">
-        <div class="brand-mark" aria-hidden="true">⚓</div>
+        <app-nmc-ministry-logo class="runtime-ministry-logo"></app-nmc-ministry-logo>
         <div class="brand-copy">
           <span class="eyebrow">{{tr('MOEI Maritime Unified Platform','المنصة البحرية الموحدة لوزارة الطاقة والبنية التحتية')}}</span>
           <h1>{{tr('Runtime Configuration & AI Agents','إعدادات التشغيل ووكلاء الذكاء الاصطناعي')}}</h1>
@@ -140,9 +141,8 @@ interface RuntimeSnapshot {
       background:rgba(255,255,255,.97);border-bottom:1px solid #e6edf3;
       box-shadow:0 4px 18px rgba(23,50,77,.05);backdrop-filter:blur(14px)}
     .brand-block{display:flex;align-items:center;gap:13px;min-width:0}
-    .brand-mark{width:44px;height:44px;flex:0 0 44px;border-radius:14px;
-      display:grid;place-items:center;background:linear-gradient(145deg,#0f766e,#0ea5a0);
-      color:#fff;font-size:19px;box-shadow:0 8px 22px rgba(15,118,110,.16)}
+    .runtime-ministry-logo{flex-shrink:0}
+    .brand-block{max-width:min(100%,760px)}
     .brand-copy{min-width:0}
     .eyebrow{display:block;color:#0f766e;font-size:9px;font-weight:800;
       letter-spacing:1.2px;text-transform:uppercase;line-height:1.3}
@@ -211,7 +211,7 @@ interface RuntimeSnapshot {
     }
     @media(max-width:650px){
       .runtime-topbar{padding:0 12px;gap:8px}
-      .brand-mark{width:36px;height:36px;flex-basis:36px;border-radius:11px;font-size:16px}
+      .brand-copy{max-width:220px}
       .brand-block{gap:8px}
       .brand-copy h1{font-size:13px}
       .brand-copy p{display:none}
