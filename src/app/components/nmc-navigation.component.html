@@ -118,9 +118,9 @@
         <a class="nav-link" [routerLink]="inspectionWorkbenchRoute"
            [class.active]="isInspectionWorkbench"
            [attr.aria-current]="isInspectionWorkbench?'page':null"
-           [title]="selectedImo ? copy('Vessel Inspection Workbench (POC)','واجهة معاينة السفينة التجريبية') : vesselHint">
+           [title]="selectedImo ? copy('NMC Legacy Vessel Inspection Workbench (POC)','واجهة معاينة السفينة القديمة الخاصة بالمركز البحري (تجريبية)') : vesselHint">
           <span class="nav-icon">⌖</span>
-          <span class="nav-label">{{copy('Vessel Inspection Workbench','واجهة معاينة السفينة')}}</span>
+          <span class="nav-label">{{copy('NMC Legacy Inspection (POC)','معاينة NMC القديمة (تجريبية)')}}</span>
         </a>
         <div class="nav-dashboard-group" *ngIf="dashboardItems('SMART_INSPECTION').length">
           <button class="nav-subgroup" type="button"
