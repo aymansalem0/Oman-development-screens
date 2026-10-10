@@ -1,0 +1,78 @@
+<div class="erp-layout">
+  <app-nmc-navigation></app-nmc-navigation>
+  <main class="erp-main">
+    <header class="erp-hero">
+      <div>
+        <small>MOEI · SETTINGS · SMART INSPECTION</small>
+        <h1>ERP Integration Simulator</h1>
+        <p>إعدادات محاكاة الربط مع نظام الموارد البشرية ERP · Workforce &amp; inspection scheduling master data</p>
+      </div>
+      <div class="hero-actions">
+        <a routerLink="/moei/smart-inspection/scheduling">← Electronic Scheduling</a>
+        <a routerLink="/moei/smart-inspection/candidates">Candidate Center</a>
+        <button type="button" (click)="refresh()" [disabled]="busy||loading">↻ Refresh</button>
+      </div>
+    </header>
+    <div class="notice error" role="alert" *ngIf="error">{{error}}</div>
+    <div class="notice success" role="status" *ngIf="success">{{success}}</div>
+    <div class="notice info" *ngIf="loading">Loading current workforce snapshot…</div>
+
+    <section class="metrics">
+      <article><small>ERP SOURCE</small><strong>{{erp?.ready?'SNAPSHOT ACTIVE':'NOT CONFIGURED'}}</strong><span>POC Excel simulator · no live ERP connection</span></article>
+      <article><small>INSPECTORS</small><strong>{{erp?.counts?.['Inspectors']??0}}</strong><span>Validated workforce records</span></article>
+      <article><small>PORTS</small><strong>{{erp?.counts?.['Ports']??0}}</strong><span>Valid master records</span></article>
+      <article><small>IMPORT DATE</small><strong class="date">{{erp?.importedAt?(erp?.importedAt|date:'short'):'—'}}</strong><span>Snapshot {{short(erp?.snapshotId)}}</span></article>
+    </section>
+
+    <div class="columns">
+      <section class="erp-panel">
+        <header><small>01 / SIMULATION SOURCE</small><h2>ERP Connection Settings</h2>
+          <p>This module simulates a read-only ERP workforce integration. Excel represents the external ERP feed; it does not create a real ERP connection.</p>
+        </header>
+        <div class="configuration">
+          <div><span>Connector Mode</span><strong>EXCEL_POC_SIMULATOR</strong></div>
+          <div><span>Source System</span><strong>ERP — Workforce / Inspector Management</strong></div>
+          <div><span>Delivery Method</span><strong>Validated XLSX → Preview → Explicit Commit</strong></div>
+          <div><span>Timezone</span><strong>Asia/Dubai (UTC+04:00)</strong></div>
+          <div><span>Destination</span><strong>Persisted POC snapshot · no ERP write-back</strong></div>
+        </div>
+        <div class="notice info">
+          No Oracle migration required. The ERP snapshot is stored separately from NMC case, assessment and risk-policy history. Uploading Excel never triggers AI.
+        </div>
+        <label>Editor / integration administrator key
+          <input type="password" [(ngModel)]="editorKey" autocomplete="off" placeholder="Required for Preview and Commit"/>
+        </label>
+        <div *ngIf="erp?.ready" class="counts">
+          <h3>Currently active ERP snapshot</h3>
+          <div *ngFor="let c of countPairs"><span>{{c.name}}</span><strong>{{c.value}}</strong></div>
+        </div>
+      </section>
+
+      <section class="erp-panel">
+        <header><small>02 / WORKFORCE DATA IMPORT</small><h2>ERP Excel Workbook</h2>
+          <p>Upload the POC ERP workbook. All 11 required sheet names and the exact headers in <b>row 4</b> are checked, followed by references, dates, roles and booking consistency.</p>
+        </header>
+        <div class="upload-box">
+          <label for="erp-file">Select ERP workbook (.xlsx, maximum 3 MB)</label>
+          <input id="erp-file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            [disabled]="busy" (change)="uploadExcel($event)"/>
+          <small *ngIf="fileName">Selected: {{fileName}} ({{fileSize/1024|number:'1.0-1'}} KB)</small>
+          <small>Excel data is not saved until <strong>Commit ERP Snapshot</strong> is clicked.</small>
+        </div>
+        <div *ngIf="pendingImport as preview" class="preview">
+          <h3>✓ Import Preview Passed — Not Committed</h3>
+          <p>Pending snapshot: {{short(preview.snapshotId)}} · Expires {{preview.expiresAt|date:'shortTime'}}</p>
+          <div class="preview-grid"><span *ngFor="let pair of preview.counts|keyvalue">{{pair.key}}: <strong>{{pair.value}}</strong></span></div>
+          <p class="hint">POC simulation only. Existing imported workforce data will be replaced only after confirmation.</p>
+          <button class="primary" type="button" (click)="commitExcel()" [disabled]="busy">Commit ERP Snapshot</button>
+        </div>
+        <div class="required-sheets">
+          <h3>Workbook Structure — 11 required worksheets</h3>
+          <div><code *ngFor="let name of requiredSheets">{{name}}</code></div>
+          <p>Headers in row 4, records starting row 5. Do not rename tabs or headers. Import supports conventional Excel files and valid namespace-prefixed SpreadsheetML workbooks.</p>
+        </div>
+      </section>
+    </div>
+    <footer>MOEI Smart Inspection POC · ERP simulation only · Source data remains auditable and separate from national maritime assessments.</footer>
+  </main>
+</div>
