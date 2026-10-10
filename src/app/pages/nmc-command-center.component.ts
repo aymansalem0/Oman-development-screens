@@ -46,6 +46,7 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
 
   searchTerm = '';
   riskFilter = 'All';
+  assessmentFilter: 'All' | 'Assessed' | 'Pending' = 'All';
   typeFilter = 'All';
   feedLive = true;
   selectedVessel?: NmcVesselProfile;
@@ -421,10 +422,17 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
       const matchesSearch = !query || [vessel.name, vessel.imo, vessel.destination, vessel.flag]
         .some(value => value.toLowerCase().includes(query));
       const matchesRisk = this.riskFilter === 'All' || this.riskLevel(vessel.risk, vessel.imo) === this.riskFilter;
+      // An AI-assessed vessel requires a COMPLETED, validated saved A01/A02
+      // assessment. Synthetic baseline risk and failed jobs never qualify.
+      const assessed = this.hasSavedScore(this.fleetResult(vessel));
+      const matchesAssessment = this.assessmentFilter === 'All' ||
+        (this.assessmentFilter === 'Assessed' ? assessed : !assessed);
       const matchesType = this.typeFilter === 'All' || vessel.type === this.typeFilter;
-      return matchesSearch && matchesRisk && matchesType;
+      return matchesSearch && matchesRisk && matchesAssessment && matchesType;
     });
   }
+
+  get visibleMapCount(): number { return this.filteredVessels.length; }
 
   get allAttentionVessels(): NmcVesselProfile[] {
     return [...this.vessels]
@@ -536,7 +544,7 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
 
   resetMapView(): void {
     // Map reset is presentation-only: do not clear saved risk, case state or chosen vessel.
-    this.searchTerm='';this.riskFilter='All';this.typeFilter='All';
+    this.searchTerm='';this.riskFilter='All';this.assessmentFilter='All';this.typeFilter='All';
     this.resetMapBounds();
     this.refreshMapMarkers();
     this.drawSelectedTrack();
