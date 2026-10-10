@@ -23,6 +23,7 @@ export interface SiPriorityWeights{
 }
 export interface SiPriorityPolicy{
   weights:SiPriorityWeights;approvedNmcFirst:true;missingRiskAction:'REVIEW_REQUIRED';
+  sourceTriggerScores?:{NMC_CASE:number;SERVICE_REQUEST:number;PSC_PORT_CALL:number};
 }
 export interface SiTargetingPolicyConfig{
   riskPriorityThreshold:number;includeMissingRiskInReview:boolean;
