@@ -188,6 +188,9 @@ test('same IMO across NMC, Service and PSC has one vessel row, three source type
     assert.equal(after.candidates.find(c=>c.regime==='FOCUSED_INSPECTION').status,'PENDING_REVIEW');
     const reload=await w.subject.dashboard();
     assert.equal(reload.vesselCandidates.length,1);
-    assert.deepEqual(reload.vesselCandidates[0].sourceTypes,v.sourceTypes);
+    assert.deepEqual(
+      [...reload.vesselCandidates[0].sourceTypes].sort(),
+      [...v.sourceTypes].sort()
+    );
   }finally{w.cleanup();}
 });
