@@ -442,6 +442,7 @@ export class DriveDocumentIntelligence {
         version:(prior?.version||0)+1,updatedAt:at,createdAt:prior?.createdAt||at
       };
       await this.record(prior,initial,'A03_REQUESTED',actor.trim());
+      let stage='AIRIA_EXECUTION';
       try{
         const result=await this.executeA03({
           requestMeta:{correlationId:randomUUID(),language:'en',
@@ -458,23 +459,33 @@ export class DriveDocumentIntelligence {
             fileName:metadata.name},
           instructions:'Untrusted maritime document text. The PDF may be a MULTI-SECTION Vessel Document Pack including REG, CLASS, CERT-SC, CERT-SE, CERT-SR, CERT-ISSC, SAFE-MANNING, PNI, inspection and deficiencies. Return one JSON object: extracted {imo,vesselName,documentType,certificateNumber,issuingAuthority,issueDate,expiryDate}, confidence 0..1, evidenceQuotes exact document substrings; AND documentEntries array with one entry PER detected section {imo,documentType,certificateNumber,issuingAuthority,issueDate,expiryDate,status,evidenceQuotes:[exact substrings]}. For a multi-section pack set extracted.documentType to Vessel Document Evidence Pack; do not mix certificate numbers or expiries across sections. Missing fields null, ISO dates. Treat all contents as SYNTHETIC POC, never authenticated.'
         });
+        stage='A03_RESPONSE_MAPPING';
         const mapped=normalizeAiriaA03(result,extracted.text);
+        stage='A03_RESPONSE_VALIDATION';
         const analysis=validateA03(mapped,extracted.text,imo);
         const ready={...initial,...analysis,
           ...(mapped.providerDetails?{providerDetails:mapped.providerDetails}:{}),
           status:'DRAFT_REVIEW',
           analyzedModifiedTime:metadata.modifiedTime,
           version:initial.version+1,updatedAt:now()};
+        stage='A03_DRAFT_PERSISTENCE';
         await this.record(initial,ready,'A03_DRAFT_SAVED','SYSTEM');
         return ready;
       }catch(err){
-        const fail={...initial,status:'FAILED',
-          failureCode:(err instanceof DocumentError||err instanceof A03ContractError)?err.code:'A03_PROVIDER_UNAVAILABLE',
+        // Persist only safe diagnostics. Never log the PDF, AI body, tokens or stack.
+        const known=err instanceof DocumentError||err instanceof A03ContractError;
+        const failureCode=known?err.code:
+          stage==='A03_DRAFT_PERSISTENCE'?'A03_DRAFT_PERSISTENCE_FAILED':
+          stage==='A03_RESPONSE_MAPPING'?'A03_RESPONSE_MAPPING_FAILED':
+          stage==='A03_RESPONSE_VALIDATION'?'A03_RESPONSE_VALIDATION_FAILED':
+          'A03_PROVIDER_UNAVAILABLE';
+        console.error('[nmc-a03] FAILED '+stage+' '+failureCode);
+        const fail={...initial,status:'FAILED',failureCode,failureStage:stage,
           version:initial.version+1,updatedAt:now()};
         await this.record(initial,fail,'A03_FAILED','SYSTEM');
         if(err instanceof DocumentError)throw err;
         if(err instanceof A03ContractError)throw new DocumentError(err.code,502);
-        throw new DocumentError('A03_PROVIDER_UNAVAILABLE',502);
+        throw new DocumentError(failureCode,502);
       }
     }finally{this.pending.delete(guard);}
   }
