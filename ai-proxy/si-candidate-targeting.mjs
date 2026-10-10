@@ -143,6 +143,14 @@ export class SiCandidateTargeting{
   async policy(){
     const state=await this._state();return copy(state.rules.at(-1));
   }
+  /**
+   * Full approved-case registry: historical and closed cases must remain visible
+   * even when a source referral drops out of the live targeting queue.
+   */
+  async inspectionCaseRegistry(){
+    const state=await this._state();
+    return {cases:copy(state.cases),events:copy(state.events)};
+  }
   /** Only business-approved SI cases may enter the AI dossier workflow. */
   async inspectionCase(id){
     if(typeof id!=='string'||!/^[a-f0-9-]{36}$/i.test(id))
@@ -409,7 +417,13 @@ export class SiCandidateTargeting{
     const data=await this.dashboard(),candidate=data.candidates.find(x=>
       x.key===input.candidateKey&&x.imo===input.imo);
     if(!candidate)throw new SiTargetingError('SI_CANDIDATE_NOT_FOUND',404);
-    if(candidate.status==='INSPECTION_CREATED'||candidate.status==='EXTERNALLY_SCHEDULED')
+    // An already scheduled, human-approved NMC referral may be linked into a
+    // *new SI workflow record* without making a second NMC booking.
+    const linkScheduledNmc=candidate.status==='EXTERNALLY_SCHEDULED'&&
+      input.action==='APPROVE'&&candidate.events.some(e=>
+        e.sourceType==='NMC_CASE'&&e.approval==='APPROVED');
+    if(candidate.status==='INSPECTION_CREATED'||
+      (candidate.status==='EXTERNALLY_SCHEDULED'&&!linkScheduledNmc))
       throw new SiTargetingError('SI_CANDIDATE_ALREADY_HANDLED',409);
     const decision={id:randomUUID(),candidateKey:candidate.key,imo:candidate.imo,
       action:input.action,actor:input.actor.trim(),note:input.note.trim(),
