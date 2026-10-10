@@ -156,6 +156,13 @@
           <p>{{copy('For NMC-origin cases a centrally CONFIRMED NMC referral is required. Other origins use clearly marked POC manual assignments until ERP integration is completed.',
             'تتطلب معاينات NMC إحالة مجدولة ومعتمدة مركزيًا. وتستخدم المصادر الأخرى تكليفًا تجريبيًا يدويًا واضحًا لحين اكتمال ربط ERP.')}}</p>
         </div></div>
+        <div class="inline-banner" *ngIf="view?.nmcBooking as booking">
+          {{copy('NMC saved booking','حجز NMC المحفوظ')}}:
+          <strong>{{booking.status}}</strong>
+          · {{booking.inspector||'—'}} · {{booking.port||'—'}}
+          · {{booking.scheduledAt?(booking.scheduledAt|date:'medium'):'—'}}
+          {{copy('· The assignment must match the saved NMC booking.','· يجب أن يطابق التكليف حجز NMC المحفوظ.')}}
+        </div>
         <a routerLink="/moei/smart-inspection/scheduling" class="action-link">
           {{copy('Open Existing ERP Scheduling →','فتح نظام الجدولة الحالي ←')}}</a>
         <div *ngIf="stage==='SCOPE_APPROVED'" class="form-grid">
