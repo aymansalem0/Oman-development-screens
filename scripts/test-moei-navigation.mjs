@@ -14,7 +14,6 @@ const chrome=read('src/app/components/nmc-platform-chrome.component.ts');
 const chromeCss=read('src/app/components/nmc-platform-chrome.component.css');
 const navCss=read('src/app/components/nmc-navigation.component.css');
 const globalCss=read('src/styles.css');
-const regexEscape=s=>s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
 
 test('shared header/footer show exact platform name and Arabic equivalence',()=>{
   assert.match(chrome,/MOEI Maritime Unified Platform/);
