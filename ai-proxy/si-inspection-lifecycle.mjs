@@ -45,6 +45,11 @@ export class SiInspectionLifecycle{
         ('SI_INSPECTION_LIFECYCLE','SI_INSPECTION_LIFECYCLE_AUDIT')`,[],
         {outFormat:oracledb.OUT_FORMAT_OBJECT});
       if(q.rows.length!==2)fails('SI_MIGRATION_013_REQUIRED',503);
+      const columns=await con.execute(`SELECT COLUMN_NAME FROM USER_TAB_COLUMNS
+        WHERE TABLE_NAME='SI_INSPECTION_LIFECYCLE_AUDIT'
+          AND COLUMN_NAME='STATE_JSON'`,[],
+        {outFormat:oracledb.OUT_FORMAT_OBJECT});
+      if(columns.rows.length!==1)fails('SI_MIGRATION_013_REQUIRED',503);
     });
     this.ready=true;
   }
@@ -136,7 +141,16 @@ export class SiInspectionLifecycle{
     const inspectionCase=await this.reference(id);
     const [record,preparation]=await Promise.all([
       this.saved(id),this.preparation.get(id)]);
-    return {status:'ok',inspectionCase,preparation:{
+    let nmcBooking=null;
+    if(inspectionCase.nmcReferralId){
+      const refs=await this.cases.listInspectionRequests();
+      const matched=refs.find(x=>x.id===inspectionCase.nmcReferralId&&
+        x.imo===inspectionCase.imo);
+      if(matched)nmcBooking={id:matched.id,status:matched.status,
+        inspector:matched.inspector||null,port:matched.port||null,
+        scheduledAt:matched.scheduledAt||null};
+    }
+    return {status:'ok',inspectionCase,nmcBooking,preparation:{
       status:preparation.saved?.status||'NOT_PREPARED',
       version:preparation.saved?.version||0,stale:preparation.stale,
       baseChecklistIds:preparation.context.baseChecklistItemIds,
