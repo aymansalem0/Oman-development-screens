@@ -15,6 +15,7 @@ import { SiSourceExcelImport } from './si-source-excel-import.mjs';
 import { SiPscSelection, SiSelectionError } from './si-psc-selection.mjs';
 import { SiAiPrioritization, SiPriorityError } from './si-ai-prioritization.mjs';
 import { SiInspectionPreparation, SiPreparationError } from './si-inspection-preparation.mjs';
+import { SiInspectionLifecycle, SiLifecycleError } from './si-inspection-lifecycle.mjs';
 
 const port = Number(process.env.PORT || 3000);
 const apiKey = (process.env.AIRIA_MENA_KEY || '').trim();
@@ -86,6 +87,8 @@ const siPreparation=new SiInspectionPreparation({mode:dbMode,oracleRepository:re
   bundles:siTargeting.bundles,
   executeA04:async input=>fleetAgentCall('a04',input),
   enabled:process.env.SI_A04_ENABLED==='true'&&Boolean(apiKey)});
+const siLifecycle=new SiInspectionLifecycle({mode:dbMode,oracleRepository:repository,
+  targeting:siTargeting,preparation:siPreparation,cases});
 const actionPlanRuns=new Set(); // process-local duplicate A01 invocation guard; version-lock remains authoritative
 const alertScanEnabled=process.env.NMC_ALERT_SCAN_ENABLED!=='false';
 const alertScanIntervalMs=Math.max(15000,Number(process.env.NMC_ALERT_SCAN_SECONDS||30)*1000);
@@ -410,6 +413,28 @@ const server = createServer(async (req, res) => {
   // NMC human-approved referrals dynamically. Only publisher may approve a new case.
   if(path==='/api/si/v1'||path.startsWith('/api/si/v1/')){
     try{
+      // Unified inspection cycle: read-only timeline, explicit human-gated state changes.
+      // GET never initiates an AI call or writes a case.
+      if(path==='/api/si/v1/lifecycle'&&req.method==='GET'){
+        dashboards.assertRole(req,'EDITOR');
+        return respond(res,200,await siLifecycle.list());
+      }
+      const lifecyclePath=/^\\/api\\/si\\/v1\\/lifecycle\\/([0-9a-f-]{36})(?:\\/(actions))?$/.exec(path);
+      if(lifecyclePath){
+        const id=lifecyclePath[1],suffix=lifecyclePath[2];
+        if(req.method==='GET'&&!suffix){
+          dashboards.assertRole(req,'EDITOR');
+          return respond(res,200,await siLifecycle.snapshot(id));
+        }
+        if(req.method==='POST'&&suffix==='actions'){
+          const body=await requestJson(req,32768);
+          const controlled=new Set(['APPROVE_SCOPE','APPROVE_REPORT','RETURN_REPORT',
+            'ISSUE_ACTIONS','VERIFY_ACTION','RECORD_FOLLOW_UP','CLOSE']);
+          dashboards.assertRole(req,controlled.has(body.action)?'PUBLISHER':'EDITOR');
+          return respond(res,200,await siLifecycle.apply(id,body));
+        }
+        return respond(res,405,{error:'METHOD_NOT_ALLOWED'});
+      }
       const prepPath=/^\/api\/si\/v1\/preparations\/([a-f0-9-]{36})(?:\/(prepare|generate|review))?$/.exec(path);
       if(prepPath){
         const caseId=prepPath[1],step=prepPath[2]||null;
@@ -521,7 +546,7 @@ const server = createServer(async (req, res) => {
       }
       return respond(res,405,{error:'METHOD_NOT_ALLOWED'});
     }catch(e){
-      if(e instanceof SiSelectionError||e instanceof SiPriorityError||e instanceof SiPreparationError||e instanceof SiTargetingError||e instanceof DashboardError)
+      if(e instanceof SiLifecycleError||e instanceof SiSelectionError||e instanceof SiPriorityError||e instanceof SiPreparationError||e instanceof SiTargetingError||e instanceof DashboardError)
         return respond(res,e.status,{error:e.code});
       if(Number.isInteger(e?.status)&&e.status>=400&&e.status<500)
         return respond(res,e.status,{error:'SI_REQUEST_INVALID'});
@@ -959,6 +984,8 @@ try{
   catch(error){console.error('[si-prioritization] SI_MIGRATION_011_REQUIRED - SI-P01 advisory disabled');}
   try{await siPreparation.initialize();}
   catch(error){console.error('[si-preparation] SI_MIGRATION_010_REQUIRED - A04 dossier disabled');}
+  try{await siLifecycle.initialize();}
+  catch(error){console.error('[si-lifecycle] SI_MIGRATION_013_REQUIRED - end-to-end cycle disabled');}
   try{await guidance.initialize();}
   catch(error){
     // Guidance requires migration 006, but an optional UI module must never
