@@ -15,6 +15,7 @@ export interface A03Result {
     issueDate:string|null;expiryDate:string|null;
   }|null;
   evidenceQuotes?:string[];
+  documentEntries?:Array<{documentType:string;imo:string|null;certificateNumber:string|null;issuingAuthority:string|null;issueDate:string|null;expiryDate:string|null;status:string|null;evidenceQuotes:string[]}>;
   conflicts?:{field:string;documentValue:string;expectedValue:string|null;reason:string}[];
   reviewedBy?:string|null;reviewedAt?:string|null;reviewReason?:string|null;
   failureCode?:string|null;authenticityVerified?:boolean;
