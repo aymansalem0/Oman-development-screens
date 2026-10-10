@@ -77,7 +77,7 @@ export class RuntimeSettings{
   constructor({env=process.env,file=process.env.NMC_RUNTIME_SETTINGS_STORE_PATH||
     '/data/nmc-runtime-settings.json',onChange=()=>{}}={}){
     this.file=file;this.env=envConfig(env);this.onChange=onChange;
-    this.version=0;this.overrides={};this.updatedAt=null;this.updatedBy=null;
+    this.version=0;this.overrides={};this.updatedAt=null;this.updatedBy=null;this.history=[];
   }
   load(){
     if(!existsSync(this.file))return this.publicView();
@@ -92,6 +92,7 @@ export class RuntimeSettings{
     catch{throw new RuntimeSettingsError('RUNTIME_SETTINGS_STORE_INVALID',503);}
     this.overrides=parsed.overrides;this.version=parsed.version;
     this.updatedAt=parsed.updatedAt||null;this.updatedBy=parsed.updatedBy||null;
+    this.history=Array.isArray(parsed.history)?parsed.history.slice(-100):[];
     return this.publicView();
   }
   get(key){if(!Object.hasOwn(allowed,key))throw new RuntimeSettingsError('RUNTIME_SETTING_UNKNOWN');return this.overrides[key]??this.env[key];}
@@ -102,6 +103,7 @@ export class RuntimeSettings{
       sources:Object.fromEntries(SETTINGS_DESCRIPTORS.map(d=>[d.key,
         Object.hasOwn(this.overrides,d.key)?'RUNTIME_OVERRIDE':'ENV_DEFAULT'])),
       updatedAt:this.updatedAt,updatedBy:this.updatedBy,
+      history:this.history.map(x=>({...x})).reverse(),
       secretsExposed:false,
       note:'Runtime overrides are persisted outside .env; edits do NOT change OS environment or Docker Compose variables.'};
   }
@@ -125,11 +127,16 @@ export class RuntimeSettings{
       throw new RuntimeSettingsError('RUNTIME_A03_AUTO_REQUIRES_A03');
     if(next.NMC_FLEET_AUTO_ENABLED&&(!next.NMC_A01_ENABLED||!next.NMC_A02_ENABLED))
       throw new RuntimeSettingsError('RUNTIME_FLEET_REQUIRES_A01_A02');
-    const prev={...this.overrides};
+    const changedKeys=SETTINGS_DESCRIPTORS
+      .filter(d=>this.get(d.key)!==next[d.key]).map(d=>d.key);
+    const stamp=new Date().toISOString();
+    const previousHistory=[...this.history,{
+      version:this.version+1,changedKeys,
+      at:stamp,actor:actor.trim(),reason:reason.trim()}].slice(-100);
     const updated={schema:1,version:this.version+1,
       overrides:Object.fromEntries(Object.entries(next)
         .filter(([k,v])=>v!==this.env[k])),
-      updatedAt:new Date().toISOString(),updatedBy:actor.trim(),reason:reason.trim()};
+      updatedAt:stamp,updatedBy:actor.trim(),reason:reason.trim(),history:previousHistory};
     try{
       mkdirSync(dirname(this.file),{recursive:true});
       const tmp=this.file+'.tmp-'+process.pid;
@@ -138,6 +145,7 @@ export class RuntimeSettings{
     }catch{throw new RuntimeSettingsError('RUNTIME_SETTINGS_SAVE_FAILED',503);}
     this.version=updated.version;this.overrides=updated.overrides;
     this.updatedAt=updated.updatedAt;this.updatedBy=updated.updatedBy;
+    this.history=updated.history;
     try{this.onChange(this.publicView());}
     catch{ /* saved desired state persists; next startup will replay safely */ }
     return this.publicView();
