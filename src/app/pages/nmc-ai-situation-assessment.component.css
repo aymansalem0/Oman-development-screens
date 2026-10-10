@@ -117,7 +117,7 @@ a, button, textarea { font: inherit; }
 
 .ai-main {
   max-width: none;
-  margin: 0 0 0 216px;
+  margin: 0 0 0 240px;
   padding: 106px 24px 34px;
 }
 
@@ -989,7 +989,7 @@ a, button, textarea { font: inherit; }
 }
 .ai-shell.rtl .ai-main {
   margin-left: 0;
-  margin-right: 216px;
+  margin-right: 240px;
 }
 .ai-shell.rtl .nav-item {
   text-align: right;
