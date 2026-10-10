@@ -39,6 +39,7 @@
   </aside>
 
   <div class="workspace">
+    <app-nmc-platform-header *ngIf="isSmartInspectionArea" area="smart-inspection"></app-nmc-platform-header>
     <header class="topbar" *ngIf="!isNmcArea">
       <div class="ministry-brand">
         <div class="oman-mark">⚓</div>
@@ -70,5 +71,6 @@
     <main class="page-content">
       <router-outlet></router-outlet>
     </main>
+    <app-nmc-platform-footer *ngIf="isSmartInspectionArea"></app-nmc-platform-footer>
   </div>
 </div>
