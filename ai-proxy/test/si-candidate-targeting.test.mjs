@@ -6,7 +6,7 @@ import {tmpdir} from 'node:os';
 import {SiCandidateTargeting,SiTargetingError} from '../si-candidate-targeting.mjs';
 
 const fleet=Array.from({length:420},(_,i)=>({
-  imo:String(9100000+i),vesselName:'Vessel '+i,flag:'UAE',vesselType:'CARGO'
+  imo:String(9100000+i),inlineContext:{vessel:{name:'Vessel '+i,flag:'UAE',vesselType:'CARGO'}}
 }));
 function workspace({referrals=[],projection=[]}={}){
   const dir=mkdtempSync(join(tmpdir(),'si-targeting-'));
@@ -50,6 +50,8 @@ test('source events are idempotent, combined within regime and permanently manua
     assert.equal(result.summary.candidates,1);
     assert.equal(c.events.length,2);
     assert.equal(c.eligibility,'MANUAL_REVIEW');
+    assert.equal(c.vesselName,'Vessel 0');
+    assert.equal(c.flag,'UAE');
     assert.equal(c.currentRisk,null);
     assert.equal(c.status,'PENDING_REVIEW');
     assert.equal(c.events[0].provenance,'POC_SIMULATOR');
