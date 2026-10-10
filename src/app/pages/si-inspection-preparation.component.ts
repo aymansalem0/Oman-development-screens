@@ -109,6 +109,25 @@ export class SiInspectionPreparationComponent implements OnInit{
         error:e=>this.fail(e)
       });
   }
+  statusLabel(value:string|null|undefined):string{
+    const key=value||'NOT PREPARED';
+    const labels:Record<string,string>={
+      'NOT PREPARED':'لم يبدأ التحضير',
+      'PREPARED':'جاهز',
+      'GENERATING':'جارٍ إنشاء الملف',
+      'DRAFT_REVIEW':'مسودة للمراجعة',
+      'APPROVED':'معتمد',
+      'REJECTED':'مرفوض',
+      'FAILED':'فشل',
+      'ENABLED':'مفعّل',
+      'DISABLED':'غير مفعّل',
+      'High':'مرتفع',
+      'Critical':'حرج',
+      'Watch':'مراقبة',
+      'Normal':'عادي'
+    };
+    return this.lang.isArabic?labels[key]||key:key;
+  }
   itemLabel(id:string):string{
     if(!this.lang.isArabic)return this.names[id]||id;
     const ar:Record<string,string>={
