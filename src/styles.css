@@ -1969,3 +1969,28 @@ button {
 .app-shell.nmc-mode .workspace,
 .app-shell.rtl.nmc-mode .workspace { width: 100%; margin: 0; }
 .app-shell.nmc-mode .page-content { padding: 0; }
+
+/* Single white NMC + Smart Inspection menu across all MOEI Smart Inspection routes.
+   The blue legacy Oman shell is disabled by AppComponent route detection.
+   Only Smart Inspection gets the menu at the viewport top; NMC keeps its own
+   82px MOEI operational header without layout regression. */
+.app-shell.smart-inspection-mode app-nmc-navigation .nmc-unified-sidebar {
+  top: 0;
+}
+.app-shell.smart-inspection-mode app-nmc-navigation .mobile-nav-toggle {
+  top: 12px;
+}
+.app-shell.smart-inspection-mode .si-layout {
+  padding-inline-start: 216px;
+}
+.app-shell.smart-inspection-mode .si-layout > .si-shell,
+.app-shell.smart-inspection-mode .si-layout > .candidate-shell {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+@media (min-width: 961px) and (max-width: 1220px) {
+  .app-shell.smart-inspection-mode .si-layout { padding-inline-start: 66px; }
+}
+@media (max-width: 960px) {
+  .app-shell.smart-inspection-mode .si-layout { padding-inline-start: 0; }
+}
