@@ -131,3 +131,14 @@ button,input,select{font:inherit}
 .kpi-cards small{font-size:9px;color:#77909f;line-height:1.3}
 @media(max-width:1280px){.projection-grid{grid-template-columns:repeat(4,minmax(0,1fr))}}
 @media(max-width:720px){.projection-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.projected-candidate-row,.projection-heading{flex-direction:column;align-items:flex-start}}
+
+
+/* Persisted supersession: subdued, not hidden until the editor removes it. */
+.alert-card.local-superseded{position:relative;background:#f3f5f7;border-color:#d8e0e5;box-shadow:none;opacity:.68;filter:grayscale(.42)}
+.alert-card.local-superseded:hover,.alert-card.local-superseded:focus-within{opacity:.94;filter:grayscale(.1)}
+.alert-card.local-superseded .alert-meta{padding-inline-end:34px}
+.alert-card.local-superseded .alert-body h4{color:#60717b}
+.alert-dismiss{position:absolute;inset-block-start:10px;inset-inline-end:11px;width:30px;height:30px;display:grid;place-items:center;border:1px solid #a9b8c1;border-radius:50%;background:#fff;color:#566d7a;font-size:24px;line-height:1;cursor:pointer;z-index:1;transition:background .15s ease}
+.alert-dismiss:hover,.alert-dismiss:focus-visible{background:#dfe8ec;color:#203e50;outline-offset:2px}
+.alert-dismiss:disabled{opacity:.4;cursor:wait}
+.local-superseded-note small{display:block;margin-top:7px;color:#466376;font-weight:700}
