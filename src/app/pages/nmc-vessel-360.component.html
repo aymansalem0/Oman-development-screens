@@ -122,6 +122,28 @@
           <span>{{ copy('Compared identity fields', 'حقول الهوية المقارنة') }} <b>{{ summary.comparedFields }}</b></span>
           <span>{{ copy('Persisted field differences', 'اختلافات الحقول المحفوظة') }} <b>{{ intelligence.conflicts.length }}</b></span>
         </div>
+        <section class="v360-quality-detail-card" *ngIf="intelligence.quality.breakdown as summary">
+          <ng-container *ngIf="summary.documentComparisons?.length">
+            <h4>✦ {{ copy('A03 Maritime Documents · Cross-Source Comparison','مقارنة مستندات A03 البحرية مع المصادر الأخرى') }}</h4>
+            <p>{{ copy('Only citation-validated synthetic Google Drive text is compared with the saved Vessel 360 synthetic certificate baseline. A disagreement requires review; this does not establish which source is correct or certify a document.',
+              'تتم مقارنة نصوص Google Drive التجريبية المدعومة باستشهادات A03 ببيانات شهادات Vessel 360 التجريبية المحفوظة. الاختلاف يحتاج مراجعة ولا يثبت أي المصدرين صحيح أو أن المستند أصلي.') }}</p>
+            <div class="v360-quality-scroll"><table class="v360-quality-source-table">
+              <thead><tr><th>{{copy('Field','الحقل')}}</th>
+                <th>{{copy('Vessel 360','بيانات Vessel 360')}}</th>
+                <th>{{copy('A03 Google Drive','نتيجة A03 من Google Drive')}}</th>
+                <th>{{copy('Match','التطابق')}}</th>
+                <th>{{copy('Evidence','الدليل')}}</th></tr></thead>
+              <tbody><tr *ngFor="let row of summary.documentComparisons">
+                <td>{{row.field}}</td><td>{{row.sourceValue}}</td>
+                <td>{{row.documentValue}}</td><td>
+                  {{row.status==='MATCHED'?copy('Matched','متطابق'):copy('Mismatch · review','مختلف · للمراجعة')}}</td>
+                <td class="v360-quality-mono">{{row.evidenceId}}</td>
+              </tr></tbody>
+            </table></div>
+            <small>{{copy('Document evidence count','عدد المستندات ذات أدلة')}}: {{summary.a03DocumentCount}} ·
+              {{copy('A03 mismatches','اختلافات A03')}}: {{summary.a03Disagreements}}</small>
+          </ng-container>
+        </section>
         <p class="v360-quality-state" *ngIf="intelligence.quality.status !== 'CALCULATED'">
           {{ copy('Structural quality not calculated for this saved assessment. A no-AirIA retrospective check is available.', 'لم تُحسب الجودة الهيكلية لهذا التقييم المحفوظ بعد. يمكن إجراء فحص لاحق دون استدعاء Airia.') }}
         </p>
