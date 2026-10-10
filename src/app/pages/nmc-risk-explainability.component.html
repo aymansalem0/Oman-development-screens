@@ -61,6 +61,7 @@
 
     <div *ngIf="busy" class="rx-notice">{{copy('Loading saved A01/A02 evidence…','جارٍ تحميل نتائج A01/A02 المحفوظة…')}}</div>
     <div *ngIf="assessmentError" class="rx-notice rx-warning" role="alert">{{assessmentError}}</div>
+    <div *ngIf="projectionNotice" class="rx-notice rx-warning" role="status">{{projectionNotice}}</div>
     <div *ngIf="!assessment && !busy" class="rx-notice">
       {{copy('No baseline or fabricated risk score is displayed. Return to Command Center and wait for a validated fleet assessment.',
              'لا نعرض درجة مخاطر افتراضية. ارجع إلى مركز القيادة وانتظر اكتمال تقييم المخاطر الموثق.')}}
@@ -74,7 +75,7 @@
           <p>{{copy('The current score is recalculated under the centrally published Oracle risk policy using the SAME saved A01/A02 severities. Command Center totals and factor weights use the active policy. Earlier scored projections and source AI signals remain in immutable history.',
                      'تُعاد درجة المخاطر الحالية وفق السياسة المركزية المنشورة باستخدام نفس مؤشرات A01/A02 المحفوظة. تتحدث العدادات والأوزان وفق السياسة النشطة، بينما تبقى التقييمات السابقة ومؤشرات AI الأصلية محفوظة في السجل.')}}</p>
           <small>{{copy('Original saved risk','المخاطر الأصلية المحفوظة')}}: {{a.score}} · {{a.level}} · {{a.configVersion}}
-             → {{copy('Current settings projection','المتوقع وفق الإعدادات الحالية')}}: {{riskScore}} · {{riskLevel}} · {{activeRiskConfig?.version||'—'}}
+             → {{copy('Current settings projection','المتوقع وفق الإعدادات الحالية')}}: {{riskScore===null?'—':riskScore}} · {{riskLabel}} · {{activeRiskConfig?.version||'—'}}
              <b *ngIf="policyChanged" class="rx-policy-delta">{{copy('CONFIGURATION CHANGED','الإعدادات مختلفة')}}</b>
           </small>
         </div>
@@ -93,7 +94,7 @@
           <div *ngFor="let band of thresholds" class="band" [ngClass]="band.key.toLowerCase()" [style.width.%]="band.width">
             <span>{{thresholdName(band.key)}} · {{band.min}}–{{band.max}}</span>
           </div>
-          <div class="score-marker" [style.left.%]="scoreMarkerPosition"><b>{{riskScore}}</b><i></i></div>
+          <div class="score-marker" *ngIf="riskScore!==null" [style.left.%]="scoreMarkerPosition"><b>{{riskScore}}</b><i></i></div>
         </div>
         <div class="rx-notice rx-inline" *ngIf="a.criticalOpenFinding">
           ⚠ {{copy('A critical open finding requires Priority Review independently of the calculated risk classification.',
@@ -108,10 +109,12 @@
           <div class="panel-header">
             <div>
               <h3>{{copy('How the Score Was Built','كيف تم احتساب درجة المخاطر')}}</h3>
-              <p>{{copy('Five unchanged saved A01/A02 severities × the CURRENT centrally published weights.',
-                        'خمسة مؤشرات محفوظة دون تغيير من A01/A02 × أوزان السياسة المركزية الحالية المنشورة.')}}</p>
+              <p *ngIf="factorViewSource==='CURRENT'">{{copy('Saved A01/A02 severities and any valid A03 evidence × the CURRENT centrally published weights.',
+                'إشارات A01/A02 المحفوظة وأدلة A03 الصالحة مضروبة في أوزان السياسة المركزية المنشورة الحالية.')}}</p>
+              <p *ngIf="factorViewSource==='SAVED'">{{copy('Original SAVED evidence with ORIGINAL weights. Current policy projection unavailable.',
+                'العوامل الأصلية المحفوظة بأوزان التقييم الأصلي. حساب السياسة الحالية غير متاح.')}}</p>
             </div>
-            <span class="count-pill">{{factors.length}} {{copy('factors','عوامل')}}</span>
+            <span class="count-pill">{{factors.length}} {{copy('factors','عوامل')}} · {{factorViewSource==='CURRENT'?copy('Current','الحالية'):copy('Saved','محفوظ')}}</span>
           </div>
           <div class="factor-list">
             <button type="button" *ngFor="let factor of factors" class="factor-card"
@@ -144,8 +147,9 @@
           <div class="rx-explain-note">
             {{copy('Calculation mode','طريقة الحساب')}}: <b>{{calculationMode}}</b> ·
             {{copy('Mode adjustment','تعديل نمط الحساب')}}: <b>{{modeAdjustment | number:'1.2-2'}}</b> ·
-            {{copy('Reconstructed','الحساب المُعاد')}}: <b>{{reconstructedScore}}/100</b> ·
-            {{copy('Current settings score','درجة الإعدادات الحالية')}}: <b>{{riskScore}}/100</b> ·
+            {{copy('Reconstructed','الحساب المُعاد')}}: <b>{{factors.length?reconstructedScore:'—'}}/100</b> ·
+            <ng-container *ngIf="riskScore!==null">{{copy('Current settings score','درجة الإعدادات الحالية')}}: <b>{{riskScore}}/100</b> · </ng-container>
+            <ng-container *ngIf="riskScore===null">{{copy('Current policy score unavailable','درجة السياسة الحالية غير متاحة')}} · </ng-container>
             {{copy('Original saved score','الدرجة الأصلية المحفوظة')}}: <b>{{a.score}}/100</b>.
             {{copy('No synthetic baseline calibration or AI rerun occurs here.',
                    'لا تتم إضافة خط أساس تجريبي أو استدعاء AI جديد عند فتح الشاشة.')}}
