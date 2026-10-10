@@ -46,7 +46,7 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
 
   searchTerm = '';
   riskFilter = 'All';
-  assessmentFilter: 'All' | 'Assessed' | 'Pending' = 'All';
+  assessmentFilter: 'All' | 'Assessed' | 'Pending' = 'Assessed';
   typeFilter = 'All';
   feedLive = true;
   selectedVessel?: NmcVesselProfile;
