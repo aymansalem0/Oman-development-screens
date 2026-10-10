@@ -210,6 +210,9 @@
             <small>{{copy('SOURCE','المصدر')}}: {{h.sourceAssessmentId}}</small>
             <span class="history-readonly">{{copy('READ ONLY · NOT CLICKABLE','للقراءة فقط · غير قابل للضغط')}}</span>
           </div>
+          <small class="history-lineage" *ngIf="h.factorSnapshotReconstructed">
+            {{copy('Factor breakdown verified from the same immutable assessment ID and the historic published policy (not a newly stored snapshot).',
+                   'تم التحقق من تفاصيل العوامل باستخدام نفس معرف التقييم الأصلي والسياسة المنشورة تاريخيًا؛ ليست نسخة جديدة محفوظة.')}}</small>
           <div *ngIf="h.factorSnapshot as snapshot" class="historical-risk-factors">
             <span class="historical-formula">{{snapshot.calculationMode}} ·
               {{copy('Weighted subtotal','المجموع الموزون')}} {{snapshot.weightedSubtotal|number:'1.2-2'}} ·
@@ -222,8 +225,8 @@
             </div>
           </div>
           <p *ngIf="!h.factorSnapshot" class="rx-notice">
-            {{copy('Historical factor snapshot was not stored before migration 008; original score and policy revision are preserved without guessing factor values.',
-              'لم تكن تفاصيل العوامل تحفظ قبل التحديث 008؛ الدرجة وإصدار السياسة الأصليان محفوظان دون اختلاق قيم تاريخية.')}}</p>
+            {{copy('A trustworthy factor breakdown is unavailable for this older revision; the original score and policy are preserved without guessing.',
+              'تفاصيل العوامل التاريخية غير متاحة بمصدر مطابق؛ الدرجة وإصدار السياسة محفوظان دون اختلاق قيم.')}}</p>
         </article>
       </div>
       <p class="rx-notice" *ngIf="!historyLoading&&!historyError&&!riskHistory.length">
