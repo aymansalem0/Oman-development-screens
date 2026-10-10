@@ -11,6 +11,7 @@ import { CentralRiskPolicy, RiskPolicyError } from './risk-policy.mjs';
 import { ErpWorkforceStore, SiError } from './si-erp-workforce.mjs';
 import { SiElectronicScheduler } from './si-electronic-scheduling.mjs';
 import { SiCandidateTargeting, SiTargetingError } from './si-candidate-targeting.mjs';
+import { SiInspectionPreparation, SiPreparationError } from './si-inspection-preparation.mjs';
 
 const port = Number(process.env.PORT || 3000);
 const apiKey = (process.env.AIRIA_MENA_KEY || '').trim();
@@ -66,6 +67,11 @@ const siScheduling=new SiElectronicScheduler({erp:siErp,cases});
 const siTargeting=new SiCandidateTargeting({mode:dbMode,oracleRepository:repository,
   cases,riskPolicy,bundles:JSON.parse((await import('node:fs')).readFileSync(
     new URL('./fleet-bundles.json',import.meta.url),'utf8'))});
+const siPreparation=new SiInspectionPreparation({mode:dbMode,oracleRepository:repository,
+  targeting:siTargeting,riskPolicy,
+  bundles:siTargeting.bundles,
+  executeA04:async input=>fleetAgentCall('a04',input),
+  enabled:process.env.SI_A04_ENABLED==='true'&&Boolean(apiKey)});
 const actionPlanRuns=new Set(); // process-local duplicate A01 invocation guard; version-lock remains authoritative
 const alertScanEnabled=process.env.NMC_ALERT_SCAN_ENABLED!=='false';
 const alertScanIntervalMs=Math.max(15000,Number(process.env.NMC_ALERT_SCAN_SECONDS||30)*1000);
@@ -390,6 +396,20 @@ const server = createServer(async (req, res) => {
   // NMC human-approved referrals dynamically. Only publisher may approve a new case.
   if(path==='/api/si/v1'||path.startsWith('/api/si/v1/')){
     try{
+      const prepPath=/^\/api\/si\/v1\/preparations\/([a-f0-9-]{36})(?:\/(prepare|generate|review))?$/.exec(path);
+      if(prepPath){
+        const caseId=prepPath[1],step=prepPath[2]||null;
+        dashboards.assertRole(req,step==='review'?'PUBLISHER':'EDITOR');
+        if(req.method==='GET'&&!step)
+          return respond(res,200,await siPreparation.get(caseId));
+        if(req.method==='POST'&&step==='prepare')
+          return respond(res,201,await siPreparation.prepare(caseId,await requestJson(req,2048)));
+        if(req.method==='POST'&&step==='generate')
+          return respond(res,201,await siPreparation.generate(caseId,await requestJson(req,2048)));
+        if(req.method==='POST'&&step==='review')
+          return respond(res,200,await siPreparation.review(caseId,await requestJson(req,2048)));
+        return respond(res,405,{error:'METHOD_NOT_ALLOWED'});
+      }
       if(req.method==='GET'&&path==='/api/si/v1/candidates/dashboard')
         return respond(res,200,await siTargeting.dashboard());
       if(req.method==='GET'&&path==='/api/si/v1/rules')
@@ -416,7 +436,7 @@ const server = createServer(async (req, res) => {
       }
       return respond(res,405,{error:'METHOD_NOT_ALLOWED'});
     }catch(e){
-      if(e instanceof SiTargetingError||e instanceof DashboardError)
+      if(e instanceof SiPreparationError||e instanceof SiTargetingError||e instanceof DashboardError)
         return respond(res,e.status,{error:e.code});
       if(Number.isInteger(e?.status)&&e.status>=400&&e.status<500)
         return respond(res,e.status,{error:'SI_REQUEST_INVALID'});
@@ -848,6 +868,8 @@ try{
   }
   try{await siTargeting.initialize();}
   catch(error){console.error('[si-targeting] SI_MIGRATION_009_REQUIRED - candidate API disabled');}
+  try{await siPreparation.initialize();}
+  catch(error){console.error('[si-preparation] SI_MIGRATION_010_REQUIRED - A04 dossier disabled');}
   try{await guidance.initialize();}
   catch(error){
     // Guidance requires migration 006, but an optional UI module must never
