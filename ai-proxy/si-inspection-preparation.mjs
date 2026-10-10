@@ -99,10 +99,11 @@ function atomicWrite(path,doc){
 }
 export class SiInspectionPreparation{
   constructor({mode='json',oracleRepository=null,targeting,riskPolicy,bundles=[],
-    executeA04=null,enabled=false,
+    executeA04=null,enabled=false,approvedDocuments=null,
     file=process.env.SI_PREPARATION_STORE_PATH||'/data/si-preparations.json'}={}){
     this.mode=mode;this.oracle=oracleRepository;this.targeting=targeting;
     this.riskPolicy=riskPolicy;this.executeA04=executeA04;this.enabled=enabled;
+    this.approvedDocuments=approvedDocuments;
     this.bundles=new Map(bundles.map(b=>[b.imo,b]));this.file=file;
     this.ready=mode==='json';this.active=new Set();
   }
@@ -189,6 +190,8 @@ export class SiInspectionPreparation{
     if(!this.riskPolicy.ready)throw new SiPreparationError('SI_RISK_POLICY_NOT_READY',503);
     const risk=await this.riskPolicy.vessel(inspectionCase.imo);
     const v=bundle.inlineContext?.vessel||{};
+    const approved=this.approvedDocuments?await this.approvedDocuments(inspectionCase.imo):[];
+    const docIds=approved.map(x=>x.evidenceId);
     const context={
       inspectionId:inspectionCase.id,caseId:inspectionCase.nmcCaseId||inspectionCase.id,
       nmcReferralId:inspectionCase.nmcReferralId||null,
@@ -201,7 +204,7 @@ export class SiInspectionPreparation{
         level:risk.riskLevel,policyRevision:risk.policyRevision,
         rulesetVersion:risk.policyVersion}:null,
       sourceAssessmentId:risk?.sourceAssessmentId||null,
-      evidenceManifestRefs:bundle.evidenceIds.slice(0,150),
+      evidenceManifestRefs:[...bundle.evidenceIds,...docIds].slice(0,150),
       openFindingRefs:(bundle.inlineContext?.deficiencies||[])
         .filter(f=>f.status==='Open').map(f=>f.id)
         .filter(e=>bundle.evidenceIds.includes(e)).slice(0,35),
@@ -209,9 +212,12 @@ export class SiInspectionPreparation{
         certificates:bundle.inlineContext?.certificates||[],
         inspectionHistory:bundle.inlineContext?.inspections||[],
         openDeficiencies:(bundle.inlineContext?.deficiencies||[]).filter(f=>f.status==='Open'),
-        documentManifest:bundle.inlineContext?.documentManifest||null},
+        documentManifest:{source:'GOOGLE_DRIVE_A03_HUMAN_REVIEWED',
+          records:approved,authenticityVerified:false,
+          requiresInspectorReview:true}},
       provenance:'SYNTHETIC_POC_NOT_OFFICIAL_SOURCE',
       externalDocumentsVerified:false,
+      a03ReviewedDocumentCount:approved.length,
       createdCaseApprovedBy:inspectionCase.approvedBy,
       targetingPolicyVersion:inspectionCase.rulesetVersion
     };
