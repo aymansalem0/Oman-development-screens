@@ -16,7 +16,7 @@ function hashOf(v,psc){
     internal:v.inlineContext,evidenceIds:v.evidenceIds,
     psc:{inspections:psc.inspections,deficiencies:psc.deficiencies,detentions:psc.detentions,
       coverage:psc.coverage,sourceMode:psc.sourceMode,datasetVersion:psc.datasetVersion},
-    ruleset:DEFAULT_FLEET_RULESET
+    driveFingerprint:'NOT_CONFIGURED',ruleset:DEFAULT_FLEET_RULESET
   })).digest('hex');
 }
 function mockFleet(){
