@@ -1,0 +1,150 @@
+<div class="si-layout">
+  <app-nmc-navigation></app-nmc-navigation>
+  <main class="si-workbench">
+    <header class="si-hero">
+      <div>
+        <small>MOEI · SMART INSPECTION · STEPS 00–04</small>
+        <h1>Inspection Candidate &amp; Targeting Center</h1>
+        <p>مركز مرشحي المعاينة والاستهداف · All active vessels · Provenance-first decisions · No automatic AI calls</p>
+      </div>
+      <div class="hero-actions">
+        <a routerLink="/moei/nmc">NMC Command Center</a>
+        <a routerLink="/moei/smart-inspection/scheduling">Electronic Scheduling ↗</a>
+        <button type="button" (click)="refresh()" [disabled]="loading||busy">↻ Refresh</button>
+      </div>
+    </header>
+
+    <p *ngIf="error" class="notice error" role="alert">{{error}}</p>
+    <p *ngIf="success" class="notice success" role="status">{{success}}</p>
+    <p *ngIf="loading" class="notice">Loading saved NMC referrals, source events and current risk projections…</p>
+    <p *ngIf="busy" class="notice">Saving centrally — please wait…</p>
+
+    <section *ngIf="dashboard as d" class="stats" aria-label="Dynamic targeting statistics">
+      <article><small>ACTIVE VESSELS EVALUATED</small><strong>{{d.summary.evaluatedPopulation}}</strong><span>Fleet snapshot {{short(d.fleetSnapshotId)}}</span></article>
+      <article><small>SAVED OFFICIAL RISK PROJECTIONS</small><strong>{{d.summary.assessedRiskVessels}}</strong><span>{{d.summary.evaluatedPopulation-d.summary.assessedRiskVessels}} missing risk; no fabricated scores</span></article>
+      <article><small>TRACEABLE CANDIDATES</small><strong>{{d.summary.candidates}}</strong><span>Derived from saved source events</span></article>
+      <article><small>PENDING OFFICER REVIEW</small><strong>{{d.summary.pendingReview}}</strong><span>Human approval required</span></article>
+      <article><small>CREATED SI CASES</small><strong>{{d.summary.inspectionsCreated}}</strong><span>Audit-linked, not yet scheduled</span></article>
+    </section>
+    <div *ngIf="dashboard as d" class="meta-line">
+      <span>Targeting Rules v{{d.policy.version}}</span>
+      <span>NMC Risk Policy v{{d.riskPolicyRevision}}</span>
+      <span>Evaluated {{d.evaluatedAt|date:'medium'}}</span>
+      <span>NMC referrals {{d.summary.bySource['NMC_CASE']||0}}</span>
+      <span>Service {{d.summary.bySource['SERVICE_REQUEST']||0}}</span>
+      <span>PSC {{d.summary.bySource['PSC_PORT_CALL']||0}}</span>
+    </div>
+
+    <section class="si-panel workflow">
+      <header><h2>01 · Live Candidate Queue</h2><p>Only approved NMC referrals or explicitly recorded POC source events appear. Different inspection regimes remain separate.</p></header>
+      <div class="filters">
+        <input type="search" [(ngModel)]="search" placeholder="Search IMO, vessel, source reference…" aria-label="Search candidates"/>
+        <select [(ngModel)]="sourceFilter" aria-label="Source filter">
+          <option value="ALL">All sources</option>
+          <option value="NMC_CASE">Approved NMC referral</option>
+          <option value="SERVICE_REQUEST">POC service event</option>
+          <option value="PSC_PORT_CALL">POC PSC port call</option>
+        </select>
+        <select [(ngModel)]="statusFilter" aria-label="Status filter">
+          <option value="ALL">All workflow statuses</option>
+          <option value="PENDING_REVIEW">Pending Review</option>
+          <option value="DEFERRED">Deferred</option>
+          <option value="REJECTED">Rejected</option>
+          <option value="INSPECTION_CREATED">Inspection Created</option>
+          <option value="EXTERNALLY_SCHEDULED">Already NMC Scheduled</option>
+        </select>
+      </div>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>Vessel / IMO</th><th>Inspection Regime</th><th>Source &amp; provenance</th><th>NMC Risk</th><th>Eligibility</th><th>Priority</th><th>Workflow</th><th></th></tr></thead>
+          <tbody>
+            <tr *ngFor="let c of candidates;trackBy:trackKey" [class.active]="selectedKey===c.key">
+              <td><strong>{{c.vesselName}}</strong><small>IMO {{c.imo}} · {{c.flag}} · {{c.vesselType}}</small></td>
+              <td>{{statusText(c.regime)}}</td>
+              <td><span *ngFor="let e of c.events" class="source-pill">{{statusText(e.sourceType)}} · {{e.provenance==='POC_SIMULATOR'?'SIMULATED':'NMC APPROVED'}}</span></td>
+              <td><strong *ngIf="c.currentRisk as risk">{{risk.score}}/100 · {{risk.level}}</strong><span *ngIf="!c.currentRisk" class="pending">NOT ASSESSED</span></td>
+              <td><span class="tag" [class.manual]="c.eligibility==='MANUAL_REVIEW'">{{statusText(c.eligibility)}}</span></td>
+              <td>{{statusText(c.priority)}}</td>
+              <td><span class="status">{{statusText(c.status)}}</span></td>
+              <td><button type="button" (click)="select(c)">Review →</button></td>
+            </tr>
+            <tr *ngIf="!candidates.length"><td colspan="8" class="empty">No matching persisted candidates. Zero is valid; no artificial inspection quota or auto-created cases.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <div class="lower-grid">
+      <section class="si-panel" *ngIf="selected as c">
+        <header><h2>02 · Officer Decision</h2><p>IMO {{c.imo}} · {{statusText(c.regime)}} · {{c.eligibility}}</p></header>
+        <div class="source-detail">
+          <div *ngFor="let e of c.events">
+            <strong>{{statusText(e.sourceType)}} · {{e.sourceEventId}}</strong>
+            <small>Reference: {{e.sourceReference}} · {{e.provenance}} · {{e.approval}}</small>
+            <small>Evidence refs: {{e.evidenceIds.length?e.evidenceIds.join(', '):'none supplied'}}</small>
+          </div>
+          <p><strong>Rules:</strong> {{c.reasons.join(' · ')}}</p>
+          <p *ngIf="c.currentRisk">Risk source assessment: {{c.currentRisk.assessmentId}} · NMC Policy v{{c.currentRisk.policyRevision}}</p>
+          <p *ngIf="c.lastDecision">Last decision: {{c.lastDecision.action}} by {{c.lastDecision.actor}} · {{c.lastDecision.at|date:'short'}} · {{c.lastDecision.note}}</p>
+          <p *ngIf="c.inspectionCase"><strong>Inspection Case:</strong> {{c.inspectionCase.id}} · {{c.inspectionCase.status}}</p>
+        </div>
+        <ng-container *ngIf="c.status!=='INSPECTION_CREATED'&&c.status!=='EXTERNALLY_SCHEDULED'">
+          <label>Decision rationale <span class="required">*</span><textarea [(ngModel)]="decisionNote" rows="3" maxlength="500" placeholder="State the reason and legal/business basis; never substitute AI judgment"></textarea></label>
+          <div class="decision-actions">
+            <button class="primary" type="button" [disabled]="busy" (click)="decide('APPROVE')">Approve &amp; Create SI Case</button>
+            <button type="button" [disabled]="busy" (click)="decide('DEFER')">Defer</button>
+            <button type="button" [disabled]="busy" (click)="decide('REJECT')">Reject</button>
+          </div>
+          <p class="hint">Approval requires a supervisor Publisher key; no Airia execution, regulatory determination or automatic scheduling.</p>
+        </ng-container>
+        <p *ngIf="c.status==='EXTERNALLY_SCHEDULED'" class="notice">This NMC referral has already been scheduled. No duplicate SI case will be created.</p>
+      </section>
+
+      <section class="si-panel">
+        <header><h2>03 · Operator &amp; Access</h2><p>Permission checks are enforced server-side. Keys stay in memory and are never stored in the browser.</p></header>
+        <label>Operator / reviewer <input [(ngModel)]="reviewer" autocomplete="off" placeholder="Business user name"/></label>
+        <label>Editor key <input type="password" [(ngModel)]="editorKey" autocomplete="off"/></label>
+        <label>Supervisor / Publisher key <input type="password" [(ngModel)]="publisherKey" autocomplete="off"/></label>
+        <p class="hint">Editor: source event, defer/reject, impact preview. Publisher: approve/create case, publish rules.</p>
+      </section>
+
+      <section class="si-panel">
+        <header><h2>04 · POC Source Event Intake</h2><p>Simulated service or PSC event, never represented as verified official data.</p></header>
+        <div class="form-grid">
+          <label>Source<select [(ngModel)]="eventForm.sourceType" (ngModelChange)="onEventSourceChange()">
+            <option value="SERVICE_REQUEST">Simulated Service Request</option>
+            <option value="PSC_PORT_CALL">Simulated PSC Port Call</option>
+          </select></label>
+          <label>Source event ID<input [(ngModel)]="eventForm.sourceEventId" placeholder="SR-POC-001"/></label>
+          <label>Reference<input [(ngModel)]="eventForm.sourceReference" placeholder="Source request / port call ID"/></label>
+          <label>Vessel IMO<input [(ngModel)]="eventForm.imo" inputmode="numeric" maxlength="7" placeholder="7-digit IMO"/></label>
+          <label>Port<input [(ngModel)]="eventForm.port" placeholder="Port name"/></label>
+          <label>ETA (optional)<input [(ngModel)]="eventForm.eta" placeholder="2026-10-15T08:00"/></label>
+          <label>Source review state<select [(ngModel)]="eventForm.sourceApprovalStatus">
+            <option value="UNVERIFIED">Unverified mock event</option>
+            <option value="SOURCE_REVIEWED">Source manually reviewed (POC only)</option>
+          </select></label>
+          <label>Context<input [(ngModel)]="eventForm.note" maxlength="500" placeholder="Business context"/></label>
+        </div>
+        <button class="primary" type="button" [disabled]="busy" (click)="addEvent()">Save Simulated Event</button>
+        <p class="hint">Both types remain MANUAL_REVIEW even when marked source-reviewed. A source event alone never creates an inspection case.</p>
+      </section>
+
+      <section class="si-panel">
+        <header><h2>05 · Configurable Priority &amp; Impact</h2><p>Versioned priority threshold only. Statutory PSC/service eligibility is NOT auto-published.</p></header>
+        <p *ngIf="dashboard">Published ruleset v{{dashboard.policy.version}} · {{dashboard.policy.config.riskPriorityThreshold}}/100 priority threshold</p>
+        <label>Proposed priority threshold (0–100)<input type="number" min="0" max="100" step="1" [(ngModel)]="threshold" (ngModelChange)="impact=null"/></label>
+        <div class="decision-actions"><button type="button" [disabled]="busy" (click)="previewRules()">Preview fleet impact</button></div>
+        <div *ngIf="impact as p" class="impact">
+          <strong>{{p.affectedCandidateCount}} affected candidate(s)</strong>
+          <small>{{p.evaluatedPopulation}} active vessels evaluated · {{p.unevaluatedRiskVessels}} with no saved risk</small>
+          <p>Impacted IMOs: {{p.affectedImos.length?p.affectedImos.join(', '):'none'}}</p>
+          <small>Changes PRIORITY only. No AI calls, no case rewrite, no legal eligibility change.</small>
+        </div>
+        <label>Business justification<input [(ngModel)]="policyReason" placeholder="Why adjust the priority threshold?"/></label>
+        <button class="primary" type="button" [disabled]="busy||!impact" (click)="publishRules()">Publish Priority Version</button>
+        <p class="hint">Current/open cases retain their approval evidence and original scoring references.</p>
+      </section>
+    </div>
+  </main>
+</div>
