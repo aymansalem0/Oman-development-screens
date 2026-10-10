@@ -161,3 +161,8 @@ test('opt-in A03 automatic scan only analyzes one changed file, then reuses evid
     assert.equal(next.length,1);
   }finally{a.close();}
 });
+
+test('A03 rejects an overlong IMO instead of truncating it to match the selected vessel',()=>{
+  const malformed={...normalized(),extracted:{...normalized().extracted,imo:IMO+'777'}};
+  assert.throws(()=>validateA03(malformed,excerpt,IMO),/A03_IMO_INVALID/);
+});
