@@ -126,6 +126,9 @@
               <span class="traffic-profile-badge">
                 {{ correlatedProfileCount }} {{ copy('correlated vessel profiles', 'ملف سفينة مترابط') }}
               </span>
+              <span class="risk-preview-badge" *ngIf="provisionalRiskCount>0">
+                {{provisionalRiskCount}} {{copy('PROVISIONAL RISK · A03 NOT ASSESSED','مخاطر مبدئية · A03 لم يُقيّم')}}
+              </span>
             </div>
             <p>
               {{ copy(
@@ -171,6 +174,10 @@
         <p class="map-filter-summary" role="status">
           {{visibleMapCount}} / {{correlatedProfileCount}}
           {{copy('vessels shown on map', 'سفينة ظاهرة على الخريطة')}}
+          <span *ngIf="provisionalRiskCount>0" class="risk-preview-note">
+            · {{copy('Provisional scores use A03=0 as a NOT ASSESSED placeholder and are not valid for maritime enforcement.',
+                     'الدرجات المبدئية تستخدم صفرًا مؤقتًا لعامل A03 بمعنى لم يتم تقييمه، ولا تصلح لقرارات الرقابة البحرية.')}}
+          </span>
           <span *ngIf="assessmentFilter==='Assessed'"> · {{copy('Completed saved A01/A02 assessments only','تقييمات A01/A02 المحفوظة والمكتملة فقط')}}</span>
           <span *ngIf="assessmentFilter==='Pending'"> · {{copy('Includes pending and failed assessments','تشمل التقييمات المعلقة والفاشلة')}}</span>
         </p>
@@ -226,6 +233,9 @@
                    (click)="$event.stopPropagation()"
                    [attr.aria-label]="copy('Analyze current risk factors for '+vessel.name,'تحليل المخاطر الحالية للسفينة '+vessel.name)">
                   {{ riskLabel(vessel.risk,vessel.imo) }} · {{ riskDisplay(vessel) }}
+                  <small *ngIf="isProvisionalRisk(vessel.imo)" class="risk-preview-chip">
+                    {{copy('PROVISIONAL · A03 NOT ASSESSED','مبدئي · A03 لم يُقيّم')}}
+                  </small>
                 </a>
               </div>
 
