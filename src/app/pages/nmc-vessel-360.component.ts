@@ -139,6 +139,7 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
   // Oracle-sourced AI data is read-only, provisional and explicitly separated
   // from the deterministic vessel/certificate/AIS fixtures.
   storedAi: FleetAiAssessment | null = null;
+  displayedRiskBasis:'CURRENT_PUBLISHED'|'ORIGINAL_SAVED'|'FIXTURE'='FIXTURE';
   storedAiHistory: FleetAiHistory | null = null;
   storedAiIntelligence: FleetAiIntelligence | null = null;
   intelligenceStatus: 'loading' | 'available' | 'unavailable' = 'loading';
@@ -497,6 +498,7 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
     const projected=this.riskEngine.centralReady&&hasCore&&(!weightedDoc||doc)?
       this.riskEngine.evaluateFromAiSignals(this.vessel,{
         ...severities,...(doc?{documentIntegrity:doc.severity}:{})} as Record<RiskFactorKey,number>):null;
+    this.displayedRiskBasis=projected?'CURRENT_PUBLISHED':'ORIGINAL_SAVED';
     this.vessel.riskScore = projected?.score ?? this.storedAi.score ?? this.vessel.riskScore;
     this.vessel.riskLevel = projected?.level ?? this.storedAi.level ?? this.vessel.riskLevel;
     this.vessel.risk=this.vessel.riskScore;
@@ -787,7 +789,11 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private isAtLeast(level: 'Watch' | 'High' | 'Critical'): boolean {
-    const thresholds = this.storedAi?.ruleset?.thresholds || this.riskEngine.config.thresholds;
+    // A reclassified Watch vessel uses CURRENT published thresholds; an
+    // unprojectable A03-dependent case displays ORIGINAL stored thresholds.
+    const thresholds = this.displayedRiskBasis==='CURRENT_PUBLISHED'
+      ?this.riskEngine.config.thresholds
+      :this.storedAi?.ruleset?.thresholds||this.riskEngine.config.thresholds;
     const score = this.vessel.riskScore;
     if (level === 'Critical') return score >= thresholds.critical;
     if (level === 'High') return score >= thresholds.high;
