@@ -490,6 +490,8 @@ export class DriveDocumentIntelligence {
     if(current.status!=='DRAFT_REVIEW')
       throw new DocumentError('DOCUMENT_NOT_AWAITING_REVIEW',409);
     if(decision==='APPROVE'){
+      if(current.providerDetails?.tamperSuspected===true)
+        throw new DocumentError('DOCUMENT_TAMPER_SUSPECTED_REVIEW_REQUIRED',409);
       if(current.extracted?.imo!==imo)
         throw new DocumentError('DOCUMENT_IMO_MATCH_REQUIRED',409);
       const latest=await this._file(imo,fileId);
