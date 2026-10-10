@@ -44,6 +44,10 @@ export interface SiLifecycleCase{
   stage:SiLifecycleStage;version:number;updatedAt:string|null;
   findings:number;actions:number;
 }
+export interface SiLifecycleVersion {
+  version:number;at:string;action:string;actor:string;reason:string;
+  snapshot:SiLifecycleRecord;
+}
 export interface SiLifecycleView{
   status:string;inspectionCase:{id:string;imo:string;regime:string;approvedBy:string;nmcReferralId?:string|null};
   preparation:{status:string;version:number;stale:boolean;baseChecklistIds:string[];
@@ -64,6 +68,10 @@ export class SiLifecycleService{
   get(caseId:string,key:string):Observable<SiLifecycleView>{
     return this.http.get<SiLifecycleView>(this.url+'/'+encodeURIComponent(caseId),
       {headers:this.headers(key)});
+  }
+  history(caseId:string,key:string):Observable<{status:string;versions:SiLifecycleVersion[]}>{
+    return this.http.get<{status:string;versions:SiLifecycleVersion[]}>(
+      this.url+'/'+encodeURIComponent(caseId)+'/history',{headers:this.headers(key)});
   }
   apply(caseId:string,key:string,body:{
     action:string;expectedVersion:number;actor:string;data?:Record<string,unknown>
