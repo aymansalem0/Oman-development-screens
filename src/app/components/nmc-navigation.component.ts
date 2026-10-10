@@ -121,7 +121,9 @@ export class NmcNavigationComponent implements OnInit, OnDestroy {
     return this.currentPath === '/moei/smart-inspection/settings/erp';
   }
   get isCase(): boolean { return this.currentPath.endsWith('/case'); }
-  get isSmartInspection(): boolean { return this.currentPath.includes('/smart-inspection'); }
+  get isSmartInspection(): boolean {
+    return this.currentPath.includes('/smart-inspection') && !this.isErpIntegrationSettings;
+  }
   get isRiskConfig(): boolean {
     return this.currentPath === '/moei/nmc/admin/risk-configuration';
   }
