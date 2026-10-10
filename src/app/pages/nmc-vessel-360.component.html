@@ -70,7 +70,7 @@
         <span><small>{{ copy('Risk / Priority', 'المخاطر / الأولوية') }}</small><b>{{ ai.score }}/100 · {{ ai.operationalPriority }}</b></span>
         <span><small>{{ copy('Assessment ID', 'رقم التقييم') }}</small><b [title]="ai.assessmentId">{{ ai.assessmentId }}</b></span>
         <span><small>{{ copy('Assessed at (UTC)', 'وقت التقييم (UTC)') }}</small><b>{{ ai.assessedAt || '—' }}</b></span>
-        <span><small>{{ copy('Five evidence-linked factors', 'خمسة عوامل مرتبطة بالأدلة') }}</small><b>{{ ai.signals.length }} · A01 / A02</b></span>
+        <span><small>{{ copy('Evidence-linked risk factors (A01/A02/A03)', 'عوامل المخاطر المرتبطة بالأدلة (A01/A02/A03)') }}</small><b>{{ ai.signals.length }} · {{ ai.signals.length === 6 ? 'A01 / A02 / A03' : 'A01 / A02' }}</b></span>
       </div>
     </section>
 
@@ -115,6 +115,9 @@
         <div class="v360-quality-peek" *ngIf="intelligence.quality.breakdown as summary">
           <span>{{ copy('Completeness', 'الاكتمال') }} <b>{{ summary.completenessPercent }}%</b></span>
           <span>{{ copy('Consistency', 'الاتساق') }} <b>{{ summary.consistencyPercent === null ? '—' : summary.consistencyPercent + '%' }}</b></span>
+          <span *ngIf="summary.documentConsistencyPercent !== undefined && summary.documentConsistencyPercent !== null">
+            {{ copy('A03 document consistency', 'اتساق مستندات A03') }} <b>{{ summary.documentConsistencyPercent }}%</b>
+            · {{ copy('Document differences', 'اختلافات المستندات') }}: {{ summary.a03Disagreements || 0 }}</span>
           <span>{{ copy('Evidence linkage', 'ربط الأدلة') }} <b>{{ summary.evidenceLinkagePercent === null ? '—' : summary.evidenceLinkagePercent + '%' }}</b></span>
           <span>{{ copy('Compared identity fields', 'حقول الهوية المقارنة') }} <b>{{ summary.comparedFields }}</b></span>
           <span>{{ copy('Persisted field differences', 'اختلافات الحقول المحفوظة') }} <b>{{ intelligence.conflicts.length }}</b></span>
@@ -125,7 +128,8 @@
         <div class="v360-quality-deep-dive" *ngIf="qualityExpanded && intelligence.quality.breakdown as summary">
           <section class="v360-quality-detail-card">
             <h4>{{ copy('Saved Oracle calculation · policy at time of scoring', 'معادلة Oracle المحفوظة · إعدادات وقت الاحتساب') }}</h4>
-            <p>{{ copy('The current POC assigns 35% to completeness, 30% to consistency, 20% to evidence linkage, and 15% to metadata. These are configurable-policy candidates—not model-learned, statistically calibrated, or approved regulatory weights.', 'أوزان النموذج التجريبي حالياً: 35% للاكتمال، و30% للاتساق، و20% لربط الأدلة، و15% لبيانات المصدر. هذه أوزان مقترحة قابلة للمراجعة وليست أوزاناً مستنتجة إحصائياً أو معتمدة تنظيمياً.') }}</p>
+            <p>{{ copy('Without A03, the baseline structural score uses 35/30/20/15. When A03 document comparisons exist, 15% of the quality mix is reserved for source-grounded document consistency; the original four metrics proportionally share 85%. All remain POC policy heuristics, not certified data confidence.',
+'دون مستندات A03 نستخدم أوزان الجودة 35/30/20/15. وعند وجود مقارنات A03 تخصص نسبة 15% لاتساق المستندات بينما تتوزع 85% على المقاييس الأربعة الأخرى. هذا تقييم هيكلي تجريبي وليس ثقة معتمدة في البيانات.') }}</p>
             <p class="v360-quality-missing" *ngIf="!summary.calculationSteps?.length">{{ copy('Detailed audit inputs were not saved in this version. Run the no-Airia quality backfill again to record real source values and evidence links.', 'تفاصيل الحساب لم تكن محفوظة في الإصدار السابق. أعد تشغيل حساب الجودة دون استدعاء Airia لتخزين قيم المصادر وروابط الأدلة الفعلية.') }}</p>
             <div class="v360-quality-scroll" *ngIf="summary.calculationSteps?.length">
               <table class="v360-quality-source-table">
