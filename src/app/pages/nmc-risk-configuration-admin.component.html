@@ -13,6 +13,10 @@
     <div class="top-actions">
       <button type="button" class="language-btn" (click)="toggleLanguage()">{{ lang.isArabic ? 'English' : 'العربية' }}</button>
       <a class="secondary-btn" routerLink="/moei/nmc">{{ copy('Back to Command Center', 'العودة إلى مركز القيادة') }}</a>
+      <button type="button" class="secondary-btn" (click)="saveDraft()" [disabled]="!canSaveDraft">
+        {{draftSaving?copy('Saving…','جارٍ الحفظ…'):copy('Save Draft','حفظ مسودة')}}</button>
+      <button type="button" class="secondary-btn" (click)="toggleHistory()">
+        {{historyVisible?copy('Hide History','إخفاء السجل'):copy('View History','عرض السجل')}}</button>
       <button type="button" class="publish-btn" (click)="publish()" [disabled]="!canPublish">
         ✓ {{ publishing ? copy('Publishing…','جارٍ النشر…') : copy('Publish New Central Version','نشر إصدار مركزي جديد') }}
       </button>
@@ -53,8 +57,14 @@
       <button type="button" *ngIf="priorBrowserDraft" (click)="importBrowserDraft()">
         {{copy('Import Legacy Browser Settings as Draft','استيراد إعدادات المتصفح السابقة كمسودة')}}</button>
     </div>
+    <div class="success-banner" *ngIf="draftSaveMessage"><span>✓</span><strong>{{draftSaveMessage}}</strong></div>
+    <div class="validation-banner" role="alert" *ngIf="draftError"><span>!</span><strong>{{draftError}}</strong></div>
+    <div class="validation-banner" role="alert" *ngIf="draftStale">
+      <span>!</span><strong>{{copy('Saved draft belongs to a previous published revision. It was not applied automatically. Review current policy before resaving.',
+        'المسودة المحفوظة تخص إصدارًا منشورًا سابقًا ولم تُطبق تلقائيًا. راجع الإعدادات النشطة قبل الحفظ مجددًا.')}}</strong>
+    </div>
     <div class="validation-banner" role="alert" *ngIf="publicationError">
-      <strong>{{publicationError}}</strong>
+      <span>!</span><strong>{{publicationError}}</strong>
     </div>
     <div class="success-banner" *ngIf="publishedMessage">
       <span>✓</span>
@@ -226,6 +236,8 @@
           </div>
 
           <div class="governance-actions">
+            <button type="button" class="secondary-action" (click)="saveDraft()" [disabled]="!canSaveDraft">
+              {{draftSaving?copy('Saving…','جارٍ الحفظ…'):copy('Save Draft (not active)','حفظ مسودة (غير نشطة)')}}</button>
             <button type="button" class="secondary-action" (click)="discardChanges()">{{ copy('Discard Draft', 'إلغاء التعديلات') }}</button>
             <button type="button" class="secondary-action" (click)="resetDraftToDefaults()">{{ copy('Load Defaults', 'تحميل الإعدادات الافتراضية') }}</button>
             <button type="button" class="publish-action" (click)="publish()" [disabled]="!canPublish">
@@ -354,7 +366,7 @@
         </article>
       </aside>
     </section>
-    <section class="panel risk-version-history" id="risk-version-history">
+    <section class="panel risk-version-history" id="risk-version-history" *ngIf="historyVisible">
       <div class="panel-header">
         <div>
           <span class="section-kicker">{{copy('IMMUTABLE RISK POLICY AUDIT HISTORY',
@@ -381,6 +393,25 @@
           <small>{{copy('Thresholds','حدود التصنيف')}}: {{entry.config.thresholds.watch}} /
             {{entry.config.thresholds.high}} / {{entry.config.thresholds.critical}} ·
             {{copy('Mode','طريقة الحساب')}}: {{entry.config.mode}}</small>
+          <div class="history-values">
+            <div class="history-value-row heading"><span>{{copy('Setting','المتغير')}}</span>
+              <span>{{copy('Previous','السابق')}}</span><span>{{copy('At this publication','في هذا الإصدار')}}</span></div>
+            <div class="history-value-row"><span>{{copy('Calculation mode','طريقة الحساب')}}</span>
+              <span>{{previousConfig(entry)?.mode||'—'}}</span><b>{{entry.config.mode}}</b></div>
+            <div class="history-value-row" *ngFor="let key of factorKeys">
+              <span>{{factorLabel(key)}} ({{copy('weight','الوزن')}})</span>
+              <span>{{previousConfig(entry)?.weights?.[key]??'—'}}%</span>
+              <b>{{entry.config.weights[key]}}%</b>
+            </div>
+            <div class="history-value-row"><span>{{copy('Watch threshold','حد المراقبة')}}</span>
+              <span>{{previousConfig(entry)?.thresholds?.watch??'—'}}</span><b>{{entry.config.thresholds.watch}}</b></div>
+            <div class="history-value-row"><span>{{copy('High threshold','حد المرتفع')}}</span>
+              <span>{{previousConfig(entry)?.thresholds?.high??'—'}}</span><b>{{entry.config.thresholds.high}}</b></div>
+            <div class="history-value-row"><span>{{copy('Critical threshold','حد الحرج')}}</span>
+              <span>{{previousConfig(entry)?.thresholds?.critical??'—'}}</span><b>{{entry.config.thresholds.critical}}</b></div>
+            <div class="history-value-row"><span>{{copy('Model name','اسم النموذج')}}</span>
+              <span>{{previousConfig(entry)?.name||'—'}}</span><b>{{entry.config.name}}</b></div>
+          </div>
         </div>
       </div>
       <p *ngIf="!policyHistory.length" class="risk-version-empty">

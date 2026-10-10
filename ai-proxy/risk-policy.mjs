@@ -38,6 +38,18 @@ export function validateRiskConfig(c){
     weights:Object.fromEntries(keySet.map(k=>[k,c.weights[k]])),
     thresholds:{watch,high,critical}};
 }
+function validateDraftConfig(value){
+  if(!value||typeof value!=='object'||!value.weights||!value.thresholds||
+     !['weighted','conservative','max-signal'].includes(value.mode)||
+     typeof value.name!=='string'||value.name.length>140)
+    throw new RiskPolicyError('RISK_DRAFT_INVALID',422);
+  if(keySet.some(k=>!Number.isInteger(value.weights[k])||
+     value.weights[k]<0||value.weights[k]>100)||
+     !['watch','high','critical'].every(k=>
+       Number.isInteger(value.thresholds[k])&&value.thresholds[k]>=0&&value.thresholds[k]<=100))
+    throw new RiskPolicyError('RISK_DRAFT_INVALID',422);
+  return copy(value); // Incomplete weights/threshold order may be saved; publish still validates.
+}
 export function calculateRiskPolicy(row,config,revision){
   const signals=row?.signals||[];
   const severities={};
@@ -53,6 +65,20 @@ export function calculateRiskPolicy(row,config,revision){
   if(config.mode==='conservative')raw+=Math.max(0,highest-raw)*.28;
   if(config.mode==='max-signal')raw=raw*.68+highest*.32;
   const score=Math.round(Math.min(100,Math.max(0,raw)));
+  const factorSnapshot={
+    calculationMode:config.mode,
+    weightedSubtotal:Number(weighted.toFixed(6)),
+    modeAdjustment:Number((raw-weighted).toFixed(6)),
+    clampedAndRoundedScore:score,
+    rulesetVersion:config.version,
+    factors:keySet.map(key=>{
+      const signal=signals.find(s=>s.factor===key);
+      return {key,severity:severities[key],weight:config.weights[key],
+        weightedContribution:Number((severities[key]*config.weights[key]/100).toFixed(6)),
+        evidenceIds:signal.evidenceIds||[],sourceAgent:signal.sourceAgent||null,
+        confidence:signal.confidence??null,reason:signal.reason||null};
+    })
+  };
   const t=config.thresholds;
   const level=score>=t.critical?'Critical':score>=t.high?'High':
     score>=t.watch?'Watch':'Normal';
@@ -62,8 +88,16 @@ export function calculateRiskPolicy(row,config,revision){
   return {imo:row.imo,sourceAssessmentId:row.assessmentId,
     riskScore:score,riskLevel:level,operationalPriority,
     criticalOpenFinding,policyVersion:config.version,policyRevision:revision,
-    originalScore:row.score,originalLevel:row.level,
+    originalScore:row.score,originalLevel:row.level,factorSnapshot,
     dataNature:'SYNTHETIC_POC_NOT_REGULATORY'};
+}
+/** Legacy policy rows may be read-only reconstructed only from the EXACT same
+ * immutable source assessment ID and the historic published config. Never guess
+ * when the source assessment has changed or the stored score does not match. */
+function explainLegacyProjection(source,config,record){
+  if(!source||!config||source.assessmentId!==record.sourceAssessmentId)return null;
+  const projected=calculateRiskPolicy(source,config,record.policyRevision);
+  return projected?.riskScore===record.riskScore?projected.factorSnapshot:null;
 }
 const fromRow=r=>({revision:r.VERSION_NO,policyRef:r.POLICY_REF,
   previousRevision:r.PREVIOUS_VERSION_NO||null,config:JSON.parse(r.CONFIG_JSON),
@@ -118,10 +152,81 @@ export class CentralRiskPolicy{
       this.ready=true;
     }catch(e){
       if(e instanceof RiskPolicyError)throw e;
-      throw new RiskPolicyError('RISK_POLICY_SCHEMA_NOT_READY',503,e);
+      throw new RiskPolicyError('RISK_POLICY_SCHEMA_NOT_READY',503);
     }
   }
   requireReady(){if(!this.ready)throw new RiskPolicyError('RISK_POLICY_SCHEMA_NOT_READY',503,e);}
+  /** The single shared business draft never affects the published model or fleet. */
+  async draft(){
+    this.requireReady();
+    if(this.mode==='json')return copy(this.state.draft||null);
+    return this.connection(async c=>{
+      try{
+        const r=await c.execute(`SELECT BASE_VERSION_NO,DRAFT_REVISION,CONFIG_JSON,UPDATED_BY,
+          ${time('UPDATED_AT')} UPDATED_AT FROM NMC_RISK_POLICY_DRAFT WHERE DRAFT_ID=1`,
+          [],{outFormat:oracledb.OUT_FORMAT_OBJECT});
+        if(!r.rows.length)return null;
+        const d=r.rows[0];
+        return {baseRevision:d.BASE_VERSION_NO,draftRevision:d.DRAFT_REVISION,
+          config:JSON.parse(d.CONFIG_JSON),updatedBy:d.UPDATED_BY,updatedAt:d.UPDATED_AT};
+      }catch{throw new RiskPolicyError('RISK_DRAFT_SCHEMA_NOT_READY',503);}
+    });
+  }
+  async saveDraft(request){
+    this.requireReady();
+    if(!request||!Number.isInteger(request.expectedRevision)||
+       !Number.isInteger(request.expectedDraftRevision)||
+       request.expectedDraftRevision<0||typeof request.updatedBy!=='string'||
+       request.updatedBy.trim().length<3||request.updatedBy.length>120)
+      throw new RiskPolicyError('RISK_DRAFT_REQUEST_INVALID',422);
+    const config=validateDraftConfig(request.config),at=iso();
+    if(this.mode==='json'){
+      if(request.expectedRevision!==this.state.activeRevision)
+        throw new RiskPolicyError('RISK_POLICY_VERSION_CONFLICT',409);
+      const previous=this.state.draft||null;
+      if((previous?.draftRevision||0)!==request.expectedDraftRevision)
+        throw new RiskPolicyError('RISK_DRAFT_VERSION_CONFLICT',409);
+      const d={baseRevision:this.state.activeRevision,
+        draftRevision:(previous?.draftRevision||0)+1,config,
+        updatedBy:request.updatedBy.trim(),updatedAt:at};
+      this.state.draft=d;this.jsonSave();return copy(d);
+    }
+    return this.connection(async c=>{
+      try{
+        const policy=await c.execute(
+          'SELECT VERSION_NO FROM NMC_RISK_POLICY_ACTIVE WHERE SINGLETON_ID=1 FOR UPDATE');
+        if(!policy.rows.length||policy.rows[0][0]!==request.expectedRevision)
+          throw new RiskPolicyError('RISK_POLICY_VERSION_CONFLICT',409);
+        const current=await c.execute(
+          'SELECT DRAFT_REVISION FROM NMC_RISK_POLICY_DRAFT WHERE DRAFT_ID=1 FOR UPDATE');
+        const actual=current.rows.length?current.rows[0][0]:0;
+        if(actual!==request.expectedDraftRevision)
+          throw new RiskPolicyError('RISK_DRAFT_VERSION_CONFLICT',409);
+        const next=actual+1;
+        if(current.rows.length){
+          await c.execute(`UPDATE NMC_RISK_POLICY_DRAFT
+            SET BASE_VERSION_NO=:base,DRAFT_REVISION=:revision,CONFIG_JSON=:config,
+            UPDATED_BY=:actor,UPDATED_AT=SYSTIMESTAMP WHERE DRAFT_ID=1`,
+            {base:request.expectedRevision,revision:next,config:clob(config),
+              actor:request.updatedBy.trim()});
+        }else{
+          await c.execute(`INSERT INTO NMC_RISK_POLICY_DRAFT
+            (DRAFT_ID,BASE_VERSION_NO,DRAFT_REVISION,CONFIG_JSON,UPDATED_BY)
+            VALUES(1,:base,:revision,:config,:actor)`,
+            {base:request.expectedRevision,revision:next,config:clob(config),
+              actor:request.updatedBy.trim()});
+        }
+        await c.commit();
+        return {baseRevision:request.expectedRevision,draftRevision:next,
+          config,updatedBy:request.updatedBy.trim(),updatedAt:at};
+      }catch(e){
+        await c.rollback();
+        if(e instanceof RiskPolicyError)throw e;
+        if(e?.errorNum===1)throw new RiskPolicyError('RISK_DRAFT_VERSION_CONFLICT',409);
+        throw new RiskPolicyError('RISK_DRAFT_SAVE_FAILED',503,e);
+      }
+    });
+  }
   async active(){
     this.requireReady();
     if(this.mode==='json')return copy(this.state.versions.find(v=>v.revision===this.state.activeRevision));
@@ -167,7 +272,7 @@ export class CentralRiskPolicy{
       const config={...clean,version:'NMC Risk Ruleset 1.'+(rev-1),
         publishedAt:at,publishedBy:request.publishedBy.trim(),
         changeReason:request.reason.trim()};
-      const projections=source.map(r=>calculateRiskPolicy(r,config,rev)).filter(Boolean);
+      const projections=source.map(r=>calculateRiskPolicy(r,config,rev)).filter(Boolean).map(p=>({...p,calculatedAt:at}));
       return {revision:rev,policyRef:config.version,
         previousRevision:previous.revision,config,reason:config.changeReason,
         publishedBy:config.publishedBy,actorRole:'PUBLISHER',
@@ -199,11 +304,11 @@ export class CentralRiskPolicy{
         for(const p of next.projections){
           await c.execute(`INSERT INTO NMC_RISK_POLICY_PROJECTION
             (POLICY_VERSION_NO,ASSESSMENT_ID,IMO,RISK_SCORE,RISK_LEVEL,OPERATIONAL_PRIORITY,
-             CRITICAL_OPEN_FINDING)
-            VALUES(:b_revision,:b_assessment_id,:b_imo,:b_score,:b_risk_level,:b_priority,:b_critical)`,
+             CRITICAL_OPEN_FINDING,FACTOR_SNAPSHOT_JSON)
+            VALUES(:b_revision,:b_assessment_id,:b_imo,:b_score,:b_risk_level,:b_priority,:b_critical,:b_snapshot)`,
             {b_revision:next.revision,b_assessment_id:p.sourceAssessmentId,b_imo:p.imo,
               b_score:p.riskScore,b_risk_level:p.riskLevel,b_priority:p.operationalPriority,
-              b_critical:p.criticalOpenFinding?'Y':'N'});
+              b_critical:p.criticalOpenFinding?'Y':'N',b_snapshot:clob(p.factorSnapshot)});
         }
         await c.execute(`UPDATE NMC_RISK_POLICY_ACTIVE
           SET VERSION_NO=:revision,UPDATED_AT=SYSTIMESTAMP WHERE SINGLETON_ID=1`,
@@ -236,23 +341,40 @@ export class CentralRiskPolicy{
   async projectionHistory(imo){
     if(!/^\d{7}$/.test(imo))throw new RiskPolicyError('RISK_POLICY_IMO_INVALID');
     this.requireReady();
-    if(this.mode==='json')return this.state.projections.filter(p=>p.imo===imo).sort(
-      (a,b)=>b.policyRevision-a.policyRevision);
+    if(this.mode==='json')return this.state.projections.filter(p=>p.imo===imo)
+      .sort((a,b)=>b.policyRevision-a.policyRevision||
+        String(b.calculatedAt||'').localeCompare(String(a.calculatedAt||'')))
+      .map(p=>{
+        const v=this.state.versions.find(v=>v.revision===p.policyRevision);
+        const reconstructed=!p.factorSnapshot?
+          explainLegacyProjection(this.fleet?.results?.[imo],v?.config,p):null;
+        return {...copy(p),policyRef:p.policyVersion||v?.policyRef,
+          factorSnapshot:p.factorSnapshot||reconstructed,
+          factorSnapshotReconstructed:!!reconstructed};
+      });
     return this.connection(async c=>{
       try{
         const q=await c.execute(`SELECT p.IMO,p.ASSESSMENT_ID,p.RISK_SCORE,p.RISK_LEVEL,
           p.OPERATIONAL_PRIORITY,p.CRITICAL_OPEN_FINDING,p.POLICY_VERSION_NO,
-          v.POLICY_REF,v.CHANGE_REASON,${time('p.CALCULATED_AT')} CALCULATED_AT
+          p.FACTOR_SNAPSHOT_JSON,v.CONFIG_JSON,v.POLICY_REF,v.CHANGE_REASON,${time('p.CALCULATED_AT')} CALCULATED_AT
           FROM NMC_RISK_POLICY_PROJECTION p JOIN NMC_RISK_POLICY_VERSION v
           ON v.VERSION_NO=p.POLICY_VERSION_NO
-          WHERE p.IMO=:imo ORDER BY p.POLICY_VERSION_NO DESC FETCH FIRST 200 ROWS ONLY`,
+          WHERE p.IMO=:imo ORDER BY p.POLICY_VERSION_NO DESC,p.CALCULATED_AT DESC FETCH FIRST 200 ROWS ONLY`,
           {imo},{outFormat:oracledb.OUT_FORMAT_OBJECT});
-        return q.rows.map(r=>({imo:r.IMO,sourceAssessmentId:r.ASSESSMENT_ID,
+        return q.rows.map(r=>{
+        const base={imo:r.IMO,sourceAssessmentId:r.ASSESSMENT_ID,
           riskScore:r.RISK_SCORE,riskLevel:r.RISK_LEVEL,
           operationalPriority:r.OPERATIONAL_PRIORITY,
           criticalOpenFinding:r.CRITICAL_OPEN_FINDING==='Y',
           policyRevision:r.POLICY_VERSION_NO,policyRef:r.POLICY_REF,
-          reason:r.CHANGE_REASON,calculatedAt:r.CALCULATED_AT}));
+          reason:r.CHANGE_REASON,calculatedAt:r.CALCULATED_AT};
+        const recovered=!r.FACTOR_SNAPSHOT_JSON?
+          explainLegacyProjection(this.fleet?.results?.[imo],
+            JSON.parse(r.CONFIG_JSON),base):null;
+        return {...base,factorSnapshot:r.FACTOR_SNAPSHOT_JSON?
+          JSON.parse(r.FACTOR_SNAPSHOT_JSON):recovered,
+          factorSnapshotReconstructed:!!recovered};
+      });
       }catch{throw new RiskPolicyError('RISK_POLICY_HISTORY_UNAVAILABLE',503);}
     });
   }
@@ -261,6 +383,7 @@ export class CentralRiskPolicy{
     const active=await this.active();
     const p=calculateRiskPolicy(savedRow,active.config,active.revision);
     if(!p)return;
+    p.calculatedAt=iso();
     if(this.mode==='json'){
       if(!this.state.projections.some(x=>x.policyRevision===p.policyRevision&&
         x.sourceAssessmentId===p.sourceAssessmentId)){
@@ -276,11 +399,11 @@ export class CentralRiskPolicy{
         if(!exists.rows.length){
           await c.execute(`INSERT INTO NMC_RISK_POLICY_PROJECTION
             (POLICY_VERSION_NO,ASSESSMENT_ID,IMO,RISK_SCORE,RISK_LEVEL,OPERATIONAL_PRIORITY,
-             CRITICAL_OPEN_FINDING)
-            VALUES(:b_revision,:b_assessment_id,:b_imo,:b_score,:b_risk_level,:b_priority,:b_critical)`,
+             CRITICAL_OPEN_FINDING,FACTOR_SNAPSHOT_JSON)
+            VALUES(:b_revision,:b_assessment_id,:b_imo,:b_score,:b_risk_level,:b_priority,:b_critical,:b_snapshot)`,
             {b_revision:active.revision,b_assessment_id:p.sourceAssessmentId,b_imo:p.imo,
               b_score:p.riskScore,b_risk_level:p.riskLevel,b_priority:p.operationalPriority,
-              b_critical:p.criticalOpenFinding?'Y':'N'});
+              b_critical:p.criticalOpenFinding?'Y':'N',b_snapshot:clob(p.factorSnapshot)});
           await c.commit();
         }
       }catch(e){await c.rollback();if(e?.errorNum!==1)throw e;}

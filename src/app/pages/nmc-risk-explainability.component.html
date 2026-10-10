@@ -33,14 +33,16 @@
         </p>
       </div>
       <div class="hero-metrics">
-        <div class="metric-card risk projected-risk-card" [ngClass]="riskClass">
-          <small>{{copy('Score under Risk Settings · browser preview',
-                       'الدرجة وفق إعدادات المخاطر · معاينة المتصفح')}}</small>
+        <button type="button" class="metric-card risk projected-risk-card current-risk-button"
+                [ngClass]="riskClass" (click)="openCurrentRisk()" [disabled]="!factors.length"
+                [attr.aria-label]="copy('Open current risk factor analysis','فتح تحليل عوامل المخاطر الحالية')">
+          <small>{{copy('CURRENT PUBLISHED RISK · CLICK TO ANALYZE',
+                       'المخاطر الحالية المنشورة · اضغط لعرض التحليل')}}</small>
           <strong>{{riskScore===null?'—':riskScore}}</strong>
           <span>{{riskLabel}} · {{activeRiskConfig?.version||'—'}}</span>
-        </div>
+        </button>
         <div class="metric-card source-risk-card">
-          <small>{{copy('Original Oracle AI assessment','تقييم AI الأصلي المحفوظ في Oracle')}}</small>
+          <small>{{copy('Original stored assessment (unchanged)','التقييم الأصلي المحفوظ (دون تعديل)')}}</small>
           <strong>{{sourceRiskScore===null?'—':sourceRiskScore}}</strong>
           <span>{{sourceRiskLevel}} · {{assessment?.configVersion||'—'}}</span>
         </div>
@@ -69,8 +71,8 @@
         <div>
           <strong>{{copy('Risk Settings applied to saved AI signals',
                         'تطبيق إعدادات المخاطر الحالية على مؤشرات AI المحفوظة')}}</strong>
-          <p>{{copy('The displayed projection is recalculated when Risk Settings are published in this browser. It is NOT written to Oracle, and does not change fleet counts, alerts, cases, or guidance decisions.',
-                     'يُعاد حساب الدرجة المعروضة عند نشر إعدادات المخاطر في هذا المتصفح فقط. لا يتم حفظها في Oracle ولا تغير العدادات أو التنبيهات أو الحالات أو قرارات الإرشاد.')}}</p>
+          <p>{{copy('The current score is recalculated under the centrally published Oracle risk policy using the SAME saved A01/A02 severities. Command Center totals and factor weights use the active policy. Earlier scored projections and source AI signals remain in immutable history.',
+                     'تُعاد درجة المخاطر الحالية وفق السياسة المركزية المنشورة باستخدام نفس مؤشرات A01/A02 المحفوظة. تتحدث العدادات والأوزان وفق السياسة النشطة، بينما تبقى التقييمات السابقة ومؤشرات AI الأصلية محفوظة في السجل.')}}</p>
           <small>{{copy('Original saved risk','المخاطر الأصلية المحفوظة')}}: {{a.score}} · {{a.level}} · {{a.configVersion}}
              → {{copy('Current settings projection','المتوقع وفق الإعدادات الحالية')}}: {{riskScore}} · {{riskLevel}} · {{activeRiskConfig?.version||'—'}}
              <b *ngIf="policyChanged" class="rx-policy-delta">{{copy('CONFIGURATION CHANGED','الإعدادات مختلفة')}}</b>
@@ -82,8 +84,8 @@
         <div class="threshold-head">
           <div>
             <h3>{{copy('Risk Classification Thresholds','حدود تصنيف المخاطر')}}</h3>
-            <p>{{copy('Current published browser Risk Settings; original Oracle thresholds remain in the historical assessment.',
-                      'حدود تصنيف إعدادات المتصفح المنشورة؛ حدود Oracle الأصلية محفوظة داخل التقييم التاريخي.')}}</p>
+            <p>{{copy('Thresholds of the centrally active published policy; old revisions remain read-only.',
+                      'حدود تصنيف السياسة المركزية النشطة، والإصدارات السابقة محفوظة للقراءة فقط.')}}</p>
           </div>
           <div class="engine-meta"><span>{{activeRiskConfig?.version||'—'}}</span><span>{{copy('Saved','محفوظ')}}: {{a.configVersion}}</span></div>
         </div>
@@ -101,13 +103,13 @@
         </div>
       </section>
 
-      <section class="explain-grid">
+      <section class="explain-grid" id="current-risk-factors">
         <div class="factor-panel panel">
           <div class="panel-header">
             <div>
               <h3>{{copy('How the Score Was Built','كيف تم احتساب درجة المخاطر')}}</h3>
-              <p>{{copy('Five saved A01/A02 severities × current browser-published weights (never fixture baselines)',
-                        'خمسة مؤشرات محفوظة من A01/A02 × الأوزان المنشورة في إعدادات المتصفح (دون خطوط أساس افتراضية)')}}</p>
+              <p>{{copy('Five unchanged saved A01/A02 severities × the CURRENT centrally published weights.',
+                        'خمسة مؤشرات محفوظة دون تغيير من A01/A02 × أوزان السياسة المركزية الحالية المنشورة.')}}</p>
             </div>
             <span class="count-pill">{{factors.length}} {{copy('factors','عوامل')}}</span>
           </div>
@@ -188,10 +190,52 @@
         </aside>
       </section>
 
+    <section class="panel rx-insight-card risk-history-panel" aria-label="Risk publication history">
+      <div class="panel-header">
+        <div><h3>{{copy('Risk Score History · Read Only','تاريخ حساب المخاطر · للعرض فقط')}}</h3>
+          <p>{{copy('Each saved risk is tied to its published policy, source assessment and original factor snapshot.',
+                   'كل نتيجة تاريخية مرتبطة بإصدار السياسة والتقييم المصدر وتفاصيل العوامل المحفوظة.')}}</p>
+        </div>
+        <button class="secondary-btn" type="button" (click)="loadRiskHistory()" [disabled]="historyLoading">
+          {{copy('Refresh History','تحديث السجل')}}</button>
+      </div>
+      <p class="rx-notice" *ngIf="historyLoading">{{copy('Loading history…','جارٍ تحميل السجل…')}}</p>
+      <p class="rx-notice rx-warning" *ngIf="historyError">{{historyError}}</p>
+      <div class="risk-history-rows">
+        <article class="historical-risk-record" *ngFor="let h of riskHistory;let i=index">
+          <div class="historical-risk-heading">
+            <strong>{{h.riskScore}}/100 · {{h.riskLevel}}</strong>
+            <span>{{h.policyRef||h.policyVersion||('Revision '+h.policyRevision)}} ·
+              {{h.calculatedAt|date:'medium'}}</span>
+            <small>{{copy('SOURCE','المصدر')}}: {{h.sourceAssessmentId}}</small>
+            <span class="history-readonly">{{copy('READ ONLY · NOT CLICKABLE','للقراءة فقط · غير قابل للضغط')}}</span>
+          </div>
+          <small class="history-lineage" *ngIf="h.factorSnapshotReconstructed">
+            {{copy('Factor breakdown verified from the same immutable assessment ID and the historic published policy (not a newly stored snapshot).',
+                   'تم التحقق من تفاصيل العوامل باستخدام نفس معرف التقييم الأصلي والسياسة المنشورة تاريخيًا؛ ليست نسخة جديدة محفوظة.')}}</small>
+          <div *ngIf="h.factorSnapshot as snapshot" class="historical-risk-factors">
+            <span class="historical-formula">{{snapshot.calculationMode}} ·
+              {{copy('Weighted subtotal','المجموع الموزون')}} {{snapshot.weightedSubtotal|number:'1.2-2'}} ·
+              {{copy('Mode adjustment','تعديل طريقة الحساب')}} {{snapshot.modeAdjustment|number:'1.2-2'}} ·
+              {{copy('Result','النتيجة')}} {{snapshot.clampedAndRoundedScore}}/100</span>
+            <div *ngFor="let f of snapshot.factors" class="historical-factor-row">
+              <span>{{f.key}}</span><span>{{copy('AI severity','مؤشر AI')}}: {{f.severity}}/100</span>
+              <span>{{copy('Weight','الوزن')}}: {{f.weight}}%</span>
+              <strong>{{f.weightedContribution|number:'1.2-2'}}</strong>
+            </div>
+          </div>
+          <p *ngIf="!h.factorSnapshot" class="rx-notice">
+            {{copy('A trustworthy factor breakdown is unavailable for this older revision; the original score and policy are preserved without guessing.',
+              'تفاصيل العوامل التاريخية غير متاحة بمصدر مطابق؛ الدرجة وإصدار السياسة محفوظان دون اختلاق قيم.')}}</p>
+        </article>
+      </div>
+      <p class="rx-notice" *ngIf="!historyLoading&&!historyError&&!riskHistory.length">
+        {{copy('No saved risk policy projections yet.','لا توجد نسخ تاريخية محفوظة لحساب المخاطر بعد.')}}</p>
+    </section>
       <section class="rx-insight-card panel">
         <div class="panel-header"><div>
           <h3>{{copy('Maritime Situation Summary','ملخص الموقف البحري')}}</h3>
-          <p>{{copy('Platform projection from saved A01/A02 evidence under current browser-published Risk Settings',
+          <p>{{copy('Platform projection from saved A01/A02 evidence under current centrally published Risk Settings',
                    'إسقاط حسابي من أدلة A01/A02 المحفوظة وفق إعدادات المخاطر المنشورة في المتصفح')}}</p>
         </div></div>
         <p>{{situationSummary}}</p>

@@ -1104,3 +1104,9 @@ button, input, select { font: inherit; }
 .operations-section-label strong{font-size:14px}
 .operations-section-label span{font-size:10px;color:#8395a1}
 .db-fetch-btn:disabled{opacity:.65;cursor:wait}
+
+/* Direct drilldown into current, centrally published risk (historic scores stay read-only). */
+.risk-inspect-link{cursor:pointer;text-decoration:none;transition:box-shadow .15s,outline-color .15s;}
+.risk-inspect-link:hover,.risk-inspect-link:focus-visible{box-shadow:0 0 0 2px rgba(15,118,110,.3);outline-offset:2px;}
+a.risk-chip{display:inline-flex;align-items:center;}
+a.big-risk{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;}

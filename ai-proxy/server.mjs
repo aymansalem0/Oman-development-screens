@@ -301,6 +301,14 @@ const server = createServer(async (req, res) => {
     try{
       if(req.method==='GET'&&path==='/api/ai/risk-policy')
         return respond(res,200,{status:'ok',active:await riskPolicy.active()});
+      if(req.method==='GET'&&path==='/api/ai/risk-policy/draft')
+        return respond(res,200,{status:'ok',draft:await riskPolicy.draft()});
+      if(req.method==='POST'&&path==='/api/ai/risk-policy/draft'){
+        dashboards.assertRole(req,'EDITOR');
+        const body=await requestJson(req,16384);
+        const draft=await riskPolicy.saveDraft(body);
+        return respond(res,200,{status:'ok',draft});
+      }
       if(req.method==='GET'&&path==='/api/ai/risk-policy/history')
         return respond(res,200,{status:'ok',history:await riskPolicy.history()});
       if(req.method==='GET'&&path==='/api/ai/risk-policy/projections')

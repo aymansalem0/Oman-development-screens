@@ -12,6 +12,7 @@ import { LanguageService } from '../services/language.service';
 import {
   NmcRiskEngineService,
   CentralPolicyVersion,
+  CentralRiskDraft,
   RiskCalculationMode,
   RiskEngineConfig,
   RiskFactorKey,
@@ -56,6 +57,21 @@ export class NmcRiskConfigurationAdminComponent implements OnInit, OnDestroy {
   publishing=false;
   policyHistory:CentralPolicyVersion[]=[];
   historyLoading=false;
+  historyVisible=false;
+  savedDraft:CentralRiskDraft|null=null;
+  draftReady=false;
+  draftSaving=false;
+  draftSaveMessage='';
+  draftActorName='';
+  draftError='';
+  private editorAccessKey='';
+  private draftRequested=false;
+  get canSaveDraft():boolean{
+    return this.policyReady&&!this.draftSaving&&!!this.draft?.name?.trim();
+  }
+  get draftStale():boolean{
+    return !!this.savedDraft&&this.savedDraft.baseRevision!==this.activeRevision;
+  }
   private publisherAccessKey='';
   private dirtyDraft=false;
   get policyReady():boolean{return this.riskEngine.centralReady&&!!this.riskEngine.activeVersion;}
@@ -112,6 +128,9 @@ export class NmcRiskConfigurationAdminComponent implements OnInit, OnDestroy {
       this.validationErrors=this.riskEngine.validate(this.draft);
       this.rebuildPreview();
       this.loadVersionHistory();
+      if(!this.draftRequested){
+        this.draftRequested=true;this.loadCentralDraft();
+      }
     }));
     this.loadVersionHistory();
     this.loadSavedAssessments();
@@ -122,6 +141,58 @@ export class NmcRiskConfigurationAdminComponent implements OnInit, OnDestroy {
       next:list=>{this.policyHistory=list;this.historyLoading=false;},
       error:()=>{this.historyLoading=false;}
     }));
+  }
+  loadCentralDraft():void{
+    this.subscriptions.add(this.riskEngine.savedDraft().subscribe({
+      next:draft=>{
+        this.savedDraft=draft;this.draftReady=true;
+        this.draftActorName=draft?.updatedBy||this.draftActorName;
+        if(draft&&draft.baseRevision===this.activeRevision&&!this.dirtyDraft){
+          this.draft=this.riskEngine.cloneConfig(draft.config);
+          this.validationErrors=this.riskEngine.validate(this.draft);
+          this.rebuildPreview();
+        }
+      },
+      error:e=>{
+        this.draftReady=false;
+        this.draftError=this.copy('Central draft unavailable: '+(e?.error?.error||'API_ERROR'),
+          'تعذر تحميل المسودة المركزية: '+(e?.error?.error||'API_ERROR'));
+      }
+    }));
+  }
+  saveDraft():void{
+    if(!this.canSaveDraft)return;
+    if(!this.editorAccessKey)this.editorAccessKey=window.prompt(
+      'Risk Draft editor key (this browser tab only)')?.trim()||'';
+    if(!this.editorAccessKey)return;
+    if(!this.draftActorName.trim())
+      this.draftActorName=window.prompt('Name of the Risk Editor saving this draft')?.trim()||'';
+    if(this.draftActorName.trim().length<3)return;
+    this.draftSaving=true;this.draftError='';this.draftSaveMessage='';
+    this.subscriptions.add(this.riskEngine.saveCentralDraft(
+      this.draft,this.activeRevision,this.savedDraft?.draftRevision||0,
+      this.draftActorName,this.editorAccessKey).subscribe({
+      next:draft=>{
+        this.savedDraft=draft;this.draftReady=true;this.draftSaving=false;
+        this.dirtyDraft=false;
+        this.draftSaveMessage=this.copy(
+          'Draft #'+draft.draftRevision+' saved centrally. It is NOT active until Publish.',
+          'تم حفظ المسودة المركزية رقم '+draft.draftRevision+'. لن تصبح نشطة قبل النشر.');
+      },
+      error:e=>{
+        this.draftSaving=false;
+        if(e?.status===403)this.editorAccessKey='';
+        this.draftError=this.copy('Draft save failed: '+(e?.error?.error||'API_ERROR'),
+          'تعذر حفظ المسودة: '+(e?.error?.error||'API_ERROR'));
+      }
+    }));
+  }
+  toggleHistory():void{
+    this.historyVisible=!this.historyVisible;
+    if(this.historyVisible)this.loadVersionHistory();
+  }
+  previousConfig(entry:CentralPolicyVersion):RiskEngineConfig|null{
+    return this.policyHistory.find(x=>x.revision===entry.previousRevision)?.config||null;
   }
   describeVersionDiff(entry:CentralPolicyVersion):string{
     const previous=this.policyHistory.find(x=>x.revision===entry.previousRevision);
@@ -278,6 +349,7 @@ export class NmcRiskConfigurationAdminComponent implements OnInit, OnDestroy {
   updateDraft(): void {
     this.dirtyDraft=true;
     this.publishedMessage = '';
+    this.draftSaveMessage='';
     this.validationErrors = this.riskEngine.validate(this.draft);
     this.rebuildPreview();
   }
@@ -345,6 +417,8 @@ export class NmcRiskConfigurationAdminComponent implements OnInit, OnDestroy {
         this.draft=this.riskEngine.cloneConfig(this.published);
         this.rebuildPreview();
         this.loadVersionHistory();
+        this.savedDraft=null;
+        this.loadCentralDraft(); // stale central draft is shown, never applied over the new policy.
         this.publishedMessage=this.copy(
           'Central version '+response.published.policyRef+' is ACTIVE. '+response.published.projectionCount+
           ' saved assessments were projected; previous versions remain in History. No AI calls.',
