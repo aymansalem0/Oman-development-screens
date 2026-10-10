@@ -2,11 +2,12 @@ import { CommonModule } from '@angular/common';
 import { Component } from '@angular/core';
 import { Router, RouterLink, RouterOutlet } from '@angular/router';
 import { LanguageService } from './services/language.service';
+import { NmcPlatformHeaderComponent, NmcPlatformFooterComponent } from './components/nmc-platform-chrome.component';
 
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [CommonModule, RouterLink, RouterOutlet],
+  imports: [CommonModule, RouterLink, RouterOutlet, NmcPlatformHeaderComponent, NmcPlatformFooterComponent],
   templateUrl: './app.component.html'
 })
 export class AppComponent {
