@@ -290,3 +290,21 @@ button, input, select, a { font: inherit; }
 .referral-form button:disabled{opacity:.6;cursor:wait}
 .referral-history{margin-top:14px;background:#eaf4f6;border-radius:9px;padding:10px;color:#3f6870}
 @media(max-width:800px){.referral-top{align-items:stretch;flex-direction:column}.referral-cards{grid-template-columns:1fr}}
+
+/* Scheduling POC increment: distinct from the synthetic targeting candidate list. */
+.schedule-summary{display:flex;flex-wrap:wrap;gap:10px;margin:15px 0}
+.schedule-summary span{display:flex;flex-direction:column;min-width:135px;flex:1;background:#f2f7f8;
+  border:1px solid #d6e4e8;border-radius:10px;padding:10px 14px;font-size:12px;gap:5px}
+.schedule-summary span strong{font-size:24px;color:#154c64}
+.schedule-buttons{display:flex;flex-wrap:wrap;gap:8px}
+.schedule-buttons button{flex:1;min-width:120px}
+.slot-available{color:#136a45;font-size:12px;margin-top:8px}
+.slot-conflict{color:#a02335;font-size:12px;margin-top:8px}
+.schedule-upcoming{border-top:1px solid #d6e4e8;padding-top:15px;margin-top:18px}
+.schedule-upcoming h3{margin:0 0 4px;font-size:17px}
+.schedule-upcoming>p{font-size:12px;margin-bottom:12px}
+.schedule-appointment{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;
+  padding:12px;margin:7px 0;gap:9px;border:1px solid #d4e3e7;border-radius:10px;background:#f7fbfc;font-size:12px}
+.schedule-appointment strong{font-size:13px}
+.schedule-appointment a{color:#075a75}
+.referral-form select{width:100%;padding:9px;border:1px solid #c5d5db;border-radius:7px;background:#fff}

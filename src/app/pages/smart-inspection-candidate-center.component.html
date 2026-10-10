@@ -33,6 +33,12 @@
           ↻ {{copy('Refresh','تحديث')}}
         </button>
       </div>
+      <div class="schedule-summary" role="group" [attr.aria-label]="copy('Electronic scheduling summary','ملخص الجدولة الإلكترونية')">
+        <span><strong>{{schedulingSummary.pending}}</strong>{{copy('Awaiting schedule','بانتظار الجدولة')}}</span>
+        <span><strong>{{schedulingSummary.upcoming}}</strong>{{copy('Upcoming inspections','معاينات قادمة')}}</span>
+        <span><strong>{{schedulingSummary.completed}}</strong>{{copy('Completed','مكتملة')}}</span>
+        <span><strong>{{schedulingSummary.elapsedUncompleted}}</strong>{{copy('Elapsed / follow up','مضى موعدها · للمتابعة')}}</span>
+      </div>
       <p *ngIf="inboundLoading">{{copy('Loading saved inspection requests…','جاري تحميل طلبات المعاينة المحفوظة…')}}</p>
       <p *ngIf="inboundError" class="referral-error" role="alert">{{inboundError}}</p>
       <p *ngIf="scheduleSuccess" class="referral-success" role="status">{{scheduleSuccess}}</p>
@@ -61,11 +67,45 @@
             <label>{{copy('Inspector / team','المعاين / الفريق')}}</label>
             <input type="text" [(ngModel)]="inspectors[item.id]" maxlength="120"
               [placeholder]="copy('Assigned inspection team','فريق المعاينة المسند')"/>
-            <button type="button" (click)="scheduleReferral(item)" [disabled]="!!scheduleBusy">
-              {{copy('Confirm schedule','اعتماد الجدولة')}}
-            </button>
+            <label>{{copy('Planned inspection duration','المدة المتوقعة للمعاينة')}}</label>
+            <select [(ngModel)]="durations[item.id]" [ngModelOptions]="{standalone:true}">
+              <option [ngValue]="undefined">{{copy('60 minutes (default)','60 دقيقة (افتراضي)')}}</option>
+              <option [ngValue]="30">30 {{copy('minutes','دقيقة')}}</option>
+              <option [ngValue]="60">60 {{copy('minutes','دقيقة')}}</option>
+              <option [ngValue]="90">90 {{copy('minutes','دقيقة')}}</option>
+              <option [ngValue]="120">120 {{copy('minutes','دقيقة')}}</option>
+              <option [ngValue]="180">180 {{copy('minutes','دقيقة')}}</option>
+              <option [ngValue]="240">240 {{copy('minutes','دقيقة')}}</option>
+            </select>
+            <div class="schedule-buttons">
+              <button type="button" (click)="checkAvailability(item)"
+                [disabled]="!!scheduleBusy||!!availabilityBusy">
+                {{availabilityBusy===item.id?copy('Checking…','جارٍ الفحص…'):copy('Check inspector availability','فحص توافر المعاين')}}
+              </button>
+              <button type="button" (click)="scheduleReferral(item)" [disabled]="!!scheduleBusy">
+                {{copy('Confirm schedule','اعتماد الجدولة')}}
+              </button>
+            </div>
+            <p *ngIf="availabilityResult[item.id]==='AVAILABLE'" class="slot-available" role="status">
+              {{copy('Available at the time checked. Revalidated when you confirm.','متاح وقت الفحص. يُعاد التحقق عند الاعتماد.')}}
+            </p>
+            <p *ngIf="availabilityResult[item.id]==='CONFLICT'" class="slot-conflict" role="alert">
+              {{copy('Inspector has an overlapping scheduled inspection. Choose another slot or team.','المعاين لديه معاينة متداخلة؛ اختر موعدًا أو فريقًا آخر.')}}
+            </p>
           </div>
         </article>
+      </div>
+      <div class="schedule-upcoming" *ngIf="scheduledReferrals.length" aria-label="Upcoming and scheduled inspections">
+        <h3>{{copy('Electronic Inspection Schedule','جدول المعاينات الإلكتروني')}}</h3>
+        <p>{{copy('Confirmed slots are persisted in the NMC Case and remain available after refresh.',
+                  'المواعيد المعتمدة محفوظة ضمن حالة NMC وتظل متاحة بعد التحديث.')}}</p>
+        <div class="schedule-appointment" *ngFor="let slot of scheduledReferrals">
+          <strong>{{slot.imo}} · {{slot.scheduledAt|date:'medium':'':'en-US'}}</strong>
+          <span>{{slot.durationMinutes||60}} {{copy('min','دقيقة')}} · {{slot.port}} · {{slot.inspector}}</span>
+          <a [routerLink]="['/moei/nmc/vessel',slot.imo,'smart-inspection']">
+            {{copy('Open assigned inspection','فتح المعاينة المسندة')}} ↗
+          </a>
+        </div>
       </div>
       <div *ngIf="inboundReferrals.length>pendingReferrals.length" class="referral-history">
         {{copy('Previously scheduled/completed referrals','إحالات سبق جدولتها أو إتمامها')}}:

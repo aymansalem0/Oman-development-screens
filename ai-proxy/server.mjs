@@ -8,6 +8,7 @@ import { NmcCaseWorkspace, NmcCaseError } from './case-workspace.mjs';
 import { normalizeA01Actions, ActionPlanError } from './nmc-action-plan.mjs';
 import { OperationalGuidance, GuidanceError } from './operational-guidance.mjs';
 import { CentralRiskPolicy, RiskPolicyError } from './risk-policy.mjs';
+import {scheduleSummary} from './inspection-scheduling.mjs';
 
 const port = Number(process.env.PORT || 3000);
 const apiKey = (process.env.AIRIA_MENA_KEY || '').trim();
@@ -372,8 +373,27 @@ const server = createServer(async (req, res) => {
   // Legacy synthetic targeting candidates remain a separate information source.
   if(path==='/api/ai/inspection-referrals'){
     if(req.method!=='GET')return respond(res,405,{error:'METHOD_NOT_ALLOWED'});
-    try{return respond(res,200,{status:'ok',requests:await cases.listInspectionRequests()});}
-    catch{return respond(res,503,{error:'CASE_STORE_UNAVAILABLE'});}
+    try{
+      const requests=await cases.listInspectionRequests();
+      return respond(res,200,{status:'ok',requests,summary:scheduleSummary(requests)});
+    }catch{return respond(res,503,{error:'CASE_STORE_UNAVAILABLE'});}
+  }
+  if(path==='/api/ai/inspection-schedule/availability'){
+    if(req.method!=='GET')return respond(res,405,{error:'METHOD_NOT_ALLOWED'});
+    try{
+      const query=new URL(req.url||'','http://localhost').searchParams;
+      const availability=await cases.inspectionAvailability({
+        scheduledAt:query.get('scheduledAt'),inspector:query.get('inspector'),
+        port:query.get('port'),durationMinutes:Number(query.get('durationMinutes'))
+      });
+      return respond(res,200,{status:'ok',...availability});
+    }catch(error){
+      if(error?.code==='CASE_SCHEDULE_INVALID')
+        return respond(res,400,{error:'CASE_SCHEDULE_INVALID'});
+      if(error?.code==='CASE_STORE_UNAVAILABLE'||error?.code==='CASE_SCHEMA_NOT_READY')
+        return respond(res,503,{error:error.code});
+      return respond(res,503,{error:'INSPECTION_AVAILABILITY_UNAVAILABLE'});
+    }
   }
 
   // A case is opened only after a human acknowledges a saved alert.

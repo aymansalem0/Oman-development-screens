@@ -39,6 +39,10 @@ export class SmartInspectionCandidateCenterComponent implements OnInit {
   dates:Record<string,string>={};
   inspectors:Record<string,string>={};
   schedulingPorts:Record<string,string>={};
+  durations:Record<string,number>={};
+  availabilityBusy='';
+  availabilityResult:Record<string,'AVAILABLE'|'CONFLICT'|'UNKNOWN'>={};
+  schedulingSummary={pending:0,upcoming:0,completed:0,elapsedUncompleted:0};
 
   constructor(
     public readonly lang: LanguageService,
@@ -52,6 +56,7 @@ export class SmartInspectionCandidateCenterComponent implements OnInit {
     this.cases.inspectionReferrals().subscribe({
       next:res=>{
         this.inboundReferrals=res.requests||[];
+        this.schedulingSummary=res.summary||{pending:0,upcoming:0,completed:0,elapsedUncompleted:0};
         this.inboundLoading=false;
       },
       error:()=>{
@@ -64,13 +69,45 @@ export class SmartInspectionCandidateCenterComponent implements OnInit {
   get pendingReferrals():NmcInspectionReferral[]{
     return this.inboundReferrals.filter(r=>r.status==='PENDING_SCHEDULING'&&r.caseStatus!=='RESOLVED');
   }
-  scheduleReferral(item:NmcInspectionReferral):void{
-    if(this.scheduleBusy)return;
-    const raw=this.dates[item.id],port=(this.schedulingPorts[item.id]||'').trim();
-    const inspector=(this.inspectors[item.id]||'').trim();
+  get scheduledReferrals():NmcInspectionReferral[]{
+    return this.inboundReferrals.filter(r=>r.status==='SCHEDULED').sort(
+      (a,b)=>Date.parse(a.scheduledAt||'')-Date.parse(b.scheduledAt||''));
+  }
+  private slotData(id:string):{scheduledAt:string;port:string;inspector:string;durationMinutes:number}|null{
+    const raw=this.dates[id],port=(this.schedulingPorts[id]||'').trim();
+    const inspector=(this.inspectors[id]||'').trim();
+    const durationMinutes=this.durations[id]||60;
     const when=raw?new Date(raw):null;
     if(!when||!Number.isFinite(when.getTime())||when.getTime()<=Date.now()||
-      !port||!inspector){
+       !port||!inspector)return null;
+    return {scheduledAt:when.toISOString(),port,inspector,durationMinutes};
+  }
+  checkAvailability(item:NmcInspectionReferral):void{
+    if(this.availabilityBusy)return;
+    const slot=this.slotData(item.id);
+    if(!slot){
+      this.inboundError=this.copy('Enter a future date/time, port and inspector.',
+        'حدد تاريخًا ووقتًا مستقبليًا وميناءً ومعاينًا.');
+      return;
+    }
+    this.availabilityBusy=item.id;this.inboundError='';
+    this.cases.inspectionAvailability(slot.scheduledAt,slot.port,slot.inspector,
+      slot.durationMinutes).subscribe({
+      next:res=>{
+        this.availabilityBusy='';
+        this.availabilityResult[item.id]=res.available?'AVAILABLE':'CONFLICT';
+      },
+      error:e=>{
+        this.availabilityBusy='';
+        this.availabilityResult[item.id]='UNKNOWN';
+        this.inboundError=this.cases.readableError(e,this.lang.isArabic);
+      }
+    });
+  }
+  scheduleReferral(item:NmcInspectionReferral):void{
+    if(this.scheduleBusy)return;
+    const slot=this.slotData(item.id);
+    if(!slot){
       this.inboundError=this.copy('Enter a future date/time, port and inspector.',
         'حدد تاريخًا ووقتًا مستقبليًا وميناءً ومعاينًا.');
       return;
@@ -82,9 +119,11 @@ export class SmartInspectionCandidateCenterComponent implements OnInit {
           this.scheduleBusy='';this.inboundError=this.copy('Case not found','الحالة غير موجودة');
           return;
         }
-        this.cases.scheduleInspection(res.case,item.id,when.toISOString(),port,inspector).subscribe({
+        this.cases.scheduleInspection(res.case,item.id,slot.scheduledAt,
+          slot.port,slot.inspector,slot.durationMinutes).subscribe({
           next:()=>{
             this.scheduleBusy='';
+            delete this.availabilityResult[item.id];
             this.scheduleSuccess=this.copy(
               'Inspection request scheduled and saved. Open the NMC Case to conduct the inspection.',
               'تمت جدولة المعاينة وحفظها. افتح حالة NMC لتنفيذ المعاينة.');

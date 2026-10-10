@@ -44,6 +44,11 @@
           <span>{{ copy('NMC Case', 'حالة NMC') }} <strong>{{ caseId }}</strong></span>
           <span>{{ copy('Inspector', 'المعاين') }} <strong>{{ inspectorName }}</strong></span>
           <span>{{ copy('Source', 'المصدر') }} <strong>{{ copy('Priority inspection task', 'مهمة معاينة ذات أولوية') }}</strong></span>
+          <span *ngIf="activeScheduledReferral as appointment">
+            {{copy('Confirmed appointment','الموعد المعتمد')}}
+            <strong>{{appointment.scheduledAt|date:'medium'}} · {{appointment.port}} ·
+              {{appointment.durationMinutes||60}} {{copy('min','دقيقة')}}</strong>
+          </span>
         </div>
       </div>
 

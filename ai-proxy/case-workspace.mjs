@@ -7,6 +7,8 @@ import {createHash,randomUUID} from 'node:crypto';
 import {existsSync,mkdirSync,readFileSync,writeFileSync,renameSync} from 'node:fs';
 import {dirname} from 'node:path';
 import oracledb from 'oracledb';
+import {normalizeInspectionSlot,overlappingInspectorAppointments,
+  InspectionScheduleError} from './inspection-scheduling.mjs';
 
 const clone=x=>JSON.parse(JSON.stringify(x));
 const now=()=>new Date().toISOString();
@@ -30,6 +32,7 @@ export class NmcCaseWorkspace{
     if(!['json','oracle'].includes(mode)||!alerts)
       throw new Error('NMC_CASE_CONFIGURATION_INVALID');
     this.mode=mode;this.oracle=oracleRepository;this.file=file;this.alerts=alerts;
+    this.schedulingTail=Promise.resolve(); // One Node POC instance: serialize slot reservations.
   }
   async list(){
     if(this.mode==='json')return Object.values(this._load().cases).map(clone)
@@ -309,25 +312,43 @@ export class NmcCaseWorkspace{
       ...r,caseStatus:c.status,sourceLevel:c.sourceLevel
     }))).sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
   }
+  async inspectionAvailability(data,excludeRequestId=null){
+    const slot=normalizeInspectionSlot(data);
+    const referrals=await this.listInspectionRequests();
+    const overlaps=overlappingInspectorAppointments(referrals,slot,excludeRequestId);
+    // Read-only: result does not expose another vessel's source assessment.
+    return {available:overlaps.length===0,conflictCount:overlaps.length,slot};
+  }
   async scheduleInspection(id,version,requestId,data,role='OPERATOR'){
-    const {scheduledAt,port,inspector}=data||{};
-    const stamp=Date.parse(scheduledAt);
-    if(typeof scheduledAt!=='string'||!Number.isFinite(stamp)||stamp<=Date.now()||
-      typeof port!=='string'||!port.trim()||port.trim().length>120||
-      typeof inspector!=='string'||!inspector.trim()||inspector.trim().length>120)
-      throw new NmcCaseError('CASE_SCHEDULE_INVALID');
-    return this._update(id,version,'INSPECTION_SCHEDULED',role,
-      'NMC referral scheduled by a human Smart Inspection coordinator',row=>{
-        if(row.status==='RESOLVED')throw new NmcCaseError('CASE_ALREADY_RESOLVED',409);
-        const req=(row.inspectionRequests||[]).find(r=>r.id===requestId);
-        if(!req)throw new NmcCaseError('CASE_INSPECTION_REQUEST_NOT_FOUND',404);
-        if(req.status!=='PENDING_SCHEDULING')
-          throw new NmcCaseError('CASE_INSPECTION_SCHEDULE_CONFLICT',409);
-        return {...row,inspectionRequests:row.inspectionRequests.map(r=>r.id!==requestId?r:{
-          ...r,status:'SCHEDULED',scheduledAt:new Date(stamp).toISOString(),
-          port:port.trim(),inspector:inspector.trim(),scheduledBy:role,version:r.version+1
-        })};
-      },{requestId,scheduledAt:new Date(stamp).toISOString()});
+    if(!isId(requestId))throw new NmcCaseError('CASE_INSPECTION_REQUEST_NOT_FOUND',404);
+    let slot;
+    try{slot=normalizeInspectionSlot(data);}
+    catch(error){
+      if(error instanceof InspectionScheduleError)
+        throw new NmcCaseError(error.code,error.status);
+      throw error;
+    }
+    // Atomic enough for the SINGLE local POC API instance. A multi-replica
+    // production service must move inspector-slot locks to the database.
+    const scheduled=this.schedulingTail.then(async()=>{
+      const refs=await this.listInspectionRequests();
+      if(overlappingInspectorAppointments(refs,slot,requestId).length)
+        throw new NmcCaseError('INSPECTION_INSPECTOR_SLOT_CONFLICT',409);
+      return this._update(id,version,'INSPECTION_SCHEDULED',role,
+        'NMC referral scheduled by a human Smart Inspection coordinator',row=>{
+          if(row.status==='RESOLVED')throw new NmcCaseError('CASE_ALREADY_RESOLVED',409);
+          const req=(row.inspectionRequests||[]).find(r=>r.id===requestId);
+          if(!req)throw new NmcCaseError('CASE_INSPECTION_REQUEST_NOT_FOUND',404);
+          if(req.status!=='PENDING_SCHEDULING')
+            throw new NmcCaseError('CASE_INSPECTION_SCHEDULE_CONFLICT',409);
+          return {...row,inspectionRequests:row.inspectionRequests.map(r=>r.id!==requestId?r:{
+            ...r,status:'SCHEDULED',...slot,scheduledBy:role,version:r.version+1
+          })};
+        },{requestId,scheduledAt:slot.scheduledAt,scheduledEndAt:slot.scheduledEndAt,
+          durationMinutes:slot.durationMinutes,inspector:slot.inspector,port:slot.port});
+    });
+    this.schedulingTail=scheduled.catch(()=>{}); // One failure cannot block the queue.
+    return scheduled;
   }
   async resolve(id,version,note,role='SUPERVISOR'){
     if(role!=='SUPERVISOR')throw new NmcCaseError('CASE_SUPERVISOR_REQUIRED',403);
