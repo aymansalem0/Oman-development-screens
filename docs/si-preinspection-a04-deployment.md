@@ -89,6 +89,7 @@ NMC_FLEET_AUTO_ENABLED=false
 SI_A04_ENABLED=false
 # Only opt in after verifying partner pipeline, cost/usage and schema:
 # SI_A04_ENABLED=true
+# AIRIA_BASE_URL=https://api.mena.airia.ai
 # AIRIA_MENA_KEY=<server-side-secret>
 ```
 Do not paste actual passwords/API keys into chat or Git. Existing `.env` database
