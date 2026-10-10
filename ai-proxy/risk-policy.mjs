@@ -272,7 +272,7 @@ export class CentralRiskPolicy{
       const config={...clean,version:'NMC Risk Ruleset 1.'+(rev-1),
         publishedAt:at,publishedBy:request.publishedBy.trim(),
         changeReason:request.reason.trim()};
-      const projections=source.map(r=>calculateRiskPolicy(r,config,rev)).filter(Boolean);
+      const projections=source.map(r=>calculateRiskPolicy(r,config,rev)).filter(Boolean).map(p=>({...p,calculatedAt:at}));
       return {revision:rev,policyRef:config.version,
         previousRevision:previous.revision,config,reason:config.changeReason,
         publishedBy:config.publishedBy,actorRole:'PUBLISHER',
@@ -342,7 +342,8 @@ export class CentralRiskPolicy{
     if(!/^\d{7}$/.test(imo))throw new RiskPolicyError('RISK_POLICY_IMO_INVALID');
     this.requireReady();
     if(this.mode==='json')return this.state.projections.filter(p=>p.imo===imo)
-      .sort((a,b)=>b.policyRevision-a.policyRevision)
+      .sort((a,b)=>b.policyRevision-a.policyRevision||
+        String(b.calculatedAt||'').localeCompare(String(a.calculatedAt||'')))
       .map(p=>{
         const v=this.state.versions.find(v=>v.revision===p.policyRevision);
         const reconstructed=!p.factorSnapshot?
@@ -358,7 +359,7 @@ export class CentralRiskPolicy{
           p.FACTOR_SNAPSHOT_JSON,v.CONFIG_JSON,v.POLICY_REF,v.CHANGE_REASON,${time('p.CALCULATED_AT')} CALCULATED_AT
           FROM NMC_RISK_POLICY_PROJECTION p JOIN NMC_RISK_POLICY_VERSION v
           ON v.VERSION_NO=p.POLICY_VERSION_NO
-          WHERE p.IMO=:imo ORDER BY p.POLICY_VERSION_NO DESC FETCH FIRST 200 ROWS ONLY`,
+          WHERE p.IMO=:imo ORDER BY p.POLICY_VERSION_NO DESC,p.CALCULATED_AT DESC FETCH FIRST 200 ROWS ONLY`,
           {imo},{outFormat:oracledb.OUT_FORMAT_OBJECT});
         return q.rows.map(r=>{
         const base={imo:r.IMO,sourceAssessmentId:r.ASSESSMENT_ID,
@@ -382,6 +383,7 @@ export class CentralRiskPolicy{
     const active=await this.active();
     const p=calculateRiskPolicy(savedRow,active.config,active.revision);
     if(!p)return;
+    p.calculatedAt=iso();
     if(this.mode==='json'){
       if(!this.state.projections.some(x=>x.policyRevision===p.policyRevision&&
         x.sourceAssessmentId===p.sourceAssessmentId)){
