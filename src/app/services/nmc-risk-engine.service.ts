@@ -38,6 +38,10 @@ export interface CentralPolicyVersion{
   config:RiskEngineConfig;reason:string;publishedBy:string;actorRole:string;
   publishedAt:string;
 }
+export interface CentralRiskDraft {
+  baseRevision:number;draftRevision:number;config:RiskEngineConfig;
+  updatedBy:string;updatedAt:string;
+}
 export interface CentralPolicyPublishResponse {
   status:'ok';published:CentralPolicyVersion&{projectionCount:number};
 }
@@ -151,6 +155,19 @@ export class NmcRiskEngineService {
     this.activeVersion=version;
     if(changed||JSON.stringify(this.configSubject.value)!==JSON.stringify(next))
       this.configSubject.next(next);
+  }
+  savedDraft():Observable<CentralRiskDraft|null>{
+    return this.http.get<{status:'ok';draft:CentralRiskDraft|null}>('/api/ai/risk-policy/draft')
+      .pipe(map(r=>r.draft));
+  }
+  saveCentralDraft(config:RiskEngineConfig,expectedRevision:number,
+    expectedDraftRevision:number,updatedBy:string,accessKey:string):
+    Observable<CentralRiskDraft>{
+    if(!accessKey.trim())throw new Error('EDITOR_ACCESS_KEY_REQUIRED');
+    const headers=new HttpHeaders({'X-NMC-DASHBOARD-KEY':accessKey.trim()});
+    return this.http.post<{status:'ok';draft:CentralRiskDraft}>('/api/ai/risk-policy/draft',{
+      expectedRevision,expectedDraftRevision,config,updatedBy
+    },{headers}).pipe(map(r=>r.draft));
   }
   history():Observable<CentralPolicyVersion[]>{
     return this.http.get<{status:'ok';history:CentralPolicyVersion[]}>('/api/ai/risk-policy/history')
