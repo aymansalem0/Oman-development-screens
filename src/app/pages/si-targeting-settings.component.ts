@@ -68,6 +68,20 @@ import {SiCandidateTargetingService,SiDashboard,SiImpact,SiPriorityWeights,SiTar
               <p [class.invalid]="weightTotal!==100"><strong>{{copy('Total','الإجمالي')}}: {{weightTotal}}%</strong> ·
                 {{copy('NMC-approved referrals remain first; missing risk requires manual review. Missing factors are never fabricated.',
                   'تظل إحالات NMC المعتمدة أولًا، وتحتاج المخاطر الناقصة مراجعة بشرية. لا يتم اختلاق عوامل غير متوفرة.')}}</p>
+              <h3>{{copy('Inspection Trigger Reason Priorities','أولويات أسباب ترشيح المعاينة')}}</h3>
+              <p>{{copy('Published source-severity indicators (0–100) affect advisory ordering only. An NMC-approved referral always keeps its protected tier.',
+                'قيم أولوية مصادر الترشيح المنشورة (من ٠ إلى ١٠٠) تؤثر على الترتيب الاستشاري فقط، مع بقاء إحالات NMC المعتمدة في مستواها المحمي.')}}</p>
+              <div class="weights-grid">
+                <label>{{copy('NMC Approved Referral','إحالة NMC معتمدة')}}
+                  <input type="number" min="0" max="100" [(ngModel)]="sourceScores.NMC_CASE" (ngModelChange)="impact=null"/>
+                </label>
+                <label>{{copy('Service Request','طلب خدمة بحرية')}}
+                  <input type="number" min="0" max="100" [(ngModel)]="sourceScores.SERVICE_REQUEST" (ngModelChange)="impact=null"/>
+                </label>
+                <label>{{copy('PSC Port Call','إخطار نداء ميناء PSC')}}
+                  <input type="number" min="0" max="100" [(ngModel)]="sourceScores.PSC_PORT_CALL" (ngModelChange)="impact=null"/>
+                </label>
+              </div>
               <p class="hint">{{copy('Illustrative POC weighting, not a Ministry-approved statutory targeting model.',
                 'أوزان تجريبية وليست نموذج استهداف تنظيميًا معتمدًا من الوزارة.')}}</p>
             </div>
@@ -156,12 +170,13 @@ export class SiTargetingSettingsComponent implements OnInit{
   loading=false;busy=false;error='';success='';
   threshold=65;reviewer='';reason='';editorKey='';publisherKey='';
   weights:SiPriorityWeights={risk:30,trigger:25,history:20,deadline:15,urgency:10};
+  sourceScores={NMC_CASE:90,SERVICE_REQUEST:55,PSC_PORT_CALL:65};
   get weightTotal():number{return Object.values(this.weights).reduce((sum,x)=>sum+Number(x||0),0);}
   private proposedConfig():SiTargetingPolicyConfig{
     return {riskPriorityThreshold:Number(this.threshold),
       includeMissingRiskInReview:true,
       prioritization:{weights:{...this.weights},approvedNmcFirst:true,
-        missingRiskAction:'REVIEW_REQUIRED'}};
+        missingRiskAction:'REVIEW_REQUIRED',sourceTriggerScores:{...this.sourceScores}}};
   }
   constructor(private readonly api:SiCandidateTargetingService,public readonly lang:LanguageService){}
   copy(en:string,ar:string){return this.lang.pick(en,ar);}
@@ -172,6 +187,8 @@ export class SiTargetingSettingsComponent implements OnInit{
       next:d=>{this.dashboard=d;this.threshold=d.policy.config.riskPriorityThreshold;
         this.weights={...(d.policy.config.prioritization?.weights||
           {risk:30,trigger:25,history:20,deadline:15,urgency:10})};
+        this.sourceScores={...(d.policy.config.prioritization?.sourceTriggerScores||
+          {NMC_CASE:90,SERVICE_REQUEST:55,PSC_PORT_CALL:65})};
         this.loading=false;},
       error:e=>{this.showError(e);this.loading=false;}
     });
@@ -189,6 +206,11 @@ export class SiTargetingSettingsComponent implements OnInit{
     if(this.weightTotal!==100||Object.values(this.weights).some(x=>!Number.isInteger(Number(x))||Number(x)<0||Number(x)>100)){
       this.error=this.copy('All criterion weights must be integers totaling 100%.',
         'يجب أن تكون الأوزان أعدادًا صحيحة ومجموعها ١٠٠٪.');return;
+    }
+    if(Object.values(this.sourceScores).some(x=>!Number.isInteger(Number(x))||
+        Number(x)<0||Number(x)>100)){
+      this.error=this.copy('All trigger reason scores must be whole numbers from 0 to 100.',
+        'يجب أن تكون أولوية أسباب الترشيح عددًا صحيحًا بين ٠ و١٠٠.');return;
     }
     this.busy=true;this.error='';this.impact=null;this.success='';
     this.api.preview(this.proposedConfig(),this.editorKey.trim()).subscribe({
