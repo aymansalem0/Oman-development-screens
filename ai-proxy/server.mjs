@@ -446,8 +446,10 @@ const server = createServer(async (req, res) => {
       // SI-P01 is an explicitly requested, paid advisory. Nothing automatically
       // invokes it on GET, source Excel import or Targeting Settings publication.
       if(path==='/api/si/v1/prioritization'||path.startsWith('/api/si/v1/prioritization/')){
-        if(req.method==='GET'&&path==='/api/si/v1/prioritization')
+        if(req.method==='GET'&&path==='/api/si/v1/prioritization'){
+          dashboards.assertRole(req,'EDITOR');
           return respond(res,200,await siPriority.status());
+        }
         if(req.method==='GET'&&path==='/api/si/v1/prioritization/history'){
           dashboards.assertRole(req,'EDITOR');
           return respond(res,200,{status:'ok',runs:await siPriority.history(15)});
