@@ -46,7 +46,8 @@ export class SiFullLifecycleComponent implements OnInit{
  followMode:'DESK_REVIEW'|'ON_SITE'='DESK_REVIEW';
  followResult:'PASS'|'FAIL'='PASS';followEvidence='';
  constructor(private route:ActivatedRoute,private api:SiLifecycleService,public lang:LanguageService){
-  const d=new Date(Date.now()+86400000);
+  // Default to tomorrow in UAE local calendar, not the browser/UTC day.
+  const d=new Date(Date.now()+86400000+4*60*60*1000);
   this.visitLocal=d.toISOString().slice(0,10)+'T09:00';
  }
  copy(en:string,ar:string){return this.lang.pick(en,ar);}
@@ -108,11 +109,21 @@ export class SiFullLifecycleComponent implements OnInit{
   });
  }
  private hydrate(){
-  const r=this.record;if(!r)return;
+  const r=this.record;
+  const booking=this.view?.nmcBooking;
+  if(booking?.status==='SCHEDULED'&&booking.scheduledAt){
+    this.assignmentMode='NMC_SCHEDULED';
+    this.inspector=booking.inspector||'';
+    this.port=booking.port||'';
+    // Display real NMC UTC booking converted into UAE (+04:00) local time.
+    const ms=Date.parse(booking.scheduledAt);
+    if(Number.isFinite(ms))this.visitLocal=
+      new Date(ms+4*60*60*1000).toISOString().slice(0,16);
+  }else if(!this.nmcOrigin)this.assignmentMode='POC_MANUAL';
+  if(!r)return;
   this.draftChecks=r.checks.map(c=>({...c,evidenceText:c.evidenceRefs.join(', ')}));
-  this.inspector=r.assignment?.inspector||this.operator;
+  this.inspector=r.assignment?.inspector||this.inspector||this.operator;
   this.port=r.assignment?.port||this.port;
-  this.assignmentMode=this.nmcOrigin?'NMC_SCHEDULED':'POC_MANUAL';
   this.reportSummary=r.report?.summary||'';
   this.draftActions=r.findings.map(f=>{
    const saved=r.actions.find(x=>x.findingId===f.id);
