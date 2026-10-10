@@ -166,6 +166,12 @@
               <span class="nav-icon">⚠</span>
               <span class="nav-label">{{copy('Risk Management','إدارة المخاطر')}}</span>
             </a>
+            <a class="nav-link" routerLink="/moei/nmc/admin/runtime-settings"
+               [class.active]="isRuntimeSettings" [attr.aria-current]="isRuntimeSettings?'page':null"
+               [title]="copy('Runtime Configuration & AI Agents','إعدادات التشغيل ووكلاء الذكاء الاصطناعي')">
+              <span class="nav-icon">✦</span>
+              <span class="nav-label">{{copy('Runtime Configuration & AI Agents','إعدادات التشغيل ووكلاء الذكاء الاصطناعي')}}</span>
+            </a>
             <a class="nav-link" routerLink="/moei/nmc/admin/data-quality"
                [queryParams]="selectedImo ? {imo:selectedImo} : null"
                [class.active]="isQualityConfig" [attr.aria-current]="isQualityConfig?'page':null"
