@@ -142,3 +142,10 @@ button,input,select{font:inherit}
 .alert-dismiss:hover,.alert-dismiss:focus-visible{background:#dfe8ec;color:#203e50;outline-offset:2px}
 .alert-dismiss:disabled{opacity:.4;cursor:wait}
 .local-superseded-note small{display:block;margin-top:7px;color:#466376;font-weight:700}
+
+
+/* UAE ministry bilingual wordmark in the common NMC 82px header. */
+.alert-ministry-logo{flex-shrink:0}
+.brand{min-width:0}
+@media(max-width:1160px){.topbar .brand>div{display:none}}
+@media(max-width:960px){.topbar{padding-inline:12px}}
