@@ -199,6 +199,10 @@ export class FleetAssessmentManager {
         values[key]=matches[0].severity;
       }
       if(factors.some(key=>!Object.hasOwn(values,key)))continue;
+      const document=row.signals.filter(s=>s?.factor==='documentIntegrity');
+      if(document.length===1&&Number.isFinite(document[0].severity)&&
+        document[0].severity>=0&&document[0].severity<=100)
+        values.documentIntegrity=document[0].severity;
       assessments.push({
         imo:row.imo,assessmentId:row.assessmentId||null,
         assessedAt:row.assessedAt||null,
