@@ -135,6 +135,11 @@ export class SiElectronicScheduler{
           slot-prep>=parseLocal(date+' '+s.start_local)&&
           slot+duration<=parseLocal(date+' '+s.end_local));
         if(!shift){sawShift=true;continue;}
+        // Port access windows are hard constraints, independent of inspector shift.
+        if(slot<parseLocal(date+' '+port.window_start)||
+           slot+duration>parseLocal(date+' '+port.window_end)){
+          sawShift=true;continue;
+        }
         const blocked=data.Blackouts.some(b=>active(b.blocks_booking)&&(b.port_id_or_ALL==='ALL'||b.port_id_or_ALL===port.port_id)
           &&intervalOverlap(slot,slot+duration,parseLocal(b.start_local),parseLocal(b.end_local)));
         if(blocked){sawBlackout=true;continue;}
@@ -201,7 +206,11 @@ export class SiElectronicScheduler{
       durationMinutes:body.durationMinutes
     };
     const calculated=this.buildOptions(input,{snapshot,policy,confirmed:this.state.confirmed});
-    const ageHours=(this.clock()-Date.parse(snapshot.importedAt))/3600000;
+    // An old ERP sheet cannot be made "fresh" merely by re-uploading it.
+    // Use the oldest employee update timestamp for conservative auto-approval.
+    const sourceDates=snapshot.data.Inspectors.map(r=>parseLocal(r.source_updated_at));
+    const oldestSourceUpdate=Math.min(...sourceDates);
+    const ageHours=(this.clock()-Math.min(Date.parse(snapshot.importedAt),oldestSourceUpdate))/3600000;
     const reasons=[];
     if(ageHours>policy.config.maxSnapshotAgeHours)reasons.push('ERP_SNAPSHOT_STALE');
     if(policy.config.approvalMode==='MANUAL')reasons.push('MANUAL_MODE');
@@ -236,8 +245,10 @@ export class SiElectronicScheduler{
       if(option.approval==='MANUAL_APPROVAL_REQUIRED'&&!allowManual)
         throw new SiError('SI_SUPERVISOR_APPROVAL_REQUIRED',403);
       const snapshot=this.erp.requireSnapshot(),policy=this.getPolicy();
+      const sourceDates=snapshot.data.Inspectors.map(r=>parseLocal(r.source_updated_at));
+      const freshness=Math.min(Date.parse(snapshot.importedAt),...sourceDates);
       if(snapshot.snapshotId!==proposal.erpSnapshotId||policy.revision!==proposal.policyRevision||
-        (this.clock()-Date.parse(snapshot.importedAt))/3600000>policy.config.maxSnapshotAgeHours)
+        (this.clock()-freshness)/3600000>policy.config.maxSnapshotAgeHours)
         throw new SiError('SI_PROPOSAL_STALE',409);
       const referral=(await this.referrals()).find(r=>r.id===proposal.referral.id&&
         r.caseId===proposal.referral.caseId);
