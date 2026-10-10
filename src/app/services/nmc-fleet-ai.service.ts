@@ -48,7 +48,7 @@ export interface FleetAiSnapshot {
 }
 /** How the synthetic data-quality engine reached its persisted structural score. */
 export interface FleetAiQualityStep {
-  key: 'completeness' | 'consistency' | 'evidenceLinkage' | 'provenance';
+  key: 'completeness' | 'consistency' | 'evidenceLinkage' | 'provenance' | 'documentConsistency';
   label: string;
   percent: number | null;
   weightPercent: number;
@@ -169,7 +169,7 @@ export interface FleetAiAnalytics {
     imo:string;assessmentId:string|null;assessedAt:string|null;
     savedRiskScore:number;savedRiskLevel:string;
     rulesetVersion:string|null;criticalOpenFinding:boolean;
-    factorSeverities:{movement:number;inspection:number;certificate:number;dataQuality:number;history:number};
+    factorSeverities:{movement:number;inspection:number;certificate:number;dataQuality:number;history:number;documentIntegrity?:number};
   }>;
 }
 @Injectable({providedIn:'root'})
