@@ -468,8 +468,9 @@ const server = createServer(async (req, res) => {
       }
       if(req.method==='GET'&&path==='/api/si/v1/psc-selection/pool'){
         dashboards.assertRole(req,'EDITOR');
-        const selectedPeriod=url.searchParams.get('period');
-        const selectedPort=url.searchParams.get('port');
+        const params=new URL(req.url||'/', 'http://localhost').searchParams;
+        const selectedPeriod=params.get('period');
+        const selectedPort=params.get('port');
         return respond(res,200,await siPscSelection.pool({
           period:selectedPeriod||null,port:selectedPort||null}));
       }
