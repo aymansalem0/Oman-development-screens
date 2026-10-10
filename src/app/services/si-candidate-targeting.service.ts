@@ -71,7 +71,8 @@ export interface SiPriorityStatus{
 export interface SiImpact{
   status:string;fleetSnapshotId:string;evaluatedPopulation:number;
   affectedImos:string[];affectedCandidateCount:number;unevaluatedRiskVessels:number;
-  warning:string;
+  warning:string;aiSettingsChanged?:boolean;
+  potentialRankingCandidates?:number;requiresManualAiRerun?:boolean;
 }
 @Injectable({providedIn:'root'})
 export class SiCandidateTargetingService{
