@@ -22,7 +22,7 @@
         <article><span>{{copy("ERP SOURCE","مصدر ERP")}}</span><strong>{{erp?.ready?copy('EXCEL IMPORTED','تم استيراد Excel'):copy('NOT IMPORTED','لم يتم الاستيراد')}}</strong><small>{{copy("Read-only ERP simulation","محاكاة قراءة بيانات ERP فقط")}}</small></article>
         <article><span>{{copy("INSPECTORS","المفتشون")}}</span><strong>{{erp?.counts?.['Inspectors']??'—'}}</strong><small>{{copy("Validated workforce records","سجلات القوى العاملة المعتمدة بعد التحقق")}}</small></article>
         <article><span>{{copy("NMC REFERRALS","إحالات المركز البحري")}}</span><strong>{{referrals.length}}</strong><small>{{copy("Human-approved · awaiting schedule","معتمدة بشريًا وبانتظار الجدولة")}}</small></article>
-        <article><span>{{copy("APPROVAL POLICY","سياسة الاعتماد")}}</span><strong>{{policy?.config?.approvalMode||'—'}}</strong><small>Revision {{policy?.revision||'—'}}</small></article>
+        <article><span>{{copy("APPROVAL POLICY","سياسة الاعتماد")}}</span><strong>{{policy?.config?.approvalMode||'—'}}</strong><small>{{copy('Revision','الإصدار')}} {{policy?.revision||'—'}}</small></article>
       </section>
   
       <div class="si-grid">
@@ -48,17 +48,17 @@
         </section>
 
         <section class="si-panel">
-          <header class="si-section-head"><div><small>{{copy("02 / NMC REFERRALS","٠٢ / إحالات المركز البحري")}}</small><h2>{{copy("Inspection Scheduling Request","طلب جدولة معاينة")}}</h2></div><span class="si-badge">{{referrals.length}} Pending</span></header>
+          <header class="si-section-head"><div><small>{{copy("02 / NMC REFERRALS","٠٢ / إحالات المركز البحري")}}</small><h2>{{copy("Inspection Scheduling Request","طلب جدولة معاينة")}}</h2></div><span class="si-badge">{{referrals.length}} {{copy('Pending','قيد الانتظار')}}</span></header>
           <label for="referral">{{copy("Approved NMC Inspection Referral","إحالة معاينة معتمدة من المركز البحري")}}</label>
           <select id="referral" [ngModel]="selectedReferralId" (ngModelChange)="selectReferral($event)">
             <option value="">{{copy("Select an approved referral…","اختر إحالة معتمدة…")}}</option>
-            <option *ngFor="let r of referrals" [value]="r.id">IMO {{r.imo}} · {{r.sourceLevel||r.priority}} · Case {{shortId(r.caseId)}}</option>
+            <option *ngFor="let r of referrals" [value]="r.id">IMO {{r.imo}} · {{r.sourceLevel||r.priority}} · {{copy('Case','الحالة')}} {{shortId(r.caseId)}}</option>
           </select>
           <div class="si-referral" *ngIf="selectedReferral as r">
-            <strong>Vessel IMO {{r.imo}}</strong>
-            <span>Priority {{r.sourceLevel||r.priority}}</span>
-            <span>Case {{shortId(r.caseId)}}</span>
-            <span>Source Assessment {{shortId(r.sourceAssessmentId)}}</span>
+            <strong>{{copy('Vessel IMO','رقم IMO للسفينة')}} {{r.imo}}</strong>
+            <span>{{copy('Priority','الأولوية')}} {{r.sourceLevel||r.priority}}</span>
+            <span>{{copy('Case','الحالة')}} {{shortId(r.caseId)}}</span>
+            <span>{{copy('Source Assessment','التقييم المصدر')}} {{shortId(r.sourceAssessmentId)}}</span>
             <p>{{r.reason}}</p>
           </div>
           <div class="si-form-grid">
@@ -83,7 +83,7 @@
       <section class="si-panel si-results" *ngIf="proposal as p">
         <header class="si-section-head"><div><small>{{copy("03 / DETERMINISTIC SCHEDULING ENGINE","٠٣ / محرك الجدولة وفق القواعد")}}</small>
           <h2>{{copy("Available Inspectors & Proposed Time Slots","المفتشون المتاحون والمواعيد المقترحة")}}</h2></div>
-          <span class="si-badge" [class.confirmed]="p.status==='CONFIRMED'">{{p.status}}</span>
+          <span class="si-badge" [class.confirmed]="p.status==='CONFIRMED'">{{copy('Status','الحالة')}}: {{p.status}}</span>
         </header>
         <p class="si-hint">{{copy("The engine checked qualifications, port eligibility, approved/pending leave, shifts, existing bookings, daily capacity, travel, and the inspection time window. Recommendation scores rank eligible slots only.","يتحقق المحرك من المؤهلات وتغطية الموانئ والإجازات والورديات والحجوزات والطاقة اليومية والانتقال والفترة الزمنية، ويرتب المواعيد المستوفية فقط.")}}</p>
         <div *ngIf="!p.options.length" class="si-empty">{{copy("No feasible slot. Check the excluded engineers below, then adjust the time window or policy.","لا يوجد موعد مناسب. راجع المفتشين المستبعدين ثم غيّر الفترة الزمنية أو السياسة.")}}</div>
@@ -91,28 +91,28 @@
           <label *ngFor="let option of p.options;trackBy:trackOption" class="si-option" [class.selected]="selectedOptionId===option.optionId">
             <input type="radio" name="option" [(ngModel)]="selectedOptionId" [value]="option.optionId" [disabled]="p.status==='CONFIRMED'">
             <div class="si-option-main"><strong>{{option.inspectorName}}</strong><span>{{option.inspectorId}} · {{option.portName}}</span>
-              <span>{{option.startLocal}} – {{option.endLocal}} (UAE)</span>
-              <span *ngIf="option.crossPort">↗ Cross-port · {{option.travelMinutes}} min travel</span></div>
+              <span>{{option.startLocal}} – {{option.endLocal}} ({{copy('UAE','الإمارات')}})</span>
+              <span *ngIf="option.crossPort">↗ {{copy('Cross-port','بين الموانئ')}} · {{option.travelMinutes}} {{copy('min travel','دقيقة انتقال')}}</span></div>
             <div class="si-option-right"><b>{{option.score}}/100</b>
-              <span [class.auto]="option.approval==='AUTO_ELIGIBLE'">{{option.approval==='AUTO_ELIGIBLE'?'Auto-eligible':'Supervisor approval'}}</span>
+              <span [class.auto]="option.approval==='AUTO_ELIGIBLE'">{{option.approval==='AUTO_ELIGIBLE'?copy('Auto-eligible','مؤهل للتأكيد الآلي'):copy('Supervisor approval','يتطلب اعتماد المشرف')}}</span>
               <small *ngFor="let reason of option.approvalReasons">{{reason}}</small></div>
           </label>
         </div>
         <div class="si-decision" *ngIf="p.options.length&&p.status==='PROPOSED'">
           <span>{{copy("Selected slot will be revalidated before NMC Case is updated. Human approval needs the separate Supervisor key.","يُعاد التحقق من الموعد المختار قبل تحديث حالة المركز البحري. ويتطلب الاعتماد البشري مفتاح المشرف.")}}</span>
-          <button type="button" class="primary" [disabled]="busy||!selectedOptionId" (click)="confirm()">✓ Confirm Selected Schedule</button>
+          <button type="button" class="primary" [disabled]="busy||!selectedOptionId" (click)="confirm()">✓ {{copy('Confirm Selected Schedule','تأكيد الموعد المختار')}}</button>
         </div>
-        <details *ngIf="p.exclusions.length"><summary>Excluded engineers ({{p.exclusions.length}}) · Reasons</summary>
+        <details *ngIf="p.exclusions.length"><summary>{{copy('Excluded inspectors','المفتشون المستبعدون')}} ({{p.exclusions.length}}) · {{copy('Reasons','الأسباب')}}</summary>
           <div class="si-exclusion" *ngFor="let item of p.exclusions"><b>{{item.inspectorId}}</b>
             <span>{{item.reasons.join(' · ')}}</span></div>
         </details>
-        <div class="si-audit-strip">ERP {{shortId(p.erpSnapshotId)}} · Policy revision {{p.policyRevision}} · Expires {{p.expiresAt|date:'shortTime'}}</div>
+        <div class="si-audit-strip">ERP {{shortId(p.erpSnapshotId)}} · {{copy('Policy revision','إصدار السياسة')}} {{p.policyRevision}} · {{copy('Expires','تنتهي الصلاحية')}} {{p.expiresAt|date:'shortTime'}}</div>
       </section>
   
       <section class="si-panel">
         <header class="si-section-head"><div><small>{{copy("04 / BUSINESS CONFIGURATION","٠٤ / إعدادات الأعمال")}}</small><h2>{{copy("Scheduling Approval & Optimization Settings","إعدادات اعتماد الجدولة وتحسين التوزيع")}}</h2></div>
-          <span class="si-badge">Version {{policy?.revision||'—'}}</span></header>
-        <p class="si-hint">تتحكم هذه الإعدادات في الاعتماد التلقائي أو اعتماد المسؤول. لا تغيّر Risk Settings ولا نتائج AI التاريخية. أي نشر جديد يحتاج Supervisor Key وسبب تغيير.</p>
+          <span class="si-badge">{{copy('Version','الإصدار')}} {{policy?.revision||'—'}}</span></header>
+        <p class="si-hint">{{copy('These policies determine automatic or supervisor approval. They do not modify NMC risk settings or previous AI results. Publication requires a supervisor key and business justification.','تتحكم هذه الإعدادات في الاعتماد التلقائي أو اعتماد المسؤول. لا تغيّر إعدادات المخاطر أو نتائج AI التاريخية. يتطلب النشر مفتاح المشرف ومبررًا إداريًا.')}}</p>
         <div class="si-policy-grid" *ngIf="draft as cfg">
           <div><label>{{copy("Scheduling Mode","وضع الجدولة")}}</label>
             <select [(ngModel)]="cfg.approvalMode">
