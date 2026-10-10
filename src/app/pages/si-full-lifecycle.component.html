@@ -349,7 +349,21 @@
             'إعادة تقييم مخاطر NMC وإجراءات التنظيم عبر المجالات لم تُنفذ تلقائياً في هذه النسخة التجريبية.')}}</p>
         </div>
         <div class="audit">
-          <h3>{{copy('Immutable Workflow Audit Events','أحداث التدقيق المحفوظة')}}</h3>
+          <h3>{{copy('Workflow Audit Events & Saved Versions','أحداث التدقيق ونسخ المعاينة المحفوظة')}}</h3>
+          <button type="button" class="secondary" [disabled]="historyBusy||busy" (click)="loadHistory()">
+            {{showVersions?copy('Hide Version History','إخفاء سجل النسخ'):copy('Inspect Saved Versions','مراجعة النسخ التاريخية')}}</button>
+          <div class="message error" *ngIf="historyError">{{historyError}}</div>
+          <div class="audit-snapshots" *ngIf="showVersions">
+            <div class="audit-item" *ngFor="let entry of versions">
+              <b>v{{entry.version}} · {{entry.action}}</b>
+              <span>{{entry.actor}} · {{entry.at|date:'medium'}}</span>
+              <small>{{entry.reason||'—'}} · {{copy('State','الحالة')}}: {{stageLabel(entry.snapshot.stage)}}</small>
+              <small *ngIf="entry.snapshot.report">{{copy('Preserved report','نسخة التقرير المحفوظة')}}:
+                {{entry.snapshot.report.status}} · {{entry.snapshot.report.summary}}</small>
+              <small *ngIf="entry.snapshot.findings.length">{{copy('Findings in version','الملاحظات في النسخة')}}:
+                {{entry.snapshot.findings.length}}</small>
+            </div>
+          </div>
           <div class="audit-item" *ngFor="let x of r.audit">
             <b>v{{x.version}} · {{x.action}}</b>
             <span>{{x.actor}} · {{x.at|date:'medium'}}</span>
