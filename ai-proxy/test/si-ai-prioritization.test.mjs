@@ -78,7 +78,7 @@ test('explicit single call persists AI rank but NMC-approved hard tier remains f
     assert.equal(run.recommendations[0].effectiveRank,1);
     assert.equal(run.recommendations[1].effectiveRank,2);
     assert.equal(run.recommendations[0].status,'ADVISORY_HUMAN_REVIEW');
-    assert.equal(run.recommendations[0].source,'AIRIA_SI_P01_UNVERIFIED_ADVISORY');
+    assert.equal(run.source,'AIRIA_SI_P01_UNVERIFIED_ADVISORY');
   }finally{w.cleanup();}
 });
 test('saved run is stable across refresh, never updates NMC or creates cases',async()=>{
