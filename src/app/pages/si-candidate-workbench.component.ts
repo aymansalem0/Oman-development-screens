@@ -5,7 +5,7 @@ import {FormsModule} from '@angular/forms';
 import {RouterLink} from '@angular/router';
 import {NmcNavigationComponent} from '../components/nmc-navigation.component';
 import {SiCandidate,SiCandidateStatus,SiCandidateTargetingService,
-  SiDashboard,SiRegime} from '../services/si-candidate-targeting.service';
+  SiDashboard} from '../services/si-candidate-targeting.service';
 
 type SourceFilter='ALL'|'NMC_CASE'|'SERVICE_REQUEST'|'PSC_PORT_CALL';
 type StatusFilter='ALL'|SiCandidateStatus;
@@ -21,14 +21,6 @@ export class SiCandidateWorkbenchComponent implements OnInit{
   sourceFilter:SourceFilter='ALL';statusFilter:StatusFilter='ALL';search='';
   selectedKey='';
   reviewer='';decisionNote='';editorKey='';publisherKey='';
-  eventForm:{
-    sourceType:'SERVICE_REQUEST'|'PSC_PORT_CALL';
-    sourceEventId:string;sourceReference:string;imo:string;port:string;eta:string;
-    sourceApprovalStatus:'UNVERIFIED'|'SOURCE_REVIEWED';note:string;
-  }={
-    sourceType:'SERVICE_REQUEST',sourceEventId:'',sourceReference:'',imo:'',port:'',eta:'',
-    sourceApprovalStatus:'UNVERIFIED',note:''
-  };
   constructor(private readonly api:SiCandidateTargetingService,public readonly lang:LanguageService){}
   copy(en:string,ar:string):string{return this.lang.pick(en,ar);}
   ngOnInit():void{this.refresh();}
@@ -78,23 +70,6 @@ export class SiCandidateWorkbenchComponent implements OnInit{
       note:this.decisionNote.trim()},key.trim()).subscribe({
       next:()=>{this.busy=false;this.success='Decision saved centrally: '+action;
         this.decisionNote='';this.refresh();},
-      error:e=>this.showError(e)
-    });
-  }
-  onEventSourceChange():void{
-    this.eventForm.sourceApprovalStatus='UNVERIFIED';
-  }
-  addEvent():void{
-    if(this.busy)return;
-    if(!this.editorKey.trim()){this.error='Editor key required to record a simulated source event.';return;}
-    if(!this.reviewer.trim()){this.error='Enter a source event operator name.';return;}
-    const f=this.eventForm,requestedRegime:SiRegime=f.sourceType==='PSC_PORT_CALL'?
-      'PORT_STATE_CONTROL':'UAE_SERVICE_INSPECTION';
-    this.busy=true;this.error='';this.success='';
-    this.api.addEvent({...f,requestedRegime,provenance:'POC_SIMULATOR',
-      evidenceIds:[],createdBy:this.reviewer.trim()},this.editorKey.trim()).subscribe({
-      next:()=>{this.busy=false;this.success='Simulated source event saved. Officer review required.';
-        this.eventForm.sourceEventId='';this.eventForm.sourceReference='';this.refresh();},
       error:e=>this.showError(e)
     });
   }

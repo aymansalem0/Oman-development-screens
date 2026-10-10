@@ -82,6 +82,9 @@
             <strong>{{statusText(e.sourceType)}} · {{e.sourceEventId}}</strong>
             <small>{{copy('Reference','المرجع')}}: {{e.sourceReference}} · {{e.provenance}} · {{e.approval}}</small>
             <small>{{copy('Evidence references','مراجع الأدلة')}}: {{e.evidenceIds.length?e.evidenceIds.join(', '):copy('none supplied','غير متوفرة')}}</small>
+            <small *ngIf="e.importFile">{{copy('Excel source','مصدر Excel')}}: {{e.importFile}}
+              · {{copy('Row','الصف')}} {{e.importExcelRow}}
+              · {{copy('Batch','دفعة الاستيراد')}} {{e.importBatchId}}</small>
           </div>
           <p><strong>{{copy("Rules:","القواعد:")}}</strong> {{c.reasons.join(' · ')}}</p>
           <p *ngIf="c.currentRisk">{{copy('Risk source assessment','مرجع تقييم المخاطر')}}: {{c.currentRisk.assessmentId}} · {{copy('NMC Policy','سياسة المركز البحري')}} v{{c.currentRisk.policyRevision}}</p>
@@ -106,38 +109,29 @@
         <label>{{copy("Operator / reviewer","المستخدم / المراجع")}} <input [(ngModel)]="reviewer" autocomplete="off" [placeholder]="copy('Business user name','اسم مستخدم الأعمال')"/></label>
         <label>{{copy("Editor key","مفتاح المحرر")}} <input type="password" [(ngModel)]="editorKey" autocomplete="off"/></label>
         <label>{{copy("Supervisor / Publisher key","مفتاح المشرف / الناشر")}} <input type="password" [(ngModel)]="publisherKey" autocomplete="off"/></label>
-        <p class="hint">{{copy("Editor: source event, defer/reject, impact preview. Publisher: approve/create case, publish rules.","المحرر: تسجيل الأحداث والتأجيل والرفض ومعاينة الأثر. الناشر: الاعتماد وإنشاء الحالات ونشر القواعد.")}}</p>
+        <p class="hint">{{copy("Editor: defer/reject. Publisher: approve/create inspection case. Source imports are administered in Settings.","المحرر: التأجيل والرفض. الناشر: اعتماد وإنشاء حالة المعاينة. تُدار مصادر Excel من الإعدادات.")}}</p>
       </section>
 
       <section class="si-panel">
-        <header><h2>{{copy("04 · POC Source Event Intake","٠٤ · استقبال أحداث المصادر التجريبية")}}</h2><p>{{copy("Simulated service or PSC event, never represented as verified official data.","حدث خدمة أو نداء ميناء تجريبي ولا يمثل بيانات حكومية رسمية موثقة.")}}</p></header>
-        <div class="form-grid">
-          <label>{{copy("Source","المصدر")}}<select [(ngModel)]="eventForm.sourceType" (ngModelChange)="onEventSourceChange()">
-            <option value="SERVICE_REQUEST">{{copy("Simulated Service Request","طلب خدمة تجريبي")}}</option>
-            <option value="PSC_PORT_CALL">{{copy("Simulated PSC Port Call","نداء ميناء PSC تجريبي")}}</option>
-          </select></label>
-          <label>{{copy("Source event ID","معرف الحدث")}}<input [(ngModel)]="eventForm.sourceEventId" placeholder="SR-POC-001"/></label>
-          <label>{{copy("Reference","المرجع")}}<input [(ngModel)]="eventForm.sourceReference" placeholder="Source request / port call ID"/></label>
-          <label>{{copy("Vessel IMO","رقم IMO للسفينة")}}<input [(ngModel)]="eventForm.imo" inputmode="numeric" maxlength="7" placeholder="7-digit IMO"/></label>
-          <label>{{copy("Port","الميناء")}}<input [(ngModel)]="eventForm.port" placeholder="Port name"/></label>
-          <label>{{copy("ETA (optional)","وقت الوصول المتوقع (اختياري)")}}<input [(ngModel)]="eventForm.eta" placeholder="2026-10-15T08:00"/></label>
-          <label>{{copy("Source review state","حالة مراجعة المصدر")}}<select [(ngModel)]="eventForm.sourceApprovalStatus">
-            <option value="UNVERIFIED">{{copy("Unverified mock event","حدث تجريبي غير موثق")}}</option>
-            <option value="SOURCE_REVIEWED">{{copy("Source manually reviewed (POC only)","مصدر تمت مراجعته يدويًا (تجريبي)")}}</option>
-          </select></label>
-          <label>{{copy("Context","السياق")}}<input [(ngModel)]="eventForm.note" maxlength="500" [placeholder]="copy('Business context','سياق العمل')"/></label>
+        <header><h2>{{copy('04 · Candidate Data Sources','٠٤ · مصادر بيانات المرشحين')}}</h2>
+          <p>{{copy('NMC remains live-connected. Service Requests and PSC Port Calls now enter the queue through validated Excel imports managed in Inspection Settings.',
+            'تظل إحالات NMC متصلة مباشرة، بينما تُستورد طلبات الخدمات وإخطارات نداء الموانئ من Excel بعد التحقق من البيانات ضمن إعدادات المعاينات.')}}</p></header>
+        <div class="source-overview">
+          <p><strong>{{copy('NMC','المركز البحري')}}:</strong>
+            {{dashboard?.summary?.bySource?.['NMC_CASE']||0}}
+            {{copy('approved referrals (live)','إحالات معتمدة (اتصال مباشر)')}}</p>
+          <p><strong>{{copy('Service Requests','طلبات الخدمات')}}:</strong>
+            {{dashboard?.summary?.bySource?.['SERVICE_REQUEST']||0}}
+            {{copy('candidate vessels from Excel','سفن مرشحة من Excel')}}</p>
+          <p><strong>{{copy('PSC Port Calls','إخطارات نداء الموانئ')}}:</strong>
+            {{dashboard?.summary?.bySource?.['PSC_PORT_CALL']||0}}
+            {{copy('candidate vessels from Excel','سفن مرشحة من Excel')}}</p>
         </div>
-        <button class="primary" type="button" [disabled]="busy" (click)="addEvent()">{{copy("Save Simulated Event","حفظ الحدث التجريبي")}}</button>
-        <p class="hint">{{copy("Both types remain MANUAL_REVIEW even when marked source-reviewed. A source event alone never creates an inspection case.","يظل النوعان خاضعين للمراجعة اليدوية حتى بعد مراجعة المصدر، ولا يؤدي الحدث وحده إلى إنشاء حالة معاينة.")}}</p>
-      </section>
-
-      <section class="si-panel">
-        <header><h2>{{copy('05 · Inspection Settings','٠٥ · إعدادات المعاينة')}}</h2>
-          <p>{{copy('Targeting priority rules and impact preview are administered centrally under Inspection Settings, not in the operational candidate queue.',
-            'تُدار قواعد الأولوية ومعاينة أثرها مركزيًا تحت إعدادات المعاينات، بعيدًا عن قائمة التشغيل اليومية.')}}</p></header>
-        <a class="settings-link" routerLink="/moei/smart-inspection/settings/targeting">
-          ⚙ {{copy('Open Targeting & Priority Rules','فتح إعدادات الاستهداف والأولوية')}} →
+        <a class="settings-link" routerLink="/moei/smart-inspection/settings/sources">
+          ⇧ {{copy('Manage Candidate Excel Sources','إدارة مصادر بيانات الترشيح من Excel')}} →
         </a>
+        <p class="hint">{{copy('Imported source records remain POC/unverified and require an officer decision. Excel cannot overwrite NMC cases or risk assessments.',
+          'تظل السجلات المستوردة تجريبية وتحتاج قرار الموظف. لا يمكن لملفات Excel تعديل حالات NMC أو تقييمات المخاطر.')}}</p>
       </section>
     </div>
   </main>

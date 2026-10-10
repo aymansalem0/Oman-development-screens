@@ -45,6 +45,13 @@ jobs:
           curl --fail --silent --show-error http://127.0.0.1:4200/api/ai/fleet/status | grep -q '"fleetSize":420'
           curl --fail --silent --show-error http://127.0.0.1:4200/api/si/v1/candidates/dashboard | grep -q '"evaluatedPopulation":420'
           curl --fail --silent --show-error http://127.0.0.1:4200/api/si/v1/rules | grep -q '"riskPriorityThreshold":65'
+          # Source-specific Excel templates are real XLSX files served over Nginx;
+          # no NMC Excel upload endpoint is permitted.
+          curl -fsS http://127.0.0.1:4200/api/si/v1/candidate-sources/template/SERVICE_REQUEST -o /tmp/si-service.xlsx
+          curl -fsS http://127.0.0.1:4200/api/si/v1/candidate-sources/template/PSC_PORT_CALL -o /tmp/si-psc.xlsx
+          unzip -t /tmp/si-service.xlsx >/dev/null
+          unzip -t /tmp/si-psc.xlsx >/dev/null
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:4200/api/si/v1/candidate-sources/template/NMC_CASE)" = "405"
           test "$(curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:4200/api/si/v1/candidates/source-events)" = "503"
           test "$(curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:4200/api/ai/fleet/start)" = "405"
           curl --fail --silent --show-error http://127.0.0.1:4200/api/ai/psc/health | grep -q '"sourceMode":"snapshot"'

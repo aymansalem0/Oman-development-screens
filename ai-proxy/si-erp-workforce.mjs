@@ -19,7 +19,7 @@ import JSZip from 'jszip';
  * Nothing is modified in the user's source file or stored before preview/commit.
  */
 const SHEET_NS='http://schemas.openxmlformats.org/spreadsheetml/2006/main';
-async function normalizeNamespacedXlsx(buffer){
+export async function normalizeNamespacedXlsx(buffer){
   const zip=await JSZip.loadAsync(buffer,{checkCRC32:true});
   const entries=Object.keys(zip.files);
   if(entries.length>160)throw new SiError('ERP_INVALID_XLSX');

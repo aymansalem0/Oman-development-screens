@@ -210,6 +210,13 @@
               <span class="nav-icon">◎</span>
               <span class="nav-label">{{copy('Targeting & Priority Rules','قواعد الاستهداف والأولوية')}}</span>
             </a>
+            <a class="nav-link" routerLink="/moei/smart-inspection/settings/sources"
+               [class.active]="isCandidateSourceSettings"
+               [attr.aria-current]="isCandidateSourceSettings?'page':null"
+               [title]="copy('Candidate Data Sources','مصادر بيانات الترشيح')">
+              <span class="nav-icon">⇧</span>
+              <span class="nav-label">{{copy('Candidate Data Sources','مصادر بيانات الترشيح')}}</span>
+            </a>
             <a class="nav-link" routerLink="/moei/smart-inspection/settings/erp"
                [class.active]="isErpIntegrationSettings"
                [attr.aria-current]="isErpIntegrationSettings?'page':null"
