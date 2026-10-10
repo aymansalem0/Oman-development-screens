@@ -37,7 +37,9 @@ export interface FleetAiSnapshot {
   scheduler?: {
     mode:string;enabled:boolean;enabledVessels:number;checkIntervalSeconds:number;
     lastTickAt:string|null;lastError:string|null;
-    lastSelected:number;lastUnchanged:number;batchRunning:boolean;
+    lastSelected:number;lastUnchanged:number;
+    blockedFailedVessels?:number;lastDocumentSourceUnavailable?:number;
+    lastDocumentSourceNotConfigured?:number;batchRunning:boolean;
   };
   job: null | {
     id:string;status:'RUNNING'|'COMPLETED'|'CANCELLED';
