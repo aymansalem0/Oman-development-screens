@@ -59,11 +59,12 @@ export function validateP01(raw,items){
   });
   return validated;
 }
-function factorSignals(candidate,clock){
+function factorSignals(candidate,clock,priorityPolicy){
   const risk=candidate.currentRisk?.score??null;
   const sources=new Set(candidate.events.map(e=>e.sourceType));
   // Illustrative operational urgency scales, not official maritime law.
-  const trigger=sources.has('NMC_CASE')?90:sources.has('PSC_PORT_CALL')?65:55;
+  const trigger=Math.max(...[...sources].map(
+    x=>priorityPolicy.sourceTriggerScores[x]).filter(Number.isFinite));
   const eta=candidate.events.map(e=>e.eta)
     .filter(x=>typeof x==='string'&&x.length>=16)
     .map(x=>Date.parse(x.length===16?x+':00Z':x)).filter(Number.isFinite).sort((a,b)=>a-b)[0];
@@ -72,7 +73,7 @@ function factorSignals(candidate,clock){
   return {risk,trigger,history:null,deadline,urgency:null};
 }
 function scoreCandidate(candidate,config,clock){
-  const policy=getSiPrioritySettings(config),signals=factorSignals(candidate,clock);
+  const policy=getSiPrioritySettings(config),signals=factorSignals(candidate,clock,policy);
   const factors=Object.entries(policy.weights).map(([key,weight])=>({
     key,weight,signal:signals[key]??null,
     contribution:signals[key]===null?null:
