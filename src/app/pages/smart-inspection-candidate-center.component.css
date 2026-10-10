@@ -292,3 +292,8 @@ button, input, select, a { font: inherit; }
 /* Shared maritime sidebar stays visible beside the legacy demo route. */
 .si-layout { display: flex; min-height: 100vh; }
 .si-layout > .candidate-shell { flex: 1; min-width: 0; }
+
+/* Legacy targeting demo remains within the shared MOEI/NMC chrome.
+   Its heading is a page-level title, not a second sticky site header. */
+.candidate-topbar{position:relative;top:auto;z-index:1;box-shadow:none;
+  background:transparent;border-bottom:1px solid #dfe9ef}
