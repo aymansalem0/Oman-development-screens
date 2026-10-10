@@ -952,3 +952,21 @@ a, button { font: inherit; }
 .source-risk-card small,.projected-risk-card small{font-size:8px;font-weight:750}
 .source-risk-card span,.projected-risk-card span{font-size:8px}
 @media(max-width:950px){.rx-policy-banner{flex-direction:column;align-items:flex-start}.hero-metrics{flex-wrap:wrap}}
+
+/* Current published risk is interactive. Historical snapshots deliberately are not. */
+.current-risk-button{appearance:none;width:100%;cursor:pointer;text-align:inherit;border:2px solid #15857e;transition:transform .15s,box-shadow .15s;}
+.current-risk-button:not(:disabled):hover,.current-risk-button:not(:disabled):focus-visible{transform:translateY(-2px);box-shadow:0 10px 28px rgba(15,118,110,.18);outline-offset:2px;}
+.current-risk-button:disabled{cursor:default;}
+#current-risk-factors{scroll-margin-top:120px;}
+.risk-history-panel{margin-top:18px;}
+.risk-history-rows{padding:12px;display:grid;gap:10px;}
+.historical-risk-record{border:1px solid #e4ebf0;background:#f9fbfc;padding:12px;border-radius:12px;cursor:default;}
+.historical-risk-heading{display:flex;align-items:center;gap:12px;flex-wrap:wrap;font-size:10px;color:#516e7d;}
+.historical-risk-heading strong{font-size:15px;color:#2e596e;}
+.historical-risk-heading small{color:#778b99;}
+.history-readonly{padding:5px 9px;border:1px solid #d4dfe7;border-radius:9px;background:#fff;color:#6e8090;font-size:9px;font-weight:800;}
+.historical-risk-factors{margin-top:9px;border-top:1px solid #e4ebf0;padding-top:8px;}
+.historical-formula{display:block;margin-bottom:8px;color:#375b74;font-size:10px;font-weight:700;}
+.historical-factor-row{display:grid;grid-template-columns:minmax(80px,1fr) repeat(3,minmax(80px,1fr));gap:10px;padding:5px 0;border-top:1px dashed #e3edf2;font-size:10px;color:#607589;}
+.historical-factor-row strong{color:#1b766f;}
+@media(max-width:760px){.historical-factor-row{grid-template-columns:repeat(2,minmax(0,1fr));}}
