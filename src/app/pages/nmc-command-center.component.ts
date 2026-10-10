@@ -539,6 +539,13 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
   }
 
   onFilterChange(): void {
+    // Do not leave an out-of-filter vessel's route or Vessel 360 action
+    // visible when the operator chooses AI Assessed Only.
+    if(this.selectedVessel&&!this.filteredVessels.some(v=>v.id===this.selectedVessel?.id)){
+      this.selectedVessel=undefined;
+      this.lastInteractiveVesselId=undefined;
+      this.drawSelectedTrack();
+    }
     this.refreshMapMarkers();
   }
 
