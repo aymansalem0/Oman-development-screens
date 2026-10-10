@@ -16,6 +16,7 @@ import { SiCandidateWorkbenchComponent } from './pages/si-candidate-workbench.co
 import { SiInspectionPreparationComponent } from './pages/si-inspection-preparation.component';
 import { SiPreparationQueueComponent } from './pages/si-preparation-queue.component';
 import { SiTargetingSettingsComponent } from './pages/si-targeting-settings.component';
+import { SiCandidateSourcesComponent } from './pages/si-candidate-sources.component';
 import { SiElectronicSchedulingComponent } from './pages/si-electronic-scheduling.component';
 import { SiErpSettingsComponent } from './pages/si-erp-settings.component';
 import { NmcDashboardBuilderComponent } from './pages/nmc-dashboard-builder.component';
@@ -35,6 +36,8 @@ export const routes: Routes = [
   { path: 'moei/smart-inspection/scheduling', component: SiElectronicSchedulingComponent },
   { path: 'moei/smart-inspection/settings/erp', component: SiErpSettingsComponent },
   { path: 'moei/smart-inspection/settings/targeting', component: SiTargetingSettingsComponent },
+  { path: 'moei/smart-inspection/settings/sources', component: SiCandidateSourcesComponent },
+  { path: 'moei/smart-inspection/settings/sources/:source', component: SiCandidateSourcesComponent },
   { path: 'moei/smart-inspection/preparation/:caseId', component: SiInspectionPreparationComponent },
   { path: 'moei/nmc', component: NmcCommandCenterComponent },
   { path: 'moei/nmc/alerts', component: NmcAlertCenterComponent },
