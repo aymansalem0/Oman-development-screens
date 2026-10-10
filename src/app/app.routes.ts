@@ -1,5 +1,5 @@
 import { Routes } from '@angular/router';
-import { NmcRuntimeSettingsComponent } from './pages/nmc-runtime-settings.component';
+
 import { ApprovalListComponent } from './pages/approval-list.component';
 import { ApprovalDetailComponent } from './pages/approval-detail.component';
 import { YearlyAvailabilityComponent } from './pages/yearly-availability.component';
@@ -52,7 +52,7 @@ export const routes: Routes = [
   { path: 'moei/nmc/dashboards/:id', component: NmcDashboardBuilderComponent },
   { path: 'moei/nmc/admin/risk-configuration', component: NmcRiskConfigurationAdminComponent },
   { path: 'moei/nmc/admin/data-quality', component: NmcDataQualityConfigurationComponent },
- { path: 'moei/nmc/admin/runtime-settings', component: NmcRuntimeSettingsComponent },
+ { path: 'moei/nmc/admin/runtime-settings', loadComponent: () => import('./pages/nmc-runtime-settings.component').then(m=>m.NmcRuntimeSettingsComponent) },
   { path: 'moei/nmc/admin/operational-guidance', component: NmcOperationalGuidanceAdminComponent },
   { path: 'moei/nmc/vessel/:imo/smart-inspection', loadComponent: () => import('./pages/nmc-smart-inspection.component').then(m => m.NmcSmartInspectionComponent) },
   { path: 'moei/nmc/vessel/:imo/case', component: NmcCaseWorkspaceComponent },
