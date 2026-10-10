@@ -254,6 +254,14 @@ button, input, select { font: inherit; }
   backdrop-filter: blur(8px);
   box-shadow: 0 4px 14px rgba(23,50,77,.08);
 }
+.map-assessed-empty {
+  left:50%; top:50%; transform:translate(-50%,-50%);
+  width:min(350px,85%); padding:17px 19px; border-radius:14px;
+  display:flex; flex-direction:column; gap:7px; text-align:center;
+  pointer-events:none;
+}
+.map-assessed-empty strong { color:#184052; font-size:13px; line-height:1.5; }
+.map-assessed-empty span { color:#647a89; font-size:10px; line-height:1.6; }
 .map-legend {
   left: 12px; bottom: 12px;
   display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
