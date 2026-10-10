@@ -77,7 +77,7 @@ interface RuntimeSnapshot {
                     tr('Enabled','مفعّل'):tr('Disabled','معطّل')}}</strong>
                 </label>
                 <ng-container *ngIf="item.type==='number'">
-                  <input type="number" [min]="item.min" [max]="item.max"
+                  <input type="number" [min]="item.min ?? null" [max]="item.max ?? null"
                     [ngModel]="draft[item.key]" (ngModelChange)="draft[item.key]=+$event"/>
                   <small>{{tr('Allowed range','النطاق المسموح')}}: {{item.min}}–{{item.max}}</small>
                 </ng-container>
