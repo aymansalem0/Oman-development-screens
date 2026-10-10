@@ -404,15 +404,25 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
     this.storedAiStatus = 'loading';
     this.subscriptions.add(this.fleetAiService.assessment(this.vessel.imo).subscribe({
       next: assessment => {
-        const keys = new Set((assessment.signals || []).map(signal => signal.factor));
-        const expected = ['movement', 'inspection', 'certificate', 'dataQuality', 'history'];
+        const signals = assessment.signals || [];
+        const core = ['movement', 'inspection', 'certificate', 'dataQuality', 'history'];
+        const allowed = new Set([...core, 'documentIntegrity']);
+        // A03 adds a SIXTH optional documentIntegrity signal. Previously the
+        // entire valid assessment (including Watch vessels) was rejected unless
+        // keys.size === 5, leaving Vessel 360 showing only fixture data.
+        const validSignals = [5, 6].includes(signals.length) &&
+          signals.every(signal => allowed.has(signal.factor) &&
+            Number.isFinite(signal.severity) &&
+            signal.severity >= 0 && signal.severity <= 100) &&
+          new Set(signals.map(signal => signal.factor)).size === signals.length &&
+          core.every(key => signals.some(signal => signal.factor === key)) &&
+          (signals.length === 5 || signals.some(s => s.factor === 'documentIntegrity'));
         if (assessment.imo !== this.vessel.imo ||
             assessment.status !== 'COMPLETED' ||
             assessment.authoritative !== false ||
             assessment.sourceNature !== 'SYNTHETIC_NOT_RIYADH_MOU' ||
             !Number.isFinite(assessment.score) ||
-            !assessment.assessmentId ||
-            keys.size !== 5 || !expected.every(key => keys.has(key))) {
+            !assessment.assessmentId || !validSignals) {
           this.storedAiStatus = 'error';
           return;
         }
@@ -483,9 +493,10 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
     ])) as {movement:number;inspection:number;certificate:number;dataQuality:number;history:number};
     const doc=this.storedAi.signals.find(s=>s.factor==='documentIntegrity');
     const weightedDoc=Number(this.riskEngine.config.weights.documentIntegrity||0)>0;
-    const projected=this.riskEngine.centralReady&&(!weightedDoc||doc)?
+    const hasCore=signalKeys.every(key=>Number.isFinite(severities[key]));
+    const projected=this.riskEngine.centralReady&&hasCore&&(!weightedDoc||doc)?
       this.riskEngine.evaluateFromAiSignals(this.vessel,{
-        ...severities,documentIntegrity:doc?.severity??0}):null;
+        ...severities,...(doc?{documentIntegrity:doc.severity}:{})}):null;
     this.vessel.riskScore = projected?.score ?? this.storedAi.score ?? this.vessel.riskScore;
     this.vessel.riskLevel = projected?.level ?? this.storedAi.level ?? this.vessel.riskLevel;
     this.vessel.risk=this.vessel.riskScore;
