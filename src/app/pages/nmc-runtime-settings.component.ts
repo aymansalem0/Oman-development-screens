@@ -25,15 +25,28 @@ interface RuntimeSnapshot {
   imports:[CommonModule,FormsModule,RouterLink,NmcNavigationComponent],
   template:`
   <div class="runtime-shell" [attr.dir]="lang.dir">
-    <header class="runtime-header">
-      <div class="runtime-mark">⚙</div>
-      <div>
-        <small>{{tr('MOEI · NMC ADMINISTRATION','وزارة الطاقة والبنية التحتية · إدارة المركز البحري')}}</small>
-        <h1>{{tr('Runtime Configuration & AI Agents','إعدادات التشغيل ووكلاء الذكاء الاصطناعي')}}</h1>
-        <p>{{tr('Managed effective runtime settings — no secrets, no editing .env, persistent audit version.',
-                'إعدادات تشغيل فعالة مع إصدارات محفوظة دون عرض أسرار أو تعديل ملف .env مباشرة.')}}</p>
+    <!-- Match the established MOEI/NMC 82px white maritime platform top bar.
+         Unified sidebar starts directly BELOW this header at the same 82px offset. -->
+    <header class="runtime-topbar">
+      <div class="brand-block">
+        <div class="brand-mark" aria-hidden="true">⚓</div>
+        <div class="brand-copy">
+          <span class="eyebrow">{{tr('MOEI Maritime Unified Platform','المنصة البحرية الموحدة لوزارة الطاقة والبنية التحتية')}}</span>
+          <h1>{{tr('Runtime Configuration & AI Agents','إعدادات التشغيل ووكلاء الذكاء الاصطناعي')}}</h1>
+          <p>{{tr('NMC Settings · Controlled agent execution and platform operations',
+                  'إعدادات المركز البحري · التحكم في تشغيل الوكلاء وعمليات المنصة')}}</p>
+        </div>
       </div>
-      <button class="outline" (click)="lang.toggle()">{{lang.isArabic?'English':'العربية'}}</button>
+      <div class="topbar-actions">
+        <span class="admin-badge">⚙ {{tr('NMC Settings','إعدادات المركز البحري')}}</span>
+        <a class="topbar-link" routerLink="/moei/nmc">
+          {{tr('← Back to Command Center','العودة إلى مركز القيادة →')}}
+        </a>
+        <button type="button" class="language-btn" (click)="lang.toggle()"
+                [attr.aria-label]="tr('Switch language','تغيير اللغة')">
+          {{lang.isArabic?'English':'العربية'}}
+        </button>
+      </div>
     </header>
     <app-nmc-navigation></app-nmc-navigation>
     <main class="runtime-main">
@@ -117,14 +130,38 @@ interface RuntimeSnapshot {
   </div>
   `,
   styles:[`
-    .runtime-shell{min-height:100vh;background:#f4f7fb;color:#183b52;font-family:inherit}
-    .runtime-header{display:flex;align-items:center;gap:17px;padding:23px 32px;background:linear-gradient(130deg,#0a3549,#145968);color:white}
-    .runtime-mark,.group-icon{display:grid;place-items:center;border-radius:12px}
-    .runtime-mark{font-size:28px;background:#ffffff18;width:52px;height:52px}
-    .runtime-header small{color:#a5e3e5;letter-spacing:1.3px;font-size:10px;font-weight:800}
-    .runtime-header h1{font-size:23px;margin:8px 0}.runtime-header p{margin:0;color:#c7e5e9;font-size:12px}
-    .runtime-header>.outline{margin-inline-start:auto;color:white;border-color:#a1c4ce}
-    .runtime-main{max-width:1280px;padding:26px 30px;margin:auto}
+    :host{display:block;position:fixed;inset:0;z-index:10000;overflow:auto;
+      color:#17324d;font-family:Inter,"Segoe UI",Tahoma,Arial,sans-serif}
+    *{box-sizing:border-box}
+    .runtime-shell{min-height:100vh;background:radial-gradient(circle at 85% 6%,rgba(14,165,233,.05),transparent 23%),
+      linear-gradient(180deg,#f8fbfd 0%,#f2f7fa 100%);color:#17324d}
+    .runtime-topbar{position:fixed;inset:0 0 auto 0;height:82px;z-index:40;
+      display:flex;align-items:center;justify-content:space-between;gap:20px;padding:0 24px;
+      background:rgba(255,255,255,.97);border-bottom:1px solid #e6edf3;
+      box-shadow:0 4px 18px rgba(23,50,77,.05);backdrop-filter:blur(14px)}
+    .brand-block{display:flex;align-items:center;gap:13px;min-width:0}
+    .brand-mark{width:44px;height:44px;flex:0 0 44px;border-radius:14px;
+      display:grid;place-items:center;background:linear-gradient(145deg,#0f766e,#0ea5a0);
+      color:#fff;font-size:19px;box-shadow:0 8px 22px rgba(15,118,110,.16)}
+    .brand-copy{min-width:0}
+    .eyebrow{display:block;color:#0f766e;font-size:9px;font-weight:800;
+      letter-spacing:1.2px;text-transform:uppercase;line-height:1.3}
+    .brand-copy h1{margin:3px 0 0;color:#17324d;font-size:18px;line-height:1.3;font-weight:750}
+    .brand-copy p{margin:3px 0 0;color:#8191a4;font-size:10px;line-height:1.3}
+    .topbar-actions{display:flex;align-items:center;justify-content:flex-end;gap:10px;flex-shrink:0}
+    .admin-badge{display:inline-flex;align-items:center;gap:6px;padding:9px 12px;
+      border:1px solid #ccefe8;border-radius:999px;background:#ecfdf9;
+      color:#0f766e;font-size:10px;font-weight:800;white-space:nowrap}
+    .topbar-link,.language-btn{display:inline-flex;align-items:center;justify-content:center;
+      min-height:36px;border:1px solid #dce5ed;border-radius:10px;
+      background:#fff;color:#52687b;font-size:10px;font-weight:750;
+      padding:0 12px;text-decoration:none;white-space:nowrap;cursor:pointer}
+    .language-btn{border-color:#cfe5e2;background:#f1faf8;color:#0f766e}
+    .topbar-link:hover,.language-btn:hover{border-color:#9fd9d2;background:#effbf8;color:#0f766e}
+    .group-icon{display:grid;place-items:center;border-radius:12px}
+    /* Match the unified fixed navigation: 82px top bar, 240px desktop sidebar. */
+    .runtime-main{margin-inline-start:240px;width:calc(100% - 240px);
+      padding:106px 28px 44px;max-width:none}
     .runtime-status{display:flex;align-items:center;gap:30px;flex-wrap:wrap;background:white;border:1px solid #dce6eb;padding:20px 26px;border-radius:14px}
     .runtime-status>div{display:flex;flex-direction:column;gap:7px;flex:1}
     .runtime-status span{font-size:10px;text-transform:uppercase;color:#607f90;font-weight:700}
@@ -162,7 +199,29 @@ interface RuntimeSnapshot {
     button:disabled{opacity:.45;cursor:not-allowed}
     .banner{padding:13px;border-radius:9px;margin:15px 0;font-size:12px}
     .banner.alert{color:#a54930;background:#fff0ec}.banner.success{color:#23774d;background:#e6f7ee}
-    @media(max-width:850px){.settings-grid{grid-template-columns:1fr}.runtime-header{flex-wrap:wrap}.runtime-main{padding:14px}.runtime-status{gap:15px}}
+    @media (min-width:961px) and (max-width:1220px){
+      .runtime-main{margin-inline-start:66px;width:calc(100% - 66px);padding-inline:20px}
+      .admin-badge{display:none}
+    }
+    @media(max-width:960px){
+      .runtime-main{margin-inline-start:0;width:100%;padding:142px 18px 32px}
+      .settings-grid{grid-template-columns:1fr}
+      .runtime-status{gap:15px}
+      .admin-badge{display:none}
+    }
+    @media(max-width:650px){
+      .runtime-topbar{padding:0 12px;gap:8px}
+      .brand-mark{width:36px;height:36px;flex-basis:36px;border-radius:11px;font-size:16px}
+      .brand-block{gap:8px}
+      .brand-copy h1{font-size:13px}
+      .brand-copy p{display:none}
+      .eyebrow{font-size:7px;letter-spacing:.5px}
+      .topbar-actions{gap:5px}
+      .topbar-link{display:none}
+      .language-btn{min-height:32px;padding:0 8px;font-size:9px}
+      .runtime-status{padding:16px}
+      .group-card,.publish-card{padding:16px}
+    }
   `]
 })
 export class NmcRuntimeSettingsComponent implements OnInit{
