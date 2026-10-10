@@ -1,4 +1,4 @@
-import {ChangeDetectionStrategy,Component} from '@angular/core';
+import {Component} from '@angular/core';
 import {LanguageService} from '../services/language.service';
 
 /**
@@ -30,8 +30,7 @@ import {LanguageService} from '../services/language.service';
     @media (max-width:700px){:host{width:157px;height:46px}
       .ministry-logo-plate{padding:3px 4px;border-radius:8px}}
     @media (max-width:430px){:host{width:124px;height:44px}}
-  `],
-  changeDetection:ChangeDetectionStrategy.OnPush
+  `]
 })
 export class NmcMinistryLogoComponent{
   constructor(public readonly lang:LanguageService){}
