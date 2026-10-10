@@ -71,20 +71,31 @@
         <h3>{{copy('Rule-Based Candidate Ranking Preview','معاينة ترتيب المرشحين وفق القواعد')}}</h3>
         <p>{{p.eligibleCount}} {{copy('open candidates · Rules v','مرشح بانتظار المراجعة · إصدار القواعد')}}{{p.policyVersion}}
           · {{copy('No AI call has been made','لم يتم تشغيل AI')}}</p>
-        <div class="table-scroll" *ngIf="p.items.length">
+        <p>{{rulePreviewVessels.length}} {{copy('unique candidate vessels, with',
+          'سفينة مرشحة بدون تكرار، تضم')}} {{p.eligibleCount}}
+          {{copy('independent inspection workflows','مسار معاينة مستقل')}}</p>
+        <div class="table-scroll" *ngIf="rulePreviewVessels.length">
           <table>
             <thead><tr>
-              <th>{{copy('Rule Rank','ترتيب القواعد')}}</th>
-              <th>{{copy('Vessel','السفينة')}}</th>
-              <th>{{copy('Tier','المستوى')}}</th>
-              <th>{{copy('Provisional Score','درجة أولية')}}</th>
-              <th>{{copy('Missing Evidence','بيانات ناقصة')}}</th>
+              <th>{{copy('Vessel Rule Rank','ترتيب السفينة بالقواعد')}}</th>
+              <th>{{copy('Vessel / IMO','السفينة / IMO')}}</th>
+              <th>{{copy('Inspection Workflows & Individual Rule Ranks','مسارات المعاينة وترتيب كل مسار')}}</th>
+              <th>{{copy('Missing Evidence by Regime','الأدلة الناقصة لكل نوع معاينة')}}</th>
             </tr></thead>
-            <tbody><tr *ngFor="let item of p.items">
-              <td><strong>#{{item.ruleRank}}</strong></td><td>{{item.vesselName}} · {{item.imo}}</td>
-              <td>{{item.protectedTier+1}}</td>
-              <td>{{item.provisionalScore===null?'—':item.provisionalScore+'/100'}}</td>
-              <td>{{item.missingData.join(' · ')||'—'}}</td>
+            <tbody><tr *ngFor="let vessel of rulePreviewVessels">
+              <td><strong>#{{vessel.minRank}}</strong></td>
+              <td>{{vessel.vesselName}} · {{vessel.imo}}</td>
+              <td>
+                <div *ngFor="let item of vessel.workflows">
+                  #{{item.ruleRank}} · {{statusText(getWorkflow(item.candidateKey)?.regime||'')}} ·
+                  {{copy('Tier','المستوى')}} {{item.protectedTier+1}} ·
+                  {{copy('Provisional','مبدئي')}} {{item.provisionalScore===null?'—':item.provisionalScore+'/100'}}
+                </div>
+              </td>
+              <td><div *ngFor="let item of vessel.workflows">
+                {{statusText(getWorkflow(item.candidateKey)?.regime||'')}}:
+                {{item.missingData.join(' · ')||'—'}}
+              </div></td>
             </tr></tbody>
           </table>
         </div>
