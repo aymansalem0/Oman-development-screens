@@ -1,4 +1,5 @@
 import { NmcNavigationComponent } from '../components/nmc-navigation.component';
+import { NmcPlatformHeaderComponent, NmcPlatformFooterComponent } from '../components/nmc-platform-chrome.component';
 import { CommonModule } from '@angular/common';
 import {
   AfterViewInit,
@@ -36,7 +37,7 @@ interface MaritimeEvent {
 @Component({
   selector: 'app-nmc-command-center',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, NmcNavigationComponent],
+  imports: [CommonModule, FormsModule, RouterLink, NmcNavigationComponent, NmcPlatformHeaderComponent, NmcPlatformFooterComponent],
   templateUrl: './nmc-command-center.component.html',
   styleUrl: './nmc-command-center.component.css'
 })
@@ -97,8 +98,7 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
     return this.lang.pick(en, ar);
   }
 
-  toggleLanguage(): void {
-    this.lang.toggle();
+  refreshMapForLanguage(): void {
 
     if (this.map) {
       this.map.remove();

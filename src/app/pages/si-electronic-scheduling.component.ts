@@ -1,3 +1,4 @@
+import {LanguageService} from '../services/language.service';
 import {CommonModule} from '@angular/common';
 import {Component,OnInit} from '@angular/core';
 import {FormsModule} from '@angular/forms';
@@ -51,11 +52,12 @@ export class SiElectronicSchedulingComponent implements OnInit{
   earliestLocal='';deadlineLocal='';
   editorKey='';publisherKey='';
   private readonly api='/api/si';
-  constructor(private readonly http:HttpClient){
+  constructor(private readonly http:HttpClient,public readonly lang:LanguageService){
     const now=Date.now()+DAY;
     this.earliestLocal=new Date(now+4*3600000).toISOString().slice(0,10)+'T08:00';
     this.deadlineLocal=new Date(now+2*DAY+4*3600000).toISOString().slice(0,10)+'T18:00';
   }
+  copy(en:string,ar:string):string{return this.lang.pick(en,ar);}
   ngOnInit():void{this.refresh();}
   refresh():void{
     this.http.get<ErpStatus&{status:string}>(this.api+'/erp/status').subscribe({

@@ -1,3 +1,4 @@
+import {LanguageService} from '../services/language.service';
 import {CommonModule} from '@angular/common';
 import {Component,OnInit} from '@angular/core';
 import {FormsModule} from '@angular/forms';
@@ -27,7 +28,8 @@ export class SiInspectionPreparationComponent implements OnInit{
     'hull-machinery':'Hull & Machinery',
     security:'Security and Access'
   };
-  constructor(private route:ActivatedRoute,private api:SiPreparationService){}
+  constructor(private route:ActivatedRoute,private api:SiPreparationService,public readonly lang:LanguageService){}
+  copy(en:string,ar:string):string{return this.lang.pick(en,ar);}
   ngOnInit():void{this.id=this.route.snapshot.paramMap.get('caseId')||'';}
   get saved(){return this.data?.saved||null;}
   get prepared():boolean{return Boolean(this.saved);}
@@ -107,7 +109,41 @@ export class SiInspectionPreparationComponent implements OnInit{
         error:e=>this.fail(e)
       });
   }
-  itemLabel(id:string):string{return this.names[id]||id;}
+  statusLabel(value:string|null|undefined):string{
+    const key=value||'NOT PREPARED';
+    const labels:Record<string,string>={
+      'NOT PREPARED':'لم يبدأ التحضير',
+      'PREPARED':'جاهز',
+      'GENERATING':'جارٍ إنشاء الملف',
+      'DRAFT_REVIEW':'مسودة للمراجعة',
+      'APPROVED':'معتمد',
+      'REJECTED':'مرفوض',
+      'FAILED':'فشل',
+      'APPROVE':'اعتماد',
+      'REJECT':'رفض',
+      'ENABLED':'مفعّل',
+      'DISABLED':'غير مفعّل',
+      'High':'مرتفع',
+      'Critical':'حرج',
+      'Watch':'مراقبة',
+      'Normal':'عادي'
+    };
+    return this.lang.isArabic?labels[key]||key:key;
+  }
+  itemLabel(id:string):string{
+    if(!this.lang.isArabic)return this.names[id]||id;
+    const ar:Record<string,string>={
+      'fire-safety':'السلامة من الحريق والمخالفات السابقة',
+      'certificates':'الشهادات الإلزامية',
+      'navigation':'الملاحة والجسر',
+      'lifesaving':'معدات إنقاذ الأرواح',
+      'pollution':'منع التلوث',
+      'manning':'الطاقم والحد الأدنى للتشغيل',
+      'hull-machinery':'البدن والآلات',
+      'security':'الأمن والتحكم في الدخول'
+    };
+    return ar[id]||this.names[id]||id;
+  }
   countFocus(id:string):string{
     return this.saved?.dossier?.checklistFocus.find(x=>x.existingItemId===id)?.focus||'BASE';
   }

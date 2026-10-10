@@ -1,3 +1,4 @@
+import {LanguageService} from '../services/language.service';
 import {CommonModule} from '@angular/common';
 import {Component,OnInit} from '@angular/core';
 import {FormsModule} from '@angular/forms';
@@ -29,7 +30,8 @@ export class SiErpSettingsComponent implements OnInit{
     'Blackouts','Travel_Matrix','Bookings','Scheduling_Policy','POC_Requests'
   ];
   private readonly api='/api/si';
-  constructor(private readonly http:HttpClient){}
+  constructor(private readonly http:HttpClient,public readonly lang:LanguageService){}
+  copy(en:string,ar:string):string{return this.lang.pick(en,ar);}
   ngOnInit(){this.refresh();}
   refresh():void{
     this.loading=true;this.error='';

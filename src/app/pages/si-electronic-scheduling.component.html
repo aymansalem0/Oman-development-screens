@@ -1,143 +1,143 @@
-<div class="si-layout">
+<div class="si-layout" [attr.dir]="lang.dir">
   <app-nmc-navigation></app-nmc-navigation>
   <div class="si-shell">
     <header class="si-header">
       <div class="si-brand"><span class="si-mark">SI</span><div>
-        <small>MOEI · SMART INSPECTION / NMC</small>
-        <h1>Electronic Inspection Scheduling</h1>
+        <small>{{copy("MOEI · SMART INSPECTION / NMC","وزارة الطاقة والبنية التحتية · المعاينة الذكية / المركز البحري")}}</small>
+        <h1>{{copy("Electronic Inspection Scheduling","الجدولة الإلكترونية للمعاينات")}}</h1>
         <p>الجدولة الإلكترونية · تكامل موارد مهندسي التفتيش من ERP · موافقة آلية أو اعتماد المسؤول</p>
       </div></div>
       <div class="si-top-actions">
-        <a routerLink="/moei/smart-inspection/candidates">← Candidate Center</a>
-        <a routerLink="/moei/nmc">NMC Command Center</a>
-        <button type="button" (click)="refresh()">↻ Refresh</button>
+        <a routerLink="/moei/smart-inspection/candidates">{{copy("← Candidate Center","← مركز ترشيح المعاينات")}}</a>
+        <a routerLink="/moei/nmc">{{copy("NMC Command Center","مركز القيادة البحري")}}</a>
+        <button type="button" (click)="refresh()">{{copy("↻ Refresh","↻ تحديث")}}</button>
       </div>
     </header>
   
     <main>
       <div *ngIf="error" class="si-message error" role="alert">{{error}}</div>
       <div *ngIf="success" class="si-message success" role="status">{{success}}</div>
-      <div *ngIf="busy" class="si-message pending" role="status">Processing — please wait…</div>
+      <div *ngIf="busy" class="si-message pending" role="status">{{copy("Processing — please wait…","جارٍ المعالجة، يرجى الانتظار…")}}</div>
       <section class="si-kpis">
-        <article><span>ERP SOURCE</span><strong>{{erp?.ready?'EXCEL IMPORTED':'NOT IMPORTED'}}</strong><small>Read-only ERP simulation</small></article>
-        <article><span>INSPECTORS</span><strong>{{erp?.counts?.['Inspectors']??'—'}}</strong><small>Validated workforce records</small></article>
-        <article><span>NMC REFERRALS</span><strong>{{referrals.length}}</strong><small>Human-approved · awaiting schedule</small></article>
-        <article><span>APPROVAL POLICY</span><strong>{{policy?.config?.approvalMode||'—'}}</strong><small>Revision {{policy?.revision||'—'}}</small></article>
+        <article><span>{{copy("ERP SOURCE","مصدر ERP")}}</span><strong>{{erp?.ready?copy('EXCEL IMPORTED','تم استيراد Excel'):copy('NOT IMPORTED','لم يتم الاستيراد')}}</strong><small>{{copy("Read-only ERP simulation","محاكاة قراءة بيانات ERP فقط")}}</small></article>
+        <article><span>{{copy("INSPECTORS","المفتشون")}}</span><strong>{{erp?.counts?.['Inspectors']??'—'}}</strong><small>{{copy("Validated workforce records","سجلات القوى العاملة المعتمدة بعد التحقق")}}</small></article>
+        <article><span>{{copy("NMC REFERRALS","إحالات المركز البحري")}}</span><strong>{{referrals.length}}</strong><small>{{copy("Human-approved · awaiting schedule","معتمدة بشريًا وبانتظار الجدولة")}}</small></article>
+        <article><span>{{copy("APPROVAL POLICY","سياسة الاعتماد")}}</span><strong>{{policy?.config?.approvalMode||'—'}}</strong><small>{{copy('Revision','الإصدار')}} {{policy?.revision||'—'}}</small></article>
       </section>
   
       <div class="si-grid">
         <section class="si-panel">
           <header class="si-section-head"><div>
-            <small>01 / ERP SOURCE STATUS</small>
-            <h2>Workforce &amp; Inspector Availability</h2>
-          </div><span class="si-badge">{{erp?.ready?'IMPORTED':'SETUP REQUIRED'}}</span></header>
-          <p class="si-hint">This screen uses a validated ERP workforce snapshot for scheduling. Upload, preview, commit and source integration settings are managed separately under <strong>Settings → ERP Integration Simulator</strong>.</p>
+            <small>{{copy("01 / ERP SOURCE STATUS","٠١ / حالة مصدر ERP")}}</small>
+            <h2>{{copy("Workforce & Inspector Availability","القوى العاملة وتوفر المفتشين")}}</h2>
+          </div><span class="si-badge">{{erp?.ready?copy('IMPORTED','تم الاستيراد'):copy('SETUP REQUIRED','يحتاج إعداد')}}</span></header>
+          <p class="si-hint">{{copy("This screen uses a validated ERP workforce snapshot for scheduling. Upload, preview, commit and source integration settings are managed separately under","تستخدم الشاشة نسخة موارد ERP التي تم التحقق منها للجدولة. تتم إدارة الرفع والمعاينة والاعتماد والإعدادات من")}} <strong>{{copy("Settings → ERP Integration Simulator","الإعدادات ← محاكاة تكامل ERP")}}</strong>.</p>
           <div *ngIf="erp?.ready" class="si-imported">
-            <div><span>Source</span><strong>POC ERP Excel Snapshot</strong></div>
-            <div><span>Last Import</span><strong>{{erp?.importedAt|date:'medium'}}</strong></div>
-            <div><span>Snapshot ID</span><code>{{shortId(erp?.snapshotId)}}</code></div>
+            <div><span>{{copy("Source","المصدر")}}</span><strong>{{copy("POC ERP Excel Snapshot","نسخة ERP التجريبية")}}</strong></div>
+            <div><span>{{copy("Last Import","آخر استيراد")}}</span><strong>{{erp?.importedAt|date:'medium'}}</strong></div>
+            <div><span>{{copy("Snapshot ID","معرف النسخة المحفوظة")}}</span><code>{{shortId(erp?.snapshotId)}}</code></div>
             <div class="si-mini-chips"><span *ngFor="let kv of erp?.counts|keyvalue">{{kv.key}}: {{kv.value}}</span></div>
           </div>
           <div *ngIf="!erp?.ready" class="si-empty">
-            No ERP workforce snapshot is configured. Scheduling remains unavailable until an Integration Administrator validates and commits the ERP Excel in Settings.
+            {{copy("No ERP workforce snapshot is configured. Scheduling remains unavailable until an Integration Administrator validates and commits the ERP Excel in Settings.","لم يتم استيراد بيانات المفتشين من ERP. الجدولة غير متاحة حتى يقوم مسؤول التكامل بمراجعة الملف واعتماده من الإعدادات.")}}
           </div>
           <a routerLink="/moei/smart-inspection/settings/erp" class="erp-settings-link">
-            ⚙ Open ERP Integration Settings →
+            {{copy("⚙ Open ERP Integration Settings →","⚙ فتح إعدادات تكامل ERP →")}}
           </a>
-          <p class="si-note">Read-only simulated external ERP feed. No direct writes to ERP, NMC Oracle risk/assessments or AI agents.</p>
+          <p class="si-note">{{copy("Read-only simulated external ERP feed. No direct writes to ERP, NMC Oracle risk/assessments or AI agents.","مصدر ERP تجريبي للقراءة فقط دون تعديل ERP أو سجلات Oracle الخاصة بالمخاطر أو التقييمات أو وكلاء AI.")}}</p>
         </section>
 
         <section class="si-panel">
-          <header class="si-section-head"><div><small>02 / NMC REFERRALS</small><h2>Inspection Scheduling Request</h2></div><span class="si-badge">{{referrals.length}} Pending</span></header>
-          <label for="referral">Approved NMC Inspection Referral</label>
+          <header class="si-section-head"><div><small>{{copy("02 / NMC REFERRALS","٠٢ / إحالات المركز البحري")}}</small><h2>{{copy("Inspection Scheduling Request","طلب جدولة معاينة")}}</h2></div><span class="si-badge">{{referrals.length}} {{copy('Pending','قيد الانتظار')}}</span></header>
+          <label for="referral">{{copy("Approved NMC Inspection Referral","إحالة معاينة معتمدة من المركز البحري")}}</label>
           <select id="referral" [ngModel]="selectedReferralId" (ngModelChange)="selectReferral($event)">
-            <option value="">Select an approved referral…</option>
-            <option *ngFor="let r of referrals" [value]="r.id">IMO {{r.imo}} · {{r.sourceLevel||r.priority}} · Case {{shortId(r.caseId)}}</option>
+            <option value="">{{copy("Select an approved referral…","اختر إحالة معتمدة…")}}</option>
+            <option *ngFor="let r of referrals" [value]="r.id">IMO {{r.imo}} · {{r.sourceLevel||r.priority}} · {{copy('Case','الحالة')}} {{shortId(r.caseId)}}</option>
           </select>
           <div class="si-referral" *ngIf="selectedReferral as r">
-            <strong>Vessel IMO {{r.imo}}</strong>
-            <span>Priority {{r.sourceLevel||r.priority}}</span>
-            <span>Case {{shortId(r.caseId)}}</span>
-            <span>Source Assessment {{shortId(r.sourceAssessmentId)}}</span>
+            <strong>{{copy('Vessel IMO','رقم IMO للسفينة')}} {{r.imo}}</strong>
+            <span>{{copy('Priority','الأولوية')}} {{r.sourceLevel||r.priority}}</span>
+            <span>{{copy('Case','الحالة')}} {{shortId(r.caseId)}}</span>
+            <span>{{copy('Source Assessment','التقييم المصدر')}} {{shortId(r.sourceAssessmentId)}}</span>
             <p>{{r.reason}}</p>
           </div>
           <div class="si-form-grid">
-            <div><label for="port">Inspection Port</label>
+            <div><label for="port">{{copy("Inspection Port","ميناء المعاينة")}}</label>
               <select id="port" [(ngModel)]="portId"><option *ngFor="let p of ports" [value]="p.port_id">{{p.port_name}}</option></select>
             </div>
-            <div><label for="type">Vessel Type</label>
-              <select id="type" [(ngModel)]="vesselType"><option value="CARGO">Cargo</option><option value="TANKER">Tanker</option>
-                <option value="PASSENGER">Passenger</option><option value="OTHER">Other</option></select></div>
-            <div><label for="earliest">Available From (Dubai)</label><input id="earliest" type="datetime-local" [(ngModel)]="earliestLocal"></div>
-            <div><label for="deadline">Inspection Deadline (Dubai)</label><input id="deadline" type="datetime-local" [(ngModel)]="deadlineLocal"></div>
-            <div><label for="regime">Inspection Regime</label>
-              <select id="regime" [(ngModel)]="regime"><option value="FOCUSED">Focused Inspection</option><option value="PSC">PSC</option><option value="FLAG">Flag State</option></select></div>
-            <div><label for="duration">Estimated Duration (minutes)</label><input id="duration" type="number" min="30" max="720" step="30" [(ngModel)]="durationMinutes"></div>
+            <div><label for="type">{{copy("Vessel Type","نوع السفينة")}}</label>
+              <select id="type" [(ngModel)]="vesselType"><option value="CARGO">{{copy("Cargo","سفينة شحن")}}</option><option value="TANKER">{{copy("Tanker","ناقلة")}}</option>
+                <option value="PASSENGER">{{copy("Passenger","سفينة ركاب")}}</option><option value="OTHER">{{copy("Other","أخرى")}}</option></select></div>
+            <div><label for="earliest">{{copy("Available From (Dubai)","بداية الإتاحة (دبي)")}}</label><input id="earliest" type="datetime-local" [(ngModel)]="earliestLocal"></div>
+            <div><label for="deadline">{{copy("Inspection Deadline (Dubai)","الموعد النهائي للمعاينة (دبي)")}}</label><input id="deadline" type="datetime-local" [(ngModel)]="deadlineLocal"></div>
+            <div><label for="regime">{{copy("Inspection Regime","نظام المعاينة")}}</label>
+              <select id="regime" [(ngModel)]="regime"><option value="FOCUSED">{{copy("Focused Inspection","معاينة مركزة")}}</option><option value="PSC">{{copy("PSC","تفتيش دولة الميناء")}}</option><option value="FLAG">{{copy("Flag State","دولة العلم")}}</option></select></div>
+            <div><label for="duration">{{copy("Estimated Duration (minutes)","المدة المتوقعة (دقيقة)")}}</label><input id="duration" type="number" min="30" max="720" step="30" [(ngModel)]="durationMinutes"></div>
           </div>
           <button type="button" class="primary wide" [disabled]="busy||!selectedReferralId||!erp?.ready"
-            (click)="generate()">⚙ Generate Electronic Schedule</button>
-          <p class="si-note">Existing NMC referral is mandatory. Only human-approved A01 priority-inspection actions may be scheduled.</p>
+            (click)="generate()">{{copy("⚙ Generate Electronic Schedule","⚙ إنشاء اقتراح الجدولة")}}</button>
+          <p class="si-note">{{copy("Existing NMC referral is mandatory. Only human-approved A01 priority-inspection actions may be scheduled.","يلزم وجود إحالة معتمدة من المركز البحري. لا تُجدول إلا إجراءات المعاينة ذات الأولوية المعتمدة بشريًا.")}}</p>
         </section>
       </div>
   
       <section class="si-panel si-results" *ngIf="proposal as p">
-        <header class="si-section-head"><div><small>03 / DETERMINISTIC SCHEDULING ENGINE</small>
-          <h2>Available Inspectors &amp; Proposed Time Slots</h2></div>
-          <span class="si-badge" [class.confirmed]="p.status==='CONFIRMED'">{{p.status}}</span>
+        <header class="si-section-head"><div><small>{{copy("03 / DETERMINISTIC SCHEDULING ENGINE","٠٣ / محرك الجدولة وفق القواعد")}}</small>
+          <h2>{{copy("Available Inspectors & Proposed Time Slots","المفتشون المتاحون والمواعيد المقترحة")}}</h2></div>
+          <span class="si-badge" [class.confirmed]="p.status==='CONFIRMED'">{{copy('Status','الحالة')}}: {{p.status}}</span>
         </header>
-        <p class="si-hint">The engine checked qualifications, port eligibility, approved/pending leave, shifts, existing bookings, daily capacity, travel, and the inspection time window. Recommendation scores rank eligible slots only.</p>
-        <div *ngIf="!p.options.length" class="si-empty">No feasible slot. Check the excluded engineers below, then adjust the time window or policy.</div>
+        <p class="si-hint">{{copy("The engine checked qualifications, port eligibility, approved/pending leave, shifts, existing bookings, daily capacity, travel, and the inspection time window. Recommendation scores rank eligible slots only.","يتحقق المحرك من المؤهلات وتغطية الموانئ والإجازات والورديات والحجوزات والطاقة اليومية والانتقال والفترة الزمنية، ويرتب المواعيد المستوفية فقط.")}}</p>
+        <div *ngIf="!p.options.length" class="si-empty">{{copy("No feasible slot. Check the excluded engineers below, then adjust the time window or policy.","لا يوجد موعد مناسب. راجع المفتشين المستبعدين ثم غيّر الفترة الزمنية أو السياسة.")}}</div>
         <div class="si-options">
           <label *ngFor="let option of p.options;trackBy:trackOption" class="si-option" [class.selected]="selectedOptionId===option.optionId">
             <input type="radio" name="option" [(ngModel)]="selectedOptionId" [value]="option.optionId" [disabled]="p.status==='CONFIRMED'">
             <div class="si-option-main"><strong>{{option.inspectorName}}</strong><span>{{option.inspectorId}} · {{option.portName}}</span>
-              <span>{{option.startLocal}} – {{option.endLocal}} (UAE)</span>
-              <span *ngIf="option.crossPort">↗ Cross-port · {{option.travelMinutes}} min travel</span></div>
+              <span>{{option.startLocal}} – {{option.endLocal}} ({{copy('UAE','الإمارات')}})</span>
+              <span *ngIf="option.crossPort">↗ {{copy('Cross-port','بين الموانئ')}} · {{option.travelMinutes}} {{copy('min travel','دقيقة انتقال')}}</span></div>
             <div class="si-option-right"><b>{{option.score}}/100</b>
-              <span [class.auto]="option.approval==='AUTO_ELIGIBLE'">{{option.approval==='AUTO_ELIGIBLE'?'Auto-eligible':'Supervisor approval'}}</span>
+              <span [class.auto]="option.approval==='AUTO_ELIGIBLE'">{{option.approval==='AUTO_ELIGIBLE'?copy('Auto-eligible','مؤهل للتأكيد الآلي'):copy('Supervisor approval','يتطلب اعتماد المشرف')}}</span>
               <small *ngFor="let reason of option.approvalReasons">{{reason}}</small></div>
           </label>
         </div>
         <div class="si-decision" *ngIf="p.options.length&&p.status==='PROPOSED'">
-          <span>Selected slot will be revalidated before NMC Case is updated. Human approval needs the separate Supervisor key.</span>
-          <button type="button" class="primary" [disabled]="busy||!selectedOptionId" (click)="confirm()">✓ Confirm Selected Schedule</button>
+          <span>{{copy("Selected slot will be revalidated before NMC Case is updated. Human approval needs the separate Supervisor key.","يُعاد التحقق من الموعد المختار قبل تحديث حالة المركز البحري. ويتطلب الاعتماد البشري مفتاح المشرف.")}}</span>
+          <button type="button" class="primary" [disabled]="busy||!selectedOptionId" (click)="confirm()">✓ {{copy('Confirm Selected Schedule','تأكيد الموعد المختار')}}</button>
         </div>
-        <details *ngIf="p.exclusions.length"><summary>Excluded engineers ({{p.exclusions.length}}) · Reasons</summary>
+        <details *ngIf="p.exclusions.length"><summary>{{copy('Excluded inspectors','المفتشون المستبعدون')}} ({{p.exclusions.length}}) · {{copy('Reasons','الأسباب')}}</summary>
           <div class="si-exclusion" *ngFor="let item of p.exclusions"><b>{{item.inspectorId}}</b>
             <span>{{item.reasons.join(' · ')}}</span></div>
         </details>
-        <div class="si-audit-strip">ERP {{shortId(p.erpSnapshotId)}} · Policy revision {{p.policyRevision}} · Expires {{p.expiresAt|date:'shortTime'}}</div>
+        <div class="si-audit-strip">ERP {{shortId(p.erpSnapshotId)}} · {{copy('Policy revision','إصدار السياسة')}} {{p.policyRevision}} · {{copy('Expires','تنتهي الصلاحية')}} {{p.expiresAt|date:'shortTime'}}</div>
       </section>
   
       <section class="si-panel">
-        <header class="si-section-head"><div><small>04 / BUSINESS CONFIGURATION</small><h2>Scheduling Approval &amp; Optimization Settings</h2></div>
-          <span class="si-badge">Version {{policy?.revision||'—'}}</span></header>
-        <p class="si-hint">تتحكم هذه الإعدادات في الاعتماد التلقائي أو اعتماد المسؤول. لا تغيّر Risk Settings ولا نتائج AI التاريخية. أي نشر جديد يحتاج Supervisor Key وسبب تغيير.</p>
+        <header class="si-section-head"><div><small>{{copy("04 / BUSINESS CONFIGURATION","٠٤ / إعدادات الأعمال")}}</small><h2>{{copy("Scheduling Approval & Optimization Settings","إعدادات اعتماد الجدولة وتحسين التوزيع")}}</h2></div>
+          <span class="si-badge">{{copy('Version','الإصدار')}} {{policy?.revision||'—'}}</span></header>
+        <p class="si-hint">{{copy('These policies determine automatic or supervisor approval. They do not modify NMC risk settings or previous AI results. Publication requires a supervisor key and business justification.','تتحكم هذه الإعدادات في الاعتماد التلقائي أو اعتماد المسؤول. لا تغيّر إعدادات المخاطر أو نتائج AI التاريخية. يتطلب النشر مفتاح المشرف ومبررًا إداريًا.')}}</p>
         <div class="si-policy-grid" *ngIf="draft as cfg">
-          <div><label>Scheduling Mode</label>
+          <div><label>{{copy("Scheduling Mode","وضع الجدولة")}}</label>
             <select [(ngModel)]="cfg.approvalMode">
-              <option value="HYBRID">HYBRID — Policy based</option><option value="MANUAL">MANUAL — All require approval</option>
-              <option value="AUTO">AUTO — Only eligible requests</option></select></div>
-          <div><label>Max Risk Level for Auto-Approval</label>
-            <select [(ngModel)]="cfg.autoMaxRiskLevel"><option>Normal</option><option>Watch</option><option>High</option><option>Critical</option></select></div>
-          <label class="si-check"><input type="checkbox" [(ngModel)]="cfg.autoApproveNmcReferrals"> Permit eligible NMC referrals to auto-confirm</label>
-          <label class="si-check"><input type="checkbox" [(ngModel)]="cfg.allowCrossPort"> Permit cross-port assignments</label>
-          <label class="si-check"><input type="checkbox" [(ngModel)]="cfg.crossPortRequiresApproval"> Cross-port requires supervisor approval</label>
-          <label class="si-check"><input type="checkbox" [(ngModel)]="cfg.pendingLeaveRequiresApproval"> Pending leave requires supervisor approval</label>
-          <div><label>Max ERP Snapshot Age (hours)</label><input type="number" min="1" max="168" [(ngModel)]="cfg.maxSnapshotAgeHours"></div>
-          <div><label>Slot Interval (minutes)</label><input type="number" min="15" max="120" [(ngModel)]="cfg.slotMinutes"></div>
-          <div><label>Max Scheduling Horizon (days)</label><input type="number" min="1" max="30" [(ngModel)]="cfg.maxHorizonDays"></div>
-          <div><label>Max Inspections / day</label><input type="number" min="1" max="10" [(ngModel)]="cfg.maxDailyInspections"></div>
-          <div><label>Prep Buffer (minutes)</label><input type="number" min="0" max="240" [(ngModel)]="cfg.prepMinutes"></div>
-          <div><label>Travel Buffer (minutes)</label><input type="number" min="0" max="240" [(ngModel)]="cfg.travelBufferMinutes"></div>
+              <option value="HYBRID">{{copy("HYBRID — Policy based","هجين — وفق القواعد")}}</option><option value="MANUAL">{{copy("MANUAL — All require approval","يدوي — يتطلب الكل اعتمادًا")}}</option>
+              <option value="AUTO">{{copy("AUTO — Only eligible requests","آلي — للطلبات المستوفية فقط")}}</option></select></div>
+          <div><label>{{copy("Max Risk Level for Auto-Approval","أعلى مستوى مخاطر للاعتماد الآلي")}}</label>
+            <select [(ngModel)]="cfg.autoMaxRiskLevel"><option>{{copy("Normal","عادي")}}</option><option>{{copy("Watch","مراقبة")}}</option><option>{{copy("High","مرتفع")}}</option><option>{{copy("Critical","حرج")}}</option></select></div>
+          <label class="si-check"><input type="checkbox" [(ngModel)]="cfg.autoApproveNmcReferrals"> {{copy("Permit eligible NMC referrals to auto-confirm","السماح بتأكيد الإحالات المستوفية تلقائيًا")}}</label>
+          <label class="si-check"><input type="checkbox" [(ngModel)]="cfg.allowCrossPort"> {{copy("Permit cross-port assignments","السماح بالتكليف بين الموانئ")}}</label>
+          <label class="si-check"><input type="checkbox" [(ngModel)]="cfg.crossPortRequiresApproval"> {{copy("Cross-port requires supervisor approval","التكليف بين الموانئ يتطلب اعتماد المشرف")}}</label>
+          <label class="si-check"><input type="checkbox" [(ngModel)]="cfg.pendingLeaveRequiresApproval"> {{copy("Pending leave requires supervisor approval","الإجازة المعلقة تتطلب اعتماد المشرف")}}</label>
+          <div><label>{{copy("Max ERP Snapshot Age (hours)","أقصى عمر لبيانات ERP (ساعة)")}}</label><input type="number" min="1" max="168" [(ngModel)]="cfg.maxSnapshotAgeHours"></div>
+          <div><label>{{copy("Slot Interval (minutes)","الفاصل بين المواعيد (دقيقة)")}}</label><input type="number" min="15" max="120" [(ngModel)]="cfg.slotMinutes"></div>
+          <div><label>{{copy("Max Scheduling Horizon (days)","أقصى مدى للجدولة (أيام)")}}</label><input type="number" min="1" max="30" [(ngModel)]="cfg.maxHorizonDays"></div>
+          <div><label>{{copy("Max Inspections / day","أقصى معاينات يوميًا")}}</label><input type="number" min="1" max="10" [(ngModel)]="cfg.maxDailyInspections"></div>
+          <div><label>{{copy("Prep Buffer (minutes)","وقت تجهيز إضافي (دقيقة)")}}</label><input type="number" min="0" max="240" [(ngModel)]="cfg.prepMinutes"></div>
+          <div><label>{{copy("Travel Buffer (minutes)","وقت انتقال إضافي (دقيقة)")}}</label><input type="number" min="0" max="240" [(ngModel)]="cfg.travelBufferMinutes"></div>
         </div>
         <div class="si-policy-actions">
-          <span>New publication is audited. Previous policy versions are never rewritten.</span>
-          <button type="button" class="primary" [disabled]="busy||!draft" (click)="publishPolicy()">Publish New Scheduling Policy</button>
+          <span>{{copy("New publication is audited. Previous policy versions are never rewritten.","يتم تدقيق كل إصدار جديد ولا يُعاد تعديل الإصدارات السابقة.")}}</span>
+          <button type="button" class="primary" [disabled]="busy||!draft" (click)="publishPolicy()">{{copy("Publish New Scheduling Policy","نشر سياسة جدولة جديدة")}}</button>
         </div>
       </section>
   
-      <footer>MOEI Smart Inspection POC · Synthetic ERP workbook / simulated workforce · No real HR data or regulatory approval</footer>
+      <!-- The shared NMC platform footer is rendered once by AppComponent. -->
     </main>
   </div>
 </div>

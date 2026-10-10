@@ -1974,12 +1974,100 @@ button {
    The blue legacy Oman shell is disabled by AppComponent route detection.
    Only Smart Inspection gets the menu at the viewport top; NMC keeps its own
    82px MOEI operational header without layout regression. */
+/* Both NMC and Smart Inspection now use the same 82px shared MOEI header. */
 .app-shell.smart-inspection-mode app-nmc-navigation .nmc-unified-sidebar {
-  top: 0;
+  top: 82px;
 }
 .app-shell.smart-inspection-mode app-nmc-navigation .mobile-nav-toggle {
-  top: 12px;
+  top: 93px;
 }
+.app-shell.smart-inspection-mode .page-content {
+  padding-top: 82px;
+}
+.app-shell.smart-inspection-mode .si-layout,
+.app-shell.smart-inspection-mode .erp-layout {
+  min-height: calc(100vh - 82px);
+  direction: inherit;
+}
+.app-shell.smart-inspection-mode .si-layout > .si-workbench,
+.app-shell.smart-inspection-mode .si-layout > .prep-main,
+.app-shell.smart-inspection-mode .si-layout > .si-shell,
+.app-shell.smart-inspection-mode .erp-layout > .erp-main {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.app-shell.smart-inspection-mode .si-hero,
+.app-shell.smart-inspection-mode .prep-hero,
+.app-shell.smart-inspection-mode .erp-hero,
+.app-shell.smart-inspection-mode .si-header {
+  background: transparent;
+  box-shadow: none;
+  border-radius: 0;
+  border-bottom: 1px solid #dfe9ef;
+  color: #16324f;
+  padding: 14px 0 23px;
+}
+.app-shell.smart-inspection-mode .si-hero small,
+.app-shell.smart-inspection-mode .prep-hero small,
+.app-shell.smart-inspection-mode .erp-hero small,
+.app-shell.smart-inspection-mode .si-brand small {
+  color: #0f766e;
+}
+.app-shell.smart-inspection-mode .si-hero h1,
+.app-shell.smart-inspection-mode .prep-hero h1,
+.app-shell.smart-inspection-mode .erp-hero h1,
+.app-shell.smart-inspection-mode .si-header h1 {
+  color: #16324f;
+  font-size: 24px;
+}
+.app-shell.smart-inspection-mode .si-hero p,
+.app-shell.smart-inspection-mode .prep-hero p,
+.app-shell.smart-inspection-mode .erp-hero p,
+.app-shell.smart-inspection-mode .si-header p {
+  color: #708698;
+  opacity: 1;
+}
+.app-shell.smart-inspection-mode .si-hero .hero-actions a,
+.app-shell.smart-inspection-mode .si-hero .hero-actions button,
+.app-shell.smart-inspection-mode .prep-hero .hero-actions a,
+.app-shell.smart-inspection-mode .prep-hero .hero-actions button,
+.app-shell.smart-inspection-mode .erp-hero .hero-actions a,
+.app-shell.smart-inspection-mode .erp-hero .hero-actions button,
+.app-shell.smart-inspection-mode .si-top-actions a,
+.app-shell.smart-inspection-mode .si-top-actions button {
+  background: #fff;
+  border: 1px solid #dce5ed;
+  color: #0f766e;
+}
+.app-shell.smart-inspection-mode .si-hero .hero-actions a:hover,
+.app-shell.smart-inspection-mode .prep-hero .hero-actions a:hover,
+.app-shell.smart-inspection-mode .erp-hero .hero-actions a:hover,
+.app-shell.smart-inspection-mode .si-top-actions a:hover {
+  background: #f4fffc;
+  border-color: #9fd9d2;
+}
+/* Platform direction, including physical menu position, follows LanguageService. */
+.app-shell.smart-inspection-mode[dir="rtl"] .si-layout,
+.app-shell.smart-inspection-mode[dir="rtl"] .erp-layout {
+  direction: rtl;
+}
+.app-shell.smart-inspection-mode[dir="rtl"] .si-workbench,
+.app-shell.smart-inspection-mode[dir="rtl"] .prep-main,
+.app-shell.smart-inspection-mode[dir="rtl"] .erp-main,
+.app-shell.smart-inspection-mode[dir="rtl"] .si-shell {
+  text-align: right;
+}
+.app-shell.smart-inspection-mode[dir="rtl"] .stats article,
+.app-shell.smart-inspection-mode[dir="rtl"] .metrics article {
+  text-align: right;
+}
+.app-shell.smart-inspection-mode input[inputmode="numeric"],
+.app-shell.smart-inspection-mode input[type="number"],
+.app-shell.smart-inspection-mode input[type="datetime-local"],
+.app-shell.smart-inspection-mode code {
+  unicode-bidi: plaintext;
+}
+
 .app-shell.smart-inspection-mode .si-layout {
   padding-inline-start: 216px;
 }
@@ -1993,4 +2081,13 @@ button {
 }
 @media (max-width: 960px) {
   .app-shell.smart-inspection-mode .si-layout { padding-inline-start: 0; }
+}
+
+/* Shared maritime navigation on ERP Settings. Exactly one fixed white menu. */
+.app-shell.smart-inspection-mode .erp-layout { padding-inline-start: 216px; }
+@media (min-width:961px) and (max-width:1220px){
+  .app-shell.smart-inspection-mode .erp-layout { padding-inline-start: 66px; }
+}
+@media (max-width:960px){
+  .app-shell.smart-inspection-mode .erp-layout { padding-inline-start: 0; }
 }
