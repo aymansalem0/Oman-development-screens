@@ -90,6 +90,22 @@ export class SiElectronicScheduler{
   async referrals(){return (await this.cases.listInspectionRequests()).filter(
     r=>r.caseStatus!=='RESOLVED'&&r.status==='PENDING_SCHEDULING'
   );}
+  async centralBookings(snapshot){
+    // Existing NMC schedules may have been made using the legacy human form.
+    // Include those allocations rather than considering only bookings made here.
+    // Legacy cases store a start but no duration; reserve a conservative 3 hours.
+    const refs=await this.cases.listInspectionRequests();
+    const people=snapshot.data.Inspectors;
+    return refs.filter(r=>r.status==='SCHEDULED'&&r.scheduledAt&&r.inspector)
+      .flatMap(r=>{
+        const person=people.find(p=>p.display_name===r.inspector);
+        const start=Date.parse(r.scheduledAt);
+        return person&&Number.isFinite(start)?[{
+          inspectorId:person.inspector_id,startUtc:new Date(start).toISOString(),
+          endUtc:new Date(start+180*MINUTE).toISOString()
+        }]:[];
+      });
+  }
   buildOptions(input,{snapshot,policy,confirmed=[]}){
     const data=snapshot.data,cfg=policy.config;
     const port=data.Ports.find(x=>x.port_id===input.portId&&active(x.active));
@@ -129,6 +145,9 @@ export class SiElectronicScheduler{
       const candidateSlots=[];
       for(let slot=startSlot;slot+duration<=upper;slot+=slotMs){
         const date=localDate(slot),time=localTime(slot),day=dayName(slot);
+        if(!qualifications.some(q=>q.valid_until>=date))continue;
+        if(!crossPort&&!effectivePorts.some(r=>r.port_id===input.portId&&
+          inEffective(date,r.effective_from,r.effective_to)))continue;
         const prep=(cfg.prepMinutes+(crossPort?travelMinutes+cfg.travelBufferMinutes:0))*MINUTE;
         const shift=data.Shifts.some(s=>s.inspector_id===engineer.inspector_id&&
           s.weekday===day&&s.status==='WORKING'&&inEffective(date,s.effective_from,s.effective_to)&&
@@ -205,7 +224,9 @@ export class SiElectronicScheduler{
       regime:body.regime||'FOCUSED',vesselType:String(body.vesselType||'').toUpperCase(),
       durationMinutes:body.durationMinutes
     };
-    const calculated=this.buildOptions(input,{snapshot,policy,confirmed:this.state.confirmed});
+    const centralBookings=await this.centralBookings(snapshot);
+    const calculated=this.buildOptions(input,{snapshot,policy,
+      confirmed:[...this.state.confirmed,...centralBookings]});
     // An old ERP sheet cannot be made "fresh" merely by re-uploading it.
     // Use the oldest employee update timestamp for conservative auto-approval.
     const sourceDates=snapshot.data.Inspectors.map(r=>parseLocal(r.source_updated_at));
@@ -253,7 +274,9 @@ export class SiElectronicScheduler{
       const referral=(await this.referrals()).find(r=>r.id===proposal.referral.id&&
         r.caseId===proposal.referral.caseId);
       if(!referral)throw new SiError('SI_REFERRAL_NO_LONGER_PENDING',409);
-      const recomputed=this.buildOptions(proposal.input,{snapshot,policy,confirmed:this.state.confirmed});
+      const centralBookings=await this.centralBookings(snapshot);
+      const recomputed=this.buildOptions(proposal.input,{snapshot,policy,
+        confirmed:[...this.state.confirmed,...centralBookings]});
       if(!recomputed.options.some(x=>x.optionId===optionId&&x.startUtc===option.startUtc))
         throw new SiError('SI_RESOURCE_UNAVAILABLE_REPLAN',409);
       const caseRow=await this.cases.get(referral.caseId);
