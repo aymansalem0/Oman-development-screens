@@ -18,7 +18,7 @@
     <div class="notice info" *ngIf="loading">{{copy("Loading current workforce snapshot…","جارٍ تحميل بيانات القوى العاملة الحالية…")}}</div>
 
     <section class="metrics">
-      <article><small>{{copy("ERP SOURCE","مصدر ERP")}}</small><strong>{{erp?.ready?'SNAPSHOT ACTIVE':'NOT CONFIGURED'}}</strong><span>{{copy("POC Excel simulator · no live ERP connection","محاكاة Excel تجريبية · لا يوجد ربط مباشر مع ERP")}}</span></article>
+      <article><small>{{copy("ERP SOURCE","مصدر ERP")}}</small><strong>{{erp?.ready?copy('SNAPSHOT ACTIVE','البيانات مفعلة'):copy('NOT CONFIGURED','لم يتم الإعداد')}}</strong><span>{{copy("POC Excel simulator · no live ERP connection","محاكاة Excel تجريبية · لا يوجد ربط مباشر مع ERP")}}</span></article>
       <article><small>{{copy("INSPECTORS","المفتشون")}}</small><strong>{{erp?.counts?.['Inspectors']??0}}</strong><span>{{copy("Validated workforce records","بيانات القوى العاملة التي تم التحقق منها")}}</span></article>
       <article><small>{{copy("PORTS","الموانئ")}}</small><strong>{{erp?.counts?.['Ports']??0}}</strong><span>{{copy("Valid master records","بيانات أساسية معتمدة بعد التحقق")}}</span></article>
       <article><small>{{copy("IMPORT DATE","تاريخ الاستيراد")}}</small><strong class="date">{{erp?.importedAt?(erp?.importedAt|date:'short'):'—'}}</strong><span>Snapshot {{short(erp?.snapshotId)}}</span></article>
@@ -56,7 +56,7 @@
           <label for="erp-file">{{copy("Select ERP workbook (.xlsx, maximum 3 MB)","اختر ملف ERP بصيغة Excel (بحد أقصى ٣ ميجابايت)")}}</label>
           <input id="erp-file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             [disabled]="busy" (change)="uploadExcel($event)"/>
-          <small *ngIf="fileName">Selected: {{fileName}} ({{fileSize/1024|number:'1.0-1'}} KB)</small>
+          <small *ngIf="fileName">Selected: {{fileName}} ({{fileSize/1024|number:'1.0-1'}} {{copy('KB','كيلوبايت')}})</small>
           <small>{{copy("Excel data is not saved until","لا تُحفظ بيانات Excel حتى الضغط على")}} <strong>{{copy("Commit ERP Snapshot","اعتماد نسخة بيانات ERP")}}</strong> {{copy("is clicked.",".")}}</small>
         </div>
         <div *ngIf="pendingImport as preview" class="preview">
