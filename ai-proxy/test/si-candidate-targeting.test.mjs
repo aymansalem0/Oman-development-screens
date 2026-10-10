@@ -135,3 +135,59 @@ test('reject unknown IMO, source authority spoof and missing source event',async
       e=>e.code==='SI_EVENT_VALIDATION_FAILED');
   }finally{w.cleanup();}
 });
+
+test('same IMO across NMC, Service and PSC has one vessel row, three source types, independent decisions',async()=>{
+  const approved={
+    id:'06f9ba7a-40d0-4dd1-acbd-7a4e60ee0d5a',
+    caseId:'9510c038-889f-4cb0-b27a-09681a69e78b',
+    imo:fleet[0].imo,status:'PENDING_SCHEDULING',caseStatus:'IN_PROGRESS',
+    createdAt:'2026-10-10T09:00:00Z',reason:'Human-approved NMC referral',
+    evidenceIds:['NMC-CASE-EVIDENCE'],sourceAssessmentId:'NMC-SAVED-ASSESSMENT'
+  };
+  const w=workspace({referrals:[approved]});
+  try{
+    const first=await w.subject.dashboard();
+    assert.equal(first.summary.candidateVessels,1);
+    assert.equal(first.vesselCandidates[0].sourceTypes.length,1);
+    await w.subject.receiveEvent(source());
+    await w.subject.receiveEvent({
+      ...source(),sourceType:'PSC_PORT_CALL',sourceEventId:'PC-001',
+      sourceReference:'PORT-001',requestedRegime:'PORT_STATE_CONTROL'
+    });
+    const d=await w.subject.dashboard();
+    assert.equal(d.summary.candidateVessels,1);
+    assert.equal(d.summary.candidates,3); // independent inspection regimes
+    assert.equal(d.summary.pendingVessels,1);
+    assert.equal(d.summary.pendingReview,3);
+    assert.equal(d.summary.bySource.NMC_CASE,1);
+    assert.equal(d.summary.bySource.SERVICE_REQUEST,1);
+    assert.equal(d.summary.bySource.PSC_PORT_CALL,1);
+    assert.equal(d.vesselCandidates.length,1);
+    const v=d.vesselCandidates[0];
+    assert.equal(v.imo,fleet[0].imo);
+    assert.equal(v.sourceTypes.length,3);
+    assert.equal(v.sourceEvents.length,3);
+    assert.equal(v.regimes.length,3);
+    assert.equal(v.workflows.length,3);
+    assert.equal(v.eligibility,'MANDATORY');
+    assert.equal(v.currentRisk,null);
+    assert.equal(v.pendingWorkflows,3);
+    const service=d.candidates.find(c=>c.regime==='UAE_SERVICE_INSPECTION');
+    const result=await w.subject.decide({
+      candidateKey:service.key,imo:service.imo,action:'APPROVE',
+      actor:'Inspection Supervisor',note:'Approved service inspection only'
+    });
+    const after=await w.subject.dashboard();
+    assert.equal(result.inspectionCase.regime,'UAE_SERVICE_INSPECTION');
+    assert.equal(after.vesselCandidates.length,1);
+    assert.equal(after.summary.candidateVessels,1);
+    assert.equal(after.summary.createdVessels,1);
+    assert.equal(after.vesselCandidates[0].createdWorkflows,1);
+    assert.equal(after.vesselCandidates[0].pendingWorkflows,2);
+    assert.equal(after.candidates.find(c=>c.regime==='PORT_STATE_CONTROL').status,'PENDING_REVIEW');
+    assert.equal(after.candidates.find(c=>c.regime==='FOCUSED_INSPECTION').status,'PENDING_REVIEW');
+    const reload=await w.subject.dashboard();
+    assert.equal(reload.vesselCandidates.length,1);
+    assert.deepEqual(reload.vesselCandidates[0].sourceTypes,v.sourceTypes);
+  }finally{w.cleanup();}
+});
