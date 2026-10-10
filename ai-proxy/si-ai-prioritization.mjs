@@ -16,7 +16,8 @@ const clone=x=>JSON.parse(JSON.stringify(x));
 const now=()=>new Date().toISOString();
 const clob=x=>({type:oracledb.DB_TYPE_CLOB,val:JSON.stringify(x)});
 const safe=x=>typeof x==='string'?x.trim():'';
-const openStatus=new Set(['PENDING_REVIEW']);
+// Stage 2: execution ranking only AFTER a Publisher created an SI case.
+const openStatus=new Set(['INSPECTION_CREATED']);
 export class SiPriorityError extends Error{
   constructor(code,status=400){super(code);this.code=code;this.status=status;}
 }
@@ -107,7 +108,7 @@ function scoreCandidate(candidate,config,clock){
 }
 export function buildSiPrioritySnapshot(dashboard,clock=Date.now()){
   const policy=getSiPrioritySettings(dashboard.policy.config);
-  const items=dashboard.candidates.filter(c=>openStatus.has(c.status))
+  const items=dashboard.candidates.filter(c=>openStatus.has(c.status)&&Boolean(c.inspectionCase?.id))
     .map(c=>scoreCandidate(c,dashboard.policy.config,clock));
   const ordered=[...items].sort((a,b)=>a.protectedTier-b.protectedTier||
     (b.provisionalScore??-1)-(a.provisionalScore??-1)||
@@ -230,7 +231,7 @@ export class SiAiPrioritization{
       const snapshot=buildSiPrioritySnapshot(await this.targeting.dashboard(),this.clock());
       if(snapshot.snapshotHash!==request.expectedSnapshotHash)
         throw new SiPriorityError('SI_P01_SOURCE_CHANGED_REPREVIEW',409);
-      if(!snapshot.items.length)throw new SiPriorityError('SI_P01_NO_PENDING_CANDIDATES',422);
+      if(!snapshot.items.length)throw new SiPriorityError('SI_P01_NO_APPROVED_INSPECTIONS',422);
       if(snapshot.items.length>100)
         throw new SiPriorityError('SI_P01_BATCH_LIMIT_100_REQUIRES_SCOPING',422);
       const base={id:randomUUID(),actor:request.actor.trim(),
@@ -239,6 +240,7 @@ export class SiAiPrioritization{
         fleetSnapshotId:snapshot.fleetSnapshotId,
         snapshotHash:snapshot.snapshotHash,
         rules:snapshot.policy,requestedCandidates:snapshot.items.length,
+        inputScope:'APPROVED_INSPECTION_CASES_ONLY',
         source:'AIRIA_SI_P01_UNVERIFIED_ADVISORY',
         approvedNmcFirst:true,humanDecisionRequired:true};
       let run;
