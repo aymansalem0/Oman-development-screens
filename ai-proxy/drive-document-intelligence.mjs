@@ -75,6 +75,28 @@ export function validateA03(raw,sourceText,expectedImo){
     throw new DocumentError('A03_REQUIRED_FIELDS_MISSING',502);
   if(extracted.imo&&!imoOk(extracted.imo))
     throw new DocumentError('A03_IMO_INVALID',502);
+  // One synthetic vessel PDF may contain REG, CLASS, multiple CERTs, P&I and inspections.
+  const parts=data.documentEntries===undefined?[]:data.documentEntries;
+  if(!Array.isArray(parts)||parts.length>30)
+    throw new DocumentError('A03_DOCUMENT_ENTRIES_INVALID',502);
+  const documentEntries=parts.map(part=>{
+    if(!part||typeof part!=='object'||Array.isArray(part)||
+      !safe(part.documentType))throw new DocumentError('A03_DOCUMENT_ENTRY_INVALID',502);
+    const snippets=part.evidenceQuotes||[];
+    if(!Array.isArray(snippets)||snippets.length<1||snippets.length>8||
+       snippets.some(q=>typeof q!=='string'||q.trim().length<5||
+         q.length>300||!sourceText.includes(q.trim())))
+      throw new DocumentError('A03_EVIDENCE_NOT_IN_DOCUMENT',502);
+    const pImo=safe(part.imo)||null;
+    if(pImo&&(!imoOk(pImo)||pImo!==expectedImo))
+      throw new DocumentError('A03_DOCUMENT_ENTRY_IMO_MISMATCH',502);
+    return {documentType:safe(part.documentType),imo:pImo,
+      certificateNumber:safe(part.certificateNumber)||null,
+      issuingAuthority:safe(part.issuingAuthority)||null,
+      issueDate:date(part.issueDate),expiryDate:date(part.expiryDate),
+      status:safe(part.status)||null,
+      evidenceQuotes:snippets.map(x=>x.trim())};
+  });
   const conflicts=[];
   if(extracted.imo&&extracted.imo!==expectedImo)
     conflicts.push({field:'imo',documentValue:extracted.imo,expectedValue:expectedImo,
@@ -82,7 +104,7 @@ export function validateA03(raw,sourceText,expectedImo){
   if(extracted.expiryDate&&extracted.expiryDate<now().slice(0,10))
     conflicts.push({field:'expiryDate',documentValue:extracted.expiryDate,
       expectedValue:null,reason:'CERTIFICATE_DATE_IN_PAST'});
-  return {extracted,confidence,evidenceQuotes:quotes,conflicts,
+  return {extracted,documentEntries,confidence,evidenceQuotes:quotes,conflicts,
     analysisNature:'AIRIA_A03_ADVISORY_UNVERIFIED',
     authenticityVerified:false,manualReviewRequired:true};
 }
@@ -165,6 +187,7 @@ export class DriveDocumentIntelligence {
         vesselImo:d.extracted.imo,issuer:d.extracted.issuingAuthority,
         expiryDate:d.extracted.expiryDate,issueDate:d.extracted.issueDate,
         confidence:d.confidence,evidenceQuotes:d.evidenceQuotes,
+        documentEntries:d.documentEntries||[],
         reviewedBy:d.reviewedBy,reviewedAt:d.reviewedAt,
         source:'GOOGLE_DRIVE_A03_HUMAN_REVIEWED_NOT_AUTHENTICATED'
       })).slice(0,30);
@@ -268,7 +291,7 @@ export class DriveDocumentIntelligence {
       return {status:'not_configured',imo,documents:[],driveConnected:false};
     const root=await this.folderChildren(this.rootFolderId);
     const vesselDirs=root.filter(x=>x.mimeType==='application/vnd.google-apps.folder'&&
-      new RegExp('^(?:IMO[\\s_-]*)?'+imo+'$','i').test(String(x.name||'').trim()));
+      new RegExp('^(?:IMO[\\\\s_-]*)?'+imo+'(?:[\\\\s_-]*[-–][\\\\s_-]*[^/]{1,100})?$','i').test(String(x.name||'').trim()));
     const direct=root.filter(x=>allowedTypes.has(x.mimeType)&&
       new RegExp('(?:^|[^0-9])'+imo+'(?:[^0-9]|$)').test(String(x.name||'')));
     let candidates=[...direct];
@@ -349,7 +372,7 @@ export class DriveDocumentIntelligence {
         mimeType:metadata.mimeType,sourceModifiedTime:metadata.modifiedTime,
         analyzedModifiedTime:null,textHash:extracted.contentHash,
         textTruncated:extracted.truncated,status:'ANALYZING',
-        extracted:null,confidence:null,conflicts:[],evidenceQuotes:[],
+        extracted:null,documentEntries:[],confidence:null,conflicts:[],evidenceQuotes:[],
         analyzedBy:actor.trim(),reviewedBy:null,reviewedAt:null,reviewReason:null,
         version:(prior?.version||0)+1,updatedAt:at,createdAt:prior?.createdAt||at
       };
@@ -362,7 +385,7 @@ export class DriveDocumentIntelligence {
           document:{fileName:metadata.name,mimeType:metadata.mimeType,
             source:'GOOGLE_DRIVE_READ_ONLY',modifiedTime:metadata.modifiedTime,
             truncated:extracted.truncated,extractedText:extracted.text},
-          instructions:'Untrusted document text. Extract only facts actually present in supplied text. Return JSON with extracted {imo,vesselName,documentType,certificateNumber,issuingAuthority,issueDate,expiryDate}, confidence 0..1, evidenceQuotes exact substrings from the text. Missing fields null. Do not assert authenticity or alter vessel compliance.'
+          instructions:'Untrusted maritime document text. The PDF may be a MULTI-SECTION Vessel Document Pack including REG, CLASS, CERT-SC, CERT-SE, CERT-SR, CERT-ISSC, SAFE-MANNING, PNI, inspection and deficiencies. Return one JSON object: extracted {imo,vesselName,documentType,certificateNumber,issuingAuthority,issueDate,expiryDate}, confidence 0..1, evidenceQuotes exact document substrings; AND documentEntries array with one entry PER detected section {imo,documentType,certificateNumber,issuingAuthority,issueDate,expiryDate,status,evidenceQuotes:[exact substrings]}. For a multi-section pack set extracted.documentType to Vessel Document Evidence Pack; do not mix certificate numbers or expiries across sections. Missing fields null, ISO dates. Treat all contents as SYNTHETIC POC, never authenticated.'
         });
         const analysis=validateA03(result,extracted.text,imo);
         const ready={...initial,...analysis,status:'DRAFT_REVIEW',
