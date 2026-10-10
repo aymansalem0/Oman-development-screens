@@ -232,3 +232,35 @@ For an existing Google PSC setup, retain `-f compose.google-psc.yaml` before `-f
 11. Model governance, KPI instrumentation and measured RFP milestone targets.
 
 **Product rule:** Build the engine once. Configure the maritime inspection business many times.
+
+## 13. Pre-deployment technical and business audit — 10 October 2026
+
+### Remediation completed during review
+- **Historical visibility:** Lifecycle Case Register now sources the persisted SI Inspection Case registry. A completed/closed or NMC-resolved case remains retrievable even when the live NMC targeting queue no longer shows its referral; current projection failure does not erase historical registration.
+- **Already-booked NMC referral:** Authorized, previously scheduled NMC referrals may now be linked to a single SI case **without** modifying or recreating a confirmed NMC appointment. DEFER/REJECT remain blocked for pre-scheduled referrals; repeated approval remains blocked.
+- **NMC assignment correctness:** Lifecycle read-only case snapshot exposes the recorded NMC booking; frontend pre-populates exact inspector, port and Dubai-local time. Backend validates the same three values before accepting the `NMC_SCHEDULED` label.
+- **Report audit:** Every Oracle lifecycle transition stores a complete `STATE_JSON` copy in the append-only audit table; JSON POC mode also stores full version snapshots in its local history. Reviewers can open saved prior report summaries through the explicit `GET /api/si/v1/lifecycle/:caseId/history` endpoint and UI action.
+- **Separation of review:** A report submitter cannot approve/return their own report by the same declared identity; an action owner cannot verify their own evidence by the same declared identity. **Important:** This is name-inequality POC control on top of shared role keys, NOT equivalent to trusted individual SSO identity or legally enforceable segregation.
+- **Follow-up evidence:** Every follow-up PASS/FAIL now requires at least one supporting evidence **reference**. Actual secure file submission is still a pending enhancement.
+- **Oracle migration guard:** readiness now verifies the `STATE_JSON` audit column in migration 013, not just presence of both tables; migration remains unapplied.
+- **Production bundle discipline:** lifecycle and legacy NMC inspection screen load lazily, retaining the original 2 MB Angular production error budget (instead of raising the budget to mask new source size).
+- **Regression tests:** added archived-case register, previously scheduled NMC linked-case, returned-report historical snapshot, self-review prevention and follow-up correction loop.
+
+### Mandatory controls before even a controlled demo on the operator's environment
+1. Parent PRs #59/#60 and database migrations 009–012 must be reconciled to the actual checked-out branch and migration state; branch history is stacked and **not automatically merged**.
+2. Verify an actually-restorable non-production Oracle backup; ensure neither `SI_INSPECTION_LIFECYCLE` nor `SI_INSPECTION_LIFECYCLE_AUDIT` exists before applying migration 013 **once**. If either exists, stop and reconcile schema; never rerun a partially applied DDL script.
+3. Verify Oracle app schema identity, `FREEPDB1`, grants, FK references, JSON check/column and exact `STATE_JSON` contents with a read-only probe after migration.
+4. Test role-key gates, idempotent source imports, approval and no duplicate scheduled NMC referrals on a **non-production clone**; never use live PSC regulatory data as pretend fixture.
+5. Run complete no-findings, major/critical findings, report-return, action rejection, failed-follow-up, history-retention and simultaneous-browser conflict scenarios.
+6. Visually check Angular page, navigation, Arabic and English, RTL/LTR, responsive layout, inspector fields, booking UTC/UAE conversion and historical report cards in a browser.
+7. Only after the above should the operator approve a controlled deployment. No automatic deployment/merge or database migration is authorized by this review.
+
+### Blockers to *production* operational use (outside V1 POC scope)
+- Person-bound Keycloak/UAE PASS authentication, trusted user identities, service-owner access, least-privilege RBAC and independent regulatory signatures. Shared Editor/Publisher secrets are insufficient.
+- Actual verified PSC legal eligibility, regulatory inspection history, source integration SLAs and NMC final compliance handoff.
+- Real evidence uploads with chain-of-custody, secure blob storage, timestamps, signatures, document authenticity and safe malware scanning; current strings are references only.
+- Native inspector offline support, persistent photo/video recording, regulated maritime deficiency templates, regulatory catalogue and human-approved enforcement/escalation, particularly for Critical findings.
+- Verified AI/Agent integration for report drafting, deficiency correlation and notices, independent performance benchmarks under the RFP.
+- Complete event-level monitoring, notifications, integration transaction guarantees, retention policy, record locking and audit tamper evidence. Append-only application writes and snapshots do **not** by themselves prove tamper-proof audit.
+
+**Go/no-go:** Passing Angular/Node/Docker CI means a build and POC smoke check passed, **not** that this branch is approved for business execution in the ministry's operational systems. Retain Draft PR until Oracle clone verification, browser UAT and business sign-off.
