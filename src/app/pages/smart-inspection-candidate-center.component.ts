@@ -2,6 +2,7 @@ import { CommonModule } from '@angular/common';
 import { Component,OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
+import { NmcNavigationComponent } from '../components/nmc-navigation.component';
 
 import {
   SmartInspectionCandidate,
@@ -19,7 +20,7 @@ type TargetingBand = 'Critical' | 'High' | 'Watch' | 'Routine';
 @Component({
   selector: 'app-smart-inspection-candidate-center',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink],
+  imports: [CommonModule, FormsModule, RouterLink, NmcNavigationComponent],
   templateUrl: './smart-inspection-candidate-center.component.html',
   styleUrl: './smart-inspection-candidate-center.component.css'
 })
