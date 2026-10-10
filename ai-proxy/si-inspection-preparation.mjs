@@ -190,7 +190,8 @@ export class SiInspectionPreparation{
     const risk=await this.riskPolicy.vessel(inspectionCase.imo);
     const v=bundle.inlineContext?.vessel||{};
     const context={
-      inspectionId:inspectionCase.id,caseId:inspectionCase.nmcReferralId||inspectionCase.id,
+      inspectionId:inspectionCase.id,caseId:inspectionCase.nmcCaseId||inspectionCase.id,
+      nmcReferralId:inspectionCase.nmcReferralId||null,
       siCaseId:inspectionCase.id,imo:inspectionCase.imo,
       vessel:{imo:inspectionCase.imo,name:clean(v.name,140),flag:clean(v.flag,80),
         vesselType:clean(v.vesselType,80)},
