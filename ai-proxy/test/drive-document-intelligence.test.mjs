@@ -124,6 +124,7 @@ test('changed Drive document is flagged stale; previous approved extract does no
     const found=await a.store.list(IMO);
     assert.equal(found.documents[0].savedStatus,'SOURCE_CHANGED');
     assert.equal(found.documents[0].analysis,null);
+    assert.equal((await a.store.approvedFor(IMO)).length,0); // A02/A04 cannot see stale approval
   }finally{a.close();}
 });
 test('disabled connector produces no agent calls or credentials requests',async()=>{
