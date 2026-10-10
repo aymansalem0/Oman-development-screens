@@ -20,6 +20,7 @@ import { SiCandidateSourcesComponent } from './pages/si-candidate-sources.compon
 import { SiPscTargetingPoolComponent } from './pages/si-psc-targeting-pool.component';
 import { SiPscQuotaSettingsComponent } from './pages/si-psc-quota-settings.component';
 import { SiElectronicSchedulingComponent } from './pages/si-electronic-scheduling.component';
+import { SiFullLifecycleComponent } from './pages/si-full-lifecycle.component';
 import { SiErpSettingsComponent } from './pages/si-erp-settings.component';
 import { NmcDashboardBuilderComponent } from './pages/nmc-dashboard-builder.component';
 import { NmcAlertCenterComponent } from './pages/nmc-alert-center.component';
@@ -32,6 +33,8 @@ export const routes: Routes = [
   { path: base + '/:id', component: ApprovalDetailComponent },
   { path: 'dashboard/appointment-availability', component: YearlyAvailabilityComponent },
   { path: 'dashboard/master-data/activity-classification-mapping', component: ActivityClassificationMappingComponent },
+  { path: 'moei/smart-inspection/lifecycle', component: SiFullLifecycleComponent },
+  { path: 'moei/smart-inspection/lifecycle/:caseId', component: SiFullLifecycleComponent },
   { path: 'moei/smart-inspection/psc-targeting', component: SiPscTargetingPoolComponent },
   { path: 'moei/smart-inspection/settings/psc-quotas', component: SiPscQuotaSettingsComponent },
   { path: 'moei/smart-inspection/candidates', component: SiCandidateWorkbenchComponent },
