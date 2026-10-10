@@ -2069,7 +2069,7 @@ button {
 }
 
 .app-shell.smart-inspection-mode .si-layout {
-  padding-inline-start: 216px;
+  padding-inline-start: 240px;
 }
 .app-shell.smart-inspection-mode .si-layout > .si-shell,
 .app-shell.smart-inspection-mode .si-layout > .candidate-shell {
@@ -2084,7 +2084,7 @@ button {
 }
 
 /* Shared maritime navigation on ERP Settings. Exactly one fixed white menu. */
-.app-shell.smart-inspection-mode .erp-layout { padding-inline-start: 216px; }
+.app-shell.smart-inspection-mode .erp-layout { padding-inline-start: 240px; }
 @media (min-width:961px) and (max-width:1220px){
   .app-shell.smart-inspection-mode .erp-layout { padding-inline-start: 66px; }
 }
