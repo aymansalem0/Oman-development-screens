@@ -10,6 +10,7 @@ import { OperationalGuidance, GuidanceError } from './operational-guidance.mjs';
 import { CentralRiskPolicy, RiskPolicyError } from './risk-policy.mjs';
 import { ErpWorkforceStore, SiError } from './si-erp-workforce.mjs';
 import { SiElectronicScheduler } from './si-electronic-scheduling.mjs';
+import { SiCandidateTargeting, SiTargetingError } from './si-candidate-targeting.mjs';
 
 const port = Number(process.env.PORT || 3000);
 const apiKey = (process.env.AIRIA_MENA_KEY || '').trim();
@@ -62,6 +63,9 @@ const cases=new NmcCaseWorkspace({mode:dbMode,oracleRepository:repository,alerts
 // are written through the established Oracle-backed case API.
 const siErp=new ErpWorkforceStore();
 const siScheduling=new SiElectronicScheduler({erp:siErp,cases});
+const siTargeting=new SiCandidateTargeting({mode:dbMode,oracleRepository:repository,
+  cases,riskPolicy,bundles:JSON.parse((await import('node:fs')).readFileSync(
+    new URL('./fleet-bundles.json',import.meta.url),'utf8'))});
 const actionPlanRuns=new Set(); // process-local duplicate A01 invocation guard; version-lock remains authoritative
 const alertScanEnabled=process.env.NMC_ALERT_SCAN_ENABLED!=='false';
 const alertScanIntervalMs=Math.max(15000,Number(process.env.NMC_ALERT_SCAN_SECONDS||30)*1000);
@@ -379,6 +383,45 @@ const server = createServer(async (req, res) => {
         return respond(res,error.status,{error:error.code});
       console.error('[nmc-guidance] API_FAILURE');
       return respond(res,503,{error:'GUIDANCE_UNAVAILABLE'});
+    }
+  }
+
+  // Phase-1 Smart Inspection: no Airia invocations; read all active IMOs and
+  // NMC human-approved referrals dynamically. Only publisher may approve a new case.
+  if(path==='/api/si/v1'||path.startsWith('/api/si/v1/')){
+    try{
+      if(req.method==='GET'&&path==='/api/si/v1/candidates/dashboard')
+        return respond(res,200,await siTargeting.dashboard());
+      if(req.method==='GET'&&path==='/api/si/v1/rules')
+        return respond(res,200,{status:'ok',policy:await siTargeting.policy()});
+      if(req.method==='POST'&&path==='/api/si/v1/candidates/source-events'){
+        dashboards.assertRole(req,'EDITOR');
+        return respond(res,201,await siTargeting.receiveEvent(await requestJson(req,8192)));
+      }
+      if(req.method==='POST'&&path==='/api/si/v1/candidates/decision'){
+        // All approvals (including manual review overrides) require a supervisor.
+        const payload=await requestJson(req,4096);
+        dashboards.assertRole(req,payload.action==='APPROVE'?'PUBLISHER':'EDITOR');
+        return respond(res,201,await siTargeting.decide(payload));
+      }
+      if(req.method==='POST'&&path==='/api/si/v1/rules/impact-preview'){
+        dashboards.assertRole(req,'EDITOR');
+        const payload=await requestJson(req,2048);
+        return respond(res,200,await siTargeting.previewRules(payload.config));
+      }
+      if(req.method==='POST'&&path==='/api/si/v1/rules/publish'){
+        dashboards.assertRole(req,'PUBLISHER');
+        return respond(res,201,{status:'ok',
+          policy:await siTargeting.publishRules(await requestJson(req,4096))});
+      }
+      return respond(res,405,{error:'METHOD_NOT_ALLOWED'});
+    }catch(e){
+      if(e instanceof SiTargetingError||e instanceof DashboardError)
+        return respond(res,e.status,{error:e.code});
+      if(Number.isInteger(e?.status)&&e.status>=400&&e.status<500)
+        return respond(res,e.status,{error:'SI_REQUEST_INVALID'});
+      console.error('[si-targeting] REQUEST_FAILED '+String(e?.code||'UNAVAILABLE').replace(/[^A-Z0-9_-]/gi,'').slice(0,40));
+      return respond(res,503,{error:'SI_TARGETING_UNAVAILABLE'});
     }
   }
 
@@ -803,6 +846,8 @@ try{
     console.error('[nmc-risk-policy] RISK_POLICY_SCHEMA_NOT_READY stage='+stage+
       ' reason='+String(error?.code||'UNKNOWN')+' oracleCode='+safeCode);
   }
+  try{await siTargeting.initialize();}
+  catch(error){console.error('[si-targeting] SI_MIGRATION_009_REQUIRED - candidate API disabled');}
   try{await guidance.initialize();}
   catch(error){
     // Guidance requires migration 006, but an optional UI module must never
