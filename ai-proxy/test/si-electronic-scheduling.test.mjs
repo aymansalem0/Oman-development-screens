@@ -64,7 +64,7 @@ test('ERP workbook headers, snapshot preview and commit, only explicit commit pe
 });
 test('rejects unknown ERP engineer references without replacing prior data',async()=>{
   const rows=structuredClone(fixtures);rows.Leaves[0][1]='UNKNOWN';
-  await assert.rejects(()=>parseErpExcel(await excelBuffer(rows)),/ERP_UNKNOWN_INSPECTOR/);
+  await assert.rejects(async()=>parseErpExcel(await excelBuffer(rows)),/ERP_UNKNOWN_INSPECTOR/);
 });
 function setup(dir){
   const erp=new ErpWorkforceStore({path:join(dir,'erp.json')});
