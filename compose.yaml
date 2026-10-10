@@ -8,7 +8,7 @@ services:
     environment:
       PORT: "3000"
       AIRIA_MENA_KEY: ${AIRIA_MENA_KEY:-}
-      AIRIA_BASE_URL: ${AIRIA_BASE_URL:-https://mena.api.airia.ai}
+      AIRIA_BASE_URL: ${AIRIA_BASE_URL:-https://api.mena.airia.ai}
       AIRIA_TIMEOUT_MS: "120000"
       # Autonomous fleet assessment is opt-in at server deployment, never a UI action.
       # Set NMC_FLEET_AUTO_ENABLED=true once after reviewing potential Airia costs.
@@ -34,6 +34,10 @@ services:
       # Does not modify Oracle schema, fleet assessments or NMC case history.
       SI_ERP_STORE_PATH: /data/si-erp-workforce.json
       SI_SCHEDULING_STORE_PATH: /data/si-scheduling-poc.json
+      # A04 may incur paid AI requests. It NEVER runs on page load.
+      # Explicitly opt in after API contract acceptance and source evidence review.
+      SI_A04_ENABLED: ${SI_A04_ENABLED:-false}
+      SI_PREPARATION_STORE_PATH: /data/si-preparations.json
       # 'oracle' requires compose.oracle.yaml, NMC_AI user and V1 migration.
       NMC_DB_MODE: ${NMC_DB_MODE:-json}
       NMC_DB_CONNECT_STRING: ${NMC_DB_CONNECT_STRING:-oracle-free-23:1521/freepdb1}

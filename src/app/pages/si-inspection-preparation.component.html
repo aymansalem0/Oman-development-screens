@@ -1,0 +1,132 @@
+<div class="si-layout">
+  <app-nmc-navigation></app-nmc-navigation>
+  <main class="prep-main">
+    <header class="prep-hero">
+      <div><small>MOEI · SMART INSPECTION · STEPS 05–08</small>
+        <h1>Inspection Preparation &amp; AI Dossier</h1>
+        <p>ملف التحضير للمعاينة · Approved case → Evidence review → Explicit A04 → Supervisor validation</p>
+      </div>
+      <div class="hero-actions">
+        <a routerLink="/moei/smart-inspection/candidates">← Candidate Center</a>
+        <button (click)="load()" [disabled]="busy||loading">↻ Refresh</button>
+      </div>
+    </header>
+    <div class="notice error" *ngIf="error" role="alert">{{error}}</div>
+    <div class="notice success" *ngIf="success" role="status">{{success}}</div>
+    <div class="notice" *ngIf="loading">Loading approved case and current NMC references…</div>
+    <div class="notice" *ngIf="busy">Saving decision or requesting explicitly authorized A04…</div>
+
+    <section class="panel access">
+      <header><h2>01 · Operator Access</h2><p>Protected case evidence. Keys are used only in request headers and are not saved in localStorage.</p></header>
+      <div class="form-grid">
+        <label>Operator name<input [(ngModel)]="actor" placeholder="Officer / inspector name" autocomplete="off"/></label>
+        <label>Editor / inspector key<input type="password" [(ngModel)]="editorKey" autocomplete="off"/></label>
+        <label>Supervisor / publisher key<input type="password" [(ngModel)]="publisherKey" autocomplete="off"/></label>
+        <div class="load-action"><button class="primary" (click)="load()" [disabled]="busy||loading">Load Approved Case</button></div>
+      </div>
+    </section>
+
+    <ng-container *ngIf="data as d">
+      <div class="stats">
+        <article><small>INSPECTION / IMO</small><strong>{{d.context.imo}}</strong><span>{{d.context.vessel.name}} · {{d.context.vessel.flag}}</span></article>
+        <article><small>PREPARATION STATUS</small><strong [class.warn]="d.stale">{{d.saved?.status||'NOT PREPARED'}}</strong><span>Revision {{d.saved?.version||0}}</span></article>
+        <article><small>CURRENT NMC RISK</small><strong *ngIf="d.context.risk as risk">{{risk.score}} / 100</strong><strong *ngIf="!d.context.risk" class="warn">NO SAVED RISK</strong><span>{{d.context.risk?.level||'Review only'}} · v{{d.context.risk?.policyRevision||'—'}}</span></article>
+        <article><small>A04 PROVIDER ACCESS</small><strong>{{d.a04Enabled?'EXPLICITLY ENABLED':'DISABLED'}}</strong><span>No AI on GET, prepare or review</span></article>
+      </div>
+      <div class="notice error" *ngIf="d.stale">
+        Source evidence or active NMC risk has changed since this preparation. Refresh preparation explicitly before any A04 or approval.
+      </div>
+      <div class="notice" *ngIf="!d.context.risk">No current saved A01/A02 assessment. Deterministic preparation is possible, but A04 is blocked until a valid NMC risk projection exists.</div>
+      <div class="notice" *ngIf="!d.a04Enabled">
+        A04 is opt-in: configure AIRIA_MENA_KEY and SI_A04_ENABLED=true on the server only after approving potential usage costs and confirming the actual A04 output schema. No mock dossier is presented as an Airia result.
+      </div>
+
+      <section class="panel">
+        <header><h2>02 · Approved Case &amp; Evidence Manifest</h2><p>The dossier is tied to this exact SI inspection case and saved NMC source assessment.</p></header>
+        <div class="context-grid">
+          <div><small>SI Inspection Case</small><strong>{{d.inspectionCase.id}}</strong></div>
+          <div><small>Regime</small><strong>{{d.context.targetRegime}}</strong></div>
+          <div><small>Human-approved by</small><strong>{{d.context.createdCaseApprovedBy}}</strong></div>
+          <div><small>Risk source assessment</small><strong>{{d.context.sourceAssessmentId||'NOT ASSESSED'}}</strong></div>
+          <div><small>Targeting policy version</small><strong>{{d.context.targetingPolicyVersion}}</strong></div>
+          <div><small>Evidence bundle</small><strong>{{d.context.bundleRef}}</strong></div>
+        </div>
+        <div class="evidence-panel">
+          <div class="info"><strong>{{d.context.evidenceManifestRefs.length}} referenced evidence IDs</strong><span>Source: synthetic NMC vessel bundle · {{d.context.externalDocumentsVerified?'Verified external documents':'NO authenticated external document PDFs'}}</span></div>
+          <div class="evidence-chips"><code *ngFor="let ev of d.context.evidenceManifestRefs">{{ev}}</code></div>
+          <div><h3>Open finding references</h3>
+            <span class="muted" *ngIf="!d.context.openFindingRefs.length">None asserted in the current source bundle</span>
+            <code *ngFor="let ref of d.context.openFindingRefs" class="inline-code">{{ref}}</code></div>
+        </div>
+        <button class="primary" (click)="prepare()" [disabled]="busy||loading||d.saved?.status==='APPROVED'||d.saved?.status==='GENERATING'">
+          {{d.saved?'Refresh Preparation Snapshot':'Prepare Case — No AI Call'}}
+        </button>
+        <p class="hint">Preparation snapshots evidence, current central risk and mandatory checklist IDs; it never changes NMC risk or invokes Airia.</p>
+      </section>
+
+      <section class="panel">
+        <header><h2>03 · Mandatory Base Checklist</h2><p>Exactly the same eight POC checklist identifiers used by the existing Smart Inspection workbench. A04 cannot delete or replace a check.</p></header>
+        <div class="checklist-grid">
+          <div *ngFor="let id of d.context.baseChecklistItemIds;let index=index" class="check">
+            <span class="check-index">{{index+1|number:'2.0-0'}}</span>
+            <div><strong>{{itemLabel(id)}}</strong><small>{{id}}</small></div>
+            <span class="check-status" [class.focus]="countFocus(id)!=='BASE'">{{countFocus(id)}}</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <header><h2>04 · On-Demand A04 Smart Inspection</h2><p>Generates a <b>focus overlay and missing-evidence suggestions only</b>. No automatic additions to approved inspection scope.</p></header>
+        <div class="form-grid small-grid">
+          <label>Requested response language<select [(ngModel)]="language"><option value="en">English</option><option value="ar">العربية</option></select></label>
+          <div class="load-action"><button class="primary" (click)="generate()" [disabled]="!canGenerate">
+            Generate AI Pre-Inspection Dossier (A04)
+          </button></div>
+        </div>
+        <p class="hint">Requires PREPARED snapshot, valid saved NMC risk, Editor key, server-side A04 opt-in and explicit confirmation of a potentially billable API call. Results are validated against actual source evidence IDs.</p>
+        <div *ngIf="d.saved?.status==='GENERATING'" class="notice">A04 request started and locked. Refresh later; do not retry blindly.</div>
+        <div *ngIf="d.saved?.status==='FAILED'" class="notice error">A04 failed validation or provider call: {{d.saved?.lastFailure}}. No invented dossier has been saved. An explicit retry is required.</div>
+      </section>
+
+      <section class="panel" *ngIf="d.saved?.dossier as ai">
+        <header><h2>05 · AI Dossier — Human Review Required</h2>
+          <p>AI suggestions are NOT inspection findings, statutory rule decisions, or confirmed evidence. Approval records acceptance of an advisory overlay only.</p></header>
+        <div class="meta">
+          <span>Agent A04 · {{ai.source}}</span>
+          <span>Confidence {{ai.agentConfidence|percent:'1.0-1'}}</span>
+          <span>Generated {{ai.generatedAt|date:'medium'}}</span>
+          <span>Correlation {{short(ai.requestCorrelationId)}}</span>
+        </div>
+        <h3>Focus Areas ({{ai.focusAreas.length}})</h3>
+        <div class="focus-grid">
+          <div class="focus-card" *ngFor="let f of ai.focusAreas">
+            <div><strong>{{f.category}}</strong><span>{{f.priority}}</span></div>
+            <p>{{f.reason}}</p>
+            <small>Evidence: {{f.evidenceIds.join(' · ')}}</small>
+          </div>
+          <p class="muted" *ngIf="!ai.focusAreas.length">No focus areas returned. The mandatory checklist still applies.</p>
+        </div>
+        <h3>Existing checklist focus overlay</h3>
+        <div class="focus-line" *ngFor="let c of ai.checklistFocus">
+          <strong>{{itemLabel(c.existingItemId)}}</strong><span>{{c.focus}}</span><small>{{c.reason}}</small>
+          <small *ngIf="c.reasonEvidenceIds.length">Evidence: {{c.reasonEvidenceIds.join(' · ')}}</small>
+        </div>
+        <h3>Predicted deficiency hypotheses (never confirmed)</h3>
+        <div class="focus-line" *ngFor="let p of ai.predictedDeficiencies">
+          <strong>{{p.category}}</strong><span>HYPOTHESIS ONLY</span><small>{{p.evidenceIds.join(' · ')}}</small>
+        </div>
+        <p *ngIf="!ai.predictedDeficiencies.length" class="muted">No predictions returned.</p>
+        <h3>Evidence gaps</h3>
+        <p class="missing" *ngFor="let gap of ai.missingEvidence">{{gap}}</p>
+        <p *ngIf="!ai.missingEvidence.length" class="muted">No missing-evidence suggestions returned; external verification status remains unchanged.</p>
+        <p *ngIf="ai.suggestedAdditionalItems.length" class="notice">Suggested additional checks (advisory only): {{ai.suggestedAdditionalItems.length}}. None are automatically added to the mandatory checklist.</p>
+        <div class="review-bar" *ngIf="d.saved?.status==='DRAFT_REVIEW'">
+          <label>Supervisor decision<select [(ngModel)]="reviewDecision"><option value="APPROVE">Approve advisory overlay</option><option value="REJECT">Reject AI dossier</option></select></label>
+          <label>Decision justification<input [(ngModel)]="reason" placeholder="Document the business reason (8+ characters)" maxlength="500"/></label>
+          <button class="primary" (click)="review()" [disabled]="busy||d.stale">Save Supervisor Decision</button>
+        </div>
+        <div *ngIf="d.saved?.review as r" class="notice success">Recorded {{r.decision}} by {{r.actor}} · {{r.at|date:'medium'}} · {{r.reason}}</div>
+      </section>
+    </ng-container>
+  </main>
+</div>

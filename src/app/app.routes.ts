@@ -13,6 +13,7 @@ import { NmcOperationalGuidanceAdminComponent } from './pages/nmc-operational-gu
 import { ActivityClassificationMappingComponent } from './pages/activity-classification-mapping.component';
 import { SmartInspectionCandidateCenterComponent } from './pages/smart-inspection-candidate-center.component';
 import { SiCandidateWorkbenchComponent } from './pages/si-candidate-workbench.component';
+import { SiInspectionPreparationComponent } from './pages/si-inspection-preparation.component';
 import { SiElectronicSchedulingComponent } from './pages/si-electronic-scheduling.component';
 import { NmcDashboardBuilderComponent } from './pages/nmc-dashboard-builder.component';
 import { NmcAlertCenterComponent } from './pages/nmc-alert-center.component';
@@ -28,6 +29,7 @@ export const routes: Routes = [
   { path: 'moei/smart-inspection/candidates', component: SiCandidateWorkbenchComponent },
   { path: 'moei/smart-inspection/candidates/demo', component: SmartInspectionCandidateCenterComponent },
   { path: 'moei/smart-inspection/scheduling', component: SiElectronicSchedulingComponent },
+  { path: 'moei/smart-inspection/preparation/:caseId', component: SiInspectionPreparationComponent },
   { path: 'moei/nmc', component: NmcCommandCenterComponent },
   { path: 'moei/nmc/alerts', component: NmcAlertCenterComponent },
   { path: 'moei/nmc/dashboards', component: NmcDashboardBuilderComponent },

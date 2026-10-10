@@ -87,6 +87,7 @@
           <p *ngIf="c.currentRisk">Risk source assessment: {{c.currentRisk.assessmentId}} · NMC Policy v{{c.currentRisk.policyRevision}}</p>
           <p *ngIf="c.lastDecision">Last decision: {{c.lastDecision.action}} by {{c.lastDecision.actor}} · {{c.lastDecision.at|date:'short'}} · {{c.lastDecision.note}}</p>
           <p *ngIf="c.inspectionCase"><strong>Inspection Case:</strong> {{c.inspectionCase.id}} · {{c.inspectionCase.status}}</p>
+          <a *ngIf="c.inspectionCase" class="prepare-link" [routerLink]="['/moei/smart-inspection/preparation',c.inspectionCase.id]">Open Preparation &amp; A04 Dossier →</a>
         </div>
         <ng-container *ngIf="c.status!=='INSPECTION_CREATED'&&c.status!=='EXTERNALLY_SCHEDULED'">
           <label>Decision rationale <span class="required">*</span><textarea [(ngModel)]="decisionNote" rows="3" maxlength="500" placeholder="State the reason and legal/business basis; never substitute AI judgment"></textarea></label>
