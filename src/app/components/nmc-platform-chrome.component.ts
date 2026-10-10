@@ -1,5 +1,5 @@
 import {CommonModule} from '@angular/common';
-import {Component,Input} from '@angular/core';
+import {Component,EventEmitter,Input,Output} from '@angular/core';
 import {RouterLink} from '@angular/router';
 import {LanguageService} from '../services/language.service';
 
@@ -41,7 +41,7 @@ import {LanguageService} from '../services/language.service';
         </div>
       </ng-template>
       <div class="maritime-actions">
-        <button type="button" class="maritime-language" (click)="lang.toggle()"
+        <button type="button" class="maritime-language" (click)="changeLanguage()"
             [attr.aria-label]="pick('Switch to Arabic','Switch to English')"
             [attr.title]="pick('Switch to Arabic','Switch to English')">
           <span aria-hidden="true">🌐</span> {{lang.isArabic?'English':'العربية'}}
@@ -66,6 +66,8 @@ export class NmcPlatformHeaderComponent{
   @Input() feedLive=true;
   @Input() clock='';
   @Input() unreadAlerts=0;
+  @Output() languageChanged=new EventEmitter<void>();
+  changeLanguage():void{this.lang.toggle();this.languageChanged.emit();}
   constructor(public readonly lang:LanguageService){}
   pick(en:string,ar:string):string{return this.lang.pick(en,ar);}
 }
