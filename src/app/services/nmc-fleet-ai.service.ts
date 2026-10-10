@@ -14,6 +14,12 @@ export interface FleetAiVessel {
   assessedAt?: string;
   sourceMode?: 'GOOGLE_SHEETS_LIVE' | 'LOCAL_FIXTURE_SNAPSHOT';
   configVersion?: string;
+  riskProvisional?: boolean;
+  a03EvidenceStatus?: 'NOT_ASSESSED'|'ASSESSED';
+  scoringSource?: string;
+  sourceAiScore?: number;
+  sourceAiLevel?: 'Normal'|'Watch'|'High'|'Critical';
+  operationalDecisionAllowed?: boolean;
   reasonCode?: string;
   lastCheckedAt?: string;
   nextCheckAt?: string;
