@@ -74,3 +74,27 @@ test('preparation menu leads to a real approved case selector, no mock case IDs'
   assert.match(settings,/this\.api\.preview\(/);
   assert.match(settings,/this\.api\.publish\(/);
 });
+
+test('SI-P01 weights and trigger priorities follow NMC Risk slider + compact number pattern',()=>{
+  const centralRisk=read('src/app/pages/nmc-risk-configuration-admin.component.html');
+  const si=read('src/app/pages/si-targeting-settings.component.ts');
+  assert.match(centralRisk,/type="range"/);
+  assert.match(centralRisk,/normalizeWeights\(\)/);
+  assert.match(si,/class="risk-style-factor" \*ngFor="let factor of weightFactors"/);
+  assert.match(si,/class="risk-style-factor" \*ngFor="let reason of triggerReasons"/);
+  assert.match(si,/type="range" min="0" max="100" step="1"/);
+  assert.match(si,/class="number-input"/);
+  assert.match(si,/normalizeWeights\(\)/);
+  assert.match(si,/\[class.invalid\]="!weightsValid"/);
+  assert.match(si,/get weightsValid\(\):boolean/);
+  assert.match(si,/this\.weightTotal===100/);
+  assert.match(si,/this\.onPriorityEdit\(\)/);
+  assert.match(si,/this\.impact=null;this\.success='';this\.error='';/);
+  assert.match(si,/missingRiskAction:'REVIEW_REQUIRED'/);
+  assert.match(si,/sourceTriggerScores:\{\.\.\.this\.sourceScores\}/);
+  assert.match(si,/\[attr\.aria-label\]=/);
+  assert.match(si,/\.factor-control input\.weight-slider\{[^}]*accent-color:#0f766e/);
+  // This PR must remain UI-only: existing backend protected P01 inputs remain.
+  const server=read('ai-proxy/server.mjs');
+  assert.match(server,/SiAiPrioritization/);
+});
