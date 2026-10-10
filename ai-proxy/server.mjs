@@ -413,8 +413,19 @@ const server = createServer(async (req, res) => {
         return respond(res,200,{status:'ok',proposals:siScheduling.list()});
       if(req.method==='POST'&&path==='/api/si/scheduling/proposals'){
         dashboards.assertRole(req,'EDITOR');
-        return respond(res,201,{status:'ok',proposal:await siScheduling.propose(
-          await requestJson(req,8192))});
+        const proposal=await siScheduling.propose(await requestJson(req,8192));
+        // Fully electronic: a published policy may automatically confirm an
+        // eligible NMC referral without any additional browser approval click.
+        // The engine rechecks constraints immediately before writing the case.
+        const auto=proposal.options[0]?.approval==='AUTO_ELIGIBLE';
+        if(auto){
+          const confirmed=await siScheduling.confirm({proposalId:proposal.id,
+            optionId:proposal.options[0].optionId,allowManual:false});
+          return respond(res,201,{status:'ok',
+            proposal:{...proposal,status:'CONFIRMED',confirmed:confirmed.booking},
+            autoConfirmed:true});
+        }
+        return respond(res,201,{status:'ok',proposal,autoConfirmed:false});
       }
       const confirmation=/^\/api\/si\/scheduling\/proposals\/([a-f0-9-]{36})\/confirm$/.exec(path);
       if(req.method==='POST'&&confirmation){
