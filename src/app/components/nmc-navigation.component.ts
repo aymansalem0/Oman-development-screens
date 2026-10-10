@@ -122,6 +122,12 @@ export class NmcNavigationComponent implements OnInit, OnDestroy {
   get isErpIntegrationSettings(): boolean {
     return this.currentPath === '/moei/smart-inspection/settings/erp';
   }
+  get isPscTargetingPool():boolean{
+    return this.currentPath==='/moei/smart-inspection/psc-targeting';
+  }
+  get isPscQuotaSettings():boolean{
+    return this.currentPath==='/moei/smart-inspection/settings/psc-quotas';
+  }
   get isCandidateSourceSettings(): boolean {
     return this.currentPath==='/moei/smart-inspection/settings/sources' ||
       this.currentPath.startsWith('/moei/smart-inspection/settings/sources/');
@@ -173,7 +179,7 @@ export class NmcNavigationComponent implements OnInit, OnDestroy {
     }
     // Keep the active screen visible in its section when routing from a
     // bookmarked deep link or from NMC Vessel 360.
-    if (this.isInspectionCandidates || this.isInspectionPreparation ||
+    if (this.isPscTargetingPool || this.isInspectionCandidates || this.isInspectionPreparation ||
         this.isInspectionScheduling || this.isInspectionWorkbench) {
       this.smartInspectionExpanded = true;
     }
@@ -182,7 +188,7 @@ export class NmcNavigationComponent implements OnInit, OnDestroy {
       this.settingsExpanded = true;
       this.nmcSettingsExpanded = true;
     }
-    if (this.isErpIntegrationSettings || this.isInspectionTargetingSettings || this.isCandidateSourceSettings) {
+    if (this.isErpIntegrationSettings || this.isInspectionTargetingSettings || this.isCandidateSourceSettings || this.isPscQuotaSettings) {
       this.settingsExpanded = true;
       this.inspectionSettingsExpanded = true;
     }
