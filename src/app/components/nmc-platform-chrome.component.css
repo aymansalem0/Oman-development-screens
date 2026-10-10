@@ -37,25 +37,22 @@
 .maritime-officer strong{display:block;color:#27445f;font-size:10px}
 .maritime-officer small{display:block;color:#97a4b3;font-size:8px;margin-top:3px}
 .maritime-platform-footer{display:flex;justify-content:space-between;align-items:center;
-  flex-wrap:wrap;gap:11px;padding:17px 24px 17px 240px;margin:0;background:#fff;
+  flex-wrap:wrap;gap:11px;padding:17px 24px;padding-inline-start:240px;margin:0;background:#fff;
   border-top:1px solid #e4ecef;color:#698296;font-size:10px;line-height:1.6;
   position:relative;z-index:3}
 .maritime-platform-footer strong{color:#26536b;font-weight:800}
 .maritime-platform-footer a{color:#0c806f;text-decoration:none;font-weight:800}
-:host-context([dir="rtl"]) .maritime-platform-footer{padding:17px 240px 17px 24px}
 :host-context([dir="rtl"]) .maritime-brand,:host-context([dir="rtl"]) .maritime-actions{direction:rtl}
 :host-context([dir="rtl"]) .maritime-alerts b{right:auto;left:-4px}
 @media(min-width:961px) and (max-width:1220px){
   .maritime-platform-footer{padding-inline-start:90px}
-  :host-context([dir="rtl"]) .maritime-platform-footer{padding-inline-start:90px}
 }
 @media(max-width:960px){
   .maritime-topbar{padding:0 16px 0 64px;grid-template-columns:minmax(0,1fr) auto;gap:12px}
   :host-context([dir="rtl"]) .maritime-topbar{padding:0 64px 0 16px}
   .maritime-status{display:none}
   .maritime-officer{display:none}
-  .maritime-platform-footer,:host-context([dir="rtl"]) .maritime-platform-footer{
-    padding:17px 20px}
+  .maritime-platform-footer{padding:17px 20px;padding-inline-start:20px}
 }
 @media(max-width:540px){
   .maritime-topbar{padding-inline:58px 12px;height:82px}
