@@ -82,7 +82,7 @@ import {NmcDocumentsService,VesselDriveListing,VesselDriveDoc} from '../services
                   <th>{{tr('Status','الحالة')}}</th>
                   <th>{{tr('Expiry','الانتهاء')}}</th>
                 </tr></thead>
-                <tbody><tr *ngFor="let section of a.documentEntries">
+                <tbody><ng-container *ngFor="let section of a.documentEntries"><tr>
                   <td>{{section.documentType}}</td>
                   <td>{{section.certificateNumber||'—'}}</td>
                   <td>{{section.status||'—'}}</td>
@@ -100,7 +100,7 @@ import {NmcDocumentsService,VesselDriveListing,VesselDriveDoc} from '../services
                       {{tr('Values match (not authenticity proof)','القيم متطابقة (ليس توثيقًا للأصالة)')}}
                     </span>
                   </td>
-                </tr></tbody>
+                </tr></ng-container></tbody>
               </table>
               <p>{{tr('Each section is inferred from the PDF text; citations are retained in the reviewed evidence record.',
                       'كل قسم مستخرج من نص PDF، وتُحفظ النصوص الداعمة داخل سجل الأدلة الذي تمت مراجعته.')}}</p>
