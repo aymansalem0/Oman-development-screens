@@ -1,4 +1,5 @@
 import { NmcNavigationComponent } from '../components/nmc-navigation.component';
+import { NmcMinistryLogoComponent } from '../components/nmc-ministry-logo.component';
 import { CommonModule } from '@angular/common';
 import { Component, OnDestroy, OnInit } from '@angular/core';
 import { Subscription, forkJoin, of } from 'rxjs';
@@ -32,7 +33,7 @@ interface ImpactRow {
 @Component({
   selector: 'app-nmc-risk-configuration-admin',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, NmcNavigationComponent],
+  imports: [CommonModule, FormsModule, RouterLink, NmcNavigationComponent, NmcMinistryLogoComponent],
   templateUrl: './nmc-risk-configuration-admin.component.html',
   styleUrl: './nmc-risk-configuration-admin.component.css'
 })
