@@ -2,10 +2,10 @@ name: Angular Build
 
 on:
   push:
-    branches: [main, 'feature/nmc-*', 'feature/si-*']
+    branches: [main, 'feature/nmc-*', 'feature/si-*', 'feature/moei-*']
   workflow_dispatch:
   pull_request:
-    branches: [main, feature/smart-inspection-poc, 'feature/nmc-*', 'feature/si-*']
+    branches: [main, feature/smart-inspection-poc, 'feature/nmc-*', 'feature/si-*', 'feature/moei-*']
 
 jobs:
   build:
@@ -26,6 +26,9 @@ jobs:
         # Uses the same adapter command that failed inside the ai-proxy Docker image.
         # Runs offline: no Oracle, Airia or backend service required.
         run: node ./ai-proxy/build-fleet-evidence.mjs
+
+      - name: Validate MOEI platform menu and settings routes
+        run: node --test scripts/test-moei-navigation.mjs
 
       - name: Build
         run: npm run build

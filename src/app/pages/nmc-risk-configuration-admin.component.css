@@ -48,7 +48,7 @@ a,button,input,textarea { font:inherit; }
 .publish-btn:disabled { opacity:.45; cursor:default; }
 
 .nmc-sidebar {
-  position:fixed; left:0; top:82px; bottom:0; width:216px; z-index:25;
+  position:fixed; left:0; top:82px; bottom:0; width:240px; z-index:25;
   padding:20px 12px 16px; background:#fff; border-right:1px solid #e6edf3; overflow-y:auto;
 }
 .sidebar-section-label { padding:0 12px 9px; color:#a0adba; font-size:8px; font-weight:800; letter-spacing:1.5px; }
@@ -76,7 +76,7 @@ a,button,input,textarea { font:inherit; }
   width:8px; height:8px; border-radius:50%; background:#22c55e; box-shadow:0 0 0 4px #eaf9ef;
 }
 
-.admin-main { margin-left:216px; padding:106px 24px 36px; }
+.admin-main { margin-left:240px; padding:106px 24px 36px; }
 .page-heading {
   display:flex; justify-content:space-between; gap:20px; align-items:flex-start;
   margin-bottom:12px;
@@ -295,7 +295,7 @@ a,button,input,textarea { font:inherit; }
 
 .risk-admin-shell.rtl { direction:rtl; font-family:"Segoe UI",Tahoma,Arial,sans-serif; }
 .risk-admin-shell.rtl .nmc-sidebar { left:auto; right:0; border-right:0; border-left:1px solid #e6edf3; }
-.risk-admin-shell.rtl .admin-main { margin-left:0; margin-right:216px; }
+.risk-admin-shell.rtl .admin-main { margin-left:0; margin-right:240px; }
 .risk-admin-shell.rtl .nav-item,.risk-admin-shell.rtl .mode-card { text-align:right; }
 .risk-admin-shell.rtl .nav-item.active { background:linear-gradient(270deg,#eaf9f6,#f5fcfb); }
 .risk-admin-shell.rtl .top-actions { justify-content:flex-start; }

@@ -2,8 +2,8 @@
 
 /* Keep management content beside the unified NMC menu on wide screens. */
 @media (min-width: 1221px) {
-  .qa-shell main { margin-left: 216px; margin-right: 0; max-width: calc(100% - 216px); }
-  .qa-shell[dir="rtl"] main { margin-left: 0; margin-right: 216px; }
+  .qa-shell main { margin-left: 240px; margin-right: 0; max-width: calc(100% - 240px); }
+  .qa-shell[dir="rtl"] main { margin-left: 0; margin-right: 240px; }
 }
 @media (min-width: 961px) and (max-width: 1220px) {
   .qa-shell main { margin-left: 66px; margin-right: 0; max-width: calc(100% - 66px); }

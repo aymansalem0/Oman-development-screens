@@ -74,82 +74,50 @@
     <section class="nav-section">
       <button class="nav-group" type="button"
               (click)="smartInspectionExpanded = !smartInspectionExpanded"
-              [attr.aria-expanded]="smartInspectionExpanded" aria-controls="smart-inspection-dashboards">
+              [attr.aria-expanded]="smartInspectionExpanded" aria-controls="si-main-submenu">
         <span class="nav-icon">✓</span>
         <span class="nav-label">{{copy('Smart Inspection','المعاينة الذكية')}}</span>
         <span class="nav-chevron">{{smartInspectionExpanded ? '⌄' : '›'}}</span>
       </button>
-      <div class="nav-children" id="smart-inspection-dashboards"
-           [hidden]="!smartInspectionExpanded"
-           >
+      <div class="nav-children" id="si-main-submenu" [hidden]="!smartInspectionExpanded">
         <a class="nav-link" routerLink="/moei/smart-inspection/candidates"
-            [class.active]="isSmartInspection">
+           [class.active]="isInspectionCandidates"
+           [attr.aria-current]="isInspectionCandidates?'page':null"
+           [title]="copy('Candidate & Targeting Center','مركز ترشيح المعاينات والاستهداف')">
           <span class="nav-icon">☷</span>
-          <span class="nav-label">{{copy('Required Inspections / Scheduling','المعاينات المطلوبة / الجدولة')}}</span>
+          <span class="nav-label">{{copy('Candidate & Targeting','الترشيح والاستهداف')}}</span>
         </a>
-        <button class="nav-subgroup" type="button"
-                (click)="smartDashboardsExpanded = !smartDashboardsExpanded"
-                [attr.aria-expanded]="smartDashboardsExpanded" aria-controls="smart-published-dashboards">
-          <span class="nav-icon">▥</span>
-          <span class="nav-label">{{copy('Dashboards','لوحات المعلومات')}}</span>
-          <span class="nav-chevron">{{smartDashboardsExpanded ? '⌄' : '›'}}</span>
-        </button>
-        <div class="nav-subchildren" id="smart-published-dashboards" [hidden]="!smartDashboardsExpanded">
-          <a *ngFor="let board of dashboardItems('SMART_INSPECTION')" class="nav-link nav-dashboard-link"
-             [routerLink]="publishedRoute(board.id)" [class.active]="isPublishedDashboard(board.id)"
-             [attr.aria-current]="isPublishedDashboard(board.id)?'page':null" [title]="board.title">
-            <span class="nav-icon">▤</span>
-            <span class="nav-label">{{board.title}}</span>
-          </a>
-        </div>
-      </div>
-    </section>
-
-    <section class="nav-section">
-      <button class="nav-group" type="button" (click)="settingsExpanded = !settingsExpanded"
-              [attr.aria-expanded]="settingsExpanded" aria-controls="nmc-settings-submenu">
-        <span class="nav-icon">⚙</span>
-        <span class="nav-label">{{copy('Settings','الإعدادات')}}</span>
-        <span class="nav-chevron">{{settingsExpanded ? '⌄' : '›'}}</span>
-      </button>
-      <div class="nav-children" id="nmc-settings-submenu" [hidden]="!settingsExpanded">
-        <a class="nav-link" routerLink="/moei/nmc/admin/risk-configuration"
-           [class.active]="isRiskConfig" [attr.aria-current]="isRiskConfig?'page':null"
-           [title]="copy('Risk Management','إدارة المخاطر')">
-          <span class="nav-icon">⚠</span>
-          <span class="nav-label">{{copy('Risk Management','إدارة المخاطر')}}</span>
-        </a>
-        <a class="nav-link" routerLink="/moei/nmc/admin/data-quality"
-           [queryParams]="selectedImo ? {imo:selectedImo} : null"
-           [class.active]="isQualityConfig" [attr.aria-current]="isQualityConfig?'page':null"
-           [title]="copy('Data Quality Management','إدارة جودة البيانات')">
+        <a class="nav-link" routerLink="/moei/smart-inspection/preparation"
+           [class.active]="isInspectionPreparation"
+           [attr.aria-current]="isInspectionPreparation?'page':null"
+           [title]="copy('Inspection Preparation & A04','تحضير المعاينة وملف A04')">
           <span class="nav-icon">▤</span>
-          <span class="nav-label">{{copy('Data Quality Management','إدارة جودة البيانات')}}</span>
+          <span class="nav-label">{{copy('Inspection Preparation & A04','تحضير المعاينة وملف A04')}}</span>
         </a>
-
-        <a class="nav-link" routerLink="/moei/smart-inspection/settings/erp"
-           [class.active]="isErpIntegrationSettings"
-           [attr.aria-current]="isErpIntegrationSettings?'page':null"
-           [title]="copy('ERP Integration Simulator','إعدادات تكامل ERP التجريبي')">
-          <span class="nav-icon">⇄</span>
-          <span class="nav-label">{{copy('ERP Integration Simulator','محاكاة الربط مع ERP')}}</span>
+        <a class="nav-link" routerLink="/moei/smart-inspection/scheduling"
+           [class.active]="isInspectionScheduling"
+           [attr.aria-current]="isInspectionScheduling?'page':null"
+           [title]="copy('Electronic Scheduling','الجدولة الإلكترونية')">
+          <span class="nav-icon">▦</span>
+          <span class="nav-label">{{copy('Electronic Scheduling','الجدولة الإلكترونية')}}</span>
         </a>
-        <a class="nav-link" routerLink="/moei/nmc/admin/operational-guidance"
-           [class.active]="isGuidanceConfig" [attr.aria-current]="isGuidanceConfig?'page':null"
-           [title]="copy('Operational Guidance Rules','قواعد الإرشاد التشغيلي')">
-          <span class="nav-icon">⚙</span>
-          <span class="nav-label">{{copy('Operational Guidance Rules','قواعد الإرشاد التشغيلي')}}</span>
+        <a class="nav-link" [routerLink]="inspectionWorkbenchRoute"
+           [class.active]="isInspectionWorkbench"
+           [attr.aria-current]="isInspectionWorkbench?'page':null"
+           [title]="selectedImo ? copy('Vessel Inspection Workbench (POC)','واجهة معاينة السفينة التجريبية') : vesselHint">
+          <span class="nav-icon">⌖</span>
+          <span class="nav-label">{{copy('Vessel Inspection Workbench','واجهة معاينة السفينة')}}</span>
         </a>
-        <div class="nav-dashboard-group" *ngIf="dashboardItems('SETTINGS').length">
+        <div class="nav-dashboard-group" *ngIf="dashboardItems('SMART_INSPECTION').length">
           <button class="nav-subgroup" type="button"
-                  (click)="settingsDashboardsExpanded = !settingsDashboardsExpanded"
-                  [attr.aria-expanded]="settingsDashboardsExpanded" aria-controls="settings-published-dashboards">
+                  (click)="smartDashboardsExpanded = !smartDashboardsExpanded"
+                  [attr.aria-expanded]="smartDashboardsExpanded" aria-controls="smart-published-dashboards">
             <span class="nav-icon">▥</span>
-            <span class="nav-label">{{copy('Dashboards','لوحات المعلومات')}}</span>
-            <span class="nav-chevron">{{settingsDashboardsExpanded ? '⌄' : '›'}}</span>
+            <span class="nav-label">{{copy('Published Dashboards','لوحات المعلومات المنشورة')}}</span>
+            <span class="nav-chevron">{{smartDashboardsExpanded ? '⌄' : '›'}}</span>
           </button>
-          <div class="nav-subchildren" id="settings-published-dashboards" [hidden]="!settingsDashboardsExpanded">
-            <a *ngFor="let board of dashboardItems('SETTINGS')" class="nav-link nav-dashboard-link"
+          <div class="nav-subchildren" id="smart-published-dashboards" [hidden]="!smartDashboardsExpanded">
+            <a *ngFor="let board of dashboardItems('SMART_INSPECTION')" class="nav-link nav-dashboard-link"
                [routerLink]="publishedRoute(board.id)" [class.active]="isPublishedDashboard(board.id)"
                [attr.aria-current]="isPublishedDashboard(board.id)?'page':null" [title]="board.title">
               <span class="nav-icon">▤</span>
@@ -161,12 +129,97 @@
     </section>
 
     <section class="nav-section">
-      <a class="nav-group nav-manager-link" routerLink="/moei/nmc/dashboards"
-         [class.active]="isDashboardManager" [attr.aria-current]="isDashboardManager?'page':null"
-         [title]="copy('Dashboard Manager','مدير لوحات المعلومات')">
-        <span class="nav-icon">⚒</span>
-        <span class="nav-label">{{copy('Dashboard Manager','مدير لوحات المعلومات')}}</span>
-      </a>
+      <button class="nav-group" type="button" (click)="settingsExpanded = !settingsExpanded"
+              [attr.aria-expanded]="settingsExpanded" aria-controls="moei-settings-groups">
+        <span class="nav-icon">⚙</span>
+        <span class="nav-label">{{copy('Settings','الإعدادات')}}</span>
+        <span class="nav-chevron">{{settingsExpanded ? '⌄' : '›'}}</span>
+      </button>
+      <div class="nav-children nav-settings-groups" id="moei-settings-groups" [hidden]="!settingsExpanded">
+        <div class="nav-settings-section">
+          <button class="nav-subgroup nav-settings-heading" type="button"
+                  (click)="nmcSettingsExpanded = !nmcSettingsExpanded"
+                  [attr.aria-expanded]="nmcSettingsExpanded" aria-controls="nmc-settings-children">
+            <span class="nav-icon">◈</span>
+            <span class="nav-label">{{copy('NMC Settings','إعدادات المركز البحري')}}</span>
+            <span class="nav-chevron">{{nmcSettingsExpanded ? '⌄' : '›'}}</span>
+          </button>
+          <div class="nav-subchildren nav-settings-links" id="nmc-settings-children"
+               [hidden]="!nmcSettingsExpanded">
+            <a class="nav-link" routerLink="/moei/nmc/admin/risk-configuration"
+               [class.active]="isRiskConfig" [attr.aria-current]="isRiskConfig?'page':null"
+               [title]="copy('Risk Management','إدارة المخاطر')">
+              <span class="nav-icon">⚠</span>
+              <span class="nav-label">{{copy('Risk Management','إدارة المخاطر')}}</span>
+            </a>
+            <a class="nav-link" routerLink="/moei/nmc/admin/data-quality"
+               [queryParams]="selectedImo ? {imo:selectedImo} : null"
+               [class.active]="isQualityConfig" [attr.aria-current]="isQualityConfig?'page':null"
+               [title]="copy('Data Quality Management','إدارة جودة البيانات')">
+              <span class="nav-icon">▤</span>
+              <span class="nav-label">{{copy('Data Quality Management','إدارة جودة البيانات')}}</span>
+            </a>
+            <a class="nav-link" routerLink="/moei/nmc/admin/operational-guidance"
+               [class.active]="isGuidanceConfig" [attr.aria-current]="isGuidanceConfig?'page':null"
+               [title]="copy('Operational Guidance Rules','قواعد الإرشاد التشغيلي')">
+              <span class="nav-icon">⚙</span>
+              <span class="nav-label">{{copy('Operational Guidance Rules','قواعد الإرشاد التشغيلي')}}</span>
+            </a>
+            <a class="nav-link" routerLink="/moei/nmc/dashboards"
+               [class.active]="isDashboardManager" [attr.aria-current]="isDashboardManager?'page':null"
+               [title]="copy('Dashboard Manager','مدير لوحات المعلومات')">
+              <span class="nav-icon">⚒</span>
+              <span class="nav-label">{{copy('Dashboard Manager','مدير لوحات المعلومات')}}</span>
+            </a>
+            <div class="nav-dashboard-group" *ngIf="dashboardItems('SETTINGS').length">
+              <button class="nav-subgroup" type="button"
+                      (click)="settingsDashboardsExpanded = !settingsDashboardsExpanded"
+                      [attr.aria-expanded]="settingsDashboardsExpanded" aria-controls="settings-published-dashboards">
+                <span class="nav-icon">▥</span>
+                <span class="nav-label">{{copy('Settings Dashboards','لوحات الإعدادات')}}</span>
+                <span class="nav-chevron">{{settingsDashboardsExpanded ? '⌄' : '›'}}</span>
+              </button>
+              <div class="nav-subchildren" id="settings-published-dashboards"
+                   [hidden]="!settingsDashboardsExpanded">
+                <a *ngFor="let board of dashboardItems('SETTINGS')" class="nav-link nav-dashboard-link"
+                   [routerLink]="publishedRoute(board.id)" [class.active]="isPublishedDashboard(board.id)"
+                   [attr.aria-current]="isPublishedDashboard(board.id)?'page':null"
+                   [title]="board.title">
+                  <span class="nav-icon">▤</span>
+                  <span class="nav-label">{{board.title}}</span>
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="nav-settings-section">
+          <button class="nav-subgroup nav-settings-heading" type="button"
+                  (click)="inspectionSettingsExpanded = !inspectionSettingsExpanded"
+                  [attr.aria-expanded]="inspectionSettingsExpanded"
+                  aria-controls="si-settings-children">
+            <span class="nav-icon">✓</span>
+            <span class="nav-label">{{copy('Inspection Settings','إعدادات المعاينات')}}</span>
+            <span class="nav-chevron">{{inspectionSettingsExpanded ? '⌄' : '›'}}</span>
+          </button>
+          <div class="nav-subchildren nav-settings-links" id="si-settings-children"
+               [hidden]="!inspectionSettingsExpanded">
+            <a class="nav-link" routerLink="/moei/smart-inspection/settings/targeting"
+               [class.active]="isInspectionTargetingSettings"
+               [attr.aria-current]="isInspectionTargetingSettings?'page':null"
+               [title]="copy('Targeting & Priority Rules','إعدادات الاستهداف والأولوية')">
+              <span class="nav-icon">◎</span>
+              <span class="nav-label">{{copy('Targeting & Priority Rules','قواعد الاستهداف والأولوية')}}</span>
+            </a>
+            <a class="nav-link" routerLink="/moei/smart-inspection/settings/erp"
+               [class.active]="isErpIntegrationSettings"
+               [attr.aria-current]="isErpIntegrationSettings?'page':null"
+               [title]="copy('ERP Integration Simulator','محاكاة الربط مع ERP')">
+              <span class="nav-icon">⇄</span>
+              <span class="nav-label">{{copy('ERP Integration Simulator','محاكاة الربط مع ERP')}}</span>
+            </a>
+          </div>
+        </div>
+      </div>
     </section>
   </nav>
 </aside>

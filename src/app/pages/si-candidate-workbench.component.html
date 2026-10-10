@@ -132,19 +132,12 @@
       </section>
 
       <section class="si-panel">
-        <header><h2>{{copy("05 · Configurable Priority & Impact","٠٥ · إعداد الأولوية ومعاينة الأثر")}}</h2><p>{{copy("Versioned priority threshold only. Statutory PSC/service eligibility is NOT auto-published.","يتم إصدار حدود الأولوية فقط. لا تُنشر قواعد الأهلية التنظيمية تلقائيًا.")}}</p></header>
-        <p *ngIf="dashboard">{{copy('Published ruleset','إصدار القواعد المنشور')}} v{{dashboard.policy.version}} · {{dashboard.policy.config.riskPriorityThreshold}}/100 {{copy('priority threshold','حد الأولوية')}}</p>
-        <label>{{copy("Proposed priority threshold (0–100)","حد الأولوية المقترح (٠–١٠٠)")}}<input type="number" min="0" max="100" step="1" [(ngModel)]="threshold" (ngModelChange)="impact=null"/></label>
-        <div class="decision-actions"><button type="button" [disabled]="busy" (click)="previewRules()">{{copy("Preview fleet impact","معاينة أثر التغيير على الأسطول")}}</button></div>
-        <div *ngIf="impact as p" class="impact">
-          <strong>{{p.affectedCandidateCount}} {{copy('affected candidates','مرشح تأثر بالتغيير')}}</strong>
-          <small>{{p.evaluatedPopulation}} {{copy('active vessels evaluated','سفينة نشطة شملها الفحص')}} · {{p.unevaluatedRiskVessels}} {{copy('without saved risk','بدون تقييم مخاطر محفوظ')}}</small>
-          <p>{{copy('Affected IMO numbers','أرقام IMO المتأثرة')}}: {{p.affectedImos.length?p.affectedImos.join(', '):copy('none','لا يوجد')}}</p>
-          <small>{{copy("Changes PRIORITY only. No AI calls, no case rewrite, no legal eligibility change.","يتغير ترتيب الأولوية فقط دون استدعاءات AI أو تعديل الحالات أو الأهلية التنظيمية.")}}</small>
-        </div>
-        <label>{{copy("Business justification","التبرير الإداري")}}<input [(ngModel)]="policyReason" [placeholder]="copy('Why adjust the priority threshold?','لماذا تريد تغيير حد الأولوية؟')"/></label>
-        <button class="primary" type="button" [disabled]="busy||!impact" (click)="publishRules()">{{copy("Publish Priority Version","نشر إصدار جديد للأولوية")}}</button>
-        <p class="hint">{{copy("Current/open cases retain their approval evidence and original scoring references.","تحتفظ الحالات المفتوحة بأدلة الاعتماد ومراجع التقييم الأصلية.")}}</p>
+        <header><h2>{{copy('05 · Inspection Settings','٠٥ · إعدادات المعاينة')}}</h2>
+          <p>{{copy('Targeting priority rules and impact preview are administered centrally under Inspection Settings, not in the operational candidate queue.',
+            'تُدار قواعد الأولوية ومعاينة أثرها مركزيًا تحت إعدادات المعاينات، بعيدًا عن قائمة التشغيل اليومية.')}}</p></header>
+        <a class="settings-link" routerLink="/moei/smart-inspection/settings/targeting">
+          ⚙ {{copy('Open Targeting & Priority Rules','فتح إعدادات الاستهداف والأولوية')}} →
+        </a>
       </section>
     </div>
   </main>

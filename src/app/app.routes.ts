@@ -14,6 +14,8 @@ import { ActivityClassificationMappingComponent } from './pages/activity-classif
 import { SmartInspectionCandidateCenterComponent } from './pages/smart-inspection-candidate-center.component';
 import { SiCandidateWorkbenchComponent } from './pages/si-candidate-workbench.component';
 import { SiInspectionPreparationComponent } from './pages/si-inspection-preparation.component';
+import { SiPreparationQueueComponent } from './pages/si-preparation-queue.component';
+import { SiTargetingSettingsComponent } from './pages/si-targeting-settings.component';
 import { SiElectronicSchedulingComponent } from './pages/si-electronic-scheduling.component';
 import { SiErpSettingsComponent } from './pages/si-erp-settings.component';
 import { NmcDashboardBuilderComponent } from './pages/nmc-dashboard-builder.component';
@@ -29,8 +31,10 @@ export const routes: Routes = [
   { path: 'dashboard/master-data/activity-classification-mapping', component: ActivityClassificationMappingComponent },
   { path: 'moei/smart-inspection/candidates', component: SiCandidateWorkbenchComponent },
   { path: 'moei/smart-inspection/candidates/demo', component: SmartInspectionCandidateCenterComponent },
+  { path: 'moei/smart-inspection/preparation', component: SiPreparationQueueComponent },
   { path: 'moei/smart-inspection/scheduling', component: SiElectronicSchedulingComponent },
   { path: 'moei/smart-inspection/settings/erp', component: SiErpSettingsComponent },
+  { path: 'moei/smart-inspection/settings/targeting', component: SiTargetingSettingsComponent },
   { path: 'moei/smart-inspection/preparation/:caseId', component: SiInspectionPreparationComponent },
   { path: 'moei/nmc', component: NmcCommandCenterComponent },
   { path: 'moei/nmc/alerts', component: NmcAlertCenterComponent },

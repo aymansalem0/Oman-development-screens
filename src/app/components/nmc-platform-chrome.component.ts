@@ -20,7 +20,7 @@ import {LanguageService} from '../services/language.service';
         <div class="maritime-mark" aria-hidden="true">⚓</div>
         <div>
           <div class="maritime-eyebrow">{{pick('MOEI · Maritime Transformation','وزارة الطاقة والبنية التحتية · التحول البحري')}}</div>
-          <h1>{{pick('National Maritime Center','المركز البحري الوطني')}}</h1>
+          <h1>{{pick('MOEI Maritime Unified Platform','المنصة البحرية الموحدة لوزارة الطاقة والبنية التحتية')}}</h1>
           <p>{{area==='nmc'
             ?pick('Operational picture · Maritime situational awareness','الصورة التشغيلية · الوعي بالموقف البحري')
             :pick('Smart Inspection · Integrated maritime services','المعاينة الذكية · الخدمات البحرية المتكاملة')}}</p>
@@ -78,7 +78,7 @@ export class NmcPlatformHeaderComponent{
   imports:[CommonModule,RouterLink],
   template:`
     <footer class="maritime-platform-footer" [attr.dir]="lang.dir">
-      <span><strong>{{pick('MOEI · National Maritime Center','وزارة الطاقة والبنية التحتية · المركز البحري الوطني')}}</strong>
+      <span><strong>{{pick('MOEI Maritime Unified Platform','المنصة البحرية الموحدة لوزارة الطاقة والبنية التحتية')}}</strong>
         · {{pick('Unified Maritime Digital Services Platform','المنصة الموحدة للخدمات البحرية الرقمية')}}</span>
       <span class="maritime-platform-disclaimer">
         {{pick('Smart Inspection & NMC · POC / simulated data — not official operational evidence',

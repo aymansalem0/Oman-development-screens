@@ -5,7 +5,7 @@ import {FormsModule} from '@angular/forms';
 import {RouterLink} from '@angular/router';
 import {NmcNavigationComponent} from '../components/nmc-navigation.component';
 import {SiCandidate,SiCandidateStatus,SiCandidateTargetingService,
-  SiDashboard,SiImpact,SiRegime} from '../services/si-candidate-targeting.service';
+  SiDashboard,SiRegime} from '../services/si-candidate-targeting.service';
 
 type SourceFilter='ALL'|'NMC_CASE'|'SERVICE_REQUEST'|'PSC_PORT_CALL';
 type StatusFilter='ALL'|SiCandidateStatus;
@@ -21,8 +21,6 @@ export class SiCandidateWorkbenchComponent implements OnInit{
   sourceFilter:SourceFilter='ALL';statusFilter:StatusFilter='ALL';search='';
   selectedKey='';
   reviewer='';decisionNote='';editorKey='';publisherKey='';
-  threshold=65;policyReason='';
-  impact:SiImpact|null=null;
   eventForm:{
     sourceType:'SERVICE_REQUEST'|'PSC_PORT_CALL';
     sourceEventId:string;sourceReference:string;imo:string;port:string;eta:string;
@@ -39,7 +37,7 @@ export class SiCandidateWorkbenchComponent implements OnInit{
     this.loading=true;this.error='';
     this.api.dashboard().subscribe({
       next:data=>{
-        this.dashboard=data;this.threshold=data.policy.config.riskPriorityThreshold;
+        this.dashboard=data;
         if(!data.candidates.some(x=>x.key===this.selectedKey))this.selectedKey='';
         this.loading=false;
       },error:e=>{this.loading=false;this.showError(e);}
@@ -97,31 +95,6 @@ export class SiCandidateWorkbenchComponent implements OnInit{
       evidenceIds:[],createdBy:this.reviewer.trim()},this.editorKey.trim()).subscribe({
       next:()=>{this.busy=false;this.success='Simulated source event saved. Officer review required.';
         this.eventForm.sourceEventId='';this.eventForm.sourceReference='';this.refresh();},
-      error:e=>this.showError(e)
-    });
-  }
-  previewRules():void{
-    if(!this.editorKey.trim()){this.error='Editor key required for impact preview.';return;}
-    this.busy=true;this.error='';this.impact=null;
-    this.api.preview({riskPriorityThreshold:Number(this.threshold),
-      includeMissingRiskInReview:true},this.editorKey.trim()).subscribe({
-      next:r=>{this.impact=r;this.busy=false;},
-      error:e=>this.showError(e)
-    });
-  }
-  publishRules():void{
-    if(!this.dashboard||this.busy)return;
-    if(!this.publisherKey.trim()||!this.reviewer.trim()||this.policyReason.trim().length<8){
-      this.error='Publisher key, reviewer and reason (at least 8 characters) are required.';return;
-    }
-    if(!this.impact){this.error='Run Impact Preview before publishing.';return;}
-    if(!window.confirm('Publish a NEW targeting priority version? Eligibility, NMC risk and AI signals will not change.'))return;
-    this.busy=true;this.error='';
-    this.api.publish({config:{riskPriorityThreshold:Number(this.threshold),includeMissingRiskInReview:true},
-      expectedVersion:this.dashboard.policy.version,publishedBy:this.reviewer.trim(),
-      reason:this.policyReason.trim()},this.publisherKey.trim()).subscribe({
-      next:()=>{this.busy=false;this.impact=null;this.policyReason='';
-        this.success='New targeting priority version published. No AI calls made.';this.refresh();},
       error:e=>this.showError(e)
     });
   }
