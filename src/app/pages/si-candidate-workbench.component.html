@@ -35,6 +35,90 @@
       <span>PSC {{d.summary.bySource['PSC_PORT_CALL']||0}}</span>
     </div>
 
+    <section class="si-panel ai-ranking-panel">
+      <header>
+        <h2>{{copy('AI Inspection Prioritization · SI-P01','ترتيب أولويات المعاينة بالذكاء الاصطناعي · SI-P01')}}</h2>
+        <p>{{copy('Published business criteria establish hard priority tiers. SI-P01 can recommend and explain the order within each tier; official NMC Risk and officer approvals are never changed.',
+          'تحدد قواعد الأعمال المنشورة مستويات الأولوية الملزمة، ويقترح SI-P01 ترتيب المرشحين داخل كل مستوى مع توضيح الأسباب دون تغيير مخاطر NMC الرسمية أو قرارات الموظف.')}}</p>
+      </header>
+      <div class="ai-controls">
+        <button type="button" (click)="previewPriority()" [disabled]="priorityBusy||loading||!dashboard">
+          {{copy('1 · Preview Rule Order (No AI)','١ · معاينة ترتيب القواعد (بدون AI)')}}
+        </button>
+        <button type="button" (click)="refreshAiStatus()" [disabled]="priorityBusy">
+          {{copy('View Saved AI Recommendations','عرض توصيات AI المحفوظة')}}
+        </button>
+        <a routerLink="/moei/smart-inspection/settings/targeting">
+          {{copy('Configure Priority Criteria ↗','ضبط معايير الأولوية ↗')}}
+        </a>
+      </div>
+      <p class="notice error" *ngIf="aiError" role="alert">{{aiError}}</p>
+      <p class="notice success" *ngIf="aiSuccess" role="status">{{aiSuccess}}</p>
+      <p class="notice" *ngIf="priorityBusy">{{copy('Loading or processing explicit request…','جارٍ تحميل البيانات أو معالجة الطلب الصريح…')}}</p>
+      <div *ngIf="priorityStatus as info" class="ai-info">
+        <span>{{copy('Airia SI-P01','وكيل Airia SI-P01')}}:
+          <strong>{{info.enabled?copy('ENABLED','مفعّل'):copy('DISABLED — setup required','غير مفعّل — يلزم الإعداد')}}</strong>
+        </span>
+        <span>{{copy('Pending candidates','المرشحون بانتظار المراجعة')}}: {{info.preview.eligibleCount}}</span>
+        <span>{{copy('Settings version','إصدار الإعدادات')}}: v{{info.preview.policyVersion}}</span>
+        <span *ngIf="info.latest" [class.ai-stale]="info.latest.isStale">
+          {{copy('Last run','آخر تشغيل')}}: {{info.latest.completedAt|date:'short'}}
+          · {{statusText(info.latest.status)}}
+          · {{info.latest.isStale?copy('STALE — refresh required','قديم — يلزم إعادة التحليل'):copy('CURRENT','حالي')}}
+        </span>
+      </div>
+      <div *ngIf="priorityPreview as p" class="rule-preview">
+        <h3>{{copy('Rule-Based Candidate Ranking Preview','معاينة ترتيب المرشحين وفق القواعد')}}</h3>
+        <p>{{p.eligibleCount}} {{copy('open candidates · Rules v','مرشح بانتظار المراجعة · إصدار القواعد')}}{{p.policyVersion}}
+          · {{copy('No AI call has been made','لم يتم تشغيل AI')}}</p>
+        <div class="table-scroll" *ngIf="p.items.length">
+          <table>
+            <thead><tr>
+              <th>{{copy('Rule Rank','ترتيب القواعد')}}</th>
+              <th>{{copy('Vessel','السفينة')}}</th>
+              <th>{{copy('Tier','المستوى')}}</th>
+              <th>{{copy('Provisional Score','درجة أولية')}}</th>
+              <th>{{copy('Missing Evidence','بيانات ناقصة')}}</th>
+            </tr></thead>
+            <tbody><tr *ngFor="let item of p.items">
+              <td><strong>#{{item.ruleRank}}</strong></td><td>{{item.vesselName}} · {{item.imo}}</td>
+              <td>{{item.protectedTier+1}}</td>
+              <td>{{item.provisionalScore===null?'—':item.provisionalScore+'/100'}}</td>
+              <td>{{item.missingData.join(' · ')||'—'}}</td>
+            </tr></tbody>
+          </table>
+        </div>
+        <p class="hint">{{copy('The score uses available evidence only. A missing NMC risk is NOT scored as zero, and the displayed score is never the official NMC Risk.',
+          'تُحسب الدرجة الأولية من الأدلة المتاحة فقط، ولا تُعامل المخاطر غير المتوفرة كصفر. هذه الدرجة ليست تقييم مخاطر NMC الرسمي.')}}</p>
+        <div class="ai-run-actions">
+          <label class="ai-cost"><input type="checkbox" [(ngModel)]="confirmAiCost"/>
+            {{copy('I authorize one potentially billable SI-P01 Airia request (max 100 open candidates).',
+              'أوافق صراحة على استدعاء واحد لوكيل SI-P01 قد يترتب عليه تكلفة (حتى ١٠٠ مرشح مفتوح).')}}
+          </label>
+          <button type="button" class="primary"
+            [disabled]="priorityBusy||!confirmAiCost||!reviewer.trim()||!p.eligibleCount||p.eligibleCount>100||!priorityStatus?.enabled"
+            (click)="runAiPriority()">
+            {{copy('2 · Run AI Prioritization Once','٢ · تشغيل AI لترتيب المعاينات مرة واحدة')}}
+          </button>
+          <small>{{copy('Requires Editor key and operator name (below). Results are advisory and must be reviewed.',
+            'يتطلب مفتاح المحرر واسم المستخدم في القسم التالي. النتائج استشارية وتحتاج مراجعة.')}}</small>
+        </div>
+      </div>
+      <div *ngIf="priorityStatus?.latest?.isStale" class="notice">
+        {{copy('Previous AI ranking is stale because candidate sources, business settings, official risk or workflow status changed. It will NOT be used to order this queue.',
+          'ترتيب AI السابق قديم بسبب تغير المصادر أو الإعدادات أو المخاطر الرسمية أو حالة المرشح؛ ولن يُستخدم في ترتيب القائمة.')}}
+      </div>
+      <div *ngIf="savedAiRun as run" class="ai-output">
+        <h3>{{copy('Saved SI-P01 Recommendation · Human Review Required','توصية SI-P01 محفوظة · يلزم قرار بشري')}}</h3>
+        <p>{{copy('Run ID','معرف التشغيل')}}: {{short(run.id)}} ·
+          {{copy('Settings','الإعدادات')}} v{{run.policyVersion}} ·
+          {{copy('NMC Risk Revision','إصدار مخاطر NMC')}} {{run.riskPolicyRevision}} ·
+          {{copy('By','بواسطة')}} {{run.actor}}</p>
+        <p class="hint">{{copy('The Candidate Queue below is now ordered by effective rank: published NMC/priority tiers first, AI within each tier only.',
+          'ترتبت قائمة المرشحين أدناه حسب الترتيب الفعّال: مستويات القواعد المنشورة أولًا، ثم اقتراح AI داخل كل مستوى.')}}</p>
+      </div>
+    </section>
+
     <section class="si-panel workflow">
       <header><h2>{{copy("01 · Live Candidate Queue","٠١ · قائمة مرشحي المعاينة")}}</h2><p>{{copy("Only approved NMC referrals or explicitly recorded POC source events appear. Different inspection regimes remain separate.","تظهر الإحالات المعتمدة من المركز البحري أو أحداث المصادر التجريبية المسجلة فقط. يظل كل نظام معاينة منفصلًا.")}}</p></header>
       <div class="filters">
@@ -56,7 +140,8 @@
       </div>
       <div class="table-scroll">
         <table>
-          <thead><tr><th>{{copy("Vessel / IMO","السفينة / رقم IMO")}}</th><th>{{copy("Inspection Regime","نظام المعاينة")}}</th><th>{{copy("Source & provenance","المصدر وأصل البيانات")}}</th><th>{{copy("NMC Risk","مخاطر المركز البحري")}}</th><th>{{copy("Eligibility","الأهلية")}}</th><th>{{copy("Priority","الأولوية")}}</th><th>{{copy("Workflow","سير العمل")}}</th><th></th></tr></thead>
+          <thead><tr><th>{{copy("Vessel / IMO","السفينة / رقم IMO")}}</th><th>{{copy("Inspection Regime","نظام المعاينة")}}</th><th>{{copy("Source & provenance","المصدر وأصل البيانات")}}</th><th>{{copy("NMC Risk","مخاطر المركز البحري")}}</th><th>{{copy("Eligibility","الأهلية")}}</th><th>{{copy("Priority","الأولوية")}}</th>
+            <th>{{copy('AI Rank / Advice','ترتيب AI / التوصية')}}</th><th>{{copy("Workflow","سير العمل")}}</th><th></th></tr></thead>
           <tbody>
             <tr *ngFor="let c of candidates;trackBy:trackKey" [class.active]="selectedKey===c.key">
               <td><strong>{{c.vesselName}}</strong><small>IMO {{c.imo}} · {{c.flag}} · {{c.vesselType}}</small></td>
@@ -65,10 +150,15 @@
               <td><strong *ngIf="c.currentRisk as risk">{{risk.score}}/100 · {{statusText(risk.level)}}</strong><span *ngIf="!c.currentRisk" class="pending">{{copy("NOT ASSESSED","لم تُقيّم")}}</span></td>
               <td><span class="tag" [class.manual]="c.eligibility==='MANUAL_REVIEW'">{{statusText(c.eligibility)}}</span></td>
               <td>{{statusText(c.priority)}}</td>
+              <td><ng-container *ngIf="aiRecommendation(c) as rec; else noAi">
+                <strong class="ai-rank">#{{rec.effectiveRank}}</strong>
+                <small>{{copy('AI suggestion','اقتراح AI')}} #{{rec.suggestedRank}}</small>
+              </ng-container>
+              <ng-template #noAi><span class="pending">—</span></ng-template></td>
               <td><span class="status">{{statusText(c.status)}}</span></td>
               <td><button type="button" (click)="select(c)">{{copy("Review →","مراجعة →")}}</button></td>
             </tr>
-            <tr *ngIf="!candidates.length"><td colspan="8" class="empty">{{copy("No matching persisted candidates. Zero is valid; no artificial inspection quota or auto-created cases.","لا توجد حالات ترشيح محفوظة مطابقة. لا يتم إنشاء حالات أو أعداد معاينة افتراضية.")}}</td></tr>
+            <tr *ngIf="!candidates.length"><td colspan="9" class="empty">{{copy("No matching persisted candidates. Zero is valid; no artificial inspection quota or auto-created cases.","لا توجد حالات ترشيح محفوظة مطابقة. لا يتم إنشاء حالات أو أعداد معاينة افتراضية.")}}</td></tr>
           </tbody>
         </table>
       </div>
@@ -87,6 +177,21 @@
               · {{copy('Batch','دفعة الاستيراد')}} {{e.importBatchId}}</small>
           </div>
           <p><strong>{{copy("Rules:","القواعد:")}}</strong> {{c.reasons.join(' · ')}}</p>
+          <div class="ai-explain" *ngIf="aiRecommendation(c) as rec">
+            <h3>{{copy('SI-P01 Explainability · Advisory Only','شرح توصية SI-P01 · للاستشارة فقط')}}</h3>
+            <p><strong>{{copy('Effective Priority Rank','الترتيب التشغيلي المقترح')}} #{{rec.effectiveRank}}</strong>
+              · {{copy('AI Rank','ترتيب AI')}} #{{rec.suggestedRank}}
+              · {{copy('Rule Rank','ترتيب القواعد')}} #{{rec.ruleRank}}</p>
+            <p>{{rec.rationale}}</p>
+            <p><strong>{{copy('Referenced Evidence','الأدلة المشار إليها')}}:</strong>
+              <code *ngFor="let id of rec.evidenceRefs">{{id}}</code></p>
+            <p><strong>{{copy('Data Gaps','البيانات الناقصة')}}:</strong>
+              {{rec.dataGaps.join(' · ')||'—'}}</p>
+            <p>{{copy('AI confidence (unverified)','ثقة AI (غير معتمدة)')}}:
+              {{rec.confidence|percent:'1.0-0'}}</p>
+            <p class="hint">{{copy('This advice does not constitute a legal inspection instruction or approved finding.',
+              'هذه التوصية لا تمثل قرار معاينة تنظيميًا أو مخالفة معتمدة.')}}</p>
+          </div>
           <p *ngIf="c.currentRisk">{{copy('Risk source assessment','مرجع تقييم المخاطر')}}: {{c.currentRisk.assessmentId}} · {{copy('NMC Policy','سياسة المركز البحري')}} v{{c.currentRisk.policyRevision}}</p>
           <p *ngIf="c.lastDecision">{{copy('Last decision','آخر قرار')}}: {{statusText(c.lastDecision.action)}} {{copy('by','بواسطة')}} {{c.lastDecision.actor}} · {{c.lastDecision.at|date:'short'}} · {{c.lastDecision.note}}</p>
           <p *ngIf="c.inspectionCase"><strong>{{copy("Inspection Case:","حالة المعاينة:")}}</strong> {{c.inspectionCase.id}} · {{c.inspectionCase.status}}</p>
