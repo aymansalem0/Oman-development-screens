@@ -217,6 +217,14 @@ export class SiInspectionLifecycle{
             const refs=await this.cases.listInspectionRequests();
             const match=refs.find(r=>r.id===c.nmcReferralId&&r.imo===c.imo&&r.status==='SCHEDULED');
             if(!match)fails('SI_NMC_REFERRAL_NOT_CONFIRMED',409);
+            // Never mark arbitrary POC time/inspector/port as an NMC-confirmed booking.
+            const selectedUtc=Date.parse(startLocal+':00+04:00');
+            const confirmedUtc=Date.parse(match.scheduledAt||'');
+            if(!Number.isFinite(selectedUtc)||!Number.isFinite(confirmedUtc)||
+              Math.abs(selectedUtc-confirmedUtc)>=60000||
+              String(match.inspector||'').trim()!==inspector||
+              String(match.port||'').trim()!==port)
+              fails('SI_NMC_CONFIRMED_ASSIGNMENT_MISMATCH',409);
           }else if(mode!=='POC_MANUAL')fails('SI_EXTERNAL_SOURCE_POC_SCHEDULING_ONLY',409);
           next.assignment={inspector,port,startLocal,mode,
             operationalValidity:mode==='NMC_SCHEDULED'?'NMC_CONFIRMED':'SIMULATED_POC',
@@ -340,6 +348,17 @@ export class SiInspectionLifecycle{
             evidenceRefs:Array.isArray(data.evidenceRefs)?
               data.evidenceRefs.map(x=>str(x,180)).filter(Boolean).slice(0,15):[]});
           if(data.result==='PASS')next.stage='READY_TO_CLOSE';
+          else{
+            // Failed follow-up reopens every deficiency for renewed corrections.
+            // Prevents the otherwise inescapable FOLLOW_UP_PENDING state.
+            for(const item of next.actions){
+              item.status='REJECTED';
+              item.review={decision:'REJECT',reason,
+                by:str(actor,120),at:now()};
+              item.history.push({at:now(),by:actor,event:'FOLLOW_UP_FAILED'});
+            }
+            next.stage='ACTIONS_OPEN';
+          }
           break;
         }
         case 'CLOSE':{
