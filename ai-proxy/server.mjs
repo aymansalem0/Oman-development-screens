@@ -16,6 +16,7 @@ import { SiPscSelection, SiSelectionError } from './si-psc-selection.mjs';
 import { SiAiPrioritization, SiPriorityError } from './si-ai-prioritization.mjs';
 import { SiInspectionPreparation, SiPreparationError } from './si-inspection-preparation.mjs';
 import { SiInspectionLifecycle, SiLifecycleError } from './si-inspection-lifecycle.mjs';
+import { DriveDocumentIntelligence, DocumentError } from './drive-document-intelligence.mjs';
 
 const port = Number(process.env.PORT || 3000);
 const apiKey = (process.env.AIRIA_MENA_KEY || '').trim();
@@ -54,7 +55,11 @@ const repository=dbMode==='oracle'
   : null;
 let guidance;
 let riskPolicy;
+const documents=new DriveDocumentIntelligence({mode:dbMode,oracleRepository:repository,
+  executeA03:async input=>fleetAgentCall('a03',input),
+  enabled:process.env.NMC_A03_ENABLED==='true'&&Boolean(apiKey)});
 const fleet=new FleetAssessmentManager({executeAgent:fleetAgentCall,getPscVessel,repository,
+  approvedDocuments:async imo=>documents.ready?documents.approvedFor(imo):[],
   onAssessmentSaved:async row=>{
     try{await guidance?.materialize(row.imo);}
     catch{console.error('[nmc-guidance] RESULT_MATERIALIZATION_FAILED');}
@@ -84,6 +89,7 @@ const siPriority=new SiAiPrioritization({
 });
 const siPreparation=new SiInspectionPreparation({mode:dbMode,oracleRepository:repository,
   targeting:siTargeting,riskPolicy,
+  approvedDocuments:async imo=>documents.ready?documents.approvedFor(imo):[],
   bundles:siTargeting.bundles,
   executeA04:async input=>fleetAgentCall('a04',input),
   enabled:process.env.SI_A04_ENABLED==='true'&&Boolean(apiKey)});
@@ -908,6 +914,44 @@ const server = createServer(async (req, res) => {
     }
   }
 
+  // Read-only Google Drive folder per vessel; no Airia calls on GET.
+  // A03 is only executed by an explicit Editor action with cost confirmation.
+  const docRoute=/^\/api\/ai\/vessels\/(\d{7})\/documents(?:\/([A-Za-z0-9_-]{8,130})(?:\/(analyze|review))?)?$/.exec(path);
+  if(docRoute){
+    const [,imo,fileId,operation]=docRoute;
+    try{
+      if(req.method==='GET'&&!fileId)return respond(res,200,await documents.list(imo));
+      if(req.method==='GET'&&fileId&&!operation){
+        const record=await documents.read(imo,fileId);
+        return respond(res,record?200:404,record?{status:'ok',analysis:record}:{error:'DOCUMENT_NOT_FOUND'});
+      }
+      if(req.method==='POST'&&fileId&&operation){
+        dashboards.assertRole(req,'EDITOR');
+        const body=await requestJson(req,8192);
+        if(operation==='analyze'){
+          const result=await documents.analyze(imo,fileId,{
+            actor:body.actor,confirmCost:body.confirmCost});
+          return respond(res,201,{status:'ok',analysis:result});
+        }
+        if(operation==='review'){
+          const result=await documents.review(imo,fileId,{
+            actor:body.actor,decision:body.decision,
+            reason:body.reason,expectedVersion:body.expectedVersion});
+          return respond(res,200,{status:'ok',analysis:result});
+        }
+      }
+      return respond(res,405,{error:'METHOD_NOT_ALLOWED'});
+    }catch(error){
+      if(error instanceof DocumentError||error instanceof DashboardError)
+        return respond(res,error.status,{error:error.code});
+      if(Number.isInteger(error?.status)&&error.status>=400&&error.status<500)
+        return respond(res,error.status,{error:'INVALID_REQUEST'});
+      // Never log Drive file content, credentials, JWT, agent body or private links.
+      console.error('[nmc-a03] DOCUMENT_REQUEST_FAILED');
+      return respond(res,503,{error:'DOCUMENT_SERVICE_UNAVAILABLE'});
+    }
+  }
+
   const match = /^\/api\/ai\/execute\/(a01|a02|a03|a04)$/i.exec(path);
   if (!match) return respond(res, 404, { error: 'NOT_FOUND' });
   if (req.method !== 'POST') return respond(res, 405, { error: 'METHOD_NOT_ALLOWED' });
@@ -983,6 +1027,8 @@ try{
     console.error('[nmc-risk-policy] RISK_POLICY_SCHEMA_NOT_READY stage='+stage+
       ' reason='+String(error?.code||'UNKNOWN')+' oracleCode='+safeCode);
   }
+  try{await documents.initialize();}
+  catch(error){console.error('[nmc-a03] MIGRATION_015_REQUIRED - Google Drive document analysis disabled');}
   try{await siTargeting.initialize();}
   catch(error){console.error('[si-targeting] SI_MIGRATION_009_REQUIRED - candidate API disabled');}
   try{await siPscSelection.initialize();}
