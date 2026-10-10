@@ -162,6 +162,7 @@ export class NmcNavigationComponent implements OnInit, OnDestroy {
   get isRiskConfig(): boolean {
     return this.currentPath === '/moei/nmc/admin/risk-configuration';
   }
+  get isRuntimeSettings():boolean{return this.currentPath==='/moei/nmc/admin/runtime-settings';}
   get isQualityConfig(): boolean {
     return this.currentPath === '/moei/nmc/admin/data-quality';
   }
@@ -187,7 +188,7 @@ export class NmcNavigationComponent implements OnInit, OnDestroy {
         this.isInspectionScheduling || this.isInspectionWorkbench) {
       this.smartInspectionExpanded = true;
     }
-    if (this.isRiskConfig || this.isQualityConfig || this.isGuidanceConfig ||
+    if (this.isRiskConfig || this.isQualityConfig || this.isRuntimeSettings || this.isGuidanceConfig ||
         this.isDashboardManager) {
       this.settingsExpanded = true;
       this.nmcSettingsExpanded = true;
