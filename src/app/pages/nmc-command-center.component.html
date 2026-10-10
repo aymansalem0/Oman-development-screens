@@ -145,6 +145,14 @@
               />
             </label>
 
+            <select [(ngModel)]="assessmentFilter" (ngModelChange)="onFilterChange()"
+                    class="assessment-filter"
+                    [attr.aria-label]="copy('Filter by AI assessment status', 'تصفية حسب حالة التقييم بالذكاء الاصطناعي')">
+              <option value="All">{{copy('All assessments','جميع حالات التقييم')}}</option>
+              <option value="Assessed">{{copy('AI Assessed Only','تم تقييمها بالذكاء الاصطناعي فقط')}}</option>
+              <option value="Pending">{{copy('Not AI assessed','لم تُقيّم بعد بالذكاء الاصطناعي')}}</option>
+            </select>
+
             <select [(ngModel)]="riskFilter" (ngModelChange)="onFilterChange()" [attr.aria-label]="copy('Filter by risk', 'تصفية حسب المخاطر')">
               <option value="All">{{ copy('All', 'الكل') }}</option>
               <option value="Critical">{{ copy('Critical', 'حرج') }}</option>
@@ -160,6 +168,12 @@
           </div>
         </div>
 
+        <p class="map-filter-summary" role="status">
+          {{visibleMapCount}} / {{correlatedProfileCount}}
+          {{copy('vessels shown on map', 'سفينة ظاهرة على الخريطة')}}
+          <span *ngIf="assessmentFilter==='Assessed'"> · {{copy('Completed saved A01/A02 assessments only','تقييمات A01/A02 المحفوظة والمكتملة فقط')}}</span>
+          <span *ngIf="assessmentFilter==='Pending'"> · {{copy('Includes pending and failed assessments','تشمل التقييمات المعلقة والفاشلة')}}</span>
+        </p>
         <div class="map-stage">
           <div #mapContainer class="real-map" dir="ltr"></div>
 
