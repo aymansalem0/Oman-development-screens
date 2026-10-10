@@ -902,8 +902,8 @@ a, button { font: inherit; }
 
 /* NMC navigation keeps contextual risk evidence available alongside other NMC screens. */
 @media (min-width: 1221px) {
-  .rx-shell .rx-main { margin-left: 216px; margin-right: 0; max-width: calc(100% - 216px); }
-  .rx-shell.rtl .rx-main { margin-left: 0; margin-right: 216px; }
+  .rx-shell .rx-main { margin-left: 240px; margin-right: 0; max-width: calc(100% - 240px); }
+  .rx-shell.rtl .rx-main { margin-left: 0; margin-right: 240px; }
 }
 @media (min-width: 961px) and (max-width: 1220px) {
   .rx-shell .rx-main { margin-left: 66px; margin-right: 0; max-width: calc(100% - 66px); }
