@@ -350,3 +350,12 @@ a,button,input,textarea { font:inherit; }
 .risk-version-detail b{color:#234659}
 .risk-version-empty{padding:22px;color:#758b9d}
 @media(max-width:850px){.risk-version-row{grid-template-columns:1fr}.risk-version-history .panel-header{flex-direction:column;align-items:flex-start}}
+
+/* Explicit Save Draft / Publish / History controls; historical values are read-only. */
+.risk-version-history .history-values{margin-top:12px;border:1px solid #e1eaf0;border-radius:10px;overflow:hidden;}
+.risk-version-history .history-value-row{display:grid;grid-template-columns: minmax(150px,2fr) minmax(95px,1fr) minmax(95px,1fr);gap:8px;align-items:center;border-top:1px solid #eef2f5;padding:7px 10px;font-size:10px;color:#587184;}
+.risk-version-history .history-value-row:first-child{border-top:0;}
+.risk-version-history .history-value-row.heading{background:#edf5f8;color:#294c62;font-weight:900;}
+.risk-version-history .history-value-row b{color:#0f766e;font-weight:900;}
+.risk-version-history .history-value-row span:not(:first-child){overflow-wrap:anywhere;}
+.top-actions .secondary-btn:disabled{opacity:.5;cursor:not-allowed;}
