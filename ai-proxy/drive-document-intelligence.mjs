@@ -248,7 +248,7 @@ export class DriveDocumentIntelligence {
   async fingerprint(imo){
     const listing=await this.list(imo);
     if(listing.status!=='ok')return 'NO_DRIVE_CONFIGURATION';
-    return listing.documents.map(d=>d.fileId+':'+d.modifiedTime+':'+d.savedStatus)
+    return listing.documents.map(d=>d.fileId+':'+d.modifiedTime)
       .sort().join('|');
   }
   async record(current,next,action,actor){
