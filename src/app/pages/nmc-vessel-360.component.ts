@@ -188,7 +188,8 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
       completeness: ['Data completeness', 'اكتمال البيانات'],
       consistency: ['Cross-source consistency', 'اتساق المصادر'],
       evidenceLinkage: ['Evidence linkage', 'ربط الأدلة'],
-      provenance: ['Source metadata coverage', 'اكتمال بيانات تعريف المصدر']
+      provenance: ['Source metadata coverage', 'اكتمال بيانات تعريف المصدر'],
+      documentConsistency: ['A03 document cross-source consistency', 'اتساق مستندات A03 مع المصادر الأخرى']
     };
     const v = labels[key];
     return v ? this.copy(v[0], v[1]) : key;
@@ -212,6 +213,8 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
         return this.copy(
           'Current V1 rule: score 100 when sourceSystem, datasetVersion and retrievedAt all exist; otherwise score 60. This checks metadata availability, not the source authority.',
           'قاعدة النسخة الحالية: 100 عند توافر sourceSystem وdatasetVersion وretrievedAt جميعاً؛ وإلا 60. هذا فحص لتوافر بيانات تعريف المصدر وليس اعتماد المصدر.');
+      case 'documentConsistency':
+        return this.copy('Grounded A03 maritime-document fields compared with synthetic Vessel 360 certificates; document authenticity is NOT verified.', 'مقارنة حقول مستندات A03 المدعومة بالنص مع بيانات الشهادات التجريبية في Vessel 360 دون إثبات أصالة المستند.');
       default: return '';
     }
   }
