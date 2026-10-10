@@ -11,6 +11,7 @@ import { CentralRiskPolicy, RiskPolicyError } from './risk-policy.mjs';
 import { ErpWorkforceStore, SiError } from './si-erp-workforce.mjs';
 import { SiElectronicScheduler } from './si-electronic-scheduling.mjs';
 import { SiCandidateTargeting, SiTargetingError } from './si-candidate-targeting.mjs';
+import { SiSourceExcelImport } from './si-source-excel-import.mjs';
 import { SiInspectionPreparation, SiPreparationError } from './si-inspection-preparation.mjs';
 
 const port = Number(process.env.PORT || 3000);
@@ -67,6 +68,7 @@ const siScheduling=new SiElectronicScheduler({erp:siErp,cases});
 const siTargeting=new SiCandidateTargeting({mode:dbMode,oracleRepository:repository,
   cases,riskPolicy,bundles:JSON.parse((await import('node:fs')).readFileSync(
     new URL('./fleet-bundles.json',import.meta.url),'utf8'))});
+const siSourceImports=new SiSourceExcelImport({targeting:siTargeting});
 const siPreparation=new SiInspectionPreparation({mode:dbMode,oracleRepository:repository,
   targeting:siTargeting,riskPolicy,
   bundles:siTargeting.bundles,
@@ -410,13 +412,27 @@ const server = createServer(async (req, res) => {
           return respond(res,200,await siPreparation.review(caseId,await requestJson(req,2048)));
         return respond(res,405,{error:'METHOD_NOT_ALLOWED'});
       }
+      if(req.method==='GET'&&path==='/api/si/v1/candidate-sources'){
+        dashboards.assertRole(req,'EDITOR');
+        return respond(res,200,await siSourceImports.status());
+      }
+      if(req.method==='POST'&&path==='/api/si/v1/candidate-sources/preview'){
+        dashboards.assertRole(req,'EDITOR');
+        return respond(res,200,await siSourceImports.preview(await requestJson(req,3*1024*1024)));
+      }
+      if(req.method==='POST'&&path==='/api/si/v1/candidate-sources/commit'){
+        dashboards.assertRole(req,'EDITOR');
+        return respond(res,201,await siSourceImports.commit(await requestJson(req,2048)));
+      }
       if(req.method==='GET'&&path==='/api/si/v1/candidates/dashboard')
         return respond(res,200,await siTargeting.dashboard());
       if(req.method==='GET'&&path==='/api/si/v1/rules')
         return respond(res,200,{status:'ok',policy:await siTargeting.policy()});
       if(req.method==='POST'&&path==='/api/si/v1/candidates/source-events'){
         dashboards.assertRole(req,'EDITOR');
-        return respond(res,201,await siTargeting.receiveEvent(await requestJson(req,8192)));
+        // POC2: external candidates come through validated source Excel,
+        // and approved NMC referrals remain read-only.
+        return respond(res,410,{error:'SI_SOURCE_EXCEL_IMPORT_REQUIRED'});
       }
       if(req.method==='POST'&&path==='/api/si/v1/candidates/decision'){
         // All approvals (including manual review overrides) require a supervisor.
