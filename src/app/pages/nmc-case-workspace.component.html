@@ -5,7 +5,7 @@
       <div>
         <div class="eyebrow">{{ copy('MOEI Maritime Unified Platform', 'المنصة البحرية الموحدة لوزارة الطاقة والبنية التحتية') }}</div>
         <h1>{{ copy('NMC Case Workspace', 'مساحة عمل الحالة بالمركز البحري') }}</h1>
-        <p>{{ copy('Coordinated maritime action, ownership, SLA and resolution', 'تنسيق الإجراءات البحرية والملكية ومستويات الخدمة والإغلاق') }}</p>
+        <p>{{ copy('Coordinated maritime decisions, execution and verified resolution', 'القرارات البحرية والتنفيذ والإغلاق بعد التحقق') }}</p>
       </div>
     </div>
 
@@ -138,13 +138,21 @@
     </section>
 
 
+    <nav class="case-journey" [attr.aria-label]="copy('Case lifecycle','مراحل الحالة')">
+      <span>{{copy('01 · Case overview','٠١ · ملخص الحالة')}}</span>
+      <span>{{copy('02 · Situation & evidence','٠٢ · الموقف والأدلة')}}</span>
+      <span>{{copy('03 · Human decision','٠٣ · القرار البشري')}}</span>
+      <span>{{copy('04 · Execution / inspection','٠٤ · التنفيذ والمعاينة')}}</span>
+      <span>{{copy('05 · Reassessment','٠٥ · إعادة التقييم')}}</span>
+      <span>{{copy('06 · Verified closure','٠٦ · الإغلاق بعد التحقق')}}</span>
+    </nav>
     <section class="ai-action-panel" aria-label="Airia A01 action plan">
       <div class="ai-action-heading">
         <div>
-          <span class="section-kicker">{{ copy('AI ACTION PLANNING · AIRIA A01', 'تخطيط الإجراءات · Airia A01') }}</span>
-          <h3>{{ copy('Evidence-backed proposed case actions', 'إجراءات حالة مقترحة ومدعومة بالأدلة') }}</h3>
-          <p>{{ copy('A01 proposes. The NMC officer approves. Only accepted actions become tasks; approved inspection referrals enter Smart Inspection scheduling.',
-            'يقترح A01 ويعتمد موظف NMC. تتحول الإجراءات المقبولة فقط إلى مهام، وتدخل إحالات المعاينة المعتمدة إلى قائمة الجدولة.') }}</p>
+          <span class="section-kicker">{{copy('02—03 · SITUATION & DECISION INTELLIGENCE','٠٢—٠٣ · تحليل الموقف والقرار')}}</span>
+          <h3>{{copy('Case intelligence & human decision','معلومات الحالة والقرار البشري')}}</h3>
+          <p>{{copy('A01 proposes. The human officer approves the operational route; the original saved risk is not changed here.',
+            'يقترح A01 ويعتمد الموظف المسار التشغيلي؛ ولا تُعدّل درجة المخاطر الأصلية المحفوظة هنا.')}}</p>
         </div>
         <button *ngIf="!centralCase.actionPlan" type="button" class="ai-plan-button"
                 [disabled]="centralBusy||caseStatus==='Resolved'" (click)="generateAiActions()">
@@ -156,7 +164,36 @@
           'يتم إعداد توصيات A01 عند تأكيد إنشاء الحالة البحرية. إذا كانت الحالة قديمة أو فشل A01، استخدم إعادة المحاولة. لن ننشئ مهام افتراضية.') }}
       </div>
       <ng-container *ngIf="centralCase.actionPlan as plan">
-        <p class="ai-plan-context">{{ plan.summary }} <small>{{ copy('Saved source risk', 'المخاطر الأصلية') }}: {{ plan.sourceScore }}/100 · {{ plan.sourceAssessmentId }}</small></p>
+        <div class="case-situation">
+          <div>
+            <span class="section-kicker">{{copy('WHAT IS HAPPENING?','ما الذي يحدث؟')}}</span>
+            <h4>{{copy('A01 situation assessment','تقييم الموقف بواسطة A01')}}</h4>
+            <p>{{plan.summary || copy('No situation summary returned by A01.','لم يرجع A01 ملخصًا للموقف.')}}</p>
+          </div>
+          <div>
+            <span class="section-kicker">{{copy('WHY DOES IT MATTER?','لماذا يستحق الاهتمام؟')}}</span>
+            <h4>{{copy('Operational significance','الأهمية التشغيلية')}}</h4>
+            <p>{{plan.whyItMatters || copy('No explanation supplied; manual verification required.','لم يقدم A01 تفسيرًا؛ يلزم التحقق البشري.')}}</p>
+          </div>
+          <small>{{copy('Immutable saved risk','المخاطر الأصلية المحفوظة')}}:
+            {{plan.sourceScore}}/100 · {{plan.sourceLevel}} · {{plan.sourceAssessmentId}}</small>
+        </div>
+        <article class="primary-decision" *ngIf="plan.primaryProposedDecision as primary">
+          <span class="section-kicker">{{copy('PRIMARY AI-PROPOSED DECISION · NOT AUTHORIZATION','القرار الرئيسي المقترح من AI · ليس اعتمادًا')}}</span>
+          <h4>{{lang.isArabic?primary.titleAr:primary.titleEn}}</h4>
+          <p>{{lang.isArabic?primary.rationaleAr:primary.rationaleEn}}</p>
+          <p><strong>{{copy('Expected outcome','النتيجة المتوقعة')}}:</strong>
+            {{lang.isArabic?primary.expectedOutcomeAr:primary.expectedOutcomeEn}}</p>
+          <small>{{copy('Supporting evidence','الأدلة الداعمة')}}: {{primary.evidenceIds.join(', ')}}</small>
+          <p class="primary-note">{{copy('Human approval and configured authority checks are still required. Review the linked actions below.',
+            'يلزم الاعتماد البشري والتحقق من الصلاحيات؛ راجع إجراءات التنفيذ أدناه.')}}</p>
+        </article>
+        <div class="decision-unavailable" *ngIf="!plan.primaryProposedDecision" role="status">
+          <strong>{{copy('Case-level AI decision not yet available','القرار الرئيسي المقترح من AI غير متاح بعد')}}</strong>
+          <p>{{copy('The current Airia integration returns individual action proposals, not the approved case-level decision contract. Below are legacy action proposals only; no primary decision or final authorization is fabricated.',
+            'التكامل الحالي مع Airia يُرجع إجراءات مقترحة منفصلة وليس عقد القرار الرئيسي المعتمد للحالة. المعروض أدناه إجراءات مقترحة بالنمط السابق، دون اختلاق قرار رئيسي أو اعتماد نهائي.')}}</p>
+        </div>
+        <h4 class="action-section-title">{{copy('Proposed execution actions · officer review','إجراءات التنفيذ المقترحة · للمراجعة البشرية')}}</h4>
         <div class="ai-action-rows">
           <article class="ai-action-row" *ngFor="let action of plan.proposedActions">
             <div class="ai-action-detail">
