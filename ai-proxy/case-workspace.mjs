@@ -360,6 +360,9 @@ export class NmcCaseWorkspace{
       if(!proposal)throw new NmcCaseError('CASE_SINGLE_DECISION_UNAVAILABLE',409);
       if(proposal.decisionStatus!=='PENDING_HUMAN_REVIEW')
         throw new NmcCaseError('CASE_ACTION_ALREADY_DECIDED',409);
+      if(decision==='ACCEPT'&&
+        proposal.rationale==='A01 recommendation linked to the validated source evidence IDs')
+        throw new NmcCaseError('CASE_DECISION_RATIONALE_UNAVAILABLE',409);
       const code=decision==='MODIFY'?newDecisionCode:proposal.code;
       if(decision==='MODIFY'&&code===proposal.code)
         throw new NmcCaseError('CASE_MODIFICATION_MUST_CHANGE_ROUTE');
