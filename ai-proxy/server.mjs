@@ -345,7 +345,7 @@ async function prepareCaseA01Actions(caseId,version){
               imo:existing.imo,assessmentId:existing.sourceAssessmentId,
               score:existing.sourceScore,level:existing.sourceLevel,
               configVersion:source.configVersion,signals:source.signals
-            });
+            },{allowUnknownAsInspection:true});
             // Provenance of the evidence actually supplied to A01, distinct from
             // the immutable legacy case field that may have been null.
             plan.evidenceAssessmentId=source.assessmentId;
