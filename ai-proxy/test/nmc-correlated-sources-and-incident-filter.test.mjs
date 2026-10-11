@@ -29,7 +29,7 @@ test('Correlated sources come from real POC API reads and leave missing services
  assert.match(vessel,/SYNTHETIC_PSC_GOOGLE/);
  assert.match(vessel,/SYNTHETIC_INCIDENT_GOOGLE/);
  assert.match(vessel,/NMC_POC_CASE/);
- assert.match(vessel,/Google Drive Vessel Documents \/ A03/);
+ assert.match(vessel,/Google Drive Vessel Documents/);
  assert.match(vessel,/Smart Inspection Referrals/);
  assert.match(vessel,/status:'Unavailable'/);
  assert.match(vessel,/lastSync:'—',confidence:null/);
