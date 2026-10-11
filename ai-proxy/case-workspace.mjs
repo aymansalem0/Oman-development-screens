@@ -37,11 +37,12 @@ export class NmcCaseWorkspace{
   constructor({
     mode='json',oracleRepository=null,
     file=process.env.NMC_CASE_STORE_PATH||'/data/nmc-case-workspace.json',
-    alerts
+    alerts,singleDecisionMode=true
   }={}){
     if(!['json','oracle'].includes(mode)||!alerts)
       throw new Error('NMC_CASE_CONFIGURATION_INVALID');
     this.mode=mode;this.oracle=oracleRepository;this.file=file;this.alerts=alerts;
+    this.singleDecisionMode=singleDecisionMode;
   }
   async list(){
     if(this.mode==='json')return Object.values(this._load().cases).map(clone)
@@ -259,7 +260,7 @@ export class NmcCaseWorkspace{
           throw new NmcCaseError('CASE_ACTION_PLAN_SOURCE_MISMATCH',409);
         // An older case may have been pending verification on its legacy tasks.
         // Starting a new AI action review reopens the operational work stage.
-        return {...row,actionPlan:plan,operationalDecision:buildSingleProposal(plan),status:'IN_PROGRESS'};
+        return {...row,actionPlan:plan,operationalDecision:this.singleDecisionMode?buildSingleProposal(plan):null,status:'IN_PROGRESS'};
       },{sourceAssessmentId:plan.sourceAssessmentId,proposals:plan.proposedActions.length});
   }
   async decideAction(id,version,actionId,decision,note='',role='OPERATOR',replacementActionType=null){
