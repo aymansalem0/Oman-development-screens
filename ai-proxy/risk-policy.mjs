@@ -29,6 +29,11 @@ export function validateRiskConfig(c){
      !['weighted','conservative','max-signal'].includes(c.mode)||
      typeof c.name!=='string'||!c.name.trim()||c.name.length>140)
     throw new RiskPolicyError('RISK_POLICY_INVALID');
+  // A03 remains a document-evidence integration, NOT an active risk factor.
+  // Preserve historical policy snapshots without rewriting old projections;
+  // all NEW published versions must contain five active factors only.
+  if(weightOf(c,'documentIntegrity')!==0)
+    throw new RiskPolicyError('A03_RISK_FACTOR_RETIRED',422);
   const numbers=keySet.map(k=>weightOf(c,k));
   if(numbers.some(x=>!Number.isInteger(x)||x<0||x>100)||
      numbers.reduce((a,b)=>a+b,0)!==100)throw new RiskPolicyError('RISK_WEIGHTS_INVALID');
@@ -45,6 +50,8 @@ function validateDraftConfig(value){
      !['weighted','conservative','max-signal'].includes(value.mode)||
      typeof value.name!=='string'||value.name.length>140)
     throw new RiskPolicyError('RISK_DRAFT_INVALID',422);
+  if(weightOf(value,'documentIntegrity')!==0)
+    throw new RiskPolicyError('A03_RISK_FACTOR_RETIRED',422);
   if(keySet.some(k=>!Number.isInteger(weightOf(value,k))||
      weightOf(value,k)<0||weightOf(value,k)>100)||
      !['watch','high','critical'].every(k=>
