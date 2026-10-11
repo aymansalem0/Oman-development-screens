@@ -188,11 +188,98 @@
           <p class="primary-note">{{copy('Human approval and configured authority checks are still required. Review the linked actions below.',
             'يلزم الاعتماد البشري والتحقق من الصلاحيات؛ راجع إجراءات التنفيذ أدناه.')}}</p>
         </article>
-        <div class="decision-unavailable" *ngIf="!plan.primaryProposedDecision" role="status">
+        <div class="decision-unavailable" *ngIf="!plan.primaryProposedDecision && !centralCase.operationalDecision" role="status">
           <strong>{{copy('Case-level AI decision not yet available','القرار الرئيسي المقترح من AI غير متاح بعد')}}</strong>
           <p>{{copy('The current Airia integration returns individual action proposals, not the approved case-level decision contract. Below are legacy action proposals only; no primary decision or final authorization is fabricated.',
             'التكامل الحالي مع Airia يُرجع إجراءات مقترحة منفصلة وليس عقد القرار الرئيسي المعتمد للحالة. المعروض أدناه إجراءات مقترحة بالنمط السابق، دون اختلاق قرار رئيسي أو اعتماد نهائي.')}}</p>
         </div>
+
+        <section class="single-decision-card" *ngIf="centralCase.operationalDecision as op">
+          <div class="single-decision-head">
+            <span class="section-kicker">{{copy('ONE OPERATIONAL DECISION · A01 INFORMED',
+              'قرار تشغيلي واحد · مدعوم بتحليل A01')}}</span>
+            <span class="single-decision-badge">{{op.decisionStatus}}</span>
+          </div>
+          <h3>{{lang.isArabic?(op.approvedTitleAr||op.titleAr):(op.approvedTitleEn||op.titleEn)}}</h3>
+          <p><strong>{{copy('Why this route','مبررات المسار')}}:</strong> {{op.rationale}}</p>
+          <p><strong>{{copy('Original Airia A01 proposal (unchanged)','توصية Airia A01 الأصلية (دون تغيير)')}}:</strong>
+            {{op.originalA01Proposal.title}} · {{op.originalA01Proposal.actionType}}</p>
+          <div class="decision-trace">
+            <span>{{copy('Risk remains','المخاطر ثابتة')}}: {{centralCase.sourceScore}}/100 · {{centralCase.sourceLevel}}</span>
+            <span>{{copy('Evidence','الأدلة')}}: {{op.evidenceIds.join(', ')}}</span>
+            <span>{{copy('A01 confidence','ثقة A01')}}: {{op.confidence*100|number:'1.0-0'}}%</span>
+          </div>
+          <p class="decision-provenance">
+            {{copy('The primary route is selected by NMC POC rules from actual A01 proposed actions. It is NOT a directly AI-authored port/detention order or a legal authorization.',
+              'المسار الرئيسي مختار بقواعد NMC التجريبية من توصيات A01 الفعلية، وليس أمر منع أو احتجاز صادرًا عن AI ولا اعتمادًا قانونيًا.')}}
+          </p>
+          <h4>{{copy('Decision-linked execution actions','الإجراءات المرتبطة بالقرار')}}</h4>
+          <ol class="decision-step-list">
+            <li *ngFor="let step of (op.approvedWorkflowSteps || op.workflowSteps)">
+              <strong>{{lang.isArabic?step.titleAr:step.titleEn}}</strong>
+              <small>{{step.role}} · {{step.kind}}</small>
+            </li>
+          </ol>
+          <div class="decision-review-form" *ngIf="op.decisionStatus==='PENDING_HUMAN_REVIEW'">
+            <label>{{copy('Alternative decision (for Modify)','قرار بديل (للتعديل)')}}</label>
+            <select [(ngModel)]="selectedOperationalCode" [disabled]="centralBusy || !decisionCatalogue.length">
+              <option value="">{{copy('Select a different decision','اختر قرارًا بديلًا')}}</option>
+              <option *ngFor="let item of decisionCatalogue" [value]="item.code"
+                [disabled]="item.code===op.code">
+                {{lang.isArabic?item.titleAr:item.titleEn}}
+                {{item.regulated ? copy(' — regulated; simulation only',' — منظم؛ محاكاة فقط'):''}}
+              </option>
+            </select>
+            <small *ngIf="decisionCatalogueError" class="decision-provenance">{{decisionCatalogueError}}</small>
+            <textarea rows="3" [(ngModel)]="operationalDecisionReason"
+              [placeholder]="copy('Business justification — mandatory for Modify/Reject',
+                  'سبب القرار التشغيلي — إلزامي للتعديل أو الرفض')"></textarea>
+            <div class="ai-decision-buttons">
+              <button type="button" [disabled]="centralBusy"
+                (click)="decideOperational('ACCEPT')">
+                ✓ {{copy('Accept decision & create action plan','اعتماد القرار وإنشاء خطة التنفيذ')}}
+              </button>
+              <button type="button" [disabled]="centralBusy || !decisionCatalogue.length"
+                (click)="decideOperational('MODIFY')">
+                {{copy('Modify decision & rebuild action plan','تعديل القرار وإعادة بناء خطة التنفيذ')}}
+              </button>
+              <button type="button" [disabled]="centralBusy"
+                (click)="decideOperational('REJECT')">
+                {{copy('Reject decision','رفض القرار')}}
+              </button>
+            </div>
+          </div>
+          <div *ngIf="op.decisionStatus!=='PENDING_HUMAN_REVIEW'" class="decision-approved">
+            <strong>{{copy('Human decision','القرار البشري')}}: {{op.humanDecision}}</strong>
+            <span>{{op.decisionNote || '—'}}</span>
+            <p *ngIf="op.humanDecision==='MODIFY'">
+              {{copy('The original AI proposal was preserved and its modification was queued for the future AI decision-improvement agent. It has NOT been transmitted.',
+                'تم حفظ اقتراح AI الأصلي وإضافة التعديل إلى طابور تغذية Agent تحسين القرارات مستقبلًا؛ لم يتم إرساله بعد.')}}
+            </p>
+          </div>
+        </section>
+        <section *ngIf="centralCase.restriction as restriction" class="poc-restriction">
+          <span class="section-kicker">{{copy('REGULATORY WORKFLOW — NON-OPERATIONAL POC SIMULATION',
+            'مسار تنظيمي — محاكاة تجريبية غير تشغيلية')}}</span>
+          <h4>{{restriction.type==='DETENTION'
+            ?copy('Proposed detention / no departure until rectification',
+              'احتجاز مقترح / منع المغادرة لحين الإصلاح')
+            :copy('Proposed prohibition of UAE port entry','منع دخول الموانئ الإماراتية المقترح')}}</h4>
+          <strong>{{restriction.status}}</strong>
+          <p>{{copy('No legal detention, entry ban, departure blockade or message to any UAE port occurs. A supervisor simulation approval and evidence record are required.',
+            'لا يتم احتجاز سفينة حقيقية أو منع دخولها أو مغادرتها أو إرسال تعليمات إلى أي ميناء إماراتي. يلزم اعتماد مشرف تجريبي وتوثيق الأدلة.')}}</p>
+          <button *ngIf="restriction.status==='PENDING_AUTHORITY_APPROVAL'" type="button"
+            [disabled]="centralBusy" (click)="authorizePocRestriction()">
+            {{copy('Authorize restriction in POC simulator only','اعتماد القيد داخل المحاكاة فقط')}}
+          </button>
+          <button *ngIf="restriction.status==='SIMULATED_ACTIVE'" type="button"
+            [disabled]="centralBusy" (click)="releasePocRestriction()">
+            {{copy('Release simulated restriction after evidence review','رفع قيد المحاكاة بعد مراجعة الأدلة')}}
+          </button>
+          <small *ngIf="restriction.authorityReference">{{copy('Demo authority reference','مرجع اعتماد المحاكاة')}}:
+            {{restriction.authorityReference}}</small>
+        </section>
+        <ng-container *ngIf="!centralCase.operationalDecision">
         <h4 class="action-section-title">{{copy('Proposed execution actions · officer review','إجراءات التنفيذ المقترحة · للمراجعة البشرية')}}</h4>
         <div class="ai-action-rows">
           <article class="ai-action-row" *ngFor="let action of plan.proposedActions">
@@ -233,6 +320,7 @@
             </div>
           </article>
         </div>
+        </ng-container>
         <section class="case-inspection-bridge" *ngIf="centralCase.inspectionRequests?.length || centralCase.inspectionOutcome">
           <h4>{{copy('04—05 · Smart Inspection hand-off & outcomes','٠٤—٠٥ · إحالات ونتائج المعاينة الذكية')}}</h4>
           <p>{{copy('NMC owns the operational case. Smart Inspection owns field execution; only recorded scheduling and results appear here.',
