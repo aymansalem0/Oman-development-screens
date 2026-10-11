@@ -57,7 +57,7 @@ docker compose -f compose.yaml -f compose.google-psc.yaml -f compose.oracle.yaml
 ```
 
 5. Visit **http://localhost:4200/#/moei/nmc/incidents**; also see the new Incident ribbon on **http://localhost:4200/#/moei/nmc**.
-6. **Command Center:** `http://localhost:4200/#/moei/nmc` now includes the latest **actual source incidents** (description, port or reporting source, incident status, separate AI score, drill-down), not just aggregate counts.
+6. **Command Center:** `http://localhost:4200/#/moei/nmc` keeps the compact incident summary. The separate incident-card wall has been removed. Source-linked **active incidents** now appear through an **Incidents** button inside the matching vessel row in **Requires Attention Now**, with expandable original incident descriptions, source, status and AI follow-up. A vessel with an active incident can appear in the attention list even if its overall A01/A02 vessel risk remains Pending. On the map the vessel's **symbol and outer incident ring** are colored by the highest active incident band, while the inner ring preserves A01/A02 vessel risk. If incident AI has not been run, color comes from the **unverified source-reported severity**, never a fabricated AI score. Closed/resolved reports remain in Incident Intelligence but do not highlight active vessels.
 7. Click **Analyze with AI** on a synthetic report with `AI_Review_Request = YES`. You will be asked for the existing POC **Editor key** and explicit confirmation before a billable model call. Read-only page loads never call AI.
 8. The AI response is validated before being appended to the `AI_Assessments` tab. To test human changes, enter officer name, rationale and alternate follow-up and choose **Modify**.
 
@@ -68,11 +68,11 @@ docker compose -f compose.yaml -f compose.google-psc.yaml -f compose.oracle.yaml
 - Source-of-truth `Operational_Status` is maintained in `Incident_Registry` by the reporting/NMC staff. AI review `Approved_Followup_Status` is separate and is not a regulatory/incident-system status change.
 - Future production integration requires approval of actual incident sources, jurisdiction/competence, authority controls, a proper event queue and case linkage.
 
-## Troubleshooting absent incident cards or navigation
+## Troubleshooting incident buttons/colored vessels or navigation
 - Confirm branch: `git branch --show-current` must equal `feat/nmc-incident-google-sheet-ai-triage-20261011`.
 - Rebuild: `docker compose -f compose.yaml -f compose.google-psc.yaml -f compose.oracle.yaml -f compose.incident-google.yaml up -d --build --force-recreate ai-proxy nmc`.
 - Health: open `http://localhost:4200/api/ai/nmc/incidents/health`. It should show `"sourceConfigured":true`. This status alone does **not** prove the credentials or shared-sheet permissions work.
 - Source: open `http://localhost:4200/api/ai/nmc/incidents`. If connected, JSON contains three example `incidents` from the actual Google Sheet. If `INCIDENT_GOOGLE_CREDENTIALS_MISSING`, check mount. If `INCIDENT_SHEET_ACCESS_DENIED`, check service-account `client_email` and Google Sheet sharing. If `INCIDENT_SHEET_REQUEST_FAILED`, check sheet ID/API enabled and Docker logs.
 - Check logs: `docker compose -f compose.yaml -f compose.google-psc.yaml -f compose.oracle.yaml -f compose.incident-google.yaml logs -f --tail=100 ai-proxy nmc`.
-- Hard-refresh browser `Ctrl+Shift+R`, then open `/#/moei/nmc`. The incident section is located **after NMC Operational Overview and before Live Maritime Map**.
+- Hard-refresh browser `Ctrl+Shift+R`, then open `/#/moei/nmc`. The incident **summary** remains after NMC Operational Overview. Look for expandable **Incidents** buttons within vessel rows under **Requires Attention Now**. Incident-linked vessels have distinct symbol and outer-ring colors on the map; there is no separate incident-cards section.
 - Reusing a **service account** does not mean entering an OAuth API key or Google Cloud console login email. It means sharing with the exact `client_email` inside the mounted JSON.
