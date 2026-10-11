@@ -195,6 +195,7 @@ export class NmcIncidentFeed {
    // Reuse existing A01/A02 Airia pipeline execution; NEVER a separate LLM.
    executeIncidentAgents=null,
    agentEnabled=()=>false,
+   onAssessmentReady=null,
    autoEnabled=process.env.NMC_INCIDENT_AUTO_TRIAGE_ENABLED==='true',
    autoMaxPerCycle=Number(process.env.NMC_INCIDENT_AUTO_MAX_PER_CYCLE||2),
    fetchImpl=globalThis.fetch,
@@ -204,6 +205,7 @@ export class NmcIncidentFeed {
   this.provider='airia_a01_a02';this.model='EXISTING_A01_A02_PIPELINES';
   this.executeIncidentAgents=executeIncidentAgents;
   this.agentEnabled=agentEnabled;
+  this.onAssessmentReady=onAssessmentReady;
   this.fetch=fetchImpl;this.credentials=credentials;
   this.token=null;this.inFlight=new Set();this.reviewInFlight=new Set();
   // Strict opt-in for scheduled billable calls, never from a browser read.
@@ -364,17 +366,43 @@ export class NmcIncidentFeed {
     return {enabled:false,assessed:0};
   if(this.autoRunning)return {enabled:true,skipped:'ALREADY_RUNNING'};
   this.autoRunning=true;
-  const result={enabled:true,assessed:0,failed:0,skipped:0};
+  const result={enabled:true,assessed:0,failed:0,skipped:0,
+    casesLinked:0,casesFailed:0};
   try{
    const feed=await this.load();
+   // Backfill already analyzed cases (e.g. when incident auto case feature
+   // first becomes enabled) and retry case-store failures without new AI cost.
+   if(this.onAssessmentReady){
+     for(const incident of feed.incidents.filter(x=>x.aiAssessment&&
+        !['CLOSED','RESOLVED'].includes(x.operationalStatus))){
+       try{await this.onAssessmentReady(incident);result.casesLinked++;}
+       catch(error){
+         result.casesFailed++;
+         console.error('[nmc-incidents] CASE_LINK_FAILED code='+
+           (error?.code||'CASE_LINK_UNAVAILABLE'));
+       }
+     }
+   }
    const pending=feed.incidents.filter(x=>
      x.aiReviewRequested&&!x.aiAssessment&&
      !this.autoFailedDescriptions.has(x.incidentId+':'+x.descriptionHash)&&
      !['CLOSED','RESOLVED'].includes(x.operationalStatus));
    for(const incident of pending.slice(0,this.autoMaxPerCycle)){
     try{
-     await this.analyze(incident.incidentId,{confirmCost:true});
+     const analyzed=await this.analyze(incident.incidentId,{confirmCost:true});
      result.assessed++;
+     if(this.onAssessmentReady){
+       try{
+         await this.onAssessmentReady({
+           ...incident,aiAssessment:analyzed.assessment
+         });
+         result.casesLinked++;
+       }catch(error){
+         result.casesFailed++;
+         console.error('[nmc-incidents] CASE_LINK_FAILED code='+
+           (error?.code||'CASE_LINK_UNAVAILABLE'));
+       }
+     }
     }catch{
      // Never repeatedly charge A01/A02 for the same failing description.
      // A changed incident description receives a new hash and may be retried.
