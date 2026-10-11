@@ -51,6 +51,24 @@ async function opened(db){
     item.id,'ACKNOWLEDGE',item.version,'Operator received the alert');
   return db.cases.fromAlert(acknowledged.id);
 }
+test('A novel or unsupported A01 action is inspection review, never autonomous detention',()=>{
+  const row={sourceAssessmentId:'VALID-A01-01',sourceScore:60,sourceLevel:'Watch'};
+  const raw={summary:'New concern',whyItMatters:'Needs human verification',
+    proposedActions:[{actionId:'novel-1',actionType:'DETENTION_ORDER',
+      title:'Unexpected AI enforcement request',
+      reason:'Documented finding must be checked',
+      priority:'HIGH',confidence:.7,requiresHumanApproval:true,
+      evidenceIds:['DEF-2026-401']}]};
+  const plan=normalizeA01Actions(raw,{imo,assessmentId:row.sourceAssessmentId,
+    score:row.sourceScore,level:row.sourceLevel,configVersion:'v1',signals},
+    {allowUnknownAsInspection:true});
+  assert.equal(plan.proposedActions[0].actionType,'UNMAPPED_AI_ACTION');
+  assert.equal(plan.proposedActions[0].originalActionType,'DETENTION_ORDER');
+  const proposal=buildSingleProposal(plan);
+  assert.equal(proposal.code,'UNMAPPED_TO_INSPECTION');
+  assert.equal(proposal.regulated,false);
+  assert.equal(proposal.originalA01Proposal.originalActionType,'DETENTION_ORDER');
+});
 test('No legal enforcement decision is selected solely from risk or A01 actions',()=>{
   const plan={proposedActions:[{actionId:'a1',actionType:'PRIORITY_INSPECTION',
     title:'Review need for inspection',reason:'Validated source requires review',
