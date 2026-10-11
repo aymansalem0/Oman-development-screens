@@ -16,6 +16,7 @@ import { NmcVesselEvidenceService } from '../services/nmc-vessel-evidence.servic
 import { NmcExternalPscService, NmcExternalPscRecord } from '../services/nmc-external-psc.service';
 import { NmcFleetAiService, FleetAiAssessment, FleetAiHistory, FleetAiIntelligence } from '../services/nmc-fleet-ai.service';
 import { NmcDataQualityConfigService, QualityPolicyImpact, projectQuality } from '../services/nmc-data-quality-config.service';
+import { NmcIncidentsService, NmcMaritimeIncident } from '../services/nmc-incidents.service';
 
 interface SourceStatus {
   name: string;
@@ -130,6 +131,8 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
   sources: SourceStatus[] = [];
   certificates: CertificateRecord[] = [];
   inspections: InspectionRecord[] = [];
+  /** Source-backed incidents joined only on this vessel's exact IMO. */
+  private vesselIncidents:NmcMaritimeIncident[]|null=null;
   deficiencies: DeficiencyRecord[] = [];
   riskFactors: RiskFactor[] = [];
   timeline: TimelineItem[] = [];
@@ -168,6 +171,7 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
     private vesselEvidence: NmcVesselEvidenceService,
     private externalPscService: NmcExternalPscService,
     private readonly fleetAiService: NmcFleetAiService,
+    private readonly incidentsService:NmcIncidentsService,
     public readonly qualityPolicy: NmcDataQualityConfigService
   ) {}
 
@@ -382,6 +386,7 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
       }
     }));
     this.loadExternalPsc();
+    this.loadVesselIncidents();
     this.loadStoredAi();
 
     const requestedTab = this.route.snapshot.queryParamMap.get('tab');
@@ -562,6 +567,20 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
         kind: this.storedAi.score! >= 85 ? 'critical' : this.storedAi.score! >= 45 ? 'warning' : 'normal'
       }];
     }
+  }
+
+  /** Never invent incidents if the source is unavailable or lacks exact IMO. */
+  private loadVesselIncidents():void{
+    this.subscriptions.add(this.incidentsService.list().subscribe({
+      next:feed=>{
+        this.vesselIncidents=feed.incidents.filter(row=>row.imo===this.vessel.imo);
+        if(this.activeTab==='accidents'&&!this.hasAccidents)this.activeTab='overview';
+      },
+      error:()=>{
+        this.vesselIncidents=null;
+        if(this.activeTab==='accidents')this.activeTab='overview';
+      }
+    }));
   }
 
   loadExternalPsc(): void {
