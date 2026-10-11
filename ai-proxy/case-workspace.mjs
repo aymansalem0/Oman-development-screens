@@ -141,6 +141,184 @@ export class NmcCaseWorkspace{
       }
     });
   }
+
+  /**
+   * Intake from an already persisted, evidence-grounded incident assessment.
+   * This opens/links ONE active NMC case per vessel without fabricating
+   * approval, execution, inspection or legal action. Incident ID + source
+   * description hash are the idempotency identity.
+   */
+  async fromIncident(incident,assessment,sourceVessel=null,role='NMC_SYSTEM'){
+    const id=incident?.incidentId,imo=incident?.imo;
+    if(!/^INC-[A-Za-z0-9-]{3,70}$/.test(id||'')||!isImo(imo)||
+      !assessment||assessment.descriptionHash!==incident.descriptionHash||
+      assessment.assessmentStatus!=='AI_COMPLETE'&&assessment.assessmentStatus!=='HUMAN_REVIEWED'||
+      !/^A01_A02_EXISTING_CONTRACTS_V1$/.test(assessment.contractVersion||'')||
+      !assessment.aiEvidenceIds?.includes('INCIDENT-'+id)||
+      !Number.isFinite(assessment.incidentRiskScore))
+      throw new NmcCaseError('CASE_INCIDENT_ASSESSMENT_NOT_VERIFIED',409);
+    if(!sourceVessel||sourceVessel.status!=='COMPLETED'||
+      !Number.isFinite(sourceVessel.score))
+      throw new NmcCaseError('CASE_INCIDENT_VESSEL_CONTEXT_REQUIRED',409);
+    const event={
+      incidentId:id,descriptionHash:incident.descriptionHash,
+      sourceOrganization:incident.sourceOrganization,sourceType:incident.sourceType,
+      sourceReference:incident.sourceReference,sourceIncidentStatus:incident.sourceIncidentStatus,
+      sourceOperationalStatus:incident.operationalStatus,
+      incidentType:incident.incidentType,portOrZone:incident.portOrZone,
+      sourceDescription:incident.description,sourceReportedSeverity:incident.reportedSeverity,
+      evidenceIds:[...new Set(assessment.aiEvidenceIds)].slice(0,40),
+      incidentRiskScore:assessment.incidentRiskScore,
+      incidentRiskBand:assessment.incidentRiskBand,
+      incidentScoreSource:'NMC_DETERMINISTIC_INCIDENT_POLICY',
+      suggestedFollowup:assessment.aiProposedFollowup,
+      suggestedFollowupState:assessment.suggestedFollowupState,
+      sourceAssessmentId:assessment.assessmentId,
+      a02ContextStatus:assessment.a02IncidentCompliance?.status||'UNKNOWN',
+      decisionStatus:'PENDING_HUMAN_REVIEW',
+      approvedFollowup:null,officerName:null,officerReason:null,
+      receivedAt:incident.receivedAt||incident.reportedAt||null,
+      assessedAt:assessment.assessedAt,updatedAt:now()
+    };
+    const existing=(await this.list()).find(x=>x.status!=='RESOLVED'&&x.imo===imo);
+    if(existing){
+      const prior=(existing.incidentEvents||[]).find(x=>x.incidentId===id);
+      if(prior?.descriptionHash===incident.descriptionHash&&
+         prior?.sourceAssessmentId===assessment.assessmentId)
+        return existing;
+      if(prior?.decisionStatus==='OFFICER_APPROVED'&&
+         prior.descriptionHash!==incident.descriptionHash)
+        throw new NmcCaseError('CASE_INCIDENT_NEW_VERSION_REQUIRES_REVIEW',409);
+      return this._update(existing.id,existing.version,'INCIDENT_LINKED',role,
+        'Source incident linked to active vessel case; action pending human decision',
+        row=>({...row,incidentEvents:[
+          ...(row.incidentEvents||[]).filter(x=>x.incidentId!==id),event
+        ]}),{incidentId:id,assessmentId:assessment.assessmentId,hasAutomaticTasks:false});
+    }
+    const caseId=randomUUID(),created=now();
+    const record={
+      id:caseId,imo,status:'OPEN',assignedRole:'NMC_OFFICER',
+      source:'GOOGLE_SHEETS_INCIDENT',sourceAssessmentId:sourceVessel.assessmentId||null,
+      alertIds:[],sourceScore:sourceVessel.score,sourceLevel:sourceVessel.level||'UNKNOWN',
+      createdAt:created,updatedAt:created,version:1,
+      tasks:[],actionPlan:null,operationalDecision:null,decisionFeedback:[],
+      restriction:null,inspectionRequests:[],decisions:[],inspectionOutcome:null,
+      incidentEvents:[event],
+      resolutionNote:null,provenance:'SYNTHETIC_POC_NON_REGULATORY'
+    };
+    const log=auditEntry(record,'INCIDENT_CASE_CREATED',role,
+      'Automatically opened from an evidence-grounded NMC source incident; no tasks approved',
+      {incidentId:id,assessmentId:assessment.assessmentId,source:'GOOGLE_SHEETS',humanApproved:false});
+    if(this.mode==='json'){
+      const state=this._load();
+      const duplicate=Object.values(state.cases).find(x=>x.status!=='RESOLVED'&&x.imo===imo);
+      if(duplicate)return this.fromIncident(incident,assessment,sourceVessel,role);
+      state.cases[caseId]=record;state.history[caseId]=[log];
+      this._write(state);
+      return clone(record);
+    }
+    return this._db(async con=>{
+      try{
+        await con.execute(`INSERT INTO NMC_CASE(
+          CASE_ID,IMO,SOURCE_ALERT_ID,ACTIVE_IMO,STATUS,VERSION_NO,DOC_JSON,UPDATED_ROLE)
+          VALUES(:id,:imo,:alert,:imo,:status,:version,:doc,:role)`,{
+          id:caseId,imo,alert:null,status:'OPEN',version:1,
+          doc:clob(record),role
+        });
+        await this._audit(con,caseId,log);await con.commit();
+        return record;
+      }catch(error){
+        await con.rollback();
+        if(error?.errorNum===1){
+          const match=(await this.list()).find(x=>x.status!=='RESOLVED'&&x.imo===imo);
+          if(match)return this.fromIncident(incident,assessment,sourceVessel,role);
+        }
+        // Oracle SOURCE_ALERT_ID must permit NULL for source-independent incident cases.
+        if(error?.errorNum===1400)throw new NmcCaseError('CASE_INCIDENT_SCHEMA_REQUIRES_NULL_ALERT',503);
+        throw error;
+      }
+    });
+  }
+
+  /**
+   * The ONLY place to approve incident actions: NMC Case Management.
+   * All executable tasks are generated AFTER an accountable human decision.
+   */
+  async decideIncident(caseId,version,incidentId,{decision,approvedFollowup,note,officer}={},role='OPERATOR'){
+    const allowed=['VERIFY_INFORMATION','ACTIVE_MONITORING','REFER_SMART_INSPECTION',
+      'ESCALATE_TO_AUTHORITY','INCIDENT_RESPONSE','CLOSE_AFTER_VERIFICATION'];
+    if(!/^INC-[A-Za-z0-9-]{3,70}$/.test(incidentId||'')||
+      !['ACCEPT','MODIFY','REJECT'].includes(decision)||
+      !allowed.includes(approvedFollowup)||
+      typeof note!=='string'||note.trim().length<15||note.length>500||
+      typeof officer!=='string'||officer.trim().length<3||officer.length>80)
+      throw new NmcCaseError('CASE_INCIDENT_DECISION_INVALID',422);
+    const routes={
+      VERIFY_INFORMATION:'REQUEST_EXTERNAL_VERIFICATION',
+      ACTIVE_MONITORING:'ENHANCED_MONITORING',
+      REFER_SMART_INSPECTION:'REFER_SMART_INSPECTION',
+      ESCALATE_TO_AUTHORITY:'REQUEST_EXTERNAL_VERIFICATION',
+      INCIDENT_RESPONSE:'INCIDENT_RESPONSE_COORDINATION',
+      CLOSE_AFTER_VERIFICATION:'REQUEST_EXTERNAL_VERIFICATION'
+    };
+    return this._update(caseId,version,'INCIDENT_DECISION_'+decision,role,note.trim(),row=>{
+      if(row.status==='RESOLVED')throw new NmcCaseError('CASE_ALREADY_RESOLVED',409);
+      const event=(row.incidentEvents||[]).find(x=>x.incidentId===incidentId);
+      if(!event)throw new NmcCaseError('CASE_INCIDENT_NOT_FOUND',404);
+      if(event.decisionStatus!=='PENDING_HUMAN_REVIEW')
+        throw new NmcCaseError('CASE_INCIDENT_ALREADY_DECIDED',409);
+      if(decision==='ACCEPT'&&approvedFollowup!==event.suggestedFollowup||
+        decision==='MODIFY'&&approvedFollowup===event.suggestedFollowup||
+        decision==='REJECT'&&approvedFollowup!=='VERIFY_INFORMATION')
+        throw new NmcCaseError('CASE_INCIDENT_DECISION_MISMATCH',422);
+      const followup=decision==='REJECT'?'VERIFY_INFORMATION':approvedFollowup;
+      const workflowCode=routes[followup];
+      const steps=decisionActionPlan(workflowCode);
+      if(!steps)throw new NmcCaseError('CASE_INCIDENT_WORKFLOW_UNAVAILABLE',409);
+      const taskSet=[...row.tasks],inspectionRequests=[...(row.inspectionRequests||[])];
+      const reviewed={
+        ...event,decisionStatus:'OFFICER_APPROVED',officerDecision:decision,
+        approvedFollowup:followup,officerName:officer.trim(),officerReason:note.trim(),
+        decidedAt:now(),workflowCode,
+        followupExecutionStatus:'PENDING_TASKS'
+      };
+      for(const step of steps){
+        const taskId=('inc-'+incidentId.toLowerCase()+'-'+step.id).slice(0,60);
+        if(taskSet.some(t=>t.id===taskId))
+          throw new NmcCaseError('CASE_INCIDENT_TASK_DUPLICATE',409);
+        const actionId='incident-'+incidentId.toLowerCase();
+        taskSet.push({
+          id:taskId,actionId,incidentId,actionType:step.kind==='SMART_INSPECTION'
+            ?'PRIORITY_INSPECTION':workflowCode,
+          workflowStepId:step.id,title:step.titleEn,titleAr:step.titleAr,
+          priority:event.incidentRiskBand,reason:note.trim(),
+          status:'Assigned',assignedRole:step.role,mandatory:step.mandatory,
+          regulatedEnforcement:false,evidenceIds:[...event.evidenceIds],
+          provenance:'NMC_INCIDENT_HUMAN_APPROVED',approvalMode:decision,generatedAt:now()
+        });
+        if(step.kind==='SMART_INSPECTION'){
+          if(inspectionRequests.some(x=>x.status!=='COMPLETED'))
+            throw new NmcCaseError('CASE_ACTIVE_INSPECTION_EXISTS',409);
+          inspectionRequests.push({
+            id:randomUUID(),caseId:row.id,imo:row.imo,incidentId,
+            actionId,status:'PENDING_SCHEDULING',
+            inspectionRegime:'FOCUSED_INSPECTION',
+            priority:event.incidentRiskBand,reason:note.trim(),
+            evidenceIds:[...event.evidenceIds],sourceScore:row.sourceScore,
+            sourceAssessmentId:row.sourceAssessmentId,
+            port:null,scheduledAt:null,inspector:null,scheduledBy:null,
+            createdAt:now(),version:1,
+            referralSource:'NMC_INCIDENT_HUMAN_APPROVED_POC'
+          });
+        }
+      }
+      return {...row,status:'IN_PROGRESS',tasks:taskSet,inspectionRequests,
+        incidentEvents:row.incidentEvents.map(x=>x.incidentId===incidentId?reviewed:x)
+      };
+    },{incidentId,decision,approvedFollowup,officer:officer.trim(),
+       noAutomaticEnforcement:true});
+  }
+
   async task(id,version,taskId,action,note='',role='OPERATOR'){
     if(!['START','COMPLETE','ESCALATE'].includes(action))
       throw new NmcCaseError('CASE_TASK_ACTION_INVALID');
@@ -149,8 +327,9 @@ export class NmcCaseWorkspace{
     return this._update(id,version,'TASK_'+action,role,note,row=>{
       if(row.status==='RESOLVED')throw new NmcCaseError('CASE_ALREADY_RESOLVED',409);
       const task=row.tasks.find(item=>item.id===taskId);
-      if(!task||!row.actionPlan||
-         !['AIRIA_A01_HUMAN_APPROVED','NMC_DECISION_HUMAN_APPROVED'].includes(task.provenance))
+      if(!task||(!row.actionPlan&&!(row.incidentEvents||[]).length)||
+         !['AIRIA_A01_HUMAN_APPROVED','NMC_DECISION_HUMAN_APPROVED',
+           'NMC_INCIDENT_HUMAN_APPROVED'].includes(task.provenance))
         throw new NmcCaseError('CASE_TASK_NOT_FOUND',404);
       const valid=action==='START'
         ?task.status==='Assigned'
@@ -168,7 +347,7 @@ export class NmcCaseWorkspace{
         ...t,status:nextStatus,
         assignedRole:action==='ESCALATE'?'NMC_SUPERVISOR':t.assignedRole
       }:t);
-      const aiTasks=tasks.filter(t=>['AIRIA_A01_HUMAN_APPROVED','NMC_DECISION_HUMAN_APPROVED'].includes(t.provenance));
+      const aiTasks=tasks.filter(t=>['AIRIA_A01_HUMAN_APPROVED','NMC_DECISION_HUMAN_APPROVED','NMC_INCIDENT_HUMAN_APPROVED'].includes(t.provenance));
       const requiredDone=aiTasks.filter(t=>t.mandatory).every(t=>t.status==='Completed');
       const aiDecisionsPending=row.operationalDecision
         ?row.operationalDecision.decisionStatus==='PENDING_HUMAN_REVIEW'
@@ -554,15 +733,17 @@ export class NmcCaseWorkspace{
     if(!reason)throw new NmcCaseError('CASE_RESOLUTION_NOTE_REQUIRED');
     return this._update(id,version,'RESOLVED',role,reason,row=>{
       if(row.status==='RESOLVED')throw new NmcCaseError('CASE_ALREADY_RESOLVED',409);
-      if(!row.actionPlan)
+      if(!row.actionPlan&&!(row.incidentEvents||[]).length)
         throw new NmcCaseError('CASE_ACTION_PLAN_REQUIRED',409);
+      if((row.incidentEvents||[]).some(ev=>ev.decisionStatus==='PENDING_HUMAN_REVIEW'))
+        throw new NmcCaseError('CASE_INCIDENT_DECISION_PENDING',409);
       if(row.operationalDecision
         ?row.operationalDecision.decisionStatus==='PENDING_HUMAN_REVIEW'
         :row.actionPlan?.proposedActions?.some(a=>a.decision==='PENDING'))
         throw new NmcCaseError('CASE_ACTION_DECISIONS_PENDING',409);
       if(row.restriction&&row.restriction.status!=='SIMULATED_RELEASED')
         throw new NmcCaseError('CASE_RESTRICTION_STILL_ACTIVE',409);
-      if(row.tasks.some(t=>['AIRIA_A01_HUMAN_APPROVED','NMC_DECISION_HUMAN_APPROVED'].includes(t.provenance)&&
+      if(row.tasks.some(t=>['AIRIA_A01_HUMAN_APPROVED','NMC_DECISION_HUMAN_APPROVED','NMC_INCIDENT_HUMAN_APPROVED'].includes(t.provenance)&&
         t.mandatory&&t.status!=='Completed'))
         throw new NmcCaseError('CASE_MANDATORY_TASKS_INCOMPLETE',409);
       // Stage 3 will add evidence-linked A02 compliance refresh and a new,
