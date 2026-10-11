@@ -689,8 +689,7 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
   }
   dashboardKpiTrack(_index:number,k:{id:NmcKpiMetricId}):string{return k.id;}
   get dashboardKpiValues():NmcKpiValues{
-    return Object.fromEntries(this.dashboardKpis.map(k=>[k.id,k.value]))
-      as NmcKpiValues;
+    return Object.fromEntries(this.dashboardKpis.map(k=>[k.id,k.value])) as NmcKpiValues;
   }
   get aiFocusIsCurrent():boolean{
     const stored=this.aiKpiFocus;
