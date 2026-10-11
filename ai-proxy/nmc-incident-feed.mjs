@@ -213,6 +213,7 @@ export class NmcIncidentFeed {
     Number.isFinite(autoMaxPerCycle)?autoMaxPerCycle:2)));
   this.autoRunning=false;
   this.lastAutoRun=null;
+  this.autoFailedDescriptions=new Set(); // do not repeatedly bill failing rows
  }
  get configured(){return !!this.sheetId;}
  get aiConfigured(){return typeof this.executeIncidentAgents==='function'&&
@@ -369,12 +370,16 @@ export class NmcIncidentFeed {
    const feed=await this.load();
    const pending=feed.incidents.filter(x=>
      x.aiReviewRequested&&!x.aiAssessment&&
+     !this.autoFailedDescriptions.has(x.incidentId+':'+x.descriptionHash)&&
      !['CLOSED','RESOLVED'].includes(x.operationalStatus));
    for(const incident of pending.slice(0,this.autoMaxPerCycle)){
     try{
      await this.analyze(incident.incidentId,{confirmCost:true});
      result.assessed++;
     }catch{
+     // Never repeatedly charge A01/A02 for the same failing description.
+     // A changed incident description receives a new hash and may be retried.
+     this.autoFailedDescriptions.add(incident.incidentId+':'+incident.descriptionHash);
      result.failed++;
     }
    }
