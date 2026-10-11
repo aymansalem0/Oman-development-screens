@@ -1144,3 +1144,60 @@ a.big-risk{display:flex;flex-direction:column;align-items:center;justify-content
  padding:12px 14px;background:#078678;color:#fff;font-size:12px;font-weight:800}
 .incident-source-warning{font-size:10px;color:#ab6e18;flex-basis:100%}
 @media(max-width:750px){.nmc-incident-ribbon{padding:14px}.incident-mini-kpis div{min-width:75px}}
+
+/* NMC-01: source-backed incident records directly inside Command Center. */
+.nmc-incidents-operational{
+  background:#fff;border:1px solid #dce8ed;border-radius:16px;
+  margin:12px 0 20px;padding:20px 23px;
+  box-shadow:0 7px 23px #224b5609;
+}
+.nmc-incidents-header{display:flex;align-items:center;justify-content:space-between;gap:15px;flex-wrap:wrap;margin-bottom:14px;}
+.nmc-incidents-header h3{font-size:18px;margin:6px 0;color:#163f55;}
+.nmc-incidents-header p{font-size:11px;line-height:1.6;margin:3px 0;color:#648493;}
+.nmc-incident-controls{display:flex;gap:12px;align-items:center;flex-wrap:wrap;}
+.nmc-incident-refresh-time{font-size:10px;color:#7c98a2;}
+.nmc-incident-open-link{color:#fff;background:#086f72;text-decoration:none;border-radius:9px;
+ padding:10px 14px;font-weight:800;font-size:11px;white-space:nowrap;}
+.nmc-incident-records{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;}
+.nmc-incident-record{border:1px solid #dfebed;border-radius:12px;background:#fbfdfd;min-width:0;overflow:hidden;}
+.nmc-incident-record.nmc-incident-expanded{border-color:#58afa7;background:#f3fbf9;}
+.nmc-incident-record-main{display:flex;justify-content:space-between;gap:14px;align-items:stretch;padding:14px;}
+.nmc-incident-record-text{min-width:0;flex:1;}
+.nmc-inc-ref{font-size:10px;color:#087f74;font-weight:850;overflow-wrap:anywhere;}
+.nmc-incident-record h4{font-size:13px;margin:7px 0;color:#23465a;overflow-wrap:anywhere;}
+.nmc-inc-source{font-size:10px;color:#748c9b;line-height:1.6;margin:2px 0;}
+.nmc-inc-snippet{font-size:11px;line-height:1.6;color:#426477;margin:9px 0 6px;
+ display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;overflow:hidden;
+ overflow-wrap:anywhere;}
+.nmc-inc-badges{display:flex;gap:5px;flex-wrap:wrap;}
+.nmc-inc-badges span{font-size:9px;padding:5px 7px;border-radius:7px;
+ color:#1d6a68;background:#e7f5f2;font-weight:750;overflow-wrap:anywhere;}
+.nmc-incident-record-side{display:flex;flex-direction:column;align-items:stretch;gap:8px;justify-content:space-between;min-width:112px;}
+.nmc-incident-risk{display:grid;gap:3px;text-align:center;padding:9px 12px;border-radius:10px;
+ background:#f0f5f7;border:1px solid #dbe7ec;color:#527080;}
+.nmc-incident-risk>span{font-size:9px;}
+.nmc-incident-risk strong{font-size:21px;color:#2d5566;}
+.nmc-incident-risk small{font-size:9px;}
+.nmc-incident-risk strong small{font-size:11px;}
+.nmc-incident-risk-high{background:#fff2e2;border-color:#ecd4ac;}
+.nmc-incident-risk-high strong{color:#aa621a;}
+.nmc-incident-risk-critical{background:#fff0f0;border-color:#efcccc;}
+.nmc-incident-risk-critical strong{color:#ba3b45;}
+.nmc-inc-expand{border:1px solid #badbd7;border-radius:9px;background:#fff;
+ font-size:10px;padding:9px 11px;cursor:pointer;color:#0d7774;font-weight:800;}
+.nmc-incident-inline-detail{padding:14px;border-top:1px solid #d7e9e7;background:#fafffd;}
+.nmc-incident-inline-detail strong{font-size:11px;color:#145a5d;}
+.nmc-incident-inline-detail p{font-size:11px;line-height:1.7;color:#396174;white-space:pre-line;overflow-wrap:anywhere;}
+.nmc-inc-external{display:inline-block;color:#087671;font-size:11px;font-weight:800;margin:6px 12px 4px 0;text-decoration:none;}
+.nmc-inc-vessel{color:#266a9d;}
+.nmc-incidents-error{display:grid;gap:7px;padding:14px;background:#fff3ec;
+ border:1px solid #f2d6c7;border-radius:10px;font-size:12px;color:#aa562a;}
+.nmc-incidents-error small{font-size:10px;}
+.nmc-incidents-empty{padding:26px;text-align:center;color:#79919c;font-size:12px;}
+.nmc-inc-audit-note{font-size:10px;color:#8c6e41;margin:12px 0 0;line-height:1.6;}
+@media(max-width:1100px){.nmc-incident-records{grid-template-columns:1fr;}}
+@media(max-width:560px){.nmc-incidents-operational{padding:14px;}
+ .nmc-incident-record-main{display:block;}
+ .nmc-incident-record-side{flex-direction:row;align-items:center;margin-top:10px;}
+ .nmc-incident-risk{min-width:110px;}
+}
