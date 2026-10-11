@@ -129,11 +129,17 @@ riskPolicy=new CentralRiskPolicy({mode:dbMode,oracleRepository:repository,fleet}
 const dashboards=new DashboardWorkspace({mode:dbMode,oracleRepository:repository});
 const alerts=new NmcAlertWorkspace({mode:dbMode,oracleRepository:repository});
 const cases=new NmcCaseWorkspace({mode:dbMode,oracleRepository:repository,alerts});
-// Incident POC deliberately reuses these exact same A01/A02 Airia pipelines.
+// Incident POC reuses exactly the existing A02 requestedSignals and A01
+// SITUATION_ASSESSMENT contracts; new business evidence is supplied inside
+// already-supported context fields. No separate model/pipeline or new output.
 const incidentAgentEnabled=()=>Boolean(apiKey)&&agentAllowed('a01')&&agentAllowed('a02');
+const incidentBundleRecords=JSON.parse((await import('node:fs')).readFileSync(
+  new URL('./fleet-bundles.json',import.meta.url),'utf8'));
+const incidentBundleMap=new Map(incidentBundleRecords.map(row=>[row.imo,row]));
 const incidentAiria=createAiriaIncidentTriage({
   executeAgent:fleetAgentCall,
   getFleetResult:imo=>fleet.getVesselResult(imo),
+  getBundle:imo=>incidentBundleMap.get(imo)||null,
   enabled:incidentAgentEnabled
 });
 const incidentFeed=new NmcIncidentFeed({
@@ -145,8 +151,7 @@ const incidentFeed=new NmcIncidentFeed({
 const siErp=new ErpWorkforceStore();
 const siScheduling=new SiElectronicScheduler({erp:siErp,cases});
 const siTargeting=new SiCandidateTargeting({mode:dbMode,oracleRepository:repository,
-  cases,riskPolicy,bundles:JSON.parse((await import('node:fs')).readFileSync(
-    new URL('./fleet-bundles.json',import.meta.url),'utf8'))});
+  cases,riskPolicy,bundles:incidentBundleRecords});
 const siSourceImports=new SiSourceExcelImport({targeting:siTargeting});
 const siPscSelection=new SiPscSelection({targeting:siTargeting,mode:dbMode,oracleRepository:repository});
 siTargeting.pscSelection=siPscSelection;

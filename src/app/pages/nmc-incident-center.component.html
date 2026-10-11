@@ -16,7 +16,7 @@
   <div class="titlebar">
    <div><span class="overline">{{copy('NMC-01 · EVENT & INCIDENT AWARENESS','NMC-01 · الوعي بالحوادث والأحداث')}}</span>
     <h2>{{copy('Maritime Incident Monitoring','متابعة الحوادث البحرية')}}</h2>
-    <p>{{copy('Synthetic reports from Maritime Reporting Platform and Port Authorities, with a dedicated AI incident assessment. Not the official vessel risk score.',
+    <p>{{copy('Synthetic incident sources, existing A01/A02 evidence interpretation and a separate deterministic incident risk policy. Not the official vessel risk score.',
       'بلاغات تجريبية من منصة البلاغات والموانئ مع تقييم AI خاص بكل حادث، منفصل عن درجة مخاطر السفينة الرسمية.')}}</p>
    </div>
    <div class="toolbar">
@@ -37,8 +37,8 @@
   <section class="score-cards">
    <article><span>{{copy('Received incidents','الحوادث المستلمة')}}</span><strong>{{data?.summary?.total ?? '—'}}</strong><small>{{copy('Google Sheet source records','سجلات Google Sheet')}}</small></article>
    <article><span>{{copy('Open / under follow-up','مفتوحة / تحت المتابعة')}}</span><strong>{{data?.summary?.unresolved ?? '—'}}</strong><small>{{copy('Status owned by reporting officers','الحالة يحددها الموظفون')}}</small></article>
-   <article><span>{{copy('AI-assessed incidents','حوادث قيّمها AI')}}</span><strong>{{assessedCount}}</strong><small>{{copy('Separate incident risk model','نموذج مخاطر خاص بالحوادث')}}</small></article>
-   <article><span>{{copy('High / Critical incident risk','مخاطر الحوادث مرتفعة / حرجة')}}</span><strong>{{urgentCount}}</strong><small>{{copy('Advisory AI scoring · not vessel risk','تقييم استرشادي وليس مخاطر السفينة')}}</small></article>
+   <article><span>{{copy('A01/A02-informed incidents','حوادث تم تفسيرها باستخدام A01/A02')}}</span><strong>{{assessedCount}}</strong><small>{{copy('Separate incident risk model','نموذج مخاطر خاص بالحوادث')}}</small></article>
+   <article><span>{{copy('High / Critical incident risk','مخاطر الحوادث مرتفعة / حرجة')}}</span><strong>{{urgentCount}}</strong><small>{{copy('Rules-based incident score · not vessel risk','درجة حادث بقواعد NMC، وليست مخاطر السفينة')}}</small></article>
   </section>
   <section class="workbench">
    <aside class="incident-list">
@@ -96,7 +96,7 @@
     </section>
     <section class="ai-assessment">
      <div class="section-heading">
-      <div><span class="overline">{{copy('INCIDENT-ONLY AI · FOUR FACTORS','AI للحوادث فقط · أربعة عوامل')}}</span>
+      <div><span class="overline">{{copy('EXISTING A01/A02 + NMC INCIDENT RISK RULES','سياق A01/A02 الحالي · ٤ عوامل بقواعد NMC')}}</span>
        <h4>{{copy('Incident Risk Assessment & Follow-up','تقييم مخاطر الحادث وخطة المتابعة')}}</h4></div>
       <button class="analyze" type="button"
         [disabled]="busy || loading || !incident.aiReviewRequested ||
@@ -134,7 +134,7 @@
       </div>
       <p class="reason"><strong>{{copy('AI analysis','تحليل AI')}}:</strong> {{ai.aiReasoning}}</p>
       <div class="followup" *ngIf="ai.a02IncidentCompliance as comp">
-        <span>{{copy('A02 · Incident compliance interpretation','A02 · تفسير الامتثال المرتبط بالحادث')}}</span>
+        <span>{{copy('A02 · Existing vessel compliance signals (context only)','A02 · إشارات امتثال السفينة الحالية (سياق فقط)')}}</span>
         <strong>{{comp.status}}</strong>
         <p>{{comp.reasoning}}</p>
         <small>{{copy('A02 evidence','أدلة A02')}}: {{comp.evidenceIds.join(', ')||'—'}}</small>
@@ -153,7 +153,7 @@
       <p *ngIf="ai.missingInformation?.length" class="missing">
        {{copy('Missing information','بيانات مطلوبة للتحقق')}}: {{ai.missingInformation.join(' · ')}}</p>
       <p class="ai-provenance">AI {{ai.aiProvider}} · {{ai.aiModel}} · {{ai.assessedAt}}
-       <br/>{{copy('Model scoring is advisory and separate from the vessel official Overall Risk. No automatic enforcement.',
+       <br/>{{copy('Incident score is computed by NMC rules using source report and grounded A01 actions; the model does not return a numeric incident score. Official vessel risk stays unchanged. No enforcement.',
         'التقييم استرشادي ومنفصل عن Overall Risk الخاص بالسفينة. لا يوجد تنفيذ تلقائي لأي عقوبة أو منع.')}}</p>
       <div class="human-review" *ngIf="ai.assessmentStatus!=='HUMAN_REVIEWED'">
        <h4>{{copy('Human follow-up approval','اعتماد المتابعة بواسطة الموظف')}}</h4>
@@ -188,8 +188,8 @@
       </div>
      </div>
      <div *ngIf="!incident.aiAssessment" class="no-ai">
-      {{copy('No Airia A01/A02 incident assessment saved yet. This requires a completed vessel assessment and support for the incident response extension.',
-        'لا يوجد تحليل حادث محفوظ من Airia A01/A02. يلزم تقييم سفينة مكتمل ودعم امتداد مخرجات الحوادث.')}}</div>
+      {{copy('No incident assessment recorded yet. Reuses the existing A01/A02 requests and responses; a saved vessel assessment is required and A01 must cite the supplied report evidence.',
+        'لا يوجد تقييم محفوظ للحادث بعد. نستخدم A01/A02 بنفس Request/Response الحاليين؛ يلزم تقييم سفينة محفوظ وأن يشير A01 إلى دليل الحادث.')}}</div>
     </section>
    </article>
    <ng-template #noSelection><div class="incident-detail empty">{{copy('Select a source incident to inspect its description and risk.',

@@ -215,8 +215,8 @@
             <span><i class="incident-legend-ring moderate"></i>{{copy('Moderate','متوسط')}}</span>
             <span><i class="incident-legend-ring low"></i>{{copy('Low','منخفض')}}</span>
             <span><i class="incident-legend-ring unassessed"></i>{{copy('Not rated','بدون تصنيف')}}</span>
-            <small>{{copy('Incident vessels: colored ship + outer ring = incident severity (AI, or unverified reported severity). Inner ring = saved A01/A02 vessel risk.',
-                'عند وجود حادث: لون السفينة والإطار الخارجي حسب خطورة الحادث (AI أو بلاغ غير مؤكد). الإطار الداخلي لمخاطر السفينة A01/A02.')}}</small>
+            <small>{{copy('Incident vessels: colored ship and outer ring = incident policy band when assessed, otherwise unverified source severity. Inner ring = saved A01/A02 vessel risk.',
+                'عند وجود حادث: لون السفينة والإطار الخارجي يمثل درجة الحادث المحسوبة بقواعد NMC أو خطورة البلاغ غير المؤكدة. الإطار الداخلي لمخاطر A01/A02.')}}</small>
           </div>
         </div>
       </div>
@@ -304,7 +304,7 @@
                   <span>{{copy('Source status','حالة المصدر')}}: {{report.sourceIncidentStatus}}</span>
                   <span>{{copy('Follow-up','المتابعة')}}: {{report.operationalStatus}}</span>
                   <span *ngIf="report.aiAssessment && !report.aiAssessmentStale">
-                    {{copy('AI incident score','درجة AI للحادث')}}: {{report.aiAssessment.incidentRiskScore}}/100
+                    {{copy('Incident risk · NMC rules','درجة مخاطر الحادث بقواعد NMC')}}: {{report.aiAssessment.incidentRiskScore}}/100
                   </span>
                   <span *ngIf="!report.aiAssessment || report.aiAssessmentStale">
                     {{copy('Reported severity (unverified)','خطورة واردة من المصدر (غير مؤكدة)')}}:

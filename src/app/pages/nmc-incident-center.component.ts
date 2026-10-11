@@ -89,8 +89,8 @@ export class NmcIncidentCenterComponent implements OnInit,OnDestroy {
   if(!row||this.busy||!row.aiReviewRequested||
      row.aiAssessment?.assessmentStatus==='HUMAN_REVIEWED')return;
   if(!window.confirm(this.copy(
-    'Send this synthetic report to the EXISTING Airia A02 compliance then A01 maritime-intelligence pipelines (two paid calls)? These require the incident output extension to be supported. No official vessel-risk changes or enforcement.',
-    'هل تريد إرسال البلاغ إلى نفس A02 للامتثال ثم A01 للموقف البحري (استدعاءان عبر Airia)؟ قد ينتج عنه تكلفة ويتطلب دعم مخرجات الحوادث الجديدة. لن تتغير مخاطر السفينة أو تُنفذ عقوبات.')))return;
+    'Send this synthetic report using existing A02 vessel risk signals then A01 situation assessment (two Airia calls, possible charges)? No request/response schema change. A01 must cite the incident evidence. Incident risk is computed by NMC rules, not directly by AI. No enforcement.',
+    'هل تريد تحليل البلاغ باستدعاء A02 Risk Signals ثم A01 Situation Assessment الحاليين (قد توجد تكلفة)؟ دون تغيير Schema، ويجب على A01 الاستشهاد بدليل الحادث. درجة المخاطر يحسبها NMC بقواعد مستقلة دون عقوبات.')))return;
   this.busy=true;this.error='';this.success='';
   this.incidents.analyze(row.incidentId,force).subscribe({
    next:()=>{

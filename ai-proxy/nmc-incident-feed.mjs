@@ -18,8 +18,8 @@ const INCIDENT_COLUMNS=[
 ];
 const ASSESSMENT_COLUMNS=[
  'Incident_ID','Description_SHA256','Assessment_ID','Assessed_At_UTC',
- 'AI_Provider','AI_Model','AI_Incident_Category','AI_Impact_0_5',
- 'AI_Urgency_0_5','AI_Exposure_0_5','AI_Recurrence_0_5',
+ 'AI_Provider','AI_Model','AI_Incident_Category','Policy_Impact_0_5',
+ 'Policy_Urgency_0_5','Policy_Exposure_0_5','Policy_Recurrence_0_5',
  'Incident_Risk_Score_0_100','Incident_Risk_Band','AI_Proposed_Followup',
  'AI_Reasoning','AI_Confidence_0_1','Missing_Information',
  'Officer_Decision','Officer_Name','Officer_Reviewed_At_UTC',
@@ -195,8 +195,7 @@ export class NmcIncidentFeed {
    // Reuse existing A01/A02 Airia pipeline execution; NEVER a separate LLM.
    executeIncidentAgents=null,
    agentEnabled=()=>false,
-   autoEnabled=process.env.NMC_INCIDENT_AUTO_TRIAGE_ENABLED==='true'&&
-     process.env.NMC_INCIDENT_AIRIA_EXTENSION_CONFIRMED==='true',
+   autoEnabled=process.env.NMC_INCIDENT_AUTO_TRIAGE_ENABLED==='true',
    autoMaxPerCycle=Number(process.env.NMC_INCIDENT_AUTO_MAX_PER_CYCLE||2),
    fetchImpl=globalThis.fetch,
    credentials=null
@@ -220,8 +219,8 @@ export class NmcIncidentFeed {
    this.agentEnabled()===true;}
  health(){return {sourceConfigured:this.configured,aiConfigured:this.aiConfigured,
    aiProvider:this.provider,scorePolicy:SCORE_VERSION,
-   incidentAgentContract:'NMC_INCIDENT_A01_A02_EXT_V1',
-   incidentContractRuntimeVerified:false,
+   incidentAgentContract:'A01_A02_EXISTING_CONTRACTS_V1',
+   incidentGroundingRequirement:'A01_REPORT_EVIDENCE_CITATION_REQUIRED',
    automaticTriageEnabled:this.autoEnabled,
    autoMaxPerCycle:this.autoMaxPerCycle,lastAutoRun:this.lastAutoRun,
    sourceStatus:this.configured?'READY_TO_FETCH':'NOT_CONFIGURED',
@@ -351,9 +350,9 @@ export class NmcIncidentFeed {
  async runAI(incident){
   if(!this.aiConfigured)
    throw new IncidentTriageError('AIRIA_A01_A02_NOT_ENABLED',503);
-  // The backend adapter uses the EXISTING A01/A02 Airia pipeline IDs.
-  // The agents must explicitly return the incident extension contract;
-  // never fake a score from normal vessel-risk signals.
+  // The backend adapter uses the EXISTING A02 signals + A01 situation
+  // assessment requests/responses. The incident score comes from deterministic
+  // NMC rules; if A01 fails to cite the report no result is saved.
   return await this.executeIncidentAgents(incident);
  }
  /**
