@@ -132,6 +132,7 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
   /** Only show actual Google Sheet accident/incident records for this IMO. */
   get accidents():NmcMaritimeIncident[]{return this.vesselIncidents||[];}
   get hasAccidents():boolean{return this.vesselIncidents!==null&&this.vesselIncidents.length>0;}
+  get inspectionsWithOpenFindings():number{return this.inspections.filter(r=>r.openDeficiencies>0).length;}
   get accidentsSourceUnavailable():boolean{return this.vesselIncidents===null;}
   selectedCertificateId = '';
 
