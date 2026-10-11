@@ -842,68 +842,70 @@
     </section>
 
     <section class="evidence-tab" *ngIf="activeTab === 'compliance'">
-      <div class="evidence-heading">
-        <div>
-          <span class="section-kicker">{{ copy('COMPLIANCE', 'الامتثال') }}</span>
-          <h3>{{ copy('Compliance Picture', 'صورة الامتثال') }}</h3>
-          <p>{{ copy('Current registration, certificate, inspection and operational compliance posture for', 'الوضع الحالي للتسجيل والشهادات والمعاينة والامتثال التشغيلي للسفينة') }} {{ vessel.name }}.</p>
-        </div>
-        <div class="evidence-heading-actions">
-          <span class="matched-badge">{{ complianceStatus }}</span>
-          <button type="button" class="secondary-btn" (click)="setTab('overview')">{{ copy('Return to overview', 'العودة إلى النظرة العامة') }}</button>
-        </div>
-      </div>
-
+      <div class="evidence-heading"><div>
+        <span class="section-kicker">{{copy('COMPLIANCE EVIDENCE','أدلة الامتثال')}}</span>
+        <h3>{{copy('Compliance & Regulatory Evidence','الامتثال والأدلة التنظيمية')}}</h3>
+        <p>{{copy('Evidence is separated from legal findings. POC fixture records are not verified flag or MOEI determinations.',
+          'يُفصل الدليل عن القرار التنظيمي. السجلات التجريبية ليست قرارات معتمدة من دولة العلم أو الوزارة.')}}</p>
+      </div><a class="secondary-btn" [routerLink]="['/moei/nmc/vessel',vessel.imo,'case']">
+        {{copy('Case Management & actions →','إدارة الحالة والإجراءات ←')}}</a></div>
       <div class="inspection-kpis">
-        <div><small>{{ registrationTitle }}</small><strong>{{ registrationStatus }}</strong><span>{{ registrationSource }} · {{ registrationAuthorityLabel }}</span></div>
-        <div><small>{{ copy('Certificates', 'الشهادات') }}</small><strong [class.critical-text]="hasCertificateConflict">{{ hasCertificateConflict ? copy('Verification Required', 'يتطلب التحقق') : copy('In Order', 'سليم') }}</strong><span>{{ hasCertificateConflict ? copy('source conflict open', 'يوجد تعارض مفتوح بالمصادر') : copy('no critical conflict', 'لا يوجد تعارض حرج') }}</span></div>
-        <div><small>{{ copy('Inspection', 'المعاينة') }}</small><strong [class.critical-text]="openDeficiencyCount > 0">{{ openDeficiencyCount > 0 ? copy('Follow-up Required', 'تتطلب متابعة') : copy('Clear', 'سليم') }}</strong><span>{{ openDeficiencyCount }} {{ copy('open', 'مفتوحة') }} deficiency</span></div>
-        <div><small>{{ copy('Overall compliance', 'الامتثال العام') }}</small><strong [class.critical-text]="vessel.risk >= 65">{{ complianceStatus }}</strong><span>{{ copy('risk score', 'درجة المخاطر') }} {{ vessel.riskScore }}/100</span></div>
+        <div><small>{{copy('Synthetic registration','تسجيل تجريبي')}}</small>
+          <strong>{{registrationStatus}}</strong><span>{{vessel.flag}} · {{registrationSource}}</span></div>
+        <div><small>{{copy('Certificate records','سجلات الشهادات')}}</small>
+          <strong>{{certificates.length}}</strong><span>{{copy('POC only, issuer not verified','بيانات تجريبية، الجهة غير متحقق منها')}}</span></div>
+        <div><small>{{copy('Open fixture deficiencies','ملاحظات تجريبية مفتوحة')}}</small>
+          <strong>{{openDeficiencyCount}}</strong><span>{{copy('Not official inspection outcome','ليست نتائج معاينات رسمية')}}</span></div>
+        <div><small>{{copy('Saved vessel risk','مخاطر السفينة المحفوظة')}}</small>
+          <strong>{{storedAi ? (vessel.riskScore+'/100') : '—'}}</strong>
+          <span>{{storedAi ? 'A01/A02 · Synthetic POC' : copy('Pending evidence','بانتظار الأدلة')}}</span></div>
       </div>
-
+      <article class="panel"><div class="panel-header"><div>
+        <h3>{{copy('A02 — saved compliance factors','A02 — عوامل امتثال محفوظة')}}</h3>
+        <p>{{copy('Only results returned and stored for this IMO; unknown does not mean compliant.',
+          'نتائج محفوظة لنفس IMO فقط، وعدم توافر البيانات لا يعني الامتثال.')}}</p>
+      </div></div>
+      <div class="factor-list" *ngIf="storedAi?.signals as signals;else a02NoEvidence">
+        <ng-container *ngFor="let factor of signals">
+          <div class="factor-row" *ngIf="['inspection','certificate','dataQuality'].includes(factor.factor)">
+            <div class="factor-main"><strong>{{factor.factor}}</strong>
+              <small>{{copy('Severity','الخطورة')}}: {{factor.severity}}/100 ·
+                {{copy('Model confidence','ثقة النموذج')}}: {{factor.confidence|percent:'1.0-0'}}</small>
+              <p>{{factor.reason}}</p>
+              <small>{{copy('Evidence','الأدلة')}}: {{factor.evidenceIds.join(', ')}}</small>
+            </div>
+          </div>
+        </ng-container>
+      </div>
+      <ng-template #a02NoEvidence><p class="v360-empty-state">
+        {{copy('No saved A02 compliance factors. No clearance can be inferred.',
+          'لا توجد عوامل امتثال محفوظة من A02؛ لا يمكن استنتاج خلو السفينة من المخالفات.')}}</p></ng-template>
+      </article>
       <div class="certificate-layout">
-        <article class="panel">
-          <div class="panel-header">
-            <div><h3>{{ copy('Compliance Controls', 'ضوابط الامتثال') }}</h3><p>{{ copy('Current cross-domain compliance checks', 'فحوص الامتثال الحالية عبر المجالات') }}</p></div>
-            <span class="source-summary">{{ copy('Live correlated status', 'حالة مترابطة مباشرة') }}</span>
-          </div>
-          <div class="source-table">
-            <div class="source-row header"><span>{{ copy('Control', 'الضابط') }}</span><span>{{ copy('Current state', 'الحالة الحالية') }}</span><span>{{ copy('Source', 'المصدر') }}</span><span>{{ copy('Risk', 'المخاطر') }}</span><span>{{ copy('Status', 'الحالة') }}</span></div>
-            <div class="source-row">
-              <div><strong>{{ registrationTitle }}</strong><small>{{ isUaeFlag ? copy('UAE legal registration state', 'حالة التسجيل القانوني في دولة الإمارات') : copy('Foreign flag registration state', 'حالة التسجيل لدى دولة العلم الأجنبية') }}</small></div>
-              <span>{{ registrationStatus }}</span><span>{{ registrationSource }}</span><span>{{ copy('Low', 'منخفض') }}</span><span class="status-chip matched">{{ isUaeFlag ? copy('Authoritative', 'معتمد') : copy('Verified', 'تم التحقق') }}</span>
-            </div>
-            <div class="source-row">
-              <div><strong>{{ copy('Certificate validity', 'صلاحية الشهادة') }}</strong><small>{{ copy('Safety and statutory certificates', 'شهادات السلامة والشهادات النظامية') }}</small></div>
-              <span>{{ hasCertificateConflict ? copy('Verification required', 'يتطلب التحقق') : copy('Valid / monitored', 'ساري / تحت المراقبة') }}</span><span>{{ primaryCertificateSourceLabel }}</span><span>{{ certificateRiskImpact }}</span><span class="status-chip" [ngClass]="hasCertificateConflict ? 'conflict' : 'matched'">{{ hasCertificateConflict ? copy('Conflict', 'تعارض') : copy('Matched', 'متطابق') }}</span>
-            </div>
-            <div class="source-row">
-              <div><strong>{{ copy('Inspection findings', 'نتائج المعاينة') }}</strong><small>{{ copy('Open deficiencies and corrective actions', 'الملاحظات المفتوحة والإجراءات التصحيحية') }}</small></div>
-              <span>{{ openDeficiencyCount }} open</span><span>{{ copy('Smart Inspection', 'المعاينة الذكية') }}</span><span>{{ inspectionRiskImpact }}</span><span class="status-chip" [ngClass]="openDeficiencyCount ? 'conflict' : 'matched'">{{ openDeficiencyCount ? copy('Action', 'إجراء') : copy('Clear', 'سليم') }}</span>
-            </div>
-            <div class="source-row">
-              <div><strong>{{ copy('Movement monitoring', 'مراقبة الحركة') }}</strong><small>{{ copy('Route and behavioral indicators', 'مؤشرات المسار والسلوك') }}</small></div>
-              <span>{{ vessel.risk >= 65 ? copy('Exception detected', 'تم رصد حالة استثنائية') : copy('Within monitored pattern', 'ضمن النمط المراقب') }}</span><span>AIS / LRIT</span><span>{{ movementRiskImpact }}</span><span class="status-chip" [ngClass]="vessel.risk >= 65 ? 'conflict' : 'available'">{{ vessel.risk >= 65 ? copy('Review', 'مراجعة') : copy('Available', 'متاح') }}</span>
-            </div>
-          </div>
+        <article class="panel"><div class="panel-header"><div>
+          <h3>{{copy('External PSC · connected synthetic source','PSC خارجي · مصدر تجريبي متصل')}}</h3></div></div>
+          <p *ngIf="externalPsc as psc">{{psc.summary.inspections}}
+            {{copy('inspections','معاينات')}} · {{psc.summary.openDeficiencies}}
+            {{copy('open findings','ملاحظات مفتوحة')}} · {{psc.summary.detentions}}
+            {{copy('detentions','حالات احتجاز')}}.
+            {{copy('All from a synthetic POC dataset, NOT Riyadh MoU.','جميعها بيانات تجريبية وليست تقارير مذكرة تفاهم الرياض.')}}</p>
+          <p *ngIf="!externalPsc">{{copy('PSC adapter unavailable / not loaded; no external compliance clearance.',
+            'مصدر PSC غير متاح أو لم يُقرأ؛ لا يمكن استنتاج الموافقة أو الخلو من الملاحظات.')}}</p>
+          <button type="button" class="secondary-btn" (click)="setTab('external-psc')">
+            {{copy('Open PSC evidence','عرض أدلة PSC')}}</button>
         </article>
-
-        <aside class="panel">
-          <div class="panel-header">
-            <div><h3>{{ copy('Compliance Decision', 'قرار الامتثال') }}</h3><p>{{ copy('Current operational interpretation', 'التفسير التشغيلي الحالي') }}</p></div>
-            <span class="risk-confidence">{{ vessel.riskLevel }}</span>
-          </div>
-          <div class="deficiency-detail">
-            <h4>{{ complianceStatus }}</h4>
-            <p class="deficiency-description">{{ attentionDescription }}</p>
-            <div class="deficiency-facts">
-              <div><small>{{ copy('Risk score', 'درجة المخاطر') }}</small><strong>{{ vessel.riskScore }}/100</strong></div>
-              <div><small>Data confidence</small><strong>{{ vessel.dataConfidence }}%</strong></div>
-              <div><small>{{ copy('Open deficiencies', 'الملاحظات المفتوحة') }}</small><strong>{{ openDeficiencyCount }}</strong></div>
-              <div><small>{{ copy('Source conflicts', 'تعارضات المصادر') }}</small><strong>{{ conflictCount }}</strong></div>
-            </div>
-          </div>
-        </aside>
+        <article class="panel"><div class="panel-header"><div>
+          <h3>{{copy('Recorded incidents & cases','الحوادث والحالات المسجلة')}}</h3></div></div>
+          <p *ngIf="hasRecordedAccidents">{{recordedAccidents.length}}
+            {{copy('source incident report(s),','بلاغ حادث من المصادر،')}}
+            {{activeAccidentCount}} {{copy('active','نشط')}}.</p>
+          <p *ngIf="!hasRecordedAccidents">{{copy('No incident report loaded for this IMO. Source availability must be checked.',
+            'لا يوجد بلاغ حادث محمّل للسفينة؛ يجب التحقق من توافر المصدر.')}}</p>
+          <a class="secondary-btn" *ngIf="hasRecordedAccidents" (click)="setTab('accidents')">
+            {{copy('View accident evidence','عرض أدلة الحوادث')}}</a>
+          <a class="secondary-btn" [routerLink]="['/moei/nmc/vessel',vessel.imo,'case']">
+            {{copy('Open central case','فتح الحالة المركزية')}}</a>
+        </article>
       </div>
     </section>
 
