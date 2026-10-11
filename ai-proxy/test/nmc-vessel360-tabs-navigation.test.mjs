@@ -56,7 +56,7 @@ test('every Vessel 360 tab has corresponding rendered data, no placeholder movem
     assert.ok(src.v360Html.includes(p),'missing movement field '+p);
   assert.doesNotMatch(src.v360Html,/class="placeholder-grid"/);
   assert.doesNotMatch(src.v360Html,/<app-nmc-vessel-documents|setTab\('documents'\)/);
-  assert.match(src.v360Ts,/Google Drive Vessel Documents \/ A03/);
+  assert.match(src.v360Ts,/Google Drive Document Metadata/);
   assert.match(src.v360Html,/externalPsc/);
   assert.match(src.v360Html,/\*ngFor="let inspection of inspections"/);
   assert.match(src.v360Html,/\*ngFor="let certificate of certificates"/);
