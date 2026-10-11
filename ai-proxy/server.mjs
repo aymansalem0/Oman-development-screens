@@ -1219,6 +1219,22 @@ try{
   server.listen(port,'0.0.0.0',()=>{
     console.log(`NMC AI proxy listening on ${port}; mode=${dbMode}; fleet-auto=${scheduler.enabled}`);
     applyRuntimeSettings();
+    // Optional incident triage worker. Off unless explicitly enabled; rows
+    // must each opt in, and no request is triggered by loading dashboards.
+    if(incidentFeed.autoEnabled&&incidentFeed.aiConfigured){
+      const intervalMinutes=Math.min(1440,Math.max(5,Number(
+        process.env.NMC_INCIDENT_AUTO_INTERVAL_MINUTES||15)||15));
+      const timer=setInterval(()=>{
+        void incidentFeed.autoTick().then(result=>{
+          console.log('[nmc-incidents] TRIAGE_TICK '+JSON.stringify(result));
+        }).catch(()=>{
+          console.error('[nmc-incidents] TRIAGE_TICK_FAILED');
+        });
+      },intervalMinutes*60000);
+      timer.unref();
+      console.log('[nmc-incidents] AUTO_TRIAGE_ENABLED minutes='+intervalMinutes+
+        ' maxPerCycle='+incidentFeed.autoMaxPerCycle);
+    }
   });
 }catch(error){
   // Fail closed: no AI requests if Oracle schema / credentials are not ready.
