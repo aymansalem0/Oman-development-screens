@@ -15,6 +15,17 @@ const isImo=x=>typeof x==='string'&&/^\d{7}$/.test(x);
 const clob=x=>({val:JSON.stringify(x),type:oracledb.DB_TYPE_CLOB});
 const noteValue=x=>typeof x==='string'&&x.trim().length>0&&x.length<=500?x.trim():null;
 const VALID_TASK_STATUS=['Assigned','In Progress','Completed','Escalated'];
+// POC routes, not a legal MOEI decision-authority matrix; human changes are
+// restricted to supported types and role mappings, not arbitrary agent text.
+const HUMAN_REPLACEMENT_ROUTES=Object.freeze({
+  VERIFY_CERTIFICATE:{title:'Verify maritime certificate status',role:'COMPLIANCE_OFFICER'},
+  ENHANCED_MONITORING:{title:'Maintain enhanced vessel monitoring',role:'NMC_OFFICER'},
+  PRIORITY_INSPECTION:{title:'Request priority vessel inspection',role:'INSPECTION_OFFICER'},
+  REVIEW_DEFICIENCY:{title:'Review open inspection deficiencies',role:'COMPLIANCE_OFFICER'},
+  VERIFY_DEFICIENCY_CLOSURE:{title:'Verify evidence of deficiency closure',role:'COMPLIANCE_OFFICER'},
+  REQUEST_EXTERNAL_VERIFICATION:{title:'Request independent evidence verification',role:'COMPLIANCE_OFFICER'},
+  NO_ACTION:{title:'No further intervention',role:'NMC_OFFICER'}
+});
 export class NmcCaseError extends Error{
   constructor(code,status=400){super(code);this.code=code;this.status=status;}
 }
@@ -169,6 +180,10 @@ export class NmcCaseWorkspace{
       throw new NmcCaseError('CASE_DECISION_INVALID');
     if(decision!=='ACCEPT'&&!noteValue(note))
       throw new NmcCaseError('CASE_DECISION_REASON_REQUIRED');
+    if(decision==='MODIFY'&&!Object.hasOwn(HUMAN_REPLACEMENT_ROUTES,replacementActionType||''))
+      throw new NmcCaseError('CASE_MODIFICATION_ROUTE_REQUIRED');
+    if(decision!=='MODIFY'&&replacementActionType)
+      throw new NmcCaseError('CASE_MODIFICATION_ROUTE_UNEXPECTED');
     if(!Array.isArray(evidenceIds)||evidenceIds.length>20||
       evidenceIds.some(v=>typeof v!=='string'||v.length>100))
       throw new NmcCaseError('CASE_EVIDENCE_INVALID');
@@ -241,7 +256,7 @@ export class NmcCaseWorkspace{
         return {...row,actionPlan:plan,status:'IN_PROGRESS'};
       },{sourceAssessmentId:plan.sourceAssessmentId,proposals:plan.proposedActions.length});
   }
-  async decideAction(id,version,actionId,decision,note='',role='OPERATOR'){
+  async decideAction(id,version,actionId,decision,note='',role='OPERATOR',replacementActionType=null){
     if(!['ACCEPT','REJECT','MODIFY'].includes(decision))
       throw new NmcCaseError('CASE_DECISION_INVALID');
     if(decision!=='ACCEPT'&&!noteValue(note))
@@ -253,12 +268,23 @@ export class NmcCaseWorkspace{
       const action=plan.proposedActions.find(a=>a.actionId===actionId);
       if(!action)throw new NmcCaseError('CASE_ACTION_NOT_FOUND',404);
       if(action.decision!=='PENDING')throw new NmcCaseError('CASE_ACTION_ALREADY_DECIDED',409);
-      if((decision==='ACCEPT'||decision==='MODIFY')&&
+      const changed=decision==='MODIFY';
+      if(changed&&replacementActionType===action.actionType)
+        throw new NmcCaseError('CASE_MODIFICATION_MUST_CHANGE_ROUTE');
+      const effectiveType=changed?replacementActionType:action.actionType;
+      const route=changed?HUMAN_REPLACEMENT_ROUTES[replacementActionType]:null;
+      if((decision==='ACCEPT'||changed)&&
         (!Array.isArray(action.evidenceIds)||!action.evidenceIds.length)&&
-        action.actionType!=='NO_ACTION')throw new NmcCaseError('CASE_ACTION_EVIDENCE_REQUIRED');
-      const accepted=decision!=='REJECT'&&action.actionType!=='NO_ACTION';
+        effectiveType!=='NO_ACTION')throw new NmcCaseError('CASE_ACTION_EVIDENCE_REQUIRED');
+      // Original A01 proposal stays immutable for review and later feedback.
+      const effectiveTitle=route?.title||action.title;
+      const effectiveRole=route?.role||action.ownerRole;
+      const effectiveReason=changed?noteValue(note):action.reason;
+      const accepted=decision!=='REJECT'&&effectiveType!=='NO_ACTION';
       const nextActions=plan.proposedActions.map(a=>a.actionId===actionId?
         {...a,decision,decisionNote:noteValue(note)||'',
+          ...(changed?{replacementActionType:effectiveType,
+            replacementTitle:effectiveTitle,replacementOwnerRole:effectiveRole}:{}),
           decidedAt:now(),decidedBy:role}:a);
       const tasks=[...row.tasks];
       const inspectionRequests=[...(row.inspectionRequests||[])];
@@ -268,9 +294,9 @@ export class NmcCaseWorkspace{
         const suffix=createHash('sha256').update(action.actionId).digest('hex').slice(0,10);
         const generatedTaskId='a01-'+action.actionId.slice(0,42)+'-'+suffix;
         const task={
-          id:generatedTaskId,actionId:action.actionId,actionType:action.actionType,
-          title:action.title,priority:action.priority,reason:action.reason,
-          status:'Assigned',assignedRole:action.ownerRole,
+          id:generatedTaskId,actionId:action.actionId,actionType:effectiveType,
+          title:effectiveTitle,priority:action.priority,reason:effectiveReason,
+          status:'Assigned',assignedRole:effectiveRole,approvalMode:decision,
           mandatory:true,evidenceIds:action.evidenceIds,
           provenance:'AIRIA_A01_HUMAN_APPROVED',sourceAssessmentId:row.sourceAssessmentId,
           generatedAt:now()
@@ -279,13 +305,13 @@ export class NmcCaseWorkspace{
           (t.provenance==='AIRIA_A01_HUMAN_APPROVED'&&t.actionId===action.actionId)))
           throw new NmcCaseError('CASE_TASK_EXISTS',409);
         tasks.push(task);
-        if(action.actionType==='PRIORITY_INSPECTION'){
+        if(effectiveType==='PRIORITY_INSPECTION'){
           if(inspectionRequests.some(r=>r.status!=='COMPLETED'))
             throw new NmcCaseError('CASE_ACTIVE_INSPECTION_EXISTS',409);
           inspectionRequests.push({
             id:randomUUID(),caseId:row.id,imo:row.imo,actionId:action.actionId,
             status:'PENDING_SCHEDULING',inspectionRegime:'FOCUSED_INSPECTION',
-            priority:action.priority,reason:action.reason,evidenceIds:action.evidenceIds,
+            priority:action.priority,reason:effectiveReason,evidenceIds:action.evidenceIds,
             sourceScore:row.sourceScore,sourceAssessmentId:row.sourceAssessmentId,
             port:null,scheduledAt:null,inspector:null,scheduledBy:null,
             createdAt:now(),version:1
@@ -301,7 +327,7 @@ export class NmcCaseWorkspace{
       const ready=allDecisionsRecorded&&allRequiredDone&&!row.inspectionOutcome;
       return {...row,actionPlan:{...plan,proposedActions:nextActions},
         tasks,inspectionRequests,status:ready?'PENDING_VERIFICATION':'IN_PROGRESS'};
-    },{actionId,decision});
+    },{actionId,decision,replacementActionType:decision==='MODIFY'?replacementActionType:null});
   }
   async listInspectionRequests(){
     const rows=await this.list();
