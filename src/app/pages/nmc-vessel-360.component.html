@@ -554,7 +554,7 @@
                   <span>{{ certificate.source }}</span>
                 </div>
               </div>
-              <span class="conflict-indicator" *ngIf="certificate.conflict">{{ copy('CONFLICT', 'تعارض') }}</span>
+              <span class="conflict-indicator" *ngIf="certificate.condition">{{copy('POC CONDITION · VERIFY','شرط تجريبي · يحتاج تحقق')}}</span>
             </button>
           </div>
         </article>
@@ -610,9 +610,12 @@
       </div>
 
       <div class="inspection-kpis">
-        <div><small>{{ copy('Inspections / 12 months', 'المعاينات / 12 شهراً') }}</small><strong>3</strong><span>{{ copy('2 with findings', '2 بها ملاحظات') }}</span></div>
+        <div><small>{{copy('Inspection records in POC','سجلات المعاينات في التجربة')}}</small><strong>{{inspections.length}}</strong>
+          <span>{{inspections.filter(inspection => inspection.openDeficiencies > 0).length}} {{copy('with open findings (synthetic)','بها ملاحظات مفتوحة (تجريبية)')}}</span></div>
         <div><small>{{ copy('Open deficiencies', 'الملاحظات المفتوحة') }}</small><strong [class.critical-text]="openDeficiencyCount > 0">{{ openDeficiencyCount }}</strong><span>{{ openDeficiencyCount > 0 ? copy('requires follow-up', 'تتطلب متابعة') : copy('no open findings', 'لا توجد ملاحظات مفتوحة') }}</span></div>
-        <div><small>{{ copy('Compliance status', 'حالة الامتثال') }}</small><strong [class.critical-text]="vessel.risk >= 65">{{ complianceStatus }}</strong><span>{{ copy('current inspection posture', 'الوضع الحالي للمعاينة') }}</span></div>
+        <div><small>{{copy('Risk-based review posture (POC)','موقف المراجعة حسب المخاطر (تجريبي)')}}</small>
+          <strong [class.critical-text]="vessel.risk >= 65">{{complianceStatus}}</strong>
+          <span>{{copy('Not an official compliance finding','ليس قرار امتثال رسمي')}}</span></div>
         <div><small>{{ copy('Risk contribution', 'المساهمة في المخاطر') }}</small><strong [class.critical-text]="inspectionRiskImpact > 10">+{{ inspectionRiskImpact }}</strong><span>{{ copy('current composite score', 'الدرجة المركبة الحالية') }}</span></div>
       </div>
 
@@ -623,7 +626,7 @@
               <h3>{{ copy('Inspection History', 'سجل المعاينات') }}</h3>
               <p>{{ copy('Most recent first', 'الأحدث أولاً') }}</p>
             </div>
-            <span class="source-summary">{{ copy('Smart Inspection', 'المعاينة الذكية') }}</span>
+            <span class="source-summary">{{copy('Synthetic Vessel 360 records · NOT live SI ledger','سجلات Vessel 360 تجريبية · ليست سجل المعاينات المباشر')}}</span>
           </div>
 
           <div class="inspection-list">
