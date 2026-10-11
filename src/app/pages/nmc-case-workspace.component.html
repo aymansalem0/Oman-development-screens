@@ -30,11 +30,45 @@
     <div *ngIf="centralSuccess" class="central-case-banner success" role="status">{{centralSuccess}}</div>
     <section *ngIf="!centralCase&&!centralLoading" class="central-case-empty">
       <span>▣</span>
-      <h2>{{copy('No central case has been opened for this vessel',
-                'لم يتم فتح حالة مركزية لهذه السفينة')}}</h2>
-      <p>{{copy('An NMC Officer must acknowledge a maritime alert and explicitly create or link a case. No operational case has been created automatically.',
-                'يجب أن يستلم ضابط المركز البحري التنبيه ثم يفتح حالة أو يربطها بحالة قائمة. لم يتم إنشاء حالة تلقائيًا.')}}</p>
-      <a routerLink="/moei/nmc/alerts">{{copy('Go to Alerts & Notifications','الانتقال إلى التنبيهات والإشعارات')}} →</a>
+      <h2>{{copy('No maritime case has been opened for this vessel',
+                'لم يتم فتح حالة بحرية لهذه السفينة')}}</h2>
+      <p>{{copy('Notifications report events and receipt only. An NMC Officer may open an operational case here after acknowledging an active alert; decisions and AI recommendations are then managed inside the case.',
+                'شاشة التنبيهات لعرض الأحداث وتسجيل استلامها فقط. يمكن لموظف المركز فتح حالة تشغيلية من هنا بعد استلام تنبيه نشط، ثم إدارة القرارات وتوصيات الذكاء الاصطناعي داخل الحالة.')}}</p>
+
+      <p *ngIf="caseAlertLoading" class="case-alert-loading">
+        {{copy('Checking eligible acknowledged alerts…','جارٍ التحقق من التنبيهات المستلمة والمؤهلة…')}}
+      </p>
+      <div *ngIf="!caseAlertLoading&&caseEligibleAlerts.length" class="case-alert-candidates">
+        <h3>{{copy('Acknowledged alerts available for case opening',
+                    'التنبيهات المستلمة والمتاحة لفتح حالة')}}</h3>
+        <article class="case-alert-choice" *ngFor="let alert of caseEligibleAlerts">
+          <div class="case-alert-description">
+            <strong>{{copy('Maritime risk alert','تنبيه مخاطر بحرية')}} · {{alert.severity}} · IMO {{alert.imo}}</strong>
+            <small>{{alert.createdAt|date:'medium'}} · {{alert.sourceLevel}} · {{alert.sourceScore}}/100</small>
+            <p>{{alert.triggeringRiskTrigger==='CRITICAL_OPEN_FINDING'
+              ?copy('A critical open maritime finding is recorded','توجد ملاحظة بحرية حرجة مفتوحة')
+              :copy('A high or critical vessel risk classification was recorded','تم تسجيل تصنيف مخاطر مرتفع أو حرج للسفينة')}}</p>
+          </div>
+          <button type="button" class="case-open-button" [disabled]="caseCreateBusy||centralBusy"
+                  (click)="createCaseFromAlert(alert)">
+            + {{copy('Open Maritime Case','فتح حالة بحرية')}}
+          </button>
+        </article>
+        <p class="case-ai-consent">
+          {{copy('Opening a case makes one explicit A01 request (possible AI usage cost). No AI recommendation becomes an approved task until an authorized officer accepts it.',
+                  'فتح الحالة يستدعي A01 مرة واحدة بعد موافقة صريحة (وقد يترتب عليه تكلفة استخدام). لا تتحول توصيات AI إلى مهام معتمدة إلا بعد موافقة الموظف المخوّل.')}}
+        </p>
+      </div>
+      <p *ngIf="!caseAlertLoading&&!caseEligibleAlerts.length" class="case-alert-empty">
+        {{caseUnacknowledgedAlerts>0
+          ?copy('This vessel has a new alert that must be acknowledged in Notifications before opening a case.',
+                'توجد تنبيهات جديدة لهذه السفينة؛ يجب استلامها في شاشة التنبيهات أولًا قبل فتح حالة.')
+          :copy('No eligible acknowledged active alerts were found for this vessel.',
+                'لا توجد تنبيهات نشطة مستلمة ومؤهلة لفتح حالة لهذه السفينة.')}}
+      </p>
+      <a routerLink="/moei/nmc/alerts" class="case-alert-back">
+        {{copy('Back to Alerts & Notifications','العودة إلى التنبيهات والإشعارات')}} →
+      </a>
     </section>
     <ng-container *ngIf="centralCase">
 
