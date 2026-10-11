@@ -24,6 +24,12 @@ export interface NmcAiActionPlan {
   sourceLevel:string;configVersion:string|null;summary:string;whyItMatters:string;
   agentAssessmentId:string|null;createdAt:string;proposedActions:NmcAiAction[];
   primaryProposedDecision?:{decisionId:string;titleAr:string;titleEn:string;rationaleAr:string;rationaleEn:string;expectedOutcomeAr?:string;expectedOutcomeEn?:string;evidenceIds:string[];urgency?:string;confidence?:number;requestedActionIds?:string[]};
+  sourceCurrency?:{
+    historicalSource:boolean;originalAssessmentId:string|null;
+    latestAssessmentId:string|null;latestRiskScore:number|null;
+    latestRiskLevel:string|null;latestAssessedAt:string|null;
+    explicitlyAcknowledged:boolean;acknowledgedAt:string|null;
+  };
 }
 export interface NmcDecisionStep{
   id:string;titleEn:string;titleAr:string;role:string;
@@ -108,6 +114,14 @@ export interface NmcCentralCaseAudit {
   details:{[key:string]:string|number|boolean|null};
   at:string;
 }
+export interface NmcCaseA01SourcePreview {
+  status:'ok';caseId:string;caseVersion:number;
+  ready:boolean;isHistorical:boolean;requiresHistoricalAcknowledgement:boolean;
+  caseAssessmentId:string|null;latestAssessmentId:string|null;
+  caseScore:number|null;latestScore:number|null;
+  caseLevel:string|null;latestLevel:string|null;
+  sourceAssessedAt:string|null;latestAssessedAt:string|null;
+}
 interface CaseResponse{
   status:'ok';case:NmcCentralCase|null;
   aiActionPlanStatus?:'READY'|'FAILED';
@@ -169,9 +183,16 @@ export class NmcCasesService {
     return this.mutate(this.path(current.id)+'/restriction/release',
       {version:current.version,authorityReference,rectificationEvidenceRef},true);
   }
-  generateActionPlan(current:NmcCentralCase):Observable<CaseResponse>{
-    return this.mutate(this.path(current.id)+'/action-plan/generate',
-      {version:current.version},false);
+  actionPlanSourcePreview(id:string):Observable<NmcCaseA01SourcePreview>{
+    return this.http.get<NmcCaseA01SourcePreview>(
+      this.path(id)+'/action-plan-source');
+  }
+  generateActionPlan(current:NmcCentralCase,acknowledgeHistoricalAssessment=false,
+    reviewedLatestAssessmentId?:string|null):Observable<CaseResponse>{
+    return this.mutate(this.path(current.id)+'/action-plan/generate',{
+      version:current.version,acknowledgeHistoricalAssessment,
+      ...(acknowledgeHistoricalAssessment?{reviewedLatestAssessmentId}: {})
+    },false);
   }
   decideAiAction(current:NmcCentralCase,actionId:string,
     decision:'ACCEPT'|'MODIFY'|'REJECT',note='',replacementActionType?:string):Observable<CaseResponse>{
@@ -282,7 +303,9 @@ export class NmcCasesService {
       A01_UNSUPPORTED_RESPONSE:['A01 response format is unsupported; no tasks were created.','تنسيق استجابة A01 غير مدعوم ولم يتم إنشاء مهام.'],
       A01_ACTION_EVIDENCE_MISSING:['A01 proposal lacks verified source evidence.','اقتراح A01 لا يحتوي أدلة مصدر تم التحقق منها.'],
       A01_ACTION_INVALID:['A01 returned an unsupported action type or duplicate identifier.','أعاد A01 نوع إجراء غير مدعوم أو معرفًا مكررًا.'],
-      CASE_SOURCE_ASSESSMENT_UNAVAILABLE:['The original saved assessment is unavailable or was superseded. No AI run was made.','التقييم الأصلي غير متاح أو تم استبداله؛ لم يتم استدعاء AI.'],
+      CASE_SOURCE_ASSESSMENT_UNAVAILABLE:['The original assessment or its exact risk evidence could not be verified. No AI call was made.','تعذر التحقق من التقييم الأصلي أو أدلة المخاطر المرتبطة به؛ لم يتم استدعاء AI.'],
+      CASE_HISTORICAL_ASSESSMENT_REVIEW_REQUIRED:['A newer risk assessment exists. Review and explicitly acknowledge use of the ORIGINAL case assessment before requesting A01.','يوجد تقييم مخاطر أحدث. راجع وأكد صراحةً استخدام التقييم الأصلي للحالة قبل طلب توصيات A01.'],
+      CASE_HISTORICAL_ASSESSMENT_CONTEXT_CHANGED:['The latest risk assessment changed during your review. Refresh and review the assessment comparison again. No AI call was made.','تغير أحدث تقييم للمخاطر أثناء المراجعة. حدّث مقارنة التقييمات وراجعها مجدداً؛ لم يتم استدعاء AI.'],
       CASE_RISK_REASSESSMENT_PENDING:['Case closure is blocked: the completed inspection requires verified A02 evidence refresh and a new saved risk assessment. Original risk remains unchanged.','لا يمكن إغلاق الحالة: المعاينة المكتملة تتطلب تحديث أدلة A02 وإعادة تقييم مخاطر جديدة ومحفوظة؛ درجة المخاطر الأصلية لم تتغير.'],
       CASE_ACTION_DECISIONS_PENDING:['Review all A01 proposals before closing the case.','يجب اتخاذ قرار بشأن جميع توصيات A01 قبل إغلاق الحالة.'],
       CASE_ACTION_PLAN_REQUIRED:['Generate and review an A01 action plan before completion.','يجب إنشاء خطة إجراءات A01 ومراجعتها قبل الإغلاق.'],
