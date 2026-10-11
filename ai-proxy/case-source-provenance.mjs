@@ -23,6 +23,7 @@ export function evaluateCaseAssessment(caseRow,current,historical=null){
     latestAssessmentId:currentId,
     caseScore:caseRow?.sourceScore??null,
     latestScore:Number.isFinite(current?.score)?current.score:null,
+    latestAssessedAt:current?.assessedAt||null,
     caseLevel:caseRow?.sourceLevel??null,
     latestLevel:current?.level||null,
     sourceAssessedAt:identityMatches?source.assessedAt||null:null,
