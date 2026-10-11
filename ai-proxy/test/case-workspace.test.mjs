@@ -308,3 +308,38 @@ test('Human supervisor closes only when mandatory actions are completed',async()
    assert.equal((await db.cases.byImo(imo)).id,row.id);
  }finally{db.close();}
 });
+test('MODIFY validates the new officer route and never executes the original A01 action',async()=>{
+ const db=setup();
+ try{
+   let row=await opened(db);
+   const initialRisk=row.sourceScore;
+   row=await db.cases.saveActionPlan(row.id,row.version,plan(row));
+   await assert.rejects(
+     ()=>db.cases.decideAction(row.id,row.version,'verify-certificate','MODIFY','Change plan'),
+     /CASE_MODIFICATION_ROUTE_REQUIRED/);
+   await assert.rejects(
+     ()=>db.cases.decideAction(row.id,row.version,'verify-certificate','MODIFY',
+       'New plan','OPERATOR','VERIFY_CERTIFICATE'),
+     /CASE_MODIFICATION_MUST_CHANGE_ROUTE/);
+   await assert.rejects(
+     ()=>db.cases.decideAction(row.id,row.version,'verify-certificate','MODIFY',
+       'Not allowed','OPERATOR','DETENTION_ORDER'),
+     /CASE_MODIFICATION_ROUTE_REQUIRED/);
+   row=await db.cases.decideAction(row.id,row.version,'verify-certificate','MODIFY',
+     'Certificate evidence warrants inspection review','OPERATOR','PRIORITY_INSPECTION');
+   const ai=row.actionPlan.proposedActions.find(a=>a.actionId==='verify-certificate');
+   assert.equal(ai.actionType,'VERIFY_CERTIFICATE');
+   assert.equal(ai.decision,'MODIFY');
+   assert.equal(ai.replacementActionType,'PRIORITY_INSPECTION');
+   assert.equal(ai.decisionNote,'Certificate evidence warrants inspection review');
+   assert.equal(row.tasks.length,1);
+   assert.equal(row.tasks[0].actionType,'PRIORITY_INSPECTION');
+   assert.equal(row.tasks[0].approvalMode,'MODIFY');
+   assert.equal(row.tasks[0].assignedRole,'INSPECTION_OFFICER');
+   assert.equal(row.inspectionRequests.length,1);
+   assert.equal(row.inspectionRequests[0].actionId,'verify-certificate');
+   assert.equal(row.sourceScore,initialRisk);
+   const history=await db.cases.history(row.id);
+   assert.equal(history[0].details.replacementActionType,'PRIORITY_INSPECTION');
+ }finally{db.close();}
+});
