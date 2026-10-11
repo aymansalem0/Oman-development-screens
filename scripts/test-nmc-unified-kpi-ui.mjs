@@ -21,7 +21,11 @@ test('eight unique counts, high and critical separate, no inverse assessed/pendi
     assert.ok(code.includes("id:'"+id+"'"),'missing UI card: '+id);
     assert.ok(policy.includes(id+":"),'missing approved backend metric: '+id);
   }
-  assert.doesNotMatch(html,/\{\{pendingCount\}\}|\{\{highRiskCount\}\}|\{\{priorityReviewCount\}\}/);
+  const summary=html.slice(html.indexOf('class="nmc-unified-kpi-board"'),
+    html.indexOf('class="workspace-grid"'));
+  // Pending remains an operational fleet FILTER count; it must not be
+  // repeated as a headline KPI in the new unified board.
+  assert.doesNotMatch(summary,/\{\{pendingCount\}\}|\{\{highRiskCount\}\}|\{\{priorityReviewCount\}\}/);
   assert.match(code,/this\.fleetSnapshot\?\.counts\.high/);
   assert.match(code,/this\.fleetSnapshot\?\.counts\.critical/);
 });
