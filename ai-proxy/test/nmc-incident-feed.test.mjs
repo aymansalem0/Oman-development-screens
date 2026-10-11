@@ -64,7 +64,7 @@ function mockFeed(){
    reasoning:'Compliance evidence is not sufficient to confirm any non-compliance.',
    authoritative:false
   },
-  contractVersion:'NMC_INCIDENT_A01_A02_EXT_V1'
+  contractVersion:'A01_A02_EXISTING_CONTRACTS_V1'
  });
  return {fake,appended};
 }
@@ -205,4 +205,39 @@ test('Arabic officer names can approve an incident follow-up without changing re
  const output=await fake.load();
  assert.equal(output.incidents[0].aiAssessment.officerName,'موظف المركز البحري');
  assert.equal(output.incidents[0].operationalStatus,'RECEIVED');
+});
+
+test('automatic source triage creates or links a central Case only after saved assessment',async()=>{
+ const {fake,appended}=mockFeed();
+ const linked=[];
+ fake.autoEnabled=true;
+ fake.autoMaxPerCycle=2;
+ fake.onAssessmentReady=async incident=>{
+   linked.push({incidentId:incident.incidentId,assessmentId:incident.aiAssessment?.assessmentId});
+ };
+ const run=await fake.autoTick();
+ assert.equal(run.assessed,1);
+ assert.equal(run.casesLinked,1);
+ assert.equal(run.casesFailed,0);
+ assert.equal(appended.length,1);
+ assert.equal(linked[0].incidentId,'INC-POC-0001');
+ assert.ok(linked[0].assessmentId);
+ const repeated=await fake.autoTick();
+ assert.equal(repeated.assessed,0);
+ assert.equal(repeated.casesLinked,1,
+  'previously assessed incident is rechecked for idempotent case linking without AI billing');
+ assert.equal(appended.length,1);
+});
+test('case persistence unavailable does not trigger expensive repeated analysis',async()=>{
+ const {fake,appended}=mockFeed();
+ fake.autoEnabled=true;
+ fake.onAssessmentReady=async()=>{throw new Error('CASE_STORE_UNAVAILABLE');};
+ const run=await fake.autoTick();
+ assert.equal(run.assessed,1);
+ assert.equal(run.casesFailed,1);
+ assert.equal(appended.length,1);
+ const second=await fake.autoTick();
+ assert.equal(second.assessed,0);
+ assert.equal(second.casesFailed,1);
+ assert.equal(appended.length,1);
 });
