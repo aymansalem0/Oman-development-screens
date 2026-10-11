@@ -61,6 +61,23 @@ export class NmcIncidentsService {
         return throwError(()=>e);
       }));
   }
+  review(id:string,assessmentId:string,decision:'ACCEPT'|'MODIFY'|'REJECT',
+    approvedFollowup:IncidentFollowup,note:string,officer:string):
+      Observable<{status:'ok';saved:boolean}>{
+    if(!this.editorKey){
+      const key=window.prompt('NMC POC operator action key (not your AI API key)');
+      if(!key?.trim())return throwError(()=>new Error('ACTION_CANCELLED'));
+      this.editorKey=key.trim();
+    }
+    return this.http.post<{status:'ok';saved:boolean}>(
+      this.base+'/'+encodeURIComponent(id)+'/review',
+      {assessmentId,decision,approvedFollowup,note,officer},
+      {headers:new HttpHeaders({'X-NMC-DASHBOARD-KEY':this.editorKey})}
+    ).pipe(catchError(e=>{
+      if(e?.status===403)this.editorKey='';
+      return throwError(()=>e);
+    }));
+  }
   message(e:unknown,ar:boolean):string{
     const error=e as {message?:string;error?:{error?:string}}|null;
     if(error?.message==='ACTION_CANCELLED')return ar?'تم إلغاء العملية.':'Cancelled.';
