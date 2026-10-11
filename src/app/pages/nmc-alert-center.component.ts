@@ -1,7 +1,7 @@
 import {CommonModule} from '@angular/common';
 import {Component,OnDestroy,OnInit} from '@angular/core';
 import {FormsModule} from '@angular/forms';
-import {Router,RouterLink} from '@angular/router';
+import {RouterLink} from '@angular/router';
 import {Subscription} from 'rxjs';
 import {NmcNavigationComponent} from '../components/nmc-navigation.component';
 import {NmcMinistryLogoComponent} from '../components/nmc-ministry-logo.component';
@@ -11,7 +11,7 @@ import {NmcFleetAiService,FleetAiSnapshot} from '../services/nmc-fleet-ai.servic
 import {NmcRiskEngineService,RiskEngineConfig} from '../services/nmc-risk-engine.service';
 import {
   NmcAlertsService,NmcOperationalAlert,NmcAlertAudit,
-  NmcAlertsOverview,AlertAction,AlertSeverity,AlertStatus
+  NmcAlertsOverview,AlertSeverity,AlertStatus
 } from '../services/nmc-alerts.service';
 import {NmcCasesService,NmcCentralCase} from '../services/nmc-cases.service';
 
@@ -40,9 +40,7 @@ export class NmcAlertCenterComponent implements OnInit,OnDestroy{
   selectedId='';
   audit:NmcAlertAudit[]=[];
   auditLoading=false;
-  notes:Record<string,string>={};
   linkedCases:NmcCentralCase[]=[];
-  creatingCase='';
   private readonly subs=new Subscription();
   private poller?:ReturnType<typeof setInterval>;
   policyLoading=false;
@@ -67,7 +65,7 @@ export class NmcAlertCenterComponent implements OnInit,OnDestroy{
   };
 
   constructor(public lang:LanguageService,private readonly alerts:NmcAlertsService,
-    private readonly cases:NmcCasesService,private readonly router:Router,
+    private readonly cases:NmcCasesService,
     private readonly fleet:NmcFleetAiService,
     private readonly riskEngine:NmcRiskEngineService){}
   ngOnInit():void{
@@ -306,38 +304,6 @@ export class NmcAlertCenterComponent implements OnInit,OnDestroy{
     return this.linkedCases.find(c=>c.alertIds.includes(alert.id)&&c.status!=='RESOLVED')
       ||this.linkedCases.find(c=>c.imo===alert.imo&&c.status!=='RESOLVED');
   }
-  createCase(alert:NmcOperationalAlert):void{
-    if(this.creatingCase||alert.status==='OPEN'||alert.status==='RESOLVED'||
-       this.isPolicySuperseded(alert))return;
-    const linked=this.linkedCase(alert);
-    if(linked){
-      void this.router.navigate(['/moei/nmc/vessel',linked.imo,'case']);
-      return;
-    }
-    if(!window.confirm(this.copy(
-      'Create the maritime case AND call Airia A01 once to prepare real evidence-backed recommendations? The agent call may incur usage cost. No tasks will be created until you approve the recommendations.',
-      'إنشاء الحالة البحرية مع استدعاء Airia A01 مرة واحدة لإعداد توصيات حقيقية مدعومة بالأدلة؟ قد يترتب على الاستدعاء تكلفة استخدام. لن تُنشأ مهام حتى تعتمد التوصيات.'
-    )))return;
-    this.creatingCase=alert.id;
-    this.subs.add(this.cases.createFromAlert(alert.id).subscribe({
-      next:result=>{
-        this.creatingCase='';
-        if(result.case){
-          const aiError=result.aiActionPlanStatus==='FAILED'
-            ?result.aiActionPlanError?.code||'A01_ACTION_PLAN_UNAVAILABLE':null;
-          void this.router.navigate(['/moei/nmc/vessel',result.case.imo,'case'],{
-            queryParams:aiError?{aiError}:undefined
-          });
-        }
-        else this.error=this.copy('Case was not returned by the server.','لم يُرجع الخادم بيانات الحالة.');
-      },
-      error:error=>{
-        this.creatingCase='';
-        this.error=this.cases.readableError(error,this.lang.isArabic);
-        if(error?.status===409)this.refresh(false);
-      }
-    }));
-  }
   get activeCount():number{return this.policySummary.active;}
   get alertsFiltered():NmcOperationalAlert[]{
     const search=this.query.trim().toLowerCase();
@@ -365,64 +331,20 @@ export class NmcAlertCenterComponent implements OnInit,OnDestroy{
   severityText(value:AlertSeverity):string{
     return value==='CRITICAL'?this.copy('Critical','حرج'):this.copy('High','مرتفع');
   }
-  actionText(value:AlertAction):string{
-    const labels:Record<AlertAction,[string,string]>={
-      ACKNOWLEDGE:['Acknowledge','استلام التنبيه'],
-      START_FOLLOW_UP:['Start follow-up','بدء المتابعة'],
-      ESCALATE:['Escalate to supervisor','تصعيد للمشرف'],
-      RESOLVE:['Resolve alert','إغلاق التنبيه'],
-      DISMISS:['Remove from inbox','إزالة من القائمة']
-    };
-    const pair=labels[value];return this.copy(pair[0],pair[1]);
-  }
-  allowed(item:NmcOperationalAlert,action:AlertAction):boolean{
-    if(action==='DISMISS')return item.status==='SUPERSEDED'&&!item.dismissedAt;
-    if(action==='ACKNOWLEDGE')return item.status==='OPEN';
-    if(action==='START_FOLLOW_UP')
-      return item.status==='ACKNOWLEDGED'||item.status==='ESCALATED';
-    if(action==='ESCALATE')
-      return ['OPEN','ACKNOWLEDGED','IN_PROGRESS'].includes(item.status);
-    return ['ACKNOWLEDGED','IN_PROGRESS','ESCALATED'].includes(item.status);
-  }
-  act(item:NmcOperationalAlert,action:AlertAction):void{
-    if(this.busy||!this.allowed(item,action)||this.isPolicySuperseded(item))return;
-    const note=(this.notes[item.id]||'').trim();
-    if(action==='RESOLVE'&&!note){
-      this.error=this.copy(
-        'Enter a resolution reason before closing the alert.',
-        'أدخل سبب إغلاق التنبيه قبل اعتماد الإغلاق.');
-      return;
-    }
-    if(action==='ESCALATE'&&!window.confirm(this.copy(
-      'Escalate this alert to the NMC Supervisor?',
-      'هل تريد تصعيد التنبيه إلى مشرف المركز البحري؟'
-    )))return;
+  /**
+   * Alert inbox action is receipt acknowledgment only.
+   * Case opening, A01 recommendations, approvals and escalation belong to
+   * the separate Case Management workflow.
+   */
+  acknowledge(item:NmcOperationalAlert):void{
+    if(this.busy||item.status!=='OPEN'||this.isPolicySuperseded(item))return;
     this.error='';this.success='';this.busy=item.id;
-    this.subs.add(this.alerts.act(item,action,note).subscribe({
+    this.subs.add(this.alerts.act(item,'ACKNOWLEDGE','').subscribe({
       next:()=>{
         this.busy='';
-        this.notes[item.id]='';
-        this.success=this.copy('Alert updated and recorded in activity history.',
-          'تم تحديث التنبيه وتسجيل الإجراء في سجل الأنشطة.');
-        this.refresh(false);
-      },
-      error:error=>{
-        this.busy='';
-        this.error=this.alerts.readableError(error,this.lang.isArabic);
-        if(error?.status===409)this.refresh(false);
-      }
-    }));
-  }
-  dismiss(item:NmcOperationalAlert):void{
-    if(this.busy||!this.allowed(item,'DISMISS'))return;
-    this.busy=item.id;this.error='';this.success='';
-    this.subs.add(this.alerts.act(item,'DISMISS','').subscribe({
-      next:()=>{
-        this.busy='';
-        if(this.selectedId===item.id){this.selectedId='';this.audit=[];}
         this.success=this.copy(
-          'Outdated notification removed from the inbox. Its audit history remains saved.',
-          'تم إزالة التنبيه القديم من القائمة مع الاحتفاظ بسجل التدقيق.');
+          'Notification receipt recorded. Continue in Case Management for decisions and actions.',
+          'تم تسجيل استلام التنبيه. تابع القرارات والإجراءات في إدارة الحالات.');
         this.refresh(false);
       },
       error:error=>{
