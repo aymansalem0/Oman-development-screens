@@ -1,8 +1,8 @@
 <button class="mobile-nav-toggle" type="button"
-        (click)="mobileOpen = !mobileOpen"
-        [attr.aria-expanded]="mobileOpen"
-        [attr.aria-label]="copy('Toggle main navigation', 'فتح أو إغلاق القائمة الرئيسية')">☰</button>
-<aside class="nmc-unified-sidebar" [class.mobile-open]="mobileOpen">
+        (click)="menuOpen = !menuOpen; mobileOpen = menuOpen"
+        [attr.aria-expanded]="menuOpen"
+        [attr.aria-label]="copy('Toggle main navigation', 'فتح أو إغلاق القائمة الرئيسية')">{{menuOpen?'✕':'☰'}}</button>
+<aside class="nmc-unified-sidebar" [class.mobile-open]="mobileOpen" [class.user-open]="menuOpen">
   <div class="nav-header">
     <div class="nav-mark">⚓</div>
     <div class="nav-identity">
