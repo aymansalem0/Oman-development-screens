@@ -388,6 +388,7 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
           ['HIGH','CRITICAL'].includes(v.aiAssessment?.incidentRiskBand||'')).length;
         this.incidentSourceError=false;
         this.incidentSourceMessage='';
+        this.incidentRejectedRowsCount=r.sourceValidationWarnings||0;
         this.incidentFeedLastUpdatedAt=new Date().toISOString();
         this.latestMaritimeIncidents=[...r.incidents].sort((a,b)=>(b.reportedAt||b.receivedAt||'').localeCompare(a.reportedAt||a.receivedAt||'')).slice(0,8);
         if(this.selectedIncidentId&&!this.latestMaritimeIncidents.some(v=>v.incidentId===this.selectedIncidentId))this.selectedIncidentId='';
