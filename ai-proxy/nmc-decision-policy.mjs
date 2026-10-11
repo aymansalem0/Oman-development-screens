@@ -83,7 +83,8 @@ const mapA01=Object.freeze({
 const weight=Object.freeze({
   VERIFY_DEFICIENCY_CLOSURE:90,PRIORITY_INSPECTION:80,
   VERIFY_CERTIFICATE:70,REVIEW_DEFICIENCY:60,
-  REQUEST_EXTERNAL_VERIFICATION:50,ENHANCED_MONITORING:35,NO_ACTION:0
+  REQUEST_EXTERNAL_VERIFICATION:50,ENHANCED_MONITORING:35,
+  UNMAPPED_AI_ACTION:10,NO_ACTION:0
 });
 export function catalogueSummaries(){
   return Object.entries(DECISION_CATALOGUE).map(([code,item])=>({
@@ -105,6 +106,7 @@ export function buildSingleProposal(plan){
     code,titleEn:def.titleEn,titleAr:def.titleAr,
     originalA01Proposal:{
       actionId:original.actionId,actionType:original.actionType,
+      ...(original.originalActionType?{originalActionType:original.originalActionType}:{}),
       title:original.title,reason:original.reason,priority:original.priority,
       confidence:original.confidence,evidenceIds:[...original.evidenceIds]
     },
