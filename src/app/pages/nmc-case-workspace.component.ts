@@ -398,6 +398,45 @@ export class NmcCaseWorkspaceComponent implements OnInit {
 
 
   /** POC route is derived from a saved A01 action, NOT a direct AI enforcement order. */
+  get canConvertLegacyA01():boolean{
+    const row=this.centralCase;
+    return !!row&&row.status!=='RESOLVED'&&!row.operationalDecision&&
+      !!row.actionPlan?.proposedActions?.length&&
+      row.actionPlan.proposedActions.every(a=>a.decision==='PENDING')&&
+      !(row.decisions||[]).length&&
+      !(row.inspectionRequests||[]).length&&
+      !(row.tasks||[]).some(t=>t.provenance==='AIRIA_A01_HUMAN_APPROVED');
+  }
+
+  initializeOperationalDecision():void{
+    const row=this.centralCase;
+    if(!row||!this.canConvertLegacyA01||this.centralBusy)return;
+    if(!window.confirm(this.copy(
+      'Create one NMC business decision from the saved A01 proposals? Zero Airia calls, no extra AI cost. The original recommendations and saved risk stay unchanged.',
+      'تحويل توصيات A01 المحفوظة إلى قرار تشغيلي واحد بقواعد NMC؟ بدون استدعاء جديد لـ Airia أو تكلفة AI إضافية، مع الحفاظ على التوصيات والمخاطر الأصلية.')))return;
+    this.centralBusy=true;this.centralError='';this.centralSuccess='';
+    this.cases.initializeOperational(row).subscribe({
+      next:response=>{
+        this.centralBusy=false;
+        if(response.case)this.applyCase(response.case);
+        this.centralSuccess=this.copy(
+          'One decision and its mapped action plan are ready for review. No Airia call was made.',
+          'القرار الواحد وإجراءاته جاهزان للمراجعة دون استدعاء جديد لـ Airia.');
+      },
+      error:error=>{
+        this.centralBusy=false;
+        this.centralError=this.cases.readableError(error,this.lang.isArabic);
+        if(error?.status===409)this.loadCentralCase();
+      }
+    });
+  }
+
+  get selectedActionNeedsOfficerRationale():boolean{
+    const op=this.centralCase?.operationalDecision;
+    return !!op&&op.rationale===
+      'A01 recommendation linked to the validated source evidence IDs';
+  }
+
   decideOperational(decision:'ACCEPT'|'MODIFY'|'REJECT'):void{
     const current=this.centralCase;
     if(!current?.operationalDecision||this.centralBusy||
@@ -408,9 +447,11 @@ export class NmcCaseWorkspaceComponent implements OnInit {
       this.centralError=this.copy('Choose a different catalogue decision.',
         'اختر قرارًا مختلفًا من كتالوج القرارات.');return;
     }
-    if(decision!=='ACCEPT'&&!note){
-      this.centralError=this.copy('Modification or rejection requires a reason.',
-        'يجب إدخال سبب التعديل أو الرفض.');return;
+    if((decision!=='ACCEPT'||this.selectedActionNeedsOfficerRationale)&&!note){
+      this.centralError=this.copy(
+        'A specific officer-verified reason is required for this decision (A01 supplied no action-specific rationale).',
+        'يتطلب هذا القرار مبررًا تشغيليًا محددًا من الموظف؛ A01 لم يقدم سببًا خاصًا بالإجراء.');
+      return;
     }
     const selected=this.decisionCatalogue.find(x=>x.code===code);
     if(selected?.regulated&&!window.confirm(this.copy(
