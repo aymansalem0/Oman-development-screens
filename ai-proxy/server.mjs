@@ -3,6 +3,7 @@ import { getPscVessel, getPscHealth } from './psc-reader.mjs';
 import { FleetAssessmentManager } from './fleet-ai.mjs';
 import { FleetAutoScheduler } from './fleet-scheduler.mjs';
 import { DashboardWorkspace, DashboardError } from './dashboard-workspace.mjs';
+import {DashboardAiFocus,DashboardFocusError} from './nmc-dashboard-focus.mjs';
 import { NmcAlertWorkspace, NmcAlertError } from './alert-workspace.mjs';
 import { NmcCaseWorkspace, NmcCaseError } from './case-workspace.mjs';
 import {evaluateCaseAssessment,historicalApprovalValid} from './case-source-provenance.mjs';
@@ -40,7 +41,8 @@ const pipelines = Object.freeze({
   a02: process.env.AIRIA_A02_PIPELINE_ID || '73708937-ba16-47e3-b404-55cc0a54b159',
   a03: process.env.AIRIA_A03_PIPELINE_ID || '603d32f6-2f5f-42a8-a592-77af571a2480',
   a04: process.env.AIRIA_A04_PIPELINE_ID || 'bad751da-0e11-48fd-861d-5bde1afbbd8d',
-  p01: process.env.AIRIA_SI_P01_PIPELINE_ID || null
+  p01: process.env.AIRIA_SI_P01_PIPELINE_ID || null,
+  dashboardFocus:(process.env.AIRIA_NMC_DASHBOARD_FOCUS_PIPELINE_ID||'').trim()||null
 });
 
 async function fleetAgentCall(agent,input) {
@@ -128,6 +130,28 @@ const fleet=new FleetAssessmentManager({executeAgent:fleetAgentCall,getPscVessel
 guidance=new OperationalGuidance({mode:dbMode,oracleRepository:repository,fleet});
 riskPolicy=new CentralRiskPolicy({mode:dbMode,oracleRepository:repository,fleet});
 const dashboards=new DashboardWorkspace({mode:dbMode,oracleRepository:repository});
+/** Distinct Airia KPI-prioritization contract; A01 situation-assessment is
+ * NOT repurposed as a dashboard model. GET/dashboard polling never calls AI. */
+async function dashboardFocusAgentCall(input){
+  if(!apiKey||!pipelines.dashboardFocus)
+    throw new Error('DASHBOARD_FOCUS_PIPELINE_NOT_CONFIGURED');
+  const upstream=await fetch(runtime.get('AIRIA_BASE_URL')+
+    '/v1/PipelineExecution/'+pipelines.dashboardFocus,{
+    method:'POST',
+    headers:{'X-API-KEY':apiKey,'Content-Type':'application/json',
+      'User-Agent':'moei-nmc-dashboard-focus/1.0'},
+    body:JSON.stringify({userInput:JSON.stringify(input),asyncOutput:false}),
+    signal:AbortSignal.timeout(timeoutMs)
+  });
+  if(!upstream.ok)throw new Error('DASHBOARD_FOCUS_UPSTREAM_UNAVAILABLE');
+  const body=await upstream.text();
+  try{return JSON.parse(body);}catch{throw new Error('DASHBOARD_FOCUS_RESPONSE_NOT_JSON');}
+}
+const dashboardAiFocus=new DashboardAiFocus({
+  executeAgent:dashboardFocusAgentCall,
+  enabled:Boolean(apiKey)&&Boolean(pipelines.dashboardFocus)&&
+    process.env.NMC_DASHBOARD_AI_FOCUS_ENABLED==='true'
+});
 const alerts=new NmcAlertWorkspace({mode:dbMode,oracleRepository:repository});
 const cases=new NmcCaseWorkspace({mode:dbMode,oracleRepository:repository,alerts});
 // Incident POC reuses exactly the existing A02 requestedSignals and A01
@@ -1052,6 +1076,26 @@ const server = createServer(async (req, res) => {
         return respond(res,error.status,{error:'INVALID_REQUEST'});
       console.error('[nmc-alerts] API_FAILURE');
       return respond(res,503,{error:'ALERT_STORE_UNAVAILABLE'});
+    }
+  }
+
+  // Executive dashboard AI focus is ON-DEMAND ONLY, with an editor key and
+  // explicit possible-cost confirmation. No fleet/Oracle/incident mutations.
+  if(path==='/api/ai/nmc/dashboard-focus/status'){
+    if(req.method!=='GET')return respond(res,405,{error:'METHOD_NOT_ALLOWED'});
+    return respond(res,200,{status:'ok',...dashboardAiFocus.status()});
+  }
+  if(path==='/api/ai/nmc/dashboard-focus/run'){
+    if(req.method!=='POST')return respond(res,405,{error:'METHOD_NOT_ALLOWED'});
+    try{
+      dashboards.assertRole(req,'EDITOR');
+      const input=await requestJson(req,4096);
+      return respond(res,200,await dashboardAiFocus.run(input));
+    }catch(error){
+      if(error instanceof DashboardFocusError||error instanceof DashboardError)
+        return respond(res,error.status,{error:error.code});
+      console.error('[nmc-kpi-focus] AI_REQUEST_FAILED');
+      return respond(res,503,{error:'DASHBOARD_FOCUS_AI_UNAVAILABLE'});
     }
   }
 
