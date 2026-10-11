@@ -1,6 +1,5 @@
 import { NmcNavigationComponent } from '../components/nmc-navigation.component';
 import { NmcMinistryLogoComponent } from '../components/nmc-ministry-logo.component';
-import { NmcVesselDocumentsComponent } from '../components/nmc-vessel-documents.component';
 import { CommonModule } from '@angular/common';
 import { AfterViewInit, Component, ElementRef, OnDestroy, OnInit, ViewChild } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
@@ -120,7 +119,7 @@ interface Vessel360View extends NmcVesselProfile {
 @Component({
   selector: 'app-nmc-vessel-360',
   standalone: true,
-  imports: [CommonModule, RouterLink, NmcNavigationComponent, NmcVesselDocumentsComponent, NmcMinistryLogoComponent],
+  imports: [CommonModule, RouterLink, NmcNavigationComponent, NmcMinistryLogoComponent],
   templateUrl: './nmc-vessel-360.component.html',
   styleUrl: './nmc-vessel-360.component.css'
 })
@@ -408,7 +407,7 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
     this.loadStoredAi();
 
     const requestedTab = this.route.snapshot.queryParamMap.get('tab');
-    if (requestedTab && ['overview','movement','compliance','inspection','external-psc','certificates','documents','sources','accidents'].includes(requestedTab)) {
+    if (requestedTab && ['overview','movement','compliance','inspection','external-psc','certificates','sources','accidents'].includes(requestedTab)) {
       this.activeTab = requestedTab;
     }
   }
@@ -1092,7 +1091,8 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
       status:'Available',lastSync:this.driveReadAt||'—',confidence:null,
       authority:'Synthetic POC document packs; approval does NOT verify issuing authority',
       dataNature:'SYNTHETIC_DRIVE_GOOGLE',sourceClass:'External Trusted',
-      route:`/moei/nmc/vessel/${this.vessel.imo}`,tab:'documents'
+      // Only read-only metadata in source correlation; the legacy A03
+      // Document Intelligence tab and its actions are retired.
     }:{
       name:'Google Drive Vessel Documents / A03',
       system:'Google Drive Document Adapter',
