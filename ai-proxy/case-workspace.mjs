@@ -385,8 +385,12 @@ export class NmcCaseWorkspace{
       if(!proposal)throw new NmcCaseError('CASE_SINGLE_DECISION_UNAVAILABLE',409);
       if(proposal.decisionStatus!=='PENDING_HUMAN_REVIEW')
         throw new NmcCaseError('CASE_ACTION_ALREADY_DECIDED',409);
-      if(decision==='ACCEPT'&&
-        proposal.rationale==='A01 recommendation linked to the validated source evidence IDs')
+      const missingA01Reason=proposal.rationale===
+        'A01 recommendation linked to the validated source evidence IDs';
+      // Legacy A01 sometimes omitted action-specific reasoning. Never
+      // treat the generic filler as valid business reasoning. An authorized
+      // human may explicitly supply and own a documented explanation.
+      if(decision==='ACCEPT'&&missingA01Reason&&!noteValue(note))
         throw new NmcCaseError('CASE_DECISION_RATIONALE_UNAVAILABLE',409);
       const code=decision==='MODIFY'?newDecisionCode:proposal.code;
       if(decision==='MODIFY'&&code===proposal.code)
@@ -417,7 +421,7 @@ export class NmcCaseWorkspace{
             ?'PRIORITY_INSPECTION':code,
           workflowStepId:item.id,title:item.titleEn,titleAr:item.titleAr,
           priority:proposal.originalA01Proposal.priority||'HIGH',
-          reason:decision==='MODIFY'?noteValue(note):proposal.rationale,
+          reason:decision==='MODIFY'||missingA01Reason?noteValue(note):proposal.rationale,
           status:'Assigned',assignedRole:item.role,mandatory:item.mandatory,
           regulatedEnforcement:!!def.regulated,
           evidenceIds:proposal.evidenceIds,
@@ -447,6 +451,7 @@ export class NmcCaseWorkspace{
         approvedTitleEn:decision==='REJECT'?null:def.titleEn,
         approvedTitleAr:decision==='REJECT'?null:def.titleAr,
         approvedWorkflowSteps:steps,decisionNote:noteValue(note)||'',
+        rationaleSource:missingA01Reason?'OFFICER_VALIDATED_LEGACY_A01':'AIRIA_A01_ACTION',
         decidedBy:role,decidedAt:now(),regulatoryEffect:'NONE_POC_ONLY'
       };
       // An immutable-original event goes to a durable CASE outbox. It is not
