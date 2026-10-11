@@ -10,6 +10,7 @@ export interface NmcCentralCaseTask {
   assignedRole:string;mandatory:boolean;evidenceIds:string[];
   actionId?:string;actionType?:string;title?:string;priority?:string;
   reason?:string;provenance?:string;approvalMode?:'ACCEPT'|'MODIFY';
+  workflowStepId?:string;titleAr?:string;regulatedEnforcement?:boolean;
 }
 export interface NmcAiAction {
   actionId:string;actionType:string;title:string;reason:string;
@@ -23,6 +24,38 @@ export interface NmcAiActionPlan {
   sourceLevel:string;configVersion:string|null;summary:string;whyItMatters:string;
   agentAssessmentId:string|null;createdAt:string;proposedActions:NmcAiAction[];
   primaryProposedDecision?:{decisionId:string;titleAr:string;titleEn:string;rationaleAr:string;rationaleEn:string;expectedOutcomeAr?:string;expectedOutcomeEn?:string;evidenceIds:string[];urgency?:string;confidence?:number;requestedActionIds?:string[]};
+}
+export interface NmcDecisionStep{
+  id:string;titleEn:string;titleAr:string;role:string;
+  kind:string;mandatory:boolean;
+}
+export interface NmcOperationalDecision{
+  code:string;titleEn:string;titleAr:string;
+  originalA01Proposal:{actionId:string;actionType:string;title:string;
+    reason:string;priority:string;confidence:number;evidenceIds:string[]};
+  selectedFromActionId:string;rationale:string;evidenceIds:string[];
+  confidence:number;workflowSteps:NmcDecisionStep[];
+  decisionStatus:'PENDING_HUMAN_REVIEW'|'APPROVED'|'REJECTED';
+  selectionSource:string;policyVersion:string;regulated:boolean;
+  regulatoryEffect:'NONE_POC_ONLY';humanDecision?:'ACCEPT'|'MODIFY'|'REJECT';
+  approvedCode?:string|null;approvedTitleEn?:string|null;approvedTitleAr?:string|null;
+  approvedWorkflowSteps?:NmcDecisionStep[];
+  decisionNote?:string;decidedBy?:string;decidedAt?:string;
+}
+export interface NmcDecisionCatalogueEntry{
+  code:string;titleEn:string;titleAr:string;regulated:boolean;
+  steps:NmcDecisionStep[];
+}
+export interface NmcPocRestriction{
+  type:'PORT_ENTRY_RESTRICTION'|'DETENTION';
+  status:'PENDING_AUTHORITY_APPROVAL'|'SIMULATED_ACTIVE'|'SIMULATED_RELEASED';
+  pocOnly:true;legalAuthorityConfirmed:false;authorityReference:string|null;
+  releaseEvidenceRef?:string|null;requestedAt:string;authorizedAt:string|null;
+}
+export interface NmcDecisionFeedback{
+  id:string;originalA01Proposal:NmcOperationalDecision['originalA01Proposal'];
+  originalNmcProposedCode:string;humanApprovedCode:string;
+  status:string;at:string;reason:string;
 }
 export interface NmcInspectionReferral {
   id:string;caseId:string;imo:string;actionId:string;
@@ -47,6 +80,9 @@ export interface NmcCentralCase {
   createdAt:string;updatedAt:string;version:number;
   tasks:NmcCentralCaseTask[];decisions:NmcCentralDecision[];
   actionPlan?:NmcAiActionPlan|null;
+  operationalDecision?:NmcOperationalDecision|null;
+  decisionFeedback?:NmcDecisionFeedback[];
+  restriction?:NmcPocRestriction|null;
   inspectionRequests?:NmcInspectionReferral[];
   inspectionOutcome:NmcCentralInspection|null;
   resolutionNote:string|null;provenance:string;
@@ -84,6 +120,27 @@ export class NmcCasesService {
   }
   createFromAlert(alertId:string):Observable<CaseResponse>{
     return this.mutate(this.root+'/from-alert',{alertId,withAiActionPlan:true},false);
+  }
+  decisionCatalogue():Observable<{status:'ok';policyVersion:string;
+    pocOnly:boolean;decisions:NmcDecisionCatalogueEntry[]}>{
+    return this.http.get<{status:'ok';policyVersion:string;
+      pocOnly:boolean;decisions:NmcDecisionCatalogueEntry[]}>(this.root+'/decision-catalogue');
+  }
+  decideOperational(current:NmcCentralCase,decision:'ACCEPT'|'MODIFY'|'REJECT',
+    newDecisionCode='',note=''):Observable<CaseResponse>{
+    return this.mutate(this.path(current.id)+'/operational-decision',
+      {version:current.version,decision,
+        ...(decision==='MODIFY'?{newDecisionCode}:{}),note},false);
+  }
+  authorizeRestriction(current:NmcCentralCase,
+    authorityReference:string,legalBasis:string):Observable<CaseResponse>{
+    return this.mutate(this.path(current.id)+'/restriction/authorize',
+      {version:current.version,authorityReference,legalBasis},true);
+  }
+  releaseRestriction(current:NmcCentralCase,
+    authorityReference:string,rectificationEvidenceRef:string):Observable<CaseResponse>{
+    return this.mutate(this.path(current.id)+'/restriction/release',
+      {version:current.version,authorityReference,rectificationEvidenceRef},true);
   }
   generateActionPlan(current:NmcCentralCase):Observable<CaseResponse>{
     return this.mutate(this.path(current.id)+'/action-plan/generate',
@@ -170,6 +227,15 @@ export class NmcCasesService {
         :`A01 action #${actionNumber} duplicates normalized actionId "${id}". Each proposal must have a unique ID.`;
     }
     const messages:Record<string,[string,string]>={
+      CASE_SINGLE_DECISION_UNAVAILABLE:['A01-derived decision is not ready.','القرار المبني على A01 غير متاح بعد.'],
+      CASE_DECISION_CODE_UNSUPPORTED:['Unknown decision. Choose an allowed POC catalogue option.','قرار غير معروف؛ اختر من قائمة القرارات المسموحة.'],
+      CASE_SINGLE_DECISION_MODE:['Use the single operational decision review rather than legacy action buttons.','استخدم مراجعة القرار التشغيلي الموحد بدلًا من أزرار الإجراءات القديمة.'],
+      CASE_RESTRICTION_AUTHORITY_EVIDENCE_REQUIRED:['Add a supervisor demo reference (6–80 safe characters) and legal review rationale (10–500). No restriction applied.','أدخل مرجع اعتماد تجريبي ومبرر المراجعة القانونية؛ لم يُطبق أي منع.'],
+      CASE_RESTRICTION_RELEASE_EVIDENCE_REQUIRED:['Provide a release reference and rectification evidence reference.','أدخل مرجع الإفراج ومرجع أدلة الإصلاح.'],
+      CASE_RESTRICTION_AUTHORIZATION_REQUIRED:['The POC restriction needs explicit supervisor simulation authorization.','يتطلب المنع التجريبي اعتماد مشرف صريحًا.'],
+      CASE_RESTRICTION_STILL_ACTIVE:['A pending/active restriction blocks case closure until simulated release.','لا يمكن إغلاق الحالة حتى رفع القيد التجريبي.'],
+      CASE_RESTRICTION_NOT_PENDING:['Restriction is not awaiting simulation authorization.','القيد ليس في انتظار الاعتماد التجريبي.'],
+      CASE_RESTRICTION_NOT_ACTIVE:['No active simulated restriction to release.','لا يوجد قيد تجريبي نشط لرفعه.'],
       CASE_CREATION_AI_REQUIRED:['AI action generation must be explicitly requested when creating the case.','يجب طلب توصيات A01 ضمن إجراء إنشاء الحالة.'],
       CASE_SCHEMA_NOT_READY:['Case database migration 004 is required.','يجب تطبيق تحديث قاعدة البيانات رقم 004.'],
       CASE_STORE_UNAVAILABLE:['Case service is unavailable.','خدمة إدارة الحالات غير متاحة.'],
