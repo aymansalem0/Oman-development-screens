@@ -28,11 +28,14 @@
     </div>
     <div *ngIf="centralError" class="central-case-banner error" role="alert">{{centralError}}</div>
     <div *ngIf="centralSuccess" class="central-case-banner success" role="status">{{centralSuccess}}</div>
-    <section *ngIf="!centralCase&&!centralLoading" class="central-case-empty">
+    <section *ngIf="(!centralCase||centralCase.status==='RESOLVED')&&!centralLoading" class="central-case-empty">
       <span>▣</span>
-      <h2>{{copy('No maritime case has been opened for this vessel',
-                'لم يتم فتح حالة بحرية لهذه السفينة')}}</h2>
-      <p>{{copy('Notifications report events and receipt only. An NMC Officer may open an operational case here after acknowledging an active alert; decisions and AI recommendations are then managed inside the case.',
+      <h2>{{centralCase?.status==='RESOLVED'
+            ?copy('The previous case is closed — open a new case from an acknowledged alert',
+                  'الحالة السابقة مغلقة — افتح حالة جديدة من تنبيه مستلم')
+            :copy('No maritime case has been opened for this vessel',
+                  'لم يتم فتح حالة بحرية لهذه السفينة')}}</h2>
+      <p>{{copy('Notifications report events and receipt only. An NMC Officer may open an operational case here after acknowledging an active alert; decisions and AI recommendations are then managed inside the case. Previous resolved cases remain in the audit history.',
                 'شاشة التنبيهات لعرض الأحداث وتسجيل استلامها فقط. يمكن لموظف المركز فتح حالة تشغيلية من هنا بعد استلام تنبيه نشط، ثم إدارة القرارات وتوصيات الذكاء الاصطناعي داخل الحالة.')}}</p>
 
       <p *ngIf="caseAlertLoading" class="case-alert-loading">
