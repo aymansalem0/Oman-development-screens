@@ -296,7 +296,7 @@ export class NmcIncidentFeed {
   try{
   if(!['ACCEPT','MODIFY','REJECT'].includes(decision)||
     !FOLLOWUP_OPTIONS.includes(approvedFollowup)||
-    !/^[\w. -]{3,80}$/.test(String(officer||''))||
+    !/^[\p{L}\p{M}\p{N} .'-]{3,80}$/u.test(String(officer||''))||
     typeof note!=='string'||note.trim().length<15||note.length>1000)
    throw new IncidentTriageError('INCIDENT_OFFICER_REVIEW_INVALID',422);
   const feed=await this.load();
