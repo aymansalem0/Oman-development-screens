@@ -944,37 +944,83 @@
     </section>
 
     <section class="single-tab panel" *ngIf="activeTab === 'movement'">
-      <div class="single-tab-head">
-        <div>
-          <span class="section-kicker">{{ activeTab | uppercase }}</span>
-          <h3>{{ activeTab === 'movement' ? 'Movement & Route Intelligence' :
-                 activeTab === 'compliance' ? 'Compliance Picture' :
-                 activeTab === 'inspection' ? 'Inspection History & Deficiencies' :
-                 activeTab === 'certificates' ? 'Certificates & Validity Conditions' :
-                 'Source Provenance & Data Quality' }}</h3>
-          <p>{{ copy('This view is connected to the same correlated vessel record and retains identity, source provenance, risk and operational context.', 'هذه الشاشة مرتبطة بنفس سجل السفينة المترابط وتحتفظ بالهوية ومصدر البيانات والمخاطر والسياق التشغيلي.') }}</p>
-        </div>
-        <button type="button" class="secondary-btn" (click)="setTab('overview')">{{ copy('Return to overview', 'العودة إلى النظرة العامة') }}</button>
+      <div class="single-tab-head"><div>
+        <span class="section-kicker">{{copy('MOVEMENT','الحركة')}}</span>
+        <h3>{{copy('Movement & Route Context','سياق الحركة والمسار')}}</h3>
+        <p>{{copy('Synthetic movement catalogue and saved A01 evidence — NOT a live official AIS/LRIT feed.',
+          'بيانات حركة تجريبية وأدلة A01 المحفوظة، وليست بثًا حيًا رسميًا من AIS/LRIT.')}}</p>
+      </div><button type="button" class="secondary-btn" (click)="setTab('overview')">
+        {{copy('Back to vessel map','العودة لخريطة السفينة')}}</button></div>
+      <div class="inspection-kpis">
+        <div><small>IMO / MMSI</small><strong>{{vessel.imo}}</strong><span>{{vessel.mmsi}}</span></div>
+        <div><small>{{copy('Position · POC','الموقع · تجريبي')}}</small>
+          <strong>{{vessel.position}}</strong><span>{{vessel.zone}}</span></div>
+        <div><small>{{copy('Speed / Course','السرعة / الاتجاه')}}</small>
+          <strong>{{vessel.speed}} kn</strong><span>{{vessel.course}}°</span></div>
+        <div><small>{{copy('Destination / ETA','الوجهة / الوصول المتوقع')}}</small>
+          <strong>{{vessel.destination}}</strong><span>{{vessel.eta}}</span></div>
       </div>
-
-      <div class="placeholder-grid">
-        <div>
-          <span class="placeholder-icon">✓</span>
-          <strong>{{ copy('Correlated vessel context retained', 'تم الاحتفاظ بسياق السفينة المترابط') }}</strong>
-          <p>{{ copy('IMO', 'رقم IMO') }} {{ vessel.imo }} {{ copy('remains the common identity key across the NMC record.', 'يظل مفتاح الهوية المشترك عبر سجل المركز البحري الوطني.') }}</p>
-        </div>
-        <div>
-          <span class="placeholder-icon">↗</span>
-          <strong>{{ copy('Source provenance available', 'مصدر البيانات متاح') }}</strong>
-          <p>{{ copy('Every displayed item keeps the originating system and last synchronization timestamp.', 'كل عنصر معروض يحتفظ بالنظام المصدر ووقت آخر مزامنة.') }}</p>
-        </div>
-        <div>
-          <span class="placeholder-icon">!</span>
-          <strong>{{ copy('Exceptions remain visible', 'الحالات الاستثنائية تظل ظاهرة') }}</strong>
-          <p>{{ copy('Data conflicts and incomplete information are shown explicitly instead of being hidden.', 'يتم إظهار تعارضات البيانات والمعلومات غير المكتملة بوضوح بدلاً من إخفائها.') }}</p>
-        </div>
-      </div>
+      <article class="panel"><div class="panel-header"><div>
+        <h3>{{copy('Saved A01 movement evidence','أدلة حركة A01 المحفوظة')}}</h3>
+        <p>{{copy('Only original saved movement signals are shown; no fabricated anomalies.',
+          'تظهر إشارات الحركة المحفوظة فقط دون افتراض مخالفات أو انحرافات غير مسجلة.')}}</p>
+      </div></div>
+      <ng-container *ngIf="storedAi?.signals as signals;else movementPending">
+        <ng-container *ngFor="let factor of signals">
+          <div class="deficiency-detail" *ngIf="factor.factor==='movement'">
+            <p>{{copy('Severity','الخطورة')}}: <b>{{factor.severity}}/100</b>
+              · {{copy('Model confidence','ثقة النموذج')}}:
+              {{factor.confidence|percent:'1.0-0'}}</p>
+            <p>{{factor.reason}}</p>
+            <p>{{copy('Evidence IDs','معرّفات الأدلة')}}: {{factor.evidenceIds.join(', ')}}</p>
+          </div>
+        </ng-container>
+      </ng-container>
+      <ng-template #movementPending><p class="v360-empty-state">
+        {{copy('No saved A01 movement assessment. Live tracking conclusions are unavailable.',
+          'لا يوجد تقييم حركة محفوظ من A01، ولا يمكن تقديم استنتاجات عن تتبع حي.')}}</p>
+      </ng-template></article>
     </section>
+
+    <section class="evidence-tab accidents-tab" *ngIf="activeTab==='accidents'&&hasRecordedAccidents">
+      <div class="evidence-heading"><div>
+        <span class="section-kicker">{{copy('PORTS + REPORTING PLATFORM','الموانئ + منصة البلاغات')}}</span>
+        <h3>{{copy('Accidents & Maritime Incidents','الحوادث والوقائع البحرية')}}</h3>
+        <p>{{copy('Original reports matching this IMO. Report descriptions are unverified statements.',
+          'البلاغات الأصلية المطابقة لرقم السفينة IMO، ولا تُعد أوصافها وقائع متحقّقًا منها.')}}</p>
+      </div><span class="attention-pill">{{activeAccidentCount}} {{copy('active report(s)','بلاغ نشط')}}</span></div>
+      <article class="panel accident-source-card" *ngFor="let row of recordedAccidents">
+        <div class="panel-header"><div>
+          <h3>{{row.incidentType}} · {{row.incidentId}}</h3>
+          <p>{{row.sourceOrganization}} · {{row.sourceType}} · {{row.sourceReference}}</p>
+        </div><span class="status-chip">{{row.operationalStatus}}</span></div>
+        <div class="accident-source-facts">
+          <span>{{copy('Reported','وقت التبليغ')}}: {{row.reportedAt?(row.reportedAt|date:'medium'):'—'}}</span>
+          <span>{{copy('Location','الموقع')}}: {{row.portOrZone||'—'}}</span>
+          <span>{{copy('Source severity','خطورة المصدر')}}: {{row.reportedSeverity||'—'}}</span>
+          <span>{{copy('Reported status','حالة البلاغ')}}: {{row.sourceIncidentStatus}}</span>
+        </div>
+        <p class="accident-description"><b>{{copy('Original description · unchanged','الوصف الأصلي · دون تعديل')}}</b><br>
+          {{row.description}}</p>
+        <div class="accident-source-facts" *ngIf="row.aiAssessment as ai">
+          <span>{{copy('Incident risk — NMC policy','مخاطر الحادث بقواعد NMC')}}:
+            <b>{{ai.incidentRiskScore}}/100 · {{ai.incidentRiskBand}}</b></span>
+          <span>{{copy('Suggested follow-up','المتابعة المقترحة')}}: {{ai.aiProposedFollowup}}</span>
+          <span>{{copy('Assessed','تاريخ التقييم')}}: {{ai.assessedAt|date:'short'}}</span>
+        </div>
+        <p *ngIf="!row.aiAssessment" class="v360-empty-state">
+          {{copy('No current evidence-grounded incident assessment saved for this source version.',
+            'لا يوجد تحليل حادث محفوظ مدعوم بالأدلة لنسخة البلاغ الحالية.')}}</p>
+        <div class="case-incident-buttons">
+          <a class="outline-btn" routerLink="/moei/nmc/incidents">
+            {{copy('Open source record →','فتح مصدر البلاغ ←')}}</a>
+          <a *ngIf="row.linkedCaseId" class="outline-btn"
+            [routerLink]="['/moei/nmc/vessel',vessel.imo,'case']">
+            {{copy('Open case & actions →','فتح الحالة وإجراءاتها ←')}}</a>
+        </div>
+      </article>
+    </section>
+
     <div class="provenance-backdrop" *ngIf="selectedProvenance" (click)="closeProvenance()"></div>
     <aside class="provenance-drawer" *ngIf="selectedProvenance as provenance" (click)="$event.stopPropagation()">
       <div class="provenance-drawer-head">
