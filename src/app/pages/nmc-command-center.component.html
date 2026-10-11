@@ -179,6 +179,17 @@
               <option value="Pending">{{ copy('Pending AI', 'بانتظار AI') }}</option>
             </select>
 
+            <select [(ngModel)]="incidentFilter" (ngModelChange)="setIncidentFilter($event)"
+                    class="incident-filter"
+                    [attr.aria-label]="copy('Filter vessels by active maritime incident status', 'تصفية السفن حسب حالة الحوادث البحرية النشطة')">
+              <option value="All">{{copy('All incident statuses','جميع حالات الحوادث')}}</option>
+              <option value="Active">{{copy('⚑ Active Incidents','⚑ حوادث نشطة')}} ({{incidentSourceError?'—':incidentVesselCount}})</option>
+              <option value="Critical">{{copy('Critical Incidents','حوادث حرجة')}}</option>
+              <option value="High">{{copy('High-Risk Incidents','حوادث مرتفعة المخاطر')}}</option>
+              <option value="PendingReview">{{copy('Pending Human Review','بانتظار المراجعة البشرية')}}</option>
+              <option value="None">{{copy('No Active Incidents','بدون حوادث نشطة')}}</option>
+            </select>
+
             <select [(ngModel)]="typeFilter" (ngModelChange)="onFilterChange()" [attr.aria-label]="copy('Filter by vessel type', 'تصفية حسب نوع السفينة')">
               <option *ngFor="let type of vesselTypes" [value]="type">{{ type === 'All' ? copy('All', 'الكل') : vesselTypeLabel(type) }}</option>
             </select>
@@ -190,6 +201,11 @@
           {{copy('vessels shown on map', 'سفينة ظاهرة على الخريطة')}}
           <span *ngIf="assessmentFilter==='Assessed'"> · {{copy('Completed saved A01/A02 assessments only','تقييمات A01/A02 المحفوظة والمكتملة فقط')}}</span>
           <span *ngIf="assessmentFilter==='Pending'"> · {{copy('Includes pending and failed assessments','تشمل التقييمات المعلقة والفاشلة')}}</span>
+          <span *ngIf="incidentFilter!=='All'"> · ⚑ {{incidentFilterLabel()}}</span>
+          <span *ngIf="incidentFilter!=='All'&&incidentFeedRefreshing"> · {{copy('Refreshing source incidents…','جارٍ تحديث بلاغات الحوادث…')}}</span>
+          <span *ngIf="incidentFilter!=='All'&&incidentSourceError" role="alert">
+            · {{copy('Incident source unavailable — results cannot be verified.','مصدر الحوادث غير متاح — لا يمكن التحقق من النتائج.')}}
+          </span>
         </p>
         <div class="map-stage">
           <div #mapContainer class="real-map" dir="ltr"></div>
@@ -227,10 +243,30 @@
             <h3>{{ copy('Requires Attention Now', 'تتطلب الانتباه الآن') }}</h3>
             <p>{{copy('Saved vessel risk and separately reported active incidents','مخاطر السفن المحفوظة وبلاغات الحوادث النشطة بصورة مستقلة')}}</p>
           </div>
-          <span class="priority-count">{{ attentionCount }}</span>
+          <div class="attention-filter-actions">
+            <button type="button" class="attention-incident-shortcut"
+                    [class.active]="incidentFilter==='Active'"
+                    [attr.aria-pressed]="incidentFilter==='Active'"
+                    (click)="setIncidentFilter(incidentFilter==='Active'?'All':'Active')"
+                    [attr.aria-label]="copy('Toggle only vessels with active maritime incidents',
+                      'عرض السفن ذات الحوادث البحرية النشطة فقط أو العودة للكل')">
+              ⚑ {{copy('Active Incidents','حوادث نشطة')}}
+              <strong>{{incidentSourceError?'—':incidentVesselCount}}</strong>
+            </button>
+            <span class="priority-count">{{ attentionCount }}</span>
+          </div>
         </div>
 
         <div class="attention-list">
+          <p *ngIf="incidentFilter!=='All' && attentionCount===0" class="attention-incident-empty" role="status">
+            {{incidentSourceError?
+              copy('Incident source unavailable — cannot verify incident filters. Try Refresh.',
+                   'مصدر الحوادث غير متاح — لا يمكن التحقق من التصفية. حاول تحديث البيانات.'):
+              incidentFeedRefreshing?
+              copy('Loading current maritime incident records…','جارٍ تحميل بلاغات الحوادث الحالية…'):
+              copy('No vessels in the attention queue match this incident filter.',
+                   'لا توجد سفن في قائمة المتابعة تطابق فلتر الحوادث المحدد.')}}
+          </p>
           <ng-container *ngFor="let vessel of attentionVessels; let i = index">
             <div class="attention-item"
               [class.active]="selectedVessel?.id === vessel.id"
