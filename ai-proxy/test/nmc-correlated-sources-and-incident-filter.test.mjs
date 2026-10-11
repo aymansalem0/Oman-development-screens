@@ -45,7 +45,8 @@ test('Conflicts are based on saved cross-source mismatches, never synthetic risk
  const body=vessel.slice(start,end);
  assert.match(body,/fieldComparisons/);
  assert.match(body,/f\.status==='MISMATCH'/);
- assert.match(body,/f\.internalValue!==null&&f\.externalValue!==null/);
+ assert.match(body,/f\.internalValue\.trim\(\)\.length>0/);
+ assert.match(body,/f\.externalValue\.trim\(\)\.length>0/);
  assert.match(body,/mismatches\.length\?'Conflict':'Available'/);
  assert.doesNotMatch(body,/hasCertificateConflict|vessel\.risk\s*[><=]/);
  assert.doesNotMatch(body,/22:42:|22:41:|22:40:/);
