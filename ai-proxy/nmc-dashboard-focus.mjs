@@ -58,13 +58,13 @@ export function validateDashboardAiChoice(raw,metrics){
   const row=unwrap(raw);
   const id=row.focusMetricId;
   if(!Object.hasOwn(METRICS,id)||metrics[id]===null||
-    !oneText(row.reason,380))
+    !oneText(row.reasonEn,380)||!oneText(row.reasonAr,380))
     throw new DashboardFocusError('DASHBOARD_FOCUS_AI_RESPONSE_INVALID',502);
   if(row.confidence!==undefined&&(!Number.isFinite(row.confidence)||
       row.confidence<0||row.confidence>1))
     throw new DashboardFocusError('DASHBOARD_FOCUS_AI_RESPONSE_INVALID',502);
-  return {metricId:id,value:metrics[id],reason:row.reason.trim(),
-    confidence:row.confidence??null};
+  return {metricId:id,value:metrics[id],reasonEn:row.reasonEn.trim(),
+    reasonAr:row.reasonAr.trim(),confidence:row.confidence??null};
 }
 export function focusPrompt(metrics){
   return {
@@ -81,7 +81,7 @@ export function focusPrompt(metrics){
       'A missing value (null) is unknown, not zero, and must NOT be selected.',
       'Do not invent ships, incidents, case outcomes, causal explanations, percentages or alerts.',
       'Never recommend enforcing action without authorized human review.',
-      'Return ONLY JSON: {"focusMetricId":"one input id","reason":"12-380 chars based on provided input","confidence":0.0 to 1.0}.'
+      'Return ONLY JSON: {"focusMetricId":"one input id","reasonEn":"English reason 12-380 chars grounded in supplied numbers","reasonAr":"Arabic reason 12-380 chars grounded in supplied numbers","confidence":0.0 to 1.0}.'
     ]
   };
 }
