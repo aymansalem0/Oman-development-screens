@@ -587,6 +587,13 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
     }
   }
 
+  refreshSourceEvidence():void{
+    this.loadExternalPsc();
+    this.loadConnectedSources();
+    this.loadDriveSources();
+    if(this.storedAi)this.loadStoredIntelligence();
+  }
+
   private loadDriveSources():void{
     this.subscriptions.add(this.documentsService.list(this.vessel.imo).subscribe({
       next:listing=>{
@@ -716,7 +723,7 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
       dataConfidence:certificate.conflict ? 92 : 97,
       identityMatch:100,
       freshness:certificate.conflict ? 94 : 97,
-      lastUpdated:'22:41:56',
+      lastUpdated:'—',
       conflict:certificate.conflict ? 'Unresolved' : 'None',
       note:certificate.condition || 'Certificate status is linked to the correlated vessel record and retained with source provenance.'
     };
@@ -736,7 +743,7 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
       dataConfidence:100,
       identityMatch:100,
       freshness:96,
-      lastUpdated:'22:41:55',
+      lastUpdated:'—',
       conflict:'None',
       note:`Inspection performed through the MOEI inspection process at ${inspection.port}. Findings and evidence remain linked to the vessel record.`
     };
@@ -975,8 +982,11 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
       note: string
     ): void => {
       fields.push({
-        key, label, value, source, system, sourceClass, authority, recordId,
-        sourceTrust, dataConfidence, identityMatch, freshness, lastUpdated, conflict, note
+        key, label, value, source:source+' (synthetic POC)',system,sourceClass,
+        authority:authority+' — simulated source, not independently verified',
+        recordId,sourceTrust,dataConfidence,identityMatch,freshness,
+        lastUpdated:'—',conflict,note:note+
+          ' This is a synthetic POC fixture; source authority and update time are not verified.'
       });
     };
 
