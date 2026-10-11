@@ -1,18 +1,19 @@
-# Opt-in ONLY. Requires a separate Google Sheets service account with EDITOR
-# access to the dedicated POC spreadsheet. Never commit its JSON key.
-# Start with: docker compose -f compose.yaml -f compose.google-psc.yaml
-#            -f compose.oracle.yaml -f compose.incident-google.yaml up -d --build ai-proxy nmc
+# NMC POC incidents. Reuses the EXISTING Google PSC service account JSON
+# mounted by compose.google-psc.yaml, provided that same client_email has
+# EDITOR access to the incident spreadsheet (AI results are append-only).
+# You DO NOT need a second JSON key or a new service-account identity.
+#
+# If a different Google SA is required later, override
+# NMC_INCIDENT_CREDENTIALS_PATH and mount it through an additional overlay.
 services:
   ai-proxy:
     environment:
       NMC_INCIDENT_SHEET_ID: ${NMC_INCIDENT_SHEET_ID:-1fl6rCjHNTPKZTeS76PLSy_ylrClLQQ0Yvq12A7nhfy8}
-      NMC_INCIDENT_CREDENTIALS_PATH: /run/secrets/nmc-incident-google.json
-      # Choose 'openai' or 'ollama' explicitly. 'disabled' makes no AI calls.
+      NMC_INCIDENT_CREDENTIALS_PATH: /run/secrets/nmc-psc-google.json
+      # 'disabled' means NO AI calls. Configure a separate model explicitly.
       NMC_INCIDENT_AI_PROVIDER: ${NMC_INCIDENT_AI_PROVIDER:-disabled}
       NMC_INCIDENT_AI_MODEL: ${NMC_INCIDENT_AI_MODEL:-}
       NMC_INCIDENT_OPENAI_API_KEY: ${NMC_INCIDENT_OPENAI_API_KEY:-}
       NMC_INCIDENT_OLLAMA_URL: ${NMC_INCIDENT_OLLAMA_URL:-http://host.docker.internal:11434}
-    volumes:
-      - ./secrets/nmc-incident-google.json:/run/secrets/nmc-incident-google.json:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"
