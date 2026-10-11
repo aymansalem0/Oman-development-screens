@@ -156,7 +156,7 @@ export class NmcIncidentFeed {
   ((this.provider==='openai'&&!!this.openaiKey)||this.provider==='ollama');}
  health(){return {sourceConfigured:this.configured,aiConfigured:this.aiConfigured,
    aiProvider:this.provider,scorePolicy:SCORE_VERSION,
-   status:this.configured?'READY_TO_FETCH':'NOT_CONFIGURED',
+   sourceStatus:this.configured?'READY_TO_FETCH':'NOT_CONFIGURED',
    realEnforcementEnabled:false,officialVesselRiskAffected:false};}
  async accessToken(){
   if(this.token&&this.token.until>Date.now()+90000)return this.token.value;
