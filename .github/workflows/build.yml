@@ -32,6 +32,8 @@ jobs:
 
       - name: NMC Command Center incident filter regression
         run: node --test scripts/test-nmc-command-incident-filters.mjs
+      - name: Vessel 360 A03 retirement and tabs regression
+        run: node --test scripts/test-nmc-v360-a03-retired-regression.mjs
       - name: Build
         run: npm run build
 
