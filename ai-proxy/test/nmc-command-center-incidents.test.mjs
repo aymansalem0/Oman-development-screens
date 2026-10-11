@@ -39,6 +39,7 @@ test('Commands remain centered on original summary and attention list, without i
  assert.match(html,/incident-map-legend/);
  assert.match(ts,/incident-outer-ring/);
  assert.match(css,/incident-outer-ring/);
+ assert.match(css,/ship-symbol path:first-child[\\s\\S]*?fill:var\\(--event-color\\)/);
 });
 test('AI scoring wins only when fresh; reported severity is not called AI when unassessed',()=>{
  const ai={reportedSeverity:'LOW',aiAssessment:{incidentRiskBand:'CRITICAL'},aiAssessmentStale:false};
