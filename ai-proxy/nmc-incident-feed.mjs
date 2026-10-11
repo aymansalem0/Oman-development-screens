@@ -190,7 +190,7 @@ export class NmcIncidentFeed {
   if(!this.configured)throw new IncidentTriageError('INCIDENT_SHEET_NOT_CONFIGURED',503);
   const token=await this.accessToken();
   const base='https://sheets.googleapis.com/v4/spreadsheets/'+enc(this.sheetId)+
-    '/values/'+enc("'"+range+"'");
+    '/values/'+enc(range);
   const url=append?base+':append?valueInputOption=RAW&insertDataOption=INSERT_ROWS':base;
   let response;
   try{response=await this.fetch(url,{
