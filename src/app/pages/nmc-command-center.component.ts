@@ -68,6 +68,7 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
   incidentFeedRefreshing=false;
   selectedIncidentId='';
   incidentSourceMessage='';
+  incidentRejectedRowsCount=0;
 
   attentionPage = 1;
   readonly attentionPageSize = 6;
