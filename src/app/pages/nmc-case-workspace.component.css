@@ -645,3 +645,25 @@ a, button, textarea { font:inherit; }
  .single-decision-card h3 {font-size:17px;}
  .decision-review-form .ai-decision-buttons {display:grid;grid-template-columns:1fr;}
 }
+
+/* Upgrade previously saved (unreviewed) A01 cases without a second AI call. */
+.legacy-decision-upgrade{
+  margin:14px 0 18px;padding:20px 23px;
+  background:linear-gradient(120deg,#ebf8f6,#f8fdfc);
+  border:2px solid #60b7a8;border-radius:13px;
+  color:#174b4c;
+}
+.legacy-decision-upgrade h4{
+  margin:10px 0;font-size:18px;color:#0e534b;
+}
+.legacy-decision-upgrade p{
+  font-size:13px;line-height:1.8;max-width:880px;margin:8px 0 15px;
+}
+.legacy-decision-upgrade button{
+  font-size:13px;min-height:45px;background:#08786a;
+}
+.legacy-decision-upgrade button:hover{background:#075e53;}
+@media(max-width:650px){
+  .legacy-decision-upgrade{padding:14px;}
+  .legacy-decision-upgrade button{width:100%;white-space:normal;}
+}
