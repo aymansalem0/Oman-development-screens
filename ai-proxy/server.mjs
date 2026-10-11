@@ -144,8 +144,29 @@ const incidentAiria=createAiriaIncidentTriage({
 });
 const incidentFeed=new NmcIncidentFeed({
   executeIncidentAgents:incidentAiria,
-  agentEnabled:incidentAgentEnabled
+  agentEnabled:incidentAgentEnabled,
+  onAssessmentReady:async incident=>{
+    // Inbound event creates/links a PENDING case only; no task is created until
+    // authorized Case Management human review. Never update source incident.
+    const saved=fleet.getVesselResult(incident.imo);
+    return cases.fromIncident(incident,incident.aiAssessment,saved);
+  }
 });
+async function incidentCaseView(){
+  const feed=await incidentFeed.load();
+  let persisted=[];
+  try{persisted=await cases.list();}
+  catch{ /* case store unavailable must not hide source incident records */ }
+  return {...feed,incidents:feed.incidents.map(incident=>{
+    const linked=persisted.find(row=>
+      (row.incidentEvents||[]).some(ev=>ev.incidentId===incident.incidentId&&
+        ev.descriptionHash===incident.descriptionHash));
+    return {...incident,linkedCaseId:linked?.id||null,
+      linkedCaseStatus:linked?.status||null,
+      caseIncidentDecisionStatus:linked?.incidentEvents?.find(ev=>
+        ev.incidentId===incident.incidentId)?.decisionStatus||null};
+  })};
+}
 // Independent POC scheduling workspace; ONLY confirmed existing NMC referrals
 // are written through the established Oracle-backed case API.
 const siErp=new ErpWorkforceStore();
@@ -405,7 +426,7 @@ const server = createServer(async (req, res) => {
   if(path==='/api/ai/nmc/incidents/health'&&req.method==='GET')
     return respond(res,200,{status:'ok',...incidentFeed.health()});
   if(path==='/api/ai/nmc/incidents'&&req.method==='GET'){
-    try{return respond(res,200,await incidentFeed.load());}
+    try{return respond(res,200,await incidentCaseView());}
     catch(error){
       if(error instanceof IncidentTriageError)
         return respond(res,error.status,{error:error.code,source:'GOOGLE_SHEETS'});
@@ -427,8 +448,12 @@ const server = createServer(async (req, res) => {
       return respond(res,503,{error:'INCIDENT_AI_TRIAGE_UNAVAILABLE'});
     }
   }
+  // No parallel incident approval workflow. All incident task decisions belong
+  // exclusively inside Case Management, with central audit and ownership.
   const incidentReviewMatch=/^\/api\/ai\/nmc\/incidents\/(INC-[A-Za-z0-9-]{3,70})\/review$/.exec(path);
-  if(incidentReviewMatch&&req.method==='POST'){
+  if(incidentReviewMatch&&req.method==='POST')
+    return respond(res,409,{error:'INCIDENT_ACTIONS_ONLY_IN_CASE_MANAGEMENT'});
+  if(false&&incidentReviewMatch&&req.method==='POST'){
     try{
       dashboards.assertRole(req,'EDITOR');
       const body=await requestJson(req,4096);
@@ -872,6 +897,12 @@ const server = createServer(async (req, res) => {
           const item=await cases.initializeOperational(first,body.version,'OPERATOR');
           return respond(res,200,{status:'ok',case:item,aiCallCount:0});
         }
+        if(action==='incidents'&&second&&third==='decision'){
+          dashboards.assertRole(req,'EDITOR');
+          const body=await requestJson(req,4096);
+          const item=await cases.decideIncident(first,body.version,second,body,'OPERATOR');
+          return respond(res,200,{status:'ok',case:item});
+        }
         if(action==='operational-decision'&&!second){
           dashboards.assertRole(req,'EDITOR');
           const body=await requestJson(req,4096);
@@ -1240,6 +1271,11 @@ try{
     if(incidentFeed.autoEnabled&&incidentFeed.aiConfigured){
       const intervalMinutes=Math.min(1440,Math.max(5,Number(
         process.env.NMC_INCIDENT_AUTO_INTERVAL_MINUTES||15)||15));
+      // Start once on boot: a newly delivered Sheet incident should not wait
+      // for a user to open a page or click Analyze. Periodic scan is fallback.
+      void incidentFeed.autoTick().then(result=>{
+        console.log('[nmc-incidents] STARTUP_TRIAGE '+JSON.stringify(result));
+      }).catch(()=>console.error('[nmc-incidents] STARTUP_TRIAGE_FAILED'));
       const timer=setInterval(()=>{
         void incidentFeed.autoTick().then(result=>{
           console.log('[nmc-incidents] TRIAGE_TICK '+JSON.stringify(result));
