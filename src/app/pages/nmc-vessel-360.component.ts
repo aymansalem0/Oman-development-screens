@@ -1084,9 +1084,9 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
     });
     const drive=this.driveListing;
     sources.push(drive?.driveConnected?{
-      name:'Google Drive Vessel Documents / A03',
-      system:'Google Drive POC Read-only Document List',
-      record:`${drive.documents.length} document(s) · ${drive.documents.filter(d=>d.savedStatus==='APPROVED').length} human-approved A03 result(s)`,
+      name:'Google Drive Document Metadata',
+      system:'Google Drive POC Read-only Metadata',
+      record:`${drive.documents.length} document record(s) available in the connected POC folder`,
       recordId:drive.documents[0]?.fileId,
       status:'Available',lastSync:this.driveReadAt||'—',confidence:null,
       authority:'Synthetic POC document packs; approval does NOT verify issuing authority',
@@ -1094,7 +1094,7 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
       // Only read-only metadata in source correlation; the legacy A03
       // Document Intelligence tab and its actions are retired.
     }:{
-      name:'Google Drive Vessel Documents / A03',
+      name:'Google Drive Document Metadata',
       system:'Google Drive Document Adapter',
       record:drive?.status==='not_configured'?'Drive root folder not configured':
         'Google Drive document listing unavailable',
