@@ -26,6 +26,8 @@ import { NmcRiskEngineService } from '../services/nmc-risk-engine.service';
 import { NmcAlertsService } from '../services/nmc-alerts.service';
 import { NmcCasesService } from '../services/nmc-cases.service';
 import {NmcIncidentsService,NmcMaritimeIncident} from '../services/nmc-incidents.service';
+import {NmcAiFocusService, NmcAiFocusResult, NmcKpiValues,
+  NmcKpiMetricId} from '../services/nmc-ai-focus.service';
 import {incidentSeverityBand as verifiedIncidentBand, isActiveNmcIncident,
   vesselMatchesIncidentFilter, type NmcIncidentFilter} from '../services/nmc-incident-filters';
 
@@ -54,6 +56,13 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
   /** One shared incident filter for map markers and the Requires Attention queue. */
   incidentFilter:NmcIncidentFilter='All';
   feedLive = true;
+  /** AI picks ONE review focus; no KPI is colored as AI-prioritized until
+   *  an explicit operator request returns a verified selection. */
+  aiKpiFocus:NmcAiFocusResult|null=null;
+  aiKpiFocusAvailable=false;
+  aiKpiFocusStatusLoaded=false;
+  aiKpiFocusBusy=false;
+  aiKpiFocusError='';
   selectedVessel?: NmcVesselProfile;
   now = new Date();
 
@@ -109,7 +118,8 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
     private readonly fleetAi: NmcFleetAiService,
     private readonly alertsService: NmcAlertsService,
     private readonly casesService: NmcCasesService,
-    private readonly incidentsService:NmcIncidentsService
+    private readonly incidentsService:NmcIncidentsService,
+    private readonly aiKpi:NmcAiFocusService
   ) {}
 
   copy(en: string, ar: string): string {
@@ -217,6 +227,11 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
   }
 
   ngOnInit(): void {
+    // Configuration GET is free and never starts Airia.
+    this.aiKpi.status().subscribe({
+      next:r=>{this.aiKpiFocusAvailable=r.configured;this.aiKpiFocusStatusLoaded=true;},
+      error:()=>{this.aiKpiFocusAvailable=false;this.aiKpiFocusStatusLoaded=true;}
+    });
     this.riskSubscription = this.riskEngine.config$.subscribe(() => {
       this.loadFleet();  // Saved fleet results remain the original Oracle snapshot.
       this.loadOperations(); // Browser policy changes immediately refresh locally eligible alerts.
@@ -629,6 +644,84 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
 
   get vesselTypes(): string[] {
     return ['All', ...Array.from(new Set(this.vessels.map(vessel => vessel.type))).sort()];
+  }
+
+  /** Distinct, explicit business measures. Critical and High are NOT combined,
+   *  and pending (the inverse of assessed) is deliberately not duplicated. */
+  get dashboardKpis():Array<{id:NmcKpiMetricId;value:number|null;display:string;
+      labelEn:string;labelAr:string;hintEn:string;hintAr:string;icon:string}>{
+    const ready=!!this.fleetSnapshot;
+    const asDisplay=(x:number|null)=>x===null?'—':x.toLocaleString('en-US');
+    const assessed=ready?this.assessedCount:null;
+    const total=this.fleetSnapshot?.fleetSize||this.trafficSnapshot.totalContacts;
+    const values:Array<{id:NmcKpiMetricId;value:number|null;
+      labelEn:string;labelAr:string;hintEn:string;hintAr:string;icon:string}>=[
+      {id:'vesselContacts',value:this.monitoredCount,labelEn:'Monitored contacts',
+        labelAr:'الأهداف البحرية المرصودة',hintEn:'Simulated AIS/LRIT traffic',
+        hintAr:'حركة AIS/LRIT تجريبية',icon:'⌖'},
+      {id:'assessedVessels',value:assessed,labelEn:'AI assessed vessels',
+        labelAr:'السفن المقيمة بالذكاء الاصطناعي',hintEn:'Completed / fleet scope',
+        hintAr:'مكتمل / إجمالي السفن',icon:'✦'},
+      {id:'highRiskVessels',value:ready?(this.fleetSnapshot?.counts.high??null):null,
+        labelEn:'High-risk vessels',labelAr:'سفن مرتفعة المخاطر',
+        hintEn:'High only · excludes Critical',hintAr:'مرتفعة فقط دون الحرجة',icon:'▲'},
+      {id:'criticalRiskVessels',value:ready?(this.fleetSnapshot?.counts.critical??null):null,
+        labelEn:'Critical-risk vessels',labelAr:'سفن حرجة المخاطر',
+        hintEn:'Based on saved risk policy',hintAr:'وفق سياسة المخاطر المحفوظة',icon:'!'},
+      {id:'requiresAttention',value:ready?this.attentionCount:null,
+        labelEn:'Vessels needing attention',labelAr:'سفن تتطلب المتابعة',
+        hintEn:'Distinct vessels · risk or incidents',
+        hintAr:'سفن مميزة · مخاطر أو حوادث',icon:'◎'},
+      {id:'activeAlerts',value:this.activeAlertCount,
+        labelEn:'Active maritime alerts',labelAr:'التنبيهات البحرية النشطة',
+        hintEn:'Alert workflow records',hintAr:'سجلات التنبيهات التشغيلية',icon:'♢'},
+      {id:'openCases',value:this.openCaseCount,
+        labelEn:'Open maritime cases',labelAr:'الحالات البحرية المفتوحة',
+        hintEn:'Central Case Management',hintAr:'إدارة الحالات المركزية',icon:'▣'},
+      {id:'activeIncidents',value:this.activeIncidentCount,
+        labelEn:'Unresolved incidents',labelAr:'الحوادث غير المغلقة',
+        hintEn:'Source reports · not unique vessels',
+        hintAr:'عدد البلاغات وليس عدد السفن',icon:'⚑'}
+    ];
+    return values.map(k=>({...k,
+      display:k.id==='assessedVessels'&&k.value!==null
+        ?asDisplay(k.value)+' / '+total:asDisplay(k.value)}));
+  }
+  dashboardKpiTrack(_index:number,k:{id:NmcKpiMetricId}):string{return k.id;}
+  get dashboardKpiValues():NmcKpiValues{
+    return Object.fromEntries(this.dashboardKpis.map(k=>[k.id,k.value]))
+      as NmcKpiValues;
+  }
+  get aiFocusIsCurrent():boolean{
+    const stored=this.aiKpiFocus;
+    if(!stored)return false;
+    const now=this.dashboardKpiValues;
+    return Object.entries(stored.snapshot).every(([id,v])=>
+      now[id as NmcKpiMetricId]===v);
+  }
+  aiFocusedKpi(id:NmcKpiMetricId):boolean{
+    return this.aiFocusIsCurrent&&this.aiKpiFocus?.selection.metricId===id;
+  }
+  requestAiKpiFocus():void{
+    if(this.aiKpiFocusBusy||!this.aiKpiFocusAvailable)return;
+    const values=this.dashboardKpiValues;
+    if(Object.values(values).filter(v=>v!==null).length<5){
+      this.aiKpiFocusError=this.copy(
+        'Wait for the operational KPI data to load before requesting AI review.',
+        'انتظر اكتمال تحميل المؤشرات التشغيلية قبل طلب مراجعة AI.');
+      return;
+    }
+    const confirmed=window.confirm(this.copy(
+      'Send only these eight aggregated synthetic dashboard counts to the dedicated Airia KPI-priority pipeline? This may incur one paid AI request. It will highlight ONE KPI for human review, not change vessel risk, incidents, cases or tasks.',
+      'هل تريد إرسال القيم المجمعة للمؤشرات الثمانية فقط إلى Airia لتحديد المؤشر الأهم؟ قد يستهلك استدعاء AI مدفوعاً. سيتم تمييز مؤشر واحد للمراجعة البشرية دون تغيير المخاطر أو الحوادث أو الحالات أو المهام.'
+    ));
+    if(!confirmed)return;
+    this.aiKpiFocusBusy=true;this.aiKpiFocusError='';
+    this.aiKpi.run(values).subscribe({
+      next:result=>{this.aiKpiFocusBusy=false;this.aiKpiFocus=result;},
+      error:e=>{this.aiKpiFocusBusy=false;this.aiKpiFocusError=
+        this.aiKpi.readableError(e,this.lang.isArabic);}
+    });
   }
 
   get monitoredCount(): number { return this.trafficSnapshot.totalContacts; }
