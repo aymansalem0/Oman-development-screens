@@ -1,0 +1,195 @@
+{
+  "_fixtureNotice": "CONTRACT EXAMPLE ONLY. Synthetic POC facts transcribed from user-reviewed screen. Not an Airia response and not a maritime/regulatory decision.",
+  "schemaVersion": "nmc-case-decision.v1",
+  "assessmentId": "EXAMPLE-A01-CASE-9328471",
+  "imo": "9328471",
+  "sourceRisk": {
+    "evaluationId": "<persisted-assessment-id>",
+    "score": 60,
+    "level": "Watch",
+    "immutable": true
+  },
+  "decisionReadiness": "REQUIRES_VERIFICATION",
+  "summary": "The saved composite risk is 60/100 (Watch), but a critical fire-safety deficiency remains open in the MOEI record despite a simulated PSC source reporting closure. Certificate source discrepancies also require verification.",
+  "whyItMatters": "The MOEI record has no verified evidence of closure for the critical fire detection and alarm finding. A simulated, unverified external record must not override the MOEI record or authorize closure.",
+  "primaryProposedDecision": {
+    "decisionId": "d-001",
+    "decisionCode": "REFER_CRITICAL_SAFETY_REVIEW",
+    "titleAr": "إحالة تعارض ملاحظة سلامة حرجة للتحقق المتخصص ومراجعة الحاجة للمعاينة",
+    "titleEn": "Refer critical safety discrepancy for specialist verification and inspection review",
+    "rationaleAr": "سجل الوزارة يُظهر ملاحظة حرجة تتعلق بنظام إنذار الحريق دون دليل إغلاق معتمد، بينما يذكر مصدر PSC خارجي تجريبي إغلاقها. ينبغي التحقق من التعارض وحالة الشهادات قبل اعتماد أي نتيجة نهائية.",
+    "rationaleEn": "The MOEI record shows an unresolved critical fire-alarm finding without verified closure evidence, while a simulated external PSC feed reports closure. The contradiction and certificate status require verification before any final conclusion.",
+    "expectedOutcomeAr": "إثبات موثق لحالة ملاحظة الحريق والشهادات وتحديد مدى الحاجة إلى معاينة فعلية.",
+    "expectedOutcomeEn": "Document the verified status of the fire-safety finding and certificates, and establish whether an inspection is warranted.",
+    "evidenceIds": [
+      "DEF-2026-401",
+      "INS-2026-01301",
+      "PSC-SIM-0001-01",
+      "CERT-SC-9328471"
+    ],
+    "uncertainties": [
+      {
+        "kind": "CONFLICTING_SOURCES",
+        "subject": "DEF-2026-401",
+        "detailEn": "MOEI: no closure evidence; simulated PSC: closed on 2026-10-03. Neither statement proves authoritative closure.",
+        "detailAr": "سجل الوزارة لا يتضمن دليل إغلاق، بينما يُظهر مصدر PSC التجريبي إغلاقًا بتاريخ 3 أكتوبر 2026؛ لم يُحسم التعارض."
+      },
+      {
+        "kind": "REQUIRES_VERIFICATION",
+        "subject": "Safety Construction Certificate",
+        "detailEn": "Conditional certificate with differing class/flag data.",
+        "detailAr": "شهادة سلامة الإنشاءات مشروطة وتوجد اختلافات بين بيانات التصنيف ودولة العلم."
+      }
+    ],
+    "urgency": "IMMEDIATE",
+    "confidence": 0.7,
+    "confidenceNotice": "ILLUSTRATIVE ONLY — no model calibration represented",
+    "requestedActionIds": [
+      "verify-def-closure",
+      "verify-certificate",
+      "priority-inspection-review",
+      "enhanced-monitoring"
+    ],
+    "suggestedRoute": "NMC_TO_COMPLIANCE_AND_SMART_INSPECTION",
+    "externalExecutionSuggested": true,
+    "finality": "PENDING_EXTERNAL_OUTCOME",
+    "outcomeVerification": {
+      "titleAr": "توثيق حالة الملاحظة الحرجة والشهادات ونتائج المعاينة إن أُجريت",
+      "titleEn": "Verify safety-finding closure, certificate status, and inspection results if scheduled",
+      "requiredEvidenceTypes": [
+        "DEFICIENCY_CLOSURE_RECORD",
+        "CERTIFICATE_SOURCE_RECONCILIATION"
+      ],
+      "conditionalEvidenceTypes": [
+        "SMART_INSPECTION_OUTCOME",
+        "POST_INSPECTION_A02_REFRESH_AND_SAVED_RISK"
+      ]
+    }
+  },
+  "additionalProposedDecisions": [],
+  "evidence": [
+    {
+      "type": "INSPECTION",
+      "evidenceIds": [
+        "DEF-2026-401",
+        "INS-2026-01301",
+        "PSC-SIM-0001-01"
+      ],
+      "verificationStatus": "CONFLICT_REQUIRES_REVIEW"
+    },
+    {
+      "type": "CERTIFICATE",
+      "evidenceIds": [
+        "CERT-SC-9328471",
+        "CERT-SE-9328471",
+        "CLASS-9328471"
+      ],
+      "verificationStatus": "SOURCE_RECONCILIATION_REQUIRED"
+    },
+    {
+      "type": "MOVEMENT",
+      "evidenceIds": [
+        "AIS-636019872",
+        "ROUTE-9328471"
+      ],
+      "verificationStatus": "LOW_SEVERITY_CONTEXT_ONLY"
+    }
+  ],
+  "proposedActions": [
+    {
+      "actionId": "verify-def-closure",
+      "actionType": "VERIFY_DEFICIENCY_CLOSURE",
+      "title": "Verify evidence of deficiency closure",
+      "titleAr": "التحقق من أدلة إغلاق ملاحظة الحريق",
+      "titleEn": "Verify closure evidence for critical fire-safety finding",
+      "reason": "The MOEI record lacks verified evidence of closure while simulated PSC data conflicts.",
+      "businessReasonAr": "الملاحظة الحرجة ما زالت دون دليل إغلاق معتمد لدى الوزارة مع وجود تعارض خارجي تجريبي.",
+      "businessReasonEn": "The critical finding lacks verified MOEI closure evidence and the simulated external source conflicts.",
+      "ownerRole": "COMPLIANCE_OFFICER",
+      "priority": "IMMEDIATE",
+      "confidence": 0.8,
+      "evidenceIds": [
+        "DEF-2026-401",
+        "INS-2026-01301",
+        "PSC-SIM-0001-01"
+      ],
+      "requiresHumanApproval": true,
+      "dependsOnActionIds": [],
+      "relationship": "REQUIRED_STEP",
+      "expectedEvidenceIds": [],
+      "completionEvidenceDescriptionAr": "نتيجة تحقق موثقة من الجهة المختصة.",
+      "completionEvidenceDescriptionEn": "A verified finding status and closure-evidence record from the competent authority."
+    },
+    {
+      "actionId": "verify-certificate",
+      "actionType": "VERIFY_CERTIFICATE",
+      "title": "Verify maritime certificate status",
+      "titleAr": "التحقق من حالة شهادات السلامة",
+      "titleEn": "Verify safety certificate status",
+      "reason": "Safety Construction status is conditional/conflicting and Safety Equipment expiry requires review.",
+      "businessReasonAr": "حالة إحدى شهادات السلامة مشروطة وتوجد اختلافات بين مصادرها؛ يجب التحقق من صلاحية الشهادات.",
+      "businessReasonEn": "Conditional and conflicting certificate source data require verification.",
+      "ownerRole": "COMPLIANCE_OFFICER",
+      "priority": "HIGH",
+      "confidence": 0.78,
+      "evidenceIds": [
+        "CERT-SC-9328471",
+        "CERT-SE-9328471",
+        "CLASS-9328471"
+      ],
+      "requiresHumanApproval": true,
+      "dependsOnActionIds": [],
+      "relationship": "PARALLEL_STEP",
+      "expectedEvidenceIds": [],
+      "completionEvidenceDescriptionAr": "مطابقة بيانات الشهادات مع المصدر المعتمد.",
+      "completionEvidenceDescriptionEn": "Reconciled certificate status against the accepted authoritative source."
+    },
+    {
+      "actionId": "priority-inspection-review",
+      "actionType": "PRIORITY_INSPECTION",
+      "title": "Request priority inspection review",
+      "titleAr": "عرض إحالة معاينة ذات أولوية للاعتماد",
+      "titleEn": "Refer priority inspection request for approval",
+      "reason": "Unresolved critical fire-safety finding may warrant on-board verification, subject to NMC authority rules.",
+      "businessReasonAr": "قد تستدعي الملاحظة الحرجة معاينة فعلية وفق قرار الموظف المختص وقواعد الإحالة.",
+      "businessReasonEn": "The critical finding may require on-board verification, subject to authorized referral and scheduling.",
+      "ownerRole": "INSPECTION_OFFICER",
+      "priority": "HIGH",
+      "confidence": 0.68,
+      "evidenceIds": [
+        "DEF-2026-401",
+        "INS-2026-01301"
+      ],
+      "requiresHumanApproval": true,
+      "dependsOnActionIds": [],
+      "relationship": "CONDITIONAL_STEP",
+      "condition": "Only if the authorized officer approves a Smart Inspection referral under the MOEI authority matrix.",
+      "expectedEvidenceIds": [],
+      "completionEvidenceDescriptionAr": "نتيجة المعاينة المحفوظة؛ لا تعني الإحالة إتمام المعاينة.",
+      "completionEvidenceDescriptionEn": "A saved inspection outcome; an approved referral is not an inspection result."
+    },
+    {
+      "actionId": "enhanced-monitoring",
+      "actionType": "ENHANCED_MONITORING",
+      "title": "Maintain enhanced vessel monitoring",
+      "titleAr": "استمرار المتابعة البحرية لحين استكمال التحقق",
+      "titleEn": "Maintain monitoring pending verification",
+      "reason": "Unresolved discrepancy requires continued situational awareness; movement findings alone are low severity.",
+      "businessReasonAr": "تظل المعلومات غير محسومة حتى انتهاء التحقق، ولا تدل حركة السفينة وحدها على خطر مرتفع.",
+      "businessReasonEn": "Maintain awareness while evidence gaps remain; movement information alone is low severity.",
+      "ownerRole": "NMC_OFFICER",
+      "priority": "MONITOR",
+      "confidence": 0.65,
+      "evidenceIds": [
+        "AIS-636019872",
+        "ROUTE-9328471"
+      ],
+      "requiresHumanApproval": true,
+      "dependsOnActionIds": [],
+      "relationship": "PARALLEL_STEP",
+      "expectedEvidenceIds": [],
+      "completionEvidenceDescriptionAr": "سجل متابعة موثق وفق سياسة المتابعة المعتمدة.",
+      "completionEvidenceDescriptionEn": "Recorded monitoring actions under the approved monitoring policy."
+    }
+  ]
+}
