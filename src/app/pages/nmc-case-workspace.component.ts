@@ -791,11 +791,12 @@ export class NmcCaseWorkspaceComponent implements OnInit {
     const incidentRoles=(current?.tasks||[])
       .filter(t=>t.provenance==='NMC_INCIDENT_HUMAN_APPROVED')
       .map(t=>t.assignedRole);
-    const roles=[...new Set([...incidentRoles,...(current?.operationalDecision?.approvedWorkflowSteps||
-      current?.operationalDecision?.workflowSteps||[]).map(a=>a.role).filter(Boolean).length
-      ?(current?.operationalDecision?.approvedWorkflowSteps||
-        current?.operationalDecision?.workflowSteps||[]).map(a=>a.role)
-      :actions.map(a=>a.ownerRole).filter(Boolean)])];
+    const decisionRoles=(current?.operationalDecision?.approvedWorkflowSteps||
+      current?.operationalDecision?.workflowSteps||[])
+      .map(step=>step.role).filter(Boolean);
+    const actionRoles=actions.map(action=>action.ownerRole).filter(Boolean);
+    const roles=[...new Set([...incidentRoles,
+      ...(decisionRoles.length?decisionRoles:actionRoles)])];
     this.stakeholders=[
       {
         role:this.copy('Case Owner','مالك الحالة'),
