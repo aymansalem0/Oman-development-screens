@@ -13,12 +13,14 @@ services:
       # Incident triage reuses the existing Airia A01/A02 pipelines and
       # AIRIA_MENA_KEY from the base application configuration.
       # No separate OpenAI/Ollama model, credentials or pipeline IDs.
-      # Optional scheduled AI triage: OFF by default; each row also requires
-      # AI_Review_Request=YES. Max 1-5 calls per cycle, interval >=5 minutes.
+      # Automatic incident AI triage is ON by default for this synthetic POC.
+      # Per-row AI_Review_Request=YES is mandatory. The worker uses saved
+      # Airia A02 then A01 (2 calls per incident), maximum 3 incidents/cycle.
+      # Disable deliberately with NMC_INCIDENT_AUTO_TRIAGE_ENABLED=false.
       # Reuses existing A01/A02 request/response schemas. Manual by default.
       # Enable the scheduled billable calls only after manual source validation.
-      NMC_INCIDENT_AUTO_TRIAGE_ENABLED: ${NMC_INCIDENT_AUTO_TRIAGE_ENABLED:-false}
-      NMC_INCIDENT_AUTO_INTERVAL_MINUTES: ${NMC_INCIDENT_AUTO_INTERVAL_MINUTES:-15}
-      NMC_INCIDENT_AUTO_MAX_PER_CYCLE: ${NMC_INCIDENT_AUTO_MAX_PER_CYCLE:-2}
+      NMC_INCIDENT_AUTO_TRIAGE_ENABLED: ${NMC_INCIDENT_AUTO_TRIAGE_ENABLED:-true}
+      NMC_INCIDENT_AUTO_INTERVAL_MINUTES: ${NMC_INCIDENT_AUTO_INTERVAL_MINUTES:-5}
+      NMC_INCIDENT_AUTO_MAX_PER_CYCLE: ${NMC_INCIDENT_AUTO_MAX_PER_CYCLE:-3}
     extra_hosts:
       - "host.docker.internal:host-gateway"
