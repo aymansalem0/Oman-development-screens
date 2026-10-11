@@ -1043,41 +1043,13 @@
         <div><small>{{ copy('Authority', 'الجهة المعتمدة') }}</small><strong>{{ provenance.authority }}</strong></div>
         <div><small>{{ copy('Record ID', 'معرف السجل') }}</small><strong>{{ provenance.recordId }}</strong></div>
         <div><small>{{ copy('Last updated', 'آخر تحديث') }}</small><strong>{{ provenance.lastUpdated }}</strong></div>
-        <div><small>{{ copy('Conflict', 'التعارض') }}</small><strong [class.conflict-text]="provenance.conflict === 'Unresolved'">{{ provenance.conflict === 'Unresolved' ? copy('Unresolved', 'غير محلول') : provenance.conflict === 'Verified' ? copy('Verified', 'تم التحقق') : copy('None', 'لا يوجد') }}</strong></div>
+        <div><small>{{ copy('Conflict', 'التعارض') }}</small><strong [class.conflict-text]="provenance.conflict === 'Unresolved'">{{ provenance.conflict === 'Unresolved' ? copy('Unresolved', 'غير محلول') : provenance.conflict === 'Verified' ? copy('Verified source comparison', 'مقارنة مصدر مؤكدة') : copy('Not independently compared', 'لم تتم مقارنة مستقلة') }}</strong></div>
       </div>
 
-      <div class="confidence-section">
-        <div class="confidence-title">
-          <div>
-            <h4>{{ copy('Confidence Breakdown', 'تفاصيل الثقة') }}</h4>
-            <p>{{ copy('Independent measures — not one combined source score.', 'مقاييس مستقلة وليست درجة واحدة مجمعة للمصدر.') }}</p>
-          </div>
-        </div>
-
-        <div class="confidence-metric">
-          <div><span>{{ copy('Source trust', 'الثقة في المصدر') }}</span><strong>{{ provenance.sourceTrust }}%</strong></div>
-          <div class="metric-bar"><i [style.width.%]="provenance.sourceTrust"></i></div>
-          <small>{{ copy('Reliability and authority of the originating source.', 'موثوقية وسلطة المصدر الأصلي.') }}</small>
-        </div>
-
-        <div class="confidence-metric">
-          <div><span>Data confidence</span><strong>{{ provenance.dataConfidence }}%</strong></div>
-          <div class="metric-bar"><i [style.width.%]="provenance.dataConfidence"></i></div>
-          <small>{{ copy('Quality and validation confidence for this specific record.', 'درجة جودة والتحقق لهذا السجل تحديداً.') }}</small>
-        </div>
-
-        <div class="confidence-metric">
-          <div><span>{{ copy('Identity match', 'تطابق الهوية') }}</span><strong>{{ provenance.identityMatch }}%</strong></div>
-          <div class="metric-bar"><i [style.width.%]="provenance.identityMatch"></i></div>
-          <small>{{ copy('Confidence that this record belongs to the same vessel.', 'درجة الثقة في أن هذا السجل يخص نفس السفينة.') }}</small>
-        </div>
-
-        <div class="confidence-metric">
-          <div><span>{{ copy('Freshness', 'حداثة البيانات') }}</span><strong>{{ provenance.freshness }}%</strong></div>
-          <div class="metric-bar"><i [style.width.%]="provenance.freshness"></i></div>
-          <small>{{ copy('How current the information is for operational use.', 'مدى حداثة المعلومات للاستخدام التشغيلي.') }}</small>
-        </div>
-      </div>
+      <p class="source-provenance-notice">
+        {{copy('This information is from a synthetic POC fixture or connected POC source as indicated above. Independent source reliability, authentication, identity-match percentage and freshness have NOT been measured. The platform cannot assign confidence percentages without evidence.',
+          'هذه المعلومات من سجل تجريبي أو مصدر مرتبط بتجربة المنصة كما هو موضح أعلاه. لا توجد قياسات مستقلة لموثوقية المصدر أو أصالته أو نسبة تطابق الهوية وحداثتها، ولا يجوز عرض نسب ثقة بلا دليل.')}}
+      </p>
 
       <div class="provenance-note" [class.warning]="provenance.conflict === 'Unresolved'">
         <strong>{{ provenance.conflict === 'Unresolved' ? copy('Attention required', 'يتطلب الانتباه') : copy('Traceability note', 'ملاحظة التتبع') }}</strong>
