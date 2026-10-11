@@ -185,19 +185,5 @@ export class NmcNavigationComponent implements OnInit, OnDestroy {
     }
   }
 
-  private expandSelectedDashboard(): void {
-    const item = this.publishedDashboards.find(d => this.isPublishedDashboard(d.id));
-    if (!item) return;
-    if (item.menuPlacement === 'NMC_CENTER') {
-      this.nmcExpanded = true;
-      this.nmcDashboardsExpanded = true;
-    } else if (item.menuPlacement === 'SMART_INSPECTION') {
-      this.smartInspectionExpanded = true;
-      this.smartDashboardsExpanded = true;
-    } else {
-      this.settingsExpanded = true;
-      this.nmcSettingsExpanded = true;
-      this.settingsDashboardsExpanded = true;
-    }
-  }
+
 }
