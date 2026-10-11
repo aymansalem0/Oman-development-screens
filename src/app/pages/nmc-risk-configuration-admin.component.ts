@@ -85,8 +85,7 @@ export class NmcRiskConfigurationAdminComponent implements OnInit, OnDestroy {
     'inspection',
     'certificate',
     'dataQuality',
-    'history',
-    'documentIntegrity'
+    'history'
   ];
 
   readonly modes: Array<{value: RiskCalculationMode; en: string; ar: string; descriptionEn: string; descriptionAr: string}> = [
@@ -313,7 +312,7 @@ export class NmcRiskConfigurationAdminComponent implements OnInit, OnDestroy {
       certificate: ['Certificates & regulatory status', 'الشهادات والحالة التنظيمية'],
       dataQuality: ['Data quality & source conflicts', 'جودة البيانات وتعارض المصادر'],
       history: ['Vessel / operator history', 'السجل التاريخي للسفينة / المشغل'],
-      documentIntegrity: ['Document integrity (A03)', 'اتساق المستندات (A03)']
+      documentIntegrity: ['Legacy A03 (disabled)', 'عامل A03 القديم (معطل)']
     };
     return this.copy(labels[key][0], labels[key][1]);
   }
@@ -325,7 +324,7 @@ export class NmcRiskConfigurationAdminComponent implements OnInit, OnDestroy {
       certificate: ['Certificate validity, conditions and regulatory compliance signals.', 'صلاحية الشهادات وشروطها ومؤشرات الامتثال التنظيمي.'],
       dataQuality: ['Source confidence, completeness and unresolved data conflicts.', 'الثقة في المصادر واكتمال البيانات والتعارضات غير المحلولة.'],
       history: ['Historical vessel, operator and recurring compliance patterns.', 'السجل التاريخي للسفينة والمشغل وأنماط الامتثال المتكررة.'],
-      documentIntegrity: ['A03 citation-grounded cross-source document mismatches. Certificate expiry is counted by A02 only.', 'اختلافات مستندات A03 المدعومة بنصوص مصدرية. صلاحية الشهادات تدخل في عامل A02 فقط.']
+      documentIntegrity: ['Disabled legacy A03 factor, not used in new risk scoring.', 'عامل A03 القديم معطل وغير مستخدم في حساب المخاطر الجديد.']
     };
     return this.copy(labels[key][0], labels[key][1]);
   }
@@ -443,8 +442,7 @@ export class NmcRiskConfigurationAdminComponent implements OnInit, OnDestroy {
   }
 
   private evaluateSaved(vessel:NmcVesselProfile,assessment:FleetAiAssessment,config:RiskEngineConfig){
-    const keys=this.factorKeys.filter(key=>key!=='documentIntegrity'||
-      Number(config.weights.documentIntegrity||0)>0);
+    const keys=this.factorKeys;
     if(keys.some(key=>!assessment.signals.some(s=>s.factor===key&&Number.isFinite(s.severity))))
       return null;
     const severities=Object.fromEntries(keys.map(key=>
