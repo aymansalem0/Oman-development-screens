@@ -41,8 +41,7 @@ const pipelines = Object.freeze({
   a02: process.env.AIRIA_A02_PIPELINE_ID || '73708937-ba16-47e3-b404-55cc0a54b159',
   a03: process.env.AIRIA_A03_PIPELINE_ID || '603d32f6-2f5f-42a8-a592-77af571a2480',
   a04: process.env.AIRIA_A04_PIPELINE_ID || 'bad751da-0e11-48fd-861d-5bde1afbbd8d',
-  p01: process.env.AIRIA_SI_P01_PIPELINE_ID || null,
-  dashboardFocus:(process.env.AIRIA_NMC_DASHBOARD_FOCUS_PIPELINE_ID||'').trim()||null
+  p01: process.env.AIRIA_SI_P01_PIPELINE_ID || null
 });
 
 async function fleetAgentCall(agent,input) {
@@ -130,27 +129,22 @@ const fleet=new FleetAssessmentManager({executeAgent:fleetAgentCall,getPscVessel
 guidance=new OperationalGuidance({mode:dbMode,oracleRepository:repository,fleet});
 riskPolicy=new CentralRiskPolicy({mode:dbMode,oracleRepository:repository,fleet});
 const dashboards=new DashboardWorkspace({mode:dbMode,oracleRepository:repository});
-/** Distinct Airia KPI-prioritization contract; A01 situation-assessment is
- * NOT repurposed as a dashboard model. GET/dashboard polling never calls AI. */
-async function dashboardFocusAgentCall(input){
-  if(!apiKey||!pipelines.dashboardFocus)
-    throw new Error('DASHBOARD_FOCUS_PIPELINE_NOT_CONFIGURED');
-  const upstream=await fetch(runtime.get('AIRIA_BASE_URL')+
-    '/v1/PipelineExecution/'+pipelines.dashboardFocus,{
-    method:'POST',
-    headers:{'X-API-KEY':apiKey,'Content-Type':'application/json',
-      'User-Agent':'moei-nmc-dashboard-focus/1.0'},
-    body:JSON.stringify({userInput:JSON.stringify(input),asyncOutput:false}),
-    signal:AbortSignal.timeout(timeoutMs)
-  });
-  if(!upstream.ok)throw new Error('DASHBOARD_FOCUS_UPSTREAM_UNAVAILABLE');
-  const body=await upstream.text();
-  try{return JSON.parse(body);}catch{throw new Error('DASHBOARD_FOCUS_RESPONSE_NOT_JSON');}
-}
+/** Existing A01/A02 business contracts are reused for maritime-risk dashboard
+ * prioritization. The subject remains a real, already-assessed vessel; aggregate
+ * KPI values are supplementary POC context and never a new risk signal. */
 const dashboardAiFocus=new DashboardAiFocus({
-  executeAgent:dashboardFocusAgentCall,
-  enabled:Boolean(apiKey)&&Boolean(pipelines.dashboardFocus)&&
-    process.env.NMC_DASHBOARD_AI_FOCUS_ENABLED==='true'
+  executeAgent:fleetAgentCall,
+  enabled:Boolean(apiKey)&&agentAllowed('a01')&&agentAllowed('a02')&&
+    process.env.NMC_DASHBOARD_AI_FOCUS_ENABLED==='true',
+  selectVessel:()=>{
+    const completed=Object.values(fleet.snapshot().results||{})
+      .filter(row=>row.status==='COMPLETED'&&row.assessmentId&&
+        Array.isArray(row.signals)&&Number.isFinite(row.score)&&
+        /^[0-9]{7}$/.test(row.imo||'')&&incidentBundleMap.has(row.imo))
+      .sort((a,b)=>b.score-a.score);
+    const vessel=completed[0]||null;
+    return vessel?{vessel,bundle:incidentBundleMap.get(vessel.imo)}:null;
+  }
 });
 const alerts=new NmcAlertWorkspace({mode:dbMode,oracleRepository:repository});
 const cases=new NmcCaseWorkspace({mode:dbMode,oracleRepository:repository,alerts});
