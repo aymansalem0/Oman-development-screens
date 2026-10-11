@@ -908,83 +908,36 @@
     </section>
 
     <section class="evidence-tab" *ngIf="activeTab === 'sources'">
-      <div class="evidence-heading">
-        <div>
-          <span class="section-kicker">{{ copy('DATA SOURCES', 'مصادر البيانات') }}</span>
-          <h3>{{ copy('Source Provenance & Authority', 'مصدر البيانات والجهة المعتمدة') }}</h3>
-          <p>{{ copy('Each vessel fact is linked to its originating system, authority class, synchronization time and confidence.', 'كل معلومة عن السفينة مرتبطة بالنظام المصدر ونوع الجهة ووقت المزامنة ودرجة الثقة.') }}</p>
-        </div>
-        <div class="evidence-heading-actions">
-          <span class="matched-badge">{{ sources.length }} {{ copy('connected sources', 'مصادر متصلة') }}</span>
-          <button type="button" class="secondary-btn" (click)="setTab('overview')">{{ copy('Return to overview', 'العودة إلى النظرة العامة') }}</button>
-        </div>
-      </div>
-
-      <div class="source-authority-summary">
-        <article class="authority-summary-card">
-          <span class="authority-symbol internal">◈</span>
-          <div>
-            <small>{{ copy('INTERNAL MASTER', 'السجل الداخلي الرئيسي') }}</small>
-            <strong>{{ copy('MOEI Unified Vessel Master', 'السجل الموحد للسفن بالوزارة') }}</strong>
-            <p>{{ copy('Correlation context for both UAE and foreign vessels.', 'سياق موحد لربط بيانات السفن الإماراتية والأجنبية.') }}</p>
-          </div>
-        </article>
-        <article class="authority-summary-card">
-          <span class="authority-symbol moei">◆</span>
-          <div>
-            <small>{{ copy('MOEI AUTHORITATIVE', 'مصدر معتمد من الوزارة') }}</small>
-            <strong>{{ isUaeFlag ? copy('UAE Registration + MOEI regulatory records', 'تسجيل الإمارات + السجلات التنظيمية للوزارة') : copy('MOEI inspections, restrictions and UAE regulatory actions', 'معاينات الوزارة والقيود والإجراءات التنظيمية الإماراتية') }}</strong>
-            <p>{{ copy('MOEI is authoritative only for records under its regulatory authority.', 'تكون الوزارة المصدر المعتمد فقط للسجلات الواقعة ضمن سلطتها التنظيمية.') }}</p>
-          </div>
-        </article>
-        <article class="authority-summary-card">
-          <span class="authority-symbol external">◇</span>
-          <div>
-            <small>{{ copy('EXTERNAL AUTHORITATIVE', 'مصدر خارجي معتمد') }}</small>
-            <strong>{{ isUaeFlag ? copy('External maritime confirmations where applicable', 'تأكيدات بحرية خارجية عند الحاجة') : registrationSource }}</strong>
-            <p>{{ isUaeFlag ? copy('Used for external validation and international context.', 'تستخدم للتحقق الخارجي والسياق الدولي.') : copy('Authoritative source for the vessel flag registration.', 'المصدر المعتمد لتسجيل السفينة لدى دولة العلم.') }}</p>
-          </div>
-        </article>
-        <article class="authority-summary-card">
-          <span class="authority-symbol feed">⌁</span>
-          <div>
-            <small>{{ copy('OPERATIONAL FEED', 'تغذية تشغيلية') }}</small>
-            <strong>AIS / LRIT</strong>
-            <p>{{ copy('Live vessel presence, position, speed, course and voyage context.', 'وجود السفينة وموقعها وسرعتها ومسارها وسياق الرحلة بصورة مباشرة.') }}</p>
-          </div>
-        </article>
-      </div>
-
+      <div class="evidence-heading"><div>
+        <span class="section-kicker">{{copy('CORRELATED EVIDENCE','الأدلة المترابطة')}}</span>
+        <h3>{{copy('Data Sources & Provenance','مصادر البيانات وأصلها')}}</h3>
+        <p>{{copy('Actual connected POC source reads and explicitly labeled synthetic/unavailable sources. No fabricated authoritative connections.',
+          'قراءات الخدمات التجريبية المتاحة مع تمييز المصادر غير المتصلة والتجريبية بوضوح؛ لا يوجد اتصال رسمي مفترض.')}}</p>
+      </div><button type="button" class="secondary-btn" (click)="refreshSourceEvidence()">
+        ↻ {{copy('Refresh sources','تحديث المصادر')}}</button></div>
       <article class="panel source-provenance-panel">
-        <div class="panel-header">
-          <div>
-            <h3>{{ copy('Connected Vessel Sources', 'مصادر السفينة المتصلة') }}</h3>
-            <p>{{ vessel.name }} · IMO {{ vessel.imo }}</p>
-          </div>
-          <span class="source-summary">{{ conflictCount }} {{ copy('unresolved conflicts', 'تعارضات غير محلولة') }}</span>
-        </div>
-
         <div class="source-provenance-grid">
           <article class="source-provenance-card" *ngFor="let source of sources">
             <div class="source-provenance-head">
-              <div>
-                <small>{{ sourceClassLabel(source.sourceClass) }}</small>
-                <h4>{{ source.name }}</h4>
-                <p>{{ source.system }}</p>
-              </div>
-              <span class="status-chip" [ngClass]="source.status.toLowerCase()">{{ sourceStatusLabel(source.status) }}</span>
+              <div><small>{{source.dataNature}} · {{source.sourceClass}}</small>
+                <h4>{{source.name}}</h4><p>{{source.system}}</p></div>
+              <span class="status-chip" [ngClass]="source.status.toLowerCase()">{{sourceStatusLabel(source.status)}}</span>
             </div>
-
             <div class="source-record">
-              <small>{{ copy('CURRENT RECORD', 'السجل الحالي') }}</small>
-              <strong>{{ source.record }}</strong>
+              <small>{{copy('SOURCE RECORD','سجل المصدر')}}</small>
+              <strong>{{source.record}}</strong>
+              <small *ngIf="source.recordId">ID: {{source.recordId}}</small>
             </div>
-
             <div class="source-metrics">
-              <div><small>{{ copy('Authority', 'الجهة المعتمدة') }}</small><strong>{{ source.authority }}</strong></div>
-              <div><small>{{ copy('Confidence', 'الثقة') }}</small><strong>{{ source.confidence }}%</strong></div>
-              <div><small>{{ copy('Last sync', 'آخر مزامنة') }}</small><strong>{{ source.lastSync }}</strong></div>
+              <div><small>{{copy('Provenance','الجهة')}}</small><strong>{{source.authority}}</strong></div>
+              <div><small>{{copy('Last API read','آخر قراءة API')}}</small>
+                <strong>{{source.lastSync==='—'?'—':(source.lastSync|date:'short')}}</strong></div>
+              <div><small>{{copy('Source confidence','ثقة المصدر')}}</small>
+                <strong>{{source.confidence===null?'—':source.confidence+'%'}}</strong></div>
             </div>
+            <a *ngIf="source.route" class="outline-btn" [routerLink]="source.route"
+              (click)="source.tab ? setTab(source.tab) : null">
+              {{copy('Open source evidence →','فتح أدلة المصدر ←')}}</a>
           </article>
         </div>
       </article>
