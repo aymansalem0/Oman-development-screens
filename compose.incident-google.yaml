@@ -15,9 +15,8 @@ services:
       # No separate OpenAI/Ollama model, credentials or pipeline IDs.
       # Optional scheduled AI triage: OFF by default; each row also requires
       # AI_Review_Request=YES. Max 1-5 calls per cycle, interval >=5 minutes.
-      # MUST remain false until the EXISTING A01 and A02 pipelines have been
-      # updated/tested to return incidentTriage + incidentCompliance.
-      NMC_INCIDENT_AIRIA_EXTENSION_CONFIRMED: ${NMC_INCIDENT_AIRIA_EXTENSION_CONFIRMED:-false}
+      # Reuses existing A01/A02 request/response schemas. Manual by default.
+      # Enable the scheduled billable calls only after manual source validation.
       NMC_INCIDENT_AUTO_TRIAGE_ENABLED: ${NMC_INCIDENT_AUTO_TRIAGE_ENABLED:-false}
       NMC_INCIDENT_AUTO_INTERVAL_MINUTES: ${NMC_INCIDENT_AUTO_INTERVAL_MINUTES:-15}
       NMC_INCIDENT_AUTO_MAX_PER_CYCLE: ${NMC_INCIDENT_AUTO_MAX_PER_CYCLE:-2}
