@@ -110,10 +110,6 @@
                    'محسوبة من المؤشرات المحفوظة دون إعادة تشغيل AI.')}}
         </p>
         <div class="decision-actions" *ngIf="vessel as v">
-          <a class="decision-action primary" [routerLink]="['/moei/nmc/vessel',v.imo]"
-             [queryParams]="{tab:'documents'}">
-            {{copy('View source documents (evidence only)','عرض مستندات المصدر (أدلة فقط)')}}
-          </a>
           <a class="decision-action" [routerLink]="['/moei/nmc/vessel',v.imo]"
              [queryParams]="{tab:'inspection'}">
             {{copy('Review inspection evidence','مراجعة أدلة المعاينة')}}
