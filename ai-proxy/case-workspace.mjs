@@ -283,7 +283,8 @@ export class NmcCaseWorkspace{
         followupExecutionStatus:'PENDING_TASKS'
       };
       for(const step of steps){
-        const taskId=('inc-'+incidentId.toLowerCase()+'-'+step.id).slice(0,60);
+        const incidentKey=createHash('sha256').update(incidentId).digest('hex').slice(0,14);
+        const taskId=('inc-'+incidentKey+'-'+step.id).slice(0,60);
         if(taskSet.some(t=>t.id===taskId))
           throw new NmcCaseError('CASE_INCIDENT_TASK_DUPLICATE',409);
         const actionId='incident-'+incidentId.toLowerCase();
@@ -354,7 +355,10 @@ export class NmcCaseWorkspace{
         :!!row.actionPlan?.proposedActions?.some(a=>a.decision==='PENDING');
       // Mandatory tasks alone do not mean a reviewed AI plan or post-inspection
       // reassessment is complete. Do not display a false PENDING_VERIFICATION.
-      const verified=requiredDone&&!aiDecisionsPending&&!row.inspectionOutcome;
+      const incidentDecisionsPending=(row.incidentEvents||[])
+        .some(ev=>ev.decisionStatus==='PENDING_HUMAN_REVIEW');
+      const verified=requiredDone&&!aiDecisionsPending&&
+        !incidentDecisionsPending&&!row.inspectionOutcome;
       return {...row,tasks,status:verified?'PENDING_VERIFICATION':'IN_PROGRESS'};
     },{taskId,action});
   }
