@@ -26,6 +26,11 @@
   </div>
   <div *ngIf="error" class="message error" role="alert">{{error}}</div>
   <div *ngIf="success" class="message success" role="status">{{success}}</div>
+  <div *ngIf="data?.sourceValidationWarnings" class="message warn" role="status">
+    {{data?.sourceValidationWarnings}}
+    {{copy('source rows are incomplete or invalid; valid incidents remain visible.',
+      'صفوف بيانات غير مكتملة أو خاطئة في المصدر؛ الحوادث الصحيحة ما زالت ظاهرة.')}}
+  </div>
   <div *ngIf="!health?.sourceConfigured" class="message warn">
    {{copy('The sheet is ready. The Docker incident data source still needs service-account configuration. No sample data is silently substituted.',
       'الشيت جاهز، لكن ربط Docker بحساب خدمة Google لا يزال يحتاج إعدادًا. لن يتم عرض بيانات وهمية بدل المصدر.')}}</div>
