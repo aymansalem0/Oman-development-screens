@@ -1126,3 +1126,21 @@ button, input, select { font: inherit; }
 .risk-inspect-link:hover,.risk-inspect-link:focus-visible{box-shadow:0 0 0 2px rgba(15,118,110,.3);outline-offset:2px;}
 a.risk-chip{display:inline-flex;align-items:center;}
 a.big-risk{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;}
+
+/* NMC-01 incident intake is separate from authoritative vessel risk */
+.nmc-incident-ribbon{display:flex;align-items:center;flex-wrap:wrap;gap:18px;padding:21px 24px;margin:19px 0;
+ border:1px solid #cce7e6;border-radius:16px;background:linear-gradient(110deg,#f5fcfa,#e8f7f3);
+ box-shadow:0 7px 24px #214b6209}
+.nmc-incident-ribbon>div:first-child{flex:1 1 270px}
+.nmc-incident-ribbon h3{margin:7px 0;color:#13505b;font-size:17px}
+.nmc-incident-ribbon p{margin:3px 0;font-size:11px;color:#5f7f8e;line-height:1.65}
+.incident-tag{font-weight:900;letter-spacing:1px;font-size:9px;color:#087b75}
+.incident-mini-kpis{display:flex;flex-wrap:wrap;gap:11px}
+.incident-mini-kpis div{display:grid;gap:6px;min-width:93px;text-align:center;
+ padding:10px 14px;background:#fff;border:1px solid #d4eae7;border-radius:10px}
+.incident-mini-kpis strong{font-size:20px;color:#0a766e}
+.incident-mini-kpis span{font-size:10px;color:#65878c}
+.incident-ribbon-link{border-radius:11px;text-decoration:none;white-space:nowrap;
+ padding:12px 14px;background:#078678;color:#fff;font-size:12px;font-weight:800}
+.incident-source-warning{font-size:10px;color:#ab6e18;flex-basis:100%}
+@media(max-width:750px){.nmc-incident-ribbon{padding:14px}.incident-mini-kpis div{min-width:75px}}
