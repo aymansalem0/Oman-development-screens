@@ -64,7 +64,7 @@ test('Opening sources is read-only and cannot bill Airia or modify ministry reco
 });
 
 test('every dataNature literal inside buildSources belongs to the SourceStatus TypeScript union',()=>{
- const declaration=vessel.match(/interface SourceStatus\\s*\\{[\\s\\S]*?dataNature:([\\s\\S]*?);/);
+ const declaration=vessel.match(/interface SourceStatus\s*\{[\s\S]*?dataNature:([\s\S]*?);/);
  assert.ok(declaration,'SourceStatus.dataNature definition required');
  const accepted=new Set([...declaration[1].matchAll(/'([^']+)'/g)].map(m=>m[1]));
  const start=vessel.indexOf('  private buildSources(): SourceStatus[] {');
