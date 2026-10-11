@@ -807,6 +807,12 @@ const server = createServer(async (req, res) => {
           }
         }
         if(!/^[a-f\d-]{36}$/i.test(first))return respond(res,404,{error:'CASE_NOT_FOUND'});
+        if(action==='operational-decision'&&second==='initialize'&&!third){
+          dashboards.assertRole(req,'EDITOR');
+          const body=await requestJson(req,4096);
+          const item=await cases.initializeOperational(first,body.version,'OPERATOR');
+          return respond(res,200,{status:'ok',case:item,aiCallCount:0});
+        }
         if(action==='operational-decision'&&!second){
           dashboards.assertRole(req,'EDITOR');
           const body=await requestJson(req,4096);
