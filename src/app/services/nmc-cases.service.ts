@@ -16,11 +16,13 @@ export interface NmcAiAction {
   priority:string;ownerRole:string;confidence:number;
   evidenceIds:string[];requiresHumanApproval:boolean;
   decision:'PENDING'|'ACCEPT'|'REJECT'|'MODIFY';decisionNote?:string;
+  replacementActionType?:string;replacementTitle?:string;replacementOwnerRole?:string;
 }
 export interface NmcAiActionPlan {
   source:string;sourceAssessmentId:string|null;sourceScore:number;
   sourceLevel:string;configVersion:string|null;summary:string;whyItMatters:string;
   agentAssessmentId:string|null;createdAt:string;proposedActions:NmcAiAction[];
+  primaryProposedDecision?:{decisionId:string;titleAr:string;titleEn:string;rationaleAr:string;rationaleEn:string;expectedOutcomeAr?:string;expectedOutcomeEn?:string;evidenceIds:string[];urgency?:string;confidence?:number;requestedActionIds?:string[]};
 }
 export interface NmcInspectionReferral {
   id:string;caseId:string;imo:string;actionId:string;
@@ -88,9 +90,9 @@ export class NmcCasesService {
       {version:current.version},false);
   }
   decideAiAction(current:NmcCentralCase,actionId:string,
-    decision:'ACCEPT'|'MODIFY'|'REJECT',note=''):Observable<CaseResponse>{
+    decision:'ACCEPT'|'MODIFY'|'REJECT',note='',replacementActionType?:string):Observable<CaseResponse>{
     return this.mutate(this.path(current.id)+'/actions/'+encodeURIComponent(actionId)+'/decision',
-      {version:current.version,decision,note},false);
+      {version:current.version,decision,note,...(replacementActionType?{replacementActionType}:{})},false);
   }
   inspectionReferrals():Observable<{status:'ok';requests:NmcInspectionReferral[]}>{
     return this.http.get<{status:'ok';requests:NmcInspectionReferral[]}>('/api/ai/inspection-referrals');
@@ -193,6 +195,9 @@ export class NmcCasesService {
       CASE_RESOLUTION_NOTE_REQUIRED:['A resolution reason is required.','يجب إدخال سبب الإغلاق.'],
       CASE_MANDATORY_TASKS_INCOMPLETE:['Complete all mandatory tasks before resolution.','يجب استكمال المهام الإلزامية قبل الإغلاق.'],
       CASE_DECISION_REASON_REQUIRED:['Provide a reason for modifying or rejecting a recommendation.','يجب تسجيل سبب تعديل أو رفض التوصية.'],
+      CASE_MODIFICATION_ROUTE_REQUIRED:['Select an allowed replacement route for Modify.','اختر مسار إجراء بديل مسموح عند التعديل.'],
+      CASE_MODIFICATION_MUST_CHANGE_ROUTE:['Modified action must differ from the original.','يجب أن يختلف الإجراء المعدل عن الإجراء الأصلي.'],
+      CASE_MODIFICATION_ROUTE_UNEXPECTED:['Replacement is only valid with Modify.','لا يجوز استخدام المسار البديل إلا عند التعديل.'],
       CASE_SUPERVISOR_REQUIRED:['Supervisor authorization is required.','تتطلب العملية اعتماد المشرف.'],
       DASHBOARD_ACCESS_DENIED:['Invalid access key.','مفتاح الصلاحية غير صحيح.']
     };
