@@ -110,8 +110,8 @@
       </button>
      </div>
      <div class="message warn" *ngIf="!health?.aiConfigured">
-      {{copy('Incident AI is disabled until you configure a separate model/provider in Docker; A01/A02 remain unchanged.',
-        'AI الخاص بالحوادث غير مفعل حتى تحدد الموديل والمزود في Docker؛ لا تغيير في A01/A02.')}}</div>
+      {{copy('Incident analysis reuses existing Airia A01/A02. Ensure both agents and the shared Airia key are enabled.',
+        'تحليل الحادث يستخدم نفس Airia A01/A02. تأكد من تفعيل الوكيلين ومفتاح Airia الحالي.')}}</div>
      <div class="message warn" *ngIf="!incident.aiReviewRequested">
       {{copy('Set AI_Review_Request to YES in Google Sheets before spending an AI call.',
        'غيّر AI_Review_Request إلى YES في Google Sheets قبل استدعاء AI.')}}</div>
@@ -133,6 +133,16 @@
        <div><span>{{copy('Recurrence','احتمال التكرار')}}</span><strong>{{ai.recurrence}}/5</strong></div>
       </div>
       <p class="reason"><strong>{{copy('AI analysis','تحليل AI')}}:</strong> {{ai.aiReasoning}}</p>
+      <div class="followup" *ngIf="ai.a02IncidentCompliance as comp">
+        <span>{{copy('A02 · Incident compliance interpretation','A02 · تفسير الامتثال المرتبط بالحادث')}}</span>
+        <strong>{{comp.status}}</strong>
+        <p>{{comp.reasoning}}</p>
+        <small>{{copy('A02 evidence','أدلة A02')}}: {{comp.evidenceIds.join(', ')||'—'}}</small>
+      </div>
+      <p class="ai-provenance" *ngIf="ai.aiEvidenceIds?.length">
+        {{copy('A01 incident evidence','أدلة الحادث في A01')}}:
+        {{ai.aiEvidenceIds?.join(', ')}} · {{ai.contractVersion}}
+      </p>
       <div class="followup">
        <span>{{copy('AI-proposed follow-up','المتابعة المقترحة من AI')}}</span>
        <strong>{{ai.aiProposedFollowup}}</strong>
@@ -178,8 +188,8 @@
       </div>
      </div>
      <div *ngIf="!incident.aiAssessment" class="no-ai">
-      {{copy('No AI incident assessment recorded. Open the source report, validate evidence, then request the incident-only model explicitly.',
-        'لا يوجد تقييم AI مسجل للحادث. راجع مصدر البلاغ والأدلة ثم اطلب تحليل AI الخاص بالحوادث صراحة.')}}</div>
+      {{copy('No Airia A01/A02 incident assessment saved yet. This requires a completed vessel assessment and support for the incident response extension.',
+        'لا يوجد تحليل حادث محفوظ من Airia A01/A02. يلزم تقييم سفينة مكتمل ودعم امتداد مخرجات الحوادث.')}}</div>
     </section>
    </article>
    <ng-template #noSelection><div class="incident-detail empty">{{copy('Select a source incident to inspect its description and risk.',
