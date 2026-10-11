@@ -32,6 +32,8 @@ export interface NmcMaritimeIncident {
   dataNature:'SYNTHETIC_POC';aiReviewRequested:boolean;rowNumber:number;
   aiAssessment:IncidentAiAssessment|null;aiAssessmentStale:boolean;
   nextFollowup?:{status:string;approval:'AI_PROPOSED'|'OFFICER_APPROVED';reason:string}|null;
+  linkedCaseId?:string|null;linkedCaseStatus?:string|null;
+  caseIncidentDecisionStatus?:'PENDING_HUMAN_REVIEW'|'OFFICER_APPROVED'|null;
 }
 export interface IncidentFeedResponse{
   status:'ok';source:string;incidents:NmcMaritimeIncident[];
