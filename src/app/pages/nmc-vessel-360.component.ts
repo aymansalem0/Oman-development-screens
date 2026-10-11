@@ -713,29 +713,16 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
     return this.fieldProvenance[key];
   }
 
-  openCertificateProvenance(certificate: CertificateRecord): void {
-    const moeiSource = certificate.source.includes('MOEI');
-    const externalAuthoritative =
-      certificate.source.includes('Flag') ||
-      certificate.source.includes('Recognized Organization') ||
-      certificate.source.includes('Verified');
-
-    this.selectedProvenance = {
-      key:`certificate-${certificate.id}`,
-      label:`${certificate.type} status`,
-      value:certificate.status,
-      source:certificate.source,
-      system:certificate.issuer,
-      sourceClass:moeiSource ? 'MOEI Authoritative' : externalAuthoritative ? 'External Authoritative' : 'External Trusted',
-      authority:moeiSource ? 'MOEI certificate record' : externalAuthoritative ? 'Flag / statutory certificate authority' : 'External maritime certificate source',
-      recordId:certificate.number,
-      sourceTrust:moeiSource ? 100 : 95,
-      dataConfidence:certificate.conflict ? 92 : 97,
-      identityMatch:100,
-      freshness:certificate.conflict ? 94 : 97,
-      lastUpdated:'—',
-      conflict:certificate.conflict ? 'Unresolved' : 'None',
-      note:certificate.condition || 'Certificate status is linked to the correlated vessel record and retained with source provenance.'
+  openCertificateProvenance(certificate:CertificateRecord):void{
+    this.selectedProvenance={
+      key:`certificate-${certificate.id}`,label:`${certificate.type} (POC)`,
+      value:certificate.status,source:'NMC synthetic certificate fixture',
+      system:certificate.issuer,sourceClass:'Internal Master',
+      authority:'Issuer/flag/RO not connected; document authenticity NOT verified',
+      recordId:certificate.number,sourceTrust:0,dataConfidence:0,
+      identityMatch:0,freshness:0,lastUpdated:'—',conflict:'None',
+      note:(certificate.condition||'POC certificate record')+
+        ' — Synthetic test-only certificate; cannot establish statutory validity.'
     };
   }
 
@@ -744,10 +731,10 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
       key:`inspection-${inspection.id}`,
       label:'Inspection result',
       value:inspection.result,
-      source:'MOEI Smart Inspection',
+      source:'NMC synthetic inspection fixture',
       system:inspection.source,
-      sourceClass:'MOEI Authoritative',
-      authority:'MOEI inspection record',
+      sourceClass:'Internal Master',
+      authority:'POC test fixture; not a verified MOEI inspection outcome',
       recordId:inspection.id,
       sourceTrust:100,
       dataConfidence:100,
@@ -755,7 +742,7 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
       freshness:96,
       lastUpdated:'—',
       conflict:'None',
-      note:`Inspection performed through the MOEI inspection process at ${inspection.port}. Findings and evidence remain linked to the vessel record.`
+      note:`Simulated inspection at ${inspection.port}. Findings are synthetic demonstration records; no real MOEI inspection has been performed or verified.`
     };
   }
 
@@ -764,10 +751,10 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
       key:`deficiency-${deficiency.id}`,
       label:`${deficiency.category} deficiency`,
       value:`${deficiency.severity} · ${deficiency.status}`,
-      source:'MOEI Smart Inspection',
-      system:'Inspection Findings & Corrective Actions',
-      sourceClass:'MOEI Authoritative',
-      authority:'MOEI inspection finding',
+      source:'NMC synthetic inspection fixture',
+      system:'POC Inspection Findings',
+      sourceClass:'Internal Master',
+      authority:'Synthetic test finding, not an authoritative deficiency',
       recordId:deficiency.id,
       sourceTrust:100,
       dataConfidence:100,
@@ -775,7 +762,8 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
       freshness:deficiency.status === 'Open' ? 95 : 92,
       lastUpdated:deficiency.raised,
       conflict:'None',
-      note:deficiency.evidence
+      note:(deficiency.evidence||'')+
+        ' — Synthetic POC finding; requires an actual signed source before official compliance decisions.'
     };
   }
 
@@ -807,20 +795,18 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
     return this.copy('Active', 'ساري');
   }
 
-  get registrationSource(): string {
-    return this.flagRegistryAuthority;
+  get registrationSource():string{
+    return this.flagRegistryAuthority+' — simulated registration record (not connected)';
   }
 
-  get registrationAuthorityLabel(): string {
-    return this.isUaeFlag
-      ? this.copy('MOEI Authoritative', 'مصدر معتمد من الوزارة')
-      : this.copy('External Authoritative', 'مصدر خارجي معتمد');
+  get registrationAuthorityLabel():string{
+    return this.copy('NMC synthetic registration fixture — not flag-verified',
+      'بيانات تسجيل تجريبية بالمركز وغير متحقق منها لدى دولة العلم');
   }
 
-  get vesselMasterRole(): string {
-    return this.isUaeFlag
-      ? this.copy('Authoritative internal vessel context linked to the UAE registry', 'سياق داخلي معتمد للسفينة ومرتبط بسجل دولة الإمارات')
-      : this.copy('Internal correlation record for a foreign-flag vessel operating in the NMC context', 'سجل داخلي لربط بيانات سفينة أجنبية ضمن سياق المركز البحري الوطني');
+  get vesselMasterRole():string{
+    return this.copy('Synthetic vessel master for IMO correlation; not an authoritative flag register',
+      'سجل سفن تجريبي للربط عبر IMO وليس سجل دولة علم معتمد');
   }
 
   get moeiRelationshipTitle(): string {
@@ -829,11 +815,9 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
       : this.copy('MOEI Regulatory Relationship', 'العلاقة التنظيمية مع الوزارة');
   }
 
-  get moeiRelationshipStatus(): string {
-    if (this.isUaeFlag) return this.copy('Registered UAE Vessel', 'سفينة مسجلة في دولة الإمارات');
-    return this.vessel.risk >= 65
-      ? this.copy('Active · Under Operational Review', 'نشطة · قيد المراجعة التشغيلية')
-      : this.copy('Active · Monitored', 'نشطة · تحت المراقبة');
+  get moeiRelationshipStatus():string{
+    return this.copy('POC operational monitoring (no verified MOEI registration/control)',
+      'مراقبة تشغيلية تجريبية دون إثبات تسجيل أو قرار رسمي من الوزارة');
   }
 
   get primaryCertificateSourceLabel(): string {
@@ -995,8 +979,10 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
       note: string
     ): void => {
       fields.push({
-        key, label, value, source:source+' (synthetic POC)',system,sourceClass,
-        authority:authority+' — simulated source, not independently verified',
+        key, label, value,
+        source:'NMC Synthetic POC · '+source,
+        system,sourceClass:'Internal Master',
+        authority:'POC fixture — not independently verified with MOEI, Flag or RO',
         recordId,sourceTrust,dataConfidence,identityMatch,freshness,
         lastUpdated:'—',conflict,note:note+
           ' This is a synthetic POC fixture; source authority and update time are not verified.'
