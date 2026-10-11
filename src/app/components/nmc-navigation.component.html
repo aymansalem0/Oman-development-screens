@@ -6,7 +6,8 @@
 <div class="nmc-nav-scrim" *ngIf="mobileOpen" (click)="mobileOpen=false"
   [attr.aria-label]="copy('Close menu','إغلاق القائمة')"></div>
 <aside id="nmc-main-navigation" class="nmc-unified-sidebar"
-  [class.mobile-open]="mobileOpen" [attr.aria-hidden]="!mobileOpen">
+  [class.mobile-open]="mobileOpen" [attr.aria-hidden]="!mobileOpen"
+  [attr.inert]="!mobileOpen ? '' : null">
   <div class="nav-header">
     <div class="nav-mark">⚓</div>
     <div class="nav-identity">
