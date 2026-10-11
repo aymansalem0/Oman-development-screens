@@ -107,7 +107,7 @@
         <article class="metric-card">
           <small>{{ copy('Task completion · not case readiness', 'إنجاز المهام · ليس جاهزية الإغلاق') }}</small>
           <strong>{{ progressPercent }}%</strong>
-          <span>{{ completedTasks }}/{{ tasks.length }} {{ copy('approved A01 tasks completed', 'مهام A01 المعتمدة المكتملة') }}</span>
+          <span>{{ completedTasks }}/{{ tasks.length }} {{ copy('approved operational tasks completed', 'مهام تشغيلية معتمدة مكتملة') }}</span>
         </article>
         <article class="metric-card">
           <small>{{ copy('Open / escalated', 'مفتوحة / مصعدة') }}</small>
@@ -124,7 +124,7 @@
     <section class="case-progress-strip">
       <div class="progress-head">
         <div>
-          <strong>{{ copy('Approved A01 task completion', 'إنجاز المهام المعتمدة من A01 فقط') }}</strong>
+          <strong>{{ copy('Approved operational task completion', 'إنجاز المهام التشغيلية المعتمدة') }}</strong>
           <p>{{ copy('Task percentage does not include pending AI decisions or post-inspection risk verification.',
               'نسبة إنجاز المهام لا تشمل قرارات AI المعلقة أو إعادة تقييم المخاطر بعد المعاينة.') }}</p>
         </div>
@@ -359,8 +359,8 @@
 
           <div class="ai-plan-alert" *ngIf="!tasks.length">
             {{centralCase.actionPlan
-              ?copy('No approved A01 tasks yet. Review the recommendations above; only accepted actions will appear here.',
-                    'لا توجد مهام معتمدة من A01 بعد. راجع التوصيات أعلاه؛ لن تظهر هنا إلا الإجراءات المعتمدة.')
+              ?copy('No approved tasks yet. Review the proposed single decision above; only approved actions appear here.',
+                    'لا توجد مهام معتمدة بعد. راجع القرار الرئيسي أعلاه؛ لن تظهر هنا إلا الإجراءات المعتمدة.')
               :copy('Recommendations are not yet available. No historical or template tasks are displayed.',
                     'التوصيات غير متاحة بعد؛ لن تظهر مهام قديمة أو ثابتة.')}}
           </div>
