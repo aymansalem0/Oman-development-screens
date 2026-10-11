@@ -93,7 +93,8 @@ function extract(raw){
 }
 const safeText=(v,max=400)=>typeof v==='string'?v.trim().slice(0,max):'';
 const unique=x=>[...new Set(x)];
-export function normalizeA01Actions(raw,{imo,assessmentId,score,level,configVersion,signals}){
+export function normalizeA01Actions(raw,{imo,assessmentId,score,level,configVersion,signals},
+  {allowUnknownAsInspection=false}={}){
   const src=extract(raw);
   if(!src.proposedActions.length||src.proposedActions.length>20)
     throw new ActionPlanError('A01_ACTIONS_NOT_AVAILABLE');
@@ -124,8 +125,13 @@ export function normalizeA01Actions(raw,{imo,assessmentId,score,level,configVers
         actionIndex,actionId
       });
     }
-    const actionType=normalizeActionType(a?.actionType);
-    if(!allowTypes.has(actionType)){
+    const rawActionType=normalizeActionType(a?.actionType);
+    const unknownActionType=!allowTypes.has(rawActionType);
+    // With explicit NMC POC opt-in, unsupported AI text NEVER becomes a legal
+    // action: it is placed under a human-reviewed inspection fallback only.
+    const actionType=unknownActionType&&allowUnknownAsInspection
+      ?'UNMAPPED_AI_ACTION':rawActionType;
+    if(unknownActionType&&!allowUnknownAsInspection){
       throw new ActionPlanError('A01_ACTION_TYPE_UNSUPPORTED',422,{
         actionIndex,actionType:safeDiagnostic(a?.actionType)
       });
@@ -137,17 +143,19 @@ export function normalizeA01Actions(raw,{imo,assessmentId,score,level,configVers
     if(!Number.isFinite(confidence)||confidence<0||confidence>1)
       throw new ActionPlanError('A01_ACTION_CONFIDENCE_INVALID');
     const explicit=Array.isArray(a.evidenceIds)?a.evidenceIds.filter(id=>verified.has(id)):[];
-    const correlated=groups[actionType].flatMap(g=>evidenceGroups.get(g)||[]);
+    const correlated=(groups[actionType]||[]).flatMap(g=>evidenceGroups.get(g)||[]);
     const evidenceIds=unique([...explicit,...correlated]);
     if(actionType!=='NO_ACTION'&&!evidenceIds.length)
       throw new ActionPlanError('A01_ACTION_EVIDENCE_MISSING');
     const rawPriority=safeText(a.priority,20).toUpperCase();
     const priority=['IMMEDIATE','CRITICAL','HIGH','MEDIUM','MONITOR','ROUTINE'].includes(rawPriority)
       ?rawPriority:'HIGH';
-    return {actionId,actionType,title:safeText(a.title,140)||labels[actionType],
+    return {actionId,actionType,
+      ...(unknownActionType?{originalActionType:safeText(a?.actionType,80)}:{}),
+      title:safeText(a.title,140)||labels[actionType]||'Unmapped A01 suggestion requiring human inspection review',
       reason:safeText(a.reason||a.rationale,400)||
         'A01 recommendation linked to the validated source evidence IDs',
-      ownerRole:roles[actionType],priority,confidence,evidenceIds,
+      ownerRole:roles[actionType]||'NMC_OFFICER',priority,confidence,evidenceIds,
       requiresHumanApproval:a.requiresHumanApproval,decision:'PENDING'};
   });
   return {
