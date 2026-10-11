@@ -892,8 +892,8 @@
             {{activeAccidentCount}} {{copy('active','نشط')}}.</p>
           <p *ngIf="!hasRecordedAccidents">{{copy('No incident report loaded for this IMO. Source availability must be checked.',
             'لا يوجد بلاغ حادث محمّل للسفينة؛ يجب التحقق من توافر المصدر.')}}</p>
-          <a class="secondary-btn" *ngIf="hasRecordedAccidents" (click)="setTab('accidents')">
-            {{copy('View accident evidence','عرض أدلة الحوادث')}}</a>
+          <button type="button" class="secondary-btn" *ngIf="hasRecordedAccidents" (click)="setTab('accidents')">
+            {{copy('View accident evidence','عرض أدلة الحوادث')}}</button>
           <a class="secondary-btn" [routerLink]="['/moei/nmc/vessel',vessel.imo,'case']">
             {{copy('Open central case','فتح الحالة المركزية')}}</a>
         </article>
