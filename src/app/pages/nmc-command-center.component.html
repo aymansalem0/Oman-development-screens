@@ -316,6 +316,12 @@
                   <strong>{{copy('AI proposed follow-up','متابعة مقترحة من AI')}}:</strong>
                   {{report.aiAssessment.aiProposedFollowup}} · {{report.aiAssessment.aiReasoning}}
                 </p>
+                <p class="attention-incident-recommendation" *ngIf="report.nextFollowup">
+                  <strong>{{report.nextFollowup.approval==='OFFICER_APPROVED'?
+                    copy('Officer-approved next-step','متابعة معتمدة من الموظف'):
+                    copy('AI-suggested next-step (pending approval)','متابعة يقترحها AI (بانتظار الاعتماد)')}}:</strong>
+                  {{report.nextFollowup.status}}
+                </p>
               </div>
               <a routerLink="/moei/nmc/incidents" class="attention-incident-detail-link"
                 (click)="$event.stopPropagation()">
