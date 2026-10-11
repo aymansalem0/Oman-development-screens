@@ -34,8 +34,8 @@ An incident-specific score of 77/100 does not change the official vessel score o
 
 ## Setup (local Docker)
 1. Open the Google Sheet above.
-2. Create or reuse a **dedicated** Google service account with the Sheets API enabled; share the Sheet with its `client_email` as **Editor** (backend reads rows and appends AI assessment/review rows). The separate PSC service account is read-only and is **not automatically authorized** for this workbook.
-3. Place your own JSON key at `./secrets/nmc-incident-google.json` (do not commit keys or paste them in chat). Set your local `.env` values, e.g.:
+2. **Reuse the existing PSC Google Cloud Service Account**. Find its `client_email` in the existing local `./secrets/nmc-psc-google.json` file. Share the incident Sheet with that **exact service-account email**. Viewer permission supports read-only display, but **Editor permission is needed for AI_Assessments append and officer review**. Enable the Google Sheets API for its associated Google Cloud project.
+3. **No new service-account JSON file is needed.** The incident overlay reuses the existing PSC credentials mounted at `/run/secrets/nmc-psc-google.json` by `compose.google-psc.yaml`. Do not create or commit `nmc-incident-google.json`. Configure the optional incident AI model in local `.env`, e.g.:
 
 ```ini
 NMC_INCIDENT_SHEET_ID=1fl6rCjHNTPKZTeS76PLSy_ylrClLQQ0Yvq12A7nhfy8
@@ -47,7 +47,7 @@ NMC_INCIDENT_OPENAI_API_KEY=<set locally; do not commit>
 # NMC_INCIDENT_AI_PROVIDER=ollama
 # NMC_INCIDENT_AI_MODEL=<installed-ollama-model>
 ```
-4. Build and run existing POC + the **additional overlay**, without deleting Docker volumes:
+4. Build and run existing POC + the **additional incident overlay**, without deleting Docker volumes (the four compose files are all required):
 
 ```powershell
 git fetch origin
@@ -57,12 +57,22 @@ docker compose -f compose.yaml -f compose.google-psc.yaml -f compose.oracle.yaml
 ```
 
 5. Visit **http://localhost:4200/#/moei/nmc/incidents**; also see the new Incident ribbon on **http://localhost:4200/#/moei/nmc**.
-6. Click **Analyze with AI** on a synthetic report with `AI_Review_Request = YES`. You will be asked for the existing POC **Editor key** and explicit confirmation before a billable model call. Read-only page loads never call AI.
-7. The AI response is validated before being appended to the `AI_Assessments` tab. To test human changes, enter officer name, rationale and alternate follow-up and choose **Modify**.
+6. **Command Center:** `http://localhost:4200/#/moei/nmc` now includes the latest **actual source incidents** (description, port or reporting source, incident status, separate AI score, drill-down), not just aggregate counts.
+7. Click **Analyze with AI** on a synthetic report with `AI_Review_Request = YES`. You will be asked for the existing POC **Editor key** and explicit confirmation before a billable model call. Read-only page loads never call AI.
+8. The AI response is validated before being appended to the `AI_Assessments` tab. To test human changes, enter officer name, rationale and alternate follow-up and choose **Modify**.
 
 ### Important limitations
-- Google Drive ChatGPT connector and a server-side Google service account are **different** authenticated contexts. The spreadsheet was created; local Docker connection **needs your service-account credentials and sharing**.
+- Google Drive ChatGPT connector and local Docker's Google service account are **different** authenticated contexts. The Sheet is created and readable in the connector; sharing it with the **same service account used by PSC** is enough for the Docker reader, provided its JSON key is mounted through compose.google-psc.yaml. Editor permission is needed to append AI results.
 - No confirmed live AI calls, local Docker build, Angular compilation, or acceptance tests were executed by the assistant in the user's environment.
 - If a description changes after AI analysis, results are marked stale; a new explicit call is required.
 - Source-of-truth `Operational_Status` is maintained in `Incident_Registry` by the reporting/NMC staff. AI review `Approved_Followup_Status` is separate and is not a regulatory/incident-system status change.
 - Future production integration requires approval of actual incident sources, jurisdiction/competence, authority controls, a proper event queue and case linkage.
+
+## Troubleshooting absent incident cards or navigation
+- Confirm branch: `git branch --show-current` must equal `feat/nmc-incident-google-sheet-ai-triage-20261011`.
+- Rebuild: `docker compose -f compose.yaml -f compose.google-psc.yaml -f compose.oracle.yaml -f compose.incident-google.yaml up -d --build --force-recreate ai-proxy nmc`.
+- Health: open `http://localhost:4200/api/ai/nmc/incidents/health`. It should show `"sourceConfigured":true`. This status alone does **not** prove the credentials or shared-sheet permissions work.
+- Source: open `http://localhost:4200/api/ai/nmc/incidents`. If connected, JSON contains three example `incidents` from the actual Google Sheet. If `INCIDENT_GOOGLE_CREDENTIALS_MISSING`, check mount. If `INCIDENT_SHEET_ACCESS_DENIED`, check service-account `client_email` and Google Sheet sharing. If `INCIDENT_SHEET_REQUEST_FAILED`, check sheet ID/API enabled and Docker logs.
+- Check logs: `docker compose -f compose.yaml -f compose.google-psc.yaml -f compose.oracle.yaml -f compose.incident-google.yaml logs -f --tail=100 ai-proxy nmc`.
+- Hard-refresh browser `Ctrl+Shift+R`, then open `/#/moei/nmc`. The incident section is located **after NMC Operational Overview and before Live Maritime Map**.
+- Reusing a **service account** does not mean entering an OAuth API key or Google Cloud console login email. It means sharing with the exact `client_email` inside the mounted JSON.
