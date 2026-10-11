@@ -30,6 +30,8 @@ export interface NmcMaritimeIncident {
 export interface IncidentFeedResponse{
   status:'ok';source:string;incidents:NmcMaritimeIncident[];
   summary:{total:number;unresolved:number;pendingAi:number;aiAnalyzed:number};
+  sourceValidationWarnings?:number;
+  rejectedRows?:{rowNumber:number;code:string}[];
   aiEnabled:boolean;riskMode:string;
 }
 export interface IncidentFeedHealth{
