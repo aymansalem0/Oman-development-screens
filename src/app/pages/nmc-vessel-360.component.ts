@@ -15,16 +15,25 @@ import { LanguageService } from '../services/language.service';
 import { NmcRiskEngineService, RiskFactorKey } from '../services/nmc-risk-engine.service';
 import { NmcVesselEvidenceService } from '../services/nmc-vessel-evidence.service';
 import { NmcExternalPscService, NmcExternalPscRecord } from '../services/nmc-external-psc.service';
+import {NmcIncidentsService,NmcMaritimeIncident} from '../services/nmc-incidents.service';
+import {NmcCasesService,NmcCentralCase} from '../services/nmc-cases.service';
+import {NmcDocumentsService,VesselDriveListing} from '../services/nmc-documents.service';
 import { NmcFleetAiService, FleetAiAssessment, FleetAiHistory, FleetAiIntelligence } from '../services/nmc-fleet-ai.service';
 import { NmcDataQualityConfigService, QualityPolicyImpact, projectQuality } from '../services/nmc-data-quality-config.service';
 
 interface SourceStatus {
   name: string;
   system: string;
-  status: 'Matched' | 'Conflict' | 'Available';
+  status: 'Matched' | 'Conflict' | 'Available' | 'Unavailable';
   lastSync: string;
   record: string;
-  confidence: number;
+  confidence: number|null;
+  dataNature:'SYNTHETIC_FIXTURE'|'SYNTHETIC_PSC_GOOGLE'|'SYNTHETIC_PSC_LOCAL'|
+    'SYNTHETIC_INCIDENT_GOOGLE'|'SYNTHETIC_DRIVE_GOOGLE'|'NMC_POC_CASE'|
+    'DERIVED_COMPARISON'|'UNAVAILABLE';
+  recordId?:string;
+  route?:string;
+  tab?:string;
   authority: string;
   sourceClass: 'MOEI Authoritative' | 'Internal Master' | 'External Authoritative' | 'External Trusted' | 'Operational Feed';
 }
@@ -126,6 +135,14 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
 
   vessel!: Vessel360View;
   sources: SourceStatus[] = [];
+  private vesselIncidents:NmcMaritimeIncident[]|null=null;
+  private incidentReadAt:string|null=null;
+  private vesselCases:NmcCentralCase[]|null=null;
+  private caseReadAt:string|null=null;
+  private pscReadAt:string|null=null;
+  private driveListing:VesselDriveListing|null=null;
+  private driveReadAt:string|null=null;
+  private intelligenceReadAt:string|null=null;
   certificates: CertificateRecord[] = [];
   inspections: InspectionRecord[] = [];
   deficiencies: DeficiencyRecord[] = [];
@@ -165,6 +182,9 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
     private riskEngine: NmcRiskEngineService,
     private vesselEvidence: NmcVesselEvidenceService,
     private externalPscService: NmcExternalPscService,
+    private readonly incidentsService:NmcIncidentsService,
+    private readonly casesService:NmcCasesService,
+    private readonly documentsService:NmcDocumentsService,
     private readonly fleetAiService: NmcFleetAiService,
     public readonly qualityPolicy: NmcDataQualityConfigService
   ) {}
@@ -273,7 +293,7 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
     const labels: Record<string, string> = {
       Matched: 'متطابق',
       Conflict: 'تعارض',
-      Available: 'متاح'
+      Available: 'متاح', Unavailable:'غير متاح'
     };
     return this.lang.isArabic ? (labels[value] || value) : value;
   }
@@ -380,6 +400,8 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
       }
     }));
     this.loadExternalPsc();
+    this.loadConnectedSources();
+    this.loadDriveSources();
     this.loadStoredAi();
 
     const requestedTab = this.route.snapshot.queryParamMap.get('tab');
@@ -431,6 +453,7 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
         this.storedAi = assessment;
         this.storedAiStatus = 'available';
         this.applyStoredAiView();
+        this.sources=this.buildSources();
         // The Leaflet vessel badge is a generated DOM icon, not Angular-bound.
         // Refresh it to display the saved Oracle score rather than the fixture score.
         if (this.map) {
@@ -459,12 +482,16 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
           return;
         }
         this.storedAiIntelligence=result;
+        this.intelligenceReadAt=new Date().toISOString();
+        this.sources=this.buildSources();
         this.qualityLocalPreview=result.quality.breakdown
           ?projectQuality(result.quality.breakdown,this.qualityPolicy.config):null;
         this.intelligenceStatus='available';
       },
       error: () => {
         this.storedAiIntelligence=null;
+        this.intelligenceReadAt=null;
+        this.sources=this.buildSources();
         this.qualityLocalPreview=null;
         this.intelligenceStatus='unavailable';
       }
@@ -564,6 +591,53 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
     }
   }
 
+  refreshSourceEvidence():void{
+    this.loadExternalPsc();
+    this.loadConnectedSources();
+    this.loadDriveSources();
+    if(this.storedAi)this.loadStoredIntelligence();
+  }
+
+  private loadDriveSources():void{
+    this.subscriptions.add(this.documentsService.list(this.vessel.imo).subscribe({
+      next:listing=>{
+        this.driveListing=listing;
+        this.driveReadAt=listing.driveConnected?new Date().toISOString():null;
+        this.sources=this.buildSources();
+      },
+      error:()=>{
+        this.driveListing=null;this.driveReadAt=null;
+        this.sources=this.buildSources();
+      }
+    }));
+  }
+
+  /** Live API reads of connected POC evidence; never fall back to fake success. */
+  private loadConnectedSources():void{
+    this.subscriptions.add(this.incidentsService.list().subscribe({
+      next:feed=>{
+        this.vesselIncidents=feed.incidents.filter(r=>r.imo===this.vessel.imo);
+        this.incidentReadAt=new Date().toISOString();
+        this.sources=this.buildSources();
+      },
+      error:()=>{
+        this.vesselIncidents=null;this.incidentReadAt=null;
+        this.sources=this.buildSources();
+      }
+    }));
+    this.subscriptions.add(this.casesService.list().subscribe({
+      next:feed=>{
+        this.vesselCases=feed.cases.filter(c=>c.imo===this.vessel.imo);
+        this.caseReadAt=new Date().toISOString();
+        this.sources=this.buildSources();
+      },
+      error:()=>{
+        this.vesselCases=null;this.caseReadAt=null;
+        this.sources=this.buildSources();
+      }
+    }));
+  }
+
   loadExternalPsc(): void {
     this.pscLoading = true;
     this.pscError = '';
@@ -575,11 +649,15 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
           this.pscError = this.copy('External PSC provenance failed validation.', 'تعذر التحقق من مصدر بيانات PSC الخارجية.');
         } else {
           this.externalPsc = payload;
+          this.pscReadAt=payload.retrievedAt||null;
         }
         this.pscLoading = false;
+        this.sources=this.buildSources();
       },
       error: () => {
         this.pscLoading = false;
+        this.pscReadAt=null;
+        this.sources=this.buildSources();
         this.pscError = this.copy(
           'External PSC data unavailable. No simulated inspection records have been inferred.',
           'بيانات PSC الخارجية غير متاحة. لم يتم افتراض أي سجلات تفتيش بديلة.'
@@ -649,7 +727,7 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
       dataConfidence:certificate.conflict ? 92 : 97,
       identityMatch:100,
       freshness:certificate.conflict ? 94 : 97,
-      lastUpdated:'22:41:56',
+      lastUpdated:'—',
       conflict:certificate.conflict ? 'Unresolved' : 'None',
       note:certificate.condition || 'Certificate status is linked to the correlated vessel record and retained with source provenance.'
     };
@@ -669,7 +747,7 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
       dataConfidence:100,
       identityMatch:100,
       freshness:96,
-      lastUpdated:'22:41:55',
+      lastUpdated:'—',
       conflict:'None',
       note:`Inspection performed through the MOEI inspection process at ${inspection.port}. Findings and evidence remain linked to the vessel record.`
     };
@@ -866,8 +944,7 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
     this.dataConflictRiskImpact = contribution('dataQuality');
     this.historicalRiskImpact = contribution('history');
 
-    this.sources = this.buildSources();
-    // The exact same deterministic fixture now drives Vessel 360 and A01/A02.
+    // The same POC evidence bundle drives Vessel 360 and A01/A02.
     const bundle = this.vesselEvidence.create(this.vessel);
     this.certificates = bundle.certificates;
     this.inspections = bundle.inspections;
@@ -876,6 +953,7 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
     this.timeline = this.buildTimeline();
     this.selectedCertificateId = this.certificates[0].id;
     this.fieldProvenance = this.buildFieldProvenance();
+    this.sources=this.buildSources();
   }
 
   private buildFieldProvenance(): Record<string, FieldProvenance> {
@@ -908,8 +986,11 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
       note: string
     ): void => {
       fields.push({
-        key, label, value, source, system, sourceClass, authority, recordId,
-        sourceTrust, dataConfidence, identityMatch, freshness, lastUpdated, conflict, note
+        key, label, value, source:source+' (synthetic POC)',system,sourceClass,
+        authority:authority+' — simulated source, not independently verified',
+        recordId,sourceTrust,dataConfidence,identityMatch,freshness,
+        lastUpdated:'—',conflict,note:note+
+          ' This is a synthetic POC fixture; source authority and update time are not verified.'
       });
     };
 
@@ -942,93 +1023,155 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
     }, {} as Record<string, FieldProvenance>);
   }
 
+  /** Fixture provenance stays visible; read timestamps belong to actual API calls. */
   private buildSources(): SourceStatus[] {
-    const certificateSourceName = this.isUaeFlag ? 'Certificates' : 'Foreign Certificates';
-    const certificateSystem = this.isUaeFlag ? 'MOEI Certificate Registry' : 'Flag / Recognized Organization Records';
-    const companySystem = this.isUaeFlag ? 'MOEI Company Master' : 'Verified Operator / Company Record';
+    if(!this.vessel)return [];
+    const sources:SourceStatus[]=[];
+    const fixture=(name:string,system:string,record:string,recordId:string)=>{
+      sources.push({name,system,record,recordId,
+        sourceClass:'Internal Master',status:'Available',
+        lastSync:'—',confidence:null,dataNature:'SYNTHETIC_FIXTURE',
+        authority:'Synthetic POC data — no authoritative live connection'});
+    };
+    fixture('Vessel Master','NMC Synthetic Vessel Catalogue',
+      `IMO ${this.vessel.imo} · ${this.vessel.name}`,`VES-${this.vessel.imo}`);
+    fixture('Flag Registration','Simulated Flag Registration',
+      `${this.vessel.flag} · ${this.registrationStatus} (synthetic)`,`REG-${this.vessel.imo}`);
+    fixture('Movement Feed','Synthetic AIS / LRIT',
+      `${this.vessel.position} · ${this.vessel.speed} kn`,`AIS-${this.vessel.mmsi}`);
+    fixture('Inspection','NMC Synthetic Inspection Evidence',
+      `${this.inspections.length} inspections · ${this.deficiencies.filter(d=>d.status==='Open').length} open findings (synthetic)`,
+      this.inspections[0]?.id||`INS-${this.vessel.imo}`);
+    fixture('Certificates','Synthetic Flag / RO Certificate Portfolio',
+      `${this.certificates.length} certificates · not verified against flag/RO`,
+      this.certificates[0]?.id||`CERT-${this.vessel.imo}`);
+    fixture('Classification / RO','Synthetic Class Society',
+      `${this.vessel.classSociety} · no external RO connection`,`CLS-${this.vessel.imo}`);
+    fixture('Company / Operator','Synthetic Vessel Operator Master',
+      this.vessel.operator,`OPR-${this.vessel.imo}`);
+    sources.push({name:'UAE Restrictions',system:'MOEI Restrictions Integration',
+      record:'Official restriction status unknown — no live source connected',
+      status:'Unavailable',lastSync:'—',confidence:null,
+      sourceClass:'MOEI Authoritative',dataNature:'UNAVAILABLE',
+      authority:'No MOEI restrictions feed in the POC'});
 
-    return [
-      {
-        name:'Vessel Master',
-        system:'MOEI Unified Vessel Master',
-        status:'Matched',
-        lastSync:'22:42:09',
-        record:`IMO ${this.vessel.imo} · Internal correlated vessel record`,
-        confidence:100,
-        authority:'NMC correlation context',
-        sourceClass:'Internal Master'
-      },
-      {
-        name:'Flag Registration',
-        system:this.registrationSource,
-        status:this.isUaeFlag ? 'Matched' : 'Available',
-        lastSync:'22:42:06',
-        record:`${this.vessel.flag} registration · ${this.registrationStatus}`,
-        confidence:this.isUaeFlag ? 100 : 96,
-        authority:this.registrationAuthorityLabel,
-        sourceClass:this.isUaeFlag ? 'MOEI Authoritative' : 'External Authoritative'
-      },
-      {
-        name:'Movement Feed',
-        system:'AIS / LRIT',
-        status:'Matched',
-        lastSync:'22:42:18',
-        record:'Position / speed / course / destination',
-        confidence:Math.max(91, this.vessel.dataConfidence),
-        authority:'Operational tracking source',
-        sourceClass:'Operational Feed'
-      },
-      {
-        name:'Inspection',
-        system:'MOEI Smart Inspection',
-        status:'Matched',
-        lastSync:'22:41:55',
-        record:this.hasOpenDeficiency ? '1 open deficiency' : 'No open critical deficiencies',
-        confidence:100,
-        authority:'MOEI inspection record',
-        sourceClass:'MOEI Authoritative'
-      },
-      {
-        name:certificateSourceName,
-        system:certificateSystem,
-        status:this.hasCertificateConflict ? 'Conflict' : 'Matched',
-        lastSync:'22:41:56',
-        record:this.hasCertificateConflict ? 'Certificate condition requires verification' : 'Certificate portfolio matched',
-        confidence:this.isUaeFlag ? 100 : 95,
-        authority:this.primaryCertificateAuthorityLabel,
-        sourceClass:this.isUaeFlag ? 'MOEI Authoritative' : 'External Authoritative'
-      },
-      {
-        name:'Classification / RO',
-        system:this.vessel.classSociety,
-        status:this.hasCertificateConflict ? 'Conflict' : 'Available',
-        lastSync:'22:41:57',
-        record:this.hasCertificateConflict ? 'Class / certificate status differs from primary record' : 'Classification record available',
-        confidence:this.hasCertificateConflict ? 92 : 96,
-        authority:'Recognized external maritime source',
-        sourceClass:'External Trusted'
-      },
-      {
-        name:'Company / Operator',
-        system:companySystem,
-        status:'Available',
-        lastSync:'22:40:12',
-        record:this.vessel.operator,
-        confidence:this.isUaeFlag ? 100 : 94,
-        authority:this.isUaeFlag ? 'MOEI company record' : 'Verified external operator context',
-        sourceClass:this.isUaeFlag ? 'MOEI Authoritative' : 'External Trusted'
-      },
-      {
-        name:'UAE Restrictions',
-        system:'MOEI Enforcement & Restrictions',
-        status:'Matched',
-        lastSync:'22:40:48',
-        record:'No active UAE restriction recorded',
-        confidence:100,
-        authority:'MOEI regulatory action',
-        sourceClass:'MOEI Authoritative'
-      }
-    ];
+    const psc=this.externalPsc;
+    sources.push(psc?{
+      name:'Port State Control / PSC',
+      system:psc.sourceMode==='GOOGLE_SHEETS_LIVE'?
+        'Google Sheets synthetic PSC':'Local synthetic PSC snapshot',
+      record:psc.coverage==='NO_RECORD_IN_FIXTURE'?
+        'No vessel entry in this synthetic PSC dataset':
+        `${psc.summary.inspections} inspections · ${psc.summary.openDeficiencies} open findings · ${psc.summary.detentions} detentions`,
+      recordId:psc.evidenceIds[0],
+      status:'Available',sourceClass:'External Trusted',
+      authority:'Synthetic fixture — NOT official Riyadh MoU',
+      dataNature:psc.sourceMode==='GOOGLE_SHEETS_LIVE'?
+        'SYNTHETIC_PSC_GOOGLE':'SYNTHETIC_PSC_LOCAL',
+      lastSync:this.pscReadAt||'—',confidence:null,
+      route:`/moei/nmc/vessel/${this.vessel.imo}`, tab:'external-psc'
+    }:{
+      name:'Port State Control / PSC',system:'PSC POC Reader',
+      record:'No PSC API response',status:'Unavailable',
+      sourceClass:'External Trusted',authority:'No current PSC source data',
+      dataNature:'UNAVAILABLE',lastSync:'—',confidence:null
+    });
+    const reports=this.vesselIncidents;
+    sources.push(reports!==null?{
+      name:'Maritime Incident Reports',
+      system:'Google Sheets · Port / Reporting Platform',
+      record:reports.length?
+        `${reports.length} report(s) · ${reports.filter(r=>!['CLOSED','RESOLVED'].includes(r.operationalStatus)).length} active · ${reports.map(r=>r.incidentId).join(', ')}`:
+        'No incident reports for this IMO in the connected Sheet',
+      recordId:reports[0]?.incidentId,
+      sourceClass:'Operational Feed',status:'Available',
+      authority:'Synthetic incoming reports, not verified maritime facts',
+      dataNature:'SYNTHETIC_INCIDENT_GOOGLE',
+      lastSync:this.incidentReadAt||'—',confidence:null,
+      route:'/moei/nmc/incidents'
+    }:{
+      name:'Maritime Incident Reports',system:'Google Sheets Incident Registry',
+      record:'Source unavailable — incident status unknown',
+      status:'Unavailable',sourceClass:'Operational Feed',
+      authority:'Could not read synthetic source',
+      dataNature:'UNAVAILABLE',lastSync:'—',confidence:null
+    });
+    const drive=this.driveListing;
+    sources.push(drive?.driveConnected?{
+      name:'Google Drive Vessel Documents / A03',
+      system:'Google Drive POC Read-only Document List',
+      record:`${drive.documents.length} document(s) · ${drive.documents.filter(d=>d.savedStatus==='APPROVED').length} human-approved A03 result(s)`,
+      recordId:drive.documents[0]?.fileId,
+      status:'Available',lastSync:this.driveReadAt||'—',confidence:null,
+      authority:'Synthetic POC document packs; approval does NOT verify issuing authority',
+      dataNature:'SYNTHETIC_DRIVE_GOOGLE',sourceClass:'External Trusted',
+      route:`/moei/nmc/vessel/${this.vessel.imo}`,tab:'documents'
+    }:{
+      name:'Google Drive Vessel Documents / A03',
+      system:'Google Drive Document Adapter',
+      record:drive?.status==='not_configured'?'Drive root folder not configured':
+        'Google Drive document listing unavailable',
+      status:'Unavailable',lastSync:'—',confidence:null,
+      sourceClass:'External Trusted',authority:'Document source not available',
+      dataNature:'UNAVAILABLE'
+    });
+    const referralRows=(this.vesselCases||[]).flatMap(c=>(c.inspectionRequests||[])
+      .map(r=>({caseId:c.id,ref:r})));
+    sources.push(this.vesselCases!==null?{
+      name:'Smart Inspection Referrals',
+      system:'NMC Case Management inspection hand-off',
+      record:referralRows.length?
+        `${referralRows.length} human-approved inspection request(s) · ${referralRows.map(r=>r.ref.status).join(', ')}`:
+        'No human-approved inspection referral recorded in NMC Cases',
+      recordId:referralRows[0]?.ref.id,
+      status:'Available',lastSync:this.caseReadAt||'—',confidence:null,
+      sourceClass:'Internal Master',dataNature:'NMC_POC_CASE',
+      authority:'Only Case referrals; not proof of completed Smart Inspection findings',
+      route:`/moei/nmc/vessel/${this.vessel.imo}/case`
+    }:{
+      name:'Smart Inspection Referrals',system:'NMC Case inspection hand-off',
+      record:'Case referral source unavailable (SI lifecycle not independently connected)',
+      status:'Unavailable',lastSync:'—',confidence:null,
+      sourceClass:'Internal Master',dataNature:'UNAVAILABLE',
+      authority:'No validated Smart Inspection outcome'
+    });
+    const cases=this.vesselCases;
+    sources.push(cases!==null?{
+      name:'NMC Case Management',system:'NMC Central Case Store',
+      record:cases.length?
+        `${cases.length} cases · ${cases.filter(c=>c.status!=='RESOLVED').length} open · ${cases.map(c=>c.status).join(', ')}`:
+        'No NMC case linked to this IMO',
+      recordId:cases[0]?.id,
+      sourceClass:'Internal Master',status:'Available',
+      authority:'Internal workflow case, not independent incident verification',
+      dataNature:'NMC_POC_CASE',lastSync:this.caseReadAt||'—',
+      confidence:null,route:`/moei/nmc/vessel/${this.vessel.imo}/case`
+    }:{
+      name:'NMC Case Management',system:'NMC Case Store',
+      record:'Case data unavailable',status:'Unavailable',
+      sourceClass:'Internal Master',authority:'POC case store not readable',
+      dataNature:'UNAVAILABLE',lastSync:'—',confidence:null
+    });
+    // Only genuine comparisons with BOTH values count as conflicts.
+    const fields=this.storedAiIntelligence?.quality?.breakdown?.fieldComparisons||[];
+    if(fields.length){
+      const mismatches=fields.filter(f=>f.status==='MISMATCH'&&
+        typeof f.internalValue==='string'&&f.internalValue.trim().length>0&&
+        typeof f.externalValue==='string'&&f.externalValue.trim().length>0);
+      sources.push({
+        name:'Cross-source Identity Comparison',
+        system:'Saved NMC Data Quality / Correlation',
+        record:mismatches.length?
+          `${mismatches.length} differing field(s): ${mismatches.map(f=>f.field).join(', ')}`:
+          `${fields.length} fields checked; ${fields.filter(f=>f.status==='MISSING').length} missing fields`,
+        recordId:this.storedAi?.assessmentId,
+        sourceClass:'Internal Master',status:mismatches.length?'Conflict':'Available',
+        authority:'Synthetic POC source comparison; not official verification',
+        dataNature:'DERIVED_COMPARISON',
+        lastSync:this.intelligenceReadAt||'—',confidence:null
+      });
+    }
+    return sources;
   }
 
   private buildRiskFactors(): RiskFactor[] {

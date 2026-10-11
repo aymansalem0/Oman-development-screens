@@ -1243,3 +1243,6 @@ a.big-risk{display:flex;flex-direction:column;align-items:center;justify-content
   .incident-map-legend small{font-size:7px;}
   .attention-incident-details{padding:12px;}
 }
+
+.map-filters select:has(option[value="Incident"]:checked){max-width:166px;
+ border-color:#d8a7b7;color:#8e3563;background:#fff7fa;font-weight:850;}

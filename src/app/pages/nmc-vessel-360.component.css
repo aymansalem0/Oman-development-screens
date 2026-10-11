@@ -2597,3 +2597,24 @@ button, a { font: inherit; }
 .v360-risk-state-note strong {color:#193f57;}
 .v360-risk-state-note.v360-watch-note {background:#fff9ea; border-color:#f1d892; color:#8d661a;}
 .v360-risk-state-note.v360-watch-note strong {color:#87621a;}
+
+/* Accurate correlated source provenance — connected POC vs fixtures vs missing feeds. */
+.source-provenance-notice {
+  margin:10px 14px 6px;padding:9px 11px;border:1px solid #d9e7ee;
+  border-radius:9px;background:#f6fafc;color:#436575;font-size:10px;
+  line-height:1.55;
+}
+.source-data-nature {display:block!important;color:#9a6b35!important;
+ font-size:9px!important;font-weight:750;overflow-wrap:anywhere;margin-top:4px;}
+.source-record-cell{overflow-wrap:anywhere;line-height:1.5;}
+.source-record-cell small{display:block;color:#778c9d;font-size:9px;margin-top:3px;}
+.source-data-link{display:inline-block;margin-top:4px;color:#087f79;
+  font-size:10px;font-weight:800;text-decoration:none;}
+.source-data-link:hover{text-decoration:underline;}
+.source-row .status-chip.unavailable{color:#b04343;background:#fff0ee;}
+.source-row .status-chip.conflict{color:#9f5420;background:#fff3dc;}
+
+.source-header-actions{display:flex;align-items:center;gap:9px;flex-wrap:wrap;}
+.source-refresh-btn{border:1px solid #bfdeda;color:#0c7773;background:#f5fbf9;
+ border-radius:9px;padding:7px 9px;font-weight:800;font-size:10px;cursor:pointer;}
+.source-refresh-btn:hover{background:#e8f7f4;}

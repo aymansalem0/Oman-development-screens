@@ -174,6 +174,7 @@
               <option value="All">{{ copy('All', 'الكل') }}</option>
               <option value="Critical">{{ copy('Critical', 'حرج') }}</option>
               <option value="High">{{ copy('High', 'مرتفع') }}</option>
+              <option value="Incident">{{copy('Incident / Accident','حادث / واقعة')}}</option>
               <option value="Watch">{{ copy('Watch', 'مراقبة') }}</option>
               <option value="Normal">{{ copy('Normal', 'طبيعي') }}</option>
               <option value="Pending">{{ copy('Pending AI', 'بانتظار AI') }}</option>
@@ -190,6 +191,14 @@
           {{copy('vessels shown on map', 'سفينة ظاهرة على الخريطة')}}
           <span *ngIf="assessmentFilter==='Assessed'"> · {{copy('Completed saved A01/A02 assessments only','تقييمات A01/A02 المحفوظة والمكتملة فقط')}}</span>
           <span *ngIf="assessmentFilter==='Pending'"> · {{copy('Includes pending and failed assessments','تشمل التقييمات المعلقة والفاشلة')}}</span>
+          <span *ngIf="riskFilter==='Incident'">
+            · {{incidentAffectedVesselCount}}
+            {{copy('vessels with active reported incidents/accidents (not a vessel risk band)',
+                'سفينة لديها بلاغات حوادث نشطة (وليست مستوى مخاطر للسفينة)')}}
+          </span>
+          <span *ngIf="riskFilter==='Incident'&&incidentSourceError">
+            · {{copy('Source unavailable: no incident vessels displayed','مصدر الحوادث غير متاح: لا يتم عرض سفن حوادث')}}
+          </span>
         </p>
         <div class="map-stage">
           <div #mapContainer class="real-map" dir="ltr"></div>
