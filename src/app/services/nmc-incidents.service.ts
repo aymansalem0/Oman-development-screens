@@ -14,6 +14,8 @@ export interface IncidentAiAssessment {
   aiProposedFollowup:IncidentFollowup;aiReasoning:string;confidence:number;
   missingInformation:string[];officerDecision?:string|null;
   approvedFollowupStatus?:IncidentFollowup|null;officerName?:string|null;
+  suggestedFollowupState?:string;approvedFollowupState?:string|null;
+  officerReviewReason?:string|null;
   assessmentStatus:string;
 }
 export interface NmcMaritimeIncident {
@@ -26,6 +28,7 @@ export interface NmcMaritimeIncident {
   receivedAt:string;updatedAt:string;assignedOfficer:string;
   dataNature:'SYNTHETIC_POC';aiReviewRequested:boolean;rowNumber:number;
   aiAssessment:IncidentAiAssessment|null;aiAssessmentStale:boolean;
+  nextFollowup?:{status:string;approval:'AI_PROPOSED'|'OFFICER_APPROVED';reason:string}|null;
 }
 export interface IncidentFeedResponse{
   status:'ok';source:string;incidents:NmcMaritimeIncident[];
@@ -37,6 +40,8 @@ export interface IncidentFeedResponse{
 export interface IncidentFeedHealth{
   status:'ok';sourceConfigured:boolean;aiConfigured:boolean;
   aiProvider:string;scorePolicy:string;realEnforcementEnabled:false;
+  automaticTriageEnabled?:boolean;autoMaxPerCycle?:number;
+  lastAutoRun?:{at:string;assessed:number;failed:number;skipped:number}|null;
 }
 @Injectable({providedIn:'root'})
 export class NmcIncidentsService {
@@ -92,7 +97,9 @@ export class NmcIncidentsService {
       INCIDENT_AI_NOT_CONFIGURED:['Choose an incident-specific AI provider and model in Docker.','اختر مزود وموديل AI للحوادث في إعدادات Docker.'],
       INCIDENT_AI_OPTIN_REQUIRED:['Enable AI_Review_Request=YES for this incident in the Google Sheet.','اجعل AI_Review_Request بقيمة YES في الشيت.'],
       INCIDENT_AI_RESPONSE_INVALID:['The model returned an invalid incident schema; nothing was saved.','استجابة نموذج AI غير مطابقة؛ لم تحفظ نتيجة.'],
-      INCIDENT_SOURCE_CHANGED_DURING_AI:['Description changed while AI was analyzing. Refresh and retry.','وصف الحادث تغيّر أثناء التحليل؛ حدث البيانات ثم حاول ثانية.']
+      INCIDENT_SOURCE_CHANGED_DURING_AI:['Description changed while AI was analyzing. Refresh and retry.','وصف الحادث تغيّر أثناء التحليل؛ حدث البيانات ثم حاول ثانية.'],
+      INCIDENT_ALREADY_REVIEWED:['The officer-reviewed assessment is immutable. Edit the source report to request a fresh assessment.','التقييم الذي اعتمده الموظف محفوظ وغير قابل للاستبدال. عدّل وصف البلاغ لإجراء تقييم جديد.'],
+      INCIDENT_AI_ALREADY_RUNNING:['The incident AI review is already running; wait for completion.','تحليل هذا الحادث قيد التنفيذ بالفعل؛ انتظر إتمامه.']
     };
     return labels[code]?.[ar?1:0]||code;
   }
