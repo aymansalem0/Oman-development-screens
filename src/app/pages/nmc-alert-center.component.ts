@@ -184,8 +184,7 @@ export class NmcAlertCenterComponent implements OnInit,OnDestroy{
             // Fail open for stale saved alerts: do not hide until matching
             // current Oracle source and complete saved A01/A02 evidence exist.
             assessment.assessmentId===expected.assessmentId&&
-            ['movement','inspection','certificate','dataQuality','history',
-             ...(Number(config.weights.documentIntegrity||0)>0?['documentIntegrity']:[])].every(
+            ['movement','inspection','certificate','dataQuality','history'].every(
               factor=>{const v=Number(sev[factor as keyof typeof sev]);
                 return Number.isFinite(v)&&v>=0&&v<=100;});
           if(!ready){missing++;continue;}
