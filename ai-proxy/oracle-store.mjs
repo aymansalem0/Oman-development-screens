@@ -386,6 +386,44 @@ export class OracleIntelligenceStore {
     finally{await con.close();}
   }
 
+  /**
+   * Exact immutable historical assessment used when opening an NMC case.
+   * READ-ONLY: never fetch current data in place of the requested ID.
+   * All 5/6 risk factors + verified evidence IDs are loaded from original rows.
+   */
+  async loadAssessmentById(assessmentId){
+    if(typeof assessmentId!=='string'||!/^[a-f\d-]{36}$/i.test(assessmentId))
+      return null;
+    if(!this.pool)throw new Error('ORACLE_SCHEMA_UNAVAILABLE');
+    const con=await this.pool.getConnection();
+    try{
+      const result=await con.execute(`SELECT ASSESSMENT_ID,IMO,RISK_SCORE,RISK_LEVEL,
+        RULESET_VERSION,SOURCE_MODE,SOURCE_NATURE,INPUT_HASH,
+        ${time('ASSESSED_AT')} ASSESSED_AT
+        FROM NMC_AI_ASSESSMENT WHERE ASSESSMENT_ID=:id`,
+        {id:assessmentId},{outFormat:oracledb.OUT_FORMAT_OBJECT});
+      if(result.rows.length!==1)return null;
+      const r=result.rows[0];
+      const factors=await con.execute(`SELECT FACTOR_KEY,SEVERITY,CONFIDENCE,
+        AGENT_CODE,REASON_TEXT,EVIDENCE_IDS_JSON
+        FROM NMC_AI_RISK_FACTOR WHERE ASSESSMENT_ID=:id
+        ORDER BY FACTOR_KEY`,
+        {id:assessmentId},{outFormat:oracledb.OUT_FORMAT_OBJECT});
+      const signals=factors.rows.map(f=>({
+        factor:f.FACTOR_KEY,severity:f.SEVERITY,confidence:f.CONFIDENCE,
+        sourceAgent:f.AGENT_CODE,reason:f.REASON_TEXT||'',
+        evidenceIds:JSON.parse(f.EVIDENCE_IDS_JSON)
+      }));
+      return {
+        assessmentId:r.ASSESSMENT_ID,imo:r.IMO,
+        status:'COMPLETED',score:r.RISK_SCORE,level:r.RISK_LEVEL,
+        configVersion:r.RULESET_VERSION,sourceMode:r.SOURCE_MODE,
+        sourceNature:r.SOURCE_NATURE,inputHash:r.INPUT_HASH,
+        assessedAt:r.ASSESSED_AT,signals
+      };
+    }finally{await con.close();}
+  }
+
   async history(imo){
     const con=await this.pool.getConnection();
     try{
