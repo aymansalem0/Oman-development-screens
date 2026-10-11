@@ -1202,6 +1202,12 @@ a.big-risk{display:flex;flex-direction:column;align-items:center;justify-content
 .incident-moderate{--event-color:#206ebd;}
 .incident-low{--event-color:#087f72;}
 .incident-unassessed{--event-color:#64748b;}
+/* Requested behavior: vessel symbol itself takes the incident severity color.
+   The existing INNER risk-ring continues to represent saved A01/A02 vessel risk.
+   The larger OUTER ring signals incident involvement and stays distinguishable. */
+:host ::ng-deep .nmc-map-marker[class*="incident-"] .ship-symbol path:first-child{
+  fill:var(--event-color);
+}
 :host ::ng-deep .nmc-map-marker .incident-outer-ring{
   position:absolute;z-index:2;
   width:calc(var(--ring-size) + 15px);height:calc(var(--ring-size) + 15px);
