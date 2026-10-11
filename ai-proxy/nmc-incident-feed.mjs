@@ -195,7 +195,8 @@ export class NmcIncidentFeed {
    // Reuse existing A01/A02 Airia pipeline execution; NEVER a separate LLM.
    executeIncidentAgents=null,
    agentEnabled=()=>false,
-   autoEnabled=process.env.NMC_INCIDENT_AUTO_TRIAGE_ENABLED==='true',
+   autoEnabled=process.env.NMC_INCIDENT_AUTO_TRIAGE_ENABLED==='true'&&
+     process.env.NMC_INCIDENT_AIRIA_EXTENSION_CONFIRMED==='true',
    autoMaxPerCycle=Number(process.env.NMC_INCIDENT_AUTO_MAX_PER_CYCLE||2),
    fetchImpl=globalThis.fetch,
    credentials=null
@@ -218,6 +219,8 @@ export class NmcIncidentFeed {
    this.agentEnabled()===true;}
  health(){return {sourceConfigured:this.configured,aiConfigured:this.aiConfigured,
    aiProvider:this.provider,scorePolicy:SCORE_VERSION,
+   incidentAgentContract:'NMC_INCIDENT_A01_A02_EXT_V1',
+   incidentContractRuntimeVerified:false,
    automaticTriageEnabled:this.autoEnabled,
    autoMaxPerCycle:this.autoMaxPerCycle,lastAutoRun:this.lastAutoRun,
    sourceStatus:this.configured?'READY_TO_FETCH':'NOT_CONFIGURED',
