@@ -9,15 +9,19 @@ export type NmcKpiMetricId=
 export type NmcKpiValues=Record<NmcKpiMetricId,number|null>;
 export interface NmcAiFocusStatus {
   status:'ok';configured:boolean;automaticAiCalls:false;
+  agentIds:['A02','A01'];potentialAgentCalls:2;
+  requestContracts:'EXISTING_A02_SIGNALS_AND_A01_SITUATION_ASSESSMENT';
   requiresExplicitOperatorConfirmation:true;
   dataNature:'SYNTHETIC_POC_ADVISORY_ONLY';
 }
 export interface NmcAiFocusResult {
-  status:'ok';provider:'AIRIA_DEDICATED_DASHBOARD_PIPELINE';
+  status:'ok';provider:'AIRIA_EXISTING_A01_A02';
   modelBased:true;reused:boolean;analyzedAt:string;
   snapshot:NmcKpiValues;snapshotHash:string;
   selection:{metricId:NmcKpiMetricId;value:number;reasonEn:string;
-    reasonAr:string;confidence:number|null};
+    reasonAr:string;confidence:number|null;a01Priority:string;
+    a01Summary:string;evidenceIds:string[]};
+  sourceImo:string;sourceAssessmentId:string;a02VerifiedFactors:string[];
   requiresHumanReview:true;dataNature:'SYNTHETIC_POC_ADVISORY_ONLY';
 }
 
@@ -50,9 +54,33 @@ export class NmcAiFocusService{
       return ar?'تم إلغاء الطلب.':'Request cancelled.';
     const code=err?.error?.error||'DASHBOARD_FOCUS_AI_UNAVAILABLE';
     const messages:Record<string,[string,string]>={
-      DASHBOARD_FOCUS_PIPELINE_NOT_CONFIGURED:[
-        'The dedicated dashboard KPI AI pipeline is not configured. No Airia request was made.',
-        'مسار Airia المخصص لترتيب مؤشرات لوحة القيادة غير مهيأ. لم يتم استدعاء AI.'
+      DASHBOARD_FOCUS_A01_A02_NOT_ENABLED:[
+        'Enable the existing A01 and A02 agents and opt in dashboard focus. No new pipeline is needed.',
+        'فعّل الوكيلين A01 وA02 وخيار تحليل مؤشرات لوحة القيادة؛ لا يلزم مسار جديد.'
+      ],
+      DASHBOARD_FOCUS_VESSEL_EVIDENCE_UNAVAILABLE:[
+        'A completed saved vessel AI assessment with evidence is required to ground the existing A01/A02 request.',
+        'يلزم تقييم سفينة محفوظ ومكتمل مع أدلة حتى يعمل طلب A01/A02 الأصلي.'
+      ],
+      DASHBOARD_FOCUS_A01_MARKER_MISSING:[
+        'Existing A01 response did not specify exactly one KPI in whyItMatters. No number was highlighted.',
+        'لم تحدد استجابة A01 مؤشراً واحداً بوضوح في whyItMatters؛ لم يتم تمييز أي رقم.'
+      ],
+      DASHBOARD_FOCUS_A01_MARKER_INVALID:[
+        'The A01 response selected an unavailable or unknown KPI. No number was highlighted.',
+        'اختارت استجابة A01 مؤشراً غير معروف أو غير متاح؛ لم يتم تمييز أي رقم.'
+      ],
+      DASHBOARD_FOCUS_A01_INVALID:[
+        'The A01 situation assessment response did not match its existing contract.',
+        'استجابة تقييم الموقف A01 لا تطابق العقد الأصلي.'
+      ],
+      DASHBOARD_FOCUS_A02_INVALID:[
+        'The A02 compliance risk-signals response did not match its existing contract.',
+        'استجابة مؤشرات المخاطر A02 لا تطابق العقد الأصلي.'
+      ],
+      DASHBOARD_FOCUS_A01_EVIDENCE_INVALID:[
+        'A01 did not cite valid underlying vessel evidence; no KPI was highlighted.',
+        'لم يستشهد A01 بأدلة سفينة سليمة؛ لم يتم تمييز أي مؤشر.'
       ],
       DASHBOARD_FOCUS_INSUFFICIENT_DATA:[
         'Wait for current dashboard sources before requesting AI focus.',
@@ -71,8 +99,16 @@ export class NmcAiFocusService{
         'طلب تحليل مؤشرات لوحة القيادة ما زال قيد التنفيذ.'
       ],
       DASHBOARD_FOCUS_AI_UNAVAILABLE:[
-        'Dashboard focus AI is temporarily unavailable; no metric was selected.',
-        'تحليل AI الخاص بأولوية المؤشرات غير متاح مؤقتاً؛ لم يتم اختيار رقم.'
+        'Dashboard A01/A02 focus is temporarily unavailable; no KPI was selected.',
+        'تحليل A01/A02 لأولوية المؤشرات غير متاح مؤقتاً؛ لم يتم اختيار مؤشر.'
+      ],
+      DASHBOARD_FOCUS_A01_UNAVAILABLE:[
+        'A01 situation assessment failed; an A02 request may have already incurred cost. No KPI was highlighted.',
+        'تعذر تحليل الموقف A01 وقد يكون طلب A02 قد استهلك تكلفة؛ لم يتم تمييز مؤشر.'
+      ],
+      DASHBOARD_FOCUS_A02_UNAVAILABLE:[
+        'A02 risk-signals assessment failed; no A01 was started and no KPI was highlighted.',
+        'تعذر تقييم مؤشرات المخاطر A02؛ لم يبدأ A01 ولم يتم تمييز مؤشر.'
       ],
       DASHBOARD_FOCUS_METRICS_INVALID:[
         'The KPI snapshot is invalid. Refresh the dashboard and try again.',
