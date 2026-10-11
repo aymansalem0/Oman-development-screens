@@ -185,6 +185,8 @@ export class NmcIncidentFeed {
    model=process.env.NMC_INCIDENT_AI_MODEL||'',
    openaiKey=process.env.NMC_INCIDENT_OPENAI_API_KEY||'',
    ollamaBaseUrl=process.env.NMC_INCIDENT_OLLAMA_URL||'http://host.docker.internal:11434',
+   autoEnabled=process.env.NMC_INCIDENT_AUTO_TRIAGE_ENABLED==='true',
+   autoMaxPerCycle=Number(process.env.NMC_INCIDENT_AUTO_MAX_PER_CYCLE||2),
    fetchImpl=globalThis.fetch,
    credentials=null
   }={}){
@@ -193,12 +195,20 @@ export class NmcIncidentFeed {
   this.openaiKey=openaiKey.trim();this.ollamaBaseUrl=ollamaBaseUrl;
   this.fetch=fetchImpl;this.credentials=credentials;
   this.token=null;this.inFlight=new Set();
+  // Strict opt-in for scheduled billable calls, never from a browser read.
+  this.autoEnabled=autoEnabled===true;
+  this.autoMaxPerCycle=Math.min(5,Math.max(1,Math.trunc(
+    Number.isFinite(autoMaxPerCycle)?autoMaxPerCycle:2)));
+  this.autoRunning=false;
+  this.lastAutoRun=null;
  }
  get configured(){return !!this.sheetId;}
  get aiConfigured(){return !!this.model&&
   ((this.provider==='openai'&&!!this.openaiKey)||this.provider==='ollama');}
  health(){return {sourceConfigured:this.configured,aiConfigured:this.aiConfigured,
    aiProvider:this.provider,scorePolicy:SCORE_VERSION,
+   automaticTriageEnabled:this.autoEnabled,
+   autoMaxPerCycle:this.autoMaxPerCycle,lastAutoRun:this.lastAutoRun,
    sourceStatus:this.configured?'READY_TO_FETCH':'NOT_CONFIGURED',
    realEnforcementEnabled:false,officialVesselRiskAffected:false};}
  async accessToken(){
@@ -350,6 +360,34 @@ export class NmcIncidentFeed {
   const message=this.provider==='openai'?result?.choices?.[0]?.message?.content:
     result?.message?.content;
   return validateIncidentAI(message);
+ }
+ /**
+  * Optional source ingestion processor. No browser GET or map refresh calls AI.
+  * Charges are bounded by per-row AI_Review_Request and per-cycle limits.
+  */
+ async autoTick(){
+  if(!this.autoEnabled||!this.aiConfigured)
+    return {enabled:false,assessed:0};
+  if(this.autoRunning)return {enabled:true,skipped:'ALREADY_RUNNING'};
+  this.autoRunning=true;
+  const result={enabled:true,assessed:0,failed:0,skipped:0};
+  try{
+   const feed=await this.load();
+   const pending=feed.incidents.filter(x=>
+     x.aiReviewRequested&&!x.aiAssessment&&
+     !['CLOSED','RESOLVED'].includes(x.operationalStatus));
+   for(const incident of pending.slice(0,this.autoMaxPerCycle)){
+    try{
+     await this.analyze(incident.incidentId,{confirmCost:true});
+     result.assessed++;
+    }catch{
+     result.failed++;
+    }
+   }
+   result.skipped=Math.max(0,pending.length-this.autoMaxPerCycle);
+   this.lastAutoRun={at:iso(),...result};
+   return result;
+  }finally{this.autoRunning=false;}
  }
  async analyze(id,{confirmCost=false,force=false}={}){
   if(confirmCost!==true)throw new IncidentTriageError('INCIDENT_AI_CONFIRMATION_REQUIRED');
