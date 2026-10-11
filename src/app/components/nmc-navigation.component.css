@@ -152,3 +152,15 @@
   .nav-settings-heading .nav-label,.nav-settings-heading .nav-chevron{display:none}
   .nav-settings-section {margin:3px 0 8px}
 }
+
+/* Command Center first: closed navigation drawer on all screen widths. */
+.mobile-nav-toggle {display:grid;position:fixed;z-index:53;top:90px;left:12px;
+ width:40px;height:40px;place-items:center;cursor:pointer;border:1px solid #bddbd5;
+ border-radius:10px;background:#fff;color:#08796e;font-size:21px;box-shadow:0 4px 16px #183f5026;}
+.nmc-unified-sidebar{transform:translateX(-110%);transition:transform .2s ease;}
+.nmc-unified-sidebar.user-open{transform:translateX(0);}
+:host-context([dir="rtl"]) .mobile-nav-toggle {left:auto;right:12px;}
+:host-context([dir="rtl"]) .nmc-unified-sidebar{transform:translateX(110%);}
+:host-context([dir="rtl"]) .nmc-unified-sidebar.user-open{transform:translateX(0);}
+@media(max-width:960px){.nmc-unified-sidebar.user-open{transform:translateX(0);}
+ :host-context([dir="rtl"]) .nmc-unified-sidebar.user-open{transform:translateX(0);}}
