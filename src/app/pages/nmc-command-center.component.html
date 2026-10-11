@@ -116,6 +116,23 @@
       </article>
     </section>
 
+    <section class="nmc-incident-ribbon" role="region" [attr.aria-label]="copy('Maritime Incident Intake','استقبال الحوادث البحرية')">
+      <div>
+        <span class="incident-tag">{{copy('INCIDENT MONITORING · GOOGLE SHEET POC','متابعة الحوادث · Google Sheet تجريبي')}}</span>
+        <h3>{{copy('Maritime Incidents & Reporting Sources','الحوادث البحرية ومصادر البلاغات')}}</h3>
+        <p>{{copy('Separate source-fed incident statuses and incident-specific AI triage. This does not change the official vessel risk score.',
+          'حالات البلاغات من مصادر مستقلة مع تقييم AI خاص بالحادث؛ دون تغيير درجة مخاطر السفينة.')}}</p>
+      </div>
+      <div class="incident-mini-kpis">
+        <div><strong>{{incidentCount===null?'—':incidentCount}}</strong><span>{{copy('Received','مستلمة')}}</span></div>
+        <div><strong>{{activeIncidentCount===null?'—':activeIncidentCount}}</strong><span>{{copy('Under follow-up','قيد المتابعة')}}</span></div>
+        <div><strong>{{criticalIncidentCount===null?'—':criticalIncidentCount}}</strong><span>{{copy('AI High / Critical','AI مرتفعة / حرجة')}}</span></div>
+      </div>
+      <a routerLink="/moei/nmc/incidents" class="incident-ribbon-link">{{copy('Open Incidents ↗','عرض الحوادث ↗')}}</a>
+      <small *ngIf="incidentSourceError" class="incident-source-warning">{{copy(
+        'Incident Google Sheet source not configured or unavailable — no fabricated counts.',
+        'مصدر Google Sheet غير متاح أو غير مهيأ؛ لن تُعرض أعداد مفترضة.')}}</small>
+    </section>
     <section class="workspace-grid">
       <div class="map-panel panel">
         <div class="panel-header map-header">
