@@ -36,12 +36,16 @@ const sheetsHeaders=[
  'AI_Reasoning','AI_Confidence_0_1','Missing_Information',
  'Officer_Decision','Officer_Name','Officer_Reviewed_At_UTC',
  'Approved_Followup_Status','Linked_Case_ID','Assessment_Status','Governance_Notice',
- 'AI_Suggested_Followup_State','Officer_Approved_Followup_State','Officer_Review_Reason'
+ 'AI_Suggested_Followup_State','Officer_Approved_Followup_State','Officer_Review_Reason',
+ 'A01_Incident_Evidence_IDs','A02_Incident_Compliance_Status',
+ 'A02_Incident_Evidence_IDs','A02_Incident_Reasoning',
+ 'Incident_Agent_Contract_Version'
 ];
 function mockFeed(){
  const appended=[];
  const fake=new NmcIncidentFeed({sheetId:'TEST-SHEET',
-  model:'test-model',provider:'ollama',fetchImpl:()=>{throw Error('No network')}});
+  agentEnabled:()=>true,executeIncidentAgents:async()=>({}),
+  fetchImpl:()=>{throw Error('No network')}});
  fake.sheets=async(method,range,options)=>{
   if(method==='GET'&&range.startsWith('Incident_Registry'))
     return {values:[registryHeaders,incidentRow]};
@@ -53,7 +57,15 @@ function mockFeed(){
   }
   throw Error('Unexpected Sheets operation');
  };
- fake.runAI=async()=>validateIncidentAI(candidate);
+ fake.runAI=async()=>({...validateIncidentAI(candidate),
+  aiEvidenceIds:['INCIDENT-INC-POC-0001'],
+  a02IncidentCompliance:{
+   status:'INSUFFICIENT_EVIDENCE',evidenceIds:['INCIDENT-INC-POC-0001'],
+   reasoning:'Compliance evidence is not sufficient to confirm any non-compliance.',
+   authoritative:false
+  },
+  contractVersion:'NMC_INCIDENT_A01_A02_EXT_V1'
+ });
  return {fake,appended};
 }
 test('single source incident remains labelled synthetic and preserves its description',()=>{
@@ -128,8 +140,9 @@ test('proposed incident follow-up is a separate next-step state, not a regulator
  const result=await fake.analyze('INC-POC-0001',{confirmCost:true});
  assert.equal(result.assessment.aiProposedFollowup,'INCIDENT_RESPONSE');
  assert.equal(result.assessment.suggestedFollowupState,'RESPONSE_COORDINATION_PENDING');
- assert.equal(appended[0].length,27);
+ assert.equal(appended[0].length,32);
  assert.equal(appended[0][24],'RESPONSE_COORDINATION_PENDING');
+ assert.equal(appended[0][28],'INSUFFICIENT_EVIDENCE');
  const view=await fake.load();
  assert.equal(view.incidents[0].operationalStatus,'RECEIVED');
  assert.deepEqual(view.incidents[0].nextFollowup,{
@@ -150,6 +163,8 @@ test('officer-modified next-step is distinct from AI advice and immutable source
  assert.equal(appended[1][24],'RESPONSE_COORDINATION_PENDING');
  assert.equal(appended[1][25],'INSPECTION_REFERRAL_PENDING');
  assert.equal(appended[1][26],reason);
+ assert.equal(appended[1].length,32);
+ assert.equal(appended[1][31],'NMC_INCIDENT_A01_A02_EXT_V1');
  const view=await fake.load();
  assert.equal(view.incidents[0].operationalStatus,'RECEIVED');
  assert.equal(view.incidents[0].nextFollowup.approval,'OFFICER_APPROVED');
