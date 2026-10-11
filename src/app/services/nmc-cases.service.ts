@@ -74,12 +74,27 @@ export interface NmcCentralInspection {
   inspectionId:string;result:string;findingsCount:number;criticalFindings:number;
   summary:string;completedAt:string;
 }
+export interface NmcCaseIncident {
+ incidentId:string;descriptionHash:string;sourceOrganization:string;sourceType:string;
+ sourceReference:string;sourceIncidentStatus:string;sourceOperationalStatus:string;
+ incidentType:string;portOrZone:string;sourceDescription:string;
+ sourceReportedSeverity:string;evidenceIds:string[];
+ incidentRiskScore:number;incidentRiskBand:string;incidentScoreSource:string;
+ suggestedFollowup:string;suggestedFollowupState:string;
+ sourceAssessmentId:string;a02ContextStatus:string;
+ decisionStatus:'PENDING_HUMAN_REVIEW'|'OFFICER_APPROVED';
+ approvedFollowup:string|null;officerName:string|null;officerReason:string|null;
+ receivedAt:string|null;assessedAt:string;updatedAt:string;
+ officerDecision?:'ACCEPT'|'MODIFY'|'REJECT';decidedAt?:string;
+ workflowCode?:string;followupExecutionStatus?:string;
+}
 export interface NmcCentralCase {
   id:string;imo:string;status:NmcCentralCaseStatus;
   assignedRole:string;source:string;sourceAssessmentId:string|null;
   alertIds:string[];sourceScore:number;sourceLevel:string;
   createdAt:string;updatedAt:string;version:number;
   tasks:NmcCentralCaseTask[];decisions:NmcCentralDecision[];
+  incidentEvents?:NmcCaseIncident[];
   actionPlan?:NmcAiActionPlan|null;
   operationalDecision?:NmcOperationalDecision|null;
   decisionFeedback?:NmcDecisionFeedback[];
@@ -121,6 +136,13 @@ export class NmcCasesService {
   }
   createFromAlert(alertId:string):Observable<CaseResponse>{
     return this.mutate(this.root+'/from-alert',{alertId,withAiActionPlan:true},false);
+  }
+  decideIncident(current:NmcCentralCase,incidentId:string,
+    decision:'ACCEPT'|'MODIFY'|'REJECT',approvedFollowup:string,
+    note:string,officer:string):Observable<CaseResponse>{
+    return this.mutate(this.path(current.id)+'/incidents/'+encodeURIComponent(incidentId)+'/decision',{
+      version:current.version,decision,approvedFollowup,note,officer
+    },false);
   }
   decisionCatalogue():Observable<{status:'ok';policyVersion:string;
     pocOnly:boolean;decisions:NmcDecisionCatalogueEntry[]}>{
@@ -232,6 +254,12 @@ export class NmcCasesService {
         :`A01 action #${actionNumber} duplicates normalized actionId "${id}". Each proposal must have a unique ID.`;
     }
     const messages:Record<string,[string,string]>={
+      CASE_INCIDENT_DECISION_INVALID:['Provide a valid incident action, officer and documented reason (15–500 characters).','أدخل متابعة صحيحة للبلاغ واسم الموظف وسببًا موثقًا (15–500 حرف).'],
+      CASE_INCIDENT_DECISION_MISMATCH:['Accept must retain AI recommendation, Modify must select a different route, and Reject requires verification.','الاعتماد يحتفظ بالتوصية، والتعديل يختار متابعة مختلفة، والرفض يتطلب التحقق.'],
+      CASE_INCIDENT_ALREADY_DECIDED:['Incident follow-up was already reviewed in this case.','تم اعتماد متابعة الحادث بالفعل داخل الحالة.'],
+      CASE_INCIDENT_NEW_VERSION_REQUIRES_REVIEW:['Source incident description changed after approval. Review the source and existing case manually.','تغير وصف الحادث بعد اعتماده؛ راجع البلاغ والحالة يدويًا.'],
+      CASE_INCIDENT_SCHEMA_REQUIRES_NULL_ALERT:['The Oracle NMC_CASE schema must allow an incident case without a source alert ID. Database migration required.','يجب السماح في قاعدة Oracle بإنشاء حالة مرتبطة بحادث بدون تنبيه سابق؛ يلزم تحديث الـSchema.'],
+      CASE_INCIDENT_DECISION_PENDING:['Review all incident follow-ups before closing this case.','يجب اعتماد أو رفض كل المتابعات المقترحة للحوادث قبل إغلاق الحالة.'],
       CASE_DECISION_RATIONALE_UNAVAILABLE:['A01 supplied no action-specific rationale. Enter your own verified business justification to accept, or modify/reject.','لم يقدم A01 مبررًا محددًا للإجراء؛ أدخل مبررًا تشغيليًا موثقًا للاعتماد أو عدّل القرار أو ارفضه.'],
       CASE_DECISION_EVIDENCE_REQUIRED:['This inspection or regulated route requires verified saved evidence.','يتطلب مسار المعاينة أو المنع وجود أدلة محفوظة تم التحقق منها.'],
       CASE_SINGLE_DECISION_EXISTS:['A single decision is already recorded. Reload the case.','يوجد قرار واحد محفوظ بالفعل. أعد تحميل الحالة.'],
