@@ -8,7 +8,7 @@ import { ActivityClassificationMappingComponent } from './pages/activity-classif
 const base = 'dashboard/maritime-navigation/navigation-aids-installation-approval';
 
 export const routes: Routes = [
-  { path: '', pathMatch: 'full', redirectTo: base },
+  { path: '', pathMatch: 'full', redirectTo: 'moei/nmc' },
   { path: base, component: ApprovalListComponent },
   { path: base + '/:id', component: ApprovalDetailComponent },
   { path: 'dashboard/appointment-availability', component: YearlyAvailabilityComponent },
@@ -41,5 +41,5 @@ export const routes: Routes = [
   { path: 'moei/nmc/vessel/:imo/ai-assessment', loadComponent: () => import('./pages/nmc-risk-explainability.component').then(m => m.NmcRiskExplainabilityComponent) },
   { path: 'moei/nmc/vessel/:imo/risk', loadComponent: () => import('./pages/nmc-risk-explainability.component').then(m => m.NmcRiskExplainabilityComponent) },
   { path: 'moei/nmc/vessel/:imo', loadComponent: () => import('./pages/nmc-vessel-360.component').then(m => m.NmcVessel360Component) },
-  { path: '**', redirectTo: base }
+  { path: '**', redirectTo: 'moei/nmc' }
 ];
