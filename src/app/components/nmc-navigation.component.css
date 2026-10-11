@@ -164,3 +164,17 @@
 :host-context([dir="rtl"]) .nmc-unified-sidebar.user-open{transform:translateX(0);}
 @media(max-width:960px){.nmc-unified-sidebar.user-open{transform:translateX(0);}
  :host-context([dir="rtl"]) .nmc-unified-sidebar.user-open{transform:translateX(0);}}
+
+/* The user-requested opened drawer must be readable on medium desktop, too. */
+@media(min-width:961px) and (max-width:1220px){
+ .nmc-unified-sidebar.user-open{width:260px;padding:18px 10px 22px;}
+ .nmc-unified-sidebar.user-open .nav-label,
+ .nmc-unified-sidebar.user-open .nav-chevron,
+ .nmc-unified-sidebar.user-open .nav-identity,
+ .nmc-unified-sidebar.user-open .nav-subgroup .nav-label,
+ .nmc-unified-sidebar.user-open .nav-subgroup .nav-chevron{display:block;}
+ .nmc-unified-sidebar.user-open .nav-group,
+ .nmc-unified-sidebar.user-open .nav-link,
+ .nmc-unified-sidebar.user-open .nav-subgroup{justify-content:flex-start;padding:9px 10px;}
+ .nmc-unified-sidebar.user-open .nav-children{margin:2px 0 0 20px;padding:3px 0 2px 13px;border-left:1px solid #dbe9e8;}
+}
