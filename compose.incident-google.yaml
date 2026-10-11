@@ -10,11 +10,9 @@ services:
     environment:
       NMC_INCIDENT_SHEET_ID: ${NMC_INCIDENT_SHEET_ID:-1fl6rCjHNTPKZTeS76PLSy_ylrClLQQ0Yvq12A7nhfy8}
       NMC_INCIDENT_CREDENTIALS_PATH: /run/secrets/nmc-psc-google.json
-      # 'disabled' means NO AI calls. Configure a separate model explicitly.
-      NMC_INCIDENT_AI_PROVIDER: ${NMC_INCIDENT_AI_PROVIDER:-disabled}
-      NMC_INCIDENT_AI_MODEL: ${NMC_INCIDENT_AI_MODEL:-}
-      NMC_INCIDENT_OPENAI_API_KEY: ${NMC_INCIDENT_OPENAI_API_KEY:-}
-      NMC_INCIDENT_OLLAMA_URL: ${NMC_INCIDENT_OLLAMA_URL:-http://host.docker.internal:11434}
+      # Incident triage reuses the existing Airia A01/A02 pipelines and
+      # AIRIA_MENA_KEY from the base application configuration.
+      # No separate OpenAI/Ollama model, credentials or pipeline IDs.
       # Optional scheduled AI triage: OFF by default; each row also requires
       # AI_Review_Request=YES. Max 1-5 calls per cycle, interval >=5 minutes.
       NMC_INCIDENT_AUTO_TRIAGE_ENABLED: ${NMC_INCIDENT_AUTO_TRIAGE_ENABLED:-false}
