@@ -1147,7 +1147,7 @@ a.big-risk{display:flex;flex-direction:column;align-items:center;justify-content
 
 /* Incident statuses appear inside the existing Requires Attention list.
    No separate wall of incident cards. The fleet A01/A02 risk color is unchanged. */
-.attention-item.has-incident{border-inline-start:3px solid #8b3bb7;}
+.attention-item.has-incident{border-inline-start:3px solid var(--event-color,#8b3bb7);}
 .attention-item .attention-incident-action{display:flex;align-items:center;margin-top:9px;}
 .attention-incident-button{
   cursor:pointer;max-width:100%;display:inline-flex;flex-wrap:wrap;
