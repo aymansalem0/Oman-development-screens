@@ -53,7 +53,7 @@ export class NmcNavigationComponent implements OnInit, OnDestroy {
 
     this.subscriptions.add(this.dashboardNavigation.published$.subscribe(items => {
       this.publishedDashboards = items;
-      this.expandSelectedDashboard();
+      // Do not auto-expand; navigation remains user-controlled.
     }));
     this.updateRoute(this.router.url);
     this.subscriptions.add(this.router.events.pipe(
@@ -183,17 +183,6 @@ export class NmcNavigationComponent implements OnInit, OnDestroy {
       try { localStorage.setItem(this.selectedKey, imo); }
       catch { /* Optional navigation convenience. */ }
     }
-  }
-    if (this.isRiskConfig || this.isQualityConfig || this.isRuntimeSettings || this.isGuidanceConfig ||
-        this.isDashboardManager) {
-      this.settingsExpanded = true;
-      this.nmcSettingsExpanded = true;
-    }
-    if (this.isErpIntegrationSettings || this.isInspectionTargetingSettings || this.isCandidateSourceSettings || this.isPscQuotaSettings) {
-      this.settingsExpanded = true;
-      this.inspectionSettingsExpanded = true;
-    }
-    this.expandSelectedDashboard();
   }
 
   private expandSelectedDashboard(): void {
