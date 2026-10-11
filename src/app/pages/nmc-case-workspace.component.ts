@@ -108,7 +108,8 @@ export class NmcCaseWorkspaceComponent implements OnInit {
           :'';
         this.buildCase();
         if(this.centralCase)this.loadCentralHistory();
-        else this.loadCaseEligibleAlerts();
+        if(!this.centralCase||this.centralCase.status==='RESOLVED')
+          this.loadCaseEligibleAlerts();
       },
       error:error=>{
         this.centralLoading=false;
@@ -142,7 +143,7 @@ export class NmcCaseWorkspaceComponent implements OnInit {
   }
 
   createCaseFromAlert(alert:NmcOperationalAlert):void{
-    if(this.centralCase||this.caseCreateBusy||
+    if((this.centralCase&&this.centralCase.status!=='RESOLVED')||this.caseCreateBusy||
       !['ACKNOWLEDGED','IN_PROGRESS','ESCALATED'].includes(alert.status)||
       alert.imo!==this.vessel.imo)return;
     if(!window.confirm(this.copy(
