@@ -194,7 +194,7 @@ export class NmcIncidentFeed {
   this.provider=provider.toLowerCase();this.model=model.trim();
   this.openaiKey=openaiKey.trim();this.ollamaBaseUrl=ollamaBaseUrl;
   this.fetch=fetchImpl;this.credentials=credentials;
-  this.token=null;this.inFlight=new Set();
+  this.token=null;this.inFlight=new Set();this.reviewInFlight=new Set();
   // Strict opt-in for scheduled billable calls, never from a browser read.
   this.autoEnabled=autoEnabled===true;
   this.autoMaxPerCycle=Math.min(5,Math.max(1,Math.trunc(
@@ -290,6 +290,10 @@ export class NmcIncidentFeed {
  async review(id,{assessmentId,decision,approvedFollowup,note,officer}={}){
   if(!/^INC-[A-Za-z0-9-]{3,70}$/.test(id))
    throw new IncidentTriageError('INCIDENT_ID_INVALID');
+  if(this.reviewInFlight.has(id)||this.inFlight.has(id))
+   throw new IncidentTriageError('INCIDENT_REVIEW_ALREADY_RUNNING',409);
+  this.reviewInFlight.add(id);
+  try{
   if(!['ACCEPT','MODIFY','REJECT'].includes(decision)||
     !FOLLOWUP_OPTIONS.includes(approvedFollowup)||
     !/^[\w. -]{3,80}$/.test(String(officer||''))||
@@ -322,6 +326,7 @@ export class NmcIncidentFeed {
     officer:officer.trim(),officerNote:note.trim(),
     approvedFollowupState:INCIDENT_FOLLOWUP_STATES[approvedFollowup],
     saved:true,operationalStatusNotChanged:true,officialRiskNotChanged:true};
+  }finally{this.reviewInFlight.delete(id);}
  }
  async runAI(incident){
   if(!this.aiConfigured)throw new IncidentTriageError('INCIDENT_AI_NOT_CONFIGURED',503);
@@ -392,7 +397,8 @@ export class NmcIncidentFeed {
  async analyze(id,{confirmCost=false,force=false}={}){
   if(confirmCost!==true)throw new IncidentTriageError('INCIDENT_AI_CONFIRMATION_REQUIRED');
   if(!/^INC-[A-Za-z0-9-]{3,70}$/.test(id))throw new IncidentTriageError('INCIDENT_ID_INVALID');
-  if(this.inFlight.has(id))throw new IncidentTriageError('INCIDENT_AI_ALREADY_RUNNING',409);
+  if(this.inFlight.has(id)||this.reviewInFlight.has(id))
+   throw new IncidentTriageError('INCIDENT_AI_ALREADY_RUNNING',409);
   this.inFlight.add(id);
   try{
    const before=await this.load();
