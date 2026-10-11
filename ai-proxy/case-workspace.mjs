@@ -361,6 +361,7 @@ export class NmcCaseWorkspace{
           throw new NmcCaseError('CASE_SINGLE_DECISION_EXISTS',409);
         if(row.actionPlan.proposedActions.some(a=>a.decision!=='PENDING')||
           row.tasks.some(t=>t.provenance==='AIRIA_A01_HUMAN_APPROVED')||
+          (row.decisions||[]).length>0||
           (row.inspectionRequests||[]).length>0)
           throw new NmcCaseError('CASE_LEGACY_REVIEW_ALREADY_STARTED',409);
         const proposal=buildSingleProposal(row.actionPlan);
