@@ -17,6 +17,7 @@ import { NmcVesselEvidenceService } from '../services/nmc-vessel-evidence.servic
 import { NmcExternalPscService, NmcExternalPscRecord } from '../services/nmc-external-psc.service';
 import {NmcIncidentsService,NmcMaritimeIncident} from '../services/nmc-incidents.service';
 import {NmcCasesService,NmcCentralCase} from '../services/nmc-cases.service';
+import {NmcDocumentsService,VesselDriveListing} from '../services/nmc-documents.service';
 import { NmcFleetAiService, FleetAiAssessment, FleetAiHistory, FleetAiIntelligence } from '../services/nmc-fleet-ai.service';
 import { NmcDataQualityConfigService, QualityPolicyImpact, projectQuality } from '../services/nmc-data-quality-config.service';
 
@@ -138,6 +139,8 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
   private vesselCases:NmcCentralCase[]|null=null;
   private caseReadAt:string|null=null;
   private pscReadAt:string|null=null;
+  private driveListing:VesselDriveListing|null=null;
+  private driveReadAt:string|null=null;
   certificates: CertificateRecord[] = [];
   inspections: InspectionRecord[] = [];
   deficiencies: DeficiencyRecord[] = [];
@@ -179,6 +182,7 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
     private externalPscService: NmcExternalPscService,
     private readonly incidentsService:NmcIncidentsService,
     private readonly casesService:NmcCasesService,
+    private readonly documentsService:NmcDocumentsService,
     private readonly fleetAiService: NmcFleetAiService,
     public readonly qualityPolicy: NmcDataQualityConfigService
   ) {}
@@ -395,6 +399,7 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
     }));
     this.loadExternalPsc();
     this.loadConnectedSources();
+    this.loadDriveSources();
     this.loadStoredAi();
 
     const requestedTab = this.route.snapshot.queryParamMap.get('tab');
@@ -580,6 +585,20 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
         kind: this.storedAi.score! >= 85 ? 'critical' : this.storedAi.score! >= 45 ? 'warning' : 'normal'
       }];
     }
+  }
+
+  private loadDriveSources():void{
+    this.subscriptions.add(this.documentsService.list(this.vessel.imo).subscribe({
+      next:listing=>{
+        this.driveListing=listing;
+        this.driveReadAt=listing.driveConnected?new Date().toISOString():null;
+        this.sources=this.buildSources();
+      },
+      error:()=>{
+        this.driveListing=null;this.driveReadAt=null;
+        this.sources=this.buildSources();
+      }
+    }));
   }
 
   /** Live API reads of connected POC evidence; never fall back to fake success. */
@@ -1062,6 +1081,45 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
       status:'Unavailable',sourceClass:'Operational Feed',
       authority:'Could not read synthetic source',
       dataNature:'UNAVAILABLE',lastSync:'—',confidence:null
+    });
+    const drive=this.driveListing;
+    sources.push(drive?.driveConnected?{
+      name:'Google Drive Vessel Documents / A03',
+      system:'Google Drive POC Read-only Document List',
+      record:`${drive.documents.length} document(s) · ${drive.documents.filter(d=>d.savedStatus==='APPROVED').length} human-approved A03 result(s)`,
+      recordId:drive.documents[0]?.fileId,
+      status:'Available',lastSync:this.driveReadAt||'—',confidence:null,
+      authority:'Synthetic POC document packs; approval does NOT verify issuing authority',
+      dataNature:'SYNTHETIC_POC',sourceClass:'External Trusted',
+      route:`/moei/nmc/vessel/${this.vessel.imo}`,tab:'documents'
+    }:{
+      name:'Google Drive Vessel Documents / A03',
+      system:'Google Drive Document Adapter',
+      record:drive?.status==='not_configured'?'Drive root folder not configured':
+        'Google Drive document listing unavailable',
+      status:'Unavailable',lastSync:'—',confidence:null,
+      sourceClass:'External Trusted',authority:'Document source not available',
+      dataNature:'UNAVAILABLE'
+    });
+    const referralRows=(this.vesselCases||[]).flatMap(c=>(c.inspectionRequests||[])
+      .map(r=>({caseId:c.id,ref:r})));
+    sources.push(this.vesselCases!==null?{
+      name:'Smart Inspection Referrals',
+      system:'NMC Case Management inspection hand-off',
+      record:referralRows.length?
+        `${referralRows.length} human-approved inspection request(s) · ${referralRows.map(r=>r.ref.status).join(', ')}`:
+        'No human-approved inspection referral recorded in NMC Cases',
+      recordId:referralRows[0]?.ref.id,
+      status:'Available',lastSync:this.caseReadAt||'—',confidence:null,
+      sourceClass:'Internal Master',dataNature:'NMC_POC_CASE',
+      authority:'Only Case referrals; not proof of completed Smart Inspection findings',
+      route:`/moei/nmc/vessel/${this.vessel.imo}/case`
+    }:{
+      name:'Smart Inspection Referrals',system:'NMC Case inspection hand-off',
+      record:'Case referral source unavailable (SI lifecycle not independently connected)',
+      status:'Unavailable',lastSync:'—',confidence:null,
+      sourceClass:'Internal Master',dataNature:'UNAVAILABLE',
+      authority:'No validated Smart Inspection outcome'
     });
     const cases=this.vesselCases;
     sources.push(cases!==null?{
