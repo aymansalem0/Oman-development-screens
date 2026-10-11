@@ -2638,3 +2638,7 @@ button, a { font: inherit; }
  padding:13px;display:flex;flex-direction:column;gap:8px;}
 .v360-movement-facts small{font-size:11px;color:#698197}
 .v360-movement-facts strong{font-size:14px;color:#21485f;overflow-wrap:anywhere;}
+
+.v360-tab-provenance{background:#fff9eb;border:1px solid #f2dbad;color:#7b5b26;
+ padding:10px 13px;border-radius:10px;margin:12px 0 18px;font-size:11px;
+ line-height:1.6;}
