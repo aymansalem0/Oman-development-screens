@@ -5,7 +5,7 @@ import { ApprovalDetailComponent } from './pages/approval-detail.component';
 import { YearlyAvailabilityComponent } from './pages/yearly-availability.component';
 import { ActivityClassificationMappingComponent } from './pages/activity-classification-mapping.component';
 
-const base = 'dashboard/maritime-navigation/navigation-aids-installation-approval';
+const base = 'moei/nmc';
 
 export const routes: Routes = [
   { path: '', pathMatch: 'full', redirectTo: base },
