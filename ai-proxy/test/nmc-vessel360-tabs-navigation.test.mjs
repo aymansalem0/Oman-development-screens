@@ -22,7 +22,7 @@ test('root and unknown routes lead to National Maritime Command Center',()=>{
   assert.match(src.routes,/path:\s*'',\s*pathMatch:\s*'full',\s*redirectTo:\s*'moei\/nmc'/);
   assert.match(src.routes,/path:\s*'\*\*',\s*redirectTo:\s*'moei\/nmc'/);
 });
-test('navigation starts CLOSED and is opened by the user's menu button only',()=>{
+test('navigation starts CLOSED and opens only after the menu button is clicked',()=>{
   for(const state of ['nmcExpanded','smartInspectionExpanded','settingsExpanded'])
     assert.match(src.navTs,new RegExp(state+' = false;'));
   assert.match(src.navTs,/menuOpen = false;/);
