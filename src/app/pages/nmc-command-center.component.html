@@ -26,113 +26,103 @@
     </section>
 
 
-    <section class="fleet-ai-overview" aria-label="AI fleet assessment status">
-      <div class="fleet-ai-heading">
-        <div>
-          <span class="fleet-ai-kicker">{{ copy('AI-DRIVEN FLEET RISK · SYNTHETIC POC', 'مخاطر الأسطول بالذكاء الاصطناعي · تجربة محاكاة') }}</span>
-          <h3>{{ copy('Fleet AI Risk Assessment', 'تقييم مخاطر الأسطول بالذكاء الاصطناعي') }}</h3>
-          <p>{{ copy(
-            'The backend checks vessels within the configured rollout scope every hour. New or changed evidence is assessed with A01/A02; stored risk scores and alert priorities appear here automatically. Synthetic POC, not official.',
-            'يعمل التقييم في الخلفية على نطاق السفن المفعّل فقط، وتُراجع الأدلة كل ساعة. تُحلل الأدلة الجديدة أو المتغيرة بواسطة A01/A02 وتظهر درجات المخاطر والأولويات المحفوظة تلقائياً. جميع البيانات تجريبية.'
-          ) }}</p>
+    <!-- ONE boundary. All operational KPIs are related, but are not additive:
+         assessed != pending, High excludes Critical, attention overlaps incidents. -->
+    <section class="nmc-unified-kpi-board" role="region"
+             [attr.aria-label]="copy('Unified maritime operational indicators',
+                'المؤشرات التشغيلية البحرية الموحدة')">
+      <header class="nmc-kpi-board-head">
+        <div class="nmc-kpi-heading">
+          <span class="nmc-kpi-eyebrow">{{copy('NATIONAL MARITIME CENTER · OPERATIONAL PULSE',
+            'المركز البحري الوطني · المؤشرات التشغيلية')}}</span>
+          <h3>{{copy('Maritime Operations Overview',
+                    'ملخص العمليات البحرية')}}</h3>
+          <p>{{copy('One current picture of vessel coverage, maritime risk and operational workflows. Counts represent different entities and must not be added together.',
+                    'صورة موحدة للتغطية البحرية والمخاطر وسير العمل. الأرقام تمثل كيانات مختلفة ولا يجوز جمعها مباشرةً.')}}</p>
         </div>
-        <span class="fleet-ai-status">{{ assessedCount }} / 420 {{ copy('AI assessed', 'تم تحليلها') }}</span>
-      </div>
-      <div class="fleet-ai-stats">
-        <div><strong>{{ assessedCount }}</strong><span>{{ copy('Assessed', 'مكتمل') }}</span></div>
-        <div><strong>{{ pendingCount }}</strong><span>{{ copy('Pending or stale', 'معلق أو قديم') }}</span></div>
-        <div><strong>{{ criticalCount }}</strong><span>{{ copy('Critical AI Risk', 'مخاطر حرجة') }}</span></div>
-        <div><strong>{{ highRiskCount }}</strong><span>{{ copy('High + Critical', 'مرتفعة + حرجة') }}</span></div>
-        <div><strong>{{ priorityReviewCount }}</strong><span>{{ copy('Priority Review', 'مراجعة ذات أولوية') }}</span></div>
-      </div>
-      <div class="fleet-auto-health">
-        <span [class.fleet-auto-live]="fleetSnapshot?.scheduler?.enabled">
-          {{ fleetSnapshot?.scheduler?.enabled
-            ? copy('● Automatic hourly vessel refresh ACTIVE', '● تحديث السفن التلقائي كل ساعة نشط')
-            : copy('◌ Automatic assessment not enabled on server', '◌ التقييم التلقائي غير مفعّل على الخادم') }}
-        </span>
-        <span>{{ fleetSnapshot?.scheduler?.enabledVessels ?? 0 }} / {{ fleetSnapshot?.fleetSize ?? 420 }} {{ copy('vessels in active assessment scope', 'سفينة ضمن نطاق التقييم المفعّل') }}</span>
-        <span>{{ copy('Saved risk results update automatically; opening this screen never starts an AI call.', 'تتحدث النتائج المحفوظة تلقائياً؛ فتح الشاشة لا يشغّل أي استدعاء AI.') }}</span>
-        <span *ngIf="latestDatabaseFetchAt">{{ copy('Database fetched at','آخر استرجاع من قاعدة البيانات') }}: {{latestDatabaseFetchAt | date:'mediumTime'}}</span>
-        <span>{{copy('A01/A02 reassessment is triggered by changed supported evidence on the configured background schedule, not by map reset.',
-                    'تُعاد معالجة A01/A02 عند تغير الأدلة المتصلة خلال الجدولة الخلفية، وليس بإعادة ضبط الخريطة.')}}</span>
-        <span *ngIf="fleetSnapshot?.job as job">
-          {{ copy('Background job', 'مهمة الخلفية') }} {{ job.status }} · {{ fleetProgress }}
-        </span>
-        <span *ngIf="fleetSnapshot?.scheduler?.lastTickAt as checked">
-          {{ copy('Last scheduler cycle', 'آخر دورة للجدولة') }}: {{ checked | date:'medium' }}
-        </span>
-      </div>
-      <p *ngIf="fleetSnapshot?.scheduler?.blockedFailedVessels as blocked" class="fleet-error" role="status">
-        {{blocked}} {{copy('previous Fleet AI failures remain skipped while retries are disabled.', 'سفينة فشل تقييمها سابقًا ولا يعاد تشغيلها طالما إعادة المحاولة متوقفة.')}}
-      </p>
-      <p *ngIf="fleetError" class="fleet-error">{{ fleetError }}</p>
-    </section>
+        <div class="nmc-kpi-actions">
+          <a class="nmc-kpi-incidents-link" routerLink="/moei/nmc/incidents">
+            ⚑ {{copy('Incident Center','مركز الحوادث')}} ↗
+          </a>
+          <button type="button" class="nmc-kpi-ask-ai"
+                  (click)="requestAiKpiFocus()"
+                  [disabled]="!aiKpiFocusAvailable||aiKpiFocusBusy"
+                  [attr.aria-busy]="aiKpiFocusBusy"
+                  [title]="aiKpiFocusAvailable
+                    ?copy('Explicit paid Airia request. Only aggregated POC counts are sent.',
+                          'طلب Airia مدفوع بموافقة صريحة. تُرسل الأرقام المجمعة التجريبية فقط.')
+                    :copy('Dedicated KPI AI pipeline is not configured.',
+                          'مسار AI المخصص للمؤشرات غير مهيأ.')">
+            ✦ {{aiKpiFocusBusy
+              ?copy('Analyzing priority…','جارٍ تحديد الأولوية…')
+              :copy('Ask AI: What needs focus?','اسأل AI: ما الأهم الآن؟')}}
+          </button>
+        </div>
+      </header>
 
-    <div class="operations-section-label">
-      <strong>{{copy('NMC Operational Overview','نظرة عامة على عمليات المركز البحري')}}</strong>
-      <span>{{copy('Live alerts, cases and attention queue · separate from Fleet AI Risk Assessment',
-                    'التنبيهات والحالات وقائمة المتابعة · منفصلة عن تقييم مخاطر الأسطول')}}</span>
-    </div>
-    <section class="kpi-grid">
-      <article class="kpi-card">
-        <div class="kpi-icon teal">⌖</div>
-        <div>
-          <span class="kpi-label">{{ copy('Simulated AIS / LRIT vessel contacts', 'أهداف AIS / LRIT التجريبية') }}</span>
-          <strong>≈{{ monitoredCount }}</strong>
-          <small>{{ copy('in / approaching UAE operational area', 'داخل / تقترب من النطاق التشغيلي للإمارات') }}</small>
-          <div class="traffic-breakdown">
-            <span>{{ trafficSnapshot.insideUaeMonitoredArea }} {{ copy('inside', 'داخل النطاق') }}</span>
-            <span>{{ trafficSnapshot.approachingUaeArea }} {{ copy('approaching', 'تقترب') }}</span>
+      <div class="nmc-unified-kpi-grid">
+        <article class="nmc-unified-kpi-card"
+                 *ngFor="let kpi of dashboardKpis;trackBy:dashboardKpiTrack"
+                 [class.nmc-ai-selected]="aiFocusedKpi(kpi.id)"
+                 [class.nmc-kpi-critical]="kpi.id==='criticalRiskVessels'"
+                 [attr.aria-label]="copy(kpi.labelEn,kpi.labelAr)+': '+kpi.display">
+          <div class="nmc-kpi-card-upper">
+            <span class="nmc-kpi-card-icon" aria-hidden="true">{{kpi.icon}}</span>
+            <span *ngIf="aiFocusedKpi(kpi.id)" class="nmc-ai-priority-label">
+              ✦ {{copy('AI FOCUS','أولوية AI')}}
+            </span>
           </div>
-        </div>
-      </article>
+          <span class="nmc-kpi-card-label">{{copy(kpi.labelEn,kpi.labelAr)}}</span>
+          <strong class="nmc-kpi-card-value">{{kpi.display}}</strong>
+          <span class="nmc-kpi-card-hint">{{copy(kpi.hintEn,kpi.hintAr)}}</span>
+        </article>
+      </div>
 
-      <article class="kpi-card">
-        <div class="kpi-icon sky">◎</div>
+      <div class="nmc-kpi-ai-result" *ngIf="aiKpiFocus && aiFocusIsCurrent" role="status">
+        <span class="nmc-kpi-ai-result-icon">✦</span>
         <div>
-          <span class="kpi-label">{{ copy('Require attention', 'تتطلب الانتباه') }}</span>
-          <strong>{{ attentionCount }}</strong>
-          <small>{{copy('AI vessel risk, critical finding or active incident','مخاطر السفينة أو ملاحظة حرجة أو حادث قيد المتابعة')}}</small>
+          <strong>{{copy('AI-prioritized attention · officer review only',
+                          'المؤشر الأهم وفق AI · للمراجعة البشرية فقط')}}</strong>
+          <p>{{lang.isArabic?aiKpiFocus.selection.reasonAr:aiKpiFocus.selection.reasonEn}}</p>
+          <small>{{copy('Dedicated Airia KPI analysis','تحليل مؤشرات Airia المخصص')}}
+            · {{aiKpiFocus.analyzedAt|date:'medium'}}
+            · {{aiKpiFocus.reused?copy('reused identical snapshot','أعيد استخدام نفس البيانات'):
+                                    copy('new analysis','تحليل جديد')}}</small>
         </div>
-      </article>
+      </div>
+      <p class="nmc-kpi-ai-stale" *ngIf="aiKpiFocus&&!aiFocusIsCurrent" role="status">
+        {{copy('Operational counts changed after the AI review. Its highlight was removed; request a new review if needed.',
+          'تغيرت القيم التشغيلية بعد مراجعة AI؛ أزيل تمييز المؤشر القديم. يمكن طلب مراجعة جديدة عند الحاجة.')}}
+      </p>
+      <p class="nmc-kpi-ai-error" *ngIf="aiKpiFocusError" role="alert">{{aiKpiFocusError}}</p>
 
-      <article class="kpi-card">
-        <div class="kpi-icon amber">♢</div>
-        <div>
-          <span class="kpi-label">{{ copy('Active Maritime Alerts', 'التنبيهات البحرية النشطة') }}</span>
-          <strong>{{ activeAlertCount===null ? '—' : activeAlertCount }}</strong>
-          <small>{{ copy('from central alert workflow', 'من نظام التنبيهات المركزي') }}</small>
-        </div>
-      </article>
-
-      <article class="kpi-card">
-        <div class="kpi-icon sky">▣</div>
-        <div>
-          <span class="kpi-label">{{ copy('Open Maritime Cases', 'الحالات البحرية المفتوحة') }}</span>
-          <strong>{{ openCaseCount===null ? '—' : openCaseCount }}</strong>
-          <small>{{ copy('human-reviewed case workflow', 'حالات تتطلب متابعة الموظفين') }}</small>
-        </div>
-      </article>
+      <footer class="nmc-kpi-board-footer">
+        <span class="nmc-kpi-source-tag">{{copy('SYNTHETIC POC','بيانات تجريبية')}}</span>
+        <span>{{fleetSnapshot?.scheduler?.enabled
+          ?copy('Automatic fleet assessment active','تقييم الأسطول التلقائي نشط')
+          :copy('Automatic fleet assessment paused','تقييم الأسطول التلقائي متوقف')}}</span>
+        <span>{{copy('Saved AI risk: A01/A02 · Incidents: Google Sheet POC',
+                     'مخاطر A01/A02 محفوظة · الحوادث: Google Sheet تجريبي')}}</span>
+        <span *ngIf="latestDatabaseFetchAt">{{copy('Oracle refreshed','تحديث Oracle')}}:
+          {{latestDatabaseFetchAt|date:'mediumTime'}}</span>
+        <span *ngIf="incidentFeedLastUpdatedAt">{{copy('Incident feed checked','مراجعة مصدر الحوادث')}}:
+          {{incidentFeedLastUpdatedAt|date:'mediumTime'}}</span>
+        <span *ngIf="!aiKpiFocusAvailable && aiKpiFocusStatusLoaded" class="nmc-kpi-config-warning">
+          {{copy('AI KPI focus requires a dedicated pipeline; no automatic call.',
+                 'تمييز AI يتطلب مساراً مخصصاً؛ لا توجد استدعاءات تلقائية.')}}
+        </span>
+        <span *ngIf="incidentSourceError" class="nmc-kpi-config-warning">
+          {{copy('Incident source unavailable — count unknown.',
+                 'مصدر الحوادث غير متاح — العدد غير معروف.')}}
+        </span>
+        <span *ngIf="fleetSnapshot?.scheduler?.blockedFailedVessels as blocked" class="nmc-kpi-config-warning">
+          {{blocked}} {{copy('previous failed fleet assessments skipped',
+                            'تقييمات أسطول فاشلة سابقة تم تخطيها')}}
+        </span>
+      </footer>
+      <p *ngIf="fleetError" class="nmc-kpi-ai-error" role="alert">{{fleetError}}</p>
     </section>
 
-    <section class="nmc-incident-ribbon" role="region" [attr.aria-label]="copy('Maritime Incident Intake','استقبال الحوادث البحرية')">
-      <div>
-        <span class="incident-tag">{{copy('INCIDENT MONITORING · GOOGLE SHEET POC','متابعة الحوادث · Google Sheet تجريبي')}}</span>
-        <h3>{{copy('Maritime Incidents & Reporting Sources','الحوادث البحرية ومصادر البلاغات')}}</h3>
-        <p>{{copy('Separate source-fed incident statuses and incident-specific AI triage. This does not change the official vessel risk score.',
-          'حالات البلاغات من مصادر مستقلة مع تقييم AI خاص بالحادث؛ دون تغيير درجة مخاطر السفينة.')}}</p>
-      </div>
-      <div class="incident-mini-kpis">
-        <div><strong>{{incidentCount===null?'—':incidentCount}}</strong><span>{{copy('Received','مستلمة')}}</span></div>
-        <div><strong>{{activeIncidentCount===null?'—':activeIncidentCount}}</strong><span>{{copy('Under follow-up','قيد المتابعة')}}</span></div>
-        <div><strong>{{criticalIncidentCount===null?'—':criticalIncidentCount}}</strong><span>{{copy('AI High / Critical','AI مرتفعة / حرجة')}}</span></div>
-      </div>
-      <a routerLink="/moei/nmc/incidents" class="incident-ribbon-link">{{copy('Open Incidents ↗','عرض الحوادث ↗')}}</a>
-      <small *ngIf="incidentSourceError" class="incident-source-warning">{{copy(
-        'Incident Google Sheet source not configured or unavailable — no fabricated counts.',
-        'مصدر Google Sheet غير متاح أو غير مهيأ؛ لن تُعرض أعداد مفترضة.')}}</small>
-    </section>
     <section class="workspace-grid">
       <div class="map-panel panel">
         <div class="panel-header map-header">
