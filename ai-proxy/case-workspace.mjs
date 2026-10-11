@@ -370,10 +370,6 @@ export class NmcCaseWorkspace{
       throw new NmcCaseError('CASE_DECISION_INVALID');
     if(decision!=='ACCEPT'&&!noteValue(note))
       throw new NmcCaseError('CASE_DECISION_REASON_REQUIRED');
-    if(decision==='MODIFY'&&!Object.hasOwn(HUMAN_REPLACEMENT_ROUTES,replacementActionType||''))
-      throw new NmcCaseError('CASE_MODIFICATION_ROUTE_REQUIRED');
-    if(decision!=='MODIFY'&&replacementActionType)
-      throw new NmcCaseError('CASE_MODIFICATION_ROUTE_UNEXPECTED');
     if(!Array.isArray(evidenceIds)||evidenceIds.length>20||
       evidenceIds.some(v=>typeof v!=='string'||v.length>100))
       throw new NmcCaseError('CASE_EVIDENCE_INVALID');
@@ -451,6 +447,12 @@ export class NmcCaseWorkspace{
       throw new NmcCaseError('CASE_DECISION_INVALID');
     if(decision!=='ACCEPT'&&!noteValue(note))
       throw new NmcCaseError('CASE_DECISION_REASON_REQUIRED');
+    // Validate the selected officer replacement route in the actual A01
+    // action workflow, not the unrelated general case decision handler.
+    if(decision==='MODIFY'&&!Object.hasOwn(HUMAN_REPLACEMENT_ROUTES,replacementActionType||''))
+      throw new NmcCaseError('CASE_MODIFICATION_ROUTE_REQUIRED');
+    if(decision!=='MODIFY'&&replacementActionType)
+      throw new NmcCaseError('CASE_MODIFICATION_ROUTE_UNEXPECTED');
     return this._update(id,version,'A01_ACTION_'+decision,role,note,row=>{
       if(row.status==='RESOLVED')throw new NmcCaseError('CASE_ALREADY_RESOLVED',409);
       const plan=row.actionPlan;
