@@ -1126,3 +1126,120 @@ button, input, select { font: inherit; }
 .risk-inspect-link:hover,.risk-inspect-link:focus-visible{box-shadow:0 0 0 2px rgba(15,118,110,.3);outline-offset:2px;}
 a.risk-chip{display:inline-flex;align-items:center;}
 a.big-risk{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;}
+
+/* NMC-01 incident intake is separate from authoritative vessel risk */
+.nmc-incident-ribbon{display:flex;align-items:center;flex-wrap:wrap;gap:18px;padding:21px 24px;margin:19px 0;
+ border:1px solid #cce7e6;border-radius:16px;background:linear-gradient(110deg,#f5fcfa,#e8f7f3);
+ box-shadow:0 7px 24px #214b6209}
+.nmc-incident-ribbon>div:first-child{flex:1 1 270px}
+.nmc-incident-ribbon h3{margin:7px 0;color:#13505b;font-size:17px}
+.nmc-incident-ribbon p{margin:3px 0;font-size:11px;color:#5f7f8e;line-height:1.65}
+.incident-tag{font-weight:900;letter-spacing:1px;font-size:9px;color:#087b75}
+.incident-mini-kpis{display:flex;flex-wrap:wrap;gap:11px}
+.incident-mini-kpis div{display:grid;gap:6px;min-width:93px;text-align:center;
+ padding:10px 14px;background:#fff;border:1px solid #d4eae7;border-radius:10px}
+.incident-mini-kpis strong{font-size:20px;color:#0a766e}
+.incident-mini-kpis span{font-size:10px;color:#65878c}
+.incident-ribbon-link{border-radius:11px;text-decoration:none;white-space:nowrap;
+ padding:12px 14px;background:#078678;color:#fff;font-size:12px;font-weight:800}
+.incident-source-warning{font-size:10px;color:#ab6e18;flex-basis:100%}
+@media(max-width:750px){.nmc-incident-ribbon{padding:14px}.incident-mini-kpis div{min-width:75px}}
+
+/* Incident statuses appear inside the existing Requires Attention list.
+   No separate wall of incident cards. The fleet A01/A02 risk color is unchanged. */
+.attention-item.has-incident{border-inline-start:3px solid var(--event-color,#8b3bb7);}
+.attention-item .attention-incident-action{display:flex;align-items:center;margin-top:9px;}
+.attention-incident-button{
+  cursor:pointer;max-width:100%;display:inline-flex;flex-wrap:wrap;
+  align-items:center;gap:5px;padding:6px 8px;border:1px solid var(--event-color);
+  color:var(--event-color);background:#fff;border-radius:8px;font-size:9px;
+  font-weight:850;line-height:1.2;text-align:start;
+}
+.attention-incident-button:hover,.attention-incident-button:focus-visible{
+  background:#f5f8fc;outline-offset:2px;
+}
+.attention-incident-button small{font-size:8px;font-weight:700;color:#687a89;}
+.attention-incident-button span:last-child{margin-inline-start:auto;font-size:12px;}
+.attention-incident-details{
+  margin:0;padding:13px 15px 14px 43px;background:#f8fafd;
+  border-block-end:2px solid #dce8ee;border-inline-start:3px solid #8b3bb7;
+}
+.attention-incident-heading{display:flex;justify-content:space-between;gap:8px;margin-bottom:8px;}
+.attention-incident-heading strong{font-size:11px;color:#24485f;}
+.attention-incident-heading span{font-size:9px;color:#7694a5;}
+.attention-incident-report{padding:9px 0;border-top:1px solid #e3eaf0;}
+.attention-incident-report-title{display:flex;gap:7px;align-items:center;justify-content:space-between;}
+.attention-incident-report-title strong{font-size:10px;color:#23546b;overflow-wrap:anywhere;}
+.attention-incident-report-title>span{
+  border:1px solid var(--event-color);border-radius:20px;padding:3px 7px;
+  color:var(--event-color);font-size:8px;font-weight:850;
+}
+.attention-incident-report-source{font-size:9px;color:#8495a2;line-height:1.5;margin:6px 0;}
+.attention-incident-description{font-size:10px;color:#3a5b6d;line-height:1.6;
+  margin:6px 0;overflow-wrap:anywhere;white-space:pre-wrap;}
+.attention-incident-report-status{display:flex;gap:5px;flex-wrap:wrap;}
+.attention-incident-report-status span{padding:4px 6px;background:#eaf3f5;
+ border-radius:6px;font-size:9px;color:#3b6874;}
+.attention-incident-recommendation{color:#41637c;font-size:9px;line-height:1.6;}
+.attention-incident-detail-link{display:inline-block;margin-top:9px;color:#0a7773;
+ text-decoration:none;font-weight:850;font-size:10px;}
+/* Active incidents are emphasized independently of saved A01/A02 vessel risk.
+   Vessel fill = fleet risk; outer ring + exclamation = incident band. */
+:host ::ng-deep .nmc-map-marker.incident-critical,
+:host ::ng-deep .incident-critical{--event-color:#d42b79;}
+:host ::ng-deep .nmc-map-marker.incident-high,
+:host ::ng-deep .incident-high{--event-color:#8937be;}
+:host ::ng-deep .nmc-map-marker.incident-moderate,
+:host ::ng-deep .incident-moderate{--event-color:#206ebd;}
+:host ::ng-deep .nmc-map-marker.incident-low,
+:host ::ng-deep .incident-low{--event-color:#087f72;}
+:host ::ng-deep .nmc-map-marker.incident-unassessed,
+:host ::ng-deep .incident-unassessed{--event-color:#64748b;}
+/* Rules above are intentionally duplicated without ::ng-deep to style
+   ordinary Angular buttons and the report rows as well as Leaflet icons. */
+.incident-critical{--event-color:#d42b79;}
+.incident-high{--event-color:#8937be;}
+.incident-moderate{--event-color:#206ebd;}
+.incident-low{--event-color:#087f72;}
+.incident-unassessed{--event-color:#64748b;}
+/* Requested behavior: vessel symbol itself takes the incident severity color.
+   The existing INNER risk-ring continues to represent saved A01/A02 vessel risk.
+   The larger OUTER ring signals incident involvement and stays distinguishable. */
+:host ::ng-deep .nmc-map-marker[class*="incident-"] .ship-symbol path:first-child{
+  fill:var(--event-color);
+}
+:host ::ng-deep .nmc-map-marker .incident-outer-ring{
+  position:absolute;z-index:2;
+  width:calc(var(--ring-size) + 15px);height:calc(var(--ring-size) + 15px);
+  border:3px solid var(--event-color);
+  background:transparent;border-radius:50%;opacity:.95;pointer-events:none;
+  box-shadow:0 0 0 2px rgba(255,255,255,.83);
+}
+:host ::ng-deep .nmc-map-marker .incident-exclamation{
+  position:absolute;z-index:4;top:-3px;right:0;
+  width:15px;height:15px;border-radius:50%;display:grid;place-items:center;
+  color:#fff;font-size:10px;font-weight:900;background:var(--event-color);
+  border:1.5px solid #fff;box-shadow:0 2px 6px rgba(15,40,55,.3);
+}
+:host ::ng-deep .nmc-map-marker.selected .incident-outer-ring{border-width:4px;}
+.vessel-risk-legend-caption{font-weight:850;font-size:8px;color:#244962;}
+.incident-map-legend{
+  position:absolute;top:9px;left:11px;max-width:min(500px,88%);
+  display:flex;align-items:center;gap:6px 9px;flex-wrap:wrap;
+  border-radius:9px;padding:8px 10px;color:#3e6275;font-size:8px;
+}
+.incident-map-legend strong{color:#284b5a;font-weight:900;font-size:9px;}
+.incident-map-legend span{display:flex;align-items:center;gap:4px;}
+.incident-legend-ring{width:11px;height:11px;border:2.5px solid;display:inline-block;border-radius:50%;}
+.incident-legend-ring.critical{border-color:#d42b79;}
+.incident-legend-ring.high{border-color:#8937be;}
+.incident-legend-ring.moderate{border-color:#206ebd;}
+.incident-legend-ring.low{border-color:#087f72;}
+.incident-legend-ring.unassessed{border-color:#64748b;}
+.incident-map-legend small{flex-basis:100%;font-size:8px;color:#698090;line-height:1.4;}
+.nmc-shell.rtl .attention-incident-details{padding:13px 43px 14px 15px;}
+@media(max-width:760px){
+  .incident-map-legend{max-width:70%;padding:6px;gap:4px;font-size:7px;}
+  .incident-map-legend small{font-size:7px;}
+  .attention-incident-details{padding:12px;}
+}

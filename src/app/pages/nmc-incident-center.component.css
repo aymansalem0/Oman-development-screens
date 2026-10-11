@@ -1,0 +1,89 @@
+:host{display:block;position:fixed;inset:0;overflow:auto;z-index:10000;background:#f2f7fa;color:#173e52;font-family:Inter,"Segoe UI",Tahoma,Arial,sans-serif}
+*{box-sizing:border-box} button,input,select,textarea{font:inherit}
+.nmc-shell{min-height:100vh}
+.incident-topbar{height:83px;position:fixed;inset:0 0 auto 0;z-index:30;display:flex;justify-content:space-between;align-items:center;gap:20px;padding:10px 27px;background:#fff;border-bottom:1px solid #e1eaf0;box-shadow:0 2px 10px #264a5610}
+.brand,.top-actions{display:flex;align-items:center;gap:14px}
+.brand small{font-size:10px;color:#087e79;font-weight:800;letter-spacing:1px}
+.brand h1{font-size:17px;margin:3px 0;color:#17374d}
+.simulation{padding:9px 12px;border:1px solid #bee8dc;background:#e9f9f4;color:#087c6d;border-radius:20px;font-size:10px;font-weight:800}
+.lang-toggle,.refresh,.sheet-link{border-radius:9px;padding:11px 15px;border:1px solid #d6e5ea;background:#fff;color:#0d726e;font-size:11px;font-weight:800;text-decoration:none;cursor:pointer}
+.incident-main{margin-left:240px;max-width:1900px;padding:108px 28px 52px}
+.breadcrumbs{font-size:11px;color:#78909f;margin:0 0 18px}
+.breadcrumbs a{color:#077f76;text-decoration:none}
+.titlebar{display:flex;justify-content:space-between;align-items:center;gap:25px;margin-bottom:23px}
+.overline{font-size:10px;color:#0d827d;font-weight:900;letter-spacing:1.2px}
+.titlebar h2{font-size:29px;margin:7px 0;color:#123f55}
+.titlebar p{font-size:12px;color:#638092;line-height:1.7;max-width:800px;margin:0}
+.toolbar{display:flex;gap:9px;flex-wrap:wrap}
+.message{padding:13px 16px;font-size:12px;border-radius:10px;margin-bottom:14px;line-height:1.6}
+.message.error{background:#fff0f0;color:#9b263c;border:1px solid #edc2ca}
+.message.success{background:#edfff7;color:#0f7955;border:1px solid #b4e6ce}
+.message.warn{background:#fffaf0;color:#956018;border:1px solid #eddba8}
+.score-cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:18px}
+.score-cards article{background:#fff;border:1px solid #dfebed;border-radius:15px;padding:19px;box-shadow:0 7px 22px #1b45640a}
+.score-cards article span,.score-cards article small{display:block;color:#6b8797;font-size:11px}
+.score-cards article strong{display:block;color:#084e57;font-size:27px;line-height:1.9}
+.workbench{display:grid;grid-template-columns:minmax(300px,34%) minmax(420px,1fr);gap:17px;align-items:start}
+.incident-list,.incident-detail{background:#fff;border:1px solid #e1eaf0;border-radius:16px;min-height:460px;box-shadow:0 6px 24px #1e526110;overflow:hidden}
+.list-header{padding:18px;border-bottom:1px solid #e5edf0;display:flex;justify-content:space-between;align-items:center}
+.list-header h3{margin:0;font-size:15px}.count{background:#e9f7f4;border-radius:10px;padding:6px 11px;font-size:11px}
+.filters{display:grid;grid-template-columns:1fr 1fr;gap:9px;padding:12px 15px;border-bottom:1px solid #ecf1f4}
+.filters input,.filters select{height:39px;border:1px solid #d8e6eb;border-radius:8px;padding:8px;font-size:11px;min-width:0}
+.incident-list-item{display:block;width:100%;padding:15px 17px;text-align:start;border:0;border-bottom:1px solid #e9f0f3;background:#fff;cursor:pointer}
+.incident-list-item:hover{background:#f7fcfa}.incident-list-item.active{background:#eaf8f4;border-inline-start:4px solid #0c9787}
+.list-line{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.list-line strong{font-size:13px;color:#194354}
+.risk-pill{border-radius:9px;background:#e6f5ed;color:#19715b;padding:6px 8px;font-size:11px;font-weight:900;white-space:nowrap}
+.risk-pill.high{background:#fff0db;color:#a96b18}.risk-pill.critical{background:#ffebee;color:#c3414b}
+.pending-pill{font-size:10px;color:#8c795e;background:#f5f0e5;border-radius:8px;padding:7px}
+.incident-meta,.status-line{font-size:11px;color:#75909b;margin-top:7px}
+.status-line{color:#086c71;font-weight:800}
+.list-empty{padding:27px;font-size:12px;color:#8b9fac}
+.incident-detail{padding:23px;overflow:visible}
+.incident-detail.empty{display:grid;place-items:center;color:#71919e;padding:35px}
+.detail-header{display:flex;justify-content:space-between;gap:15px;align-items:start}
+.detail-header h3{margin:8px 0;font-size:20px;color:#153d53}
+.detail-header p{font-size:11px;color:#7892a1;margin:0}
+.status-tag{font-size:10px;font-weight:900;border-radius:9px;background:#e4f5f1;padding:8px;color:#0c8173}
+.meta-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:17px 0}
+.meta-grid>div{padding:12px;background:#f7fafb;border:1px solid #edf1f4;border-radius:10px;min-width:0}
+.meta-grid span{display:block;font-size:10px;color:#8aa0a9}
+.meta-grid strong{font-size:11px;color:#234a5d;overflow-wrap:anywhere}
+.description{border:1px solid #dbe7ec;background:#f8fbfc;border-radius:12px;padding:17px;margin-bottom:20px}
+.description h4,.ai-assessment h4{font-size:15px;margin:0 0 10px;color:#124454}
+.description p{color:#335668;font-size:12px;line-height:1.8;white-space:pre-wrap;overflow-wrap:anywhere}
+.description small{font-size:10px;color:#8b6622}
+.ai-assessment{border:1px solid #c7e8dd;background:linear-gradient(180deg,#f4fcfa,#fff);border-radius:13px;padding:17px}
+.section-heading{display:flex;justify-content:space-between;gap:15px;align-items:center;margin-bottom:18px}
+.section-heading h4{margin-top:7px}
+.analyze,.review-actions button{border:0;background:#087e73;color:#fff;border-radius:9px;padding:11px 13px;font-size:11px;font-weight:800;cursor:pointer}
+button:disabled{opacity:.5;cursor:not-allowed}
+.risk-banner{display:flex;justify-content:space-between;align-items:center;border-radius:14px;background:#e6f8f2;padding:13px 18px;margin-bottom:12px}
+.risk-banner span{display:block;font-size:11px;color:#4b776e}
+.risk-banner strong{font-size:31px;color:#0c6158}
+.risk-banner strong small{font-size:13px;font-weight:500}
+.band{font-size:12px!important;font-weight:900;padding:7px 12px;border-radius:9px;background:#e1f2e9;color:#0e855c!important}
+.band.high{background:#fff0d6;color:#b56d11!important}.band.critical{background:#ffebee;color:#c42d45!important}
+.risk-banner small{display:block;margin-top:6px;color:#648475}
+.risk-factors{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.risk-factors div{background:#fff;border:1px solid #d8e9e7;border-radius:10px;padding:10px}
+.risk-factors span{display:block;font-size:10px;color:#7a9c9c}.risk-factors strong{font-size:15px;color:#1e4c59}
+.reason{font-size:12px;color:#305566;line-height:1.75;white-space:pre-wrap}
+.followup{padding:13px;background:#e5f4ff;border:1px solid #c8e3f7;border-radius:10px;display:grid;gap:6px}
+.followup span{font-size:11px;color:#5d809e}.followup strong{color:#1b648b;font-size:14px;overflow-wrap:anywhere}
+.missing,.ai-provenance{font-size:11px;color:#9b681f;line-height:1.7}
+.ai-provenance{background:#fff8eb;border:1px solid #f1e0b9;border-radius:9px;padding:10px}
+.human-review{background:#fff;border:1px solid #cde4e5;border-radius:12px;padding:15px;margin-top:16px}
+.human-review h4{margin:0 0 12px}.review-fields{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.review-fields label{font-size:11px;font-weight:800}
+.review-fields input,.review-fields select,.human-review textarea{width:100%;display:block;margin:6px 0 10px;border:1px solid #ccdde4;border-radius:9px;padding:10px;background:#fff;color:#214c61;font-size:12px}
+.human-review textarea{resize:vertical}
+.review-actions{display:flex;gap:8px;flex-wrap:wrap}
+.review-actions .outline{background:#24689a}.review-actions .reject{background:#aa4f55}
+.human-review small{display:block;margin-top:11px;font-size:10px;color:#816e4b;line-height:1.6}
+.reviewed-note{margin-top:15px;padding:13px;border-radius:10px;background:#eaf8f0;color:#107253;font-size:12px}
+.no-ai{padding:30px;text-align:center;font-size:12px;color:#789499}
+@media(max-width:1150px){.workbench{grid-template-columns:1fr}.score-cards{grid-template-columns:repeat(2,1fr)}.incident-main{padding-inline:14px}}
+@media(max-width:760px){.incident-topbar{padding:10px}.brand h1{font-size:13px}.simulation{display:none}.incident-main{margin-left:0;padding-top:110px}.titlebar{display:block}.toolbar{margin-top:17px}.meta-grid,.risk-factors{grid-template-columns:repeat(2,1fr)}.filters,.review-fields{grid-template-columns:1fr}}
+:host-context([dir="rtl"]) .incident-main{margin-left:0;margin-right:240px}
+@media(max-width:760px){:host-context([dir="rtl"]) .incident-main{margin-right:0}}

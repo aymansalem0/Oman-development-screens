@@ -1,0 +1,123 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {
+  NmcIncidentFeed,IncidentTriageError,parseIncidentSheet,validateIncidentAI
+} from '../nmc-incident-feed.mjs';
+
+const registryHeaders=[
+ 'Incident_ID','Source_Type','Source_Organization','Source_Reference',
+ 'Reported_At_UTC','Occurred_At_UTC','IMO','Vessel_Name','Incident_Type',
+ 'Port_or_Zone','Latitude','Longitude','Incident_Description',
+ 'Source_Incident_Status','Operational_Status','Reported_Severity',
+ 'Persons_Affected','Pollution_Reported','Evidence_Reference','Source_URL',
+ 'Received_At_UTC','Updated_At_UTC','Assigned_Officer','Officer_Notes',
+ 'Data_Nature','AI_Review_Request'
+];
+const incidentRow=[
+ 'INC-POC-0001','PORT_AUTHORITY','Fujairah Port POC','SOURCE-001',
+ '2026-10-11T08:20:00Z','2026-10-11T08:05:00Z','9328471',
+ 'MV Gulf Horizon','FIRE','Fujairah Anchorage','','',
+ 'Port report indicates smoke in engine room, source not confirmed. Crew requires verification.',
+ 'REPORTED','RECEIVED','HIGH','0','UNKNOWN','TEST-EVID-001','',
+ '2026-10-11T08:23:00Z','2026-10-11T08:23:00Z','','',
+ 'SYNTHETIC_POC','YES'
+];
+const candidate={
+ category:'FIRE',impact:4,urgency:5,exposure:4,recurrence:1,
+ recommendedFollowup:'INCIDENT_RESPONSE',
+ reasoning:'Unconfirmed onboard smoke in a populated operational area requires urgent verification.',
+ confidence:.84,missingInformation:['Onboard verification']
+};
+const sheetsHeaders=[
+ 'Incident_ID','Description_SHA256','Assessment_ID','Assessed_At_UTC',
+ 'AI_Provider','AI_Model','AI_Incident_Category','AI_Impact_0_5',
+ 'AI_Urgency_0_5','AI_Exposure_0_5','AI_Recurrence_0_5',
+ 'Incident_Risk_Score_0_100','Incident_Risk_Band','AI_Proposed_Followup',
+ 'AI_Reasoning','AI_Confidence_0_1','Missing_Information',
+ 'Officer_Decision','Officer_Name','Officer_Reviewed_At_UTC',
+ 'Approved_Followup_Status','Linked_Case_ID','Assessment_Status','Governance_Notice'
+];
+function mockFeed(){
+ const appended=[];
+ const fake=new NmcIncidentFeed({sheetId:'TEST-SHEET',
+  model:'test-model',provider:'ollama',fetchImpl:()=>{throw Error('No network')}});
+ fake.sheets=async(method,range,options)=>{
+  if(method==='GET'&&range.startsWith('Incident_Registry'))
+    return {values:[registryHeaders,incidentRow]};
+  if(method==='GET'&&range.startsWith('AI_Assessments'))
+    return {values:[sheetsHeaders,...appended]};
+  if(method==='POST'&&range.startsWith('AI_Assessments')){
+    appended.push(...options.values);
+    return {updates:{updatedRows:1}};
+  }
+  throw Error('Unexpected Sheets operation');
+ };
+ fake.runAI=async()=>validateIncidentAI(candidate);
+ return {fake,appended};
+}
+test('single source incident remains labelled synthetic and preserves its description',()=>{
+ const rows=parseIncidentSheet([registryHeaders,incidentRow]);
+ assert.equal(rows.length,1);
+ assert.equal(rows[0].imo,'9328471');
+ assert.equal(rows[0].description,incidentRow[12]);
+ assert.equal(rows[0].dataNature,'SYNTHETIC_POC');
+ assert.equal(rows[0].operationalStatus,'RECEIVED');
+});
+test('validates model fields; computes advisory risk 77, not official vessel risk',()=>{
+ const result=validateIncidentAI(candidate);
+ assert.equal(result.incidentRiskScore,77);
+ assert.equal(result.incidentRiskBand,'CRITICAL');
+ assert.equal(result.requiresHumanReview,true);
+ assert.equal(result.regulatoryEffect,'NONE_POC_ONLY');
+});
+test('rejects AI inventing unapproved detention, port ban or free-text statuses',()=>{
+ assert.throws(()=>validateIncidentAI({...candidate,
+  recommendedFollowup:'BAN_ALL_UAE_PORTS'}),/INCIDENT_AI_RESPONSE_INVALID/);
+ assert.throws(()=>validateIncidentAI({...candidate,
+  recommendedFollowup:'DETAIN'}),/INCIDENT_AI_RESPONSE_INVALID/);
+});
+test('AI analysis runs only after explicit cost approval; saves separate sheet record',async()=>{
+ const {fake,appended}=mockFeed();
+ await assert.rejects(()=>fake.analyze('INC-POC-0001'),/INCIDENT_AI_CONFIRMATION_REQUIRED/);
+ assert.equal(appended.length,0);
+ const r=await fake.analyze('INC-POC-0001',{confirmCost:true});
+ assert.equal(r.assessment.incidentRiskScore,77);
+ assert.equal(appended.length,1);
+ assert.equal(appended[0][11],77);
+ assert.equal(appended[0][14],candidate.reasoning);
+ assert.equal(appended[0][22],'AI_COMPLETE');
+ assert.equal(appended[0][23].includes('not vessel overall risk'),true);
+ const reused=await fake.analyze('INC-POC-0001',{confirmCost:true});
+ assert.equal(reused.reused,true);
+ assert.equal(appended.length,1);
+});
+test('human modification retains original AI follow-up and adds separate audited row',async()=>{
+ const {fake,appended}=mockFeed();
+ const ai=await fake.analyze('INC-POC-0001',{confirmCost:true});
+ await fake.review('INC-POC-0001',{
+  assessmentId:ai.assessment.assessmentId,decision:'MODIFY',
+  approvedFollowup:'REFER_SMART_INSPECTION',
+  officer:'NMC Inspector',note:'Officer examined reported smoke and requests an inspection review'
+ });
+ assert.equal(appended.length,2);
+ assert.equal(appended[0][13],'INCIDENT_RESPONSE');
+ assert.equal(appended[1][13],'INCIDENT_RESPONSE');
+ assert.equal(appended[1][20],'REFER_SMART_INSPECTION');
+ assert.equal(appended[1][22],'HUMAN_REVIEWED');
+ assert.equal(appended[1][17],'MODIFY');
+ const feed=await fake.load();
+ assert.equal(feed.incidents[0].operationalStatus,'RECEIVED');
+ assert.equal(feed.incidents[0].aiAssessment.approvedFollowupStatus,'REFER_SMART_INSPECTION');
+ assert.equal(feed.incidents[0].aiAssessment.officerDecision,'MODIFY');
+});
+test('changes to source description invalidate previous AI assessment',async()=>{
+ const {fake,appended}=mockFeed();
+ await fake.analyze('INC-POC-0001',{confirmCost:true});
+ incidentRow[12]+=' New verified update.';
+ try{
+  const list=await fake.load();
+  assert.equal(list.incidents[0].aiAssessment,null);
+  assert.equal(list.incidents[0].aiAssessmentStale,true);
+ }finally{incidentRow[12]=incidentRow[12].replace(' New verified update.','');}
+ assert.equal(appended.length,1);
+});
