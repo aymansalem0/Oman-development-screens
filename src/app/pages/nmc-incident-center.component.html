@@ -67,6 +67,12 @@
       <div class="incident-meta">{{incident.incidentType}} · {{incident.portOrZone}}</div>
       <div class="incident-meta">{{incident.sourceOrganization}} · {{incident.sourceReference}}</div>
       <div class="status-line">{{incident.operationalStatus}} · IMO {{incident.imo||'—'}}</div>
+      <div class="status-line" *ngIf="incident.nextFollowup">
+        {{copy('Next step','الخطوة التالية')}}: {{incident.nextFollowup.status}}
+        · {{incident.nextFollowup.approval==='OFFICER_APPROVED'?
+          copy('Officer approved','معتمدة من الموظف'):
+          copy('AI proposed','مقترحة من AI')}}
+      </div>
     </button>
    </aside>
    <article class="incident-detail" *ngIf="selected as incident; else noSelection">
@@ -93,10 +99,14 @@
       <div><span class="overline">{{copy('INCIDENT-ONLY AI · FOUR FACTORS','AI للحوادث فقط · أربعة عوامل')}}</span>
        <h4>{{copy('Incident Risk Assessment & Follow-up','تقييم مخاطر الحادث وخطة المتابعة')}}</h4></div>
       <button class="analyze" type="button"
-        [disabled]="busy || loading || !incident.aiReviewRequested || !health?.aiConfigured"
+        [disabled]="busy || loading || !incident.aiReviewRequested ||
+          !health?.aiConfigured || incident.aiAssessment?.assessmentStatus==='HUMAN_REVIEWED'"
         (click)="assess(!!incident.aiAssessment)">
         {{busy?copy('Analyzing…','جارٍ التحليل…'):
-          incident.aiAssessment?copy('Reassess description','إعادة تقييم الوصف'):copy('Analyze with AI','تحليل الحادث بالذكاء الاصطناعي')}}
+          incident.aiAssessment?.assessmentStatus==='HUMAN_REVIEWED'?
+            copy('Officer review saved','قرار الموظف محفوظ'):
+          incident.aiAssessment?copy('Reassess unapproved result','إعادة تقييم غير المعتمد'):
+          copy('Analyze with AI','تحليل الحادث بالذكاء الاصطناعي')}}
       </button>
      </div>
      <div class="message warn" *ngIf="!health?.aiConfigured">
@@ -123,8 +133,13 @@
        <div><span>{{copy('Recurrence','احتمال التكرار')}}</span><strong>{{ai.recurrence}}/5</strong></div>
       </div>
       <p class="reason"><strong>{{copy('AI analysis','تحليل AI')}}:</strong> {{ai.aiReasoning}}</p>
-      <div class="followup"><span>{{copy('AI-proposed follow-up','المتابعة المقترحة من AI')}}</span>
-       <strong>{{ai.aiProposedFollowup}}</strong></div>
+      <div class="followup">
+       <span>{{copy('AI-proposed follow-up','المتابعة المقترحة من AI')}}</span>
+       <strong>{{ai.aiProposedFollowup}}</strong>
+       <span>{{copy('Suggested next-step status (NOT executed)','حالة المتابعة المقترحة (لم تنفذ)')}}</span>
+       <strong>{{ai.suggestedFollowupState}}</strong>
+       <span>{{copy('Approval required','تتطلب اعتماد الموظف')}}</span>
+      </div>
       <p *ngIf="ai.missingInformation?.length" class="missing">
        {{copy('Missing information','بيانات مطلوبة للتحقق')}}: {{ai.missingInformation.join(' · ')}}</p>
       <p class="ai-provenance">AI {{ai.aiProvider}} · {{ai.aiModel}} · {{ai.assessedAt}}
@@ -154,6 +169,12 @@
       <div class="reviewed-note" *ngIf="ai.assessmentStatus==='HUMAN_REVIEWED'">
        ✓ {{copy('Officer review saved','تم حفظ مراجعة الموظف')}}:
        {{ai.officerDecision}} · {{ai.approvedFollowupStatus}}
+       <p>{{copy('Officer-approved next-step state','حالة المتابعة المعتمدة من الموظف')}}:
+         <strong>{{ai.approvedFollowupState||incident.nextFollowup?.status}}</strong></p>
+       <p *ngIf="ai.officerReviewReason">{{copy('Officer rationale','مبرر الموظف')}}:
+         {{ai.officerReviewReason}}</p>
+       <small>{{copy('Recorded as pending follow-up. No referral, incident closure or enforcement has been executed.',
+         'تم تسجيل المتابعة المطلوبة فقط، دون تنفيذ إحالة أو إغلاق أو إجراء تنظيمي.')}}</small>
       </div>
      </div>
      <div *ngIf="!incident.aiAssessment" class="no-ai">
