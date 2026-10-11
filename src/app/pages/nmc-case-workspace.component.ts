@@ -15,6 +15,7 @@ import {
   NmcInspectionOutcome
 } from '../services/nmc-case-state.service';
 import {NmcCasesService,NmcCentralCase,NmcCentralCaseAudit,NmcAiAction} from '../services/nmc-cases.service';
+import {NmcAlertsService,NmcOperationalAlert} from '../services/nmc-alerts.service';
 
 type CaseStatus = 'Open' | 'In Progress' | 'Pending Verification' | 'Resolved';
 type TaskStatus = 'Pending' | 'Assigned' | 'In Progress' | 'Completed' | 'Escalated';
@@ -69,6 +70,11 @@ export class NmcCaseWorkspaceComponent implements OnInit {
   centralError='';
   centralSuccess='';
   actionNotes:Record<string,string>={};
+  // Read-only NMC notifications are offered here for explicit case opening.
+  caseEligibleAlerts:NmcOperationalAlert[]=[];
+  caseUnacknowledgedAlerts=0;
+  caseAlertLoading=false;
+  caseCreateBusy=false;
   tasks: CaseTask[] = [];
   timeline: CaseTimelineItem[] = [];
   stakeholders: Stakeholder[] = [];
@@ -79,7 +85,8 @@ export class NmcCaseWorkspaceComponent implements OnInit {
     public lang: LanguageService,
     private caseState: NmcCaseStateService,
     private riskEngine: NmcRiskEngineService,
-    private readonly cases: NmcCasesService
+    private readonly cases: NmcCasesService,
+    private readonly alerts: NmcAlertsService
   ) {}
 
   ngOnInit(): void {
@@ -101,10 +108,74 @@ export class NmcCaseWorkspaceComponent implements OnInit {
           :'';
         this.buildCase();
         if(this.centralCase)this.loadCentralHistory();
+        if(!this.centralCase||this.centralCase.status==='RESOLVED')
+          this.loadCaseEligibleAlerts();
       },
       error:error=>{
         this.centralLoading=false;
         this.centralError=this.cases.readableError(error,this.lang.isArabic);
+      }
+    });
+  }
+
+  /**
+   * Case creation belongs to this screen. Alert Inbox only acknowledges receipt.
+   * Read-only discovery never invokes Airia; only an explicit user click does.
+   */
+  private loadCaseEligibleAlerts():void{
+    this.caseAlertLoading=true;
+    this.caseEligibleAlerts=[];
+    this.caseUnacknowledgedAlerts=0;
+    this.alerts.overview().subscribe({
+      next:response=>{
+        this.caseAlertLoading=false;
+        const matches=(response.alerts||[]).filter(a=>a.imo===this.vessel.imo&&
+          !a.dismissedAt&&!['RESOLVED','SUPERSEDED'].includes(a.status));
+        this.caseUnacknowledgedAlerts=matches.filter(a=>a.status==='OPEN').length;
+        this.caseEligibleAlerts=matches.filter(a=>
+          ['ACKNOWLEDGED','IN_PROGRESS','ESCALATED'].includes(a.status));
+      },
+      error:error=>{
+        this.caseAlertLoading=false;
+        this.centralError=this.alerts.readableError(error,this.lang.isArabic);
+      }
+    });
+  }
+
+  createCaseFromAlert(alert:NmcOperationalAlert):void{
+    if((this.centralCase&&this.centralCase.status!=='RESOLVED')||this.caseCreateBusy||
+      !['ACKNOWLEDGED','IN_PROGRESS','ESCALATED'].includes(alert.status)||
+      alert.imo!==this.vessel.imo)return;
+    if(!window.confirm(this.copy(
+      'Open a maritime case for this acknowledged alert? The system will request one Airia A01 analysis (possible usage cost). AI suggestions are NOT decisions; tasks require officer approval.',
+      'فتح حالة بحرية للتنبيه المستلم؟ سيطلب النظام تحليلًا واحدًا من Airia A01 (قد توجد تكلفة استخدام). توصيات الذكاء الاصطناعي ليست قرارات، ولن تتحول إلى مهام دون اعتماد الموظف.'
+    )))return;
+    this.caseCreateBusy=true;this.centralBusy=true;
+    this.centralError='';this.centralSuccess='';
+    this.cases.createFromAlert(alert.id).subscribe({
+      next:response=>{
+        this.caseCreateBusy=false;this.centralBusy=false;
+        if(response.case){
+          this.applyCase(response.case);
+          if(response.aiActionPlanStatus==='FAILED'){
+            const code=response.aiActionPlanError?.code||'A01_ACTION_PLAN_UNAVAILABLE';
+            this.centralError=this.cases.readableError(
+              {error:{error:code,details:response.aiActionPlanError?.details}},
+              this.lang.isArabic);
+          }else{
+            this.centralSuccess=this.copy(
+              'Maritime case opened. Review any A01 proposals before approving an action.',
+              'تم فتح الحالة البحرية. راجع مقترحات A01 قبل اعتماد أي إجراء.');
+          }
+        }else{
+          this.centralError=this.copy('Case creation returned no case. Please refresh.',
+            'لم يُرجع الخادم الحالة الجديدة. يرجى تحديث الصفحة.');
+        }
+      },
+      error:error=>{
+        this.caseCreateBusy=false;this.centralBusy=false;
+        this.centralError=this.cases.readableError(error,this.lang.isArabic);
+        if(error?.status===409)this.loadCentralCase();
       }
     });
   }
