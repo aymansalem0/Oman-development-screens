@@ -36,6 +36,7 @@ export interface NmcOperationalDecision{
   selectedFromActionId:string;rationale:string;evidenceIds:string[];
   confidence:number;workflowSteps:NmcDecisionStep[];
   decisionStatus:'PENDING_HUMAN_REVIEW'|'APPROVED'|'REJECTED';
+  rationaleSource?:'OFFICER_VALIDATED_LEGACY_A01'|'AIRIA_A01_ACTION';
   selectionSource:string;policyVersion:string;regulated:boolean;
   regulatoryEffect:'NONE_POC_ONLY';humanDecision?:'ACCEPT'|'MODIFY'|'REJECT';
   approvedCode?:string|null;approvedTitleEn?:string|null;approvedTitleAr?:string|null;
@@ -125,6 +126,10 @@ export class NmcCasesService {
     pocOnly:boolean;decisions:NmcDecisionCatalogueEntry[]}>{
     return this.http.get<{status:'ok';policyVersion:string;
       pocOnly:boolean;decisions:NmcDecisionCatalogueEntry[]}>(this.root+'/decision-catalogue');
+  }
+  initializeOperational(current:NmcCentralCase):Observable<CaseResponse>{
+    return this.mutate(this.path(current.id)+'/operational-decision/initialize',
+      {version:current.version},false);
   }
   decideOperational(current:NmcCentralCase,decision:'ACCEPT'|'MODIFY'|'REJECT',
     newDecisionCode='',note=''):Observable<CaseResponse>{
@@ -227,8 +232,10 @@ export class NmcCasesService {
         :`A01 action #${actionNumber} duplicates normalized actionId "${id}". Each proposal must have a unique ID.`;
     }
     const messages:Record<string,[string,string]>={
-      CASE_DECISION_RATIONALE_UNAVAILABLE:['A01 provided no decision-specific reason. Request evidence review and modify with a documented justification.','لم يقدم A01 مبررًا محددًا؛ راجع الأدلة وسجل السبب عند تعديل القرار.'],
+      CASE_DECISION_RATIONALE_UNAVAILABLE:['A01 supplied no action-specific rationale. Enter your own verified business justification to accept, or modify/reject.','لم يقدم A01 مبررًا محددًا للإجراء؛ أدخل مبررًا تشغيليًا موثقًا للاعتماد أو عدّل القرار أو ارفضه.'],
       CASE_DECISION_EVIDENCE_REQUIRED:['This inspection or regulated route requires verified saved evidence.','يتطلب مسار المعاينة أو المنع وجود أدلة محفوظة تم التحقق منها.'],
+      CASE_SINGLE_DECISION_EXISTS:['A single decision is already recorded. Reload the case.','يوجد قرار واحد محفوظ بالفعل. أعد تحميل الحالة.'],
+      CASE_LEGACY_REVIEW_ALREADY_STARTED:['This case already contains human decisions or execution activity. Migration is disabled to protect the audit history.','تحتوي الحالة على قرارات أو تنفيذ سابق؛ لا يمكن تحويلها حفاظًا على سجل المراجعة.'],
       CASE_SINGLE_DECISION_UNAVAILABLE:['A01-derived decision is not ready.','القرار المبني على A01 غير متاح بعد.'],
       CASE_DECISION_CODE_UNSUPPORTED:['Unknown decision. Choose an allowed POC catalogue option.','قرار غير معروف؛ اختر من قائمة القرارات المسموحة.'],
       CASE_SINGLE_DECISION_MODE:['Use the single operational decision review rather than legacy action buttons.','استخدم مراجعة القرار التشغيلي الموحد بدلًا من أزرار الإجراءات القديمة.'],
