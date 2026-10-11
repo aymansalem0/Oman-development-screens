@@ -12,7 +12,7 @@
     <div class="top-actions">
       <button type="button" class="language-btn" (click)="toggleLanguage()">{{ lang.isArabic ? 'English' : 'العربية' }}</button>
       <a class="back-btn" routerLink="/moei/nmc">{{ lang.isArabic ? 'العودة إلى مركز القيادة →' : '← Back to Command Center' }}</a>
-      <button type="button" class="secondary-btn">{{ copy('Export vessel brief', 'تصدير ملخص السفينة') }}</button>
+      
       <a class="secondary-btn ai-assessment-btn" [routerLink]="['/moei/nmc/vessel', vessel.imo, 'risk']">
         ✦ {{ copy('Risk Intelligence & Explainability', 'تحليل وتفسير المخاطر') }}
       </a>
@@ -494,13 +494,13 @@
             <div>
               <small>{{ copy('MOEI Certificate Registry', 'سجل الشهادات بالوزارة') }}</small>
               <strong>{{ copy('Conditionally Valid', 'سارية بشروط') }}</strong>
-              <span>{{ copy('Updated', 'تحديث') }} 22:41:56</span>
+              <span>{{ copy('Updated', 'تحديث') }} —</span>
             </div>
             <div class="vs">≠</div>
             <div>
               <small>{{ copy('External Classification Feed', 'تغذية هيئة التصنيف الخارجية') }}</small>
               <strong>{{ copy('Valid', 'سارية') }}</strong>
-              <span>{{ copy('Updated', 'تحديث') }} 22:41:57</span>
+              <span>{{ copy('Updated', 'تحديث') }} —</span>
             </div>
           </div>
 
@@ -514,9 +514,9 @@
             </p>
           </div>
 
-          <button type="button" class="primary-btn wide" (click)="startCertificateVerification()">
-            {{ certificateVerificationStarted ? copy('Verification task created', 'تم إنشاء مهمة التحقق') : copy('Start verification task', 'بدء مهمة التحقق') }}
-          </button>
+          <a class="primary-btn wide" [routerLink]="['/moei/nmc/vessel',vessel.imo,'case']">
+            {{copy('Review in Case Management','المراجعة في إدارة الحالات')}}
+          </a>
         </article>
 
         <article class="panel timeline-panel">
@@ -638,36 +638,30 @@
                 <strong>{{ copy('Source Conflict Verification', 'التحقق من تعارض المصادر') }}</strong>
                 <p>{{ copy('The same certificate is reported differently by two sources.', 'تم الإبلاغ عن الشهادة نفسها بحالتين مختلفتين من مصدرين.') }}</p>
               </div>
-              <span class="conflict-badge">{{ certificateVerificationStarted ? copy('TASK CREATED', 'تم إنشاء المهمة') : copy('UNRESOLVED', 'غير محلول') }}</span>
+              <span class="conflict-badge">{{copy('SYNTHETIC · UNVERIFIED','تجريبي · غير متحقق')}}</span>
             </div>
 
             <div class="source-compare-grid">
               <div class="authority-source">
                 <small>{{ primaryCertificateSourceLabel }}</small>
                 <strong>{{ copy('Conditionally Valid', 'سارية بشروط') }}</strong>
-                <span>22:41:56 · {{ copy('Confidence', 'الثقة') }} 100%</span>
+                <span>— · {{ copy('Confidence', 'الثقة') }} 100%</span>
               </div>
               <div class="compare-symbol">≠</div>
               <div>
                 <small>{{ vessel.classSociety }}</small>
                 <strong>Valid</strong>
-                <span>22:41:57 · {{ copy('Confidence', 'الثقة') }} 68%</span>
+                <span>— · {{ copy('Confidence', 'الثقة') }} 68%</span>
               </div>
             </div>
 
-            <div class="verification-task" *ngIf="certificateVerificationStarted">
-              <span>✓</span>
-              <div>
-                <strong>{{ copy('Verification task VER-2026-00872 created', 'تم إنشاء مهمة التحقق VER-2026-00872') }}</strong>
-                <p>{{ copy('Assigned to', 'تم الإسناد إلى') }}
-{{ isUaeFlag ? copy('Certificate Compliance Officer', 'مسؤول امتثال الشهادات') : copy('Foreign Vessel Compliance Officer', 'مسؤول امتثال السفن الأجنبية') }}
-· {{ copy('Priority High', 'أولوية مرتفعة') }} · {{ copy('Due in 15 minutes', 'الاستحقاق خلال 15 دقيقة') }}.</p>
-              </div>
-            </div>
-
-            <button type="button" class="primary-btn wide" (click)="startCertificateVerification()" [disabled]="certificateVerificationStarted">
-              {{ certificateVerificationStarted ? copy('Verification in progress', 'التحقق جارٍ') : copy('Create verification task', 'إنشاء مهمة تحقق') }}
-            </button>
+            <p class="verification-note">
+              {{copy('This is a synthetic certificate comparison; no official verification task exists until recorded through Case Management.',
+              'هذه مقارنة شهادات تجريبية؛ لا توجد مهمة تحقق رسمية إلا إذا سُجلت فعليًا داخل إدارة الحالات.')}}
+            </p>
+            <a class="primary-btn wide" [routerLink]="['/moei/nmc/vessel',vessel.imo,'case']">
+              {{copy('Open Case Management','فتح إدارة الحالات')}}
+            </a>
           </div>
         </aside>
       </div>
@@ -762,18 +756,15 @@
                 <span>+{{ deficiency.riskImpact }}</span>
               </div>
 
-              <div class="inspection-action" [class.created]="priorityInspectionCreated">
-                <span>{{ priorityInspectionCreated ? '✓' : '↗' }}</span>
-                <div>
-                  <strong>{{ priorityInspectionCreated ? copy('Priority inspection case created', 'تم إنشاء حالة معاينة ذات أولوية') : copy('Recommended operational action', 'الإجراء التشغيلي الموصى به') }}</strong>
-                  <p *ngIf="!priorityInspectionCreated">{{ copy('Create a priority follow-up inspection and carry forward this deficiency and supporting evidence.', 'إنشاء معاينة متابعة ذات أولوية مع نقل الملاحظة والأدلة الداعمة.') }}</p>
-                  <p *ngIf="priorityInspectionCreated">{{ copy('Priority inspection created for', 'تم إنشاء معاينة ذات أولوية للسفينة') }} {{ vessel.name }} · {{ copy('Evidence inherited from the latest inspection record.', 'تم توريث الأدلة من أحدث سجل معاينة.') }}</p>
-                </div>
+              <div class="inspection-action">
+                <span>↗</span>
+                <div><strong>{{copy('Follow-up through Case Management','المتابعة من خلال إدارة الحالات')}}</strong>
+                <p>{{copy('A source deficiency does not create an inspection by itself. Authorized officers review evidence and create accountable case tasks.',
+                'الملاحظة لا تنشئ معاينة تلقائيًا؛ يراجع الموظف المختص الأدلة وينشئ مهام الحالة المعتمدة.')}}</p></div>
               </div>
-
-              <button type="button" class="primary-btn wide" (click)="createPriorityInspection()" [disabled]="priorityInspectionCreated">
-                {{ priorityInspectionCreated ? copy('Priority inspection created', 'تم إنشاء المعاينة ذات الأولوية') : copy('Create priority inspection', 'إنشاء معاينة ذات أولوية') }}
-              </button>
+              <a class="primary-btn wide" [routerLink]="['/moei/nmc/vessel',vessel.imo,'case']">
+                {{copy('Open Case Management','فتح إدارة الحالات')}}
+              </a>
             </div>
           </ng-container>
 
