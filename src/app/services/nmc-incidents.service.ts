@@ -13,6 +13,7 @@ export interface IncidentAiAssessment {
   incidentRiskScore:number;incidentRiskBand:'LOW'|'MODERATE'|'HIGH'|'CRITICAL';
   aiProposedFollowup:IncidentFollowup;aiReasoning:string;confidence:number;
   missingInformation:string[];officerDecision?:string|null;
+  approvedFollowupStatus?:IncidentFollowup|null;officerName?:string|null;
   assessmentStatus:string;
 }
 export interface NmcMaritimeIncident {
