@@ -435,7 +435,7 @@ export class NmcCaseWorkspace{
             id:randomUUID(),caseId:row.id,imo:row.imo,
             actionId:linkedActionId,status:'PENDING_SCHEDULING',
             inspectionRegime:'FOCUSED_INSPECTION',priority:'HIGH',
-            reason:decision==='MODIFY'?noteValue(note):proposal.rationale,
+            reason:decision==='MODIFY'||missingA01Reason?noteValue(note):proposal.rationale,
             evidenceIds:proposal.evidenceIds,sourceScore:row.sourceScore,
             sourceAssessmentId:row.sourceAssessmentId,
             port:null,scheduledAt:null,inspector:null,scheduledBy:null,
