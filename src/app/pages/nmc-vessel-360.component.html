@@ -582,15 +582,6 @@
             </div>
           </div>
 
-          <div class="risk-evidence-link" *ngIf="certificate.conflict">
-            <div>
-              <small>{{ copy('RISK CONTRIBUTION', 'المساهمة في المخاطر') }}</small>
-              <strong>{{ certificate.status }} certificate +{{ certificateRiskImpact }}</strong>
-              <p>{{ copy('This record directly contributes to the current vessel risk level.', 'يسهم هذا السجل مباشرة في مستوى المخاطر الحالي للسفينة.') }}</p>
-            </div>
-            <span>+{{ certificateRiskImpact }}</span>
-          </div>
-
         </aside>
       </div>
     </section>
@@ -650,7 +641,7 @@
               <h3>{{ copy('Open Deficiency', 'ملاحظة مفتوحة') }}</h3>
               <p>{{ copy('Evidence driving vessel prioritization', 'الدليل المؤثر في تحديد أولوية السفينة') }}</p>
             </div>
-            <span class="critical-badge" *ngIf="openDeficiencyCount > 0">{{ vessel.risk >= 80 ? copy('CRITICAL', 'حرجة') : copy('OPEN', 'مفتوحة') }}</span>
+            <span class="critical-badge" *ngIf="openDeficiencyCount > 0">{{copy('OPEN POC FINDING','ملاحظة تجريبية مفتوحة')}}</span>
           </div>
 
           <ng-container *ngFor="let deficiency of deficiencies">
