@@ -18,7 +18,7 @@ const signals=[
 function setup(){
  const dir=mkdtempSync(join(tmpdir(),'nmc-case-a01-'));
  const alerts=new NmcAlertWorkspace({mode:'json',file:join(dir,'alerts.json'),escalationMinutes:20});
- const opts={mode:'json',file:join(dir,'cases.json'),alerts};
+ const opts={mode:'json',file:join(dir,'cases.json'),alerts,singleDecisionMode:false};
  return {alerts,opts,cases:new NmcCaseWorkspace(opts),
    close:()=>rmSync(dir,{recursive:true,force:true})};
 }
