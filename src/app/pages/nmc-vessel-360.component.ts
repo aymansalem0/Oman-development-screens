@@ -670,17 +670,11 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
   }
 
   openRiskEvidence(source: string): void {
-    if (source.includes('Certificate') || source.includes('Data Quality')) {
-      this.activeTab = 'certificates';
-      return;
-    }
-    if (source.includes('Inspection')) {
-      this.activeTab = 'inspection';
-      return;
-    }
-    if (source.includes('AIS') || source.includes('Movement')) {
-      this.activeTab = 'movement';
-    }
+    if(source.includes('Certificate'))this.setTab('certificates');
+    else if(source.includes('Data Quality'))this.setTab('sources');
+    else if(source.includes('Inspection'))this.setTab('inspection');
+    else if(source.includes('AIS')||source.includes('Movement'))this.setTab('movement');
+    else this.setTab('sources');
   }
 
   selectedCertificate(): CertificateRecord | undefined {
