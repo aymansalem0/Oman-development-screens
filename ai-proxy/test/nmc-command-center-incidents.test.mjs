@@ -7,22 +7,27 @@ const root=new URL('../../',import.meta.url);
 const ts=readFileSync(fileURLToPath(new URL('src/app/pages/nmc-command-center.component.ts',root)),'utf8');
 const html=readFileSync(fileURLToPath(new URL('src/app/pages/nmc-command-center.component.html',root)),'utf8');
 const css=readFileSync(fileURLToPath(new URL('src/app/pages/nmc-command-center.component.css',root)),'utf8');
+const policy=readFileSync(fileURLToPath(new URL('src/app/services/nmc-incident-filters.ts',root)),'utf8');
 
-// Extract the actual simple TypeScript method *body* for a runtime Node smoke test
-// without importing Angular packages in the backend test suite.
-function methodBody(signature){
- const start=ts.indexOf(signature);
- assert.ok(start>=0,'Missing command-center method: '+signature);
- const open=ts.indexOf('{',start+signature.length);
+// Runtime smoke tests extract pure TS function bodies without importing
+// Angular or requiring the root Angular build dependencies in ai-proxy CI.
+function bodyOf(source,signature){
+ const start=source.indexOf(signature);
+ assert.ok(start>=0,'Missing method or policy function: '+signature);
+ const open=source.indexOf('{',start+signature.length);
  assert.ok(open>=0);
  let depth=0;
- for(let i=open;i<ts.length;i++){
-  if(ts[i]==='{')depth++;
-  else if(ts[i]==='}'&&!--depth)return ts.slice(open+1,i);
+ for(let i=open;i<source.length;i++){
+  if(source[i]==='{')depth++;
+  else if(source[i]==='}'&&!--depth)return source.slice(open+1,i);
  }
- throw Error('Unbalanced method: '+signature);
+ throw Error('Unbalanced function: '+signature);
 }
-const asFn=(signature,args)=>new Function(...args,methodBody(signature));
+const verifiedIncidentBand=new Function('row',bodyOf(policy,
+  'export function incidentSeverityBand(row:NmcMaritimeIncident):IncidentSeverityBand'));
+const asFn=(signature,args)=>new Function('verifiedIncidentBand',
+  'return function('+args.join(',')+') {'+bodyOf(ts,signature)+'}'
+)(verifiedIncidentBand);
 const band=asFn('incidentSeverityBand(row:NmcMaritimeIncident):',['row']);
 const rank=asFn('incidentSeverityRank(row:NmcMaritimeIncident):',['row']);
 const forVessel=asFn('incidentsForVessel(imo:string):',['imo']);
@@ -70,9 +75,11 @@ test('Active incident vessel remains in attention list even when official fleet 
   hasActiveIncidents:imo=>imo==='9328471',
   fleetResult:()=>null,
   incidentRepresentative:imo=>imo==='9328471'?{reportedSeverity:'HIGH',aiAssessment:null}:null,
-  incidentSeverityRank:r=>rank.call({incidentSeverityBand:band},r)
+  incidentSeverityRank:r=>rank.call({incidentSeverityBand:band},r),
+  matchesIncidentFilter:()=>true
  };
  assert.deepEqual(attention.call(ctx).map(v=>v.imo).sort(),['9328471','9404090']);
  assert.match(ts,/\!\(\/\^\[0-9\]\{7\}\$\/\)\.test\(report\.imo\)/);
- assert.match(ts,/\['CLOSED','RESOLVED'\]\.includes\(report\.operationalStatus\)/);
+ assert.match(ts,/!isActiveNmcIncident\(report\)/);
+ assert.match(policy,/\['CLOSED','RESOLVED'\]\.includes/);
 });
