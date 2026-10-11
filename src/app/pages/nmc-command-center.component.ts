@@ -25,7 +25,7 @@ import { LanguageService } from '../services/language.service';
 import { NmcRiskEngineService } from '../services/nmc-risk-engine.service';
 import { NmcAlertsService } from '../services/nmc-alerts.service';
 import { NmcCasesService } from '../services/nmc-cases.service';
-import {NmcIncidentsService} from '../services/nmc-incidents.service';
+import {NmcIncidentsService,NmcMaritimeIncident} from '../services/nmc-incidents.service';
 
 interface MaritimeEvent {
   time: string;
@@ -63,6 +63,11 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
   activeIncidentCount:number|null=null;
   criticalIncidentCount:number|null=null;
   incidentSourceError=false;
+  latestMaritimeIncidents:NmcMaritimeIncident[]=[];
+  incidentFeedLastUpdatedAt:string|null=null;
+  incidentFeedRefreshing=false;
+  selectedIncidentId='';
+  incidentSourceMessage='';
 
   attentionPage = 1;
   readonly attentionPageSize = 6;
@@ -354,6 +359,16 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
     const j=this.fleetSnapshot?.job;
     return j?j.completed+' completed · '+j.failed+' failed / '+j.total:'';
   }
+  get expandedMaritimeIncident():NmcMaritimeIncident|undefined{
+    return this.latestMaritimeIncidents.find(v=>v.incidentId===this.selectedIncidentId);
+  }
+  viewMaritimeIncident(id:string):void{
+    this.selectedIncidentId=this.selectedIncidentId===id?'':id;
+  }
+  incidentRiskLabel(v:NmcMaritimeIncident):string{
+    return v.aiAssessment?v.aiAssessment.incidentRiskBand:
+      (v.aiAssessmentStale?'STALE':'NOT_ASSESSED');
+  }
   private loadOperations():void{
     this.alertsService.overviewForBrowserPolicy().subscribe({
       next:response=>{
@@ -362,17 +377,27 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
       },
       error:()=>{this.unreadAlertCount=0;this.activeAlertCount=null;}
     });
+    this.incidentFeedRefreshing=true;
     this.incidentsService.list().subscribe({
       next:r=>{
+        this.incidentFeedRefreshing=false;
         this.incidentCount=r.summary.total;
         this.activeIncidentCount=r.summary.unresolved;
         this.criticalIncidentCount=r.incidents.filter(v=>
           ['HIGH','CRITICAL'].includes(v.aiAssessment?.incidentRiskBand||'')).length;
         this.incidentSourceError=false;
+        this.incidentSourceMessage='';
+        this.incidentFeedLastUpdatedAt=new Date().toISOString();
+        this.latestMaritimeIncidents=[...r.incidents].sort((a,b)=>(b.reportedAt||b.receivedAt||'').localeCompare(a.reportedAt||a.receivedAt||'')).slice(0,8);
+        if(this.selectedIncidentId&&!this.latestMaritimeIncidents.some(v=>v.incidentId===this.selectedIncidentId))this.selectedIncidentId='';
       },
-      error:()=>{
+      error:err=>{
+        this.incidentFeedRefreshing=false;
         this.incidentCount=null;this.activeIncidentCount=null;
         this.criticalIncidentCount=null;this.incidentSourceError=true;
+        this.latestMaritimeIncidents=[];
+        this.selectedIncidentId='';
+        this.incidentSourceMessage=this.incidentsService.message(err,this.lang.isArabic);
       }
     });
     this.casesService.list().subscribe({
