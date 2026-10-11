@@ -6,6 +6,7 @@ import { DashboardWorkspace, DashboardError } from './dashboard-workspace.mjs';
 import { NmcAlertWorkspace, NmcAlertError } from './alert-workspace.mjs';
 import { NmcCaseWorkspace, NmcCaseError } from './case-workspace.mjs';
 import { normalizeA01Actions, ActionPlanError } from './nmc-action-plan.mjs';
+import {catalogueSummaries,DECISION_POLICY_VERSION} from './nmc-decision-policy.mjs';
 import { OperationalGuidance, GuidanceError } from './operational-guidance.mjs';
 import { CentralRiskPolicy, RiskPolicyError } from './risk-policy.mjs';
 import { ErpWorkforceStore, SiError } from './si-erp-workforce.mjs';
@@ -757,6 +758,10 @@ const server = createServer(async (req, res) => {
     if(resource!=='cases')return respond(res,404,{error:'CASE_NOT_FOUND'});
     try{
       if(req.method==='GET'){
+        if(first==='decision-catalogue'&&!action)return respond(res,200,{
+          status:'ok',policyVersion:DECISION_POLICY_VERSION,
+          pocOnly:true,decisions:catalogueSummaries()
+        });
         if(!first)return respond(res,200,{status:'ok',cases:await cases.list()});
         if(first==='by-imo'&&/^\d{7}$/.test(action)&&!second){
           const item=await cases.byImo(action);
@@ -802,6 +807,24 @@ const server = createServer(async (req, res) => {
           }
         }
         if(!/^[a-f\d-]{36}$/i.test(first))return respond(res,404,{error:'CASE_NOT_FOUND'});
+        if(action==='operational-decision'&&!second){
+          dashboards.assertRole(req,'EDITOR');
+          const body=await requestJson(req,4096);
+          const item=await cases.decideOperational(first,body.version,body,'OPERATOR');
+          return respond(res,200,{status:'ok',case:item});
+        }
+        if(action==='restriction'&&second==='authorize'&&!third){
+          dashboards.assertRole(req,'PUBLISHER');
+          const body=await requestJson(req,4096);
+          const item=await cases.authorizeRestriction(first,body.version,body,'POC_SUPERVISOR');
+          return respond(res,200,{status:'ok',case:item});
+        }
+        if(action==='restriction'&&second==='release'&&!third){
+          dashboards.assertRole(req,'PUBLISHER');
+          const body=await requestJson(req,4096);
+          const item=await cases.releaseRestriction(first,body.version,body,'POC_SUPERVISOR');
+          return respond(res,200,{status:'ok',case:item});
+        }
         if(action==='action-plan'&&second==='generate'&&!third){
           dashboards.assertRole(req,'EDITOR');
           const body=await requestJson(req,4096);
