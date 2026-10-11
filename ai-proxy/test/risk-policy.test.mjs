@@ -139,10 +139,10 @@ test('old risk policy projections are explained only when saved source assessmen
   }finally{rmSync(dir,{recursive:true,force:true});}
 });
 
-test('published A03 weight recalculates only source assessments with a validated document factor',()=>{
+test('new policy rejects retired A03 weighting but historical published six-factor projection remains explainable',()=>{
   const configWithDoc={...baseline,weights:{movement:23,inspection:25,
     certificate:18,dataQuality:13,history:11,documentIntegrity:10}};
-  assert.equal(validateRiskConfig(configWithDoc).weights.documentIntegrity,10);
+  assert.throws(()=>validateRiskConfig(configWithDoc),/A03_RISK_FACTOR_RETIRED/);
   assert.equal(calculateRiskPolicy(assessment,configWithDoc,4),null);
   const supplemented={...assessment,signals:[
     ...assessment.signals,{factor:'documentIntegrity',severity:50,confidence:0.65,
