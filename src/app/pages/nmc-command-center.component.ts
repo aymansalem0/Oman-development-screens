@@ -63,12 +63,13 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
   activeIncidentCount:number|null=null;
   criticalIncidentCount:number|null=null;
   incidentSourceError=false;
-  latestMaritimeIncidents:NmcMaritimeIncident[]=[];
   incidentFeedLastUpdatedAt:string|null=null;
   incidentFeedRefreshing=false;
-  selectedIncidentId='';
   incidentSourceMessage='';
   incidentRejectedRowsCount=0;
+  /** Complete source rows indexed by IMO. No simulated severity or vessel risk is substituted. */
+  readonly activeIncidentsByImo=new Map<string,NmcMaritimeIncident[]>();
+  expandedIncidentImo:string|null=null;
 
   attentionPage = 1;
   readonly attentionPageSize = 6;
@@ -360,15 +361,53 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
     const j=this.fleetSnapshot?.job;
     return j?j.completed+' completed · '+j.failed+' failed / '+j.total:'';
   }
-  get expandedMaritimeIncident():NmcMaritimeIncident|undefined{
-    return this.latestMaritimeIncidents.find(v=>v.incidentId===this.selectedIncidentId);
+  /** A source incident belongs to a vessel only with an exact 7-digit IMO match. */
+  incidentsForVessel(imo:string):NmcMaritimeIncident[]{
+    return this.activeIncidentsByImo.get(imo)||[];
   }
-  viewMaritimeIncident(id:string):void{
-    this.selectedIncidentId=this.selectedIncidentId===id?'':id;
+  hasActiveIncidents(imo:string):boolean{
+    return this.incidentsForVessel(imo).length>0;
   }
-  incidentRiskLabel(v:NmcMaritimeIncident):string{
-    return v.aiAssessment?v.aiAssessment.incidentRiskBand:
-      (v.aiAssessmentStale?'STALE':'NOT_ASSESSED');
+  toggleVesselIncidents(imo:string):void{
+    this.expandedIncidentImo=this.expandedIncidentImo===imo?null:imo;
+  }
+  /** Human/source-reported severity is visibly distinct from AI scoring. */
+  incidentSeverityBand(row:NmcMaritimeIncident):'CRITICAL'|'HIGH'|'MODERATE'|'LOW'|'UNASSESSED'{
+    if(row.aiAssessment&&!row.aiAssessmentStale)
+      return row.aiAssessment.incidentRiskBand;
+    switch((row.reportedSeverity||'').toUpperCase()){
+      case 'CRITICAL':return 'CRITICAL';
+      case 'HIGH':return 'HIGH';
+      case 'MEDIUM':return 'MODERATE';
+      case 'LOW':return 'LOW';
+      default:return 'UNASSESSED';
+    }
+  }
+  incidentSeverityRank(row:NmcMaritimeIncident):number{
+    const band=this.incidentSeverityBand(row);
+    return ({CRITICAL:4,HIGH:3,MODERATE:2,LOW:1,UNASSESSED:0})[band];
+  }
+  incidentRepresentative(imo:string):NmcMaritimeIncident|undefined{
+    return this.incidentsForVessel(imo)[0];
+  }
+  incidentClass(imo:string):string{
+    const incident=this.incidentRepresentative(imo);
+    return incident?'incident-'+this.incidentSeverityBand(incident).toLowerCase():'';
+  }
+  incidentSourceIsAI(row:NmcMaritimeIncident):boolean{
+    return !!row.aiAssessment&&!row.aiAssessmentStale;
+  }
+  incidentBandLabel(imo:string):string{
+    const row=this.incidentRepresentative(imo);
+    if(!row)return '';
+    const band=this.incidentSeverityBand(row);
+    return (this.incidentSourceIsAI(row)?'AI ':'Reported ')+band;
+  }
+  /** Show incident-only cases in the attention queue even when A01/A02 is Pending. */
+  private hasSavedFleetAttention(v:NmcVesselProfile):boolean{
+    return v.risk>=0&&(
+      this.riskLevel(v.risk,v.imo)!=='Normal'||
+      this.fleetResult(v)?.operationalPriority==='Priority Review');
   }
   private loadOperations():void{
     this.alertsService.overviewForBrowserPolicy().subscribe({
@@ -390,15 +429,36 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
         this.incidentSourceMessage='';
         this.incidentRejectedRowsCount=r.sourceValidationWarnings||0;
         this.incidentFeedLastUpdatedAt=new Date().toISOString();
-        this.latestMaritimeIncidents=[...r.incidents].sort((a,b)=>(b.reportedAt||b.receivedAt||'').localeCompare(a.reportedAt||a.receivedAt||'')).slice(0,8);
-        if(this.selectedIncidentId&&!this.latestMaritimeIncidents.some(v=>v.incidentId===this.selectedIncidentId))this.selectedIncidentId='';
+        const grouped=new Map<string,NmcMaritimeIncident[]>();
+        for(const report of r.incidents){
+          // Closed/resolved incident history remains in Incident Intelligence,
+          // but does not raise the vessel's ACTIVE incident flag on the map.
+          if(['CLOSED','RESOLVED'].includes(report.operationalStatus))continue;
+          if(!report.imo||!/^\\d{7}$/.test(report.imo))continue;
+          const bucket=grouped.get(report.imo)||[];
+          bucket.push(report);
+          grouped.set(report.imo,bucket);
+        }
+        this.activeIncidentsByImo.clear();
+        for(const [imo,rows] of grouped){
+          rows.sort((left,right)=>
+            this.incidentSeverityRank(right)-this.incidentSeverityRank(left)||
+            (right.reportedAt||right.receivedAt||'').localeCompare(left.reportedAt||left.receivedAt||''));
+          this.activeIncidentsByImo.set(imo,rows);
+        }
+        if(this.expandedIncidentImo&&!this.hasActiveIncidents(this.expandedIncidentImo))
+          this.expandedIncidentImo=null;
+        this.attentionPage=Math.min(this.attentionPage,this.attentionPageCount);
+        this.refreshMapMarkers();
       },
       error:err=>{
         this.incidentFeedRefreshing=false;
         this.incidentCount=null;this.activeIncidentCount=null;
         this.criticalIncidentCount=null;this.incidentSourceError=true;
-        this.latestMaritimeIncidents=[];
-        this.selectedIncidentId='';
+        // Fail closed: never display stale incident markers as if confirmed.
+        this.activeIncidentsByImo.clear();
+        this.expandedIncidentImo=null;
+        this.refreshMapMarkers();
         this.incidentSourceMessage=this.incidentsService.message(err,this.lang.isArabic);
       }
     });
@@ -482,9 +542,19 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
 
   get allAttentionVessels(): NmcVesselProfile[] {
     return [...this.vessels]
-      .filter(v=>v.risk>=0&&(this.riskLevel(v.risk,v.imo)!=='Normal'||this.fleetResult(v)?.operationalPriority==='Priority Review'))
-      .sort((a,b)=>Number(this.fleetResult(b)?.operationalPriority==='Priority Review')-
-        Number(this.fleetResult(a)?.operationalPriority==='Priority Review')||b.risk-a.risk);
+      .filter(v=>this.hasSavedFleetAttention(v)||this.hasActiveIncidents(v.imo))
+      .sort((a,b)=>{
+        const aPriority=Number(this.fleetResult(a)?.operationalPriority==='Priority Review');
+        const bPriority=Number(this.fleetResult(b)?.operationalPriority==='Priority Review');
+        // Preserve existing ranked fleet priorities. Within each saved risk
+        // tier, incident severity raises matters that need human attention.
+        const aRisk=a.risk<0?0:a.risk,bRisk=b.risk<0?0:b.risk;
+        const aIncident=this.incidentRepresentative(a.imo);
+        const bIncident=this.incidentRepresentative(b.imo);
+        const aRank=aIncident?this.incidentSeverityRank(aIncident):0;
+        const bRank=bIncident?this.incidentSeverityRank(bIncident):0;
+        return bPriority-aPriority || bRank-aRank || bRisk-aRisk;
+      });
   }
 
   get attentionVessels(): NmcVesselProfile[] {
@@ -528,7 +598,7 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
   }
 
   private syncAttentionPageForVessel(vessel: NmcVesselProfile): void {
-    if(vessel.risk<0||this.riskLevel(vessel.risk,vessel.imo)==='Normal')return;
+    if(!this.hasSavedFleetAttention(vessel)&&!this.hasActiveIncidents(vessel.imo))return;
     const index = this.allAttentionVessels.findIndex(item => item.id === vessel.id);
     if (index >= 0) this.attentionPage = Math.floor(index / this.attentionPageSize) + 1;
   }
@@ -654,8 +724,9 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
     return L.divIcon({
       className: 'nmc-map-marker-wrap',
       html: `
-        <div class="nmc-map-marker ${level} ${selected}" style="--ship-size:${shipSize}px;--ring-size:${ringSize}px">
+        <div class="nmc-map-marker ${level} ${selected} ${this.incidentClass(vessel.imo)}" style="--ship-size:${shipSize}px;--ring-size:${ringSize}px">
           <span class="risk-ring"></span>
+          ${this.hasActiveIncidents(vessel.imo)?'<span class="incident-outer-ring"></span><span class="incident-exclamation">!</span>':''}
           <span class="ship-pulse"></span>
           <svg class="ship-symbol" viewBox="0 0 24 34" aria-hidden="true" style="transform:rotate(${vessel.course}deg)">
             <path d="M12 1.4c1.5 2.1 4.7 4.6 6.5 8.2v15.7L12 32.6 5.5 25.3V9.6C7.3 6 10.5 3.5 12 1.4Z"></path>
