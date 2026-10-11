@@ -673,9 +673,11 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
   }
 
   openRiskEvidence(source: string): void {
-    if (source.includes('Certificate') || source.includes('Data Quality')) {
-      this.activeTab = 'certificates';
-      return;
+    if(source.includes('Data Quality')){
+      this.activeTab='sources';return;
+    }
+    if(source.includes('Certificate')){
+      this.activeTab='certificates';return;
     }
     if (source.includes('Inspection')) {
       this.activeTab = 'inspection';
@@ -827,11 +829,11 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
   }
 
   get primaryCertificateSourceLabel(): string {
-    return this.isUaeFlag ? 'MOEI Certificate Registry' : `${this.vessel.flag} Flag / Verified Certificate Record`;
+    return 'Synthetic certificate record (not issuer verified)';
   }
 
   get primaryCertificateAuthorityLabel(): string {
-    return this.isUaeFlag ? 'MOEI Authoritative' : 'External Authoritative';
+    return 'Synthetic source; official verification unavailable';
   }
 
   get vesselInitials(): string {
@@ -1097,17 +1099,17 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
     });
     const drive=this.driveListing;
     sources.push(drive?.driveConnected?{
-      name:'Google Drive Vessel Documents / A03',
-      system:'Google Drive POC Read-only Document List',
-      record:`${drive.documents.length} document(s) · ${drive.documents.filter(d=>d.savedStatus==='APPROVED').length} human-approved A03 result(s)`,
+      name:'Google Drive Vessel Documents',
+      system:'Google Drive POC Read-only Document Listing',
+      record:`${drive.documents.length} linked POC document(s); document authenticity not confirmed`,
       recordId:drive.documents[0]?.fileId,
       status:'Available',lastSync:this.driveReadAt||'—',confidence:null,
       authority:'Synthetic POC document packs; approval does NOT verify issuing authority',
       dataNature:'SYNTHETIC_DRIVE_GOOGLE',sourceClass:'External Trusted',
-      route:`/moei/nmc/vessel/${this.vessel.imo}`,tab:'documents'
+      recordId:drive.documents[0]?.fileId
     }:{
-      name:'Google Drive Vessel Documents / A03',
-      system:'Google Drive Document Adapter',
+      name:'Google Drive Vessel Documents',
+      system:'Google Drive Read-only Document Adapter',
       record:drive?.status==='not_configured'?'Drive root folder not configured':
         'Google Drive document listing unavailable',
       status:'Unavailable',lastSync:'—',confidence:null,
@@ -1179,7 +1181,7 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
 
     return [
       {
-        label:critical ? 'Unresolved critical inspection deficiency' : this.hasOpenDeficiency ? 'Open inspection deficiency' : 'Inspection history exposure',
+        label:this.hasOpenDeficiency ? 'Open synthetic inspection deficiency' : 'Inspection history exposure',
         value:this.inspectionRiskImpact,
         source:'Inspection'
       },
@@ -1189,12 +1191,12 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
         source:'AIS / Movement'
       },
       {
-        label:this.hasCertificateConflict ? 'Conditional certificate state' : this.vessel.risk >= 55 ? 'Certificate expiry proximity' : 'Certificate profile exposure',
+        label:'Synthetic certificate compliance factor',
         value:this.certificateRiskImpact,
         source:'Certificate Registry'
       },
       {
-        label:this.hasCertificateConflict ? 'Conflict between authoritative data sources' : 'Data-quality / external-source factor',
+        label:'Data-quality / source-reliability factor',
         value:this.dataConflictRiskImpact,
         source:'Data Quality'
       },
