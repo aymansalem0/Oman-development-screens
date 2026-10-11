@@ -217,7 +217,7 @@ button, input, select { font: inherit; }
 }
 .map-panel { min-height: 540px; }
 .map-header { flex-wrap: wrap; }
-.map-filters { display: flex; align-items: center; gap: 7px; }
+.map-filters { display:flex; align-items:center; flex-wrap:wrap; gap:7px; max-width:100%; min-width:0; }
 .search-box {
   min-width: 240px; height: 35px;
   display: flex; align-items: center; gap: 7px;
