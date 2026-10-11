@@ -176,7 +176,7 @@ const unpackAssessments=values=>{
   officerReviewReason:r[26]||null
  }));
 };
-const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+
 export class NmcIncidentFeed {
  constructor({sheetId=process.env.NMC_INCIDENT_SHEET_ID||'',
    credentialsPath=process.env.NMC_INCIDENT_CREDENTIALS_PATH||
@@ -258,7 +258,7 @@ export class NmcIncidentFeed {
  async load(){
   const [raw,ai]=await Promise.all([
     this.sheets('GET','Incident_Registry!A1:Z1500'),
-    this.sheets('GET','AI_Assessments!A1:X1500')
+    this.sheets('GET','AI_Assessments!A1:AA1500')
   ]);
   const {incidents,rejectedRows}=parseIncidentFeedRows(raw.values||[]);
   const allAssessments=unpackAssessments(ai.values||[]);
