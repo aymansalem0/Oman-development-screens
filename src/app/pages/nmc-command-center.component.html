@@ -234,6 +234,7 @@
             <div class="attention-item"
               [class.active]="selectedVessel?.id === vessel.id"
               [class.has-incident]="hasActiveIncidents(vessel.imo)"
+              [ngClass]="incidentClass(vessel.imo)"
               role="button" tabindex="0"
               [attr.title]="selectedVessel?.id === vessel.id
                 ? copy('Click again to open Vessel 360','اضغط مرة أخرى لفتح ملف السفينة')
