@@ -527,7 +527,12 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
     return this.vessels.filter(vessel => {
       const matchesSearch = !query || [vessel.name, vessel.imo, vessel.destination, vessel.flag]
         .some(value => value.toLowerCase().includes(query));
-      const matchesRisk = this.riskFilter === 'All' || this.riskLevel(vessel.risk, vessel.imo) === this.riskFilter;
+      // Incident / Accident is a SOURCE EVENT filter, not an A01/A02 risk
+      // band. A vessel with an active report is eligible even when Pending AI.
+      const matchesRisk = this.riskFilter === 'All' ||
+        (this.riskFilter === 'Incident' ? this.hasActiveIncidents(vessel.imo) :
+        this.riskFilter === 'Pending' ? !this.hasSavedScore(this.fleetResult(vessel)) :
+        this.riskLevel(vessel.risk, vessel.imo) === this.riskFilter);
       // An AI-assessed vessel requires a COMPLETED, validated saved A01/A02
       // assessment. Synthetic baseline risk and failed jobs never qualify.
       const assessed = this.hasSavedScore(this.fleetResult(vessel));
@@ -539,10 +544,14 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
   }
 
   get visibleMapCount(): number { return this.filteredVessels.length; }
+  get incidentAffectedVesselCount():number{
+    return this.vessels.filter(v=>this.hasActiveIncidents(v.imo)).length;
+  }
 
   get allAttentionVessels(): NmcVesselProfile[] {
     return [...this.vessels]
-      .filter(v=>this.hasSavedFleetAttention(v)||this.hasActiveIncidents(v.imo))
+      .filter(v=>(this.hasSavedFleetAttention(v)||this.hasActiveIncidents(v.imo)) &&
+        (this.riskFilter!=='Incident'||this.hasActiveIncidents(v.imo)))
       .sort((a,b)=>{
         const aPriority=Number(this.fleetResult(a)?.operationalPriority==='Priority Review');
         const bPriority=Number(this.fleetResult(b)?.operationalPriority==='Priority Review');
