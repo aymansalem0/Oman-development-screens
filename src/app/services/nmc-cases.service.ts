@@ -9,7 +9,7 @@ export interface NmcCentralCaseTask {
   id:string;status:NmcCentralTaskStatus;
   assignedRole:string;mandatory:boolean;evidenceIds:string[];
   actionId?:string;actionType?:string;title?:string;priority?:string;
-  reason?:string;provenance?:string;
+  reason?:string;provenance?:string;approvalMode?:'ACCEPT'|'MODIFY';
 }
 export interface NmcAiAction {
   actionId:string;actionType:string;title:string;reason:string;
