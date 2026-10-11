@@ -141,6 +141,7 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
   private pscReadAt:string|null=null;
   private driveListing:VesselDriveListing|null=null;
   private driveReadAt:string|null=null;
+  private intelligenceReadAt:string|null=null;
   certificates: CertificateRecord[] = [];
   inspections: InspectionRecord[] = [];
   deficiencies: DeficiencyRecord[] = [];
@@ -480,6 +481,7 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
           return;
         }
         this.storedAiIntelligence=result;
+        this.intelligenceReadAt=new Date().toISOString();
         this.sources=this.buildSources();
         this.qualityLocalPreview=result.quality.breakdown
           ?projectQuality(result.quality.breakdown,this.qualityPolicy.config):null;
@@ -487,6 +489,7 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
       },
       error: () => {
         this.storedAiIntelligence=null;
+        this.intelligenceReadAt=null;
         this.sources=this.buildSources();
         this.qualityLocalPreview=null;
         this.intelligenceStatus='unavailable';
@@ -1152,7 +1155,8 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
     const fields=this.storedAiIntelligence?.quality?.breakdown?.fieldComparisons||[];
     if(fields.length){
       const mismatches=fields.filter(f=>f.status==='MISMATCH'&&
-        f.internalValue!==null&&f.externalValue!==null);
+        typeof f.internalValue==='string'&&f.internalValue.trim().length>0&&
+        typeof f.externalValue==='string'&&f.externalValue.trim().length>0);
       sources.push({
         name:'Cross-source Identity Comparison',
         system:'Saved NMC Data Quality / Correlation',
@@ -1163,7 +1167,7 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
         sourceClass:'Internal Master',status:mismatches.length?'Conflict':'Available',
         authority:'Synthetic POC source comparison; not official verification',
         dataNature:'DERIVED_COMPARISON',
-        lastSync:this.storedAi?.assessedAt||'—',confidence:null
+        lastSync:this.intelligenceReadAt||'—',confidence:null
       });
     }
     return sources;
