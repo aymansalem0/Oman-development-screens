@@ -65,6 +65,18 @@ export const DECISION_CATALOGUE=Object.freeze({
       step('detention-order','Obtain documented authorized detention decision','استصدار قرار احتجاز موثق من الجهة المختصة','REGULATORY_AUTHORITY','AUTHORITY_APPROVAL'),
       step('rectification-check','Verify corrections before considering release','التحقق من الإصلاحات قبل النظر في الإفراج','PSC_AUTHORIZED_OFFICER','MANUAL_VERIFICATION')]
   },
+  INCIDENT_RESPONSE_COORDINATION:{
+    titleEn:'Coordinate response to reported maritime incident',
+    titleAr:'تنسيق الاستجابة للحادث البحري المبلّغ عنه',
+    steps:[
+      step('verify-incident-source','Confirm incident description and authority source',
+        'التحقق من وصف البلاغ والجهة المبلغة','NMC_OFFICER'),
+      step('coordinate-stakeholders','Assign relevant maritime follow-up and stakeholder liaison',
+        'تحديد الأطراف البحرية المعنية وتنسيق المتابعة','NMC_SUPERVISOR'),
+      step('record-response-outcome','Document verified response outcome and outstanding actions',
+        'توثيق نتيجة الاستجابة والإجراءات المتبقية','NMC_OFFICER')
+    ]
+  },
   NO_ACTION:{
     titleEn:'No further intervention after documented review',titleAr:'لا يلزم إجراء إضافي بعد المراجعة الموثقة',
     steps:[]

@@ -98,16 +98,11 @@
      <div class="section-heading">
       <div><span class="overline">{{copy('EXISTING A01/A02 + NMC INCIDENT RISK RULES','سياق A01/A02 الحالي · ٤ عوامل بقواعد NMC')}}</span>
        <h4>{{copy('Incident Risk Assessment & Follow-up','تقييم مخاطر الحادث وخطة المتابعة')}}</h4></div>
-      <button class="analyze" type="button"
-        [disabled]="busy || loading || !incident.aiReviewRequested ||
-          !health?.aiConfigured || incident.aiAssessment?.assessmentStatus==='HUMAN_REVIEWED'"
-        (click)="assess(!!incident.aiAssessment)">
-        {{busy?copy('Analyzing…','جارٍ التحليل…'):
-          incident.aiAssessment?.assessmentStatus==='HUMAN_REVIEWED'?
-            copy('Officer review saved','قرار الموظف محفوظ'):
-          incident.aiAssessment?copy('Reassess unapproved result','إعادة تقييم غير المعتمد'):
-          copy('Analyze with AI','تحليل الحادث بالذكاء الاصطناعي')}}
-      </button>
+      <span class="triage-auto-pill">
+        {{incident.aiAssessment?
+          copy('✓ Automatically assessed','✓ تم التقييم تلقائيًا'):
+          copy('⟳ Automatic source triage','⟳ تقييم تلقائي من مصادر البلاغات')}}
+      </span>
      </div>
      <div class="message warn" *ngIf="!health?.aiConfigured">
       {{copy('Incident analysis reuses existing Airia A01/A02. Ensure both agents and the shared Airia key are enabled.',
@@ -155,41 +150,28 @@
       <p class="ai-provenance">AI {{ai.aiProvider}} · {{ai.aiModel}} · {{ai.assessedAt}}
        <br/>{{copy('Incident score is computed by NMC rules using source report and grounded A01 actions; the model does not return a numeric incident score. Official vessel risk stays unchanged. No enforcement.',
         'التقييم استرشادي ومنفصل عن Overall Risk الخاص بالسفينة. لا يوجد تنفيذ تلقائي لأي عقوبة أو منع.')}}</p>
-      <div class="human-review" *ngIf="ai.assessmentStatus!=='HUMAN_REVIEWED'">
-       <h4>{{copy('Human follow-up approval','اعتماد المتابعة بواسطة الموظف')}}</h4>
-       <div class="review-fields">
-        <label>{{copy('Officer','الموظف')}}<input [(ngModel)]="officer" maxlength="80"
-          [placeholder]="copy('Officer name','اسم الموظف')"/></label>
-        <label>{{copy('Final proposed follow-up','المتابعة بعد المراجعة')}}
-          <select [(ngModel)]="followupSelection">
-           <option *ngFor="let code of followupOptions" [value]="code">{{code}}</option>
-          </select>
-        </label>
-       </div>
-       <textarea rows="3" [(ngModel)]="officerNote" maxlength="1000"
-         [placeholder]="copy('Review reason and supporting evidence (required)', 'سبب الاعتماد أو التعديل والأدلة (إلزامي)')"></textarea>
-       <div class="review-actions">
-        <button (click)="review('ACCEPT')" [disabled]="busy">{{copy('Accept AI follow-up','اعتماد متابعة AI')}}</button>
-        <button (click)="review('MODIFY')" [disabled]="busy" class="outline">{{copy('Modify follow-up','تعديل المتابعة')}}</button>
-        <button (click)="review('REJECT')" [disabled]="busy" class="reject">{{copy('Reject / verify information','رفض / طلب التحقق')}}</button>
-       </div>
-       <small>{{copy('This writes an audited review to AI_Assessments only; it does not dispatch an inspection, restrict a port or change source incident status.',
-        'يسجل القرار في AI_Assessments فقط، ولا ينشئ معاينة أو يمنع ميناء أو يغيّر حالة الحادث في المصدر.')}}</small>
-      </div>
-      <div class="reviewed-note" *ngIf="ai.assessmentStatus==='HUMAN_REVIEWED'">
-       ✓ {{copy('Officer review saved','تم حفظ مراجعة الموظف')}}:
-       {{ai.officerDecision}} · {{ai.approvedFollowupStatus}}
-       <p>{{copy('Officer-approved next-step state','حالة المتابعة المعتمدة من الموظف')}}:
-         <strong>{{ai.approvedFollowupState||incident.nextFollowup?.status}}</strong></p>
-       <p *ngIf="ai.officerReviewReason">{{copy('Officer rationale','مبرر الموظف')}}:
-         {{ai.officerReviewReason}}</p>
-       <small>{{copy('Recorded as pending follow-up. No referral, incident closure or enforcement has been executed.',
-         'تم تسجيل المتابعة المطلوبة فقط، دون تنفيذ إحالة أو إغلاق أو إجراء تنظيمي.')}}</small>
+      <div class="case-management-followup">
+        <h4>{{copy('Case Management owns follow-up decisions','القرارات والمتابعة داخل إدارة الحالات')}}</h4>
+        <p>{{copy('The NMC backend automatically opens or links a maritime case after an evidence-grounded assessment. Officers approve actions, assign and track tasks inside that case.',
+        'يفتح NMC حالة بحرية أو يربط الحادث بحالة قائمة بعد التقييم تلقائيًا. اعتماد الإجراءات وإسناد المهام ومتابعتها يتم داخل إدارة الحالات.')}}</p>
+        <div *ngIf="incident.linkedCaseId; else waitingForCase" class="case-ready">
+          <strong>{{copy('Case','الحالة')}}: {{incident.linkedCaseId}}</strong>
+          <span>{{incident.linkedCaseStatus}} · {{incident.caseIncidentDecisionStatus}}</span>
+          <a [routerLink]="['/moei/nmc/vessel',incident.imo,'case']">
+            {{copy('Open Case Management →','فتح إدارة الحالة ←')}}
+          </a>
+        </div>
+        <ng-template #waitingForCase>
+          <span class="case-sync-pending">
+            {{copy('Waiting for automatic case creation/linking. Check backend triage/case-store status if this persists.',
+              'جارٍ ربط الحالة تلقائيًا. إذا استمر الانتظار، راجع تشغيل معالجة البلاغات وقاعدة بيانات الحالات.')}}
+          </span>
+        </ng-template>
       </div>
      </div>
      <div *ngIf="!incident.aiAssessment" class="no-ai">
-      {{copy('No incident assessment recorded yet. Reuses the existing A01/A02 requests and responses; a saved vessel assessment is required and A01 must cite the supplied report evidence.',
-        'لا يوجد تقييم محفوظ للحادث بعد. نستخدم A01/A02 بنفس Request/Response الحاليين؛ يلزم تقييم سفينة محفوظ وأن يشير A01 إلى دليل الحادث.')}}</div>
+      {{copy('Automatic A02→A01 assessment is queued for opted-in source reports. No user click is necessary; valid saved vessel evidence and an A01 citation to the incident source are required.',
+        'يُعالج NMC البلاغ تلقائيًا باستخدام A02 ثم A01 دون الحاجة لزر، بشرط وجود أدلة السفينة وحصولنا على استشهاد A01 بدليل البلاغ.')}}</div>
     </section>
    </article>
    <ng-template #noSelection><div class="incident-detail empty">{{copy('Select a source incident to inspect its description and risk.',

@@ -323,9 +323,13 @@
                   {{report.nextFollowup.status}}
                 </p>
               </div>
+              <a [routerLink]="['/moei/nmc/vessel',vessel.imo,'case']"
+                 class="attention-incident-detail-link" (click)="$event.stopPropagation()">
+                {{copy('Open Case Management · follow-up actions →','فتح إدارة الحالة ومتابعة الإجراءات ←')}}
+              </a>
               <a routerLink="/moei/nmc/incidents" class="attention-incident-detail-link"
-                (click)="$event.stopPropagation()">
-                {{copy('Open Incident Intelligence & AI →','فتح الحوادث وتحليل AI →')}}
+                (click)="$event.stopPropagation()" style="margin-inline-start:12px">
+                {{copy('Incident source & assessment','مصدر الحادث وتقييمه')}}
               </a>
             </div>
           </ng-container>

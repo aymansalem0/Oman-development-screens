@@ -67,3 +67,36 @@ Optional scheduled automatic analysis remains OFF by default and MUST be deliber
 A V8 in-memory test validates that A02 uses the current fleet-signal property set, A01 uses the current situation-assessment property set, both receive the report in existing evidence/context fields, A01 must cite it, original vessel score is unchanged, and separate score/follow-up are derived. The full Node suite, Angular build, local Docker and live Airia incident demonstration are **not yet verified**. If the live pipelines do not cite additional incident evidence in their normal response, manual review remains required; don't silently invent model analysis.
 
 No automatic maritime enforcement, incident confirmation, actual case creation, legal restrictions or Smart Inspection referral is implemented in this stage.
+
+
+## Stage 1B — Automatic intake + central Case Management (current)
+**Supersedes earlier manual Analyze/Approve UI instructions above.** The user requested that incident triage start automatically when a Google Sheet source row arrives, and all officer action decisions be managed inside the same NMC Case Management system.
+
+### Runtime behavior
+- With `compose.incident-google.yaml`, the incident worker starts **automatically on backend startup** and polls every **5 minutes**. It processes up to **3 opted-in reports per cycle** (`AI_Review_Request=YES`). Each previously unassessed case uses exactly A02 then A01 with their existing schema, up to two Airia calls per incident. Existing saved assessments are reused; a browser refresh never triggers AI.
+- The worker skips already assessed unchanged descriptions, resolved/closed source reports and rows without opt-in. If A01 does not cite the incident evidence, it fails closed; no fake score/case.
+- After a valid saved incident assessment, the worker **automatically opens ONE active central NMC Case per vessel or links the incident to an existing active case**, with append-only case audit; it creates **zero approved tasks/inspections** at intake. Already assessed reports (e.g. `INC-POC-0001`) are backfilled into Cases on the next tick without repeat Airia spend.
+- The Incident Intelligence screen is **read-only for AI evaluation and human follow-up**. It displays background assessment status and a link to the vessel's central `/moei/nmc/vessel/<IMO>/case` page once the case is linked. The old incident `/review` API is disabled with 409; no dual approval history.
+- Inside **Case Management**, the NMC officer reviews each incident report and recommendation, chooses **Accept / Modify / Reject**, provides name and reason, and approves mapped Case tasks. Tasks have proper accountable roles, status, evidence and case audit. Smart Inspection referral is created **only after the human approval**, in `PENDING_SCHEDULING` state, never automatically dispatched.
+- Case resolution remains blocked while incident decisions or mandatory follow-up tasks are outstanding; completion of a real inspection requires post-inspection evidence/reassessment before closure. No source `Incident_Registry.Operational_Status` is silently updated.
+
+### Configuration
+```ini
+NMC_INCIDENT_AUTO_TRIAGE_ENABLED=true
+NMC_INCIDENT_AUTO_INTERVAL_MINUTES=5
+NMC_INCIDENT_AUTO_MAX_PER_CYCLE=3
+```
+The Compose overlay now defaults to these values. Disable the worker explicitly with `NMC_INCIDENT_AUTO_TRIAGE_ENABLED=false` if you want to stop recurring Airia charges. All 3 current synthetic source incidents have `AI_Review_Request=YES`, so initial startup may trigger paid calls for those that lack a saved assessment and already have a completed saved A01/A02 vessel snapshot.
+
+### Oracle compatibility
+An incident-source case has no source alert; it stores `SOURCE_ALERT_ID=NULL` in existing `NMC_CASE`. When Oracle's existing `SOURCE_ALERT_ID` is NOT NULL, a DBA must review/run `tools/oracle/nmc-incident-case-source.sql` once so incident-sourced records can be saved without an artificial alert. No new tables are needed. The case link failure is logged and retried on the next poll without repeating successful AI calls.
+
+### Demo acceptance
+1. Open `/moei/nmc/incidents`. The **Analyze** and separate follow-up approval buttons should be absent.
+2. For a new opted-in source report, check the backend `[nmc-incidents] STARTUP_TRIAGE` or `TRIAGE_TICK` logs. After a valid, evidence-citing A01 response, the Incident AI score is appended automatically to `AI_Assessments`.
+3. Confirm the source event is linked to the central Case screen. Two reports for the same IMO should appear **inside one active Case**, with zero tasks before approval.
+4. Select one incident inside Case Management, enter officer name/justification, and click Accept/Modify/Reject. Only then does the Case populate assigned tasks and optional pending Smart Inspection referral.
+5. Confirm the Case audit shows `INCIDENT_CASE_CREATED` / `INCIDENT_LINKED` / `INCIDENT_DECISION_*` and that Source Operational Status and saved Vessel Overall Risk are unchanged.
+
+### Limitations
+The current Case Management schema may need the nullable-source-alert migration noted above. Live Airia, full Angular build, Oracle database DDL and Docker runtime have **not** been independently verified here. Automatic polling is not event-triggered streaming; up to five minutes of latency applies.

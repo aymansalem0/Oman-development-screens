@@ -75,6 +75,13 @@ export class NmcCaseWorkspaceComponent implements OnInit {
   selectedOperationalCode='';
   operationalDecisionReason='';
   decisionCatalogueError='';
+  readonly incidentFollowupOptions=[
+    'VERIFY_INFORMATION','ACTIVE_MONITORING','REFER_SMART_INSPECTION',
+    'ESCALATE_TO_AUTHORITY','INCIDENT_RESPONSE','CLOSE_AFTER_VERIFICATION'
+  ];
+  incidentFollowupSelection:Record<string,string>={};
+  incidentOfficerName='';
+  incidentOfficerReasons:Record<string,string>={};
   readonly humanActionTypes=[
     'VERIFY_CERTIFICATE','ENHANCED_MONITORING','PRIORITY_INSPECTION',
     'REVIEW_DEFICIENCY','VERIFY_DEFICIENCY_CLOSURE',
@@ -265,17 +272,19 @@ export class NmcCaseWorkspaceComponent implements OnInit {
     if(!this.centralCase)return false;
     // A reviewed plan with every action rejected / NO_ACTION may have zero
     // tasks. That is a deliberate human decision, not an empty-case default.
-    if(!this.centralCase.actionPlan)return false;
+    if(!this.centralCase.actionPlan&&!(this.centralCase.incidentEvents||[]).length)return false;
     if(this.pendingAiActionCount>0)return false;
     return this.tasks.filter(t=>t.mandatory)
       .every(t=>t.status==='Completed');
   }
 
   get pendingAiActionCount():number{
+    const incidentPending=(this.centralCase?.incidentEvents||[])
+      .filter(r=>r.decisionStatus==='PENDING_HUMAN_REVIEW').length;
     if(this.centralCase?.operationalDecision)return this.centralCase.operationalDecision
-      .decisionStatus==='PENDING_HUMAN_REVIEW'?1:0;
-    return this.centralCase?.actionPlan?.proposedActions.filter(
-      a=>a.decision==='PENDING').length||0;
+      .decisionStatus==='PENDING_HUMAN_REVIEW'?1+incidentPending:incidentPending;
+    return (this.centralCase?.actionPlan?.proposedActions.filter(
+      a=>a.decision==='PENDING').length||0)+incidentPending;
   }
 
   get approvedAiTaskCount():number{
@@ -310,6 +319,18 @@ export class NmcCaseWorkspaceComponent implements OnInit {
 
   get nextAction(): string {
     const next = this.tasks.find(task => task.status !== 'Completed');
+    if((this.centralCase?.incidentEvents||[]).some(e=>
+         e.decisionStatus==='PENDING_HUMAN_REVIEW'))
+      return this.copy('Review the incident follow-up decision inside this case',
+        'مراجعة قرار متابعة الحادث داخل الحالة');
+    if(!this.centralCase?.actionPlan&&this.centralCase?.incidentEvents?.length){
+      if(this.riskReassessmentPending)
+        return this.copy('Await post-inspection evidence review',
+          'في انتظار مراجعة أدلة ما بعد المعاينة');
+      const task=this.tasks.find(t=>t.status!=='Completed');
+      return task?task.title:this.copy('Document closure evidence and resolve the case',
+        'توثيق أدلة المعالجة وإغلاق الحالة');
+    }
     if(!this.centralCase?.actionPlan)return this.copy(
       'A01 recommendations were unavailable at case creation · retry',
       'توصيات A01 لم تتوفر عند إنشاء الحالة · إعادة المحاولة');
@@ -398,6 +419,51 @@ export class NmcCaseWorkspaceComponent implements OnInit {
 
 
   /** POC route is derived from a saved A01 action, NOT a direct AI enforcement order. */
+  /**
+   * All incident action approvals happen in Case Management, never on the
+   * Incident Intake screen and never via an automatic AI transition.
+   */
+  reviewCaseIncident(id:string,decision:'ACCEPT'|'MODIFY'|'REJECT'):void{
+    const current=this.centralCase;
+    if(!current||this.centralBusy||current.status==='RESOLVED')return;
+    const report=(current.incidentEvents||[]).find(x=>x.incidentId===id);
+    if(!report||report.decisionStatus!=='PENDING_HUMAN_REVIEW')return;
+    const selected=decision==='ACCEPT'?report.suggestedFollowup:
+      decision==='REJECT'?'VERIFY_INFORMATION':
+      this.incidentFollowupSelection[id]||report.suggestedFollowup;
+    const reason=(this.incidentOfficerReasons[id]||'').trim();
+    const officer=this.incidentOfficerName.trim();
+    if(reason.length<15||officer.length<3){
+      this.centralError=this.copy(
+        'Enter an officer name and a documented reason (at least 15 characters).',
+        'أدخل اسم الموظف وسببًا موثقًا لا يقل عن 15 حرفًا.');
+      return;
+    }
+    if(decision==='MODIFY'&&selected===report.suggestedFollowup){
+      this.centralError=this.copy('Select a different follow-up for Modify.',
+        'اختر متابعة مختلفة عند تعديل التوصية.');
+      return;
+    }
+    if(!window.confirm(this.copy(
+      'Save the incident decision and generate its accountable case tasks? No real authority, port or vessel control will be invoked.',
+      'حفظ قرار الحادث وإنشاء مهامه داخل الحالة؟ لن يتم تنفيذ أي أمر تنظيمي أو تغيير على الميناء أو السفينة.')))return;
+    this.centralBusy=true;this.centralError='';this.centralSuccess='';
+    this.cases.decideIncident(current,id,decision,selected,reason,officer).subscribe({
+      next:r=>{
+        this.centralBusy=false;
+        if(r.case)this.applyCase(r.case);
+        this.centralSuccess=this.copy(
+          'Incident follow-up approved; central case tasks/roles and audit trail updated.',
+          'تم اعتماد متابعة الحادث وإنشاء مهامها وأدوارها داخل الحالة وتحديث سجل الإجراءات.');
+        this.loadCentralHistory();
+      },
+      error:e=>{
+        this.centralBusy=false;this.centralError=this.cases.readableError(e,this.lang.isArabic);
+        if(e?.status===409)this.loadCentralCase();
+      }
+    });
+  }
+
   get canConvertLegacyA01():boolean{
     const row=this.centralCase;
     return !!row&&row.status!=='RESOLVED'&&!row.operationalDecision&&
@@ -682,7 +748,8 @@ export class NmcCaseWorkspaceComponent implements OnInit {
     // remain stored for audit but never appear as current recommendations.
     const current=this.centralCase;
     this.tasks=(current?.tasks||[])
-      .filter(t=>['AIRIA_A01_HUMAN_APPROVED','NMC_DECISION_HUMAN_APPROVED'].includes(t.provenance||''))
+      .filter(t=>['AIRIA_A01_HUMAN_APPROVED','NMC_DECISION_HUMAN_APPROVED',
+        'NMC_INCIDENT_HUMAN_APPROVED'].includes(t.provenance||''))
       .map(stored=>{
         const priority:CaseTask['priority']=stored.priority==='CRITICAL'||
           stored.priority==='IMMEDIATE'?'Critical':
@@ -693,7 +760,10 @@ export class NmcCaseWorkspaceComponent implements OnInit {
           actionId:stored.actionId,
            title:this.lang.isArabic?(stored.titleAr||stored.title||stored.actionType||stored.id):(stored.title||stored.actionType||stored.id),
           owner:stored.assignedRole,
-          source:stored.provenance==='NMC_DECISION_HUMAN_APPROVED'
+          source:stored.provenance==='NMC_INCIDENT_HUMAN_APPROVED'
+             ?this.copy('Maritime incident follow-up · human-approved case action',
+                'متابعة حادث بحري · إجراء معتمد من الموظف داخل الحالة')
+             :stored.provenance==='NMC_DECISION_HUMAN_APPROVED'
              ?this.copy('NMC business decision workflow · approved by officer',
                 'إجراءات قرار المركز البحري · معتمدة من الموظف')
              :stored.approvalMode==='MODIFY'
@@ -718,11 +788,15 @@ export class NmcCaseWorkspaceComponent implements OnInit {
       this.caseStatus='In Progress';
 
     const actions=current?.actionPlan?.proposedActions||[];
-    const roles=[...new Set((current?.operationalDecision?.approvedWorkflowSteps||
-      current?.operationalDecision?.workflowSteps||[]).map(a=>a.role).filter(Boolean).length
-      ?(current?.operationalDecision?.approvedWorkflowSteps||
-        current?.operationalDecision?.workflowSteps||[]).map(a=>a.role)
-      :actions.map(a=>a.ownerRole).filter(Boolean))];
+    const incidentRoles=(current?.tasks||[])
+      .filter(t=>t.provenance==='NMC_INCIDENT_HUMAN_APPROVED')
+      .map(t=>t.assignedRole);
+    const decisionRoles=(current?.operationalDecision?.approvedWorkflowSteps||
+      current?.operationalDecision?.workflowSteps||[])
+      .map(step=>step.role).filter(Boolean);
+    const actionRoles=actions.map(action=>action.ownerRole).filter(Boolean);
+    const roles=[...new Set([...incidentRoles,
+      ...(decisionRoles.length?decisionRoles:actionRoles)])];
     this.stakeholders=[
       {
         role:this.copy('Case Owner','مالك الحالة'),
