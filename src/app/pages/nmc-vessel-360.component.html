@@ -400,17 +400,23 @@
           <div class="panel-header">
             <div>
               <h3>{{ copy('Correlated Data Sources', 'مصادر البيانات المترابطة') }}</h3>
-              <p>{{ copy('Every business fact retains source, timestamp and confidence', 'كل معلومة تحتفظ بالمصدر ووقت التحديث ودرجة الثقة') }}</p>
+              <p>{{copy('POC source provenance · actual API read times · synthetic vs connected vs unavailable',
+                'مصادر بيانات التجربة · وقت قراءة API الفعلي · تمييز التجريبي والمتصل وغير المتاح')}}</p>
             </div>
-            <span class="source-summary">{{ sources.length }} {{ copy('sources', 'مصادر') }} · {{ conflictCount }} {{ copy('conflicts', 'تعارضات') }}</span>
+            <span class="source-summary">{{sources.length}} {{copy('source entries','سجل مصدر')}} ·
+              {{conflictCount}} {{copy('evidence-based conflicts','تعارضات مثبتة بالمقارنة')}}</span>
           </div>
 
+          <p class="source-provenance-notice">
+            {{copy('Synthetic fixture entries are not live official integrations. Last read is when NMC received the API response, NOT the last update at the reporting authority. "—" means no verified timestamp or confidence.',
+              'السجلات التجريبية ليست تكاملات رسمية مباشرة. وقت القراءة هو وقت استجابة API لدى المنصة، وليس آخر تحديث عند الجهة. تعني «—» عدم توافر وقت أو درجة ثقة متحقق منها.')}}
+          </p>
           <div class="source-table">
             <div class="source-row header">
               <span>{{ copy('Source', 'المصدر') }}</span>
               <span>{{ copy('Record', 'السجل') }}</span>
               <span>{{ copy('Authority', 'الجهة المعتمدة') }}</span>
-              <span>{{ copy('Last sync', 'آخر مزامنة') }}</span>
+              <span>{{copy('Last read','آخر قراءة')}}</span>
               <span>{{ copy('Confidence', 'الثقة') }}</span>
               <span>{{ copy('Status', 'الحالة') }}</span>
             </div>
@@ -418,9 +424,15 @@
             <div class="source-row" *ngFor="let source of sources">
               <div>
                 <strong>{{ source.name }}</strong>
-                <small>{{ source.system }}</small>
+                <small>{{source.system}}</small>
+                <small class="source-data-nature">{{source.dataNature}}</small>
               </div>
-              <span>{{ source.record }}</span>
+              <span class="source-record-cell">
+                {{source.record}}
+                <small *ngIf="source.recordId">ID: {{source.recordId}}</small>
+                <a *ngIf="source.route" [routerLink]="source.route"
+                  class="source-data-link">{{copy('Open source evidence →','عرض المصدر والأدلة ←')}}</a>
+              </span>
               <span class="authority-cell">
                 <b class="source-class" [ngClass]="{
                   'moei-authority': source.sourceClass === 'MOEI Authoritative',
@@ -431,8 +443,10 @@
                 }">{{ sourceClassLabel(source.sourceClass) }}</b>
                 <small>{{ source.authority }}</small>
               </span>
-              <span>{{ source.lastSync }}</span>
-              <span>{{ source.confidence }}%</span>
+              <span [attr.title]="source.lastSync==='—' ? copy('Not connected / no proven update time','غير متصل / وقت تحديث غير متحقق') : source.lastSync">
+                {{source.lastSync==='—'?'—':(source.lastSync | date:'short')}}
+              </span>
+              <span>{{source.confidence===null?'—':(source.confidence+'%')}}</span>
               <span class="status-chip" [ngClass]="source.status.toLowerCase()">{{ sourceStatusLabel(source.status) }}</span>
             </div>
           </div>
