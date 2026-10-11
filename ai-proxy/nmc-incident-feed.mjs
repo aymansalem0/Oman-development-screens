@@ -195,8 +195,7 @@ export class NmcIncidentFeed {
    // Reuse existing A01/A02 Airia pipeline execution; NEVER a separate LLM.
    executeIncidentAgents=null,
    agentEnabled=()=>false,
-   autoEnabled=process.env.NMC_INCIDENT_AUTO_TRIAGE_ENABLED==='true'&&
-     process.env.NMC_INCIDENT_AIRIA_EXTENSION_CONFIRMED==='true',
+   autoEnabled=process.env.NMC_INCIDENT_AUTO_TRIAGE_ENABLED==='true',
    autoMaxPerCycle=Number(process.env.NMC_INCIDENT_AUTO_MAX_PER_CYCLE||2),
    fetchImpl=globalThis.fetch,
    credentials=null
@@ -220,8 +219,8 @@ export class NmcIncidentFeed {
    this.agentEnabled()===true;}
  health(){return {sourceConfigured:this.configured,aiConfigured:this.aiConfigured,
    aiProvider:this.provider,scorePolicy:SCORE_VERSION,
-   incidentAgentContract:'NMC_INCIDENT_A01_A02_EXT_V1',
-   incidentContractRuntimeVerified:false,
+   incidentAgentContract:'A01_A02_EXISTING_CONTRACTS_V1',
+   incidentGroundingRequirement:'A01_REPORT_EVIDENCE_CITATION_REQUIRED',
    automaticTriageEnabled:this.autoEnabled,
    autoMaxPerCycle:this.autoMaxPerCycle,lastAutoRun:this.lastAutoRun,
    sourceStatus:this.configured?'READY_TO_FETCH':'NOT_CONFIGURED',
@@ -351,9 +350,9 @@ export class NmcIncidentFeed {
  async runAI(incident){
   if(!this.aiConfigured)
    throw new IncidentTriageError('AIRIA_A01_A02_NOT_ENABLED',503);
-  // The backend adapter uses the EXISTING A01/A02 Airia pipeline IDs.
-  // The agents must explicitly return the incident extension contract;
-  // never fake a score from normal vessel-risk signals.
+  // The backend adapter uses the EXISTING A02 signals + A01 situation
+  // assessment requests/responses. The incident score comes from deterministic
+  // NMC rules; if A01 fails to cite the report no result is saved.
   return await this.executeIncidentAgents(incident);
  }
  /**
