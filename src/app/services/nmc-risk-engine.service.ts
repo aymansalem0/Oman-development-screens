@@ -5,7 +5,7 @@ import { map, tap } from 'rxjs/operators';
 import { NmcVesselProfile, RiskLevel } from '../data/nmc-vessel-catalog';
 import { NMC_OPERATIONAL_VESSELS } from '../data/nmc-expanded-vessel-catalog';
 
-export type RiskFactorKey = 'movement' | 'inspection' | 'certificate' | 'dataQuality' | 'history' | 'documentIntegrity';
+export type RiskFactorKey = 'movement' | 'inspection' | 'certificate' | 'dataQuality' | 'history';
 export type RiskCalculationMode = 'weighted' | 'conservative' | 'max-signal';
 
 export interface RiskWeights {
@@ -14,7 +14,6 @@ export interface RiskWeights {
   certificate: number;
   dataQuality: number;
   history: number;
-  documentIntegrity: number;
 }
 
 export interface RiskThresholds {
@@ -80,8 +79,7 @@ const DEFAULT_CONFIG: RiskEngineConfig = {
     inspection: 28,
     certificate: 20,
     dataQuality: 14,
-    history: 13,
-    documentIntegrity: 0
+    history: 13
   },
   thresholds: {
     watch: 45,
@@ -190,7 +188,9 @@ export class NmcRiskEngineService {
 
   cloneConfig(config: RiskEngineConfig): RiskEngineConfig {
     const copy=JSON.parse(JSON.stringify(config)) as RiskEngineConfig;
-    copy.weights.documentIntegrity=Number(copy.weights.documentIntegrity||0);
+    // Existing saved browser policy can contain an obsolete optional A03
+    // factor. Do not import it into the active five-factor scoring schema.
+    delete (copy.weights as unknown as Record<string,number>).documentIntegrity;
     return copy;
   }
 
@@ -269,9 +269,9 @@ export class NmcRiskEngineService {
     config: RiskEngineConfig = this.configSubject.value
   ): RiskEvaluation {
     const keys: RiskFactorKey[] = ['movement', 'inspection', 'certificate', 'dataQuality', 'history'];
-    if(Number(config.weights.documentIntegrity||0)>0)keys.push('documentIntegrity');
+
     if (!keys.every(key => Number.isFinite(severities[key]) && severities[key] >= 0 && severities[key] <= 100)) {
-      throw new Error('Missing required validated A03 document-integrity signal; no risk projection can be calculated.');
+      throw new Error('Missing validated A01/A02 five-factor signals; no risk projection can be calculated.');
     }
 
     let score = this.weightedScore(severities, config.weights);
@@ -369,6 +369,10 @@ export class NmcRiskEngineService {
 
   validate(config: RiskEngineConfig): string[] {
     const errors: string[] = [];
+    if(Object.keys(config.weights).some(key=>!['movement','inspection','certificate',
+        'dataQuality','history'].includes(key))){
+      errors.push('Unsupported risk factor; A03 document integrity has been retired.');
+    }
     const totalWeight = Object.values(config.weights).reduce((sum, value) => sum + Number(value || 0), 0);
 
     if (Object.values(config.weights).some(value =>
@@ -434,8 +438,7 @@ export class NmcRiskEngineService {
         deterministic(7, 21, 10) * 0.75 +
         (age > 20 ? 5 : age > 15 ? 3 : 0),
         0, 100
-      ),
-      documentIntegrity: 0 // No A03 evidence in local fixtures; zero weight by default. Never claim verified quality.
+      )
 
     };
   }

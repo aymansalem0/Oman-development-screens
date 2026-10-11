@@ -2091,3 +2091,26 @@ button {
 @media (max-width:960px){
   .app-shell.smart-inspection-mode .erp-layout { padding-inline-start: 0; }
 }
+
+/* The closed-by-default MOEI navigation is an overlay, not reserved space. */
+.app-shell .nmc-shell .nmc-main,
+.app-shell .nmc-shell.rtl .nmc-main,
+.app-shell .v360-shell .v360-main,
+.app-shell .v360-shell.rtl .v360-main,
+.app-shell .case-shell .case-main,
+.app-shell .case-shell.rtl .case-main,
+.app-shell .risk-admin-shell .admin-main,
+.app-shell .risk-admin-shell.rtl .admin-main{
+ margin-left:0!important;margin-right:0!important;max-width:100%!important;
+}
+.app-shell.smart-inspection-mode .si-layout,
+.app-shell.smart-inspection-mode .erp-layout{padding-inline-start:0!important;}
+.app-shell .nmc-shell .nmc-main,
+.app-shell .v360-shell .v360-main{
+ padding-inline-start:max(56px,env(safe-area-inset-left))!important;
+}
+.app-shell[dir="rtl"] .nmc-shell .nmc-main,
+.app-shell[dir="rtl"] .v360-shell .v360-main{
+ padding-inline-start:16px!important;
+ padding-inline-end:max(56px,env(safe-area-inset-right))!important;
+}

@@ -85,8 +85,7 @@ export class NmcRiskConfigurationAdminComponent implements OnInit, OnDestroy {
     'inspection',
     'certificate',
     'dataQuality',
-    'history',
-    'documentIntegrity'
+    'history'
   ];
 
   readonly modes: Array<{value: RiskCalculationMode; en: string; ar: string; descriptionEn: string; descriptionAr: string}> = [
@@ -243,7 +242,7 @@ export class NmcRiskConfigurationAdminComponent implements OnInit, OnDestroy {
               if(!vessel||!assessment||assessment.status!=='COMPLETED'||
                  assessment.authoritative!==false||!Number.isFinite(assessment.score)||
                  !assessment.assessmentId||!Array.isArray(assessment.signals)||
-                 !this.factorKeys.filter(key=>key!=='documentIntegrity').every(key=>assessment.signals.filter(x=>
+                 !this.factorKeys.every(key=>assessment.signals.filter(x=>
                    x.factor===key&&Number.isFinite(x.severity)).length===1))return [];
               return [{vessel,assessment}];
             });
@@ -312,8 +311,7 @@ export class NmcRiskConfigurationAdminComponent implements OnInit, OnDestroy {
       inspection: ['Inspection & deficiencies', 'المعاينات والملاحظات'],
       certificate: ['Certificates & regulatory status', 'الشهادات والحالة التنظيمية'],
       dataQuality: ['Data quality & source conflicts', 'جودة البيانات وتعارض المصادر'],
-      history: ['Vessel / operator history', 'السجل التاريخي للسفينة / المشغل'],
-      documentIntegrity: ['Document integrity (A03)', 'اتساق المستندات (A03)']
+      history: ['Vessel / operator history', 'السجل التاريخي للسفينة / المشغل']
     };
     return this.copy(labels[key][0], labels[key][1]);
   }
@@ -324,8 +322,7 @@ export class NmcRiskConfigurationAdminComponent implements OnInit, OnDestroy {
       inspection: ['Open deficiencies, inspection outcomes and technical exposure.', 'الملاحظات المفتوحة ونتائج المعاينة والتعرض الفني.'],
       certificate: ['Certificate validity, conditions and regulatory compliance signals.', 'صلاحية الشهادات وشروطها ومؤشرات الامتثال التنظيمي.'],
       dataQuality: ['Source confidence, completeness and unresolved data conflicts.', 'الثقة في المصادر واكتمال البيانات والتعارضات غير المحلولة.'],
-      history: ['Historical vessel, operator and recurring compliance patterns.', 'السجل التاريخي للسفينة والمشغل وأنماط الامتثال المتكررة.'],
-      documentIntegrity: ['A03 citation-grounded cross-source document mismatches. Certificate expiry is counted by A02 only.', 'اختلافات مستندات A03 المدعومة بنصوص مصدرية. صلاحية الشهادات تدخل في عامل A02 فقط.']
+      history: ['Historical vessel, operator and recurring compliance patterns.', 'السجل التاريخي للسفينة والمشغل وأنماط الامتثال المتكررة.']
     };
     return this.copy(labels[key][0], labels[key][1]);
   }
@@ -443,8 +440,7 @@ export class NmcRiskConfigurationAdminComponent implements OnInit, OnDestroy {
   }
 
   private evaluateSaved(vessel:NmcVesselProfile,assessment:FleetAiAssessment,config:RiskEngineConfig){
-    const keys=this.factorKeys.filter(key=>key!=='documentIntegrity'||
-      Number(config.weights.documentIntegrity||0)>0);
+    const keys=this.factorKeys;
     if(keys.some(key=>!assessment.signals.some(s=>s.factor===key&&Number.isFinite(s.severity))))
       return null;
     const severities=Object.fromEntries(keys.map(key=>

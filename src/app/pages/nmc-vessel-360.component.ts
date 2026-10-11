@@ -1,6 +1,5 @@
 import { NmcNavigationComponent } from '../components/nmc-navigation.component';
 import { NmcMinistryLogoComponent } from '../components/nmc-ministry-logo.component';
-import { NmcVesselDocumentsComponent } from '../components/nmc-vessel-documents.component';
 import { CommonModule } from '@angular/common';
 import { AfterViewInit, Component, ElementRef, OnDestroy, OnInit, ViewChild } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
@@ -120,7 +119,7 @@ interface Vessel360View extends NmcVesselProfile {
 @Component({
   selector: 'app-nmc-vessel-360',
   standalone: true,
-  imports: [CommonModule, RouterLink, NmcNavigationComponent, NmcVesselDocumentsComponent, NmcMinistryLogoComponent],
+  imports: [CommonModule, RouterLink, NmcNavigationComponent, NmcMinistryLogoComponent],
   templateUrl: './nmc-vessel-360.component.html',
   styleUrl: './nmc-vessel-360.component.css'
 })
@@ -129,14 +128,13 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
 
   imo = '';
   activeTab = 'overview';
-  certificateVerificationStarted = false;
-  priorityInspectionCreated = false;
   selectedCertificateId = '';
 
   vessel!: Vessel360View;
   sources: SourceStatus[] = [];
   private vesselIncidents:NmcMaritimeIncident[]|null=null;
   private incidentReadAt:string|null=null;
+  private requestedAccidentsTab=false;
   private vesselCases:NmcCentralCase[]|null=null;
   private caseReadAt:string|null=null;
   private pscReadAt:string|null=null;
@@ -210,8 +208,7 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
       completeness: ['Data completeness', 'اكتمال البيانات'],
       consistency: ['Cross-source consistency', 'اتساق المصادر'],
       evidenceLinkage: ['Evidence linkage', 'ربط الأدلة'],
-      provenance: ['Source metadata coverage', 'اكتمال بيانات تعريف المصدر'],
-      documentConsistency: ['A03 document cross-source consistency', 'اتساق مستندات A03 مع المصادر الأخرى']
+      provenance: ['Source metadata coverage', 'اكتمال بيانات تعريف المصدر']
     };
     const v = labels[key];
     return v ? this.copy(v[0], v[1]) : key;
@@ -235,8 +232,6 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
         return this.copy(
           'Current V1 rule: score 100 when sourceSystem, datasetVersion and retrievedAt all exist; otherwise score 60. This checks metadata availability, not the source authority.',
           'قاعدة النسخة الحالية: 100 عند توافر sourceSystem وdatasetVersion وretrievedAt جميعاً؛ وإلا 60. هذا فحص لتوافر بيانات تعريف المصدر وليس اعتماد المصدر.');
-      case 'documentConsistency':
-        return this.copy('Grounded A03 maritime-document fields compared with synthetic Vessel 360 certificates; document authenticity is NOT verified.', 'مقارنة حقول مستندات A03 المدعومة بالنص مع بيانات الشهادات التجريبية في Vessel 360 دون إثبات أصالة المستند.');
       default: return '';
     }
   }
@@ -404,10 +399,13 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
     this.loadDriveSources();
     this.loadStoredAi();
 
-    const requestedTab = this.route.snapshot.queryParamMap.get('tab');
-    if (requestedTab && ['overview','movement','compliance','inspection','external-psc','certificates','documents','sources'].includes(requestedTab)) {
-      this.activeTab = requestedTab;
-    }
+    const requestedTab=this.route.snapshot.queryParamMap.get('tab');
+    this.requestedAccidentsTab=requestedTab==='accidents';
+    if(requestedTab&&requestedTab!=='accidents'&&
+      ['overview','movement','compliance','inspection','external-psc',
+        'certificates','sources'].includes(requestedTab))
+      this.activeTab=requestedTab;
+    // Never expose a blank Accidents tab before Google Sheet responds.
   }
 
   ngAfterViewInit(): void {
@@ -419,8 +417,22 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
     this.map?.remove();
   }
 
+  get hasRecordedAccidents():boolean{
+    return this.vesselIncidents!==null&&this.vesselIncidents.length>0;
+  }
+  get recordedAccidents():NmcMaritimeIncident[]{
+    return [...(this.vesselIncidents||[])].sort((a,b)=>
+      (Date.parse(b.reportedAt||'')||0)-(Date.parse(a.reportedAt||'')||0));
+  }
+  get activeAccidentCount():number{
+    return this.recordedAccidents.filter(row=>
+      !['CLOSED','RESOLVED'].includes(row.operationalStatus)).length;
+  }
   setTab(tab: string): void {
-    this.activeTab = tab;
+    if(tab==='accidents'&&!this.hasRecordedAccidents)return;
+    if(!['overview','movement','compliance','inspection','external-psc',
+      'certificates','sources','accidents'].includes(tab))return;
+    this.activeTab=tab;
   }
 
   private loadStoredAi(): void {
@@ -429,17 +441,12 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
       next: assessment => {
         const signals = assessment.signals || [];
         const core = ['movement', 'inspection', 'certificate', 'dataQuality', 'history'];
-        const allowed = new Set([...core, 'documentIntegrity']);
-        // A03 adds a SIXTH optional documentIntegrity signal. Previously the
-        // entire valid assessment (including Watch vessels) was rejected unless
-        // keys.size === 5, leaving Vessel 360 showing only fixture data.
-        const validSignals = [5, 6].includes(signals.length) &&
-          signals.every(signal => allowed.has(signal.factor) &&
-            Number.isFinite(signal.severity) &&
-            signal.severity >= 0 && signal.severity <= 100) &&
-          new Set(signals.map(signal => signal.factor)).size === signals.length &&
-          core.every(key => signals.some(signal => signal.factor === key)) &&
-          (signals.length === 5 || signals.some(s => s.factor === 'documentIntegrity'));
+        // Old historical snapshots may include a retired A03 sixth factor.
+        // Check the ORIGINAL five factors and never project/show legacy A03.
+        const validSignals = [5,6].includes(signals.length) &&
+          core.every(key=>signals.filter(signal=>signal.factor===key&&
+            Number.isFinite(signal.severity)&&signal.severity>=0&&
+            signal.severity<=100).length===1);
         if (assessment.imo !== this.vessel.imo ||
             assessment.status !== 'COMPLETED' ||
             assessment.authoritative !== false ||
@@ -451,6 +458,7 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
         }
 
         this.storedAi = assessment;
+        this.timeline=this.buildTimeline();
         this.storedAiStatus = 'available';
         this.applyStoredAiView();
         this.sources=this.buildSources();
@@ -519,12 +527,9 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
     const severities=Object.fromEntries(signalKeys.map(key=>[
       key,this.storedAi!.signals.find(signal=>signal.factor===key)?.severity
     ])) as {movement:number;inspection:number;certificate:number;dataQuality:number;history:number};
-    const doc=this.storedAi.signals.find(s=>s.factor==='documentIntegrity');
-    const weightedDoc=Number(this.riskEngine.config.weights.documentIntegrity||0)>0;
     const hasCore=signalKeys.every(key=>Number.isFinite(severities[key]));
-    const projected=this.riskEngine.centralReady&&hasCore&&(!weightedDoc||doc)?
-      this.riskEngine.evaluateFromAiSignals(this.vessel,{
-        ...severities,...(doc?{documentIntegrity:doc.severity}:{})} as Record<RiskFactorKey,number>):null;
+    const projected=this.riskEngine.centralReady&&hasCore?
+      this.riskEngine.evaluateFromAiSignals(this.vessel,severities):null;
     this.displayedRiskBasis=projected?'CURRENT_PUBLISHED':'ORIGINAL_SAVED';
     this.vessel.riskScore = projected?.score ?? this.storedAi.score ?? this.vessel.riskScore;
     this.vessel.riskLevel = projected?.level ?? this.storedAi.level ?? this.vessel.riskLevel;
@@ -546,7 +551,8 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
     const weights = this.riskEngine.centralReady?
       (this.riskEngine.config.weights as unknown as Record<string, number>):
       (this.storedAi.ruleset?.weights as unknown as Record<string, number> | undefined);
-    this.riskFactors = this.storedAi.signals.map(signal => {
+    this.riskFactors = this.storedAi.signals.filter(signal=>
+      signalKeys.some(key=>key===signal.factor)).map(signal => {
       const weight = weights?.[signal.factor] ?? 0;
       return {
         label: names[signal.factor] || signal.factor,
@@ -617,11 +623,19 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
     this.subscriptions.add(this.incidentsService.list().subscribe({
       next:feed=>{
         this.vesselIncidents=feed.incidents.filter(r=>r.imo===this.vessel.imo);
+        if(this.requestedAccidentsTab&&this.hasRecordedAccidents)
+          this.activeTab='accidents';
+        this.requestedAccidentsTab=false;
+        this.timeline=this.buildTimeline();
         this.incidentReadAt=new Date().toISOString();
+        if(this.activeTab==='accidents'&&!this.hasRecordedAccidents)
+          this.activeTab='overview';
         this.sources=this.buildSources();
       },
       error:()=>{
         this.vesselIncidents=null;this.incidentReadAt=null;
+        this.requestedAccidentsTab=false;
+        if(this.activeTab==='accidents')this.activeTab='overview';
         this.sources=this.buildSources();
       }
     }));
@@ -667,9 +681,11 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
   }
 
   openRiskEvidence(source: string): void {
-    if (source.includes('Certificate') || source.includes('Data Quality')) {
-      this.activeTab = 'certificates';
-      return;
+    if(source.includes('Data Quality')){
+      this.activeTab='sources';return;
+    }
+    if(source.includes('Certificate')){
+      this.activeTab='certificates';return;
     }
     if (source.includes('Inspection')) {
       this.activeTab = 'inspection';
@@ -678,16 +694,6 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
     if (source.includes('AIS') || source.includes('Movement')) {
       this.activeTab = 'movement';
     }
-  }
-
-  startCertificateVerification(): void {
-    this.certificateVerificationStarted = true;
-    this.activeTab = 'certificates';
-  }
-
-  createPriorityInspection(): void {
-    this.priorityInspectionCreated = true;
-    this.activeTab = 'inspection';
   }
 
   selectedCertificate(): CertificateRecord | undefined {
@@ -707,29 +713,16 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
     return this.fieldProvenance[key];
   }
 
-  openCertificateProvenance(certificate: CertificateRecord): void {
-    const moeiSource = certificate.source.includes('MOEI');
-    const externalAuthoritative =
-      certificate.source.includes('Flag') ||
-      certificate.source.includes('Recognized Organization') ||
-      certificate.source.includes('Verified');
-
-    this.selectedProvenance = {
-      key:`certificate-${certificate.id}`,
-      label:`${certificate.type} status`,
-      value:certificate.status,
-      source:certificate.source,
-      system:certificate.issuer,
-      sourceClass:moeiSource ? 'MOEI Authoritative' : externalAuthoritative ? 'External Authoritative' : 'External Trusted',
-      authority:moeiSource ? 'MOEI certificate record' : externalAuthoritative ? 'Flag / statutory certificate authority' : 'External maritime certificate source',
-      recordId:certificate.number,
-      sourceTrust:moeiSource ? 100 : 95,
-      dataConfidence:certificate.conflict ? 92 : 97,
-      identityMatch:100,
-      freshness:certificate.conflict ? 94 : 97,
-      lastUpdated:'—',
-      conflict:certificate.conflict ? 'Unresolved' : 'None',
-      note:certificate.condition || 'Certificate status is linked to the correlated vessel record and retained with source provenance.'
+  openCertificateProvenance(certificate:CertificateRecord):void{
+    this.selectedProvenance={
+      key:`certificate-${certificate.id}`,label:`${certificate.type} (POC)`,
+      value:certificate.status,source:'NMC synthetic certificate fixture',
+      system:certificate.issuer,sourceClass:'Internal Master',
+      authority:'Issuer/flag/RO not connected; document authenticity NOT verified',
+      recordId:certificate.number,sourceTrust:0,dataConfidence:0,
+      identityMatch:0,freshness:0,lastUpdated:'—',conflict:'None',
+      note:(certificate.condition||'POC certificate record')+
+        ' — Synthetic test-only certificate; cannot establish statutory validity.'
     };
   }
 
@@ -738,10 +731,10 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
       key:`inspection-${inspection.id}`,
       label:'Inspection result',
       value:inspection.result,
-      source:'MOEI Smart Inspection',
+      source:'NMC synthetic inspection fixture',
       system:inspection.source,
-      sourceClass:'MOEI Authoritative',
-      authority:'MOEI inspection record',
+      sourceClass:'Internal Master',
+      authority:'POC test fixture; not a verified MOEI inspection outcome',
       recordId:inspection.id,
       sourceTrust:100,
       dataConfidence:100,
@@ -749,7 +742,7 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
       freshness:96,
       lastUpdated:'—',
       conflict:'None',
-      note:`Inspection performed through the MOEI inspection process at ${inspection.port}. Findings and evidence remain linked to the vessel record.`
+      note:`Simulated inspection at ${inspection.port}. Findings are synthetic demonstration records; no real MOEI inspection has been performed or verified.`
     };
   }
 
@@ -758,10 +751,10 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
       key:`deficiency-${deficiency.id}`,
       label:`${deficiency.category} deficiency`,
       value:`${deficiency.severity} · ${deficiency.status}`,
-      source:'MOEI Smart Inspection',
-      system:'Inspection Findings & Corrective Actions',
-      sourceClass:'MOEI Authoritative',
-      authority:'MOEI inspection finding',
+      source:'NMC synthetic inspection fixture',
+      system:'POC Inspection Findings',
+      sourceClass:'Internal Master',
+      authority:'Synthetic test finding, not an authoritative deficiency',
       recordId:deficiency.id,
       sourceTrust:100,
       dataConfidence:100,
@@ -769,7 +762,8 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
       freshness:deficiency.status === 'Open' ? 95 : 92,
       lastUpdated:deficiency.raised,
       conflict:'None',
-      note:deficiency.evidence
+      note:(deficiency.evidence||'')+
+        ' — Synthetic POC finding; requires an actual signed source before official compliance decisions.'
     };
   }
 
@@ -801,20 +795,18 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
     return this.copy('Active', 'ساري');
   }
 
-  get registrationSource(): string {
-    return this.flagRegistryAuthority;
+  get registrationSource():string{
+    return this.flagRegistryAuthority+' — simulated registration record (not connected)';
   }
 
-  get registrationAuthorityLabel(): string {
-    return this.isUaeFlag
-      ? this.copy('MOEI Authoritative', 'مصدر معتمد من الوزارة')
-      : this.copy('External Authoritative', 'مصدر خارجي معتمد');
+  get registrationAuthorityLabel():string{
+    return this.copy('NMC synthetic registration fixture — not flag-verified',
+      'بيانات تسجيل تجريبية بالمركز وغير متحقق منها لدى دولة العلم');
   }
 
-  get vesselMasterRole(): string {
-    return this.isUaeFlag
-      ? this.copy('Authoritative internal vessel context linked to the UAE registry', 'سياق داخلي معتمد للسفينة ومرتبط بسجل دولة الإمارات')
-      : this.copy('Internal correlation record for a foreign-flag vessel operating in the NMC context', 'سجل داخلي لربط بيانات سفينة أجنبية ضمن سياق المركز البحري الوطني');
+  get vesselMasterRole():string{
+    return this.copy('Synthetic vessel master for IMO correlation; not an authoritative flag register',
+      'سجل سفن تجريبي للربط عبر IMO وليس سجل دولة علم معتمد');
   }
 
   get moeiRelationshipTitle(): string {
@@ -823,19 +815,17 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
       : this.copy('MOEI Regulatory Relationship', 'العلاقة التنظيمية مع الوزارة');
   }
 
-  get moeiRelationshipStatus(): string {
-    if (this.isUaeFlag) return this.copy('Registered UAE Vessel', 'سفينة مسجلة في دولة الإمارات');
-    return this.vessel.risk >= 65
-      ? this.copy('Active · Under Operational Review', 'نشطة · قيد المراجعة التشغيلية')
-      : this.copy('Active · Monitored', 'نشطة · تحت المراقبة');
+  get moeiRelationshipStatus():string{
+    return this.copy('POC operational monitoring (no verified MOEI registration/control)',
+      'مراقبة تشغيلية تجريبية دون إثبات تسجيل أو قرار رسمي من الوزارة');
   }
 
   get primaryCertificateSourceLabel(): string {
-    return this.isUaeFlag ? 'MOEI Certificate Registry' : `${this.vessel.flag} Flag / Verified Certificate Record`;
+    return 'Synthetic certificate record (not issuer verified)';
   }
 
   get primaryCertificateAuthorityLabel(): string {
-    return this.isUaeFlag ? 'MOEI Authoritative' : 'External Authoritative';
+    return 'Synthetic source; official verification unavailable';
   }
 
   get vesselInitials(): string {
@@ -868,7 +858,8 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
 
   private isAtLeast(level: 'Watch' | 'High' | 'Critical'): boolean {
     // A reclassified Watch vessel uses CURRENT published thresholds; an
-    // unprojectable A03-dependent case displays ORIGINAL stored thresholds.
+    // Historical snapshots retain their originally saved thresholds; only a
+  // validated currently published five-factor policy may project a new score.
     const thresholds = this.displayedRiskBasis==='CURRENT_PUBLISHED'
       ?this.riskEngine.config.thresholds
       :this.storedAi?.ruleset?.thresholds||this.riskEngine.config.thresholds;
@@ -934,9 +925,9 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
     const contribution = (key: string): number =>
       evaluation.factors.find(factor => factor.key === key)?.contribution || 0;
 
-    this.hasCertificateConflict = evidenceRisk >= 80;
-    this.hasOpenDeficiency = evidenceRisk >= 45;
-    this.openDeficiencyCount = this.hasOpenDeficiency ? 1 : 0;
+    // There is no independently verified live flag-vs-RO certificate
+    // comparison in the POC. Never infer a certificate conflict from risk.
+    this.hasCertificateConflict = false;
 
     this.movementRiskImpact = contribution('movement');
     this.inspectionRiskImpact = contribution('inspection');
@@ -949,9 +940,11 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
     this.certificates = bundle.certificates;
     this.inspections = bundle.inspections;
     this.deficiencies = bundle.deficiencies;
+    this.openDeficiencyCount=this.deficiencies.filter(d=>d.status==='Open').length;
+    this.hasOpenDeficiency=this.openDeficiencyCount>0;
     this.riskFactors = this.buildRiskFactors();
     this.timeline = this.buildTimeline();
-    this.selectedCertificateId = this.certificates[0].id;
+    this.selectedCertificateId = this.certificates[0]?.id||'';
     this.fieldProvenance = this.buildFieldProvenance();
     this.sources=this.buildSources();
   }
@@ -986,8 +979,10 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
       note: string
     ): void => {
       fields.push({
-        key, label, value, source:source+' (synthetic POC)',system,sourceClass,
-        authority:authority+' — simulated source, not independently verified',
+        key, label, value,
+        source:'NMC Synthetic POC · '+source,
+        system,sourceClass:'Internal Master',
+        authority:'POC fixture — not independently verified with MOEI, Flag or RO',
         recordId,sourceTrust,dataConfidence,identityMatch,freshness,
         lastUpdated:'—',conflict,note:note+
           ' This is a synthetic POC fixture; source authority and update time are not verified.'
@@ -1098,17 +1093,17 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
     });
     const drive=this.driveListing;
     sources.push(drive?.driveConnected?{
-      name:'Google Drive Vessel Documents / A03',
-      system:'Google Drive POC Read-only Document List',
-      record:`${drive.documents.length} document(s) · ${drive.documents.filter(d=>d.savedStatus==='APPROVED').length} human-approved A03 result(s)`,
+      name:'Google Drive Vessel Documents',
+      system:'Google Drive POC Read-only Document Listing',
+      record:`${drive.documents.length} linked POC document(s); document authenticity not confirmed`,
       recordId:drive.documents[0]?.fileId,
       status:'Available',lastSync:this.driveReadAt||'—',confidence:null,
       authority:'Synthetic POC document packs; approval does NOT verify issuing authority',
       dataNature:'SYNTHETIC_DRIVE_GOOGLE',sourceClass:'External Trusted',
-      route:`/moei/nmc/vessel/${this.vessel.imo}`,tab:'documents'
+      recordId:drive.documents[0]?.fileId
     }:{
-      name:'Google Drive Vessel Documents / A03',
-      system:'Google Drive Document Adapter',
+      name:'Google Drive Vessel Documents',
+      system:'Google Drive Read-only Document Adapter',
       record:drive?.status==='not_configured'?'Drive root folder not configured':
         'Google Drive document listing unavailable',
       status:'Unavailable',lastSync:'—',confidence:null,
@@ -1180,7 +1175,7 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
 
     return [
       {
-        label:critical ? 'Unresolved critical inspection deficiency' : this.hasOpenDeficiency ? 'Open inspection deficiency' : 'Inspection history exposure',
+        label:this.hasOpenDeficiency ? 'Open synthetic inspection deficiency' : 'Inspection history exposure',
         value:this.inspectionRiskImpact,
         source:'Inspection'
       },
@@ -1190,12 +1185,12 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
         source:'AIS / Movement'
       },
       {
-        label:this.hasCertificateConflict ? 'Conditional certificate state' : this.vessel.risk >= 55 ? 'Certificate expiry proximity' : 'Certificate profile exposure',
+        label:'Synthetic certificate compliance factor',
         value:this.certificateRiskImpact,
         source:'Certificate Registry'
       },
       {
-        label:this.hasCertificateConflict ? 'Conflict between authoritative data sources' : 'Data-quality / external-source factor',
+        label:'Data-quality / source-reliability factor',
         value:this.dataConflictRiskImpact,
         source:'Data Quality'
       },
@@ -1207,22 +1202,23 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
     ];
   }
 
-  private buildTimeline(): TimelineItem[] {
-    const level = this.vessel.riskLevel;
-    const items: TimelineItem[] = [
-      { time:'22:42', title:`Risk assessed as ${level}`, detail:`Composite vessel score is ${this.vessel.risk} after current data correlation.`, kind:this.vessel.risk >= 85 ? 'critical' : this.vessel.risk >= 45 ? 'warning' : 'normal' }
-    ];
-
-    if (this.hasCertificateConflict) {
-      items.push({ time:'22:41', title:'Certificate data conflict detected', detail:'MOEI registry and external classification source disagree.', kind:'warning' });
+  private buildTimeline():TimelineItem[]{
+    // No invented event timestamps. Recorded source incidents and saved
+    // A01/A02 assessment only; synthetic navigation is NOT an AIS event log.
+    const items:TimelineItem[]=[];
+    if(this.storedAi?.assessedAt&&Number.isFinite(Date.parse(this.storedAi.assessedAt))){
+      items.push({time:new Date(this.storedAi.assessedAt).toLocaleString(),
+        title:'Saved A01/A02 vessel risk assessment',
+        detail:`Score ${this.storedAi.score}/100 · ${this.storedAi.level} · synthetic POC evidence`,
+        kind:'normal'});
     }
-    if (this.vessel.risk >= 65) {
-      items.push({ time:'22:40', title:'Movement exception detected', detail:'Observed movement differs from the monitored route pattern.', kind:'warning' });
+    for(const incident of this.recordedAccidents){
+      if(!incident.reportedAt||!Number.isFinite(Date.parse(incident.reportedAt)))continue;
+      items.push({time:new Date(incident.reportedAt).toLocaleString(),
+        title:`Source report ${incident.incidentId} · ${incident.incidentType}`,
+        detail:`${incident.sourceOrganization} · ${incident.operationalStatus} (unverified synthetic report)`,
+        kind:'warning'});
     }
-    if (this.hasOpenDeficiency) {
-      items.push({ time:'20:15', title:'Open inspection finding loaded', detail:'Outstanding deficiency included in the vessel risk picture.', kind:'warning' });
-    }
-    items.push({ time:'18:04', title:'Vessel entered monitoring area', detail:'AIS identity matched to MOEI vessel master using IMO number.', kind:'normal' });
     return items;
   }
 

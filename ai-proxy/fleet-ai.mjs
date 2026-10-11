@@ -10,14 +10,12 @@ import {dirname} from 'node:path';
 import {timingSafeEqual} from 'node:crypto';
 import {catalogFromNmcSource} from './psc-fixtures.mjs';
 import {evaluateDataQuality} from './data-quality.mjs';
-import {documentEvidenceChecks,documentIntegritySignal} from './document-risk-evidence.mjs';
 
 const baseTs=readFileSync(new URL('./nmc-vessel-catalog.ts',import.meta.url),'utf8');
 const extraTs=readFileSync(new URL('./nmc-expanded-vessel-catalog.ts',import.meta.url),'utf8');
 const catalogue=catalogFromNmcSource(baseTs,extraTs);
 const VALID_IMOS=new Set(catalogue.map(v=>v.imo));
 const FACTORS=['movement','inspection','certificate','dataQuality','history'];
-const OPTIONAL_FACTOR='documentIntegrity';
 const AGENT_FACTORS={a01:['movement','history'],a02:['inspection','certificate','dataQuality']};
 const DEFAULT_WEIGHTS={movement:25,inspection:28,certificate:20,dataQuality:14,history:13};
 const DEFAULT_THRESHOLDS={watch:45,high:65,critical:85};
@@ -44,8 +42,9 @@ const unpack=(input,depth=0)=>{
 };
 const normalizedConfig=(config)=>{
   if(!config||typeof config!=='object')throw new Error('INVALID_FLEET_RULESET');
-  const weights=Object.fromEntries([...FACTORS,OPTIONAL_FACTOR].map(k=>
-    [k,k===OPTIONAL_FACTOR?Number(config.weights?.[k]||0):Number(config.weights?.[k])]));
+  if(Number(config.weights?.documentIntegrity||0)>0)
+    throw new Error('FLEET_LEGACY_A03_POLICY_REBALANCE_REQUIRED');
+  const weights=Object.fromEntries(FACTORS.map(k=>[k,Number(config.weights?.[k])]));
   const total=Object.values(weights).reduce((s,n)=>s+n,0);
   if(Object.values(weights).some(n=>!Number.isFinite(n)||n<0)||Math.abs(total-100)>0.01)
     throw new Error('INVALID_FLEET_WEIGHTS');
@@ -62,7 +61,7 @@ const normalizedConfig=(config)=>{
 export function evaluateFleetSignals(signals,config){
   const cfg=normalizedConfig(config);
   const values=Object.fromEntries(signals.map(s=>[s.factor,s.severity]));
-  const keys=cfg.weights.documentIntegrity>0?[...FACTORS,OPTIONAL_FACTOR]:FACTORS;
+  const keys=FACTORS;
   // A missing document may not be treated as a zero-risk factor.
   if(keys.some(k=>!Number.isFinite(values[k])))
     throw new Error('INCOMPLETE_FLEET_SIGNALS');
@@ -199,10 +198,6 @@ export class FleetAssessmentManager {
         values[key]=matches[0].severity;
       }
       if(factors.some(key=>!Object.hasOwn(values,key)))continue;
-      const document=row.signals.filter(s=>s?.factor==='documentIntegrity');
-      if(document.length===1&&Number.isFinite(document[0].severity)&&
-        document[0].severity>=0&&document[0].severity<=100)
-        values.documentIntegrity=document[0].severity;
       assessments.push({
         imo:row.imo,assessmentId:row.assessmentId||null,
         assessedAt:row.assessedAt||null,
@@ -333,48 +328,11 @@ export class FleetAssessmentManager {
     const psc=await this.getPscVessel(v.imo); // errors fail closed, never fall back from live to fixture.
     if(psc.authoritative!==false||psc.dataNature!=='SYNTHETIC_NOT_RIYADH_MOU'||
       !Array.isArray(psc.evidenceIds)||psc.imo!==v.imo)throw new Error('FLEET_PSC_PROVENANCE_INVALID');
-    // A03 is supplementary unless the PUBLISHED risk policy assigns a
-    // positive documentIntegrity weight. Do not let a missing Drive mount
-    // block lawful A01/A02 scoring under the published five-factor policy.
-    // Never reuse stale drafts, invent a zero-risk A03 factor, or change a
-    // completed assessment merely because the document source is unavailable.
-    const requireA03=Number(cfg.weights?.documentIntegrity||0)>0;
-    let approved=[],documentSourceStatus='NO_CURRENT_A03_EVIDENCE',documentSourceError=null;
-    try{
-      approved=this.documentEvidence?await this.documentEvidence(v.imo):
-        this.approvedDocuments?await this.approvedDocuments(v.imo):[];
-      if(!Array.isArray(approved))throw new Error('A03_EVIDENCE_INVALID');
-      if(approved.length)documentSourceStatus='AVAILABLE_PROVISIONAL_OR_REVIEWED';
-    }catch(error){
-      if(requireA03)throw new Error('DOCUMENT_INTEGRITY_EVIDENCE_REQUIRED');
-      // Missing A03 is UNKNOWN, not verified clean; attach a safe public
-      // diagnostic code to the persisted result so operators can investigate.
-      const code=String(error?.code||error?.message||'');
-      documentSourceError=/^[A-Z][A-Z0-9_]{1,95}$/.test(code)?
-        code:'A03_DOCUMENT_SOURCE_UNAVAILABLE';
-      documentSourceStatus='UNAVAILABLE';
-      console.warn('[nmc-a03] optional-source-unavailable imo='+v.imo+
-        ' reasonCode='+documentSourceError);
-      approved=[];
-    }
-    const checks=documentEvidenceChecks({imo:v.imo,documents:approved,
-      certificates:v.inlineContext?.certificates||[]});
-    const docFactor=documentIntegritySignal(checks);
-    if(requireA03&&!docFactor)
-      throw new Error('DOCUMENT_INTEGRITY_EVIDENCE_REQUIRED');
-    const documentIds=approved.map(x=>x.evidenceId);
-    const ids=[...v.evidenceIds,...psc.evidenceIds,...documentIds];
-    const context={...v.inlineContext,
-      documentIntelligence:{
-        source:'GOOGLE_DRIVE_A03_PROVISIONAL_OR_REVIEWED_NOT_AUTHENTICATED',
-        availability:documentSourceStatus,
-        unavailableReasonCode:documentSourceError,
-        items:approved,documentEvidenceIds:documentIds,
-        documentConsistency:checks,approvalRequiredForOfficialUse:true,
-        certificatesAndExpiryBelongToA02:true,
-        warning:'Document authenticity not verified. Human review is NOT validation by flag authority.'
-      },
-      externalPsc:{
+    // Document/A03 verification remains a separate evidence workflow.
+    // It is NOT a vessel-risk factor nor a mandatory source for fleet scoring.
+    // Only the original A01/A02 five-factor evidence bundle is scored.
+    const ids=[...v.evidenceIds,...psc.evidenceIds];
+    const context={...v.inlineContext,externalPsc:{
       sourceSystem:psc.sourceSystem,sourceMode:psc.sourceMode,dataNature:psc.dataNature,
       authoritative:false,verifiedByAuthority:false,coverage:psc.coverage,
       retrievedAt:psc.retrievedAt,inspections:psc.inspections,deficiencies:psc.deficiencies,
@@ -390,20 +348,9 @@ export class FleetAssessmentManager {
       this.executeAgent('a02',{...base,requestedSignals:AGENT_FACTORS.a02})
     ]);
     const validated=verifyFleetSignals(a01,a02,ids,psc.evidenceIds,psc.inspections.length>0);
-    // Do not score the same documentary discrepancy twice inside risk.
-    // A02 may use approved/provisional A03 evidence for certificate compliance,
-    // but its dataQuality severity must cite OTHER structured/PSC gaps.
-    // The separately stored structural Data Quality calculation still includes
-    // A03 comparisons at 15% for visibility.
-    if(docFactor&&validated.find(s=>s.factor==='dataQuality')?.evidenceIds
-      .some(id=>documentIds.includes(id)))
-      throw new Error('FLEET_A03_DOCUMENT_RISK_DOUBLE_COUNT');
-    // Add a non-LLM document factor from citation-validated A03 outputs.
-    // A01/A02 supply their original five factors; the deterministic NMC
-    // engine calculates the sixth without inventing a model score.
-    const signals=docFactor?[...validated,docFactor]:validated;
+    const signals=validated; // Five validated A01/A02 factors only.
     const risk=evaluateFleetSignals(signals,cfg);
-    const quality=evaluateDataQuality({bundle:v,psc,signals,documents:approved});
+    const quality=evaluateDataQuality({bundle:v,psc,signals,documents:[]});
     const internal=v.inlineContext.deficiencies||[];
     const criticalOpen=internal.some(x=>x.status==='Open'&&x.severity==='Critical')||
       psc.deficiencies.some(x=>x.status==='OPEN'&&x.severity==='CRITICAL');
@@ -414,13 +361,7 @@ export class FleetAssessmentManager {
       operationalPriority:priority,criticalOpenFinding:criticalOpen,
       reviewedByHuman:false,authoritative:false,
       sourceMode:psc.sourceMode,pscSummary:psc.summary,
-      signals,quality,documentEvidence:{
-        evidenceIds:documentIds,documentCount:approved.length,
-        availability:documentSourceStatus,
-        unavailableReasonCode:documentSourceError,
-        comparison:checks,reviewedCount:approved.filter(d=>d.reviewStatus==='APPROVED').length,
-        provisionalCount:approved.filter(d=>d.reviewStatus==='DRAFT_REVIEW').length,
-        impactMethod:'EXPLAINABLE_RULES_NOT_LLM_OFFICIAL_SCORE'},
+      signals,quality,
       configVersion:risk.configVersion,ruleset:cfg,
       assessedAt:new Date().toISOString(),
       sourceNature:'SYNTHETIC_NOT_RIYADH_MOU',evidenceVerified:false,
