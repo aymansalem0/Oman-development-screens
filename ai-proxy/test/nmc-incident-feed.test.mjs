@@ -35,12 +35,17 @@ const sheetsHeaders=[
  'Incident_Risk_Score_0_100','Incident_Risk_Band','AI_Proposed_Followup',
  'AI_Reasoning','AI_Confidence_0_1','Missing_Information',
  'Officer_Decision','Officer_Name','Officer_Reviewed_At_UTC',
- 'Approved_Followup_Status','Linked_Case_ID','Assessment_Status','Governance_Notice'
+ 'Approved_Followup_Status','Linked_Case_ID','Assessment_Status','Governance_Notice',
+ 'AI_Suggested_Followup_State','Officer_Approved_Followup_State','Officer_Review_Reason',
+ 'A01_Incident_Evidence_IDs','A02_Incident_Compliance_Status',
+ 'A02_Incident_Evidence_IDs','A02_Incident_Reasoning',
+ 'Incident_Agent_Contract_Version'
 ];
 function mockFeed(){
  const appended=[];
  const fake=new NmcIncidentFeed({sheetId:'TEST-SHEET',
-  model:'test-model',provider:'ollama',fetchImpl:()=>{throw Error('No network')}});
+  agentEnabled:()=>true,executeIncidentAgents:async()=>({}),
+  fetchImpl:()=>{throw Error('No network')}});
  fake.sheets=async(method,range,options)=>{
   if(method==='GET'&&range.startsWith('Incident_Registry'))
     return {values:[registryHeaders,incidentRow]};
@@ -52,7 +57,15 @@ function mockFeed(){
   }
   throw Error('Unexpected Sheets operation');
  };
- fake.runAI=async()=>validateIncidentAI(candidate);
+ fake.runAI=async()=>({...validateIncidentAI(candidate),
+  aiEvidenceIds:['INCIDENT-INC-POC-0001'],
+  a02IncidentCompliance:{
+   status:'INSUFFICIENT_EVIDENCE',evidenceIds:['INCIDENT-INC-POC-0001'],
+   reasoning:'Compliance evidence is not sufficient to confirm any non-compliance.',
+   authoritative:false
+  },
+  contractVersion:'NMC_INCIDENT_A01_A02_EXT_V1'
+ });
  return {fake,appended};
 }
 test('single source incident remains labelled synthetic and preserves its description',()=>{
@@ -120,4 +133,76 @@ test('changes to source description invalidate previous AI assessment',async()=>
   assert.equal(list.incidents[0].aiAssessmentStale,true);
  }finally{incidentRow[12]=incidentRow[12].replace(' New verified update.','');}
  assert.equal(appended.length,1);
+});
+
+test('proposed incident follow-up is a separate next-step state, not a regulatory incident status',async()=>{
+ const {fake,appended}=mockFeed();
+ const result=await fake.analyze('INC-POC-0001',{confirmCost:true});
+ assert.equal(result.assessment.aiProposedFollowup,'INCIDENT_RESPONSE');
+ assert.equal(result.assessment.suggestedFollowupState,'RESPONSE_COORDINATION_PENDING');
+ assert.equal(appended[0].length,32);
+ assert.equal(appended[0][24],'RESPONSE_COORDINATION_PENDING');
+ assert.equal(appended[0][28],'INSUFFICIENT_EVIDENCE');
+ const view=await fake.load();
+ assert.equal(view.incidents[0].operationalStatus,'RECEIVED');
+ assert.deepEqual(view.incidents[0].nextFollowup,{
+  status:'RESPONSE_COORDINATION_PENDING',approval:'AI_PROPOSED',
+  reason:candidate.reasoning
+ });
+});
+test('officer-modified next-step is distinct from AI advice and immutable source status',async()=>{
+ const {fake,appended}=mockFeed();
+ const evaluated=await fake.analyze('INC-POC-0001',{confirmCost:true});
+ const reason='Source report examined; send evidence for an inspection referral review';
+ const reviewed=await fake.review('INC-POC-0001',{
+  assessmentId:evaluated.assessment.assessmentId,decision:'MODIFY',
+  approvedFollowup:'REFER_SMART_INSPECTION',officer:'NMC Inspector',note:reason
+ });
+ assert.equal(reviewed.approvedFollowupState,'INSPECTION_REFERRAL_PENDING');
+ assert.equal(appended[0][24],'RESPONSE_COORDINATION_PENDING');
+ assert.equal(appended[1][24],'RESPONSE_COORDINATION_PENDING');
+ assert.equal(appended[1][25],'INSPECTION_REFERRAL_PENDING');
+ assert.equal(appended[1][26],reason);
+ assert.equal(appended[1].length,32);
+ assert.equal(appended[1][31],'NMC_INCIDENT_A01_A02_EXT_V1');
+ const view=await fake.load();
+ assert.equal(view.incidents[0].operationalStatus,'RECEIVED');
+ assert.equal(view.incidents[0].nextFollowup.approval,'OFFICER_APPROVED');
+ assert.equal(view.incidents[0].nextFollowup.status,'INSPECTION_REFERRAL_PENDING');
+ await assert.rejects(()=>fake.analyze('INC-POC-0001',{
+  confirmCost:true,force:true}),/INCIDENT_ALREADY_REVIEWED/);
+});
+test('scheduled triage remains off by default; when enabled it respects source opt-in and no duplicate assessments',async()=>{
+ const {fake,appended}=mockFeed();
+ assert.equal((await fake.autoTick()).enabled,false);
+ assert.equal(appended.length,0);
+ fake.autoEnabled=true;fake.autoMaxPerCycle=1;
+ incidentRow[25]='NO';
+ try{
+  const blocked=await fake.autoTick();
+  assert.equal(blocked.assessed,0);
+  assert.equal(appended.length,0);
+ }finally{incidentRow[25]='YES';}
+ const once=await fake.autoTick();
+ assert.equal(once.assessed,1);
+ assert.equal(appended.length,1);
+ const twice=await fake.autoTick();
+ assert.equal(twice.assessed,0);
+ assert.equal(appended.length,1);
+});
+
+test('Arabic officer names can approve an incident follow-up without changing reported status',async()=>{
+ const {fake}=mockFeed();
+ const ai=await fake.analyze('INC-POC-0001',{confirmCost:true});
+ const reviewed=await fake.review('INC-POC-0001',{
+  assessmentId:ai.assessment.assessmentId,
+  decision:'ACCEPT',
+  approvedFollowup:'INCIDENT_RESPONSE',
+  officer:'موظف المركز البحري',
+  note:'تمت مراجعة وصف البلاغ ويلزم التنسيق للتحقق من حالة الدخان'
+ });
+ assert.equal(reviewed.saved,true);
+ const output=await fake.load();
+ assert.equal(output.incidents[0].aiAssessment.officerName,'موظف المركز البحري');
+ assert.equal(output.incidents[0].operationalStatus,'RECEIVED');
 });

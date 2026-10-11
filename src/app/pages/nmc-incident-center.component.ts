@@ -74,19 +74,23 @@ export class NmcIncidentCenterComponent implements OnInit,OnDestroy {
   if(!silent)this.loading=true;
   this.incidents.list().subscribe({
    next:d=>{
+    const previousAssessmentId=this.selected?.aiAssessment?.assessmentId||null;
     this.data=d;this.loading=false;this.error='';
     if(!this.selectedId||!d.incidents.some(x=>x.incidentId===this.selectedId))
       this.select(d.incidents[0]?.incidentId||'');
+    else if((this.selected?.aiAssessment?.assessmentId||null)!==previousAssessmentId)
+      this.followupSelection=this.selected?.aiAssessment?.aiProposedFollowup||'VERIFY_INFORMATION';
    },
    error:e=>{this.loading=false;this.error=this.incidents.message(e,this.lang.isArabic);}
   });
  }
  assess(force=false):void{
   const row=this.selected;
-  if(!row||this.busy||!row.aiReviewRequested)return;
+  if(!row||this.busy||!row.aiReviewRequested||
+     row.aiAssessment?.assessmentStatus==='HUMAN_REVIEWED')return;
   if(!window.confirm(this.copy(
-    'Send this synthetic incident description to the configured external AI model? The request may incur charges. AI cannot alter vessel overall risk, impose restrictions or confirm a maritime incident.',
-    'هل تريد إرسال وصف الحادث التجريبي إلى نموذج الذكاء الاصطناعي المحدد؟ قد ينتج عن ذلك تكلفة. لن يغير AI المخاطر الإجمالية للسفينة أو يفرض قيودًا أو يؤكد الحادث.')))return;
+    'Send this synthetic report to the EXISTING Airia A02 compliance then A01 maritime-intelligence pipelines (two paid calls)? These require the incident output extension to be supported. No official vessel-risk changes or enforcement.',
+    'هل تريد إرسال البلاغ إلى نفس A02 للامتثال ثم A01 للموقف البحري (استدعاءان عبر Airia)؟ قد ينتج عنه تكلفة ويتطلب دعم مخرجات الحوادث الجديدة. لن تتغير مخاطر السفينة أو تُنفذ عقوبات.')))return;
   this.busy=true;this.error='';this.success='';
   this.incidents.analyze(row.incidentId,force).subscribe({
    next:()=>{
@@ -120,8 +124,8 @@ export class NmcIncidentCenterComponent implements OnInit,OnDestroy {
   this.incidents.review(row.incidentId,ai.assessmentId,decision,route,reason,name).subscribe({
    next:()=>{
     this.busy=false;this.success=this.copy(
-      'Human decision saved in AI_Assessments. Incident source status was not overwritten.',
-      'تم حفظ القرار البشري في AI_Assessments دون تغيير حالة الحادث الأصلية في المصدر.');
+      'Officer-approved follow-up and next-step state saved in AI_Assessments, preserving the original source status and vessel risk.',
+      'تم حفظ المتابعة المعتمدة وحالة الخطوة التالية في AI_Assessments، دون تغيير حالة البلاغ الأصلي أو درجة مخاطر السفينة.');
     this.refresh(true);
    },
    error:e=>{this.busy=false;this.error=this.incidents.message(e,this.lang.isArabic);}

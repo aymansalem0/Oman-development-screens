@@ -6,6 +6,7 @@ import { DashboardWorkspace, DashboardError } from './dashboard-workspace.mjs';
 import { NmcAlertWorkspace, NmcAlertError } from './alert-workspace.mjs';
 import { NmcCaseWorkspace, NmcCaseError } from './case-workspace.mjs';
 import {NmcIncidentFeed,IncidentTriageError} from './nmc-incident-feed.mjs';
+import {createAiriaIncidentTriage} from './nmc-incident-airia.mjs';
 import { normalizeA01Actions, ActionPlanError } from './nmc-action-plan.mjs';
 import {catalogueSummaries,DECISION_POLICY_VERSION} from './nmc-decision-policy.mjs';
 import { OperationalGuidance, GuidanceError } from './operational-guidance.mjs';
@@ -128,7 +129,17 @@ riskPolicy=new CentralRiskPolicy({mode:dbMode,oracleRepository:repository,fleet}
 const dashboards=new DashboardWorkspace({mode:dbMode,oracleRepository:repository});
 const alerts=new NmcAlertWorkspace({mode:dbMode,oracleRepository:repository});
 const cases=new NmcCaseWorkspace({mode:dbMode,oracleRepository:repository,alerts});
-const incidentFeed=new NmcIncidentFeed();
+// Incident POC deliberately reuses these exact same A01/A02 Airia pipelines.
+const incidentAgentEnabled=()=>Boolean(apiKey)&&agentAllowed('a01')&&agentAllowed('a02');
+const incidentAiria=createAiriaIncidentTriage({
+  executeAgent:fleetAgentCall,
+  getFleetResult:imo=>fleet.getVesselResult(imo),
+  enabled:incidentAgentEnabled
+});
+const incidentFeed=new NmcIncidentFeed({
+  executeIncidentAgents:incidentAiria,
+  agentEnabled:incidentAgentEnabled
+});
 // Independent POC scheduling workspace; ONLY confirmed existing NMC referrals
 // are written through the established Oracle-backed case API.
 const siErp=new ErpWorkforceStore();
@@ -1219,6 +1230,22 @@ try{
   server.listen(port,'0.0.0.0',()=>{
     console.log(`NMC AI proxy listening on ${port}; mode=${dbMode}; fleet-auto=${scheduler.enabled}`);
     applyRuntimeSettings();
+    // Optional incident triage worker. Off unless explicitly enabled; rows
+    // must each opt in, and no request is triggered by loading dashboards.
+    if(incidentFeed.autoEnabled&&incidentFeed.aiConfigured){
+      const intervalMinutes=Math.min(1440,Math.max(5,Number(
+        process.env.NMC_INCIDENT_AUTO_INTERVAL_MINUTES||15)||15));
+      const timer=setInterval(()=>{
+        void incidentFeed.autoTick().then(result=>{
+          console.log('[nmc-incidents] TRIAGE_TICK '+JSON.stringify(result));
+        }).catch(()=>{
+          console.error('[nmc-incidents] TRIAGE_TICK_FAILED');
+        });
+      },intervalMinutes*60000);
+      timer.unref();
+      console.log('[nmc-incidents] AUTO_TRIAGE_ENABLED minutes='+intervalMinutes+
+        ' maxPerCycle='+incidentFeed.autoMaxPerCycle);
+    }
   });
 }catch(error){
   // Fail closed: no AI requests if Oracle schema / credentials are not ready.
