@@ -133,8 +133,6 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
   get accidents():NmcMaritimeIncident[]{return this.vesselIncidents||[];}
   get hasAccidents():boolean{return this.vesselIncidents!==null&&this.vesselIncidents.length>0;}
   get accidentsSourceUnavailable():boolean{return this.vesselIncidents===null;}
-  certificateVerificationStarted = false;
-  priorityInspectionCreated = false;
   selectedCertificateId = '';
 
   vessel!: Vessel360View;
@@ -682,16 +680,6 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
     if (source.includes('AIS') || source.includes('Movement')) {
       this.activeTab = 'movement';
     }
-  }
-
-  startCertificateVerification(): void {
-    this.certificateVerificationStarted = true;
-    this.activeTab = 'certificates';
-  }
-
-  createPriorityInspection(): void {
-    this.priorityInspectionCreated = true;
-    this.activeTab = 'inspection';
   }
 
   selectedCertificate(): CertificateRecord | undefined {
