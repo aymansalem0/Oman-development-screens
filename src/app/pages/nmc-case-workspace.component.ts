@@ -14,7 +14,7 @@ import {
   NmcCaseStateService,
   NmcInspectionOutcome
 } from '../services/nmc-case-state.service';
-import {NmcCasesService,NmcCentralCase,NmcCentralCaseAudit,NmcAiAction} from '../services/nmc-cases.service';
+import {NmcCasesService,NmcCentralCase,NmcCentralCaseAudit,NmcAiAction,NmcDecisionCatalogueEntry} from '../services/nmc-cases.service';
 import {NmcAlertsService,NmcOperationalAlert} from '../services/nmc-alerts.service';
 
 type CaseStatus = 'Open' | 'In Progress' | 'Pending Verification' | 'Resolved';
@@ -71,6 +71,10 @@ export class NmcCaseWorkspaceComponent implements OnInit {
   centralSuccess='';
   actionNotes:Record<string,string>={};
   replacementActionTypes:Record<string,string>={};
+  decisionCatalogue:NmcDecisionCatalogueEntry[]=[];
+  selectedOperationalCode='';
+  operationalDecisionReason='';
+  decisionCatalogueError='';
   readonly humanActionTypes=[
     'VERIFY_CERTIFICATE','ENHANCED_MONITORING','PRIORITY_INSPECTION',
     'REVIEW_DEFICIENCY','VERIFY_DEFICIENCY_CLOSURE',
@@ -96,6 +100,12 @@ export class NmcCaseWorkspaceComponent implements OnInit {
   ) {}
 
   ngOnInit(): void {
+    this.cases.decisionCatalogue().subscribe({
+      next:result=>{this.decisionCatalogue=result.decisions||[];},
+      error:()=>{this.decisionCatalogueError=this.copy(
+        'Decision catalogue unavailable — changes are disabled.',
+        'كتالوج القرارات غير متاح؛ تم تعطيل التعديل.');}
+    });
     const imo = this.route.snapshot.paramMap.get('imo') || NMC_OPERATIONAL_VESSELS[0].imo;
     const profile = getOperationalVesselByImo(imo) || NMC_OPERATIONAL_VESSELS[0];
     this.vessel = this.riskEngine.applyToVessel(profile);
@@ -262,6 +272,8 @@ export class NmcCaseWorkspaceComponent implements OnInit {
   }
 
   get pendingAiActionCount():number{
+    if(this.centralCase?.operationalDecision)return this.centralCase.operationalDecision
+      .decisionStatus==='PENDING_HUMAN_REVIEW'?1:0;
     return this.centralCase?.actionPlan?.proposedActions.filter(
       a=>a.decision==='PENDING').length||0;
   }
@@ -273,7 +285,8 @@ export class NmcCaseWorkspaceComponent implements OnInit {
   get readyForResolution():boolean{
     return !!this.centralCase&&this.centralCase.status!=='RESOLVED'&&
       this.mandatoryComplete&&this.pendingAiActionCount===0&&
-      !this.riskReassessmentPending;
+      !this.riskReassessmentPending&&
+      (!this.centralCase.restriction||this.centralCase.restriction.status==='SIMULATED_RELEASED');
   }
 
   get inspectionOutcome(): NmcInspectionOutcome | undefined {
@@ -300,7 +313,11 @@ export class NmcCaseWorkspaceComponent implements OnInit {
     if(!this.centralCase?.actionPlan)return this.copy(
       'A01 recommendations were unavailable at case creation · retry',
       'توصيات A01 لم تتوفر عند إنشاء الحالة · إعادة المحاولة');
-    if(this.centralCase.actionPlan.proposedActions.some(a=>a.decision==='PENDING'))
+    if(this.centralCase.operationalDecision?.decisionStatus==='PENDING_HUMAN_REVIEW')
+      return this.copy('Review the single NMC operational decision',
+        'مراجعة القرار التشغيلي الواحد المقترح');
+    if(!this.centralCase.operationalDecision&&
+      this.centralCase.actionPlan.proposedActions.some(a=>a.decision==='PENDING'))
       return this.copy('Review proposed AI actions', 'مراجعة الإجراءات المقترحة من AI');
     if(this.riskReassessmentPending)
       return this.copy('Await verified post-inspection risk reassessment',
@@ -376,6 +393,77 @@ export class NmcCaseWorkspaceComponent implements OnInit {
         this.centralError=this.cases.readableError(error,this.lang.isArabic);
         if(error?.status===409)this.loadCentralCase();
       }
+    });
+  }
+
+
+  /** POC route is derived from a saved A01 action, NOT a direct AI enforcement order. */
+  decideOperational(decision:'ACCEPT'|'MODIFY'|'REJECT'):void{
+    const current=this.centralCase;
+    if(!current?.operationalDecision||this.centralBusy||
+      current.operationalDecision.decisionStatus!=='PENDING_HUMAN_REVIEW')return;
+    const code=decision==='MODIFY'?this.selectedOperationalCode:'';
+    const note=this.operationalDecisionReason.trim();
+    if(decision==='MODIFY'&&(!code||code===current.operationalDecision.code)){
+      this.centralError=this.copy('Choose a different catalogue decision.',
+        'اختر قرارًا مختلفًا من كتالوج القرارات.');return;
+    }
+    if(decision!=='ACCEPT'&&!note){
+      this.centralError=this.copy('Modification or rejection requires a reason.',
+        'يجب إدخال سبب التعديل أو الرفض.');return;
+    }
+    const selected=this.decisionCatalogue.find(x=>x.code===code);
+    if(selected?.regulated&&!window.confirm(this.copy(
+      'REGULATORY SCOPE: This is a POC-only simulation. A second supervisor approval and legal authority review are required. No real ship or UAE port is restricted.',
+      'تنبيه تنظيمي: هذا محاكاة POC فقط. يلزم اعتماد مشرف ومراجعة الاختصاص القانوني. لن يتم منع أو احتجاز أي سفينة حقيقية.')))return;
+    if(!window.confirm(this.copy(
+      'Record the single operational decision and create its mapped execution plan?',
+      'هل تريد تسجيل القرار التشغيلي الواحد وإنشاء إجراءات تنفيذه؟')))return;
+    this.centralBusy=true;this.centralError='';
+    this.cases.decideOperational(current,decision,code,note).subscribe({
+      next:r=>{this.centralBusy=false;if(r.case)this.applyCase(r.case);
+        this.centralSuccess=this.copy(
+          'Human decision and mapped tasks saved. Original Airia A01 proposal preserved.',
+          'تم تسجيل القرار البشري والمهام وربط الاقتراح الأصلي من Airia دون تغييره.');},
+      error:e=>{this.centralBusy=false;this.centralError=this.cases.readableError(e,this.lang.isArabic);
+        if(e?.status===409)this.loadCentralCase();}
+    });
+  }
+  authorizePocRestriction():void{
+    const current=this.centralCase;
+    if(!current||current.restriction?.status!=='PENDING_AUTHORITY_APPROVAL'||this.centralBusy)return;
+    const ref=window.prompt(this.copy('POC supervisor authority reference (not real authorization):',
+      'مرجع اعتماد المشرف التجريبي (ليس اعتمادًا قانونيًا حقيقيًا):'));
+    if(!ref)return;
+    const legalBasis=window.prompt(this.copy('Document the legal-basis review / competent authority (POC):',
+      'سجل مراجعة السند القانوني والاختصاص (تجريبي):'));
+    if(!legalBasis)return;
+    if(!window.confirm(this.copy(
+      'Activate a SIMULATED restriction only? No ports, vessel systems or legal registers are connected.',
+      'تفعيل قيد محاكاة فقط؟ لن يتم الاتصال بالموانئ أو سجلات السفن أو جهات إنفاذ حقيقية.')))return;
+    this.centralBusy=true;this.centralError='';
+    this.cases.authorizeRestriction(current,ref,legalBasis).subscribe({
+      next:r=>{this.centralBusy=false;if(r.case)this.applyCase(r.case);
+        this.centralSuccess=this.copy('POC restriction recorded as SIMULATED_ACTIVE only.',
+          'تم تسجيل القيد كمحاكاة نشطة فقط.');},
+      error:e=>{this.centralBusy=false;this.centralError=this.cases.readableError(e,this.lang.isArabic);}
+    });
+  }
+  releasePocRestriction():void{
+    const current=this.centralCase;
+    if(!current||current.restriction?.status!=='SIMULATED_ACTIVE'||this.centralBusy)return;
+    const ref=window.prompt(this.copy('Supervisor release reference (POC):',
+      'مرجع اعتماد رفع القيد (تجريبي):'));
+    if(!ref)return;
+    const evidence=window.prompt(this.copy('Verified rectification / release evidence reference:',
+      'مرجع دليل الإصلاح / الإفراج بعد التحقق:'));
+    if(!evidence)return;
+    this.centralBusy=true;this.centralError='';
+    this.cases.releaseRestriction(current,ref,evidence).subscribe({
+      next:r=>{this.centralBusy=false;if(r.case)this.applyCase(r.case);
+        this.centralSuccess=this.copy('Simulated restriction released; record remains audited.',
+          'تم رفع قيد المحاكاة مع الاحتفاظ بسجل الإجراءات.');},
+      error:e=>{this.centralBusy=false;this.centralError=this.cases.readableError(e,this.lang.isArabic);}
     });
   }
 
@@ -553,7 +641,7 @@ export class NmcCaseWorkspaceComponent implements OnInit {
     // remain stored for audit but never appear as current recommendations.
     const current=this.centralCase;
     this.tasks=(current?.tasks||[])
-      .filter(t=>t.provenance==='AIRIA_A01_HUMAN_APPROVED')
+      .filter(t=>['AIRIA_A01_HUMAN_APPROVED','NMC_DECISION_HUMAN_APPROVED'].includes(t.provenance||''))
       .map(stored=>{
         const priority:CaseTask['priority']=stored.priority==='CRITICAL'||
           stored.priority==='IMMEDIATE'?'Critical':
@@ -562,9 +650,12 @@ export class NmcCaseWorkspaceComponent implements OnInit {
         return {
           id:stored.id,
           actionId:stored.actionId,
-          title:stored.title||stored.actionType||stored.id,
+           title:this.lang.isArabic?(stored.titleAr||stored.title||stored.actionType||stored.id):(stored.title||stored.actionType||stored.id),
           owner:stored.assignedRole,
-          source:stored.approvalMode==='MODIFY'
+          source:stored.provenance==='NMC_DECISION_HUMAN_APPROVED'
+             ?this.copy('NMC business decision workflow · approved by officer',
+                'إجراءات قرار المركز البحري · معتمدة من الموظف')
+             :stored.approvalMode==='MODIFY'
              ?this.copy('Human-modified A01 action','إجراء A01 معدل ومعتمد بشريًا')
              :this.copy('Airia A01 · approved by an officer',
                'Airia A01 · معتمدة من الموظف'),
@@ -586,7 +677,11 @@ export class NmcCaseWorkspaceComponent implements OnInit {
       this.caseStatus='In Progress';
 
     const actions=current?.actionPlan?.proposedActions||[];
-    const roles=[...new Set(actions.map(a=>a.ownerRole).filter(Boolean))];
+    const roles=[...new Set((current?.operationalDecision?.approvedWorkflowSteps||
+      current?.operationalDecision?.workflowSteps||[]).map(a=>a.role).filter(Boolean).length
+      ?(current?.operationalDecision?.approvedWorkflowSteps||
+        current?.operationalDecision?.workflowSteps||[]).map(a=>a.role)
+      :actions.map(a=>a.ownerRole).filter(Boolean))];
     this.stakeholders=[
       {
         role:this.copy('Case Owner','مالك الحالة'),
