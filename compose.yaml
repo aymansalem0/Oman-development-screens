@@ -10,11 +10,10 @@ services:
       AIRIA_MENA_KEY: ${AIRIA_MENA_KEY:-}
       AIRIA_BASE_URL: ${AIRIA_BASE_URL:-https://api.mena.airia.ai}
       AIRIA_TIMEOUT_MS: "120000"
-      # Dedicated KPI-focus Airia pipeline: opt-in, paid ONLY after an operator
-      # presses "Ask AI to prioritize" and supplies the Dashboard Editor key.
-      # Never reuse the A01 maritime-situation contract for unrelated KPI JSON.
+      # Dashboard focus reuses configured maritime A02 risk signals followed
+      # by A01 situation-assessment; never a new pipeline or response schema.
+      # Opt-in ONLY: explicit operator click + possible TWO paid AI requests.
       NMC_DASHBOARD_AI_FOCUS_ENABLED: ${NMC_DASHBOARD_AI_FOCUS_ENABLED:-false}
-      AIRIA_NMC_DASHBOARD_FOCUS_PIPELINE_ID: ${AIRIA_NMC_DASHBOARD_FOCUS_PIPELINE_ID:-}
       # Autonomous fleet assessment is opt-in at server deployment, never a UI action.
       # Set NMC_FLEET_AUTO_ENABLED=true once after reviewing potential Airia costs.
       NMC_FLEET_AUTO_ENABLED: ${NMC_FLEET_AUTO_ENABLED:-false}
