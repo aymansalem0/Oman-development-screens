@@ -62,3 +62,19 @@ test('Opening sources is read-only and cannot bill Airia or modify ministry reco
  assert.match(vesselHtml,/Last read/);
  assert.match(vesselHtml,/not live official integrations/);
 });
+
+test('every dataNature literal inside buildSources belongs to the SourceStatus TypeScript union',()=>{
+ const declaration=vessel.match(/interface SourceStatus\\s*\\{[\\s\\S]*?dataNature:([\\s\\S]*?);/);
+ assert.ok(declaration,'SourceStatus.dataNature definition required');
+ const accepted=new Set([...declaration[1].matchAll(/'([^']+)'/g)].map(m=>m[1]));
+ const start=vessel.indexOf('  private buildSources(): SourceStatus[] {');
+ const end=vessel.indexOf('  private buildRiskFactors(): RiskFactor[] {',start);
+ assert.ok(start>=0&&end>start);
+ const types=[...vessel.slice(start,end).matchAll(/dataNature:'([^']+)'/g)].map(m=>m[1]);
+ assert.ok(types.length>=6,'expected static and connected source origin tags');
+ for(const type of types)
+   assert.ok(accepted.has(type),'Undeclared dataNature '+type+' breaks Angular production build');
+ assert.ok(accepted.has('SYNTHETIC_DRIVE_GOOGLE'),'Google Drive source type must be declared');
+ assert.ok(!types.includes('SYNTHETIC_POC'),
+   'Generic SYNTHETIC_POC is not an allowed SourceStatus provenance type');
+});
