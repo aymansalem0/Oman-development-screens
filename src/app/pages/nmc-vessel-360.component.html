@@ -403,8 +403,13 @@
               <p>{{copy('POC source provenance · actual API read times · synthetic vs connected vs unavailable',
                 'مصادر بيانات التجربة · وقت قراءة API الفعلي · تمييز التجريبي والمتصل وغير المتاح')}}</p>
             </div>
-            <span class="source-summary">{{sources.length}} {{copy('source entries','سجل مصدر')}} ·
-              {{conflictCount}} {{copy('evidence-based conflicts','تعارضات مثبتة بالمقارنة')}}</span>
+            <div class="source-header-actions">
+              <span class="source-summary">{{sources.length}} {{copy('source entries','سجل مصدر')}} ·
+                {{conflictCount}} {{copy('evidence-based conflicts','تعارضات مثبتة بالمقارنة')}}</span>
+              <button type="button" class="source-refresh-btn" (click)="refreshSourceEvidence()">
+                ↻ {{copy('Refresh sources','تحديث المصادر')}}
+              </button>
+            </div>
           </div>
 
           <p class="source-provenance-notice">
