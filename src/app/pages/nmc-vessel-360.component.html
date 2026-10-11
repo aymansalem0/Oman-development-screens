@@ -431,6 +431,7 @@
                 {{source.record}}
                 <small *ngIf="source.recordId">ID: {{source.recordId}}</small>
                 <a *ngIf="source.route" [routerLink]="source.route"
+                  (click)="source.tab ? setTab(source.tab) : null"
                   class="source-data-link">{{copy('Open source evidence →','عرض المصدر والأدلة ←')}}</a>
               </span>
               <span class="authority-cell">
