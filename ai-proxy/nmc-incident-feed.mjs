@@ -116,6 +116,34 @@ export function parseIncidentSheet(values){
  }
  return result;
 }
+/**
+ * For manually maintained Google Sheets, a half-filled new row must not
+ * hide all valid previously received incidents from the Command Center.
+ * Invalid or duplicate rows are omitted *with explicit row diagnostics*.
+ * The strict parser remains available for contract tests/import validation.
+ */
+export function parseIncidentFeedRows(values){
+  if(!Array.isArray(values)||!Array.isArray(values[0])||
+    INCIDENT_COLUMNS.some((h,i)=>values[0][i]!==h))
+    throw new IncidentTriageError('INCIDENT_SHEET_HEADER_MISMATCH',503);
+  const incidents=[],rejectedRows=[];
+  const seen=new Set();
+  for(let index=1;index<values.length;index++){
+    const row=values[index]||[];
+    if(!row.some(v=>String(v??'').trim()))continue;
+    try{
+      const incident=parseIncidentSheet([values[0],row])[0];
+      if(seen.has(incident.incidentId))
+        throw new IncidentTriageError('INCIDENT_DUPLICATE_ID',422);
+      seen.add(incident.incidentId);
+      incidents.push({...incident,rowNumber:index+1});
+    }catch(e){
+      rejectedRows.push({rowNumber:index+1,
+        code:e instanceof IncidentTriageError?e.code:'INCIDENT_ROW_INVALID'});
+    }
+  }
+  return {incidents,rejectedRows};
+}
 const unpackAssessments=values=>{
  if(!Array.isArray(values)||!Array.isArray(values[0])||
    ASSESSMENT_COLUMNS.some((h,i)=>values[0][i]!==h))
@@ -207,11 +235,12 @@ export class NmcIncidentFeed {
     this.sheets('GET','Incident_Registry!A1:Z1500'),
     this.sheets('GET','AI_Assessments!A1:X1500')
   ]);
-  const incidents=parseIncidentSheet(raw.values||[]);
+  const {incidents,rejectedRows}=parseIncidentFeedRows(raw.values||[]);
   const allAssessments=unpackAssessments(ai.values||[]);
   const latest=new Map();
   for(const row of allAssessments)latest.set(row.incidentId,row);
   return {status:'ok',source:'GOOGLE_SHEETS_SYNTHETIC_POC',
+    rejectedRows,sourceValidationWarnings:rejectedRows.length,
     incidents:incidents.map(row=>({
       ...row,
       aiAssessment:latest.get(row.incidentId)?.descriptionHash===row.descriptionHash
