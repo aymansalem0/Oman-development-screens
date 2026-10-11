@@ -175,3 +175,19 @@ test('scheduled triage remains off by default; when enabled it respects source o
  assert.equal(twice.assessed,0);
  assert.equal(appended.length,1);
 });
+
+test('Arabic officer names can approve an incident follow-up without changing reported status',async()=>{
+ const {fake}=mockFeed();
+ const ai=await fake.analyze('INC-POC-0001',{confirmCost:true});
+ const reviewed=await fake.review('INC-POC-0001',{
+  assessmentId:ai.assessment.assessmentId,
+  decision:'ACCEPT',
+  approvedFollowup:'INCIDENT_RESPONSE',
+  officer:'موظف المركز البحري',
+  note:'تمت مراجعة وصف البلاغ ويلزم التنسيق للتحقق من حالة الدخان'
+ });
+ assert.equal(reviewed.saved,true);
+ const output=await fake.load();
+ assert.equal(output.incidents[0].aiAssessment.officerName,'موظف المركز البحري');
+ assert.equal(output.incidents[0].operationalStatus,'RECEIVED');
+});
