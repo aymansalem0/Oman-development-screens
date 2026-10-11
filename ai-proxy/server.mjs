@@ -5,6 +5,7 @@ import { FleetAutoScheduler } from './fleet-scheduler.mjs';
 import { DashboardWorkspace, DashboardError } from './dashboard-workspace.mjs';
 import { NmcAlertWorkspace, NmcAlertError } from './alert-workspace.mjs';
 import { NmcCaseWorkspace, NmcCaseError } from './case-workspace.mjs';
+import {NmcIncidentFeed,IncidentTriageError} from './nmc-incident-feed.mjs';
 import { normalizeA01Actions, ActionPlanError } from './nmc-action-plan.mjs';
 import {catalogueSummaries,DECISION_POLICY_VERSION} from './nmc-decision-policy.mjs';
 import { OperationalGuidance, GuidanceError } from './operational-guidance.mjs';
@@ -127,6 +128,7 @@ riskPolicy=new CentralRiskPolicy({mode:dbMode,oracleRepository:repository,fleet}
 const dashboards=new DashboardWorkspace({mode:dbMode,oracleRepository:repository});
 const alerts=new NmcAlertWorkspace({mode:dbMode,oracleRepository:repository});
 const cases=new NmcCaseWorkspace({mode:dbMode,oracleRepository:repository,alerts});
+const incidentFeed=new NmcIncidentFeed();
 // Independent POC scheduling workspace; ONLY confirmed existing NMC referrals
 // are written through the established Oracle-backed case API.
 const siErp=new ErpWorkforceStore();
@@ -379,6 +381,31 @@ const server = createServer(async (req, res) => {
       adapter:'nmc-airia-proxy',fleetAutoEnabled:scheduler.enabled,
       persistence:db,persistenceHealthy:fleet.persistenceHealthy
     });
+  }
+
+
+  // Dedicated incident-reporting source and AI triage. No A01/A02 changes.
+  // GET is read-only and never starts an AI call. POST is explicit/chargeable.
+  if(path==='/api/ai/nmc/incidents/health'&&req.method==='GET')
+    return respond(res,200,{status:'ok',...incidentFeed.health()});
+  if(path==='/api/ai/nmc/incidents'&&req.method==='GET'){
+    try{return respond(res,200,await incidentFeed.load());}
+    catch(e){if(e instanceof IncidentTriageError)
+      return respond(res,e.status,{error:e.code,source:'GOOGLE_SHEETS'});
+      return respond(res,503,{error:'INCIDENT_SOURCE_UNAVAILABLE'});}
+  }
+  const triageMatch=/^\\/api\\/ai\\/nmc\\/incidents\\/(INC-[A-Za-z0-9-]{3,70})\\/analyze$/.exec(path);
+  if(triageMatch&&req.method==='POST'){
+    try{
+      dashboards.assertRole(req,'EDITOR');
+      const body=await requestJson(req,4096);
+      return respond(res,200,await incidentFeed.analyze(triageMatch[1],{
+        confirmCost:body.confirmCost===true,force:body.force===true}));
+    }catch(e){
+      if(e instanceof IncidentTriageError||e instanceof DashboardError)
+        return respond(res,e.status,{error:e.code});
+      return respond(res,503,{error:'INCIDENT_AI_TRIAGE_UNAVAILABLE'});
+    }
   }
 
   if (req.method === 'GET' && path === '/api/ai/psc/health') {
