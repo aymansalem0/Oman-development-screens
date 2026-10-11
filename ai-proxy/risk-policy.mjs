@@ -9,11 +9,11 @@ import oracledb from 'oracledb';
 const copy=x=>JSON.parse(JSON.stringify(x));
 const iso=()=>new Date().toISOString();
 const coreKeys=['movement','inspection','certificate','dataQuality','history'];
-const keySet=[...coreKeys,'documentIntegrity'];
-const weightOf=(c,key)=>key==='documentIntegrity'?Number(c.weights?.documentIntegrity||0):c.weights?.[key];
+const keySet=[...coreKeys];
+const weightOf=(c,key)=>c.weights?.[key];
 const baseline={
   version:'NMC Risk Ruleset 1.0',name:'National Maritime Risk Model',mode:'weighted',
-  weights:{movement:25,inspection:28,certificate:20,dataQuality:14,history:13,documentIntegrity:0},
+  weights:{movement:25,inspection:28,certificate:20,dataQuality:14,history:13},
   thresholds:{watch:45,high:65,critical:85},
   publishedAt:null,publishedBy:'SYSTEM INITIAL BASELINE',
   changeReason:'Initial central baseline; previous browser policies are NOT auto-imported.'
@@ -29,6 +29,11 @@ export function validateRiskConfig(c){
      !['weighted','conservative','max-signal'].includes(c.mode)||
      typeof c.name!=='string'||!c.name.trim()||c.name.length>140)
     throw new RiskPolicyError('RISK_POLICY_INVALID');
+  // Old 0%-weighted A03 keys are accepted only for backwards compatibility,
+  // but never published as a new factor. Any positive legacy A03 value must
+  // be reviewed and redistributed by an authorized policy publisher.
+  if(Number(c.weights?.documentIntegrity||0)>0)
+    throw new RiskPolicyError('RISK_LEGACY_A03_REBALANCE_REQUIRED',409);
   const numbers=keySet.map(k=>weightOf(c,k));
   if(numbers.some(x=>!Number.isInteger(x)||x<0||x>100)||
      numbers.reduce((a,b)=>a+b,0)!==100)throw new RiskPolicyError('RISK_WEIGHTS_INVALID');
@@ -50,12 +55,17 @@ function validateDraftConfig(value){
      !['watch','high','critical'].every(k=>
        Number.isInteger(value.thresholds[k])&&value.thresholds[k]>=0&&value.thresholds[k]<=100))
     throw new RiskPolicyError('RISK_DRAFT_INVALID',422);
-  return copy(value); // Incomplete weights/threshold order may be saved; publish still validates.
+  if(Number(value.weights?.documentIntegrity||0)>0)
+    throw new RiskPolicyError('RISK_LEGACY_A03_REBALANCE_REQUIRED',409);
+  const clean=copy(value);
+  delete clean.weights.documentIntegrity;
+  return clean; // Draft history remains append-only, new drafts use five factors.
 }
 export function calculateRiskPolicy(row,config,revision){
   const signals=row?.signals||[];
   const severities={};
-  const activeKeys=[...coreKeys,...(weightOf(config,'documentIntegrity')>0?['documentIntegrity']:[])];
+  if(Number(config.weights?.documentIntegrity||0)>0)return null;
+  const activeKeys=[...coreKeys];
   for(const key of activeKeys){
     const rows=signals.filter(s=>s.factor===key);
     if(rows.length!==1||!Number.isFinite(rows[0].severity)||
