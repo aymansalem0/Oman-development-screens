@@ -2613,3 +2613,8 @@ button, a { font: inherit; }
 .source-data-link:hover{text-decoration:underline;}
 .source-row .status-chip.unavailable{color:#b04343;background:#fff0ee;}
 .source-row .status-chip.conflict{color:#9f5420;background:#fff3dc;}
+
+.source-header-actions{display:flex;align-items:center;gap:9px;flex-wrap:wrap;}
+.source-refresh-btn{border:1px solid #bfdeda;color:#0c7773;background:#f5fbf9;
+ border-radius:9px;padding:7px 9px;font-weight:800;font-size:10px;cursor:pointer;}
+.source-refresh-btn:hover{background:#e8f7f4;}
