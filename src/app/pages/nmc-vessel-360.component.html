@@ -287,6 +287,12 @@
     </nav>
 
 
+    <p class="v360-tab-provenance" *ngIf="activeTab==='movement'||activeTab==='compliance'||
+       activeTab==='inspection'||activeTab==='certificates'">
+      {{copy('POC simulated vessel data — not connected to authoritative AIS, Flag, RO or MOEI records. Follow-up actions require Case Management approval.',
+        'بيانات السفينة في هذا القسم تجريبية وليست اتصالًا مباشرًا بمصادر AIS أو دولة العلم أو هيئة التصنيف أو سجلات الوزارة. الإجراءات تتطلب اعتماد إدارة الحالات.')}}
+    </p>
+
     <section class="overview-layout" *ngIf="activeTab === 'overview'">
       <div class="left-column">
         <article class="panel summary-panel">
