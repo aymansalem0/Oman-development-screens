@@ -201,6 +201,7 @@
           </div>
 
           <div class="map-overlay map-legend">
+            <span class="vessel-risk-legend-caption">{{copy('A01/A02 vessel risk (inner ring)','مخاطر السفينة A01/A02 (الإطار الداخلي)')}}</span>
             <span><i class="dot critical"></i> {{ copy('Critical', 'حرج') }}</span>
             <span><i class="dot high"></i> {{ copy('High', 'مرتفع') }}</span>
             <span><i class="dot watch"></i> {{ copy('Watch', 'مراقبة') }}</span>
@@ -214,8 +215,8 @@
             <span><i class="incident-legend-ring moderate"></i>{{copy('Moderate','متوسط')}}</span>
             <span><i class="incident-legend-ring low"></i>{{copy('Low','منخفض')}}</span>
             <span><i class="incident-legend-ring unassessed"></i>{{copy('Not rated','بدون تصنيف')}}</span>
-            <small>{{copy('AI score if available; otherwise reported severity (unverified). Vessel color stays A01/A02 risk.',
-                'تصنيف AI إن توفر، وإلا خطورة البلاغ غير المؤكدة. لون السفينة يعكس مخاطر A01/A02.')}}</small>
+            <small>{{copy('Incident vessels: colored ship + outer ring = incident severity (AI, or unverified reported severity). Inner ring = saved A01/A02 vessel risk.',
+                'عند وجود حادث: لون السفينة والإطار الخارجي حسب خطورة الحادث (AI أو بلاغ غير مؤكد). الإطار الداخلي لمخاطر السفينة A01/A02.')}}</small>
           </div>
         </div>
       </div>
