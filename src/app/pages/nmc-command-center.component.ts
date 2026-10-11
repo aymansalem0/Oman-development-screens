@@ -434,7 +434,7 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
           // Closed/resolved incident history remains in Incident Intelligence,
           // but does not raise the vessel's ACTIVE incident flag on the map.
           if(['CLOSED','RESOLVED'].includes(report.operationalStatus))continue;
-          if(!report.imo||!/^\\d{7}$/.test(report.imo))continue;
+          if(!report.imo||!(/^[0-9]{7}$/).test(report.imo))continue;
           const bucket=grouped.get(report.imo)||[];
           bucket.push(report);
           grouped.set(report.imo,bucket);
