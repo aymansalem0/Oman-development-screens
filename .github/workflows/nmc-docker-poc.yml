@@ -19,6 +19,8 @@ jobs:
       - name: Unit-test PSC proxy and schemas
         run: |
           node --check ai-proxy/server.mjs
+          node --check ai-proxy/case-source-provenance.mjs
+          node --test ai-proxy/test/case-source-provenance.test.mjs
           node --check ai-proxy/psc-reader.mjs
           node --check ai-proxy/fleet-ai.mjs
           node --check ai-proxy/fleet-scheduler.mjs

@@ -5,6 +5,7 @@ import { FleetAutoScheduler } from './fleet-scheduler.mjs';
 import { DashboardWorkspace, DashboardError } from './dashboard-workspace.mjs';
 import { NmcAlertWorkspace, NmcAlertError } from './alert-workspace.mjs';
 import { NmcCaseWorkspace, NmcCaseError } from './case-workspace.mjs';
+import {evaluateCaseAssessment,historicalApprovalValid} from './case-source-provenance.mjs';
 import {NmcIncidentFeed,IncidentTriageError} from './nmc-incident-feed.mjs';
 import {createAiriaIncidentTriage} from './nmc-incident-airia.mjs';
 import { normalizeA01Actions, ActionPlanError } from './nmc-action-plan.mjs';
@@ -324,9 +325,21 @@ async function requestJson(req, limit = maxBytes) {
 }
 
 
+// Read-only preview using the exact saved case assessment; no Airia calls.
+// A newer vessel assessment may exist, but it is NEVER substituted for the
+// immutable source of this case or its recorded risk score.
+async function caseA01SourcePreview(item){
+  const current=fleet.getVesselResult(item.imo);
+  const needHistory=Boolean(item.sourceAssessmentId)&&
+    item.sourceAssessmentId!==current?.assessmentId;
+  const historical=needHistory&&repository?.loadAssessmentById
+    ?await repository.loadAssessmentById(item.sourceAssessmentId):null;
+  return evaluateCaseAssessment(item,current,historical);
+}
+
 // Only an explicit operator creation or retry calls Airia A01: never GET,
 // dashboard display, alert scanning or page refresh.
-async function prepareCaseA01Actions(caseId,version){
+async function prepareCaseA01Actions(caseId,version,approval={}){
           const existing=await cases.get(caseId);
           if(!existing)throw new NmcCaseError('CASE_NOT_FOUND',404);
           if(existing.version!==version)throw new NmcCaseError('CASE_VERSION_CONFLICT',409);
@@ -337,11 +350,10 @@ async function prepareCaseA01Actions(caseId,version){
           // Strong provenance check: use ONLY the exact saved A01/A02 assessment
           // that initiated this case. Never silently use the synthetic fixture or
           // a newer scored assessment that superseded the event.
-          const source=fleet.getVesselResult(existing.imo);
-          if(!source||source.status!=='COMPLETED'||
-            source.score!==existing.sourceScore||source.level!==existing.sourceLevel||
-            !Array.isArray(source.signals)||![5,6].includes(source.signals.length))
-            throw new NmcCaseError('CASE_SOURCE_ASSESSMENT_UNAVAILABLE',409);
+          const preview=await caseA01SourcePreview(existing);
+          const approvalResult=historicalApprovalValid(preview,approval);
+          if(!approvalResult.ok)throw new NmcCaseError(approvalResult.error,409);
+          const source=preview.source;
           // Older PR42 alerts omitted the assessment ID from the snapshot.
           // Reconcile ONLY when the persisted alert timestamp/ruleset and current
           // saved AI source prove it was already assessed before that alert.
@@ -389,6 +401,19 @@ async function prepareCaseA01Actions(caseId,version){
             // the immutable legacy case field that may have been null.
             plan.evidenceAssessmentId=source.assessmentId;
             plan.legacySourceReconciled=legacyReconciled;
+            // Immutable historical input may differ from the vessel's newest
+            // score; the operator explicitly acknowledged this before A01.
+            // This does NOT constitute human approval of A01 actions.
+            plan.sourceCurrency={
+              historicalSource:preview.isHistorical,
+              originalAssessmentId:source.assessmentId,
+              latestAssessmentId:preview.latestAssessmentId,
+              latestRiskScore:preview.latestScore,
+              latestRiskLevel:preview.latestLevel,
+              latestAssessedAt:preview.latestAssessedAt,
+              explicitlyAcknowledged:preview.isHistorical,
+              acknowledgedAt:preview.isHistorical?new Date().toISOString():null
+            };
             return await cases.saveActionPlan(caseId,version,plan);
           }finally{actionPlanRuns.delete(caseId);}
 }
@@ -841,6 +866,14 @@ const server = createServer(async (req, res) => {
           return respond(res,200,{status:'ok',case:item});
         }
         if(/^[a-f\d-]{36}$/i.test(first)&&!second){
+          if(action==='action-plan-source'){
+            const item=await cases.get(first);
+            if(!item)throw new NmcCaseError('CASE_NOT_FOUND',404);
+            const preview=await caseA01SourcePreview(item);
+            const {source,...safe}=preview;
+            return respond(res,200,{status:'ok',caseId:item.id,
+              caseVersion:item.version,...safe});
+          }
           if(action==='history')
             return respond(res,200,{status:'ok',history:await cases.history(first)});
           if(!action){
@@ -913,7 +946,10 @@ const server = createServer(async (req, res) => {
         if(action==='action-plan'&&second==='generate'&&!third){
           dashboards.assertRole(req,'EDITOR');
           const body=await requestJson(req,4096);
-          const item=await prepareCaseA01Actions(first,body.version);
+          const item=await prepareCaseA01Actions(first,body.version,{
+            acknowledgeHistoricalAssessment:body.acknowledgeHistoricalAssessment===true,
+            reviewedLatestAssessmentId:body.reviewedLatestAssessmentId
+          });
           return respond(res,200,{status:'ok',case:item});
         }
         if(action==='actions'&&second&&third==='decision'){

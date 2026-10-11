@@ -231,6 +231,16 @@
           'يتم إعداد توصيات A01 عند تأكيد إنشاء الحالة البحرية. إذا كانت الحالة قديمة أو فشل A01، استخدم إعادة المحاولة. لن ننشئ مهام افتراضية.') }}
       </div>
       <ng-container *ngIf="centralCase.actionPlan as plan">
+        <div class="ai-plan-alert" *ngIf="plan.sourceCurrency?.historicalSource" role="alert">
+          <strong>{{copy('HISTORICAL CASE ASSESSMENT — OFFICER REVIEW REQUIRED',
+            'تقييم تاريخي للحالة — المراجعة البشرية مطلوبة')}}</strong>
+          <p>{{copy('A01 recommendations were generated using the original case risk and evidence, NOT the latest vessel risk. Compare the updated vessel intelligence before approving any operation.',
+            'تم إعداد توصيات A01 باستخدام مخاطر وأدلة الحالة الأصلية، وليس أحدث تقييم للسفينة. قارن تحليل المخاطر الأحدث قبل اعتماد أي إجراء تشغيلي.')}}</p>
+          <small>{{copy('Original risk','المخاطر الأصلية')}}: {{plan.sourceScore}}/100 ·
+            {{copy('Latest risk at review','أحدث مخاطر وقت المراجعة')}}:
+            {{plan.sourceCurrency?.latestRiskScore ?? '—'}}/100 ·
+            {{plan.sourceCurrency?.latestAssessmentId || '—'}}</small>
+        </div>
         <div class="case-situation">
           <div>
             <span class="section-kicker">{{copy('WHAT IS HAPPENING?','ما الذي يحدث؟')}}</span>

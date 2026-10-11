@@ -363,22 +363,70 @@ export class NmcCaseWorkspaceComponent implements OnInit {
 
   generateAiActions():void{
     if(!this.centralCase||this.centralBusy||this.centralCase.actionPlan)return;
-    if(!window.confirm(this.copy(
-      'Retry the unsuccessful A01 step from case creation? This makes one explicit Airia call.',
-      'إعادة محاولة خطوة A01 التي لم تكتمل عند إنشاء الحالة؟ سيتم استدعاء Airia مرة واحدة.')))return;
+    const current=this.centralCase;
     this.centralBusy=true;this.centralError='';this.centralSuccess='';
-    this.cases.generateActionPlan(this.centralCase).subscribe({
-      next:res=>{
-        this.centralBusy=false;
-        if(res.case)this.applyCase(res.case);
-        this.centralSuccess=this.copy(
-          'A01 proposals are ready. Only your approved A01 actions appear as case tasks.',
-          'توصيات A01 جاهزة. لن تظهر كمهام إلا توصيات A01 التي اعتمدتها.');
+    // Free, read-only preflight: load the immutable case source by exact
+    // assessment ID before requesting a potentially paid Airia A01 call.
+    this.cases.actionPlanSourcePreview(current.id).subscribe({
+      next:preview=>{
+        if(!preview.ready){
+          this.centralBusy=false;
+          this.centralError=this.cases.readableError(
+            {error:{error:'CASE_SOURCE_ASSESSMENT_UNAVAILABLE'}},this.lang.isArabic);
+          return;
+        }
+        if(preview.caseVersion!==current.version){
+          this.centralBusy=false;
+          this.centralError=this.cases.readableError(
+            {error:{error:'CASE_VERSION_CONFLICT'}},this.lang.isArabic);
+          this.loadCentralCase();return;
+        }
+        const historical=preview.requiresHistoricalAcknowledgement;
+        const confirmText=historical
+          ?this.copy(
+            'IMPORTANT — ORIGINAL HISTORICAL RISK REVIEW. This case was opened with risk '+preview.caseScore+
+            ' ('+preview.caseAssessmentId+'), but the newest saved vessel risk is '+
+            (preview.latestScore??'unavailable')+' ('+(preview.latestAssessmentId||'unavailable')+
+            '). A01 will use ONLY the original case evidence; this does NOT update current risk '+
+            'or approve any operational action. Have you reviewed this difference and explicitly '+
+            'authorized ONE paid Airia A01 analysis on the original historical snapshot?',
+            'تنبيه — مراجعة التقييم التاريخي الأصلي. فُتحت الحالة بدرجة مخاطر '+preview.caseScore+
+            ' ('+preview.caseAssessmentId+')، بينما أحدث تقييم محفوظ هو '+
+            (preview.latestScore??'غير متاح')+' ('+(preview.latestAssessmentId||'غير متاح')+
+            '). سيعتمد A01 على الأدلة الأصلية للحالة فقط دون تعديل المخاطر الحالية أو اعتماد '+
+            'أي إجراء تشغيلي. هل راجعت الاختلاف وتوافق صراحةً على استدعاء Airia A01 '+
+            'مرة واحدة باستخدام التقييم التاريخي؟')
+          :this.copy(
+            'Request one Airia A01 analysis using the verified saved case assessment? '+
+            'This may incur AI usage costs; recommendations require human approval.',
+            'طلب تحليل Airia A01 واحد باستخدام التقييم الأصلي المؤكد للحالة؟ '+
+            'قد يتطلب تكلفة استخدام، ولن تتحول التوصيات إلى مهام دون اعتماد بشري.');
+        if(!window.confirm(confirmText)){
+          this.centralBusy=false;return;
+        }
+        this.cases.generateActionPlan(current,historical,
+          historical?preview.latestAssessmentId:undefined).subscribe({
+          next:res=>{
+            this.centralBusy=false;
+            if(res.case)this.applyCase(res.case);
+            this.centralSuccess=this.copy(
+              historical
+                ?'Historical A01 proposals saved. Compare with the newest risk assessment before approving any task.'
+                :'A01 proposals saved. Only human-approved proposals become operational tasks.',
+              historical
+                ?'حُفظت توصيات A01 المستندة إلى التقييم التاريخي. قارنها بأحدث تقييم قبل اعتماد أي مهمة.'
+                :'حُفظت توصيات A01. لن تُنشأ مهام تشغيلية إلا بعد الاعتماد البشري.');
+          },
+          error:error=>{
+            this.centralBusy=false;
+            this.centralError=this.cases.readableError(error,this.lang.isArabic);
+            if(error?.status===409)this.loadCentralCase();
+          }
+        });
       },
       error:error=>{
         this.centralBusy=false;
         this.centralError=this.cases.readableError(error,this.lang.isArabic);
-        if(error?.status===409)this.loadCentralCase();
       }
     });
   }
