@@ -35,7 +35,8 @@ const sheetsHeaders=[
  'Incident_Risk_Score_0_100','Incident_Risk_Band','AI_Proposed_Followup',
  'AI_Reasoning','AI_Confidence_0_1','Missing_Information',
  'Officer_Decision','Officer_Name','Officer_Reviewed_At_UTC',
- 'Approved_Followup_Status','Linked_Case_ID','Assessment_Status','Governance_Notice'
+ 'Approved_Followup_Status','Linked_Case_ID','Assessment_Status','Governance_Notice',
+ 'AI_Suggested_Followup_State','Officer_Approved_Followup_State','Officer_Review_Reason'
 ];
 function mockFeed(){
  const appended=[];
@@ -119,5 +120,58 @@ test('changes to source description invalidate previous AI assessment',async()=>
   assert.equal(list.incidents[0].aiAssessment,null);
   assert.equal(list.incidents[0].aiAssessmentStale,true);
  }finally{incidentRow[12]=incidentRow[12].replace(' New verified update.','');}
+ assert.equal(appended.length,1);
+});
+
+test('proposed incident follow-up is a separate next-step state, not a regulatory incident status',async()=>{
+ const {fake,appended}=mockFeed();
+ const result=await fake.analyze('INC-POC-0001',{confirmCost:true});
+ assert.equal(result.assessment.aiProposedFollowup,'INCIDENT_RESPONSE');
+ assert.equal(result.assessment.suggestedFollowupState,'RESPONSE_COORDINATION_PENDING');
+ assert.equal(appended[0].length,27);
+ assert.equal(appended[0][24],'RESPONSE_COORDINATION_PENDING');
+ const view=await fake.load();
+ assert.equal(view.incidents[0].operationalStatus,'RECEIVED');
+ assert.deepEqual(view.incidents[0].nextFollowup,{
+  status:'RESPONSE_COORDINATION_PENDING',approval:'AI_PROPOSED',
+  reason:candidate.reasoning
+ });
+});
+test('officer-modified next-step is distinct from AI advice and immutable source status',async()=>{
+ const {fake,appended}=mockFeed();
+ const evaluated=await fake.analyze('INC-POC-0001',{confirmCost:true});
+ const reason='Source report examined; send evidence for an inspection referral review';
+ const reviewed=await fake.review('INC-POC-0001',{
+  assessmentId:evaluated.assessment.assessmentId,decision:'MODIFY',
+  approvedFollowup:'REFER_SMART_INSPECTION',officer:'NMC Inspector',note:reason
+ });
+ assert.equal(reviewed.approvedFollowupState,'INSPECTION_REFERRAL_PENDING');
+ assert.equal(appended[0][24],'RESPONSE_COORDINATION_PENDING');
+ assert.equal(appended[1][24],'RESPONSE_COORDINATION_PENDING');
+ assert.equal(appended[1][25],'INSPECTION_REFERRAL_PENDING');
+ assert.equal(appended[1][26],reason);
+ const view=await fake.load();
+ assert.equal(view.incidents[0].operationalStatus,'RECEIVED');
+ assert.equal(view.incidents[0].nextFollowup.approval,'OFFICER_APPROVED');
+ assert.equal(view.incidents[0].nextFollowup.status,'INSPECTION_REFERRAL_PENDING');
+ await assert.rejects(()=>fake.analyze('INC-POC-0001',{
+  confirmCost:true,force:true}),/INCIDENT_ALREADY_REVIEWED/);
+});
+test('scheduled triage remains off by default; when enabled it respects source opt-in and no duplicate assessments',async()=>{
+ const {fake,appended}=mockFeed();
+ assert.equal((await fake.autoTick()).enabled,false);
+ assert.equal(appended.length,0);
+ fake.autoEnabled=true;fake.autoMaxPerCycle=1;
+ incidentRow[25]='NO';
+ try{
+  const blocked=await fake.autoTick();
+  assert.equal(blocked.assessed,0);
+  assert.equal(appended.length,0);
+ }finally{incidentRow[25]='YES';}
+ const once=await fake.autoTick();
+ assert.equal(once.assessed,1);
+ assert.equal(appended.length,1);
+ const twice=await fake.autoTick();
+ assert.equal(twice.assessed,0);
  assert.equal(appended.length,1);
 });
