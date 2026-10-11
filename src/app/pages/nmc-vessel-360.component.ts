@@ -31,6 +31,7 @@ interface SourceStatus {
     'SYNTHETIC_INCIDENT_GOOGLE'|'NMC_POC_CASE'|'DERIVED_COMPARISON'|'UNAVAILABLE';
   recordId?:string;
   route?:string;
+  tab?:string;
   authority: string;
   sourceClass: 'MOEI Authoritative' | 'Internal Master' | 'External Authoritative' | 'External Trusted' | 'Operational Feed';
 }
@@ -1035,7 +1036,7 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
       dataNature:psc.sourceMode==='GOOGLE_SHEETS_LIVE'?
         'SYNTHETIC_PSC_GOOGLE':'SYNTHETIC_PSC_LOCAL',
       lastSync:this.pscReadAt||'—',confidence:null,
-      route:`/moei/nmc/vessel/${this.vessel.imo}?tab=external-psc`
+      route:`/moei/nmc/vessel/${this.vessel.imo}`, tab:'external-psc'
     }:{
       name:'Port State Control / PSC',system:'PSC POC Reader',
       record:'No PSC API response',status:'Unavailable',
