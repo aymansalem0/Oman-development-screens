@@ -27,6 +27,7 @@ export const routes: Routes = [
   { path: 'moei/smart-inspection/settings/sources/:source', loadComponent: () => import('./pages/si-candidate-sources.component').then(m => m.SiCandidateSourcesComponent) },
   { path: 'moei/smart-inspection/preparation/:caseId', loadComponent: () => import('./pages/si-inspection-preparation.component').then(m => m.SiInspectionPreparationComponent) },
   { path: 'moei/nmc', loadComponent: () => import('./pages/nmc-command-center.component').then(m => m.NmcCommandCenterComponent) },
+  { path: 'moei/nmc/incidents', loadComponent: () => import('./pages/nmc-incident-center.component').then(m => m.NmcIncidentCenterComponent) },
   { path: 'moei/nmc/alerts', loadComponent: () => import('./pages/nmc-alert-center.component').then(m => m.NmcAlertCenterComponent) },
   { path: 'moei/nmc/dashboards', loadComponent: () => import('./pages/nmc-dashboard-builder.component').then(m => m.NmcDashboardBuilderComponent) },
   { path: 'moei/nmc/dashboards/view/:id', loadComponent: () => import('./pages/nmc-dashboard-builder.component').then(m => m.NmcDashboardBuilderComponent) },
