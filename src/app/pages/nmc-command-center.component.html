@@ -480,7 +480,8 @@
             <span>360</span>
             {{ copy('Open Vessel 360', 'فتح Vessel 360') }}
           </a>
-          <button type="button" class="primary-btn">{{ copy('Review Maritime Event', 'مراجعة الحدث البحري') }}</button>
+          <a class="primary-btn" [routerLink]="['/moei/nmc/vessel',v.imo,'case']">
+                {{copy('Review in Case Management','مراجعة الحدث داخل إدارة الحالات')}}</a>
         </div>
       </div>
     </section>
