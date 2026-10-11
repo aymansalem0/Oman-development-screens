@@ -62,7 +62,7 @@ export class NmcNavigationComponent implements OnInit, OnDestroy {
       this.updateRoute(event.urlAfterRedirects);
       this.dashboardNavigation.refresh();
       this.refreshAlertCount();
-      this.mobileOpen = false;
+      this.mobileOpen = false;this.menuOpen=false;
     }));
     this.dashboardNavigation.refresh();
     this.refreshAlertCount();
