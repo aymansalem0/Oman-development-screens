@@ -81,14 +81,13 @@ test('batch runner persistently stores only validated five-factor assessments',a
   rmSync(scratch,{recursive:true,force:true});
 });
 
-test('document-integrity weighted risk requires actual A03 source evidence, preserving old 5-factor scores',()=>{
+test('retired A03 factor cannot influence new fleet score, existing five factors unchanged',()=>{
   const withDoc={...config,weights:{movement:23,inspection:25,certificate:18,
     dataQuality:13,history:11,documentIntegrity:10}};
-  assert.throws(()=>evaluateFleetSignals(signals,withDoc),/INCOMPLETE_FLEET_SIGNALS/);
+  assert.throws(()=>evaluateFleetSignals(signals,withDoc),/A03_RISK_FACTOR_RETIRED/);
   const withSignal=[...signals,{factor:'documentIntegrity',severity:50,
     confidence:0.65,status:'AVAILABLE',sourceAgent:'A03',
     evidenceIds:['GDOC-0123456789abcdef0123'],reason:'Grounded cross-source mismatch'}];
-  const weighted=evaluateFleetSignals(withSignal,withDoc);
-  assert.equal(weighted.score,58);assert.equal(weighted.level,'Watch');
+  assert.throws(()=>evaluateFleetSignals(withSignal,withDoc),/A03_RISK_FACTOR_RETIRED/);
   assert.equal(evaluateFleetSignals(withSignal,config).score,59);
 });
