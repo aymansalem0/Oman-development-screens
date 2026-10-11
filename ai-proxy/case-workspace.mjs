@@ -344,6 +344,31 @@ export class NmcCaseWorkspace{
    * mapping are NMC-owned policy, not claimed to have been authored by Airia.
    * No genuine restriction, detention, or port API is called.
    */
+  /**
+   * Explicitly opt an untouched, previously-saved legacy A01 action plan
+   * into the single-decision POC. Never invoke Airia or change saved risk,
+   * any individual A01 proposal or a human's previous decisions.
+   */
+  async initializeOperational(id,version,role='OPERATOR'){
+    return this._update(id,version,'SINGLE_DECISION_FROM_SAVED_A01',role,
+      'Operator converted unreviewed saved A01 recommendations to one NMC POC decision',
+      row=>{
+        if(row.status==='RESOLVED')
+          throw new NmcCaseError('CASE_ALREADY_RESOLVED',409);
+        if(!row.actionPlan?.proposedActions?.length)
+          throw new NmcCaseError('CASE_ACTION_PLAN_REQUIRED',409);
+        if(row.operationalDecision)
+          throw new NmcCaseError('CASE_SINGLE_DECISION_EXISTS',409);
+        if(row.actionPlan.proposedActions.some(a=>a.decision!=='PENDING')||
+          row.tasks.some(t=>t.provenance==='AIRIA_A01_HUMAN_APPROVED')||
+          (row.inspectionRequests||[]).length>0)
+          throw new NmcCaseError('CASE_LEGACY_REVIEW_ALREADY_STARTED',409);
+        const proposal=buildSingleProposal(row.actionPlan);
+        if(!proposal)throw new NmcCaseError('CASE_SINGLE_DECISION_UNAVAILABLE',409);
+        return {...row,operationalDecision:proposal};
+      },{noNewAiCall:true,originalAssessmentUnchanged:true});
+  }
+
   async decideOperational(id,version,data,role='OPERATOR'){
     const {decision,newDecisionCode,note}=data||{};
     if(!['ACCEPT','MODIFY','REJECT'].includes(decision))
