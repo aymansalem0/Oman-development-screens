@@ -2618,3 +2618,27 @@ button, a { font: inherit; }
 .source-refresh-btn{border:1px solid #bfdeda;color:#0c7773;background:#f5fbf9;
  border-radius:9px;padding:7px 9px;font-weight:800;font-size:10px;cursor:pointer;}
 .source-refresh-btn:hover{background:#e8f7f4;}
+
+/* Real incident reports only; an empty IMO has no Accidents tab. */
+.v360-accident-record{border:1px solid #d9e6ed;background:#fbfdfe;border-radius:12px;
+ padding:16px 18px;margin:12px 0;color:#244a61;}
+.v360-accident-title{display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;}
+.v360-accident-title strong{font-size:14px;color:#1e465f}
+.v360-accident-title span{background:#e7f2f5;border-radius:14px;padding:5px 10px;
+ font-size:11px;font-weight:750;color:#336579}
+.v360-accident-record p{line-height:1.65;font-size:12px;white-space:pre-wrap;}
+.v360-accident-data{display:flex;flex-wrap:wrap;gap:8px;margin:11px 0;}
+.v360-accident-data>span{background:#ecf3f7;padding:6px 10px;border-radius:8px;
+ font-size:11px;color:#315c77;}
+.v360-accident-score{padding:11px;background:#edf7f4;border-left:3px solid #0a8881;
+ border-radius:7px;margin-top:10px;}
+.v360-accident-score strong{font-size:12px;color:#076d6a;}
+.v360-movement-facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;}
+.v360-movement-facts>div{border:1px solid #d8e5ed;background:#f9fcfd;border-radius:10px;
+ padding:13px;display:flex;flex-direction:column;gap:8px;}
+.v360-movement-facts small{font-size:11px;color:#698197}
+.v360-movement-facts strong{font-size:14px;color:#21485f;overflow-wrap:anywhere;}
+
+.v360-tab-provenance{background:#fff9eb;border:1px solid #f2dbad;color:#7b5b26;
+ padding:10px 13px;border-radius:10px;margin:12px 0 18px;font-size:11px;
+ line-height:1.6;}

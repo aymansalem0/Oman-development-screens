@@ -1,6 +1,5 @@
 import { NmcNavigationComponent } from '../components/nmc-navigation.component';
 import { NmcMinistryLogoComponent } from '../components/nmc-ministry-logo.component';
-import { NmcVesselDocumentsComponent } from '../components/nmc-vessel-documents.component';
 import { CommonModule } from '@angular/common';
 import { AfterViewInit, Component, ElementRef, OnDestroy, OnInit, ViewChild } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
@@ -120,7 +119,7 @@ interface Vessel360View extends NmcVesselProfile {
 @Component({
   selector: 'app-nmc-vessel-360',
   standalone: true,
-  imports: [CommonModule, RouterLink, NmcNavigationComponent, NmcVesselDocumentsComponent, NmcMinistryLogoComponent],
+  imports: [CommonModule, RouterLink, NmcNavigationComponent, NmcMinistryLogoComponent],
   templateUrl: './nmc-vessel-360.component.html',
   styleUrl: './nmc-vessel-360.component.css'
 })
@@ -129,8 +128,11 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
 
   imo = '';
   activeTab = 'overview';
-  certificateVerificationStarted = false;
-  priorityInspectionCreated = false;
+  /** Only show actual Google Sheet accident/incident records for this IMO. */
+  get accidents():NmcMaritimeIncident[]{return this.vesselIncidents||[];}
+  get hasAccidents():boolean{return this.vesselIncidents!==null&&this.vesselIncidents.length>0;}
+  get inspectionsWithOpenFindings():number{return this.inspections.filter(r=>r.openDeficiencies>0).length;}
+  get accidentsSourceUnavailable():boolean{return this.vesselIncidents===null;}
   selectedCertificateId = '';
 
   vessel!: Vessel360View;
@@ -405,7 +407,7 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
     this.loadStoredAi();
 
     const requestedTab = this.route.snapshot.queryParamMap.get('tab');
-    if (requestedTab && ['overview','movement','compliance','inspection','external-psc','certificates','documents','sources'].includes(requestedTab)) {
+    if (requestedTab && ['overview','movement','compliance','inspection','external-psc','certificates','sources','accidents'].includes(requestedTab)) {
       this.activeTab = requestedTab;
     }
   }
@@ -420,6 +422,7 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
   }
 
   setTab(tab: string): void {
+    if(tab==='accidents'&&!this.hasAccidents)return;
     this.activeTab = tab;
   }
 
@@ -519,12 +522,9 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
     const severities=Object.fromEntries(signalKeys.map(key=>[
       key,this.storedAi!.signals.find(signal=>signal.factor===key)?.severity
     ])) as {movement:number;inspection:number;certificate:number;dataQuality:number;history:number};
-    const doc=this.storedAi.signals.find(s=>s.factor==='documentIntegrity');
-    const weightedDoc=Number(this.riskEngine.config.weights.documentIntegrity||0)>0;
     const hasCore=signalKeys.every(key=>Number.isFinite(severities[key]));
-    const projected=this.riskEngine.centralReady&&hasCore&&(!weightedDoc||doc)?
-      this.riskEngine.evaluateFromAiSignals(this.vessel,{
-        ...severities,...(doc?{documentIntegrity:doc.severity}:{})} as Record<RiskFactorKey,number>):null;
+    const projected=this.riskEngine.centralReady&&hasCore?
+      this.riskEngine.evaluateFromAiSignals(this.vessel,severities as Record<RiskFactorKey,number>):null;
     this.displayedRiskBasis=projected?'CURRENT_PUBLISHED':'ORIGINAL_SAVED';
     this.vessel.riskScore = projected?.score ?? this.storedAi.score ?? this.vessel.riskScore;
     this.vessel.riskLevel = projected?.level ?? this.storedAi.level ?? this.vessel.riskLevel;
@@ -546,7 +546,7 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
     const weights = this.riskEngine.centralReady?
       (this.riskEngine.config.weights as unknown as Record<string, number>):
       (this.storedAi.ruleset?.weights as unknown as Record<string, number> | undefined);
-    this.riskFactors = this.storedAi.signals.map(signal => {
+    this.riskFactors = this.storedAi.signals.filter(signal => signal.factor !== 'documentIntegrity').map(signal => {
       const weight = weights?.[signal.factor] ?? 0;
       return {
         label: names[signal.factor] || signal.factor,
@@ -617,11 +617,13 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
     this.subscriptions.add(this.incidentsService.list().subscribe({
       next:feed=>{
         this.vesselIncidents=feed.incidents.filter(r=>r.imo===this.vessel.imo);
+        if(this.activeTab==='accidents'&&!this.hasAccidents)this.activeTab='overview';
         this.incidentReadAt=new Date().toISOString();
         this.sources=this.buildSources();
       },
       error:()=>{
         this.vesselIncidents=null;this.incidentReadAt=null;
+        if(this.activeTab==='accidents')this.activeTab='overview';
         this.sources=this.buildSources();
       }
     }));
@@ -667,27 +669,11 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
   }
 
   openRiskEvidence(source: string): void {
-    if (source.includes('Certificate') || source.includes('Data Quality')) {
-      this.activeTab = 'certificates';
-      return;
-    }
-    if (source.includes('Inspection')) {
-      this.activeTab = 'inspection';
-      return;
-    }
-    if (source.includes('AIS') || source.includes('Movement')) {
-      this.activeTab = 'movement';
-    }
-  }
-
-  startCertificateVerification(): void {
-    this.certificateVerificationStarted = true;
-    this.activeTab = 'certificates';
-  }
-
-  createPriorityInspection(): void {
-    this.priorityInspectionCreated = true;
-    this.activeTab = 'inspection';
+    if(source.includes('Certificate'))this.setTab('certificates');
+    else if(source.includes('Data Quality'))this.setTab('sources');
+    else if(source.includes('Inspection'))this.setTab('inspection');
+    else if(source.includes('AIS')||source.includes('Movement'))this.setTab('movement');
+    else this.setTab('sources');
   }
 
   selectedCertificate(): CertificateRecord | undefined {
@@ -1098,16 +1084,17 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
     });
     const drive=this.driveListing;
     sources.push(drive?.driveConnected?{
-      name:'Google Drive Vessel Documents / A03',
-      system:'Google Drive POC Read-only Document List',
-      record:`${drive.documents.length} document(s) · ${drive.documents.filter(d=>d.savedStatus==='APPROVED').length} human-approved A03 result(s)`,
+      name:'Google Drive Document Metadata',
+      system:'Google Drive POC Read-only Metadata',
+      record:`${drive.documents.length} document record(s) available in the connected POC folder`,
       recordId:drive.documents[0]?.fileId,
       status:'Available',lastSync:this.driveReadAt||'—',confidence:null,
       authority:'Synthetic POC document packs; approval does NOT verify issuing authority',
       dataNature:'SYNTHETIC_DRIVE_GOOGLE',sourceClass:'External Trusted',
-      route:`/moei/nmc/vessel/${this.vessel.imo}`,tab:'documents'
+      // Only read-only metadata in source correlation; the legacy A03
+      // Document Intelligence tab and its actions are retired.
     }:{
-      name:'Google Drive Vessel Documents / A03',
+      name:'Google Drive Document Metadata',
       system:'Google Drive Document Adapter',
       record:drive?.status==='not_configured'?'Drive root folder not configured':
         'Google Drive document listing unavailable',

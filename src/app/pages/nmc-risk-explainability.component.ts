@@ -66,9 +66,9 @@ export class NmcRiskExplainabilityComponent implements OnInit,OnDestroy {
     certificate:['Certificates & compliance','الشهادات والامتثال'],
     dataQuality:['Data quality','جودة البيانات'],
     history:['Historical risk','المخاطر التاريخية'],
-    documentIntegrity:['Document Integrity (A03)','اتساق المستندات (A03)']
+    documentIntegrity:['Historical A03 signal (retired)','عامل A03 تاريخي (مُلغى)']
   };
-  readonly factorOrder:FactorKey[]=['movement','inspection','certificate','dataQuality','history','documentIntegrity'];
+  readonly factorOrder:FactorKey[]=['movement','inspection','certificate','dataQuality','history'];
 
   constructor(private route:ActivatedRoute,public lang:LanguageService,
     private readonly fleet:NmcFleetAiService,
@@ -168,28 +168,22 @@ export class NmcRiskExplainabilityComponent implements OnInit,OnDestroy {
         this.guidanceError=this.guidance.message(e,this.lang.isArabic);}
     }));
   }
-  /**
-   * The CURRENT central risk policy may require a sixth A03 signal that an
-   * older saved A01/A02 assessment does not have. In that situation never
-   * invent a current score, but ALWAYS show the saved original factor trace.
-   * This also keeps source-assessed Watch vessels visible for human review.
-   */
+  /** Current policy uses five A01/A02 factors. Historic saved scores stay immutable. */
   private updatePolicyProjection():void{
     const row=this.assessment,config=this.activeRiskConfig,vessel=this.vessel;
     this.projectedRisk=null;
     this.projectionNotice='';
     if(!row||!vessel){this.factors=[];this.selectedFactor=undefined;return;}
-    const core=this.factorOrder.filter(key=>key!=='documentIntegrity');
+    const core=this.factorOrder;
     const hasValidSignal=(key:FactorKey):boolean=>
       row.signals.filter(s=>s.factor===key&&Number.isFinite(s.severity)&&
         s.severity>=0&&s.severity<=100).length===1;
     const validCore=core.every(hasValidSignal);
-    const needsDocument=Number(config?.weights?.documentIntegrity||0)>0;
     const validPolicy=Boolean(config&&this.riskEngine.centralReady&&
       this.riskEngine.validate(config).length===0);
-    const canProject=validCore&&validPolicy&&(!needsDocument||hasValidSignal('documentIntegrity'));
+    const canProject=validCore&&validPolicy;
     if(canProject&&config){
-      const required=this.factorOrder.filter(key=>key!=='documentIntegrity'||needsDocument);
+      const required=this.factorOrder;
       const severities=Object.fromEntries(required.map(key=>
         [key,row.signals.find(s=>s.factor===key)!.severity])) as Record<RiskFactorKey,number>;
       this.projectedRisk=this.riskEngine.evaluateFromAiSignals(vessel,severities,config);
@@ -197,9 +191,6 @@ export class NmcRiskExplainabilityComponent implements OnInit,OnDestroy {
       this.projectionNotice=!validCore?
         this.copy('Some original A01/A02 risk factors are missing or invalid. Only recorded, individually valid signals are displayed; no current policy score is inferred.',
           'بعض عوامل A01/A02 الأصلية غير متوفرة أو غير صالحة. تُعرض الإشارات المحفوظة الصالحة فقط ولا يتم افتراض درجة للسياسة الحالية.') :
-        needsDocument&&!hasValidSignal('documentIntegrity')?
-          this.copy('The currently published risk policy requires A03 Document Integrity evidence, which is missing from this saved assessment. Current risk is UNAVAILABLE; the original saved risk and its factors are shown unchanged.',
-            'السياسة المنشورة حاليًا تشترط دليل اتساق مستندات A03 وهو غير موجود في هذا التقييم. المخاطر الحالية غير متاحة؛ تُعرض المخاطر والعوامل الأصلية المحفوظة دون تغيير.') :
           this.copy('The current published risk policy is unavailable or invalid. The original saved risk and supported factors are still available for review.',
             'السياسة المنشورة حاليًا غير متاحة أو غير صالحة. تبقى درجة المخاطر الأصلية والعوامل المحفوظة متاحة للمراجعة.');
     }
@@ -240,13 +231,6 @@ export class NmcRiskExplainabilityComponent implements OnInit,OnDestroy {
     };
     const pair=labels[this.sourceRiskLevel];
     return pair?this.copy(pair[0],pair[1]):this.copy('Unavailable','غير متاح');
-  }
-  /** Never infer a new risk when A03 is required by the current policy. */
-  get missingRequiredA03():boolean{
-    return Boolean(this.assessment&&this.riskEngine.centralReady&&
-      Number(this.activeRiskConfig?.weights.documentIntegrity||0)>0&&
-      !this.assessment.signals.some(s=>s.factor==='documentIntegrity'&&
-        Number.isFinite(s.severity)&&s.severity>=0&&s.severity<=100));
   }
   /** Top recorded contributing factors from the ORIGINAL assessment weights only. */
   get savedRiskDrivers():Array<{label:string;factor:string;severity:number;weight:number;

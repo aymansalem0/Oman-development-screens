@@ -2091,3 +2091,19 @@ button {
 @media (max-width:960px){
   .app-shell.smart-inspection-mode .erp-layout { padding-inline-start: 0; }
 }
+
+/* MOEI operational workspace uses a drawer, not a permanently reserved sidebar.
+   Restores the full canvas for Command Center and Vessel 360 on desktop. */
+@media(min-width:961px){
+  .app-shell.nmc-mode .nmc-shell .nmc-main,
+  .app-shell.nmc-mode .v360-shell .v360-main,
+  .app-shell.nmc-mode .case-shell .case-main,
+  .app-shell.nmc-mode .incident-main,
+  .app-shell.nmc-mode .risk-admin-shell .admin-main {
+    margin-left:0!important;margin-right:0!important;max-width:100%!important;
+    width:100%!important;
+  }
+  .app-shell.nmc-mode .nmc-shell .nmc-main,
+  .app-shell.nmc-mode .v360-shell .v360-main,
+  .app-shell.nmc-mode .case-shell .case-main {padding-inline:24px;}
+}

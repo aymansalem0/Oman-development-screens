@@ -37,9 +37,7 @@
                 [ngClass]="riskClass" (click)="openCurrentRisk()" [disabled]="!factors.length"
                 [attr.aria-label]="copy('Review available risk evidence','مراجعة أدلة المخاطر المتاحة')">
           <small>{{riskScore===null
-            ? (missingRequiredA03
-              ?copy('CURRENT POLICY · A03 EVIDENCE REQUIRED','السياسة الحالية · تحتاج أدلة A03')
-              :copy('CURRENT PUBLISHED RISK UNAVAILABLE','نتيجة السياسة الحالية غير متاحة'))
+            ? copy('CURRENT PUBLISHED RISK UNAVAILABLE','نتيجة السياسة الحالية غير متاحة')
             :copy('CURRENT PUBLISHED RISK · CLICK TO ANALYZE','المخاطر الحالية المنشورة · عرض التفاصيل')}}</small>
           <strong>{{riskScore===null?'—':riskScore}}</strong>
           <span>{{riskLabel}} · {{activeRiskConfig?.version||'—'}}</span>
@@ -104,13 +102,7 @@
         <strong>{{riskScore===null
           ?copy('Why the CURRENT risk is not available','لماذا درجة المخاطر الحالية غير متاحة؟')
           :copy('CURRENT policy result','نتيجة السياسة الحالية')}}</strong>
-        <p *ngIf="missingRequiredA03">
-          {{copy('Published policy','السياسة المنشورة')}} {{activeRiskConfig?.version||'—'}}
-          {{copy('assigns','تخصص')}} {{activeRiskConfig?.weights?.documentIntegrity}}%
-          {{copy('to A03 Document Integrity, but this assessment has no validated A03 risk signal. No current score can be calculated safely.',
-                 'لعامل اتساق المستندات A03، لكن هذا التقييم لا يحتوي على مؤشر مخاطر A03 صالح. لا يمكن احتساب درجة حالية بأمان.')}}
-        </p>
-        <p *ngIf="riskScore===null&&!missingRequiredA03">{{projectionNotice}}</p>
+        <p *ngIf="riskScore===null">{{projectionNotice}}</p>
         <p *ngIf="riskScore!==null">
           {{copy('Current published risk','المخاطر وفق السياسة الحالية')}}:
           <b>{{riskScore}}/100 · {{riskLabel}}</b>.
@@ -118,10 +110,6 @@
                    'محسوبة من المؤشرات المحفوظة دون إعادة تشغيل AI.')}}
         </p>
         <div class="decision-actions" *ngIf="vessel as v">
-          <a class="decision-action primary" [routerLink]="['/moei/nmc/vessel',v.imo]"
-             [queryParams]="{tab:'documents'}">
-            {{copy('1 · Open Vessel Documents / A03','١ · فتح مستندات السفينة / A03')}}
-          </a>
           <a class="decision-action" [routerLink]="['/moei/nmc/vessel',v.imo]"
              [queryParams]="{tab:'inspection'}">
             {{copy('Review inspection evidence','مراجعة أدلة المعاينة')}}
@@ -130,10 +118,6 @@
             {{copy('Review published risk policy','مراجعة سياسة المخاطر المنشورة')}}
           </a>
         </div>
-        <small *ngIf="missingRequiredA03">
-          {{copy('Review the vessel documents, analyze and approve A03 evidence where appropriate, then perform a separately authorized reassessment to generate a new current score. A03/AI requests may incur costs. Viewing this page never starts an agent.',
-                 'راجع مستندات السفينة وحلل أدلة A03 واعتمدها عند اللزوم، ثم نفّذ إعادة تقييم منفصلة بتفويض واضح للحصول على درجة حالية جديدة. قد تكون استدعاءات AI مدفوعة. فتح هذه الصفحة لا يشغّل أي وكيل.')}}
-        </small>
       </div>
     </section>
 
@@ -187,8 +171,8 @@
           <div class="panel-header">
             <div>
               <h3>{{copy('How the Score Was Built','كيف تم احتساب درجة المخاطر')}}</h3>
-              <p *ngIf="factorViewSource==='CURRENT'">{{copy('Saved A01/A02 severities and any valid A03 evidence × the CURRENT centrally published weights.',
-                'إشارات A01/A02 المحفوظة وأدلة A03 الصالحة مضروبة في أوزان السياسة المركزية المنشورة الحالية.')}}</p>
+              <p *ngIf="factorViewSource==='CURRENT'">{{copy('Five A01/A02 source severities × CURRENT published weights; legacy A03 contributes zero to new risk calculations.',
+                'مؤشرات A01/A02 الخمسة في الأوزان المنشورة الحالية؛ مساهمة A03 في المخاطر الجديدة تساوي صفر.')}}</p>
               <p *ngIf="factorViewSource==='SAVED'">{{copy('Original SAVED evidence with ORIGINAL weights. Current policy projection unavailable.',
                 'العوامل الأصلية المحفوظة بأوزان التقييم الأصلي. حساب السياسة الحالية غير متاح.')}}</p>
             </div>

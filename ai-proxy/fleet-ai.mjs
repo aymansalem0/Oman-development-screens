@@ -62,7 +62,10 @@ const normalizedConfig=(config)=>{
 export function evaluateFleetSignals(signals,config){
   const cfg=normalizedConfig(config);
   const values=Object.fromEntries(signals.map(s=>[s.factor,s.severity]));
-  const keys=cfg.weights.documentIntegrity>0?[...FACTORS,OPTIONAL_FACTOR]:FACTORS;
+  // A03 document metadata may inform data quality, never the fleet risk score.
+  if(cfg.weights.documentIntegrity!==0)
+    throw new Error('A03_RISK_FACTOR_RETIRED');
+  const keys=FACTORS;
   // A missing document may not be treated as a zero-risk factor.
   if(keys.some(k=>!Number.isFinite(values[k])))
     throw new Error('INCOMPLETE_FLEET_SIGNALS');
@@ -338,7 +341,7 @@ export class FleetAssessmentManager {
     // block lawful A01/A02 scoring under the published five-factor policy.
     // Never reuse stale drafts, invent a zero-risk A03 factor, or change a
     // completed assessment merely because the document source is unavailable.
-    const requireA03=Number(cfg.weights?.documentIntegrity||0)>0;
+    const requireA03=false; // A03 document integrity is not a fleet risk factor.
     let approved=[],documentSourceStatus='NO_CURRENT_A03_EVIDENCE',documentSourceError=null;
     try{
       approved=this.documentEvidence?await this.documentEvidence(v.imo):
@@ -401,7 +404,9 @@ export class FleetAssessmentManager {
     // Add a non-LLM document factor from citation-validated A03 outputs.
     // A01/A02 supply their original five factors; the deterministic NMC
     // engine calculates the sixth without inventing a model score.
-    const signals=docFactor?[...validated,docFactor]:validated;
+    // Preserve A01/A02 exact five-factor result. Do not persist a sixth
+    // documentIntegrity factor or use it for vessel risk projections.
+    const signals=validated;
     const risk=evaluateFleetSignals(signals,cfg);
     const quality=evaluateDataQuality({bundle:v,psc,signals,documents:approved});
     const internal=v.inlineContext.deficiencies||[];

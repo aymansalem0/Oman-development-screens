@@ -164,7 +164,7 @@ test('officer-modified next-step is distinct from AI advice and immutable source
  assert.equal(appended[1][25],'INSPECTION_REFERRAL_PENDING');
  assert.equal(appended[1][26],reason);
  assert.equal(appended[1].length,32);
- assert.equal(appended[1][31],'NMC_INCIDENT_A01_A02_EXT_V1');
+ assert.equal(appended[1][31],'A01_A02_EXISTING_CONTRACTS_V1');
  const view=await fake.load();
  assert.equal(view.incidents[0].operationalStatus,'RECEIVED');
  assert.equal(view.incidents[0].nextFollowup.approval,'OFFICER_APPROVED');

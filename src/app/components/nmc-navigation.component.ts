@@ -20,15 +20,16 @@ import { NmcAlertsService } from '../services/nmc-alerts.service';
   styleUrl: './nmc-navigation.component.css'
 })
 export class NmcNavigationComponent implements OnInit, OnDestroy {
-  nmcExpanded = true;
-  smartInspectionExpanded = true;
-  settingsExpanded = true;
+  nmcExpanded = false;
+  smartInspectionExpanded = false;
+  settingsExpanded = false;
   nmcSettingsExpanded = true;
   inspectionSettingsExpanded = true;
   nmcDashboardsExpanded = true;
   smartDashboardsExpanded = true;
   settingsDashboardsExpanded = true;
   mobileOpen = false;
+  menuOpen = false;
   currentPath = '';
   selectedImo: string | null = null;
   publishedDashboards: PublishedDashboardMenuItem[] = [];
@@ -52,7 +53,7 @@ export class NmcNavigationComponent implements OnInit, OnDestroy {
 
     this.subscriptions.add(this.dashboardNavigation.published$.subscribe(items => {
       this.publishedDashboards = items;
-      this.expandSelectedDashboard();
+      // Do not auto-expand; navigation remains user-controlled.
     }));
     this.updateRoute(this.router.url);
     this.subscriptions.add(this.router.events.pipe(
@@ -61,7 +62,7 @@ export class NmcNavigationComponent implements OnInit, OnDestroy {
       this.updateRoute(event.urlAfterRedirects);
       this.dashboardNavigation.refresh();
       this.refreshAlertCount();
-      this.mobileOpen = false;
+      this.mobileOpen = false;this.menuOpen=false;
     }));
     this.dashboardNavigation.refresh();
     this.refreshAlertCount();
@@ -182,37 +183,7 @@ export class NmcNavigationComponent implements OnInit, OnDestroy {
       try { localStorage.setItem(this.selectedKey, imo); }
       catch { /* Optional navigation convenience. */ }
     }
-    // Keep the active screen visible in its section when routing from a
-    // bookmarked deep link or from NMC Vessel 360.
-    if (this.isPscTargetingPool || this.isInspectionCandidates || this.isInspectionPreparation ||
-        this.isInspectionScheduling || this.isInspectionWorkbench) {
-      this.smartInspectionExpanded = true;
-    }
-    if (this.isRiskConfig || this.isQualityConfig || this.isRuntimeSettings || this.isGuidanceConfig ||
-        this.isDashboardManager) {
-      this.settingsExpanded = true;
-      this.nmcSettingsExpanded = true;
-    }
-    if (this.isErpIntegrationSettings || this.isInspectionTargetingSettings || this.isCandidateSourceSettings || this.isPscQuotaSettings) {
-      this.settingsExpanded = true;
-      this.inspectionSettingsExpanded = true;
-    }
-    this.expandSelectedDashboard();
   }
 
-  private expandSelectedDashboard(): void {
-    const item = this.publishedDashboards.find(d => this.isPublishedDashboard(d.id));
-    if (!item) return;
-    if (item.menuPlacement === 'NMC_CENTER') {
-      this.nmcExpanded = true;
-      this.nmcDashboardsExpanded = true;
-    } else if (item.menuPlacement === 'SMART_INSPECTION') {
-      this.smartInspectionExpanded = true;
-      this.smartDashboardsExpanded = true;
-    } else {
-      this.settingsExpanded = true;
-      this.nmcSettingsExpanded = true;
-      this.settingsDashboardsExpanded = true;
-    }
-  }
+
 }
