@@ -134,6 +134,7 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
   sources: SourceStatus[] = [];
   private vesselIncidents:NmcMaritimeIncident[]|null=null;
   private incidentReadAt:string|null=null;
+  private requestedAccidentsTab=false;
   private vesselCases:NmcCentralCase[]|null=null;
   private caseReadAt:string|null=null;
   private pscReadAt:string|null=null;
@@ -398,10 +399,13 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
     this.loadDriveSources();
     this.loadStoredAi();
 
-    const requestedTab = this.route.snapshot.queryParamMap.get('tab');
-    if (requestedTab && ['overview','movement','compliance','inspection','external-psc','certificates','sources','accidents'].includes(requestedTab)) {
-      this.activeTab = requestedTab;
-    }
+    const requestedTab=this.route.snapshot.queryParamMap.get('tab');
+    this.requestedAccidentsTab=requestedTab==='accidents';
+    if(requestedTab&&requestedTab!=='accidents'&&
+      ['overview','movement','compliance','inspection','external-psc',
+        'certificates','sources'].includes(requestedTab))
+      this.activeTab=requestedTab;
+    // Never expose a blank Accidents tab before Google Sheet responds.
   }
 
   ngAfterViewInit(): void {
@@ -619,6 +623,9 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
     this.subscriptions.add(this.incidentsService.list().subscribe({
       next:feed=>{
         this.vesselIncidents=feed.incidents.filter(r=>r.imo===this.vessel.imo);
+        if(this.requestedAccidentsTab&&this.hasRecordedAccidents)
+          this.activeTab='accidents';
+        this.requestedAccidentsTab=false;
         this.timeline=this.buildTimeline();
         this.incidentReadAt=new Date().toISOString();
         if(this.activeTab==='accidents'&&!this.hasRecordedAccidents)
@@ -627,6 +634,7 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
       },
       error:()=>{
         this.vesselIncidents=null;this.incidentReadAt=null;
+        this.requestedAccidentsTab=false;
         if(this.activeTab==='accidents')this.activeTab='overview';
         this.sources=this.buildSources();
       }
