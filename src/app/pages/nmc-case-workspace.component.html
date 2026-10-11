@@ -188,7 +188,21 @@
           <p class="primary-note">{{copy('Human approval and configured authority checks are still required. Review the linked actions below.',
             'يلزم الاعتماد البشري والتحقق من الصلاحيات؛ راجع إجراءات التنفيذ أدناه.')}}</p>
         </article>
-        <div class="decision-unavailable" *ngIf="!plan.primaryProposedDecision && !centralCase.operationalDecision" role="status">
+        <div class="legacy-decision-upgrade" *ngIf="canConvertLegacyA01" role="region"
+          [attr.aria-label]="copy('Saved-A01 single-decision upgrade','تحويل توصيات A01 المحفوظة إلى قرار واحد')">
+          <span class="section-kicker">{{copy('EXISTING CASE · SAVED AIRIA A01 OUTPUT',
+            'حالة حالية · استجابة Airia A01 محفوظة')}}</span>
+          <h4>{{copy('Review one maritime decision with its linked actions',
+            'مراجعة قرار بحري واحد وإجراءاته المرتبطة')}}</h4>
+          <p>{{copy('This case already has individual A01 recommendations saved under the earlier workflow. Convert the same saved recommendations into one NMC-proposed business decision, without calling Airia again or changing the source risk. The original A01 outputs remain in case history.',
+            'هذه الحالة تحتوي توصيات A01 محفوظة بالنظام السابق. يمكنك تحويل نفس التوصيات إلى قرار تشغيلي واحد بقواعد NMC دون استدعاء Airia مجددًا أو تغيير المخاطر الأصلية؛ مع الاحتفاظ بالتوصيات الأصلية في سجل الحالة.')}}</p>
+          <button type="button" class="ai-plan-button"
+            [disabled]="centralBusy" (click)="initializeOperationalDecision()">
+            {{copy('Create one decision from saved A01 · No AI call',
+              'استخراج قرار واحد من A01 المحفوظ · بدون استدعاء AI')}}
+          </button>
+        </div>
+        <div class="decision-unavailable" *ngIf="!canConvertLegacyA01 && !plan.primaryProposedDecision && !centralCase.operationalDecision" role="status">
           <strong>{{copy('Case-level AI decision not yet available','القرار الرئيسي المقترح من AI غير متاح بعد')}}</strong>
           <p>{{copy('The current Airia integration returns individual action proposals, not the approved case-level decision contract. Below are legacy action proposals only; no primary decision or final authorization is fabricated.',
             'التكامل الحالي مع Airia يُرجع إجراءات مقترحة منفصلة وليس عقد القرار الرئيسي المعتمد للحالة. المعروض أدناه إجراءات مقترحة بالنمط السابق، دون اختلاق قرار رئيسي أو اعتماد نهائي.')}}</p>
@@ -201,7 +215,10 @@
             <span class="single-decision-badge">{{op.decisionStatus}}</span>
           </div>
           <h3>{{lang.isArabic?(op.approvedTitleAr||op.titleAr):(op.approvedTitleEn||op.titleEn)}}</h3>
-          <p><strong>{{copy('Why this route','مبررات المسار')}}:</strong> {{op.rationale}}</p>
+          <p *ngIf="!selectedActionNeedsOfficerRationale"><strong>{{copy('Why this route','مبررات المسار')}}:</strong> {{op.rationale}}</p>
+          <p *ngIf="selectedActionNeedsOfficerRationale" class="decision-provenance" role="alert">
+            {{copy('A01 returned evidence IDs but no action-specific rationale. Review the saved Situation Assessment and evidence above. To accept this NMC-selected decision, an officer must enter a verified business reason below; it will be recorded as human-authored, never as an A01 explanation.',
+              'أعاد A01 معرفات الأدلة دون مبرر خاص بهذا الإجراء. راجع تحليل الموقف والأدلة المحفوظة أعلاه. لاعتماد القرار المختار بقواعد NMC، يجب أن يسجل الموظف مبررًا تشغيليًا موثقًا أدناه؛ وسيُحفظ كمبرر بشري وليس كتفسير صادر عن A01.')}}</p>
           <p><strong>{{copy('Original Airia A01 proposal (unchanged)','توصية Airia A01 الأصلية (دون تغيير)')}}:</strong>
             {{op.originalA01Proposal.title}} · {{op.originalA01Proposal.actionType}}</p>
           <div class="decision-trace">
@@ -232,8 +249,11 @@
             </select>
             <small *ngIf="decisionCatalogueError" class="decision-provenance">{{decisionCatalogueError}}</small>
             <textarea rows="3" [(ngModel)]="operationalDecisionReason"
-              [placeholder]="copy('Business justification — mandatory for Modify/Reject',
-                  'سبب القرار التشغيلي — إلزامي للتعديل أو الرفض')"></textarea>
+              [placeholder]="selectedActionNeedsOfficerRationale?
+                  copy('Officer-verified business reason required for Accept / Modify / Reject',
+                       'مبرر تشغيلي موثق إلزامي للاعتماد أو التعديل أو الرفض'):
+                  copy('Business justification — mandatory for Modify/Reject',
+                       'سبب القرار التشغيلي — إلزامي للتعديل أو الرفض')"></textarea>
             <div class="ai-decision-buttons">
               <button type="button" [disabled]="centralBusy"
                 (click)="decideOperational('ACCEPT')">
@@ -279,7 +299,7 @@
           <small *ngIf="restriction.authorityReference">{{copy('Demo authority reference','مرجع اعتماد المحاكاة')}}:
             {{restriction.authorityReference}}</small>
         </section>
-        <ng-container *ngIf="!centralCase.operationalDecision">
+        <ng-container *ngIf="!centralCase.operationalDecision && !canConvertLegacyA01">
         <h4 class="action-section-title">{{copy('Proposed execution actions · officer review','إجراءات التنفيذ المقترحة · للمراجعة البشرية')}}</h4>
         <div class="ai-action-rows">
           <article class="ai-action-row" *ngFor="let action of plan.proposedActions">
