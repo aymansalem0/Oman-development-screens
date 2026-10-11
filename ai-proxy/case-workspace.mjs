@@ -365,6 +365,10 @@ export class NmcCaseWorkspace{
         throw new NmcCaseError('CASE_MODIFICATION_MUST_CHANGE_ROUTE');
       const def=decisionDefinition(code);
       if(!def)throw new NmcCaseError('CASE_DECISION_CODE_UNSUPPORTED');
+      if(decision!=='REJECT'&&
+        (isRegulatedDecision(code)||['REFER_SMART_INSPECTION','UNMAPPED_TO_INSPECTION'].includes(code))&&
+        !proposal.evidenceIds?.length)
+        throw new NmcCaseError('CASE_DECISION_EVIDENCE_REQUIRED',409);
       // Regulatory decisions are simulated *only after* a second, distinct
       // publisher-key approval and documented authority reference.
       const restriction=decision!=='REJECT'&&isRegulatedDecision(code)
