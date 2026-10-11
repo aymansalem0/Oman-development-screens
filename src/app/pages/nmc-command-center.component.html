@@ -93,7 +93,7 @@
         <div>
           <span class="kpi-label">{{ copy('Require attention', 'تتطلب الانتباه') }}</span>
           <strong>{{ attentionCount }}</strong>
-          <small>{{ copy('AI risk or critical finding flag', 'مخاطر AI أو مخالفة حرجة') }}</small>
+          <small>{{copy('AI vessel risk, critical finding or active incident','مخاطر السفينة أو ملاحظة حرجة أو حادث قيد المتابعة')}}</small>
         </div>
       </article>
 
@@ -225,7 +225,7 @@
         <div class="panel-header">
           <div>
             <h3>{{ copy('Requires Attention Now', 'تتطلب الانتباه الآن') }}</h3>
-            <p>{{ copy('Prioritized by operational risk', 'مرتبة حسب المخاطر التشغيلية') }}</p>
+            <p>{{copy('Saved vessel risk and separately reported active incidents','مخاطر السفن المحفوظة وبلاغات الحوادث النشطة بصورة مستقلة')}}</p>
           </div>
           <span class="priority-count">{{ attentionCount }}</span>
         </div>
@@ -357,7 +357,8 @@
             <span class="ai-icon">✦</span>
             <div>
               <strong>{{ copy('Continuous prioritization', 'تحديد الأولويات بصورة مستمرة') }}</strong>
-              <p>{{ copy('Only completed A01/A02 assessments enter the attention queue. Pending vessels never inherit synthetic baseline scores.', 'لا تدخل قائمة الأولويات إلا السفن التي اكتمل تحليلها بواسطة A01/A02. السفن المعلقة لا ترث درجات المخاطر الافتراضية.') }}</p>
+              <p>{{copy('Saved A01/A02 vessel risk or a separately reported active incident can bring a vessel here. Incident-only vessels keep their original Pending AI vessel risk.',
+'تظهر السفينة بسبب مخاطر A01/A02 المحفوظة أو بلاغ حادث نشط مستقل. السفن التي دخلت بسبب الحوادث تظل مخاطرها الأصلية بانتظار AI إن لم تُقيّم بعد.')}}</p>
             </div>
           </div>
         </div>
