@@ -1,0 +1,43 @@
+name: NMC Frontend and Backend Checks
+on:
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'ai-proxy/**'
+      - 'package.json'
+      - 'angular.json'
+      - '.github/workflows/nmc-compile.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  angular-production:
+    name: Angular 18 Production Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install frontend dependencies
+        run: npm install --no-audit --no-fund
+      - name: Angular production build
+        run: npm run build -- --configuration production --base-href /
+
+  nmc-backend:
+    name: Node Backend Syntax and Regression
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ai-proxy
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install backend dependencies
+        run: npm install --no-audit --no-fund
+      - name: Run backend tests
+        run: npm test
