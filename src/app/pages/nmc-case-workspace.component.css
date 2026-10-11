@@ -518,6 +518,27 @@ a, button, textarea { font:inherit; }
 .central-case-empty a{display:inline-flex;background:#0d8c82;color:#fff;font-weight:750;padding:11px 17px;border-radius:9px;text-decoration:none;font-size:12px}
 
 
+/* Maritime case intake belongs in Case Management after alert acknowledgment. */
+.case-alert-candidates{margin:20px auto 0;max-width:850px;text-align:start}
+.case-alert-candidates h3{color:#1d4859;font-size:14px;margin:0 0 12px}
+.case-alert-choice{display:flex;justify-content:space-between;align-items:center;gap:20px;
+  padding:15px 17px;margin:10px 0;border:1px solid #d9e8ed;border-radius:13px;background:#f6fafb}
+.case-alert-description{min-width:0;flex:1}
+.case-alert-description strong{display:block;color:#244d63;font-size:13px}
+.case-alert-description small{display:block;margin:6px 0;color:#587d8c;font-size:11px}
+.central-case-empty .case-alert-description p{margin:5px 0 0;max-width:none;font-size:11px;text-align:start}
+.case-open-button{border:1px solid #0d8c82;border-radius:10px;background:#0d8c82;color:#fff;
+  font-weight:750;font-size:12px;padding:12px 15px;white-space:nowrap;cursor:pointer}
+.case-open-button:hover{background:#0b706b}
+.case-open-button:disabled{cursor:wait;opacity:.52}
+.central-case-empty .case-ai-consent,.central-case-empty .case-alert-loading,
+.central-case-empty .case-alert-empty{max-width:850px;margin:14px auto;font-size:12px;line-height:1.7;color:#617e90}
+.central-case-empty .case-ai-consent{font-size:11px;padding:12px;background:#e8f7f4;
+  border:1px solid #cee9e2;border-radius:9px;color:#225e5a}
+.central-case-empty a.case-alert-back{background:#fff;border:1px solid #d2e6e1;color:#0d766e;margin-top:12px}
+@media(max-width:700px){.case-alert-choice{flex-direction:column;align-items:stretch}
+  .case-open-button{width:100%;white-space:normal}}
+
 /* A01 action-plan approval (separate from generated central tasks) */
 .ai-action-panel{background:#fff;border:1px solid #cfdee9;border-radius:16px;padding:20px;margin:18px 0;box-shadow:0 6px 16px #113b5310}
 .ai-action-heading,.ai-action-title{display:flex;align-items:center;justify-content:space-between;gap:16px}
