@@ -7,6 +7,7 @@ import {createHash,randomUUID} from 'node:crypto';
 import {existsSync,mkdirSync,readFileSync,writeFileSync,renameSync} from 'node:fs';
 import {dirname} from 'node:path';
 import oracledb from 'oracledb';
+import {buildSingleProposal,decisionDefinition,decisionActionPlan,isRegulatedDecision} from './nmc-decision-policy.mjs';
 
 const clone=x=>JSON.parse(JSON.stringify(x));
 const now=()=>new Date().toISOString();
@@ -36,11 +37,12 @@ export class NmcCaseWorkspace{
   constructor({
     mode='json',oracleRepository=null,
     file=process.env.NMC_CASE_STORE_PATH||'/data/nmc-case-workspace.json',
-    alerts
+    alerts,singleDecisionMode=true
   }={}){
     if(!['json','oracle'].includes(mode)||!alerts)
       throw new Error('NMC_CASE_CONFIGURATION_INVALID');
     this.mode=mode;this.oracle=oracleRepository;this.file=file;this.alerts=alerts;
+    this.singleDecisionMode=singleDecisionMode;
   }
   async list(){
     if(this.mode==='json')return Object.values(this._load().cases).map(clone)
@@ -104,7 +106,8 @@ export class NmcCaseWorkspace{
       createdAt:timestamp,updatedAt:timestamp,version:1,
       // New cases start with no fabricated tasks. A01 proposes actions;
       // human acceptance materializes tasks in the central case.
-      tasks:[],actionPlan:null,inspectionRequests:[],decisions:[],inspectionOutcome:null,
+      tasks:[],actionPlan:null,operationalDecision:null,decisionFeedback:[],restriction:null,
+      inspectionRequests:[],decisions:[],inspectionOutcome:null,
       resolutionNote:null,provenance:'SYNTHETIC_POC_NON_REGULATORY'
     };
     const log=auditEntry(record,'CREATED',role,
@@ -147,7 +150,7 @@ export class NmcCaseWorkspace{
       if(row.status==='RESOLVED')throw new NmcCaseError('CASE_ALREADY_RESOLVED',409);
       const task=row.tasks.find(item=>item.id===taskId);
       if(!task||!row.actionPlan||
-         task.provenance!=='AIRIA_A01_HUMAN_APPROVED')
+         !['AIRIA_A01_HUMAN_APPROVED','NMC_DECISION_HUMAN_APPROVED'].includes(task.provenance))
         throw new NmcCaseError('CASE_TASK_NOT_FOUND',404);
       const valid=action==='START'
         ?task.status==='Assigned'
@@ -155,6 +158,9 @@ export class NmcCaseWorkspace{
           ?['Assigned','In Progress','Escalated'].includes(task.status)
           :['Assigned','In Progress'].includes(task.status);
       if(!valid)throw new NmcCaseError('CASE_TASK_TRANSITION_INVALID',409);
+      if(action==='COMPLETE'&&task.regulatedEnforcement&&
+        row.restriction?.status!=='SIMULATED_ACTIVE')
+        throw new NmcCaseError('CASE_RESTRICTION_AUTHORIZATION_REQUIRED',409);
       if(action==='COMPLETE'&&task.actionType==='PRIORITY_INSPECTION'&&!row.inspectionOutcome)
         throw new NmcCaseError('CASE_INSPECTION_EVIDENCE_REQUIRED',409);
       const nextStatus={START:'In Progress',COMPLETE:'Completed',ESCALATE:'Escalated'}[action];
@@ -162,10 +168,11 @@ export class NmcCaseWorkspace{
         ...t,status:nextStatus,
         assignedRole:action==='ESCALATE'?'NMC_SUPERVISOR':t.assignedRole
       }:t);
-      const aiTasks=tasks.filter(t=>t.provenance==='AIRIA_A01_HUMAN_APPROVED');
+      const aiTasks=tasks.filter(t=>['AIRIA_A01_HUMAN_APPROVED','NMC_DECISION_HUMAN_APPROVED'].includes(t.provenance));
       const requiredDone=aiTasks.filter(t=>t.mandatory).every(t=>t.status==='Completed');
-      const aiDecisionsPending=!!row.actionPlan?.proposedActions?.some(
-        a=>a.decision==='PENDING');
+      const aiDecisionsPending=row.operationalDecision
+        ?row.operationalDecision.decisionStatus==='PENDING_HUMAN_REVIEW'
+        :!!row.actionPlan?.proposedActions?.some(a=>a.decision==='PENDING');
       // Mandatory tasks alone do not mean a reviewed AI plan or post-inspection
       // reassessment is complete. Do not display a false PENDING_VERIFICATION.
       const verified=requiredDone&&!aiDecisionsPending&&!row.inspectionOutcome;
@@ -253,7 +260,7 @@ export class NmcCaseWorkspace{
           throw new NmcCaseError('CASE_ACTION_PLAN_SOURCE_MISMATCH',409);
         // An older case may have been pending verification on its legacy tasks.
         // Starting a new AI action review reopens the operational work stage.
-        return {...row,actionPlan:plan,status:'IN_PROGRESS'};
+        return {...row,actionPlan:plan,operationalDecision:this.singleDecisionMode?buildSingleProposal(plan):null,status:'IN_PROGRESS'};
       },{sourceAssessmentId:plan.sourceAssessmentId,proposals:plan.proposedActions.length});
   }
   async decideAction(id,version,actionId,decision,note='',role='OPERATOR',replacementActionType=null){
@@ -265,6 +272,7 @@ export class NmcCaseWorkspace{
       if(row.status==='RESOLVED')throw new NmcCaseError('CASE_ALREADY_RESOLVED',409);
       const plan=row.actionPlan;
       if(!plan)throw new NmcCaseError('CASE_ACTION_PLAN_REQUIRED',409);
+      if(row.operationalDecision)throw new NmcCaseError('CASE_SINGLE_DECISION_MODE',409);
       const action=plan.proposedActions.find(a=>a.actionId===actionId);
       if(!action)throw new NmcCaseError('CASE_ACTION_NOT_FOUND',404);
       if(action.decision!=='PENDING')throw new NmcCaseError('CASE_ACTION_ALREADY_DECIDED',409);
@@ -329,6 +337,191 @@ export class NmcCaseWorkspace{
         tasks,inspectionRequests,status:ready?'PENDING_VERIFICATION':'IN_PROGRESS'};
     },{actionId,decision,replacementActionType:decision==='MODIFY'?replacementActionType:null});
   }
+
+  /**
+   * SINGLE maritime business decision for new NMC POC cases.
+   * The primary source remains the unchanged A01 action; the catalogue and
+   * mapping are NMC-owned policy, not claimed to have been authored by Airia.
+   * No genuine restriction, detention, or port API is called.
+   */
+  /**
+   * Explicitly opt an untouched, previously-saved legacy A01 action plan
+   * into the single-decision POC. Never invoke Airia or change saved risk,
+   * any individual A01 proposal or a human's previous decisions.
+   */
+  async initializeOperational(id,version,role='OPERATOR'){
+    return this._update(id,version,'SINGLE_DECISION_FROM_SAVED_A01',role,
+      'Operator converted unreviewed saved A01 recommendations to one NMC POC decision',
+      row=>{
+        if(row.status==='RESOLVED')
+          throw new NmcCaseError('CASE_ALREADY_RESOLVED',409);
+        if(!row.actionPlan?.proposedActions?.length)
+          throw new NmcCaseError('CASE_ACTION_PLAN_REQUIRED',409);
+        if(row.operationalDecision)
+          throw new NmcCaseError('CASE_SINGLE_DECISION_EXISTS',409);
+        if(row.actionPlan.proposedActions.some(a=>a.decision!=='PENDING')||
+          row.tasks.some(t=>t.provenance==='AIRIA_A01_HUMAN_APPROVED')||
+          (row.decisions||[]).length>0||
+          (row.inspectionRequests||[]).length>0)
+          throw new NmcCaseError('CASE_LEGACY_REVIEW_ALREADY_STARTED',409);
+        const proposal=buildSingleProposal(row.actionPlan);
+        if(!proposal)throw new NmcCaseError('CASE_SINGLE_DECISION_UNAVAILABLE',409);
+        return {...row,operationalDecision:proposal};
+      },{noNewAiCall:true,originalAssessmentUnchanged:true});
+  }
+
+  async decideOperational(id,version,data,role='OPERATOR'){
+    const {decision,newDecisionCode,note}=data||{};
+    if(!['ACCEPT','MODIFY','REJECT'].includes(decision))
+      throw new NmcCaseError('CASE_DECISION_INVALID');
+    if(decision!=='ACCEPT'&&!noteValue(note))
+      throw new NmcCaseError('CASE_DECISION_REASON_REQUIRED');
+    if(decision==='MODIFY'&&!decisionDefinition(newDecisionCode))
+      throw new NmcCaseError('CASE_DECISION_CODE_UNSUPPORTED');
+    if(decision!=='MODIFY'&&newDecisionCode)
+      throw new NmcCaseError('CASE_MODIFICATION_ROUTE_UNEXPECTED');
+    return this._update(id,version,'OPERATIONAL_DECISION_'+decision,role,note||'',row=>{
+      if(row.status==='RESOLVED')throw new NmcCaseError('CASE_ALREADY_RESOLVED',409);
+      const proposal=row.operationalDecision;
+      if(!proposal)throw new NmcCaseError('CASE_SINGLE_DECISION_UNAVAILABLE',409);
+      if(proposal.decisionStatus!=='PENDING_HUMAN_REVIEW')
+        throw new NmcCaseError('CASE_ACTION_ALREADY_DECIDED',409);
+      const missingA01Reason=proposal.rationale===
+        'A01 recommendation linked to the validated source evidence IDs';
+      // Legacy A01 sometimes omitted action-specific reasoning. Never
+      // treat the generic filler as valid business reasoning. An authorized
+      // human may explicitly supply and own a documented explanation.
+      if(decision==='ACCEPT'&&missingA01Reason&&!noteValue(note))
+        throw new NmcCaseError('CASE_DECISION_RATIONALE_UNAVAILABLE',409);
+      const code=decision==='MODIFY'?newDecisionCode:proposal.code;
+      if(decision==='MODIFY'&&code===proposal.code)
+        throw new NmcCaseError('CASE_MODIFICATION_MUST_CHANGE_ROUTE');
+      const def=decisionDefinition(code);
+      if(!def)throw new NmcCaseError('CASE_DECISION_CODE_UNSUPPORTED');
+      if(decision!=='REJECT'&&
+        (isRegulatedDecision(code)||['REFER_SMART_INSPECTION','UNMAPPED_TO_INSPECTION'].includes(code))&&
+        !proposal.evidenceIds?.length)
+        throw new NmcCaseError('CASE_DECISION_EVIDENCE_REQUIRED',409);
+      // Regulatory decisions are simulated *only after* a second, distinct
+      // publisher-key approval and documented authority reference.
+      const restriction=decision!=='REJECT'&&isRegulatedDecision(code)
+        ?{type:def.restrictionType,status:'PENDING_AUTHORITY_APPROVAL',
+          pocOnly:true,legalAuthorityConfirmed:false,
+          originalRiskScore:row.sourceScore,requestedAt:now(),
+          authorityReference:null,authorizedAt:null,releaseEvidenceRef:null}
+        :null;
+      const steps=decision==='REJECT'?[]:decisionActionPlan(code);
+      const tasks=[...row.tasks];
+      const inspectionRequests=[...(row.inspectionRequests||[])];
+      for(const [i,item] of steps.entries()){
+        const idPart='nmc-'+String(i+1)+'-'+item.id;
+        if(tasks.some(t=>t.id===idPart))throw new NmcCaseError('CASE_TASK_EXISTS',409);
+        const linkedActionId=proposal.selectedFromActionId;
+        tasks.push({
+          id:idPart,actionId:linkedActionId,actionType:item.kind==='SMART_INSPECTION'
+            ?'PRIORITY_INSPECTION':code,
+          workflowStepId:item.id,title:item.titleEn,titleAr:item.titleAr,
+          priority:proposal.originalA01Proposal.priority||'HIGH',
+          reason:decision==='MODIFY'||missingA01Reason?noteValue(note):proposal.rationale,
+          status:'Assigned',assignedRole:item.role,mandatory:item.mandatory,
+          regulatedEnforcement:!!def.regulated,
+          evidenceIds:proposal.evidenceIds,
+          provenance:'NMC_DECISION_HUMAN_APPROVED',
+          approvalMode:decision,generatedAt:now()
+        });
+        if(item.kind==='SMART_INSPECTION'){
+          if(inspectionRequests.some(x=>x.status!=='COMPLETED'))
+            throw new NmcCaseError('CASE_ACTIVE_INSPECTION_EXISTS',409);
+          inspectionRequests.push({
+            id:randomUUID(),caseId:row.id,imo:row.imo,
+            actionId:linkedActionId,status:'PENDING_SCHEDULING',
+            inspectionRegime:'FOCUSED_INSPECTION',priority:'HIGH',
+            reason:decision==='MODIFY'||missingA01Reason?noteValue(note):proposal.rationale,
+            evidenceIds:proposal.evidenceIds,sourceScore:row.sourceScore,
+            sourceAssessmentId:row.sourceAssessmentId,
+            port:null,scheduledAt:null,inspector:null,scheduledBy:null,
+            createdAt:now(),version:1,
+            referralSource:'NMC_HUMAN_APPROVED_BUSINESS_DECISION'
+          });
+        }
+      }
+      const reviewed={
+        ...proposal,decisionStatus:decision==='REJECT'?'REJECTED':'APPROVED',
+        humanDecision:decision,
+        approvedCode:decision==='REJECT'?null:code,
+        approvedTitleEn:decision==='REJECT'?null:def.titleEn,
+        approvedTitleAr:decision==='REJECT'?null:def.titleAr,
+        approvedWorkflowSteps:steps,decisionNote:noteValue(note)||'',
+        rationaleSource:missingA01Reason?'OFFICER_VALIDATED_LEGACY_A01':'AIRIA_A01_ACTION',
+        decidedBy:role,decidedAt:now(),regulatoryEffect:'NONE_POC_ONLY'
+      };
+      // An immutable-original event goes to a durable CASE outbox. It is not
+      // transmitted to an imaginary improvement agent without a verified API.
+      const feedback=decision==='MODIFY'?[
+        ...(row.decisionFeedback||[]),{
+          id:randomUUID(),eventType:'NMC_AI_DECISION_IMPROVEMENT',
+          originalA01Proposal:clone(proposal.originalA01Proposal),
+          originalNmcProposedCode:proposal.code,
+          humanApprovedCode:code,reason:noteValue(note),
+          evidenceIds:[...proposal.evidenceIds],
+          caseId:row.id,imo:row.imo,sourceAssessmentId:row.sourceAssessmentId,
+          at:now(),status:'QUEUED_AWAITING_AGENT_INTEGRATION',
+          aiTransmissionCount:0
+        }
+      ]:(row.decisionFeedback||[]);
+      return {
+        ...row,operationalDecision:reviewed,restriction,tasks,
+        inspectionRequests,decisionFeedback:feedback,status:'IN_PROGRESS'
+      };
+    },{decision,newDecisionCode:decision==='MODIFY'?newDecisionCode:null,
+      originalA01ActionId:null,feedbackQueued:decision==='MODIFY'});
+  }
+
+  /**
+   * Explicit publisher-key authorization of a simulated restriction.
+   * This does NOT attest that an MOEI officer has legal powers, and has
+   * no external port/ship/legal registry side effects.
+   */
+  async authorizeRestriction(id,version,data,role='POC_SUPERVISOR'){
+    const authorityReference=typeof data?.authorityReference==='string'
+      ?data.authorityReference.trim():'';
+    const legalBasis=typeof data?.legalBasis==='string'?data.legalBasis.trim():'';
+    if(!/^[A-Za-z0-9/_.-]{6,80}$/.test(authorityReference)||legalBasis.length<10||
+      legalBasis.length>500)
+      throw new NmcCaseError('CASE_RESTRICTION_AUTHORITY_EVIDENCE_REQUIRED');
+    return this._update(id,version,'POC_RESTRICTION_SIMULATED_AUTHORIZED',role,
+      'Simulator authorization only — never dispatched to ports',row=>{
+        if(row.status==='RESOLVED')throw new NmcCaseError('CASE_ALREADY_RESOLVED',409);
+        if(row.restriction?.status!=='PENDING_AUTHORITY_APPROVAL')
+          throw new NmcCaseError('CASE_RESTRICTION_NOT_PENDING',409);
+        return {...row,restriction:{
+          ...row.restriction,status:'SIMULATED_ACTIVE',pocOnly:true,
+          legalAuthorityConfirmed:false,authorityReference,
+          legalBasis,authorizedAt:now(),authorizedBy:role
+        }};
+      },{authorityReference,simulation:true});
+  }
+
+  async releaseRestriction(id,version,data,role='POC_SUPERVISOR'){
+    const authorityReference=typeof data?.authorityReference==='string'
+      ?data.authorityReference.trim():'';
+    const rectificationEvidenceRef=typeof data?.rectificationEvidenceRef==='string'
+      ?data.rectificationEvidenceRef.trim():'';
+    if(!/^[A-Za-z0-9/_.-]{6,80}$/.test(authorityReference)||
+      !/^[A-Za-z0-9/_.-]{6,100}$/.test(rectificationEvidenceRef))
+      throw new NmcCaseError('CASE_RESTRICTION_RELEASE_EVIDENCE_REQUIRED');
+    return this._update(id,version,'POC_RESTRICTION_SIMULATED_RELEASED',role,
+      'Simulation release after recorded rectification evidence',row=>{
+        if(row.restriction?.status!=='SIMULATED_ACTIVE')
+          throw new NmcCaseError('CASE_RESTRICTION_NOT_ACTIVE',409);
+        return {...row,restriction:{
+          ...row.restriction,status:'SIMULATED_RELEASED',
+          releasedAt:now(),releaseAuthorityReference:authorityReference,
+          releaseEvidenceRef:rectificationEvidenceRef
+        }};
+      },{authorityReference,rectificationEvidenceRef,simulation:true});
+  }
+
   async listInspectionRequests(){
     const rows=await this.list();
     return rows.flatMap(c=>(c.inspectionRequests||[]).map(r=>({
@@ -363,9 +556,13 @@ export class NmcCaseWorkspace{
       if(row.status==='RESOLVED')throw new NmcCaseError('CASE_ALREADY_RESOLVED',409);
       if(!row.actionPlan)
         throw new NmcCaseError('CASE_ACTION_PLAN_REQUIRED',409);
-      if(row.actionPlan?.proposedActions?.some(a=>a.decision==='PENDING'))
+      if(row.operationalDecision
+        ?row.operationalDecision.decisionStatus==='PENDING_HUMAN_REVIEW'
+        :row.actionPlan?.proposedActions?.some(a=>a.decision==='PENDING'))
         throw new NmcCaseError('CASE_ACTION_DECISIONS_PENDING',409);
-      if(row.tasks.some(t=>t.provenance==='AIRIA_A01_HUMAN_APPROVED'&&
+      if(row.restriction&&row.restriction.status!=='SIMULATED_RELEASED')
+        throw new NmcCaseError('CASE_RESTRICTION_STILL_ACTIVE',409);
+      if(row.tasks.some(t=>['AIRIA_A01_HUMAN_APPROVED','NMC_DECISION_HUMAN_APPROVED'].includes(t.provenance)&&
         t.mandatory&&t.status!=='Completed'))
         throw new NmcCaseError('CASE_MANDATORY_TASKS_INCOMPLETE',409);
       // Stage 3 will add evidence-linked A02 compliance refresh and a new,

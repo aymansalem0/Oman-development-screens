@@ -602,3 +602,68 @@ a, button, textarea { font:inherit; }
 .inspection-link{display:inline-block;margin-top:9px;font-size:12px;color:#0e776d;font-weight:800}
 @media(max-width:1100px){.case-journey{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:680px){.case-journey{grid-template-columns:repeat(2,minmax(0,1fr))}.case-situation{grid-template-columns:1fr}}
+
+/* A01-informed NMC decision mapping is POC-local; regulatory routes are never live. */
+.single-decision-card {
+  margin:18px 0 16px;padding:20px;border:1px solid #b9d9df;
+  border-radius:16px;background:linear-gradient(180deg,#f7fcfd,#fff);
+}
+.single-decision-head {display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;}
+.single-decision-card h3 {font-size:20px;color:#153d54;margin:13px 0;}
+.single-decision-card h4 {font-size:14px;margin:18px 0 11px;}
+.single-decision-card p {line-height:1.7;font-size:12px;color:#395268;}
+.single-decision-card strong {color:#123850;}
+.single-decision-badge {padding:7px 12px;border-radius:8px;background:#dcefeb;
+ color:#085950;font-size:10px;font-weight:800;}
+.decision-trace {display:flex;flex-wrap:wrap;gap:8px;margin:13px 0;}
+.decision-trace span {font-size:10px;background:#e9f5f7;border-radius:8px;padding:7px 10px;}
+.decision-provenance {font-size:11px!important;color:#8b4b12!important;
+ background:#fffaee;border:1px solid #f0dfa8;padding:11px;border-radius:9px;}
+.decision-step-list {margin:10px 0 19px;padding-inline-start:23px;}
+.decision-step-list li {padding:11px 12px;border-bottom:1px solid #e3ebee;font-size:12px;}
+.decision-step-list small {display:block;color:#627b89;margin-top:5px;}
+.decision-review-form {display:grid;gap:10px;padding:13px;border:1px solid #c9dee4;
+ border-radius:12px;background:white;}
+.decision-review-form label {font-weight:800;font-size:11px;}
+.decision-review-form select,.decision-review-form textarea {
+ width:100%;max-width:100%;min-width:0;border:1px solid #bacdd7;border-radius:10px;
+ padding:10px;background:#fff;color:#153d54;font:inherit;font-size:13px;
+}
+.decision-approved {border-radius:10px;border:1px solid #c8e0dc;background:#eef8f4;
+ display:grid;gap:7px;padding:14px;font-size:12px;}
+.poc-restriction {margin:16px 0;padding:18px;border:2px solid #edca93;border-radius:14px;
+ background:#fffaf0;color:#5d3d13;}
+.poc-restriction h4 {font-size:17px;margin:11px 0;}
+.poc-restriction strong {display:inline-block;background:#ffe5c0;border-radius:7px;
+ padding:6px 10px;font-size:11px;}
+.poc-restriction p,.poc-restriction small {font-size:12px;line-height:1.6;display:block;margin:10px 0;}
+.poc-restriction button {border:1px solid #c18c40;background:#834b14;color:white;
+ border-radius:9px;padding:10px 16px;cursor:pointer;font:inherit;font-size:12px;}
+.poc-restriction button:disabled {opacity:.5;cursor:not-allowed;}
+@media (max-width:650px) {
+ .single-decision-card,.poc-restriction {padding:13px;}
+ .single-decision-card h3 {font-size:17px;}
+ .decision-review-form .ai-decision-buttons {display:grid;grid-template-columns:1fr;}
+}
+
+/* Upgrade previously saved (unreviewed) A01 cases without a second AI call. */
+.legacy-decision-upgrade{
+  margin:14px 0 18px;padding:20px 23px;
+  background:linear-gradient(120deg,#ebf8f6,#f8fdfc);
+  border:2px solid #60b7a8;border-radius:13px;
+  color:#174b4c;
+}
+.legacy-decision-upgrade h4{
+  margin:10px 0;font-size:18px;color:#0e534b;
+}
+.legacy-decision-upgrade p{
+  font-size:13px;line-height:1.8;max-width:880px;margin:8px 0 15px;
+}
+.legacy-decision-upgrade button{
+  font-size:13px;min-height:45px;background:#08786a;
+}
+.legacy-decision-upgrade button:hover{background:#075e53;}
+@media(max-width:650px){
+  .legacy-decision-upgrade{padding:14px;}
+  .legacy-decision-upgrade button{width:100%;white-space:normal;}
+}
