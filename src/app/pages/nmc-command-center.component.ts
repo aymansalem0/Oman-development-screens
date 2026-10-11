@@ -26,6 +26,8 @@ import { NmcRiskEngineService } from '../services/nmc-risk-engine.service';
 import { NmcAlertsService } from '../services/nmc-alerts.service';
 import { NmcCasesService } from '../services/nmc-cases.service';
 import {NmcIncidentsService,NmcMaritimeIncident} from '../services/nmc-incidents.service';
+import {incidentSeverityBand as verifiedIncidentBand, isActiveNmcIncident,
+  vesselMatchesIncidentFilter, type NmcIncidentFilter} from '../services/nmc-incident-filters';
 
 interface MaritimeEvent {
   time: string;
@@ -50,7 +52,7 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
   assessmentFilter: 'All' | 'Assessed' | 'Pending' = 'All';
   typeFilter = 'All';
   /** One shared incident filter for map markers and the Requires Attention queue. */
-  incidentFilter:'All'|'Active'|'Critical'|'High'|'PendingReview'|'None'='All';
+  incidentFilter:NmcIncidentFilter='All';
   feedLive = true;
   selectedVessel?: NmcVesselProfile;
   now = new Date();
@@ -374,24 +376,8 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
   get incidentVesselCount():number{
     return this.vessels.filter(v=>this.hasActiveIncidents(v.imo)).length;
   }
-  /** The NMC case officer decision is distinct from the source-sheet AI review. */
-  private incidentPendingHumanReview(row:NmcMaritimeIncident):boolean{
-    if(row.caseIncidentDecisionStatus==='PENDING_HUMAN_REVIEW')return true;
-    const ai=row.aiAssessment;
-    return !!ai&&!row.aiAssessmentStale&&ai.assessmentStatus!=='HUMAN_REVIEWED';
-  }
   private matchesIncidentFilter(imo:string):boolean{
-    if(this.incidentFilter==='All')return true;
-    const active=this.incidentsForVessel(imo);
-    if(this.incidentFilter==='None')return active.length===0;
-    if(this.incidentFilter==='Active')return active.length>0;
-    if(this.incidentFilter==='Critical')
-      return active.some(row=>this.incidentSeverityBand(row)==='CRITICAL');
-    if(this.incidentFilter==='High')
-      return active.some(row=>this.incidentSeverityBand(row)==='HIGH');
-    if(this.incidentFilter==='PendingReview')
-      return active.some(row=>this.incidentPendingHumanReview(row));
-    return false;
+    return vesselMatchesIncidentFilter(this.incidentFilter,this.incidentsForVessel(imo));
   }
   incidentFilterLabel():string{
     switch(this.incidentFilter){
@@ -403,7 +389,7 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
       default:return this.copy('All incident statuses','جميع حالات الحوادث');
     }
   }
-  setIncidentFilter(value:typeof this.incidentFilter):void{
+  setIncidentFilter(value:NmcIncidentFilter):void{
     this.incidentFilter=value;
     this.attentionPage=1;
     this.onFilterChange();
@@ -411,17 +397,9 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
   toggleVesselIncidents(imo:string):void{
     this.expandedIncidentImo=this.expandedIncidentImo===imo?null:imo;
   }
-  /** Human/source-reported severity is visibly distinct from AI scoring. */
+  /** AI assessed vs source-reported incident severity remains distinct. */
   incidentSeverityBand(row:NmcMaritimeIncident):'CRITICAL'|'HIGH'|'MODERATE'|'LOW'|'UNASSESSED'{
-    if(row.aiAssessment&&!row.aiAssessmentStale)
-      return row.aiAssessment.incidentRiskBand;
-    switch((row.reportedSeverity||'').toUpperCase()){
-      case 'CRITICAL':return 'CRITICAL';
-      case 'HIGH':return 'HIGH';
-      case 'MEDIUM':return 'MODERATE';
-      case 'LOW':return 'LOW';
-      default:return 'UNASSESSED';
-    }
+    return verifiedIncidentBand(row);
   }
   incidentSeverityRank(row:NmcMaritimeIncident):number{
     const band=this.incidentSeverityBand(row);
@@ -473,7 +451,7 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
         for(const report of r.incidents){
           // Closed/resolved incident history remains in Incident Intelligence,
           // but does not raise the vessel's ACTIVE incident flag on the map.
-          if(['CLOSED','RESOLVED'].includes(report.operationalStatus))continue;
+          if(!isActiveNmcIncident(report))continue;
           if(!report.imo||!(/^[0-9]{7}$/).test(report.imo))continue;
           const bucket=grouped.get(report.imo)||[];
           bucket.push(report);
