@@ -75,6 +75,13 @@ export class NmcCaseWorkspaceComponent implements OnInit {
   selectedOperationalCode='';
   operationalDecisionReason='';
   decisionCatalogueError='';
+  readonly incidentFollowupOptions=[
+    'VERIFY_INFORMATION','ACTIVE_MONITORING','REFER_SMART_INSPECTION',
+    'ESCALATE_TO_AUTHORITY','INCIDENT_RESPONSE','CLOSE_AFTER_VERIFICATION'
+  ];
+  incidentFollowupSelection:Record<string,string>={};
+  incidentOfficerName='';
+  incidentOfficerReasons:Record<string,string>={};
   readonly humanActionTypes=[
     'VERIFY_CERTIFICATE','ENHANCED_MONITORING','PRIORITY_INSPECTION',
     'REVIEW_DEFICIENCY','VERIFY_DEFICIENCY_CLOSURE',
@@ -398,6 +405,51 @@ export class NmcCaseWorkspaceComponent implements OnInit {
 
 
   /** POC route is derived from a saved A01 action, NOT a direct AI enforcement order. */
+  /**
+   * All incident action approvals happen in Case Management, never on the
+   * Incident Intake screen and never via an automatic AI transition.
+   */
+  reviewCaseIncident(id:string,decision:'ACCEPT'|'MODIFY'|'REJECT'):void{
+    const current=this.centralCase;
+    if(!current||this.centralBusy||current.status==='RESOLVED')return;
+    const report=(current.incidentEvents||[]).find(x=>x.incidentId===id);
+    if(!report||report.decisionStatus!=='PENDING_HUMAN_REVIEW')return;
+    const selected=decision==='ACCEPT'?report.suggestedFollowup:
+      decision==='REJECT'?'VERIFY_INFORMATION':
+      this.incidentFollowupSelection[id]||report.suggestedFollowup;
+    const reason=(this.incidentOfficerReasons[id]||'').trim();
+    const officer=this.incidentOfficerName.trim();
+    if(reason.length<15||officer.length<3){
+      this.centralError=this.copy(
+        'Enter an officer name and a documented reason (at least 15 characters).',
+        'أدخل اسم الموظف وسببًا موثقًا لا يقل عن 15 حرفًا.');
+      return;
+    }
+    if(decision==='MODIFY'&&selected===report.suggestedFollowup){
+      this.centralError=this.copy('Select a different follow-up for Modify.',
+        'اختر متابعة مختلفة عند تعديل التوصية.');
+      return;
+    }
+    if(!window.confirm(this.copy(
+      'Save the incident decision and generate its accountable case tasks? No real authority, port or vessel control will be invoked.',
+      'حفظ قرار الحادث وإنشاء مهامه داخل الحالة؟ لن يتم تنفيذ أي أمر تنظيمي أو تغيير على الميناء أو السفينة.')))return;
+    this.centralBusy=true;this.centralError='';this.centralSuccess='';
+    this.cases.decideIncident(current,id,decision,selected,reason,officer).subscribe({
+      next:r=>{
+        this.centralBusy=false;
+        if(r.case)this.applyCase(r.case);
+        this.centralSuccess=this.copy(
+          'Incident follow-up approved; central case tasks/roles and audit trail updated.',
+          'تم اعتماد متابعة الحادث وإنشاء مهامها وأدوارها داخل الحالة وتحديث سجل الإجراءات.');
+        this.loadCentralHistory();
+      },
+      error:e=>{
+        this.centralBusy=false;this.centralError=this.cases.readableError(e,this.lang.isArabic);
+        if(e?.status===409)this.loadCentralCase();
+      }
+    });
+  }
+
   get canConvertLegacyA01():boolean{
     const row=this.centralCase;
     return !!row&&row.status!=='RESOLVED'&&!row.operationalDecision&&
