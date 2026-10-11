@@ -227,6 +227,8 @@ export class NmcCasesService {
         :`A01 action #${actionNumber} duplicates normalized actionId "${id}". Each proposal must have a unique ID.`;
     }
     const messages:Record<string,[string,string]>={
+      CASE_DECISION_RATIONALE_UNAVAILABLE:['A01 provided no decision-specific reason. Request evidence review and modify with a documented justification.','لم يقدم A01 مبررًا محددًا؛ راجع الأدلة وسجل السبب عند تعديل القرار.'],
+      CASE_DECISION_EVIDENCE_REQUIRED:['This inspection or regulated route requires verified saved evidence.','يتطلب مسار المعاينة أو المنع وجود أدلة محفوظة تم التحقق منها.'],
       CASE_SINGLE_DECISION_UNAVAILABLE:['A01-derived decision is not ready.','القرار المبني على A01 غير متاح بعد.'],
       CASE_DECISION_CODE_UNSUPPORTED:['Unknown decision. Choose an allowed POC catalogue option.','قرار غير معروف؛ اختر من قائمة القرارات المسموحة.'],
       CASE_SINGLE_DECISION_MODE:['Use the single operational decision review rather than legacy action buttons.','استخدم مراجعة القرار التشغيلي الموحد بدلًا من أزرار الإجراءات القديمة.'],
