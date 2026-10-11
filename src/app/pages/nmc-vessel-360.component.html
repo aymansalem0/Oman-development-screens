@@ -481,44 +481,6 @@
             </a>
         </article>
 
-        <article class="panel conflict-panel" *ngIf="hasCertificateConflict">
-          <div class="panel-header">
-            <div>
-              <h3>{{ copy('Data Conflict', 'تعارض البيانات') }}</h3>
-              <p>{{ copy('Human verification required', 'يتطلب تحققاً بشرياً') }}</p>
-            </div>
-            <span class="conflict-badge">{{ copy('UNRESOLVED', 'غير محلول') }}</span>
-          </div>
-
-          <div class="compare-box">
-            <div>
-              <small>{{ copy('MOEI Certificate Registry', 'سجل الشهادات بالوزارة') }}</small>
-              <strong>{{ copy('Conditionally Valid', 'سارية بشروط') }}</strong>
-              <span>{{ copy('Updated', 'تحديث') }} —</span>
-            </div>
-            <div class="vs">≠</div>
-            <div>
-              <small>{{ copy('External Classification Feed', 'تغذية هيئة التصنيف الخارجية') }}</small>
-              <strong>{{ copy('Valid', 'سارية') }}</strong>
-              <span>{{ copy('Updated', 'تحديث') }} —</span>
-            </div>
-          </div>
-
-          <div class="verification-note">
-            <strong>{{ copy('System behavior', 'سلوك النظام') }}</strong>
-            <p>
-              {{ copy(
-  'The conflict is preserved and highlighted. The platform does not silently choose one source or auto-enforce a restriction before authorized verification.',
-  'يتم الاحتفاظ بالتعارض وإبرازه. ولا تختار المنصة مصدراً تلقائياً أو تفرض قيداً قبل التحقق المعتمد.'
-) }}
-            </p>
-          </div>
-
-          <a class="primary-btn wide" [routerLink]="['/moei/nmc/vessel',vessel.imo,'case']">
-            {{copy('Review in Case Management','المراجعة في إدارة الحالات')}}
-          </a>
-        </article>
-
         <article class="panel timeline-panel">
           <div class="panel-header">
             <div>
@@ -623,46 +585,13 @@
             </div>
           </div>
 
-          <div class="risk-evidence-link" *ngIf="certificate.conflict">
-            <div>
-              <small>{{ copy('RISK CONTRIBUTION', 'المساهمة في المخاطر') }}</small>
-              <strong>{{ certificate.status }} certificate +{{ certificateRiskImpact }}</strong>
-              <p>{{ copy('This record directly contributes to the current vessel risk level.', 'يسهم هذا السجل مباشرة في مستوى المخاطر الحالي للسفينة.') }}</p>
-            </div>
-            <span>+{{ certificateRiskImpact }}</span>
-          </div>
-
-          <div class="source-comparison" *ngIf="certificate.conflict">
-            <div class="source-comparison-head">
-              <div>
-                <strong>{{ copy('Source Conflict Verification', 'التحقق من تعارض المصادر') }}</strong>
-                <p>{{ copy('The same certificate is reported differently by two sources.', 'تم الإبلاغ عن الشهادة نفسها بحالتين مختلفتين من مصدرين.') }}</p>
-              </div>
-              <span class="conflict-badge">{{copy('SYNTHETIC · UNVERIFIED','تجريبي · غير متحقق')}}</span>
-            </div>
-
-            <div class="source-compare-grid">
-              <div class="authority-source">
-                <small>{{ primaryCertificateSourceLabel }}</small>
-                <strong>{{ copy('Conditionally Valid', 'سارية بشروط') }}</strong>
-                <span>— · {{ copy('Confidence', 'الثقة') }} 100%</span>
-              </div>
-              <div class="compare-symbol">≠</div>
-              <div>
-                <small>{{ vessel.classSociety }}</small>
-                <strong>Valid</strong>
-                <span>— · {{ copy('Confidence', 'الثقة') }} 68%</span>
-              </div>
-            </div>
-
-            <p class="verification-note">
-              {{copy('This is a synthetic certificate comparison; no official verification task exists until recorded through Case Management.',
-              'هذه مقارنة شهادات تجريبية؛ لا توجد مهمة تحقق رسمية إلا إذا سُجلت فعليًا داخل إدارة الحالات.')}}
-            </p>
-            <a class="primary-btn wide" [routerLink]="['/moei/nmc/vessel',vessel.imo,'case']">
-              {{copy('Open Case Management','فتح إدارة الحالات')}}
-            </a>
-          </div>
+          <p class="verification-note" *ngIf="certificate.condition || certificate.status!=='Valid'">
+            {{copy('Simulated certificate status requires verification against the issuing flag/RO. No independent certificate conflict or verification task is asserted.',
+              'حالة الشهادة المعروضة تجريبية وتحتاج للتحقق من جهة العلم أو التصنيف. لا نفترض وجود تعارض مثبت أو مهمة تحقق تم إنشاؤها.')}}
+          </p>
+          <a class="primary-btn wide" [routerLink]="['/moei/nmc/vessel',vessel.imo,'case']">
+            {{copy('Review actions in Case Management','مراجعة الإجراءات في إدارة الحالات')}}
+          </a>
         </aside>
       </div>
     </section>
