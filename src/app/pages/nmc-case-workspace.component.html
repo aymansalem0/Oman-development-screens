@@ -199,7 +199,11 @@
             <div class="ai-action-detail">
               <div class="ai-action-title"><b>{{action.title}}</b>
                 <span class="ai-decision-state">{{action.decision}}</span></div>
-              <p>{{action.reason}}</p>
+              <p *ngIf="action.reason!=='A01 recommendation linked to the validated source evidence IDs'">{{action.reason}}</p>
+              <p *ngIf="action.reason==='A01 recommendation linked to the validated source evidence IDs'" class="decision-unavailable">
+                {{copy('A01 did not provide action-specific business reasoning. This is only an evidence-linked legacy placeholder and must not be treated as an explanation.',
+                  'لم يقدم A01 مبررًا تشغيليًا خاصًا بهذا الإجراء؛ النص السابق مجرد بديل قديم مرتبط بالأدلة وليس تفسيرًا صالحًا للاعتماد.')}}
+              </p>
               <small>A01 · {{action.actionType}} · {{action.ownerRole}} · {{action.priority}} ·
                 {{ copy('confidence', 'الثقة') }} {{(action.confidence*100)|number:'1.0-0'}}% ·
                 {{action.evidenceIds.join(', ')}}</small>
