@@ -203,25 +203,54 @@
               <small>A01 · {{action.actionType}} · {{action.ownerRole}} · {{action.priority}} ·
                 {{ copy('confidence', 'الثقة') }} {{(action.confidence*100)|number:'1.0-0'}}% ·
                 {{action.evidenceIds.join(', ')}}</small>
-              <p *ngIf="action.decisionNote">{{copy('Officer note','ملاحظة الموظف')}}: {{action.decisionNote}}</p>
+              <p *ngIf="action.decisionNote"><strong>{{copy('Recorded human reason','سبب القرار البشري المسجل')}}:</strong> {{action.decisionNote}}</p>
+              <p *ngIf="action.replacementActionType" class="effective-route">
+                {{copy('Human-selected execution route','مسار التنفيذ المختار من الموظف')}}:
+                <strong>{{humanActionLabel(action.replacementActionType)}}</strong> · {{action.replacementOwnerRole}}
+              </p>
             </div>
             <div *ngIf="action.decision==='PENDING'" class="ai-action-decisions">
-              <textarea [(ngModel)]="actionNotes[action.actionId]"
-                  [placeholder]="copy('Reason for Modify / Reject (required)', 'سبب التعديل أو الرفض (مطلوب)')"
-                  rows="2"></textarea>
+              <label class="replacement-label" [for]="'replace-'+action.actionId">
+                  {{copy('Replacement route (for Modify)','المسار البديل (عند التعديل)')}}
+                </label>
+                <select [id]="'replace-'+action.actionId" [(ngModel)]="replacementActionTypes[action.actionId]">
+                  <option value="">{{copy('Select a different execution action','اختر إجراء تنفيذ مختلفًا')}}</option>
+                  <option *ngFor="let route of humanActionTypes" [value]="route"
+                    [disabled]="route===action.actionType">{{humanActionLabel(route)}}</option>
+                </select>
+                <textarea [(ngModel)]="actionNotes[action.actionId]"
+                   [placeholder]="copy('Business reason (required for Modify / Reject)','السبب التشغيلي (إلزامي للتعديل أو الرفض)')"
+                   rows="2"></textarea>
               <div class="ai-decision-buttons">
                 <button type="button" [disabled]="centralBusy" (click)="decideAiAction(action,'ACCEPT')">✓ {{copy('Accept','اعتماد')}}</button>
-                <button type="button" [disabled]="centralBusy" (click)="decideAiAction(action,'MODIFY')">{{copy('Accept with note','اعتماد بملاحظة')}}</button>
+                <button type="button" [disabled]="centralBusy" (click)="decideAiAction(action,'MODIFY')">{{copy('Approve modified route','اعتماد الإجراء البديل')}}</button>
                 <button type="button" [disabled]="centralBusy" (click)="decideAiAction(action,'REJECT')">{{copy('Reject','رفض')}}</button>
               </div>
             </div>
           </article>
         </div>
-        <div class="ai-queue-note" *ngIf="centralCase.inspectionRequests?.length">
-          {{copy('Approved inspection requests','طلبات المعاينة المعتمدة')}}:
-          <span *ngFor="let r of centralCase.inspectionRequests">{{r.status}} · </span>
-          <a [routerLink]="['/moei/smart-inspection/candidates']">{{copy('Open Smart Inspection scheduling →','فتح جدول المعاينة الذكية ←')}}</a>
-        </div>
+        <section class="case-inspection-bridge" *ngIf="centralCase.inspectionRequests?.length || centralCase.inspectionOutcome">
+          <h4>{{copy('04—05 · Smart Inspection hand-off & outcomes','٠٤—٠٥ · إحالات ونتائج المعاينة الذكية')}}</h4>
+          <p>{{copy('NMC owns the operational case. Smart Inspection owns field execution; only recorded scheduling and results appear here.',
+              'المركز البحري يدير الحالة التشغيلية؛ والمعاينة الذكية مسؤولة عن التنفيذ الميداني، ولا تظهر هنا إلا الجداول والنتائج المسجلة.')}}</p>
+          <div class="inspection-referral" *ngFor="let request of centralCase.inspectionRequests">
+            <strong>{{humanActionLabel('PRIORITY_INSPECTION')}}</strong>
+            <span>{{request.status}} · {{request.port||'—'}} · {{request.inspector||'—'}}</span>
+            <small>{{copy('Linked action','الإجراء المرتبط')}}: {{request.actionId}} ·
+              {{copy('Inspection request','طلب معاينة')}}: {{request.id}}</small>
+          </div>
+          <div class="inspection-referral" *ngIf="centralCase.inspectionOutcome as outcome">
+            <strong>{{copy('Recorded inspection outcome','نتيجة المعاينة المسجلة')}}</strong>
+            <span>{{outcome.result}} · {{copy('Findings','الملاحظات')}}: {{outcome.findingsCount}} ·
+              {{copy('Critical','حرجة')}}: {{outcome.criticalFindings}}</span>
+            <small>{{outcome.summary}}</small>
+          </div>
+          <div class="decision-unavailable" *ngIf="riskReassessmentPending">
+            {{copy('Closure is blocked until a verified A02 refresh and new saved deterministic assessment are integrated. Original risk remains unchanged.',
+            'الإغلاق متوقف حتى ربط تحديث A02 الموثق وتقييم مخاطر حتمي جديد ومحفوظ؛ ولا تتغير الدرجة الأصلية.')}}</div>
+          <a class="inspection-link" [routerLink]="['/moei/smart-inspection/candidates']">
+            {{copy('Open Smart Inspection Candidate & Targeting Center →','فتح مركز ترشيحات المعاينة الذكية ←')}}</a>
+        </section>
       </ng-container>
     </section>
     <section class="workspace-grid">
@@ -230,8 +259,8 @@
           <div class="panel-header">
             <div>
               <span class="section-kicker">{{ copy('ACTION ORCHESTRATION', 'تنسيق الإجراءات') }}</span>
-              <h3>{{ copy('Tasks & SLA', 'المهام ومستويات الخدمة') }}</h3>
-              <p>{{ copy('Each action has ownership, evidence, SLA and escalation status.', 'لكل إجراء مسؤولية وأدلة ومستوى خدمة وحالة تصعيد.') }}</p>
+              <h3>{{ copy('Approved tasks & follow-up', 'المهام المعتمدة والمتابعة') }}</h3>
+              <p>{{ copy('Only approved tasks appear here with ownership, evidence and operational status.', 'لا تظهر هنا إلا المهام المعتمدة مع المسؤول والأدلة والحالة التشغيلية.') }}</p>
             </div>
             <span class="task-count">{{ tasks.length }} {{ copy('tasks', 'مهام') }}</span>
           </div>
@@ -261,7 +290,7 @@
 
                   <div class="task-facts">
                     <span><small>{{ copy('Owner', 'المسؤول') }}</small><b>{{ task.owner }}</b></span>
-                    <span><small>{{ copy('SLA / Due', 'مستوى الخدمة / الاستحقاق') }}</small><b>{{ task.dueLabel }}</b></span>
+                    <span><small>{{ copy('Follow-up', 'المتابعة') }}</small><b>{{ task.dueLabel }}</b></span>
                     <span><small>{{ copy('Evidence', 'الأدلة') }}</small><b>{{ task.evidence.length }} {{ copy('linked', 'مرتبطة') }}</b></span>
                     <span><small>{{ copy('Required', 'إلزامية') }}</small><b>{{ task.mandatory ? copy('Yes', 'نعم') : copy('No', 'لا') }}</b></span>
                   </div>
@@ -429,7 +458,7 @@
         <strong>{{ task.owner }}</strong>
       </div>
       <div>
-        <small>{{ copy('SLA / Due', 'مستوى الخدمة / الاستحقاق') }}</small>
+        <small>{{ copy('Follow-up', 'المتابعة') }}</small>
         <strong>{{ task.dueLabel }}</strong>
       </div>
     </div>
