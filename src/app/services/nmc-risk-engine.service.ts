@@ -190,7 +190,8 @@ export class NmcRiskEngineService {
 
   cloneConfig(config: RiskEngineConfig): RiskEngineConfig {
     const copy=JSON.parse(JSON.stringify(config)) as RiskEngineConfig;
-    copy.weights.documentIntegrity=Number(copy.weights.documentIntegrity||0);
+    // Keep the legacy JSON field for compatibility but never weight A03.
+    copy.weights.documentIntegrity=0;
     return copy;
   }
 
@@ -269,9 +270,9 @@ export class NmcRiskEngineService {
     config: RiskEngineConfig = this.configSubject.value
   ): RiskEvaluation {
     const keys: RiskFactorKey[] = ['movement', 'inspection', 'certificate', 'dataQuality', 'history'];
-    if(Number(config.weights.documentIntegrity||0)>0)keys.push('documentIntegrity');
+    // Historical sixth factor is not active in the NMC five-factor model.
     if (!keys.every(key => Number.isFinite(severities[key]) && severities[key] >= 0 && severities[key] <= 100)) {
-      throw new Error('Missing required validated A03 document-integrity signal; no risk projection can be calculated.');
+      throw new Error('Five core vessel AI signals are required for risk projection.');
     }
 
     let score = this.weightedScore(severities, config.weights);
