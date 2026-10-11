@@ -611,7 +611,7 @@
 
       <div class="inspection-kpis">
         <div><small>{{copy('Inspection records in POC','سجلات المعاينات في التجربة')}}</small><strong>{{inspections.length}}</strong>
-          <span>{{inspections.filter(inspection => inspection.openDeficiencies > 0).length}} {{copy('with open findings (synthetic)','بها ملاحظات مفتوحة (تجريبية)')}}</span></div>
+          <span>{{inspectionsWithOpenFindings}} {{copy('with open findings (synthetic)','بها ملاحظات مفتوحة (تجريبية)')}}</span></div>
         <div><small>{{ copy('Open deficiencies', 'الملاحظات المفتوحة') }}</small><strong [class.critical-text]="openDeficiencyCount > 0">{{ openDeficiencyCount }}</strong><span>{{ openDeficiencyCount > 0 ? copy('requires follow-up', 'تتطلب متابعة') : copy('no open findings', 'لا توجد ملاحظات مفتوحة') }}</span></div>
         <div><small>{{copy('Risk-based review posture (POC)','موقف المراجعة حسب المخاطر (تجريبي)')}}</small>
           <strong [class.critical-text]="vessel.risk >= 65">{{complianceStatus}}</strong>
