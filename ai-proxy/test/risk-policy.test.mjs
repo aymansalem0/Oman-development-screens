@@ -139,18 +139,16 @@ test('old risk policy projections are explained only when saved source assessmen
   }finally{rmSync(dir,{recursive:true,force:true});}
 });
 
-test('published A03 weight recalculates only source assessments with a validated document factor',()=>{
-  const configWithDoc={...baseline,weights:{movement:23,inspection:25,
-    certificate:18,dataQuality:13,history:11,documentIntegrity:10}};
-  assert.equal(validateRiskConfig(configWithDoc).weights.documentIntegrity,10);
-  assert.equal(calculateRiskPolicy(assessment,configWithDoc,4),null);
-  const supplemented={...assessment,signals:[
-    ...assessment.signals,{factor:'documentIntegrity',severity:50,confidence:0.65,
-      sourceAgent:'A03',evidenceIds:['GDOC-0123456789abcdef0123']}]};
-  const projected=calculateRiskPolicy(supplemented,configWithDoc,4);
-  assert.ok(projected);assert.equal(projected.factorSnapshot.factors.length,6);
-  assert.equal(projected.factorSnapshot.factors.at(-1).key,'documentIntegrity');
-  assert.equal(projected.factorSnapshot.factors.at(-1).weight,10);
-  assert.equal(validateRiskConfig(baseline).weights.documentIntegrity,0);
-  assert.equal(calculateRiskPolicy(assessment,baseline,1).factorSnapshot.factors.length,5);
+test('obsolete positive A03 factor cannot be published; five-source policy remains authoritative',()=>{
+ const legacy={...baseline,weights:{movement:23,inspection:25,
+   certificate:18,dataQuality:13,history:11,documentIntegrity:10}};
+ assert.throws(()=>validateRiskConfig(legacy),/RISK_LEGACY_A03_REBALANCE_REQUIRED/);
+ assert.equal(calculateRiskPolicy(assessment,legacy,4),null);
+ const historic={...assessment,signals:[...assessment.signals,
+   {factor:'documentIntegrity',severity:50,sourceAgent:'A03',evidenceIds:['OLD-DOC']}]};
+ const projected=calculateRiskPolicy(historic,baseline,4);
+ assert.ok(projected);
+ assert.equal(projected.factorSnapshot.factors.length,5);
+ assert.ok(projected.factorSnapshot.factors.every(f=>f.key!=='documentIntegrity'));
+ assert.equal(validateRiskConfig(baseline).weights.documentIntegrity,undefined);
 });
