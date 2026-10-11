@@ -159,6 +159,12 @@
         <small>{{copy('No incident is fabricated or replaced with fleet AI events.',
           'لن تُستبدل الحوادث بأحداث AI للسفن أو ببيانات مختلقة.')}}</small>
       </div>
+      <div *ngIf="!incidentSourceError && incidentRejectedRowsCount>0"
+        class="nmc-incidents-error" role="status">
+        {{incidentRejectedRowsCount}}
+        {{copy('incident rows are incomplete or invalid in the Google Sheet. Valid incidents are still shown.',
+          'صفوف حوادث غير مكتملة أو غير صحيحة في Google Sheet؛ ستظل الحوادث الصحيحة ظاهرة.')}}
+      </div>
       <div *ngIf="!incidentSourceError && !latestMaritimeIncidents.length"
         class="nmc-incidents-empty">
         {{incidentFeedRefreshing?copy('Reading the incident source…','جارٍ قراءة بيانات الحوادث…'):
