@@ -29,7 +29,8 @@ interface SourceStatus {
   record: string;
   confidence: number|null;
   dataNature:'SYNTHETIC_FIXTURE'|'SYNTHETIC_PSC_GOOGLE'|'SYNTHETIC_PSC_LOCAL'|
-    'SYNTHETIC_INCIDENT_GOOGLE'|'NMC_POC_CASE'|'DERIVED_COMPARISON'|'UNAVAILABLE';
+    'SYNTHETIC_INCIDENT_GOOGLE'|'SYNTHETIC_DRIVE_GOOGLE'|'NMC_POC_CASE'|
+    'DERIVED_COMPARISON'|'UNAVAILABLE';
   recordId?:string;
   route?:string;
   tab?:string;
@@ -1103,7 +1104,7 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
       recordId:drive.documents[0]?.fileId,
       status:'Available',lastSync:this.driveReadAt||'—',confidence:null,
       authority:'Synthetic POC document packs; approval does NOT verify issuing authority',
-      dataNature:'SYNTHETIC_POC',sourceClass:'External Trusted',
+      dataNature:'SYNTHETIC_DRIVE_GOOGLE',sourceClass:'External Trusted',
       route:`/moei/nmc/vessel/${this.vessel.imo}`,tab:'documents'
     }:{
       name:'Google Drive Vessel Documents / A03',
