@@ -44,7 +44,7 @@ test('five-factor A01/A02 risk policy: no new A03 weighting, no sixth factor on 
 });
 test('every Vessel 360 tab has corresponding rendered data, no placeholder movement tab',()=>{
   const tabNames=['overview','movement','compliance','inspection',
-    'external-psc','certificates','documents','sources','accidents'];
+    'external-psc','certificates','sources','accidents'];
   for(const tab of tabNames){
     assert.ok(src.v360Html.includes("setTab('"+tab+"')"),
       'tab '+tab+' needs a working click handler');
@@ -55,7 +55,8 @@ test('every Vessel 360 tab has corresponding rendered data, no placeholder movem
   for(const p of ['vessel.speed','vessel.course','vessel.destination','vessel.eta','vessel.navStatus'])
     assert.ok(src.v360Html.includes(p),'missing movement field '+p);
   assert.doesNotMatch(src.v360Html,/class="placeholder-grid"/);
-  assert.match(src.v360Html,/<app-nmc-vessel-documents/);
+  assert.doesNotMatch(src.v360Html,/<app-nmc-vessel-documents|setTab\('documents'\)/);
+  assert.match(src.v360Ts,/Google Drive Vessel Documents \/ A03/);
   assert.match(src.v360Html,/externalPsc/);
   assert.match(src.v360Html,/\*ngFor="let inspection of inspections"/);
   assert.match(src.v360Html,/\*ngFor="let certificate of certificates"/);
