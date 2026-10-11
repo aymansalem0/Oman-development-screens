@@ -15,5 +15,10 @@ services:
       NMC_INCIDENT_AI_MODEL: ${NMC_INCIDENT_AI_MODEL:-}
       NMC_INCIDENT_OPENAI_API_KEY: ${NMC_INCIDENT_OPENAI_API_KEY:-}
       NMC_INCIDENT_OLLAMA_URL: ${NMC_INCIDENT_OLLAMA_URL:-http://host.docker.internal:11434}
+      # Optional scheduled AI triage: OFF by default; each row also requires
+      # AI_Review_Request=YES. Max 1-5 calls per cycle, interval >=5 minutes.
+      NMC_INCIDENT_AUTO_TRIAGE_ENABLED: ${NMC_INCIDENT_AUTO_TRIAGE_ENABLED:-false}
+      NMC_INCIDENT_AUTO_INTERVAL_MINUTES: ${NMC_INCIDENT_AUTO_INTERVAL_MINUTES:-15}
+      NMC_INCIDENT_AUTO_MAX_PER_CYCLE: ${NMC_INCIDENT_AUTO_MAX_PER_CYCLE:-2}
     extra_hosts:
       - "host.docker.internal:host-gateway"
