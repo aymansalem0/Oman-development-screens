@@ -22,8 +22,8 @@
       <div>
         <span class="eyebrow">{{copy('MARITIME SITUATIONAL AWARENESS','الوعي بالموقف البحري')}}</span>
         <h2>{{copy('Alerts & Notifications','التنبيهات والإشعارات')}}</h2>
-        <p>{{copy('Published Risk Rules issue new alerts when risk classification changes. Outdated alerts are dimmed until removed; history and linked cases remain saved.',
-                  'تنشئ قواعد المخاطر المنشورة تنبيهًا جديدًا عند تغيير تصنيف السفينة؛ تصبح التنبيهات القديمة معتمة حتى إزالتها من القائمة، مع بقاء السجل والحالات المرتبطة.')}}</p>
+        <p>{{copy('This inbox reports maritime risk events and acknowledges receipt only. Operational decisions, AI recommendations, assignments and case closure belong in Case Management.',
+                   'هذه الشاشة لعرض تنبيهات المخاطر البحرية وتسجيل استلامها فقط. القرارات التشغيلية وتوصيات الذكاء الاصطناعي والإسناد وإغلاق الحالات تتم داخل إدارة الحالات.')}}</p>
       </div>
       <div class="heading-actions">
         <span class="update-time" *ngIf="overview">{{copy('Updated','آخر تحديث')}}: {{overview.updatedAt|date:'shortTime'}}</span>
@@ -101,17 +101,14 @@
           {{copy('New high/critical candidates not yet in Oracle',
                  'مرشحات مخاطر مرتفعة/حرجة جديدة لم تُسجل في Oracle')}}:
           <b>{{projectionReady?projectedCandidates.length:'—'}}</b> ·
-          {{copy('Outdated notifications remain dimmed in the inbox until you press ×. Removing from view never deletes Oracle history. Critical open findings remain reviewable.',
-                 'تظل التنبيهات القديمة ظاهرة بلون معتم حتى الضغط على ×. إزالتها من العرض لا تحذف تاريخها من Oracle؛ تظل الملاحظات الحرجة المفتوحة قيد المراجعة.')}}
+          {{copy('Superseded alerts stay visible for review and audit. Use the Outdated filter to inspect them; critical findings remain traceable.',
+                 'تظل التنبيهات المستبدلة متاحة للمراجعة والتدقيق عبر مرشح قديمة، وتبقى الملاحظات الحرجة قابلة للتتبع.')}}
         </p>
         <small>{{copy('This is not central policy publication or automatic legal resolution. Risk changes cannot silently close a linked maritime case.',
                        'هذه معاينة محلية وليست نشرًا مركزيًا أو إغلاقًا رسميًا تلقائيًا. لا يتم إغلاق الحالات البحرية المرتبطة دون اعتماد.')}}</small>
         <p *ngIf="policyLoading">{{copy('Rechecking saved A01/A02 evidence…','جارٍ مراجعة أدلة A01/A02 المحفوظة…')}}</p>
         <p *ngIf="policyError" class="policy-warning" role="alert">{{policyError}}</p>
       </div>
-      <a class="link secondary" routerLink="/moei/nmc/admin/risk-configuration">
-        {{copy('Risk Management','إعدادات المخاطر')}} ↗
-      </a>
     </section>
     <div class="notice" role="status" *ngIf="success">✓ {{success}}</div>
     <div class="error" role="alert" *ngIf="error">{{error}}</div>
@@ -140,8 +137,8 @@
       <div class="toolbar">
         <div>
           <h3>{{copy('Operational Alert Inbox','صندوق التنبيهات التشغيلية')}}</h3>
-          <p>{{copy('Active notifications follow centrally published Risk Rules. Superseded notifications stay dimmed until removed with ×.',
-                   'تتبع التنبيهات النشطة قواعد المخاطر المنشورة مركزيًا، وتظل التنبيهات المستبدلة معتمة حتى إزالتها باستخدام ×.')}}</p>
+          <p>{{copy('Review events, acknowledge receipt, and continue the operational workflow in Case Management. Superseded alerts remain available for audit.',
+                   'راجع الأحداث واستلم التنبيهات، ثم تابع الإجراءات في إدارة الحالات. تبقى التنبيهات المستبدلة متاحة للتدقيق.')}}</p>
         </div>
         <div class="controls">
           <label class="search">
@@ -174,12 +171,6 @@
       <article *ngFor="let alert of alertsFiltered" class="alert-card"
                [class.critical]="displaySeverity(alert)==='CRITICAL'"
                [class.local-superseded]="isPolicySuperseded(alert)">
-        <button *ngIf="isPolicySuperseded(alert)" type="button"
-                class="alert-dismiss" [disabled]="!!busy"
-                (click)="dismiss(alert)"
-                [title]="copy('Remove outdated notification from inbox (audit retained)',
-                               'إزالة التنبيه القديم من القائمة مع الاحتفاظ بالسجل')"
-                [attr.aria-label]="copy('Remove outdated notification','إزالة التنبيه القديم')">×</button>
         <div class="alert-main">
           <div class="alert-symbol" [class.high]="displaySeverity(alert)==='HIGH'">
             {{displaySeverity(alert)==='CRITICAL'?'!':'▲'}}
@@ -215,54 +206,36 @@
             </div>
           </div>
         </div>
-        <div class="actions">
+        <div class="actions" aria-label="Notification navigation and acknowledgment">
+          <button *ngIf="alert.status==='OPEN'&&!isPolicySuperseded(alert)" type="button"
+                  class="link primary" [disabled]="!!busy"
+                  (click)="acknowledge(alert)"
+                  [title]="copy('Records notification receipt only; does not approve a decision or close a case',
+                                 'يسجل استلام التنبيه فقط ولا يعتمد قرارًا أو يغلق حالة')">
+            ✓ {{copy('Acknowledge alert','استلام التنبيه')}}
+          </button>
           <a [routerLink]="['/moei/nmc/vessel',alert.imo]" class="link secondary">
             {{copy('Vessel 360','الملف الشامل للسفينة')}} ↗
           </a>
           <a *ngIf="linkedCase(alert)" [routerLink]="['/moei/nmc/vessel',alert.imo,'case']"
              class="link secondary">
-            {{copy('Open Linked Case','فتح الحالة المرتبطة')}} ↗
+            {{copy('Open Linked Case','عرض الحالة المرتبطة')}} ↗
           </a>
-          <button *ngIf="!linkedCase(alert)&&alert.status!=='RESOLVED'&&!isPolicySuperseded(alert)" type="button"
-                  class="link primary" [disabled]="alert.status==='OPEN'||!!creatingCase"
-                  (click)="createCase(alert)">
-            + {{copy('Create Maritime Case','إنشاء حالة بحرية')}}
-          </button>
+          <a *ngIf="!linkedCase(alert)&&!isPolicySuperseded(alert)&&alert.status!=='RESOLVED'"
+             [routerLink]="['/moei/nmc/vessel',alert.imo,'case']" class="link secondary">
+            {{copy('Continue in Case Management','المتابعة في إدارة الحالات')}} ↗
+          </a>
           <button type="button" class="secondary" (click)="toggleDetails(alert)">
             {{selectedId===alert.id?copy('Hide History','إخفاء السجل'):copy('Activity History','سجل الأنشطة')}}
           </button>
         </div>
         <div *ngIf="isPolicySuperseded(alert)" class="local-superseded-note">
-          {{copy('This alert was superseded by a published risk classification change. You can remove it from the inbox with ×; linked maritime cases, previous decisions and audit history are preserved.',
-                  'تم استبدال هذا التنبيه بعد تغيير تصنيف المخاطر وفق القواعد المنشورة. يمكنك إزالته من القائمة باستخدام ×، مع الاحتفاظ بالحالات البحرية المرتبطة والقرارات السابقة وسجل التدقيق.')}}
+          {{copy('This risk alert has been superseded. Its linked cases and audit trail remain available; no operational decision is taken from this inbox.',
+                  'تم استبدال هذا التنبيه. تبقى الحالات المرتبطة وسجل التدقيق متاحة، ولا يتم اتخاذ قرارات تشغيلية من صندوق التنبيهات.')}}
           <small *ngIf="alert.supersededByRiskLevel">
             {{copy('New risk classification','التصنيف الجديد')}}:
             {{alert.supersededByRiskScore}}/100 · {{alert.supersededByRiskLevel}}
           </small>
-        </div>
-        <div class="decision-panel" *ngIf="alert.status!=='RESOLVED'&&!isPolicySuperseded(alert)">
-          <label>{{copy('Operator note / resolution reason','ملاحظة الموظف / سبب الإغلاق')}}
-            <input type="text" [(ngModel)]="notes[alert.id]" maxlength="500"
-              [placeholder]="copy('Record operational context before an action','سجّل سبب الإجراء أو نتيجة التحقق')">
-          </label>
-          <div class="decision-actions">
-            <button *ngIf="allowed(alert,'ACKNOWLEDGE')" type="button" class="primary"
-                    [disabled]="!!busy" (click)="act(alert,'ACKNOWLEDGE')">
-              ✓ {{actionText('ACKNOWLEDGE')}}
-            </button>
-            <button *ngIf="allowed(alert,'START_FOLLOW_UP')" type="button" class="primary"
-                    [disabled]="!!busy" (click)="act(alert,'START_FOLLOW_UP')">
-              → {{actionText('START_FOLLOW_UP')}}
-            </button>
-            <button *ngIf="allowed(alert,'ESCALATE')" type="button" class="escalate-btn"
-                    [disabled]="!!busy" (click)="act(alert,'ESCALATE')">
-              ↗ {{actionText('ESCALATE')}}
-            </button>
-            <button *ngIf="allowed(alert,'RESOLVE')" type="button" class="resolve-btn"
-                    [disabled]="!!busy" (click)="act(alert,'RESOLVE')">
-              ✓ {{actionText('RESOLVE')}}
-            </button>
-          </div>
         </div>
         <div *ngIf="selectedId===alert.id" class="history-panel">
           <h5>{{copy('Alert Audit Trail','سجل تغييرات التنبيه')}}</h5>
