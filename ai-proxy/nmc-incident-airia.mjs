@@ -9,7 +9,7 @@
  * containers and must be explicitly cited by A01 to count as AI-grounded.
  * The incident score is computed by separate, declared rules, not by AI.
  */
-import {IncidentTriageError} from './nmc-incident-feed.mjs';
+import {IncidentTriageError,INCIDENT_FOLLOWUP_STATES} from './nmc-incident-feed.mjs';
 
 export const INCIDENT_CONTRACT='A01_A02_EXISTING_CONTRACTS_V1';
 const A02_FACTORS=['inspection','certificate','dataQuality'];
@@ -39,7 +39,7 @@ const unwrap=(input,marker)=>{
 const normalizeType=value=>{
  if(typeof value!=='string')return '';
  const key=value.trim().replace(/([a-z0-9])([A-Z])/g,'$1_$2')
-   .replace(/[\\s-]+/g,'_').toUpperCase();
+   .replace(/[\s-]+/g,'_').toUpperCase();
  return ({
   REQUEST_PRIORITY_INSPECTION:'PRIORITY_INSPECTION',
   CREATE_PRIORITY_INSPECTION:'PRIORITY_INSPECTION',
@@ -115,7 +115,7 @@ export function scoreIncidentFromEvidence(incident,a01,a02){
  const exposure=incident.portOrZone?3:2;
  // Historical A01/A02 signals are contextual, NOT evidence of prior incidents.
  // Recurrence is unknown unless the original source report explicitly documents it.
- const repeated=/\\b(repeated|recurring|again|multiple occurrences|previous similar incident)\\b/i
+ const repeated=/\b(repeated|recurring|again|multiple occurrences|previous similar incident)\b/i
    .test(incident.description||'');
  const recurrence=repeated?3:1;
  const incidentRiskScore=Math.round((impact*35+urgency*30+
@@ -140,6 +140,7 @@ export function scoreIncidentFromEvidence(incident,a01,a02){
  if(!FOLLOWUP.has(aiProposedFollowup))aiProposedFollowup='VERIFY_INFORMATION';
  return {category:incident.incidentType,impact,urgency,exposure,recurrence,
   incidentRiskScore,incidentRiskBand,aiProposedFollowup,
+  suggestedFollowupState:INCIDENT_FOLLOWUP_STATES[aiProposedFollowup],
   aiReasoning:a01.whyItMatters+
     ' [Incident score is calculated by NMC rules from source-reported severity/type, '+
     'zone, explicit recurrence terms and existing A01 urgency; source facts remain unverified.]',
@@ -208,7 +209,7 @@ export function createAiriaIncidentTriage({executeAgent,getFleetResult,getBundle
   if(!history)throw new IncidentTriageError('INCIDENT_HISTORY_SIGNAL_REQUIRED',409);
   history.evidenceIds=unique([...history.evidenceIds,reportId]);
   history.reason=toString(history.reason,500)+
-    '\\n[SUPPLEMENTAL UNVERIFIED INCIDENT SOURCE, NOT VERIFIED HISTORICAL DEFICIENCY] '+
+    '\n[SUPPLEMENTAL UNVERIFIED INCIDENT SOURCE, NOT VERIFIED HISTORICAL DEFICIENCY] '+
     'Evidence '+reportId+'; type='+incident.incidentType+
     '; source='+incident.sourceType+'; reference='+incident.sourceReference+
     '; description='+event.description+
