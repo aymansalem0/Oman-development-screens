@@ -23,7 +23,8 @@ const ASSESSMENT_COLUMNS=[
  'Incident_Risk_Score_0_100','Incident_Risk_Band','AI_Proposed_Followup',
  'AI_Reasoning','AI_Confidence_0_1','Missing_Information',
  'Officer_Decision','Officer_Name','Officer_Reviewed_At_UTC',
- 'Approved_Followup_Status','Linked_Case_ID','Assessment_Status','Governance_Notice'
+ 'Approved_Followup_Status','Linked_Case_ID','Assessment_Status','Governance_Notice',
+ 'AI_Suggested_Followup_State','Officer_Approved_Followup_State','Officer_Review_Reason'
 ];
 const STATUS=new Set(['RECEIVED','UNDER_VERIFICATION','MONITORING',
  'REFERRED_FOR_INSPECTION','ESCALATED_TO_AUTHORITY','RESPONSE_IN_PROGRESS',
@@ -32,6 +33,15 @@ export const FOLLOWUP_OPTIONS=Object.freeze([
  'VERIFY_INFORMATION','ACTIVE_MONITORING','REFER_SMART_INSPECTION',
  'ESCALATE_TO_AUTHORITY','INCIDENT_RESPONSE','CLOSE_AFTER_VERIFICATION'
 ]);
+/** Next-step routing states, NOT executed / reported incident statuses. */
+export const INCIDENT_FOLLOWUP_STATES=Object.freeze({
+ VERIFY_INFORMATION:'VERIFICATION_REQUIRED',
+ ACTIVE_MONITORING:'MONITORING_TO_ASSIGN',
+ REFER_SMART_INSPECTION:'INSPECTION_REFERRAL_PENDING',
+ ESCALATE_TO_AUTHORITY:'AUTHORITY_ESCALATION_PENDING',
+ INCIDENT_RESPONSE:'RESPONSE_COORDINATION_PENDING',
+ CLOSE_AFTER_VERIFICATION:'CLOSURE_EVIDENCE_REQUIRED'
+});
 const SOURCE_TYPES=new Set(['REPORTING_PLATFORM','PORT_AUTHORITY']);
 const CATEGORY_TYPES=new Set([
  'FIRE','COLLISION','GROUNDING','ENGINE_FAILURE','STEERING_FAILURE',
@@ -74,6 +84,7 @@ export function validateIncidentAI(raw){
    exposure:data.exposure,recurrence:data.recurrence,
    incidentRiskScore:riskScore,incidentRiskBand:riskBand,
    aiProposedFollowup:data.recommendedFollowup,
+   suggestedFollowupState:INCIDENT_FOLLOWUP_STATES[data.recommendedFollowup],
    aiReasoning:data.reasoning.trim(),confidence:data.confidence,
    missingInformation:data.missingInformation.map(x=>x.trim()).filter(Boolean),
    requiresHumanReview:true,requiresImmediateReview:riskScore>=75||data.urgency>=4,
@@ -158,7 +169,11 @@ const unpackAssessments=values=>{
   missingInformation:String(r[16]||'').split(' | ').filter(Boolean),
   officerDecision:r[17]||null,officerName:r[18]||null,
   officerReviewedAt:r[19]||null,approvedFollowupStatus:r[20]||null,
-  linkedCaseId:r[21]||null,assessmentStatus:r[22]||null
+  linkedCaseId:r[21]||null,assessmentStatus:r[22]||null,
+  suggestedFollowupState:r[24]||
+    INCIDENT_FOLLOWUP_STATES[r[13]]||'VERIFICATION_REQUIRED',
+  approvedFollowupState:r[25]||null,
+  officerReviewReason:r[26]||null
  }));
 };
 const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
@@ -241,13 +256,19 @@ export class NmcIncidentFeed {
   for(const row of allAssessments)latest.set(row.incidentId,row);
   return {status:'ok',source:'GOOGLE_SHEETS_SYNTHETIC_POC',
     rejectedRows,sourceValidationWarnings:rejectedRows.length,
-    incidents:incidents.map(row=>({
-      ...row,
-      aiAssessment:latest.get(row.incidentId)?.descriptionHash===row.descriptionHash
-        ?latest.get(row.incidentId):null,
-      aiAssessmentStale:!!latest.get(row.incidentId)&&
-        latest.get(row.incidentId).descriptionHash!==row.descriptionHash
-    })),
+    incidents:incidents.map(row=>{
+      const aiRow=latest.get(row.incidentId);
+      const fresh=aiRow?.descriptionHash===row.descriptionHash;
+      const current=fresh?aiRow:null;
+      return {...row,aiAssessment:current,aiAssessmentStale:!!aiRow&&!fresh,
+        nextFollowup:current?{
+          status:current.approvedFollowupState||
+            current.suggestedFollowupState,
+          approval:current.assessmentStatus==='HUMAN_REVIEWED'?
+            'OFFICER_APPROVED':'AI_PROPOSED',
+          reason:current.officerReviewReason||current.aiReasoning
+        }:null};
+    }),
     summary:{
       total:incidents.length,unresolved:incidents.filter(x=>!['CLOSED','RESOLVED'].includes(x.operationalStatus)).length,
       pendingAi:incidents.filter(x=>x.aiReviewRequested&&
@@ -283,10 +304,13 @@ export class NmcIncidentFeed {
     prior.incidentRiskBand,prior.aiProposedFollowup,prior.aiReasoning,
     prior.confidence,prior.missingInformation.join(' | '),
     decision,officer.trim(),iso(),approvedFollowup,'','HUMAN_REVIEWED',
-    notice+' Officer reason: '+note.trim()];
-  await this.sheets('POST','AI_Assessments!A:X',{values:[record],append:true});
+    notice+' Officer reason: '+note.trim(),
+    prior.suggestedFollowupState||INCIDENT_FOLLOWUP_STATES[prior.aiProposedFollowup],
+    INCIDENT_FOLLOWUP_STATES[approvedFollowup],note.trim()];
+  await this.sheets('POST','AI_Assessments!A:AA',{values:[record],append:true});
   return {status:'ok',incidentId:id,assessmentId,decision,approvedFollowup,
     officer:officer.trim(),officerNote:note.trim(),
+    approvedFollowupState:INCIDENT_FOLLOWUP_STATES[approvedFollowup],
     saved:true,operationalStatusNotChanged:true,officialRiskNotChanged:true};
  }
  async runAI(incident){
@@ -338,6 +362,8 @@ export class NmcIncidentFeed {
    if(!incident)throw new IncidentTriageError('INCIDENT_NOT_FOUND',404);
    if(!incident.aiReviewRequested)throw new IncidentTriageError('INCIDENT_AI_OPTIN_REQUIRED',409);
    if(incident.aiAssessment&&!force)return {status:'ok',reused:true,assessment:incident.aiAssessment};
+   if(incident.aiAssessment?.assessmentStatus==='HUMAN_REVIEWED'&&force)
+     throw new IncidentTriageError('INCIDENT_ALREADY_REVIEWED',409);
    const classification=await this.runAI(incident);
    // Race safe: refuse to save AI inference for description altered mid-request.
    const after=await this.load();
@@ -354,8 +380,8 @@ export class NmcIncidentFeed {
      row.aiProvider,row.aiModel,row.category,row.impact,row.urgency,row.exposure,
      row.recurrence,row.incidentRiskScore,row.incidentRiskBand,row.aiProposedFollowup,
      row.aiReasoning,row.confidence,row.missingInformation.join(' | '),
-     '','','','','','AI_COMPLETE',notice];
-   await this.sheets('POST','AI_Assessments!A:X',{values:[values],append:true});
+     '','','','','','AI_COMPLETE',notice,row.suggestedFollowupState,'',''];
+   await this.sheets('POST','AI_Assessments!A:AA',{values:[values],append:true});
    return {status:'ok',reused:false,assessment:row};
   }finally{this.inFlight.delete(id);}
  }
