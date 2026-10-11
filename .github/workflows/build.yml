@@ -30,6 +30,8 @@ jobs:
       - name: Validate MOEI platform menu and settings routes
         run: node --test scripts/test-moei-navigation.mjs
 
+      - name: NMC Command Center incident filter regression
+        run: node --test scripts/test-nmc-command-incident-filters.mjs
       - name: Build
         run: npm run build
 

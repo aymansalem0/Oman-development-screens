@@ -26,6 +26,8 @@ import { NmcRiskEngineService } from '../services/nmc-risk-engine.service';
 import { NmcAlertsService } from '../services/nmc-alerts.service';
 import { NmcCasesService } from '../services/nmc-cases.service';
 import {NmcIncidentsService,NmcMaritimeIncident} from '../services/nmc-incidents.service';
+import {incidentSeverityBand as verifiedIncidentBand, isActiveNmcIncident,
+  vesselMatchesIncidentFilter, type NmcIncidentFilter} from '../services/nmc-incident-filters';
 
 interface MaritimeEvent {
   time: string;
@@ -49,6 +51,8 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
   riskFilter = 'All';
   assessmentFilter: 'All' | 'Assessed' | 'Pending' = 'All';
   typeFilter = 'All';
+  /** One shared incident filter for map markers and the Requires Attention queue. */
+  incidentFilter:NmcIncidentFilter='All';
   feedLive = true;
   selectedVessel?: NmcVesselProfile;
   now = new Date();
@@ -368,20 +372,34 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
   hasActiveIncidents(imo:string):boolean{
     return this.incidentsForVessel(imo).length>0;
   }
+  /** Count distinct catalogued vessels, never count two reports for one IMO twice. */
+  get incidentVesselCount():number{
+    return this.vessels.filter(v=>this.hasActiveIncidents(v.imo)).length;
+  }
+  private matchesIncidentFilter(imo:string):boolean{
+    return vesselMatchesIncidentFilter(this.incidentFilter,this.incidentsForVessel(imo));
+  }
+  incidentFilterLabel():string{
+    switch(this.incidentFilter){
+      case 'Active':return this.copy('Active incidents','حوادث نشطة');
+      case 'Critical':return this.copy('Critical incidents (AI or reported)','حوادث حرجة (AI أو بلاغ)');
+      case 'High':return this.copy('High incidents (AI or reported)','حوادث مرتفعة (AI أو بلاغ)');
+      case 'PendingReview':return this.copy('Pending human review','بانتظار المراجعة البشرية');
+      case 'None':return this.copy('No active incidents','لا توجد حوادث نشطة');
+      default:return this.copy('All incident statuses','جميع حالات الحوادث');
+    }
+  }
+  setIncidentFilter(value:NmcIncidentFilter):void{
+    this.incidentFilter=value;
+    this.attentionPage=1;
+    this.onFilterChange();
+  }
   toggleVesselIncidents(imo:string):void{
     this.expandedIncidentImo=this.expandedIncidentImo===imo?null:imo;
   }
-  /** Human/source-reported severity is visibly distinct from AI scoring. */
+  /** AI assessed vs source-reported incident severity remains distinct. */
   incidentSeverityBand(row:NmcMaritimeIncident):'CRITICAL'|'HIGH'|'MODERATE'|'LOW'|'UNASSESSED'{
-    if(row.aiAssessment&&!row.aiAssessmentStale)
-      return row.aiAssessment.incidentRiskBand;
-    switch((row.reportedSeverity||'').toUpperCase()){
-      case 'CRITICAL':return 'CRITICAL';
-      case 'HIGH':return 'HIGH';
-      case 'MEDIUM':return 'MODERATE';
-      case 'LOW':return 'LOW';
-      default:return 'UNASSESSED';
-    }
+    return verifiedIncidentBand(row);
   }
   incidentSeverityRank(row:NmcMaritimeIncident):number{
     const band=this.incidentSeverityBand(row);
@@ -433,7 +451,7 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
         for(const report of r.incidents){
           // Closed/resolved incident history remains in Incident Intelligence,
           // but does not raise the vessel's ACTIVE incident flag on the map.
-          if(['CLOSED','RESOLVED'].includes(report.operationalStatus))continue;
+          if(!isActiveNmcIncident(report))continue;
           if(!report.imo||!(/^[0-9]{7}$/).test(report.imo))continue;
           const bucket=grouped.get(report.imo)||[];
           bucket.push(report);
@@ -449,7 +467,7 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
         if(this.expandedIncidentImo&&!this.hasActiveIncidents(this.expandedIncidentImo))
           this.expandedIncidentImo=null;
         this.attentionPage=Math.min(this.attentionPage,this.attentionPageCount);
-        this.refreshMapMarkers();
+        this.onFilterChange();
       },
       error:err=>{
         this.incidentFeedRefreshing=false;
@@ -458,7 +476,7 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
         // Fail closed: never display stale incident markers as if confirmed.
         this.activeIncidentsByImo.clear();
         this.expandedIncidentImo=null;
-        this.refreshMapMarkers();
+        this.onFilterChange();
         this.incidentSourceMessage=this.incidentsService.message(err,this.lang.isArabic);
       }
     });
@@ -534,7 +552,8 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
       const matchesAssessment = this.assessmentFilter === 'All' ||
         (this.assessmentFilter === 'Assessed' ? assessed : !assessed);
       const matchesType = this.typeFilter === 'All' || vessel.type === this.typeFilter;
-      return matchesSearch && matchesRisk && matchesAssessment && matchesType;
+      return matchesSearch && matchesRisk && matchesAssessment && matchesType &&
+        this.matchesIncidentFilter(vessel.imo);
     });
   }
 
@@ -542,8 +561,13 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
 
   get allAttentionVessels(): NmcVesselProfile[] {
     return [...this.vessels]
-      .filter(v=>this.hasSavedFleetAttention(v)||this.hasActiveIncidents(v.imo))
+      .filter(v=>(this.hasSavedFleetAttention(v)||this.hasActiveIncidents(v.imo))&&
+        this.matchesIncidentFilter(v.imo))
       .sort((a,b)=>{
+        // Active incident vessels must remain visible on the first attention
+        // page; do not bury their buttons behind risk-only pagination.
+        const aActive=Number(this.hasActiveIncidents(a.imo));
+        const bActive=Number(this.hasActiveIncidents(b.imo));
         const aPriority=Number(this.fleetResult(a)?.operationalPriority==='Priority Review');
         const bPriority=Number(this.fleetResult(b)?.operationalPriority==='Priority Review');
         // Preserve existing ranked fleet priorities. Within each saved risk
@@ -553,7 +577,7 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
         const bIncident=this.incidentRepresentative(b.imo);
         const aRank=aIncident?this.incidentSeverityRank(aIncident):0;
         const bRank=bIncident?this.incidentSeverityRank(bIncident):0;
-        return bPriority-aPriority || bRank-aRank || bRisk-aRisk;
+        return bActive-aActive || bRank-aRank || bPriority-aPriority || bRisk-aRisk;
       });
   }
 
@@ -668,6 +692,7 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
   resetMapView(): void {
     // Map reset is presentation-only: do not clear saved risk, case state or chosen vessel.
     this.searchTerm='';this.riskFilter='All';this.assessmentFilter='All';this.typeFilter='All';
+    this.incidentFilter='All';this.attentionPage=1;
     this.resetMapBounds();
     this.refreshMapMarkers();
     this.drawSelectedTrack();
