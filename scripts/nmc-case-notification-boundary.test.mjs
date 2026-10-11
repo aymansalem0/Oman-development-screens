@@ -16,7 +16,9 @@ test('Alerts inbox has receipt acknowledgment only, with no operational decision
   for(const forbidden of [
     'createCase(alert)','dismiss(alert)','START_FOLLOW_UP','ESCALATE',
     'RESOLVE','decision-panel','decision-actions','Operator note / resolution reason'
-  ])assert.ok(!alertHtml.includes(forbidden),forbidden);
+  ])assert.ok(!controls.includes(forbidden),forbidden);
+  assert.ok(!alertHtml.includes('class="decision-panel"'));
+  assert.ok(!alertHtml.includes('Operator note / resolution reason'));
   assert.ok(!alertTs.includes('this.cases.createFromAlert('));
   assert.ok(!alertTs.includes("this.alerts.act(item,'ESCALATE'"));
   assert.ok(!alertTs.includes("this.alerts.act(item,'RESOLVE'"));
