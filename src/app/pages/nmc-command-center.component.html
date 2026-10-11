@@ -49,10 +49,10 @@
                   [disabled]="!aiKpiFocusAvailable||aiKpiFocusBusy"
                   [attr.aria-busy]="aiKpiFocusBusy"
                   [title]="aiKpiFocusAvailable
-                    ?copy('Explicit paid Airia request. Only aggregated POC counts are sent.',
-                          'طلب Airia مدفوع بموافقة صريحة. تُرسل الأرقام المجمعة التجريبية فقط.')
-                    :copy('Dedicated KPI AI pipeline is not configured.',
-                          'مسار AI المخصص للمؤشرات غير مهيأ.')">
+                    ?copy('Uses existing A02 risk signals then A01 situation assessment (up to TWO paid calls). Same request/response fields, with dashboard context.',
+                          'يستخدم A02 لمؤشرات المخاطر ثم A01 لتقييم الموقف (قد ينتج استدعاءان مدفوعان). نفس حقول الطلب والاستجابة مع سياق لوحة القيادة.')
+                    :copy('A01/A02 dashboard review is disabled; opt in from server configuration.',
+                          'مراجعة المؤشرات بواسطة A01/A02 معطلة؛ يلزم تفعيلها من إعدادات الخادم.')">
             ✦ {{aiKpiFocusBusy
               ?copy('Analyzing priority…','جارٍ تحديد الأولوية…')
               :copy('Ask AI: What needs focus?','اسأل AI: ما الأهم الآن؟')}}
@@ -84,7 +84,10 @@
           <strong>{{copy('AI-prioritized attention · officer review only',
                           'المؤشر الأهم وفق AI · للمراجعة البشرية فقط')}}</strong>
           <p>{{lang.isArabic?aiKpiFocus.selection.reasonAr:aiKpiFocus.selection.reasonEn}}</p>
-          <small>{{copy('Dedicated Airia KPI analysis','تحليل مؤشرات Airia المخصص')}}
+          <small>{{copy('Anchored to saved vessel assessment','استنادًا إلى تقييم السفينة المحفوظ')}}:
+            IMO {{aiKpiFocus.sourceImo}} · {{copy('A01 cited evidence','أدلة A01')}}:
+            {{aiKpiFocus.selection.evidenceIds.length}}</small>
+          <small>{{copy('Existing Airia A02 + A01 maritime agents','الوكيلان البحريان الحاليان Airia A02 + A01')}}
             · {{aiKpiFocus.analyzedAt|date:'medium'}}
             · {{aiKpiFocus.reused?copy('reused identical snapshot','أعيد استخدام نفس البيانات'):
                                     copy('new analysis','تحليل جديد')}}</small>
@@ -108,8 +111,8 @@
         <span *ngIf="incidentFeedLastUpdatedAt">{{copy('Incident feed checked','مراجعة مصدر الحوادث')}}:
           {{incidentFeedLastUpdatedAt|date:'mediumTime'}}</span>
         <span *ngIf="!aiKpiFocusAvailable && aiKpiFocusStatusLoaded" class="nmc-kpi-config-warning">
-          {{copy('AI KPI focus requires a dedicated pipeline; no automatic call.',
-                 'تمييز AI يتطلب مساراً مخصصاً؛ لا توجد استدعاءات تلقائية.')}}
+          {{copy('AI KPI focus uses existing A02/A01 agents; enable explicit opt-in on the server.',
+                 'أولوية المؤشرات تستخدم الوكيلين A02/A01 الحاليين؛ فعّل الخيار صراحةً في الخادم.')}}
         </span>
         <span *ngIf="incidentSourceError" class="nmc-kpi-config-warning">
           {{copy('Incident source unavailable — count unknown.',
