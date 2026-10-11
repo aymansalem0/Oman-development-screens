@@ -711,8 +711,8 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
       return;
     }
     const confirmed=window.confirm(this.copy(
-      'Send only these eight aggregated synthetic dashboard counts to the dedicated Airia KPI-priority pipeline? This may incur one paid AI request. It will highlight ONE KPI for human review, not change vessel risk, incidents, cases or tasks.',
-      'هل تريد إرسال القيم المجمعة للمؤشرات الثمانية فقط إلى Airia لتحديد المؤشر الأهم؟ قد يستهلك استدعاء AI مدفوعاً. سيتم تمييز مؤشر واحد للمراجعة البشرية دون تغيير المخاطر أو الحوادث أو الحالات أو المهام.'
+      'Send these eight synthetic aggregate counts to the EXISTING A02 and A01 maritime-risk agents using the saved assessment of one representative vessel? This may incur TWO paid Airia requests (A02 then A01). The original response schemas remain unchanged. A KPI is highlighted only if A01 explicitly identifies one inside whyItMatters, with cited vessel evidence. Human review only; no risk, cases, alerts, tasks or incident data will change.',
+      'هل تريد إرسال المؤشرات الثمانية التجريبية إلى الوكيلين البحريين الحاليين A02 ثم A01 اعتماداً على تقييم سفينة محفوظ؟ قد يستهلك ذلك استدعاءين مدفوعين من Airia. لن تتغير عقود الاستجابة؛ يميز النظام مؤشراً واحداً فقط إذا حدده A01 صراحةً داخل whyItMatters مع الاستشهاد بأدلة السفينة. النتيجة للمراجعة البشرية دون تغيير المخاطر أو الحالات أو التنبيهات أو المهام أو الحوادث.'
     ));
     if(!confirmed)return;
     this.aiKpiFocusBusy=true;this.aiKpiFocusError='';
