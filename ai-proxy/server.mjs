@@ -453,17 +453,6 @@ const server = createServer(async (req, res) => {
   const incidentReviewMatch=/^\/api\/ai\/nmc\/incidents\/(INC-[A-Za-z0-9-]{3,70})\/review$/.exec(path);
   if(incidentReviewMatch&&req.method==='POST')
     return respond(res,409,{error:'INCIDENT_ACTIONS_ONLY_IN_CASE_MANAGEMENT'});
-  if(false&&incidentReviewMatch&&req.method==='POST'){
-    try{
-      dashboards.assertRole(req,'EDITOR');
-      const body=await requestJson(req,4096);
-      return respond(res,200,await incidentFeed.review(incidentReviewMatch[1],body));
-    }catch(error){
-      if(error instanceof IncidentTriageError||error instanceof DashboardError)
-        return respond(res,error.status,{error:error.code});
-      return respond(res,503,{error:'INCIDENT_REVIEW_UNAVAILABLE'});
-    }
-  }
 
   if (req.method === 'GET' && path === '/api/ai/psc/health') {
     return respond(res, 200, getPscHealth());
