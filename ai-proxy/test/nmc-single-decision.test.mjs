@@ -163,3 +163,55 @@ test('Detention modification queues original AI action, never applies real no-de
     assert.equal(row.tasks.every(t=>t.regulatedEnforcement),true);
   }finally{db.close();}
 });
+
+test('Existing unreviewed A01 case converts explicitly without replacing original actions or saved risk',async()=>{
+  const db=setup();
+  try{
+    let row=await opened(db);
+    const legacy=new NmcCaseWorkspace({
+      mode:'json',file:db.cases.file,alerts:db.alerts,singleDecisionMode:false
+    });
+    row=await legacy.saveActionPlan(row.id,row.version,normalized(row,[
+      'VERIFY_DEFICIENCY_CLOSURE','VERIFY_CERTIFICATE','PRIORITY_INSPECTION'
+    ]));
+    assert.equal(row.operationalDecision,null);
+    const savedActions=JSON.stringify(row.actionPlan.proposedActions);
+    const sourceVersion=row.version;
+    row=await db.cases.initializeOperational(row.id,sourceVersion);
+    assert.equal(row.operationalDecision.code,'VERIFY_DEFICIENCY_CLOSURE');
+    assert.equal(JSON.stringify(row.actionPlan.proposedActions),savedActions);
+    assert.equal(row.sourceScore,60);
+    assert.equal(row.sourceLevel,'Watch');
+    assert.deepEqual(row.tasks,[]);
+    assert.deepEqual(row.inspectionRequests,[]);
+    assert.equal(row.version,sourceVersion+1);
+    await assert.rejects(()=>db.cases.initializeOperational(
+      row.id,row.version),/CASE_SINGLE_DECISION_EXISTS/);
+  }finally{db.close();}
+});
+
+test('Generic legacy A01 rationale requires a human-authored reason before accepting single decision',async()=>{
+  const db=setup();
+  try{
+    let row=await opened(db);
+    const legacy=new NmcCaseWorkspace({
+      mode:'json',file:db.cases.file,alerts:db.alerts,singleDecisionMode:false
+    });
+    const actions=normalized(row,['PRIORITY_INSPECTION']);
+    actions.proposedActions[0].reason=
+      'A01 recommendation linked to the validated source evidence IDs';
+    row=await legacy.saveActionPlan(row.id,row.version,actions);
+    row=await db.cases.initializeOperational(row.id,row.version);
+    await assert.rejects(()=>db.cases.decideOperational(
+      row.id,row.version,{decision:'ACCEPT'}),/CASE_DECISION_RATIONALE_UNAVAILABLE/);
+    const note='Critical inspection evidence reviewed by officer: on-board verification required';
+    row=await db.cases.decideOperational(row.id,row.version,{
+      decision:'ACCEPT',note
+    });
+    assert.equal(row.tasks[0].reason,note);
+    assert.equal(row.inspectionRequests[0].reason,note);
+    assert.equal(row.operationalDecision.rationaleSource,'OFFICER_VALIDATED_LEGACY_A01');
+    assert.equal(row.operationalDecision.originalA01Proposal.reason,
+      'A01 recommendation linked to the validated source evidence IDs');
+  }finally{db.close();}
+});
