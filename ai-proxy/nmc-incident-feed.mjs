@@ -18,8 +18,8 @@ const INCIDENT_COLUMNS=[
 ];
 const ASSESSMENT_COLUMNS=[
  'Incident_ID','Description_SHA256','Assessment_ID','Assessed_At_UTC',
- 'AI_Provider','AI_Model','AI_Incident_Category','AI_Impact_0_5',
- 'AI_Urgency_0_5','AI_Exposure_0_5','AI_Recurrence_0_5',
+ 'AI_Provider','AI_Model','AI_Incident_Category','Policy_Impact_0_5',
+ 'Policy_Urgency_0_5','Policy_Exposure_0_5','Policy_Recurrence_0_5',
  'Incident_Risk_Score_0_100','Incident_Risk_Band','AI_Proposed_Followup',
  'AI_Reasoning','AI_Confidence_0_1','Missing_Information',
  'Officer_Decision','Officer_Name','Officer_Reviewed_At_UTC',
