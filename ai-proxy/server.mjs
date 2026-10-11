@@ -812,7 +812,7 @@ const server = createServer(async (req, res) => {
           dashboards.assertRole(req,'EDITOR');
           const body=await requestJson(req,4096);
           const item=await cases.decideAction(first,body.version,second,
-            body.decision,body.note||'');
+            body.decision,body.note||'','OPERATOR',body.replacementActionType||null);
           return respond(res,200,{status:'ok',case:item});
         }
         if(action==='inspections'&&second&&third==='schedule'){

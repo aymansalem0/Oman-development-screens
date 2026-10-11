@@ -70,6 +70,12 @@ export class NmcCaseWorkspaceComponent implements OnInit {
   centralError='';
   centralSuccess='';
   actionNotes:Record<string,string>={};
+  replacementActionTypes:Record<string,string>={};
+  readonly humanActionTypes=[
+    'VERIFY_CERTIFICATE','ENHANCED_MONITORING','PRIORITY_INSPECTION',
+    'REVIEW_DEFICIENCY','VERIFY_DEFICIENCY_CLOSURE',
+    'REQUEST_EXTERNAL_VERIFICATION','NO_ACTION'
+  ];
   // Read-only NMC notifications are offered here for explicit case opening.
   caseEligibleAlerts:NmcOperationalAlert[]=[];
   caseUnacknowledgedAlerts=0;
@@ -303,6 +309,20 @@ export class NmcCaseWorkspaceComponent implements OnInit {
     return next.title;
   }
 
+  humanActionLabel(type:string):string{
+    const labels:Record<string,[string,string]>={
+      VERIFY_CERTIFICATE:['Verify certificate','التحقق من الشهادة'],
+      ENHANCED_MONITORING:['Enhanced vessel monitoring','تعزيز مراقبة السفينة'],
+      PRIORITY_INSPECTION:['Priority Smart Inspection referral','إحالة معاينة ذكية ذات أولوية'],
+      REVIEW_DEFICIENCY:['Review open deficiencies','مراجعة الملاحظات المفتوحة'],
+      VERIFY_DEFICIENCY_CLOSURE:['Verify deficiency closure','التحقق من إغلاق الملاحظات'],
+      REQUEST_EXTERNAL_VERIFICATION:['Request external verification','طلب تحقق من جهة خارجية'],
+      NO_ACTION:['No further intervention','عدم اتخاذ إجراء إضافي']
+    };
+    const label=labels[type];
+    return label?this.copy(label[0],label[1]):type.replaceAll('_',' ');
+  }
+
   generateAiActions():void{
     if(!this.centralCase||this.centralBusy||this.centralCase.actionPlan)return;
     if(!window.confirm(this.copy(
@@ -328,15 +348,22 @@ export class NmcCaseWorkspaceComponent implements OnInit {
   decideAiAction(item:NmcAiAction,decision:'ACCEPT'|'REJECT'|'MODIFY'):void{
     if(!this.centralCase||this.centralBusy||item.decision!=='PENDING')return;
     const note=(this.actionNotes[item.actionId]||'').trim();
+    const replacement=decision==='MODIFY'?(this.replacementActionTypes[item.actionId]||''):undefined;
+    if(decision==='MODIFY'&&(!replacement||replacement===item.actionType)){
+      this.centralError=this.copy(
+        'Choose a different, permitted replacement route for Modify.',
+        'لتعديل الإجراء اختر مسارًا بديلًا مختلفًا ومسموحًا.');
+      return;
+    }
     if(decision!=='ACCEPT'&&!note){
       this.centralError=this.copy('Enter a reason for modification or rejection.','ادخل سبب التعديل أو الرفض.');
       return;
     }
     if(!window.confirm(this.copy(
-      'Save this human decision? Accepted actions become central tasks; inspection actions enter the scheduling queue.',
-      'حفظ القرار البشري؟ الإجراءات المقبولة تتحول إلى مهام، والمعاينات إلى قائمة الجدولة.')))return;
+      'Save this review? Accept uses the A01 action. Modify uses your chosen alternative route, never the original action.',
+      'حفظ القرار؟ الاعتماد يستخدم إجراء A01، أما التعديل فيستخدم المسار البديل المختار وليس الإجراء الأصلي.')))return;
     this.centralBusy=true;this.centralError='';
-    this.cases.decideAiAction(this.centralCase,item.actionId,decision,note).subscribe({
+    this.cases.decideAiAction(this.centralCase,item.actionId,decision,note,replacement).subscribe({
       next:res=>{
         this.centralBusy=false;
         if(res.case)this.applyCase(res.case);
@@ -537,8 +564,10 @@ export class NmcCaseWorkspaceComponent implements OnInit {
           actionId:stored.actionId,
           title:stored.title||stored.actionType||stored.id,
           owner:stored.assignedRole,
-          source:this.copy('Airia A01 · approved by an officer',
-            'Airia A01 · معتمدة من الموظف'),
+          source:stored.approvalMode==='MODIFY'
+             ?this.copy('Human-modified A01 action','إجراء A01 معدل ومعتمد بشريًا')
+             :this.copy('Airia A01 · approved by an officer',
+               'Airia A01 · معتمدة من الموظف'),
           priority,
           dueLabel:this.copy('Operational follow-up','متابعة تشغيلية'),
           status:stored.status as TaskStatus,
