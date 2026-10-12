@@ -11,6 +11,11 @@
     </div>
   </div>
 
+  <div class="nav-user-session">
+    <div><strong>{{auth.username||'admin'}}</strong><small>ADMIN · NMC &amp; INSPECTION</small></div>
+    <button type="button" (click)="auth.logout()">
+      {{copy('Sign out','تسجيل الخروج')}}</button>
+  </div>
   <nav [attr.aria-label]="copy('Main maritime navigation', 'القائمة الرئيسية للخدمات البحرية')">
     <section class="nav-section">
       <button class="nav-group" type="button" (click)="toggleMain('nmc')"
