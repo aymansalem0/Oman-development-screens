@@ -32,6 +32,8 @@ export function buildC01Source(dashboard,pscPolicy=null){
         allowedEvidence,reasons:c.reasons||[],rulePriority:c.priority};
     }).sort((a,b)=>a.candidateKey.localeCompare(b.candidateKey));
   const source={schemaVersion:'SI-C01-v1',
+    selectionRiskThreshold:Number.isInteger(dashboard.policy.config?.riskPriorityThreshold)?
+      dashboard.policy.config.riskPriorityThreshold:65,
     policyRevision:dashboard.policy.version,
     riskPolicyRevision:dashboard.riskPolicyRevision,
     pscQuotaPolicyRevision:pscPolicy?.version??null,
@@ -64,7 +66,7 @@ export function validateC01(raw,source){
     // PSC/service candidates or candidates with missing verified risk.
     if(r.recommendation==='SELECT_RECOMMENDED'&&
       (!c.currentRisk||!Number.isFinite(c.currentRisk.score)||
-       !r.evidenceRefs.length||!c.sourceTypes.includes('NMC_CASE')))
+       !r.evidenceRefs.length||!c.sourceTypes.length))
       throw new SiCandidateAgentError('SI_C01_HARD_RULE_OVERRIDE',502);
     seen.add(r.candidateKey);
     return {candidateKey:c.candidateKey,imo:c.imo,regime:c.regime,
@@ -119,6 +121,7 @@ export class SiCandidateAgent{
      requestMeta:{correlationId:'SI-C01-'+randomUUID(),actor:input.actor.trim(),
        language:'en',mode:'ADVISORY_ONLY'},
      snapshotHash:s.snapshotHash,policyRevision:s.policyRevision,
+     selectionRiskThreshold:s.selectionRiskThreshold,
      riskPolicyRevision:s.riskPolicyRevision,
      pscQuotaPolicyRevision:s.pscQuotaPolicyRevision,
      candidates:s.candidates};
