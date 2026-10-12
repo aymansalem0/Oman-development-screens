@@ -113,8 +113,7 @@ interface RuntimeSnapshot {
           <p>{{tr('Publish only after checking agent costs, scheduler vessel limits and the Airia endpoint. The publisher key is not stored in the browser.',
                    'انشر بعد مراجعة تكلفة الوكلاء وحدود السفن المجدولة وعنوان Airia. مفتاح المشرف لا يتم تخزينه في المتصفح.')}}</p>
           <div class="publish-form">
-            <label>{{tr('Publisher name','اسم المشرف')}}<input [(ngModel)]="actor" maxlength="100"
-              [placeholder]="tr('Your name','اسم المستخدم')"/></label>
+
             <label>{{tr('Change reason (min. 8 characters)','سبب التعديل (8 أحرف على الأقل)')}}
               <input [(ngModel)]="reason" maxlength="500"/></label>
           </div>
@@ -228,7 +227,7 @@ export class NmcRuntimeSettingsComponent implements OnInit{
   snapshot:RuntimeSnapshot|null=null;
   draft:Record<string,boolean|number|string>={};
   groups=['agents','scheduler','alerts','connectivity'];
-  actor='';reason='';error='';success='';loading=false;saving=false;
+  actor='admin';reason='';error='';success='';loading=false;saving=false;
   constructor(private readonly http:HttpClient,public lang:LanguageService){}
   tr(en:string,ar:string){return this.lang.pick(en,ar);}
   ngOnInit(){this.load();}
