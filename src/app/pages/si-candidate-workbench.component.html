@@ -56,7 +56,9 @@
           {{plan?.agentRunId?copy('Re-run AI Selection & Priority','إعادة حساب اختيار وترتيب AI'):
             copy('Generate AI Selection & Priority','إنشاء اختيار وترتيب AI')}}
         </button>
-        <span class="si-zero-ai">{{copy('MOCK: 0 Airia calls','MOCK: بدون اتصال Airia')}}</span>
+        <span class="si-zero-ai">{{plan?.provider==='AIRIA'?
+          copy('AIRIA: confirmed call may incur cost','Airia: الطلب المؤكد قد يترتب عليه تكلفة'):
+          copy('MOCK: 0 Airia calls','MOCK: بدون اتصال Airia')}}</span>
       </div>
       <p class="notice error" role="alert" *ngIf="planError">{{planError}}</p>
       <p class="notice success" role="status" *ngIf="planNotice">{{planNotice}}</p>
