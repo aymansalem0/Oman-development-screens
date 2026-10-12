@@ -189,7 +189,7 @@ export class SiPscQuotaSettingsComponent implements OnInit{
     portOverrides:[],mandatoryOutsideQuota:true};
   impact:{status:string;summary:{bucket:string;eligiblePortCalls:number;
     selectionRate:number;targetCount:number;selectedCount:number;overQuota:boolean}[]}|null=null;
-  editorKey='';publisherKey='';reviewer='';reason='';busy=false;error='';success='';
+  editorKey='MOEI_SESSION';publisherKey='MOEI_SESSION';reviewer='admin';reason='';busy=false;error='';success='';
   constructor(private readonly api:SiPscSelectionService,public readonly lang:LanguageService){}
   ngOnInit():void{this.load();}
   copy(en:string,ar:string){return this.lang.pick(en,ar);}
