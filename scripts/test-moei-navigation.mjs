@@ -120,53 +120,52 @@ test('PSC quota settings auto-load published policy; credentials guard changes, 
   assert.match(server,/POST'&&path==='\/api\/si\/v1\/psc-selection\/decision'\)\{\s*dashboards\.assertRole\(req,'PUBLISHER'\)/);
 });
 
-test('all sidebar submenus collapse on first load, even on deep links or refresh',()=>{
-  assert.match(sidebarMenu,/main:MainMaritimeGroup\\|null=null/);
-  assert.match(sidebarMenu,/settings:SettingsMaritimeGroup\\|null=null/);
-  assert.match(sidebarMenu,/dashboard:MaritimeDashboardGroup\\|null=null/);
-  assert.match(navTs,/NmcSidebarMenuStateService/);
-  assert.doesNotMatch(navTs,/this\\.expandSelectedDashboard\\(/);
-  assert.doesNotMatch(navTs,/this\\.smartInspectionExpanded\\s*=\\s*true/);
-  assert.doesNotMatch(navTs,/this\\.settingsExpanded\\s*=\\s*true/);
-  assert.doesNotMatch(sidebarMenu,/localStorage|sessionStorage|fetch\\(/);
+test('all sidebar submenus collapse initially, even on bookmarks or refresh',()=>{
+  for(const initialization of [
+    "main:MainMaritimeGroup|null=null",
+    "settings:SettingsMaritimeGroup|null=null",
+    "dashboard:MaritimeDashboardGroup|null=null"
+  ])assert.ok(sidebarMenu.includes(initialization),initialization);
+  assert.ok(navTs.includes('NmcSidebarMenuStateService'));
+  for(const bad of [
+    'expandSelectedDashboard','this.smartInspectionExpanded = true',
+    'this.settingsExpanded = true'
+  ])assert.ok(!navTs.includes(bad),'Unexpected route-driven expansion: '+bad);
+  for(const bad of ['localStorage','sessionStorage','fetch('])
+    assert.ok(!sidebarMenu.includes(bad),'Menu state must not be persisted: '+bad);
 });
 
-test('only clicked main menu expands: NMC, Smart Inspection and Settings are exclusive',()=>{
-  for(const section of ['nmc','smart','settings']){
-    assert.ok(nav.includes("toggleMain('"+section+"')"),
-      'Missing explicit click toggle on '+section);
-  }
-  assert.match(sidebarMenu,/toggleMain\\(group:MainMaritimeGroup\\):void/);
-  assert.match(sidebarMenu,/if\\(this\\.main===group\\)\\{/);
-  assert.match(sidebarMenu,/this\\.main=null/);
-  assert.match(sidebarMenu,/this\\.main=group/);
+test('NMC, Smart Inspection, Settings: one main submenu open per explicit click',()=>{
+  for(const area of ['nmc','smart','settings'])
+    assert.ok(nav.includes("toggleMain('"+area+"')"));
   for(const expanded of ['nmcExpanded','smartInspectionExpanded','settingsExpanded']){
-    assert.match(nav,new RegExp('\\[attr\\.aria-expanded\\]="'+expanded+'"'));
-    assert.match(nav,new RegExp('\\[hidden\\]="!'+expanded+'"'));
+    assert.ok(nav.includes('[attr.aria-expanded]="'+expanded+'"'));
+    assert.ok(nav.includes('[hidden]="!'+expanded+'"'));
   }
+  assert.ok(sidebarMenu.includes('toggleMain(group:MainMaritimeGroup):void'));
+  assert.ok(sidebarMenu.includes('if(this.main===group){'));
+  assert.ok(sidebarMenu.includes('this.main=null'));
+  assert.ok(sidebarMenu.includes('this.main=group'));
 });
 
-test('Settings NMC and Inspection subgroups are mutually exclusive and clicked only',()=>{
-  assert.match(nav,/toggleSettings\\('nmc'\\)/);
-  assert.match(nav,/toggleSettings\\('inspection'\\)/);
-  assert.match(sidebarMenu,/this\\.settings=group/);
-  assert.match(sidebarMenu,/this\\.settings=null/);
-  assert.match(nav,/\\[hidden\\]="!nmcSettingsExpanded"/);
-  assert.match(nav,/\\[hidden\\]="!inspectionSettingsExpanded"/);
-  for(const item of ['nmc','smart','settings']){
-    assert.ok(nav.includes("toggleDashboard('"+item+"')"),
-       'Missing dashboard subgroup click for '+item);
-  }
-  assert.match(navTs,/toggleDashboard\\(group:MaritimeDashboardGroup\\)/);
+test('nested Settings sections and published Dashboards expand by user click only',()=>{
+  for(const area of ['nmc','inspection'])
+    assert.ok(nav.includes("toggleSettings('"+area+"')"));
+  for(const area of ['nmc','smart','settings'])
+    assert.ok(nav.includes("toggleDashboard('"+area+"')"));
+  assert.ok(sidebarMenu.includes('this.settings=group'));
+  assert.ok(sidebarMenu.includes('this.settings=null'));
+  assert.ok(sidebarMenu.includes("if(this.main!==group)return"));
+  assert.ok(nav.includes('[hidden]="!nmcSettingsExpanded"'));
+  assert.ok(nav.includes('[hidden]="!inspectionSettingsExpanded"'));
 });
 
-test('sidebar open state persists through SPA route navigation but no auto-expand',()=>{
-  assert.match(sidebarMenu,/@Injectable\\(\\{providedIn:'root'\\}\\)/);
-  assert.match(navTs,/get nmcExpanded\\(\\):boolean\\{return this\\.menuState\\.main==='nmc'/);
-  assert.match(navTs,/get smartInspectionExpanded\\(\\):boolean\\{return this\\.menuState\\.main==='smart'/);
-  assert.match(navTs,/get settingsExpanded\\(\\):boolean\\{return this\\.menuState\\.main==='settings'/);
-  // Routing still computes active links but never expands collapsed menu.
-  assert.match(navTs,/private updateRoute\\(url: string\\): void/);
-  assert.match(navTs,/this\\.currentPath = url/);
-  assert.doesNotMatch(navTs,/expandSelectedDashboard/);
+test('opened sidebar survives Angular route changes without reopening on deep links',()=>{
+  assert.ok(sidebarMenu.includes("@Injectable({providedIn:'root'})"));
+  assert.ok(navTs.includes("return this.menuState.main==='nmc'"));
+  assert.ok(navTs.includes("return this.menuState.main==='smart'"));
+  assert.ok(navTs.includes("return this.menuState.main==='settings'"));
+  assert.ok(navTs.includes('private updateRoute(url: string): void'));
+  assert.ok(navTs.includes('this.currentPath = url'));
+  assert.ok(!navTs.includes('expandSelectedDashboard'));
 });
