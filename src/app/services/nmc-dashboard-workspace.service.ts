@@ -96,25 +96,12 @@ export class NmcDashboardWorkspaceService {
     return new HttpHeaders({'X-NMC-DASHBOARD-KEY':key});
   }
 
-  private requireKey(kind:'editor'|'publisher'):string{
-    const prior=kind==='editor'?this.editorKey:this.publisherKey;
-    if(prior)return prior;
-    const value=window.prompt(
-      kind==='editor'
-        ?'Enter the authorized dashboard editor access key (held in this tab only).'
-        :'Enter the authorized dashboard publishing access key (held in this tab only).'
-    );
-    if(!value?.trim())throw new Error('ACCESS_KEY_REQUIRED');
-    if(kind==='editor')this.editorKey=value.trim();
-    else this.publisherKey=value.trim();
-    return value.trim();
+  private requireKey(_kind:'editor'|'publisher'):string{
+    // Central POC Admin HttpOnly session is checked by backend.
+    // No in-page key dialogs; interceptor strips this non-secret placeholder.
+    return 'MOEI_SESSION';
   }
-
-  private catchCredentialFailure(error:unknown,kind:'editor'|'publisher'):Observable<never>{
-    if(error instanceof HttpErrorResponse && error.status===403){
-      if(kind==='editor')this.editorKey='';
-      else this.publisherKey='';
-    }
+  private catchCredentialFailure(error:unknown,_kind:'editor'|'publisher'):Observable<never>{
     return throwError(()=>error);
   }
 
