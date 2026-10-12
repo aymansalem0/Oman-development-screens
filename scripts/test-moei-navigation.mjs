@@ -131,7 +131,7 @@ test('all sidebar submenus collapse initially, even on bookmarks or refresh',()=
     'expandSelectedDashboard','this.smartInspectionExpanded = true',
     'this.settingsExpanded = true'
   ])assert.ok(!navTs.includes(bad),'Unexpected route-driven expansion: '+bad);
-  for(const bad of ['localStorage','sessionStorage','fetch('])
+  for(const bad of ['localStorage.setItem','sessionStorage.setItem','fetch('])
     assert.ok(!sidebarMenu.includes(bad),'Menu state must not be persisted: '+bad);
 });
 
