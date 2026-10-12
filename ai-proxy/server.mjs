@@ -195,7 +195,7 @@ const siSourceImports=new SiSourceExcelImport({targeting:siTargeting});
 const siPscSelection=new SiPscSelection({targeting:siTargeting,mode:dbMode,oracleRepository:repository});
 siTargeting.pscSelection=siPscSelection;
 const siPriority=new SiAiPrioritization({
-  targeting:siTargeting,mode:dbMode,oracleRepository:repository,
+  targeting:siTargeting,mode:dbMode,oracleRepository:repository,provider:siAiProvider,
   executeAgent:async input=>siAiProvider==='mock'?mockSiP01(input):fleetAgentCall('p01',input),
   enabled:siAiProvider==='mock'||(
     runtime.get('SI_P01_ENABLED')&&Boolean(apiKey)&&Boolean(pipelines.p01))
@@ -205,7 +205,7 @@ const siCandidateAgent=new SiCandidateAgent({
   executeAgent:async input=>siAiProvider==='mock'?mockSiC01(input):fleetAgentCall('c01',input)
 });
 const siPreparation=new SiInspectionPreparation({mode:dbMode,oracleRepository:repository,
-  targeting:siTargeting,riskPolicy,
+  targeting:siTargeting,riskPolicy,provider:siAiProvider,
   approvedDocuments:async imo=>documents.ready?documents.approvedFor(imo):[],
   bundles:siTargeting.bundles,
   executeA04:async input=>siAiProvider==='mock'?mockSiA04(input):fleetAgentCall('a04',input),
