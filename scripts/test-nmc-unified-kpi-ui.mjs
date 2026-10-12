@@ -61,3 +61,32 @@ test('KPI cards use compact desktop height without hiding mobile AI focus',()=>{
   assert.match(css,/\.nmc-unified-kpi-card\.nmc-ai-selected/);
   assert.match(css,/@media\(max-width:600px\)/);
 });
+
+test('Reset Dashboard restores original view without AI calls or deleting maritime records',()=>{
+  assert.match(html,/class="nmc-kpi-reset"/);
+  assert.match(html,/\(click\)="resetDashboardView\(\)"/);
+  assert.match(html,/\[disabled\]="aiKpiFocusBusy"/);
+  assert.match(html,/copy\('Reset Dashboard','إعادة ضبط اللوحة'\)/);
+  assert.match(html,/\*ngIf="dashboardResetNotice"/);
+  const method=code.split('  resetDashboardView():void{')[1]?.split('  resetMapView(): void {')[0];
+  assert.ok(method,'Dashboard reset implementation not found');
+  for(const statement of [
+    'if(this.aiKpiFocusBusy)return;',
+    'this.aiKpiFocus=null;',
+    "this.aiKpiFocusError='';",
+    'this.selectedVessel=undefined;',
+    'this.lastInteractiveVesselId=undefined;',
+    'this.expandedIncidentImo=null;',
+    'this.feedLive=true;',
+    'this.resetMapView();'
+  ])assert.ok(method.includes(statement),'Missing reset step: '+statement);
+  assert.doesNotMatch(method,/\.aiKpi\.run\(|executeAgent\(|\.post\(|\.delete\(|\.put\(|fetch\(/);
+  const mapMethod=code.split('  resetMapView(): void {')[1]?.split('  private resetMapBounds():void{')[0];
+  assert.ok(mapMethod,'Existing map-reset method missing');
+  for(const state of ["searchTerm=''", "riskFilter='All'","assessmentFilter='All'",
+       "typeFilter='All'","incidentFilter='All'","attentionPage=1"])
+    assert.ok(mapMethod.includes(state),'Map reset omits: '+state);
+  assert.match(mapMethod,/this\.resetMapBounds\(\)/);
+  assert.match(mapMethod,/this\.drawSelectedTrack\(\)/);
+  assert.match(mapMethod,/this\.fetchAgain\(\)/);
+});
