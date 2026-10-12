@@ -62,3 +62,10 @@ test('compact layout keeps existing source, risk and vessel-level status context
  assert.match(html,/v\.sourceEvents\.length/);
  assert.match(html,/v\.currentRisk/);
 });
+
+test('Inspection Candidate & Targeting is the FIRST Smart Inspection menu screen',()=>{
+ const menu=read('src/app/components/nmc-navigation.component.html');
+ const sub=menu.split('id="si-main-submenu"')[1]?.split('</div>')[0]||'';
+ assert.ok(sub.includes('routerLink="/moei/smart-inspection/candidates"'),
+  'Candidate targeting should lead the Smart Inspection submenu');
+});
