@@ -23,8 +23,9 @@ test('login is the ONLY credential entry within NMC and Smart Inspection workben
  assert.match(routes,/canActivate:\[moeiAdminGuard\]/);
  assert.ok(css.includes('.si-unified-table'));
 });
-test('AI planning and official inspection approval remain distinct after central login',()=>{
+test('AI plan edits remain separate from one supervisor whole-plan approval',()=>{
  assert.match(html,/savePlanEdit\(\)/);
- assert.match(html,/decide\('APPROVE'\)/);
+ assert.match(html,/<app-si-bulk-approval-panel/);
+ assert.doesNotMatch(html,/\(click\)="decide\('APPROVE'\)"/);
  assert.match(html,/Officer Reason/);
 });
