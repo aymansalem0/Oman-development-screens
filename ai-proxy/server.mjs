@@ -627,6 +627,11 @@ const server = createServer(async (req, res) => {
   // NMC human-approved referrals dynamically. Only publisher may approve a new case.
   if(path==='/api/si/v1'||path.startsWith('/api/si/v1/')){
     try{
+      // SI-09: source-backed manager view, GET only, Editor role required.
+      if(path==='/api/si/v1/management'&&req.method==='GET'){
+        dashboards.assertRole(req,'EDITOR');
+        return respond(res,200,await siLifecycle.managementSnapshot());
+      }
       // Unified inspection cycle: read-only timeline, explicit human-gated state changes.
       // GET never initiates an AI call or writes a case.
       if(path==='/api/si/v1/lifecycle'&&req.method==='GET'){

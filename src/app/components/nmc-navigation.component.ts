@@ -122,6 +122,9 @@ export class NmcNavigationComponent implements OnInit, OnDestroy {
   get isErpIntegrationSettings(): boolean {
     return this.currentPath === '/moei/smart-inspection/settings/erp';
   }
+  get isInspectionManagement():boolean{
+    return this.currentPath==='/moei/smart-inspection/management';
+  }
   get isInspectionLifecycle():boolean{
     return this.currentPath==='/moei/smart-inspection/lifecycle'||
       this.currentPath.startsWith('/moei/smart-inspection/lifecycle/');
@@ -184,7 +187,7 @@ export class NmcNavigationComponent implements OnInit, OnDestroy {
     }
     // Keep the active screen visible in its section when routing from a
     // bookmarked deep link or from NMC Vessel 360.
-    if (this.isPscTargetingPool || this.isInspectionCandidates || this.isInspectionPreparation ||
+    if (this.isInspectionManagement || this.isPscTargetingPool || this.isInspectionCandidates || this.isInspectionPreparation ||
         this.isInspectionScheduling || this.isInspectionWorkbench) {
       this.smartInspectionExpanded = true;
     }
