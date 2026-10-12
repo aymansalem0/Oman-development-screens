@@ -113,6 +113,33 @@ export interface SiC01Run{
  mutations:false;warning:string;recommendations:SiC01Recommendation[];
 }
 @Injectable({providedIn:'root'})
+export interface SiInspectionPlanRow{
+ imo:string;vesselName:string;flag:string;vesselType:string;
+ sources:string[];regimes:string[];sourceEvents:SiCandidateEvent[];
+ risk:SiCandidate['currentRisk'];
+ pendingWorkflows:number;approvedCases:number;externalScheduled:number;
+ aiRecommended:boolean|null;planSelected:boolean|null;
+ selectionOrigin:'AI_ADVISORY'|'OFFICER_AMENDED'|'NOT_EVALUATED';
+ officerReason:string|null;officerActor:string|null;
+ requestedRank:number|null;modelRank:number|null;effectiveRank:number|null;
+ priorityReason:string|null;selectionReason:string|null;
+ evidenceRefs:string[];dataGaps:string[];confidence:number|null;
+ editable:boolean;locked:boolean;mandatoryReferral:boolean;
+ regimeAdvisories:SiC01Recommendation[];
+}
+export interface SiInspectionPlanState{
+ status:'ok';provider:'MOCK'|'AIRIA';mock:boolean;
+ sourceHash:string;revision:number;generatedAt:string|null;
+ agentRunId:string|null;stale:boolean;externalCallsOnRead:0;
+ aiRecommendedVessels:number|null;selectedForPlan:number|null;
+ approvedCases:number;warning:string;rows:SiInspectionPlanRow[];
+}
+export interface SiInspectionPlanResult{
+ status:'RECALCULATED';provider:'MOCK'|'AIRIA';mock:boolean;
+ agentRunId:string;externalCalls:number;revision:number;sourceHash:string;
+ aiRecommendedVessels:number;selectedForPlan:number;
+ humanApprovalStillRequired:true;rows:SiInspectionPlanRow[];
+}
 export class SiCandidateTargetingService{
   private readonly api='/api/si/v1';
   constructor(private http:HttpClient){}
@@ -135,6 +162,18 @@ export class SiCandidateTargetingService{
   publish(body:{config:SiTargetingPolicyConfig;
     expectedVersion:number;publishedBy:string;reason:string},key:string):Observable<unknown>{
     return this.http.post(this.api+'/rules/publish',body,{headers:this.headers(key)});
+  }
+  inspectionPlan(key:string):Observable<SiInspectionPlanState>{
+    return this.http.get<SiInspectionPlanState>(this.api+'/inspection-plan',
+      {headers:this.headers(key)});
+  }
+  rerankInspectionPlan(key:string,body:{
+    actor:string;expectedSourceHash:string;expectedRevision:number;
+    confirmRun:true;confirmCost:boolean;
+    change?:{imo:string;selected:boolean;requestedRank:number|null;reason:string}
+  }):Observable<SiInspectionPlanResult>{
+    return this.http.post<SiInspectionPlanResult>(
+      this.api+'/inspection-plan/rerank',body,{headers:this.headers(key)});
   }
   candidateAiConfiguration(key:string):Observable<{status:string;provider:'MOCK'|'AIRIA';mock:boolean;agents:string[];externalCallsInMock:number}>{
     return this.http.get<{status:string;provider:'MOCK'|'AIRIA';mock:boolean;agents:string[];externalCallsInMock:number}>(
