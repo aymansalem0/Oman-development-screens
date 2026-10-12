@@ -199,10 +199,17 @@ export class DashboardAiFocus{
     this.enabled=enabled;this.now=now;this.cacheMs=cacheMs;
     this.cache=null;this.inFlight=false;
   }
-  status(){return {configured:this.enabled,
-    agentIds:['A02','A01'],requestContracts:'EXISTING_A02_SIGNALS_AND_A01_SITUATION_ASSESSMENT',
-    dataNature:'SYNTHETIC_POC_ADVISORY_ONLY',automaticAiCalls:false,
-    requiresExplicitOperatorConfirmation:true,potentialAgentCalls:2};}
+  /** Status is a free read-only eligibility check, NOT an AI request. */
+  status(){
+    const candidate=this.enabled&&typeof this.selectVessel==='function'
+      ?this.selectVessel():null;
+    return {configured:this.enabled,
+      assessmentContextReady:Boolean(candidate?.vessel&&candidate?.bundle),
+      sourceImo:candidate?.vessel?.imo||null,
+      agentIds:['A02','A01'],requestContracts:'EXISTING_A02_SIGNALS_AND_A01_SITUATION_ASSESSMENT',
+      dataNature:'SYNTHETIC_POC_ADVISORY_ONLY',automaticAiCalls:false,
+      requiresExplicitOperatorConfirmation:true,potentialAgentCalls:2};
+  }
   async run({metrics,confirmCost}={}){
     if(confirmCost!==true)throw new DashboardFocusError('DASHBOARD_FOCUS_CONFIRM_REQUIRED',400);
     if(!this.enabled||typeof this.executeAgent!=='function'||
