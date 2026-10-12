@@ -93,8 +93,10 @@ requested rank is carried as a separate immutable human amendment with actor,
 reason and timestamp; it must never be misrepresented as a pure model output.
 
 Mock selection uses existing **approved NMC referrals with saved real risk and
-evidence**; the order is deterministic descending saved risk. Others stay
-manual review pending officer choice, not fabricated selection. The backend
+evidence** and other source-backed **PSC/service candidate workflows meeting
+the published targeting risk threshold**, strictly as advisory suggestions.
+Candidates without saved risk or source evidence stay manual review.
+The protected NMC tier ranks first; other selected vessels follow saved risk. The backend
 enforces the protected NMC referral first-tier on every re-rank. Future Airia
 responses must pass this same strict candidate key, evidence and priority
 validation.
