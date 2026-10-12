@@ -8,7 +8,8 @@ export type NmcKpiMetricId=
   'requiresAttention'|'activeAlerts'|'openCases'|'activeIncidents';
 export type NmcKpiValues=Record<NmcKpiMetricId,number|null>;
 export interface NmcAiFocusStatus {
-  status:'ok';configured:boolean;automaticAiCalls:false;
+  status:'ok';configured:boolean;assessmentContextReady:boolean;
+  sourceImo:string|null;automaticAiCalls:false;
   agentIds:['A02','A01'];potentialAgentCalls:2;
   requestContracts:'EXISTING_A02_SIGNALS_AND_A01_SITUATION_ASSESSMENT';
   requiresExplicitOperatorConfirmation:true;
