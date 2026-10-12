@@ -30,7 +30,17 @@ export class SiInspectionPreparationComponent implements OnInit{
   };
   constructor(private route:ActivatedRoute,private api:SiPreparationService,public readonly lang:LanguageService){}
   copy(en:string,ar:string):string{return this.lang.pick(en,ar);}
-  ngOnInit():void{this.id=this.route.snapshot.paramMap.get('caseId')||'';}
+  ngOnInit():void{
+    // GET is read-only and never calls Airia. No extra key prompt after SSO.
+    // Handle navigation between approved cases without displaying stale evidence.
+    this.route.paramMap.subscribe(params=>{
+      this.id=params.get('caseId')||'';
+      this.data=null;this.error='';this.success='';
+      if(this.id)this.load();
+      else this.error=this.copy('No inspection case selected. Open an approved case from the preparation register.',
+        'لم يتم اختيار حالة معاينة. افتح حالة معتمدة من قائمة التحضير.');
+    });
+  }
   get saved(){return this.data?.saved||null;}
   get prepared():boolean{return Boolean(this.saved);}
   get aiDraft():boolean{return this.saved?.status==='DRAFT_REVIEW';}
@@ -52,7 +62,18 @@ export class SiInspectionPreparationComponent implements OnInit{
   }
   private fail(e:unknown):void{
     const err=e as {error?:{error?:string};status?:number};
-    this.error=err?.error?.error||'Unable to complete the request. Check Oracle migration 010 and backend.';
+    const code=err?.error?.error;
+    this.error=code==='SI_MIGRATION_010_REQUIRED'?
+      this.copy('Preparation unavailable: Oracle migration 010 is missing. Contact the database administrator; do not recreate Oracle.',
+        'التحضير غير متاح: ترحيل Oracle رقم 010 غير مطبق. راجع مسؤول قاعدة البيانات دون إعادة إنشائها.'):
+      code==='SI_APPROVED_CASE_REQUIRED'?
+      this.copy('This inspection case is not approved or no longer exists in the saved registry.',
+        'حالة المعاينة غير معتمدة أو غير موجودة في السجل المحفوظ.'):
+      code==='SI_VESSEL_BUNDLE_MISSING'?
+      this.copy('Approved case found, but its source vessel evidence bundle is unavailable.',
+        'الحالة المعتمدة موجودة لكن حزمة أدلة السفينة المصدر غير متاحة.'):
+      this.copy('Unable to load approved case evidence. Please verify the SI preparation API and Oracle migration 010.',
+        'تعذر تحميل أدلة حالة المعاينة. راجع خدمة التحضير وترحيل Oracle رقم 010.');
     this.busy=false;this.loading=false;
     if(err?.status===401)this.error='Your login session expired.';
   }
