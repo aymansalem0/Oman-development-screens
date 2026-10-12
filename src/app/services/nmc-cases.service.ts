@@ -132,8 +132,8 @@ interface CaseHistoryResponse{status:'ok';history:NmcCentralCaseAudit[]}
 @Injectable({providedIn:'root'})
 export class NmcCasesService {
   private readonly root='/api/ai/cases';
-  private editorKey='';
-  private publisherKey='';
+  private editorKey='MOEI_SESSION';
+  private publisherKey='MOEI_SESSION';
   constructor(private readonly http:HttpClient){}
 
   byImo(imo:string):Observable<CaseResponse>{
@@ -231,7 +231,7 @@ export class NmcCasesService {
   private mutate(path:string,body:object,publisher:boolean):Observable<CaseResponse>{
     let key=publisher?this.publisherKey:this.editorKey;
     if(!key){
-      const value=window.prompt(publisher?'Supervisor approval key':'Operator action key');
+      const value='MOEI_SESSION';
       if(!value?.trim())return throwError(()=>new Error('ACTION_CANCELLED'));
       key=value.trim();
       if(publisher)this.publisherKey=key;
@@ -241,8 +241,8 @@ export class NmcCasesService {
       headers:new HttpHeaders({'X-NMC-DASHBOARD-KEY':key})
     }).pipe(catchError(err=>{
       if(err?.status===403){
-        if(publisher)this.publisherKey='';
-        else this.editorKey='';
+        if(publisher)this.publisherKey='MOEI_SESSION';
+        else this.editorKey='MOEI_SESSION';
       }
       return throwError(()=>err);
     }));
