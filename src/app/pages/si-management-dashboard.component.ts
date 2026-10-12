@@ -14,9 +14,9 @@ import {SiManagementService,SiManagementReport,SiManagementCase} from '../servic
  styleUrl:'./si-management-dashboard.component.css'
 })
 export class SiManagementDashboardComponent{
- editorKey='';busy=false;error='';report:SiManagementReport|null=null;
+ editorKey='MOEI_SESSION';busy=false;error='';report:SiManagementReport|null=null;
  search='';stage='ALL';regime='ALL';inspector='ALL';
- constructor(private api:SiManagementService,public lang:LanguageService){}
+ constructor(private api:SiManagementService,public lang:LanguageService){this.load();}
  copy(en:string,ar:string):string{return this.lang.pick(en,ar);}
  load():void{
   if(!this.editorKey.trim()){
