@@ -23,9 +23,7 @@
         <p>{{copy('Editor permission required for Excel Preview, Commit and import history. The key is kept in memory only.',
           'يلزم مفتاح المحرر لمعاينة ملفات Excel واعتماد الاستيراد وعرض السجل. يبقى المفتاح في الذاكرة فقط.')}}</p>
       </div>
-      <label>{{copy('Editor key','مفتاح المحرر')}}
-        <input type="password" [(ngModel)]="editorKey" autocomplete="off"/>
-      </label>
+      
       <button class="primary" type="button" (click)="refresh()" [disabled]="busy||loading">
         {{copy('Load Sources','تحميل المصادر')}}
       </button>
