@@ -145,7 +145,7 @@ export class SiElectronicSchedulingComponent implements OnInit{
     const headers=this.headers(true);if(!headers)return;
     const reason=window.prompt('Reason for scheduling policy change (min 8 chars):')?.trim()||'';
     if(reason.length<8)return;
-    const by=window.prompt('Publisher name / role:')?.trim()||'';
+    const by='admin';
     if(!by)return;
     this.busy=true;this.error='';this.success='';
     this.http.post(this.api+'/scheduling/policy/publish',
