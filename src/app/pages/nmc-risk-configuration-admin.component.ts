@@ -163,8 +163,7 @@ export class NmcRiskConfigurationAdminComponent implements OnInit, OnDestroy {
   }
   saveDraft():void{
     if(!this.canSaveDraft)return;
-    if(!this.editorAccessKey)this.editorAccessKey=window.prompt(
-      'Risk Draft editor key (this browser tab only)')?.trim()||'';
+    if(!this.editorAccessKey)this.editorAccessKey='MOEI_SESSION';
     if(!this.editorAccessKey)return;
     if(!this.draftActorName.trim())
       this.draftActorName='admin';
@@ -408,8 +407,7 @@ export class NmcRiskConfigurationAdminComponent implements OnInit, OnDestroy {
         ' saved AI assessments WITHOUT running agents; keep prior versions, audit and cases?',
       'نشر إصدار مخاطر جديد نشط مركزيًا في Oracle لكل المستخدمين وإعادة حساب '+count+
         ' تقييم AI محفوظ دون استدعاء الوكلاء، مع الاحتفاظ بتاريخ الإصدارات والحالات؟')))return;
-    if(!this.publisherAccessKey)
-      this.publisherAccessKey=window.prompt('Risk Policy supervisor publishing key (this browser tab only)')?.trim()||'';
+    if(!this.publisherAccessKey)this.publisherAccessKey='MOEI_SESSION';
     if(!this.publisherAccessKey)return;
     this.publishing=true;this.publicationError='';this.publishedMessage='';
     this.subscriptions.add(this.riskEngine.publishCentral(this.draft,this.activeRevision,
