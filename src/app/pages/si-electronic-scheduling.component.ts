@@ -50,7 +50,7 @@ export class SiElectronicSchedulingComponent implements OnInit{
   selectedReferralId='';selectedOptionId='';
   portId='JEA';vesselType='CARGO';regime='FOCUSED';durationMinutes=180;
   earliestLocal='';deadlineLocal='';
-  editorKey='';publisherKey='';
+  editorKey='MOEI_SESSION';publisherKey='MOEI_SESSION';
   private readonly api='/api/si';
   constructor(private readonly http:HttpClient,public readonly lang:LanguageService){
     const now=Date.now()+DAY;
@@ -91,7 +91,7 @@ export class SiElectronicSchedulingComponent implements OnInit{
   private key(publisher:boolean):string|null{
     let key=publisher?this.publisherKey:this.editorKey;
     if(!key){
-      key=window.prompt(publisher?'Supervisor / publisher key':'Operator / editor key')?.trim()||'';
+      key='MOEI_SESSION';
       if(!key)return null;
       if(publisher)this.publisherKey=key;else this.editorKey=key;
     }
@@ -102,7 +102,7 @@ export class SiElectronicSchedulingComponent implements OnInit{
   }
   private showError(error:unknown):void{
     const e=error as {error?:{error?:string};status?:number};
-    if(e?.status===403){this.editorKey='';this.publisherKey='';}
+    if(e?.status===401)this.error='Your login session expired.';
     this.error=e?.error?.error||'Operation unavailable. Check backend and access key.';
     this.success='';this.busy=false;
   }
