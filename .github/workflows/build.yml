@@ -67,6 +67,9 @@ jobs:
       - name: Unified SI inspection-plan persistence and priority regressions
         run: node --test ai-proxy/test/si-inspection-plan.test.mjs
 
+      - name: Unified MOEI Admin session security regression
+        run: node --test ai-proxy/test/moei-poc-auth.test.mjs
+
       - name: SI AI MOCK contract regressions (C01/P01/A04)
         run: node --test ai-proxy/test/si-agent-mock.test.mjs
 
