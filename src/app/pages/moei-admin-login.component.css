@@ -1,30 +1,140 @@
 :host{display:block;min-height:100vh}
-.moei-auth-page{min-height:100vh;display:flex;align-items:center;justify-content:center;
- background:radial-gradient(ellipse at 10% 15%,#276f8b 0,transparent 35%),
- linear-gradient(130deg,#102f4a,#0c2341 55%,#064b59);padding:25px;font-family:Inter,Arial,sans-serif}
-.moei-auth-card{background:#fff;width:min(445px,100%);padding:33px 37px;
- border-radius:20px;box-shadow:0 25px 90px #06182e70;color:#17384c}
-.seal{width:51px;height:51px;border-radius:13px;background:#e2f3f0;
- color:#0a776d;display:flex;align-items:center;justify-content:center;font-size:26px;margin-bottom:15px}
-.eyebrow{font-size:10px;letter-spacing:1.5px;font-weight:900;color:#0c8c80;margin:5px 0}
-h1{font-size:24px;line-height:1.3;margin:10px 0;color:#123b52}
-.intro{color:#637c88;font-size:12px;line-height:1.65}
-.role-badge{background:#eaf6f3;border:1px solid #cbebe3;color:#067269;border-radius:8px;
- display:inline-block;padding:7px 11px;font-size:10px;letter-spacing:.4px;font-weight:850;margin:9px 0 16px}
-label{display:block;font-size:11px;font-weight:800;color:#496576;margin:14px 0 6px}
-input{box-sizing:border-box;width:100%;height:43px;border:1px solid #c4dbe3;
- border-radius:8px;padding:9px 12px;font:inherit;font-size:14px;color:#16445c}
-input:focus{outline:2px solid #95d8d0;border-color:#138c7d}
-.submit{border:0;border-radius:9px;background:#078377;color:white;font-size:12px;
- font-weight:850;height:43px;width:100%;margin-top:20px;cursor:pointer}
-.submit:disabled{opacity:.55;cursor:not-allowed}
-.error{padding:10px;background:#fff0ec;border-radius:7px;color:#ad4538;font-size:11px}
-.foot{margin-top:22px;padding-top:15px;border-top:1px solid #ebeff0;display:flex;
- justify-content:space-between;align-items:center;gap:12px;font-size:9px;color:#8aa0ac}
-.foot button{border:0;background:transparent;color:#167c79;cursor:pointer;font-weight:900}
-@media(max-width:560px){.moei-auth-card{padding:25px 22px}h1{font-size:21px}}
-.google-login{display:flex;align-items:center;justify-content:center;gap:14px;font-size:14px}
-.google-g{font-weight:900;font-size:20px;background:#fff;color:#4285f4;
-  display:inline-flex;align-items:center;justify-content:center;
-  border-radius:5px;width:28px;height:28px}
-.setup{font-size:11px;color:#637c88;line-height:1.8;margin-top:14px}
+*{box-sizing:border-box}
+.moei-auth-page{
+  position:relative;isolation:isolate;min-height:100vh;overflow:hidden;
+  font-family:Inter,"Segoe UI",Tahoma,Arial,sans-serif;
+  color:#18374e;background:#06253a
+}
+.moei-auth-scene,.moei-auth-shade{position:absolute;inset:0;pointer-events:none}
+.moei-auth-scene{
+  background-color:#072f48;
+  background-image:url('/branding/moei-login-maritime.avif'),
+    url('/branding/moei-login-maritime.svg');
+  background-size:cover,cover;background-position:center center,center center;
+  background-repeat:no-repeat,no-repeat;transform:scale(1.018);
+  filter:saturate(.95) contrast(1.045)
+}
+.moei-auth-shade{
+  background:linear-gradient(90deg,rgba(1,18,34,.68) 0%,rgba(1,23,39,.48) 47%,rgba(1,19,35,.73) 100%),
+    linear-gradient(0deg,rgba(2,21,34,.76),transparent 34%);
+}
+.moei-auth-layout{
+  position:relative;z-index:1;display:grid;
+  grid-template-columns:minmax(0,1.22fr) minmax(385px,.78fr);
+  gap:clamp(26px,5vw,96px);align-items:center;
+  min-height:100vh;max-width:1670px;
+  margin-inline:auto;padding:clamp(22px,3vw,48px) clamp(24px,5vw,84px)
+}
+.moei-auth-showcase{
+  display:flex;flex-direction:column;justify-content:space-between;align-items:flex-start;
+  align-self:stretch;min-height:min(750px,calc(100vh - 70px));max-width:760px;
+  color:#fff;text-shadow:0 1px 4px rgba(0,0,0,.13)
+}
+.showcase-ministry{margin-bottom:40px}
+.showcase-content{padding:30px 0 25px;max-width:710px}
+.showcase-overline{
+  display:flex;align-items:center;gap:9px;
+  color:#A7EAE0;font-size:11px;letter-spacing:2.1px;font-weight:750
+}
+.showcase-overline-dot{height:7px;width:7px;flex:0 0 auto;
+  border-radius:50%;background:#E2C489;box-shadow:0 0 12px #D7B97B}
+.showcase-brand{display:flex;align-items:center;gap:14px;margin:30px 0 34px}
+.showcase-platform-mark{width:69px;height:69px;flex:0 0 auto;filter:drop-shadow(0 10px 20px #00162480)}
+.showcase-brand-name{display:block;font-weight:900;font-size:25px;letter-spacing:3px}
+.showcase-brand-caption{display:block;color:#C2E3E4;font-size:11px;
+  letter-spacing:2.1px;margin-top:7px;font-weight:650}
+.showcase-content h2{font-size:clamp(34px,4vw,60px);line-height:1.09;
+  letter-spacing:-1.7px;margin:0 0 18px;font-weight:800;max-width:650px}
+.showcase-description{font-size:clamp(14px,1.1vw,17px);line-height:1.92;
+  max-width:620px;color:#D4E6EA;margin:0 0 30px}
+.showcase-capabilities{display:flex;flex-wrap:wrap;gap:9px}
+.showcase-capabilities span{padding:10px 14px;border-radius:999px;
+  background:#0C3545B8;color:#E9FFFF;border:1px solid #7ECCCA61;
+  font-size:11px;font-weight:650;backdrop-filter:blur(12px)}
+.showcase-bottom{display:flex;gap:12px;align-items:center;color:#A6CBCE;
+  font-size:10px;letter-spacing:1.5px;font-weight:700;max-width:640px}
+.showcase-bottom-line{display:block;flex:0 0 26px;height:2px;background:#E3C387}
+.moei-auth-card{
+  justify-self:end;width:min(100%,480px);
+  padding:clamp(25px,2.7vw,43px);
+  background:rgba(255,255,255,.985);color:#133b4e;
+  border:1px solid rgba(255,255,255,.94);
+  border-top:4px solid #C9AA75;border-radius:23px;
+  box-shadow:0 36px 105px rgba(0,10,24,.43),0 1px 0 rgba(255,255,255,.55) inset
+}
+.card-ministry{display:flex;justify-content:center;margin:0 auto 17px;
+  width:min(280px,100%);height:63px}
+.card-rule{height:1px;width:100%;background:linear-gradient(90deg,transparent,#CDD9DC,transparent);
+  margin:17px 0 24px}
+.card-platform-identity{display:flex;align-items:center;gap:13px;margin-bottom:25px}
+.card-platform-mark{height:52px;width:52px;flex:0 0 auto}
+.card-platform-name{font-weight:850;color:#07384E;letter-spacing:1.3px;font-size:17px;display:block}
+.card-platform-subtitle{color:#7A9399;font-size:10px;letter-spacing:.6px;
+  font-weight:750;display:block;margin-top:5px}
+.card-heading{margin:0 0 16px}
+.eyebrow{color:#128B82;font-size:10px;letter-spacing:1.25px;font-weight:850;margin:0 0 10px}
+h1{font-size:clamp(25px,2.4vw,32px);line-height:1.23;margin:0 0 10px;
+  letter-spacing:-.7px;color:#102E43}
+.intro{font-size:13px;line-height:1.75;color:#6B818B;margin:0}
+.role-badge{display:inline-flex;align-items:center;gap:9px;background:#EFF8F4;
+  color:#226C60;border:1px solid #D2EBDF;border-radius:100px;
+  padding:8px 12px;font-size:10.5px;font-weight:750;margin:12px 0 10px}
+.role-badge-dot{display:block;width:7px;height:7px;
+  border-radius:50%;background:#28A785;box-shadow:0 0 0 3px #27B18B24}
+.google-login{
+  display:flex;align-items:center;justify-content:center;gap:12px;
+  width:100%;min-height:54px;margin-top:22px;padding:10px 15px;
+  border-radius:10px;background:#087F79;color:#fff;border:1px solid #087F79;
+  font-size:14px;font-weight:800;cursor:pointer;transition:background .18s,transform .18s;
+  box-shadow:0 8px 16px #087F7924
+}
+.google-login:not(:disabled):hover{background:#056660;transform:translateY(-1px)}
+.google-login:disabled,.submit:disabled{opacity:.54;cursor:not-allowed}
+.google-g{display:flex;align-items:center;justify-content:center;
+  width:34px;height:34px;background:#fff;border-radius:8px;flex:0 0 auto}
+.login-arrow{margin-inline-start:auto;font-size:20px;font-weight:400;color:#D3E7E3}
+.security-note{display:flex;align-items:start;gap:8px;margin:18px 0 10px;
+  color:#7B9196;font-size:10.5px;line-height:1.8}
+.security-note>span{font-size:14px;color:#199B8B}
+.setup{font-size:11px;color:#A85B31;background:#FFF8EE;border-radius:8px;
+  padding:10px 12px;line-height:1.75;margin-top:12px}
+label{display:block;font-size:12px;font-weight:800;color:#486978;margin:14px 0 6px}
+input{width:100%;height:44px;padding:10px 13px;font:inherit;border-radius:9px;
+  border:1px solid #BED2DA;color:#153A4D;background:#fff}
+input:focus{outline:2px solid #85D5CE;border-color:#11928A}
+.submit:not(.google-login){border:0;border-radius:9px;background:#0A8177;color:#fff;
+  font-size:13px;font-weight:850;min-height:45px;width:100%;margin-top:21px;cursor:pointer}
+.error{padding:10px 13px;background:#FFF0EC;border-radius:8px;color:#AF4938;
+  font-size:12px;line-height:1.6;margin:12px 0}
+.foot{margin-top:29px;padding-top:17px;border-top:1px solid #E5ECEF;
+  display:flex;justify-content:space-between;align-items:center;gap:12px;
+  color:#899AA2;font-size:10px;line-height:1.5}
+.foot button{border:0;background:transparent;color:#0D8379;cursor:pointer;
+  font-size:11px;font-weight:850}
+.moei-auth-page[dir="rtl"] .showcase-overline,
+.moei-auth-page[dir="rtl"] .showcase-brand-name,
+.moei-auth-page[dir="rtl"] .showcase-brand-caption{letter-spacing:0}
+.moei-auth-page[dir="rtl"] .showcase-content h2{letter-spacing:0}
+.moei-auth-page[dir="rtl"] .card-platform-name{letter-spacing:.2px}
+@media(max-width:1100px){
+  .moei-auth-layout{grid-template-columns:minmax(0,1fr) minmax(360px,.9fr);gap:26px;padding:30px}
+  .showcase-content h2{font-size:38px}
+  .showcase-brand-name{font-size:22px}
+  .showcase-description{font-size:13px}
+}
+@media(max-width:790px){
+  .moei-auth-layout{display:flex;justify-content:center;min-height:100vh;padding:24px}
+  .moei-auth-showcase{display:none}
+  .moei-auth-card{justify-self:auto;width:min(100%,480px)}
+  .moei-auth-shade{background:rgba(2,22,36,.67)}
+}
+@media(max-width:490px){
+  .moei-auth-layout{padding:14px;align-items:center}
+  .moei-auth-card{padding:25px 21px;border-radius:16px}
+  .card-platform-name{font-size:15px}
+  .foot{font-size:9px}
+}
+@media(prefers-reduced-motion:reduce){
+  .google-login{transition:none}
+  .google-login:hover{transform:none}
+}
