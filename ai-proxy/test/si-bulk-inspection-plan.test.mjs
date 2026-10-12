@@ -65,7 +65,7 @@ const mk=({multiple=false,risk=true}={})=>{
   run:async()=>{agentCalls.push({agent:'P01'});return {status:'SUCCEEDED'};}};
  const si=new SiBulkInspectionPlan({inspectionPlan:plan,targeting,preparation,priority,
   file:join(dir,'batches.json'),submitTask:fn=>queue.push(fn)});
- const settings={reason:'Reviewed saved NMC evidence and approved plan as a batch.',
+ const settings={actor:'test.supervisor',reason:'Reviewed saved NMC evidence and approved plan as a batch.',
   expectedSourceHash:'source-one',expectedRevision:3,
   expectedAgentRunId:'C01-RUN-101',confirmApproval:true,
   generateA04:true,runP01:true,confirmAiCost:false,
