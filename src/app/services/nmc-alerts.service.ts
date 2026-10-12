@@ -94,8 +94,8 @@ export class NmcAlertsService {
       {headers:new HttpHeaders({'X-NMC-DASHBOARD-KEY':key})}
     ).pipe(catchError(err=>{
       if(err?.status===403||err?.status===503){
-        if(isSupervisor)this.supervisorKey='';
-        else this.operatorKey='';
+        if(isSupervisor)this.supervisorKey='MOEI_SESSION';
+        else this.operatorKey='MOEI_SESSION';
       }
       return throwError(()=>err);
     }));
