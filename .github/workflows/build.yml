@@ -34,6 +34,10 @@ jobs:
         run: node --test scripts/test-nmc-command-incident-filters.mjs
       - name: Vessel 360 A03 retirement and tabs regression
         run: node --test scripts/test-nmc-v360-a03-retired-regression.mjs
+      - name: Unified operations dashboard AI-focus regression
+        run: |
+          node --test scripts/test-nmc-unified-kpi-ui.mjs
+          node --test ai-proxy/test/nmc-dashboard-focus.test.mjs
       - name: Build
         run: npm run build
 

@@ -1270,3 +1270,124 @@ a.big-risk{display:flex;flex-direction:column;align-items:center;justify-content
   .incident-map-legend small{font-size:7px;}
   .attention-incident-details{padding:12px;}
 }
+
+
+/* Executive NMC pulse: ONE outer boundary, eight non-duplicated KPIs.
+   The purple focus is granted ONLY by a verified, on-demand Airia response. */
+.nmc-unified-kpi-board{
+  background:#fff;
+  border:1px solid #dce8f1;
+  border-radius:19px;
+  margin:0 0 16px;
+  overflow:hidden;
+  box-shadow:0 12px 28px rgba(28,66,92,.055);
+}
+.nmc-kpi-board-head{
+  display:flex;align-items:center;justify-content:space-between;
+  gap:12px;flex-wrap:wrap;
+  padding:13px 18px 11px;
+  background:linear-gradient(112deg,#f5fbfb 0%,#fff 73%);
+  border-bottom:1px solid #eaf0f4;
+}
+.nmc-kpi-heading{flex:1 1 390px;min-width:0}
+.nmc-kpi-eyebrow{font-size:9px;letter-spacing:.75px;font-weight:850;color:#087d76}
+.nmc-kpi-heading h3{font-size:18px;line-height:1.25;margin:3px 0;color:#194660}
+.nmc-kpi-heading p{margin:0;color:#698496;font-size:10px;line-height:1.45;max-width:780px}
+.nmc-kpi-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.nmc-kpi-incidents-link,.nmc-kpi-ask-ai{
+  min-height:36px;border-radius:9px;padding:8px 11px;
+  font-weight:800;font-size:10.5px;text-decoration:none;
+  display:inline-flex;align-items:center;justify-content:center;
+  gap:6px;transition:background .15s,border-color .15s;
+}
+.nmc-kpi-incidents-link{background:#f3fafa;border:1px solid #cce5df;color:#096d67}
+.nmc-kpi-reset{
+  display:inline-flex;align-items:center;justify-content:center;gap:6px;
+  min-height:36px;padding:8px 11px;border-radius:9px;
+  background:#fff;border:1px solid #bfcfda;color:#3f6579;
+  font-size:10.5px;font-weight:800;cursor:pointer;
+}
+.nmc-kpi-reset span{font-size:17px;line-height:1;font-weight:750}
+.nmc-kpi-reset:hover:not(:disabled){background:#edf5f7;border-color:#7da4b2;color:#205c69}
+.nmc-kpi-reset:disabled{opacity:.48;cursor:not-allowed}
+.nmc-kpi-reset:focus-visible{outline:2px solid #1a88bf;outline-offset:3px}
+.nmc-kpi-reset-notice{
+  margin:8px 16px 0;padding:8px 10px;border:1px solid #cae9d9;
+  border-radius:8px;background:#f1fcf6;color:#14633f;
+  font-size:10px;line-height:1.45;
+}
+.nmc-kpi-ask-ai{border:1px solid #5542ac;background:linear-gradient(125deg,#6350c2,#4c399d);color:#fff;cursor:pointer}
+.nmc-kpi-ask-ai:hover:not(:disabled){background:#4e3b9e}
+.nmc-kpi-ask-ai:disabled{opacity:.52;cursor:not-allowed}
+.nmc-kpi-incidents-link:focus-visible,.nmc-kpi-ask-ai:focus-visible{outline:2px solid #1a88bf;outline-offset:3px}
+.nmc-unified-kpi-grid{
+  display:grid;grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:9px;padding:11px 16px;
+}
+.nmc-unified-kpi-card{
+  position:relative;min-width:0;min-height:107px;box-sizing:border-box;
+  padding:10px 12px;border-radius:11px;
+  border:1px solid #e3ebf1;background:#fbfdfe;
+  display:flex;flex-direction:column;
+  transition:background .16s,border-color .16s,transform .16s;
+}
+.nmc-kpi-card-upper{display:flex;align-items:center;justify-content:space-between;min-height:24px;margin-bottom:3px}
+.nmc-kpi-card-icon{
+  width:24px;height:24px;display:grid;place-items:center;
+  background:#e8f3f5;color:#247480;border-radius:7px;
+  font-size:13px;font-weight:900;
+}
+.nmc-unified-kpi-card.nmc-kpi-critical .nmc-kpi-card-icon{color:#be5c26;background:#fff0e5}
+.nmc-kpi-card-label{font-size:10px;font-weight:750;color:#637a8b;line-height:1.35;min-height:13px}
+.nmc-kpi-card-value{
+  display:block;margin:2px 0 3px;line-height:1.12;
+  font-size:25px;font-weight:900;letter-spacing:-.4px;
+  color:#193e59;font-variant-numeric:tabular-nums;
+}
+.nmc-kpi-card-hint{font-size:9px;line-height:1.3;color:#8697a5;margin-top:auto}
+.nmc-unified-kpi-card.nmc-ai-selected{
+  border:2px solid #7254c4;background:linear-gradient(140deg,#f4efff,#fff 82%);
+  box-shadow:0 8px 20px rgba(112,83,195,.18);
+  padding:9px 11px;
+}
+.nmc-unified-kpi-card.nmc-ai-selected .nmc-kpi-card-value{color:#5d34b8;font-size:28px}
+.nmc-unified-kpi-card.nmc-ai-selected .nmc-kpi-card-icon{background:#e6dafe;color:#6946c2}
+.nmc-ai-priority-label{border-radius:999px;padding:4px 6px;white-space:nowrap;background:#6b47b8;color:#fff;font-size:8px;font-weight:900}
+.nmc-kpi-ai-result{
+  margin:0 20px 14px;padding:13px 15px;
+  border:1px solid #d9c8ff;border-inline-start:4px solid #7254c4;
+  background:#f9f7ff;border-radius:12px;display:flex;gap:12px;
+}
+.nmc-kpi-ai-result-icon{color:#7254c4;font-size:22px}
+.nmc-kpi-ai-result strong{font-size:12px;color:#5937a6}
+.nmc-kpi-ai-result p{margin:5px 0;font-size:11px;color:#43566b;line-height:1.7}
+.nmc-kpi-ai-result small{font-size:9px;color:#82769d}
+.nmc-kpi-ai-error,.nmc-kpi-ai-stale{margin:0 20px 14px;padding:11px 13px;border-radius:10px;font-size:11px;line-height:1.6}
+.nmc-kpi-ai-error{background:#fff4f1;border:1px solid #f1c4b7;color:#9d4930}
+.nmc-kpi-ai-stale{background:#fffaf0;border:1px solid #f3dfa5;color:#8b681e}
+.nmc-kpi-board-footer{
+  padding:8px 16px 9px;background:#f8fafc;border-top:1px solid #edf1f4;
+  display:flex;flex-wrap:wrap;gap:8px 17px;align-items:center;
+  font-size:9px;line-height:1.6;color:#627c90;
+}
+.nmc-kpi-source-tag{
+  color:#08766c;font-weight:850;border-radius:6px;
+  background:#e9f6f1;padding:4px 6px;
+}
+.nmc-kpi-config-warning{color:#a36d27;font-weight:750}
+@media(max-width:1280px){.nmc-unified-kpi-grid{grid-template-columns:repeat(3,minmax(0,1fr));}}
+@media(max-width:960px){.nmc-unified-kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr));}}
+@media(max-width:600px){
+  .nmc-kpi-board-head{padding:12px}
+  .nmc-kpi-heading h3{font-size:16px}
+  .nmc-kpi-actions{width:100%}
+  .nmc-kpi-incidents-link,.nmc-kpi-ask-ai,.nmc-kpi-reset{flex:1 1 145px}
+  .nmc-unified-kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;padding:9px}
+  .nmc-unified-kpi-card{min-height:112px;padding:9px}
+  .nmc-kpi-card-value{font-size:22px}
+  .nmc-kpi-card-label{font-size:10px}
+  .nmc-unified-kpi-card.nmc-ai-selected{padding:8px}
+  .nmc-unified-kpi-card.nmc-ai-selected .nmc-kpi-card-value{font-size:24px}
+  .nmc-kpi-ai-result{margin:0 10px 10px}
+}
+@media(max-width:375px){.nmc-unified-kpi-grid{grid-template-columns:1fr}}

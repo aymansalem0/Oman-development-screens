@@ -37,7 +37,10 @@ const attention=asFn('get allAttentionVessels():',['__unused__']);
 
 test('Commands remain centered on original summary and attention list, without incident card wall',()=>{
  assert.doesNotMatch(html,/nmc-incidents-operational|nmc-incident-records/);
- assert.match(html,/nmc-incident-ribbon/);
+ // Unified executive panel replaces standalone repeated Incident ribbon.
+ assert.match(html,/class="nmc-unified-kpi-board"/);
+ assert.match(html,/routerLink="\/moei\/nmc\/incidents"/);
+ assert.match(html,/id:'activeIncidents'|\*ngFor="let kpi of dashboardKpis/);
  assert.match(html,/attention-incident-button/);
  assert.match(html,/attention-incident-details/);
  assert.match(html,/incident\.description|report\.description/);

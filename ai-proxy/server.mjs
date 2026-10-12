@@ -3,6 +3,7 @@ import { getPscVessel, getPscHealth } from './psc-reader.mjs';
 import { FleetAssessmentManager } from './fleet-ai.mjs';
 import { FleetAutoScheduler } from './fleet-scheduler.mjs';
 import { DashboardWorkspace, DashboardError } from './dashboard-workspace.mjs';
+import {DashboardAiFocus,DashboardFocusError,selectDashboardFocusVessel} from './nmc-dashboard-focus.mjs';
 import { NmcAlertWorkspace, NmcAlertError } from './alert-workspace.mjs';
 import { NmcCaseWorkspace, NmcCaseError } from './case-workspace.mjs';
 import {evaluateCaseAssessment,historicalApprovalValid} from './case-source-provenance.mjs';
@@ -128,6 +129,15 @@ const fleet=new FleetAssessmentManager({executeAgent:fleetAgentCall,getPscVessel
 guidance=new OperationalGuidance({mode:dbMode,oracleRepository:repository,fleet});
 riskPolicy=new CentralRiskPolicy({mode:dbMode,oracleRepository:repository,fleet});
 const dashboards=new DashboardWorkspace({mode:dbMode,oracleRepository:repository});
+/** Existing A01/A02 business contracts are reused for maritime-risk dashboard
+ * prioritization. The subject remains a real, already-assessed vessel; aggregate
+ * KPI values are supplementary POC context and never a new risk signal. */
+const dashboardAiFocus=new DashboardAiFocus({
+  executeAgent:fleetAgentCall,
+  enabled:Boolean(apiKey)&&agentAllowed('a01')&&agentAllowed('a02')&&
+    process.env.NMC_DASHBOARD_AI_FOCUS_ENABLED==='true',
+  selectVessel:()=>selectDashboardFocusVessel(fleet,incidentBundleMap)
+});
 const alerts=new NmcAlertWorkspace({mode:dbMode,oracleRepository:repository});
 const cases=new NmcCaseWorkspace({mode:dbMode,oracleRepository:repository,alerts});
 // Incident POC reuses exactly the existing A02 requestedSignals and A01
@@ -1052,6 +1062,26 @@ const server = createServer(async (req, res) => {
         return respond(res,error.status,{error:'INVALID_REQUEST'});
       console.error('[nmc-alerts] API_FAILURE');
       return respond(res,503,{error:'ALERT_STORE_UNAVAILABLE'});
+    }
+  }
+
+  // Executive dashboard AI focus is ON-DEMAND ONLY, with an editor key and
+  // explicit possible-cost confirmation. No fleet/Oracle/incident mutations.
+  if(path==='/api/ai/nmc/dashboard-focus/status'){
+    if(req.method!=='GET')return respond(res,405,{error:'METHOD_NOT_ALLOWED'});
+    return respond(res,200,{status:'ok',...dashboardAiFocus.status()});
+  }
+  if(path==='/api/ai/nmc/dashboard-focus/run'){
+    if(req.method!=='POST')return respond(res,405,{error:'METHOD_NOT_ALLOWED'});
+    try{
+      dashboards.assertRole(req,'EDITOR');
+      const input=await requestJson(req,4096);
+      return respond(res,200,await dashboardAiFocus.run(input));
+    }catch(error){
+      if(error instanceof DashboardFocusError||error instanceof DashboardError)
+        return respond(res,error.status,{error:error.code});
+      console.error('[nmc-kpi-focus] AI_REQUEST_FAILED');
+      return respond(res,503,{error:'DASHBOARD_FOCUS_AI_UNAVAILABLE'});
     }
   }
 
