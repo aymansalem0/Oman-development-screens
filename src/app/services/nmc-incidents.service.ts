@@ -51,7 +51,7 @@ export interface IncidentFeedHealth{
 @Injectable({providedIn:'root'})
 export class NmcIncidentsService {
   private readonly base='/api/ai/nmc/incidents';
-  private editorKey='';
+  private editorKey='MOEI_SESSION';
   constructor(private readonly http:HttpClient){}
   list():Observable<IncidentFeedResponse>{
     return this.http.get<IncidentFeedResponse>(this.base);
@@ -61,16 +61,14 @@ export class NmcIncidentsService {
   }
   analyze(id:string,force=false):Observable<{status:'ok';reused:boolean;assessment:IncidentAiAssessment}>{
     if(!this.editorKey){
-      const key=window.prompt('NMC POC operator action key (not your AI API key)');
-      if(!key?.trim())return throwError(()=>new Error('ACTION_CANCELLED'));
-      this.editorKey=key.trim();
+      this.editorKey='MOEI_SESSION';
     }
     return this.http.post<{status:'ok';reused:boolean;assessment:IncidentAiAssessment}>(
       this.base+'/'+encodeURIComponent(id)+'/analyze',
       {confirmCost:true,force},{
         headers:new HttpHeaders({'X-NMC-DASHBOARD-KEY':this.editorKey})
       }).pipe(catchError(e=>{
-        if(e?.status===403)this.editorKey='';
+        if(e?.status===403)this.editorKey='MOEI_SESSION';
         return throwError(()=>e);
       }));
   }
@@ -78,16 +76,14 @@ export class NmcIncidentsService {
     approvedFollowup:IncidentFollowup,note:string,officer:string):
       Observable<{status:'ok';saved:boolean}>{
     if(!this.editorKey){
-      const key=window.prompt('NMC POC operator action key (not your AI API key)');
-      if(!key?.trim())return throwError(()=>new Error('ACTION_CANCELLED'));
-      this.editorKey=key.trim();
+      this.editorKey='MOEI_SESSION';
     }
     return this.http.post<{status:'ok';saved:boolean}>(
       this.base+'/'+encodeURIComponent(id)+'/review',
       {assessmentId,decision,approvedFollowup,note,officer},
       {headers:new HttpHeaders({'X-NMC-DASHBOARD-KEY':this.editorKey})}
     ).pipe(catchError(e=>{
-      if(e?.status===403)this.editorKey='';
+      if(e?.status===403)this.editorKey='MOEI_SESSION';
       return throwError(()=>e);
     }));
   }
