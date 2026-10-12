@@ -28,11 +28,11 @@ import {SiPreparationCaseSummary,SiPreparationService} from '../services/si-prep
         </header>
         <div *ngIf="loading" class="info" role="status">{{copy('Loading centrally saved approved cases…','جارٍ تحميل حالات المعاينة المعتمدة…')}}</div>
         <div *ngIf="error" class="error" role="alert">{{error}}</div>
-        <div *ngIf="!loading&&!preparationAvailable" class="error" role="alert">
+        <div *ngIf="!loading&&!preparationAvailable&&!error" class="error" role="alert">
           {{copy('Approved cases are shown, but the preparation workspace is not ready. Oracle migration 010 must be verified by an administrator; no data was changed.',
             'تظهر الحالات المعتمدة، لكن مساحة التحضير غير جاهزة. يجب التحقق من ترحيل Oracle رقم 010 بواسطة المسؤول؛ لم يتم تغيير أي بيانات.')}}
         </div>
-        <section class="metrics" *ngIf="!loading">
+        <section class="metrics" *ngIf="!loading&&!error">
           <article><span>{{copy('Approved SI Cases','حالات المعاينة المعتمدة')}}</span><strong>{{cases.length}}</strong></article>
           <article><span>{{copy('Risk Recorded at Approval','المخاطر وقت الاعتماد')}}</span><strong>{{casesWithRisk}}</strong></article>
           <article><span>{{copy('Not Yet Prepared','لم يبدأ تحضيرها')}}</span><strong>{{unpreparedCount}}</strong></article>
@@ -70,7 +70,7 @@ import {SiPreparationCaseSummary,SiPreparationService} from '../services/si-prep
               </tbody>
             </table>
           </div>
-          <div class="info" *ngIf="!loading&&!cases.length">
+          <div class="info" *ngIf="!loading&&!cases.length&&!error">
             {{copy('No approved SI cases are saved yet. Open Candidate Center, review a traceable source event and approve an inspection case first.',
               'لا توجد حالات معاينة معتمدة بعد. افتح مركز الترشيح، وراجع حدث المصدر، ثم اعتمد حالة معاينة أولًا.')}}
             <a routerLink="/moei/smart-inspection/candidates">{{copy('Go to Candidate Center','الانتقال إلى مركز الترشيح')}}</a>
