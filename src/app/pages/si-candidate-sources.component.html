@@ -20,8 +20,8 @@
     <section class="access panel">
       <div>
         <h2>{{copy('Source Administrator','مسؤول مصادر البيانات')}}</h2>
-        <p>{{copy('Editor permission required for Excel Preview, Commit and import history. The key is kept in memory only.',
-          'يلزم مفتاح المحرر لمعاينة ملفات Excel واعتماد الاستيراد وعرض السجل. يبقى المفتاح في الذاكرة فقط.')}}</p>
+        <p>{{copy('Authenticated Admin access is required for Excel Preview, Commit and import history. No page-level keys.',
+          'تُستخدم جلسة المدير الموحدة لمعاينة ملفات Excel واعتماد الاستيراد وعرض السجل.')}}</p>
       </div>
       
       <button class="primary" type="button" (click)="refresh()" [disabled]="busy||loading">
