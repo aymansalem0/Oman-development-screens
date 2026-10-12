@@ -46,13 +46,14 @@ test('AI why-selected and why-ranked explanations appear in a single expandable 
  assert.match(html,/planRow\(v\)\?\.evidenceRefs/);
  assert.match(html,/planRow\(v\)\?\.officerReason/);
 });
-test('official supervisor inspection approval remains separate from advisory plan changes',()=>{
- assert.match(html,/decide\('APPROVE'\)/);
+test('one official supervisor approval covers the plan, not each vessel row',()=>{
+ assert.match(html,/<app-si-bulk-approval-panel/);
+ assert.doesNotMatch(html,/\(click\)="decide\('APPROVE'\)"/);
  assert.doesNotMatch(html,/\[\(ngModel\)\]="publisherKey"/);
- assert.match(html,/decide\('APPROVE'\)/);
  assert.match(backend,/const siInspectionPlan=new SiInspectionPlan/);
- assert.match(backend,/siInspectionPlan\.rerank/);
- assert.match(backend,/dashboards\.assertRole\(req,'EDITOR'\)/);
+ assert.match(backend,/const siBulkPlan=new SiBulkInspectionPlan/);
+ assert.match(backend,/siBulkPlan\.approve/);
+ assert.match(backend,/dashboards\.assertRole\(req,'PUBLISHER'\)/);
  assert.match(svc,/rerankInspectionPlan/);
 });
 test('compact layout keeps existing source, risk and vessel-level status context',()=>{
