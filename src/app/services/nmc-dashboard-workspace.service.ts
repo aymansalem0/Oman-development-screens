@@ -17,8 +17,8 @@ interface DashboardRevisionsResponse {status:'ok';revisions:DashboardRevision[];
 @Injectable({providedIn:'root'})
 export class NmcDashboardWorkspaceService {
   private readonly root='/api/ai/dashboards';
-  private editorKey='';
-  private publisherKey='';
+  private editorKey='MOEI_SESSION';
+  private publisherKey='MOEI_SESSION';
 
   constructor(private readonly http:HttpClient){}
 
