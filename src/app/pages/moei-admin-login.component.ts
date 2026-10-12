@@ -1,7 +1,7 @@
 import {CommonModule} from '@angular/common';
-import {Component} from '@angular/core';
+import {Component,OnInit} from '@angular/core';
 import {FormsModule} from '@angular/forms';
-import {Router} from '@angular/router';
+import {ActivatedRoute,Router} from '@angular/router';
 import {LanguageService} from '../services/language.service';
 import {MoeiAuthService} from '../services/moei-auth.service';
 
@@ -10,24 +10,35 @@ import {MoeiAuthService} from '../services/moei-auth.service';
  templateUrl:'./moei-admin-login.component.html',
  styleUrl:'./moei-admin-login.component.css'
 })
-export class MoeiAdminLoginComponent{
+export class MoeiAdminLoginComponent implements OnInit{
  username='admin';password='';busy=false;error='';
- constructor(public lang:LanguageService,private auth:MoeiAuthService,private router:Router){}
+ mode='google';googleConfigured=false;loading=true;
+ constructor(public lang:LanguageService,private auth:MoeiAuthService,
+   private router:Router,private route:ActivatedRoute){}
  copy(en:string,ar:string){return this.lang.pick(en,ar);}
+ ngOnInit():void{
+   const message=this.route.snapshot.queryParamMap.get('error');
+   if(message){
+     this.error=message==='MOEI_GOOGLE_ACCOUNT_NOT_ALLOWED'?
+       this.copy('This Google account is not authorized. Contact an administrator.',
+         'حساب Google هذا غير مصرح له بالدخول. تواصل مع مدير النظام.'):
+       this.copy('Google sign-in was not completed. Please try again.',
+         'لم يكتمل تسجيل الدخول بواسطة Google. حاول مرة أخرى.');
+   }
+   this.auth.providers().subscribe({
+     next:r=>{this.mode=r.mode;this.googleConfigured=r.googleConfigured;this.loading=false;},
+     error:()=>{this.loading=false;this.error=this.copy('Authentication service unavailable.',
+       'خدمة تسجيل الدخول غير متاحة حالياً.');}
+   });
+ }
+ googleSignIn():void{if(!this.busy&&this.googleConfigured)this.auth.googleSignIn();}
  submit():void{
-  if(this.busy||!this.username.trim()||!this.password)return;
+  if(this.busy||this.mode!=='local'||!this.username.trim()||!this.password)return;
   this.busy=true;this.error='';
   this.auth.login(this.username.trim(),this.password).subscribe({
    next:()=>{this.busy=false;this.password='';void this.router.navigate(['/moei/nmc']);},
-   error:e=>{this.busy=false;this.password='';
-    const code=e?.error?.error;
-    this.error=code==='MOEI_ADMIN_LOGIN_NOT_CONFIGURED'?
-      this.copy('Admin password is not configured on the server. Ask the operator to set MOEI_ADMIN_PASSWORD (12+ characters) and restart ai-proxy.',
-        'كلمة مرور المشرف غير مُعدّة على الخادم. اضبط MOEI_ADMIN_PASSWORD ثم أعد تشغيل ai-proxy.'):
-      code==='MOEI_LOGIN_RATE_LIMITED'?
-        this.copy('Too many attempts. Please retry after one minute.',
-          'محاولات كثيرة. يرجى المحاولة بعد دقيقة.'):
-      this.copy('Username or password is incorrect.','اسم المستخدم أو كلمة المرور غير صحيحة.');
+   error:()=>{this.busy=false;this.password='';
+     this.error=this.copy('Username or password is incorrect.','اسم المستخدم أو كلمة المرور غير صحيحة.');
    }
   });
  }
