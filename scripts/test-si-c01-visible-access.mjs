@@ -8,7 +8,7 @@ const css=read('src/app/pages/si-candidate-workbench.component.css');
 const login=read('src/app/pages/moei-admin-login.component.html');
 const routes=read('src/app/app.routes.ts');
 test('unified C01 grid has no Officer or key input; Admin identity is global',()=>{
- assert.match(html,/class="si-unified-queue"/);
+ assert.match(html,/class="si-panel si-unified-queue"/);
  assert.match(html,/si-admin-user/);
  assert.match(html,/Generate AI Selection & Priority/);
  assert.doesNotMatch(html,/\[\(ngModel\)\]="(?:editorKey|publisherKey|reviewer)"/);
