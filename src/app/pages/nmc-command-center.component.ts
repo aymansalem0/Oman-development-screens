@@ -60,6 +60,7 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
    *  an explicit operator request returns a verified selection. */
   aiKpiFocus:NmcAiFocusResult|null=null;
   aiKpiFocusAvailable=false;
+  aiKpiFocusContextReady=false;
   aiKpiFocusStatusLoaded=false;
   aiKpiFocusBusy=false;
   aiKpiFocusError='';
@@ -229,8 +230,15 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
   ngOnInit(): void {
     // Configuration GET is free and never starts Airia.
     this.aiKpi.status().subscribe({
-      next:r=>{this.aiKpiFocusAvailable=r.configured;this.aiKpiFocusStatusLoaded=true;},
-      error:()=>{this.aiKpiFocusAvailable=false;this.aiKpiFocusStatusLoaded=true;}
+      next:r=>{
+        this.aiKpiFocusAvailable=r.configured&&r.assessmentContextReady;
+        this.aiKpiFocusContextReady=r.assessmentContextReady;
+        this.aiKpiFocusStatusLoaded=true;
+      },
+      error:()=>{
+        this.aiKpiFocusAvailable=false;this.aiKpiFocusContextReady=false;
+        this.aiKpiFocusStatusLoaded=true;
+      }
     });
     this.riskSubscription = this.riskEngine.config$.subscribe(() => {
       this.loadFleet();  // Saved fleet results remain the original Oracle snapshot.
