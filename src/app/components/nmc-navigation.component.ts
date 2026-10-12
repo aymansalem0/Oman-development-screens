@@ -187,7 +187,7 @@ export class NmcNavigationComponent implements OnInit, OnDestroy {
     }
     // Keep the active screen visible in its section when routing from a
     // bookmarked deep link or from NMC Vessel 360.
-    if (this.isPscTargetingPool || this.isInspectionCandidates || this.isInspectionPreparation ||
+    if (this.isInspectionManagement || this.isPscTargetingPool || this.isInspectionCandidates || this.isInspectionPreparation ||
         this.isInspectionScheduling || this.isInspectionWorkbench) {
       this.smartInspectionExpanded = true;
     }
