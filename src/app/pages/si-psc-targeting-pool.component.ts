@@ -129,7 +129,7 @@ import {SiPscSelectionService,PscSelectionPool,PscPoolItem,PscQuotaBucket}
 })
 export class SiPscTargetingPoolComponent implements OnInit{
   data:PscSelectionPool|null=null;selected:PscPoolItem|null=null;
-  editorKey='';publisherKey='';periodFilter='';portFilter='';actor='';reason='';
+  editorKey='MOEI_SESSION';publisherKey='MOEI_SESSION';periodFilter='';portFilter='';actor='admin';reason='';
   busy=false;error='';success='';
   constructor(private readonly api:SiPscSelectionService,public readonly lang:LanguageService){}
   ngOnInit():void{}
