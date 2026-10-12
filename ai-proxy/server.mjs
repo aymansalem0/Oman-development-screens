@@ -24,6 +24,7 @@ import { SiPscSelection, SiSelectionError } from './si-psc-selection.mjs';
 import { SiAiPrioritization, SiPriorityError } from './si-ai-prioritization.mjs';
 import {SiCandidateAgent,SiCandidateAgentError} from './si-candidate-agent.mjs';
 import {SiInspectionPlan} from './si-inspection-plan.mjs';
+import {SiBulkInspectionPlan,SiBulkApprovalError} from './si-bulk-inspection-plan.mjs';
 import {mockSiP01,mockSiA04,mockSiC01} from './si-agent-mock.mjs';
 import { SiInspectionPreparation, SiPreparationError } from './si-inspection-preparation.mjs';
 import { SiInspectionLifecycle, SiLifecycleError } from './si-inspection-lifecycle.mjs';
@@ -225,6 +226,10 @@ const siPreparation=new SiInspectionPreparation({mode:dbMode,oracleRepository:re
   bundles:siTargeting.bundles,
   executeA04:async input=>siAiProvider==='mock'?mockSiA04(input):fleetAgentCall('a04',input),
   enabled:siAiProvider==='mock'||(runtime.get('SI_A04_ENABLED')&&Boolean(apiKey))});
+const siBulkPlan=new SiBulkInspectionPlan({
+  inspectionPlan:siInspectionPlan,targeting:siTargeting,
+  preparation:siPreparation,priority:siPriority
+});
 const siLifecycle=new SiInspectionLifecycle({mode:dbMode,oracleRepository:repository,
   targeting:siTargeting,preparation:siPreparation,cases});
 const actionPlanRuns=new Set(); // process-local duplicate A01 invocation guard; version-lock remains authoritative
@@ -752,6 +757,30 @@ const server = createServer(async (req, res) => {
         dashboards.assertRole(req,'EDITOR');
         return respond(res,200,await siInspectionPlan.rerank(await requestJson(req,4096)));
       }
+      // One supervisor action for all plan-selected vessels. GET is read-only;
+      // POST asynchronously creates per-regime cases and deterministic dossiers,
+      // with explicitly authorized optional A04/P01 paid calls.
+      if(path==='/api/si/v1/inspection-batches/preview'&&req.method==='GET'){
+        dashboards.assertRole(req,'EDITOR');
+        return respond(res,200,await siBulkPlan.preview());
+      }
+      if(path==='/api/si/v1/inspection-batches'&&req.method==='GET'){
+        dashboards.assertRole(req,'EDITOR');
+        return respond(res,200,{batches:siBulkPlan.latest()});
+      }
+      if(path==='/api/si/v1/inspection-batches'&&req.method==='POST'){
+        dashboards.assertRole(req,'PUBLISHER');
+        const identity=moeiAuth.session(req);
+        const input=await requestJson(req,8192);
+        return respond(res,202,await siBulkPlan.approve({
+          ...input,actor:identity?.email||identity?.username||input.actor
+        }));
+      }
+      const batchPath=/^\/api\/si\/v1\/inspection-batches\/([a-f0-9-]{36})$/.exec(path);
+      if(batchPath&&req.method==='GET'){
+        dashboards.assertRole(req,'EDITOR');
+        return respond(res,200,siBulkPlan.get(batchPath[1]));
+      }
       // New SI-C01 advisory is NEVER an approval and NEVER changes persisted cases.
       // MOCK branch has zero Airia usage; Airia mode reuses exact payload shape.
       if(path==='/api/si/v1/agents/configuration'&&req.method==='GET'){
@@ -917,7 +946,7 @@ const server = createServer(async (req, res) => {
       }
       return respond(res,405,{error:'METHOD_NOT_ALLOWED'});
     }catch(e){
-      if(e instanceof SiCandidateAgentError||e instanceof SiLifecycleError||e instanceof SiSelectionError||e instanceof SiPriorityError||e instanceof SiPreparationError||e instanceof SiTargetingError||e instanceof DashboardError)
+      if(e instanceof SiBulkApprovalError||e instanceof SiCandidateAgentError||e instanceof SiLifecycleError||e instanceof SiSelectionError||e instanceof SiPriorityError||e instanceof SiPreparationError||e instanceof SiTargetingError||e instanceof DashboardError)
         return respond(res,e.status,{error:e.code});
       if(Number.isInteger(e?.status)&&e.status>=400&&e.status<500)
         return respond(res,e.status,{error:'SI_REQUEST_INVALID'});
