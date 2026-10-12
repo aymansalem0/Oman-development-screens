@@ -66,12 +66,13 @@ test('desktop sidebar and responsive NMC + SI offsets are consistently widened',
   assert.match(navCss,/@media \(max-width: 960px\)/);
   assert.match(navCss,/:host-context\(\[dir="rtl"\]\) \.nmc-unified-sidebar/);
 });
-test('preparation menu leads to a real approved case selector, no mock case IDs',()=>{
+test('preparation menu lists persisted approved cases rather than volatile targeting',()=>{
   const launcher=read('src/app/pages/si-preparation-queue.component.ts');
   const settings=read('src/app/pages/si-targeting-settings.component.ts');
-  assert.match(launcher,/status==='INSPECTION_CREATED'/);
-  assert.match(launcher,/this\.api\.dashboard\(\)/);
-  assert.match(launcher,/\['\/moei\/smart-inspection\/preparation',c\.inspectionCase\?\.id\]/);
+  assert.match(launcher,/this\.api\.list\(this\.editorKey\)/);
+  assert.doesNotMatch(launcher,/this\.api\.dashboard\(\)/);
+  assert.match(launcher,/\['\/moei\/smart-inspection\/preparation',c\.id\]/);
+  assert.match(launcher,/No approved SI cases are saved yet/);
   assert.match(settings,/this\.api\.preview\(/);
   assert.match(settings,/this\.api\.publish\(/);
 });
