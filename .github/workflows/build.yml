@@ -78,6 +78,9 @@ jobs:
       - name: Google SSO allowlist, PKCE and verified-token security tests
         run: node --test ai-proxy/test/moei-google-sso.test.mjs
 
+      - name: SI-01 bulk plan approval orchestration regression
+        run: node --test ai-proxy/test/si-bulk-inspection-plan.test.mjs
+
       - name: SI-02 persistent preparation registry tests
         run: node --test ai-proxy/test/si-preparation-queue.test.mjs
 
