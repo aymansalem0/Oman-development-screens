@@ -80,11 +80,14 @@ export class SiInspectionPreparationComponent implements OnInit{
     if(!this.canGenerate||!this.actor.trim()){
       this.error='Prepare the case, confirm current saved NMC risk, and enter officer name.';return;
     }
-    if(!window.confirm('Execute A04 on Airia NOW? This is an explicit API call that may incur AI usage charges. The output remains a human-reviewed suggestion; no official risk or checklist will change.'))return;
+    const mock=this.data?.a04Provider==='MOCK';
+    if(!window.confirm(mock?
+      'Generate MOCK A04 dossier? No Airia calls. Fixed template, not real analysis. Inspector and supervisor review required.':
+      'Execute A04 on Airia NOW? This is a potentially paid call. Suggestions require supervisor review.'))return;
     this.busy=true;this.error='';this.success='';
     this.api.generate(this.id,this.editorKey.trim(),{actor:this.actor.trim(),
       expectedVersion:this.nextVersion,confirmCost:true,language:this.language}).subscribe({
-      next:()=>this.completed('A04 dossier saved as DRAFT REVIEW. A supervisor must approve it.'),
+      next:()=>this.completed(this.data?.a04Provider==='MOCK'?'MOCK A04 dossier saved as DRAFT REVIEW. No Airia call.':'A04 dossier saved as DRAFT REVIEW. A supervisor must approve it.'),
       error:e=>{this.fail(e);this.loadAfterFailedCall();}
     });
   }
