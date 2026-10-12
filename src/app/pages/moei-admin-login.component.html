@@ -1,40 +1,118 @@
 <main class="moei-auth-page" [attr.dir]="lang.dir">
-  <section class="moei-auth-card" aria-label="MOEI Maritime Platform login">
-    <div class="seal">⚓</div>
-    <p class="eyebrow">MOEI · UAE · MARITIME SERVICES</p>
-    <h1>{{copy('Unified Maritime Platform','منصة الشؤون البحرية الموحدة')}}</h1>
-    <p class="intro">{{copy('Secure single sign-on for National Maritime Centre and Smart Inspection.',
-      'تسجيل دخول موحد وآمن للمركز البحري الوطني والمعاينة الذكية.')}}</p>
-    <div class="role-badge">{{copy('Approved Google accounts only','حسابات Google المعتمدة فقط')}}</div>
-    <ng-container *ngIf="!loading && mode==='google'">
-      <p class="error" *ngIf="error" role="alert">{{error}}</p>
-      <button class="submit google-login" type="button" (click)="googleSignIn()"
-              [disabled]="busy||!googleConfigured">
-        <span class="google-g" aria-hidden="true">G</span>
-        {{copy('Continue with Google','المتابعة باستخدام Google')}}
-      </button>
-      <p class="setup" *ngIf="!googleConfigured">
-        {{copy('Google SSO needs OAuth Client ID and Secret on the server before first use.',
-          'يلزم إعداد Google OAuth Client ID وClient Secret على الخادم قبل الاستخدام.')}}
-      </p>
-      <p class="setup">{{copy('Access is restricted to accounts approved by the administrator.',
-        'الدخول مقصور على الحسابات التي يعتمدها مدير النظام.')}}</p>
-    </ng-container>
-    <form *ngIf="!loading && mode==='local'" (ngSubmit)="submit()">
-      <label for="moei-user">{{copy('Username','اسم المستخدم')}}</label>
-      <input id="moei-user" type="text" name="username" autocomplete="username"
-             [(ngModel)]="username" required [disabled]="busy"/>
-      <label for="moei-pass">{{copy('Password','كلمة المرور')}}</label>
-      <input id="moei-pass" type="password" name="password" autocomplete="current-password"
-             [(ngModel)]="password" required [disabled]="busy"/>
-      <p class="error" *ngIf="error" role="alert">{{error}}</p>
-      <button class="submit" type="submit" [disabled]="busy||!username.trim()||!password">
-        {{busy?copy('Signing in…','جارٍ تسجيل الدخول…'):copy('Sign in','تسجيل الدخول')}}
-      </button>
-    </form>
-    <div class="foot">
-      <span>{{copy('MOEI POC · Restricted Access','بيئة الوزارة التجريبية · وصول مقيد')}}</span>
-      <button type="button" (click)="lang.toggle()">{{lang.isArabic?'English':'العربية'}}</button>
-    </div>
-  </section>
+  <div class="moei-auth-scene" aria-hidden="true"></div>
+  <div class="moei-auth-shade" aria-hidden="true"></div>
+
+  <div class="moei-auth-layout">
+    <section class="moei-auth-showcase"
+       [attr.aria-label]="copy('Ministry of Energy and Infrastructure maritime digital platform','المنصة البحرية الرقمية لوزارة الطاقة والبنية التحتية')">
+      <app-nmc-ministry-logo class="showcase-ministry"></app-nmc-ministry-logo>
+
+      <div class="showcase-content">
+        <div class="showcase-overline">
+          <span class="showcase-overline-dot" aria-hidden="true"></span>
+          {{copy('UAE MARITIME DIGITAL TRANSFORMATION','التحول الرقمي البحري لدولة الإمارات')}}
+        </div>
+
+        <div class="showcase-brand">
+          <img src="/branding/moei-maritime-platform-mark.svg" width="72" height="72"
+               alt="" aria-hidden="true" class="showcase-platform-mark"/>
+          <div>
+            <span class="showcase-brand-name">MOEI MARITIME</span>
+            <span class="showcase-brand-caption">
+              {{copy('UNIFIED DIGITAL PLATFORM','المنصة الرقمية الموحدة')}}
+            </span>
+          </div>
+        </div>
+
+        <h2>{{copy('One connected maritime future.','مستقبل بحري واحد ومترابط.')}}</h2>
+        <p class="showcase-description">
+          {{copy('A unified digital gateway for maritime situational awareness, smart inspection and AI-assisted operations.',
+          'بوابة رقمية موحدة للوعي بالموقف البحري والمعاينة الذكية والعمليات المدعومة بالذكاء الاصطناعي.')}}
+        </p>
+
+        <div class="showcase-capabilities">
+          <span>{{copy('National Maritime Centre','المركز البحري الوطني')}}</span>
+          <span>{{copy('Smart Inspection','المعاينة الذكية')}}</span>
+          <span>{{copy('AI-Enabled Operations','عمليات مدعومة بالذكاء الاصطناعي')}}</span>
+        </div>
+      </div>
+
+      <div class="showcase-bottom">
+        <span class="showcase-bottom-line" aria-hidden="true"></span>
+        {{copy('MARITIME INTELLIGENCE · CONNECTED SERVICES · SAFER SEAS',
+          'ذكاء بحري · خدمات مترابطة · بحار أكثر أمانًا')}}
+      </div>
+    </section>
+
+    <section class="moei-auth-card" aria-label="MOEI Maritime Platform login">
+      <app-nmc-ministry-logo class="card-ministry"></app-nmc-ministry-logo>
+
+      <div class="card-rule" aria-hidden="true"></div>
+
+      <div class="card-platform-identity">
+        <img src="/branding/moei-maritime-platform-mark.svg" width="52" height="52"
+             alt="" aria-hidden="true" class="card-platform-mark"/>
+        <div>
+          <span class="card-platform-name">MOEI MARITIME</span>
+          <span class="card-platform-subtitle">
+            {{copy('UNIFIED DIGITAL PLATFORM','المنصة الرقمية الموحدة')}}
+          </span>
+        </div>
+      </div>
+
+      <div class="card-heading">
+        <p class="eyebrow">{{copy('SECURE PLATFORM ACCESS','دخول آمن إلى المنصة')}}</p>
+        <h1>{{copy('Welcome back','مرحبًا بعودتك')}}</h1>
+        <p class="intro">{{copy('Sign in to access the National Maritime Centre and Smart Inspection services.',
+          'سجّل الدخول للوصول إلى المركز البحري الوطني وخدمات المعاينة الذكية.')}}</p>
+      </div>
+
+      <div class="role-badge">
+        <span class="role-badge-dot" aria-hidden="true"></span>
+        {{copy('Authorized Google accounts only','الدخول لحسابات Google المعتمدة فقط')}}
+      </div>
+
+      <ng-container *ngIf="!loading && mode==='google'">
+        <p class="error" *ngIf="error" role="alert">{{error}}</p>
+        <button class="submit google-login" type="button" (click)="googleSignIn()"
+                [disabled]="busy||!googleConfigured">
+          <span class="google-g" aria-hidden="true">
+            <svg viewBox="0 0 48 48" width="22" height="22"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.5 5.4 2.6 13.2l7.9 6.1C12.4 13.5 17.8 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.27 5.48-4.81 7.18l7.73 6C44.37 38.03 46.98 31.88 46.98 24.55z"/><path fill="#FBBC05" d="M10.53 28.7A14.41 14.41 0 0 1 9.75 24c0-1.64.29-3.23.77-4.7l-7.9-6.16A23.88 23.88 0 0 0 0 24c0 3.87.93 7.5 2.62 10.86l7.91-6.16z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.9-5.79l-7.73-6C30.05 37.63 27.33 38.5 24 38.5c-6.24 0-11.57-4.01-13.47-9.56l-7.91 6.15C6.5 42.6 14.6 48 24 48z"/></svg>
+          </span>
+          {{copy('Continue with Google','المتابعة باستخدام Google')}}
+          <span class="login-arrow" aria-hidden="true">↗</span>
+        </button>
+
+        <p class="setup" *ngIf="!googleConfigured">
+          {{copy('Google SSO needs OAuth Client ID and Secret on the server before first use.',
+            'يلزم إعداد Google OAuth Client ID وClient Secret على الخادم قبل الاستخدام.')}}
+        </p>
+        <p class="security-note">
+          <span aria-hidden="true">◈</span>
+          {{copy('Access is restricted to Google accounts approved by your administrator.',
+            'الدخول متاح فقط لحسابات Google التي اعتمدها مدير النظام.')}}
+        </p>
+      </ng-container>
+
+      <form *ngIf="!loading && mode==='local'" (ngSubmit)="submit()">
+        <label for="moei-user">{{copy('Username','اسم المستخدم')}}</label>
+        <input id="moei-user" type="text" name="username" autocomplete="username"
+               [(ngModel)]="username" required [disabled]="busy"/>
+        <label for="moei-pass">{{copy('Password','كلمة المرور')}}</label>
+        <input id="moei-pass" type="password" name="password" autocomplete="current-password"
+               [(ngModel)]="password" required [disabled]="busy"/>
+        <p class="error" *ngIf="error" role="alert">{{error}}</p>
+        <button class="submit" type="submit" [disabled]="busy||!username.trim()||!password">
+          {{busy?copy('Signing in…','جارٍ تسجيل الدخول…'):copy('Sign in','تسجيل الدخول')}}
+        </button>
+      </form>
+
+      <div class="foot">
+        <span>{{copy('MOEI POC · Restricted Access','بيئة الوزارة التجريبية · وصول مقيد')}}</span>
+        <button type="button" (click)="lang.toggle()">
+          {{lang.isArabic?'English':'العربية'}}
+        </button>
+      </div>
+    </section>
+  </div>
 </main>
