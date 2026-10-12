@@ -13,7 +13,7 @@
 
   <nav [attr.aria-label]="copy('Main maritime navigation', 'القائمة الرئيسية للخدمات البحرية')">
     <section class="nav-section">
-      <button class="nav-group" type="button" (click)="nmcExpanded = !nmcExpanded"
+      <button class="nav-group" type="button" (click)="toggleMain('nmc')"
               [attr.aria-expanded]="nmcExpanded" aria-controls="nmc-main-submenu">
         <span class="nav-icon">◉</span>
         <span class="nav-label">{{ copy('NMC Center', 'المركز البحري الوطني') }}</span>
@@ -58,7 +58,7 @@
 
         <div class="nav-dashboard-group" *ngIf="dashboardItems('NMC_CENTER').length">
           <button class="nav-subgroup" type="button"
-                  (click)="nmcDashboardsExpanded = !nmcDashboardsExpanded"
+                  (click)="toggleDashboard('nmc')"
                   [attr.aria-expanded]="nmcDashboardsExpanded" aria-controls="nmc-published-dashboards">
             <span class="nav-icon">▥</span>
             <span class="nav-label">{{copy('Dashboards','لوحات المعلومات')}}</span>
@@ -79,7 +79,7 @@
 
     <section class="nav-section">
       <button class="nav-group" type="button"
-              (click)="smartInspectionExpanded = !smartInspectionExpanded"
+              (click)="toggleMain('smart')"
               [attr.aria-expanded]="smartInspectionExpanded" aria-controls="si-main-submenu">
         <span class="nav-icon">✓</span>
         <span class="nav-label">{{copy('Smart Inspection','المعاينة الذكية')}}</span>
@@ -137,7 +137,7 @@
         </a>
         <div class="nav-dashboard-group" *ngIf="dashboardItems('SMART_INSPECTION').length">
           <button class="nav-subgroup" type="button"
-                  (click)="smartDashboardsExpanded = !smartDashboardsExpanded"
+                  (click)="toggleDashboard('smart')"
                   [attr.aria-expanded]="smartDashboardsExpanded" aria-controls="smart-published-dashboards">
             <span class="nav-icon">▥</span>
             <span class="nav-label">{{copy('Published Dashboards','لوحات المعلومات المنشورة')}}</span>
@@ -156,7 +156,7 @@
     </section>
 
     <section class="nav-section">
-      <button class="nav-group" type="button" (click)="settingsExpanded = !settingsExpanded"
+      <button class="nav-group" type="button" (click)="toggleMain('settings')"
               [attr.aria-expanded]="settingsExpanded" aria-controls="moei-settings-groups">
         <span class="nav-icon">⚙</span>
         <span class="nav-label">{{copy('Settings','الإعدادات')}}</span>
@@ -165,7 +165,7 @@
       <div class="nav-children nav-settings-groups" id="moei-settings-groups" [hidden]="!settingsExpanded">
         <div class="nav-settings-section">
           <button class="nav-subgroup nav-settings-heading" type="button"
-                  (click)="nmcSettingsExpanded = !nmcSettingsExpanded"
+                  (click)="toggleSettings('nmc')"
                   [attr.aria-expanded]="nmcSettingsExpanded" aria-controls="nmc-settings-children">
             <span class="nav-icon">◈</span>
             <span class="nav-label">{{copy('NMC Settings','إعدادات المركز البحري')}}</span>
@@ -206,7 +206,7 @@
             </a>
             <div class="nav-dashboard-group" *ngIf="dashboardItems('SETTINGS').length">
               <button class="nav-subgroup" type="button"
-                      (click)="settingsDashboardsExpanded = !settingsDashboardsExpanded"
+                      (click)="toggleDashboard('settings')"
                       [attr.aria-expanded]="settingsDashboardsExpanded" aria-controls="settings-published-dashboards">
                 <span class="nav-icon">▥</span>
                 <span class="nav-label">{{copy('Settings Dashboards','لوحات الإعدادات')}}</span>
@@ -227,7 +227,7 @@
         </div>
         <div class="nav-settings-section">
           <button class="nav-subgroup nav-settings-heading" type="button"
-                  (click)="inspectionSettingsExpanded = !inspectionSettingsExpanded"
+                  (click)="toggleSettings('inspection')"
                   [attr.aria-expanded]="inspectionSettingsExpanded"
                   aria-controls="si-settings-children">
             <span class="nav-icon">✓</span>
