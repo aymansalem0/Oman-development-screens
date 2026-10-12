@@ -54,7 +54,9 @@ export function projectInspectionPlan(dashboard,source,run,overrides={}){
    selectionOrigin:note?'OFFICER_AMENDED':run?'AI_ADVISORY':'NOT_EVALUATED',
    officerReason:note?.reason||null,officerActor:note?.actor||null,
    requestedRank:note?.requestedRank??null,
-   modelRank:null,effectiveRank:null,priorityReason:null,
+   modelRank:advice.length?Math.min(...advice.filter(x=>Number.isInteger(x.suggestedRank))
+     .map(x=>x.suggestedRank).concat([999999])):null,
+   effectiveRank:null,priorityReason:null,
    selectionReason:advice.find(x=>x.recommendation==='SELECT_RECOMMENDED')?.reason||
      advice[0]?.reason||null,
    evidenceRefs:[...new Set(advice.flatMap(x=>x.evidenceRefs||[]))],
@@ -71,18 +73,19 @@ export function projectInspectionPlan(dashboard,source,run,overrides={}){
   ranked.sort((a,b)=>
    Number(b.mandatoryReferral)-Number(a.mandatoryReferral)||
    (a.requestedRank??100000)-(b.requestedRank??100000)||
+   (a.modelRank??999999)-(b.modelRank??999999)||
    (riskOf({currentRisk:b.risk})??-1)-(riskOf({currentRisk:a.risk})??-1)||
    a.imo.localeCompare(b.imo));
   for(let i=0;i<ranked.length;i++){
    const row=ranked[i];
    row.effectiveRank=i+1;
-   row.modelRank=i+1; // MOCK baseline; provider may supply additional rank when integrated.
+   const sourceAdvice=row.regimeAdvisories.find(x=>x.recommendation==='SELECT_RECOMMENDED');
+   const modelExplanation=sourceAdvice?.priorityRationale||
+       'No AI ranking available for manual inclusion; requires officer review.';
    row.priorityReason=row.requestedRank!==null?
-    'Re-ranked after the officer requested position '+row.requestedRank+
-      '. Approved NMC referrals retain the protected first tier.':
-    row.mandatoryReferral?
-      'Priority tier: approved NMC referral. Within tier: available saved risk, then IMO.':
-      'Advisory order: available saved risk, then IMO. Missing risk is not treated as zero.';
+    'Officer requested position '+row.requestedRank+' with an auditable reason; C01 reran. '+
+      'Approved NMC referrals retain their protected first tier. '+modelExplanation:
+    (row.mandatoryReferral?'Protected NMC referral priority. ':'')+modelExplanation;
   }
  }
  return [...grouped.values()].sort((a,b)=>
