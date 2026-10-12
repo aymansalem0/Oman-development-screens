@@ -93,7 +93,8 @@ export interface SiImpact{
 export interface SiC01Recommendation{
   candidateKey:string;imo:string;regime:string;
   recommendation:'SELECT_RECOMMENDED'|'DEFER_RECOMMENDED'|'MANUAL_REVIEW';
-  confidence:number;reason:string;evidenceRefs:string[];dataGaps:string[];
+  confidence:number;reason:string;priorityRationale:string;suggestedRank:number|null;
+  evidenceRefs:string[];dataGaps:string[];
   requiresHumanReview:true;regulatoryDecision:false;
 }
 export interface SiC01Preview {
