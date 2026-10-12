@@ -117,11 +117,21 @@ export class SiCandidateAgent{
     throw new SiCandidateAgentError('SI_C01_NO_PENDING_CANDIDATES',422);
    if(s.candidates.length>100)
     throw new SiCandidateAgentError('SI_C01_LIMIT_100_SCOPE_REQUIRED',422);
+   const officerPlanChanges=Array.isArray(input.officerPlanChanges)?
+     input.officerPlanChanges.filter(x=>
+       /^[0-9]{7}$/.test(x?.imo||'')&&
+       s.candidates.some(c=>c.imo===x.imo)&&
+       typeof x.reason==='string'&&x.reason.length>=8&&
+       typeof x.selected==='boolean'&&
+       (x.requestedRank===null||
+        (Number.isInteger(x.requestedRank)&&x.requestedRank>=1&&x.requestedRank<=100)))
+       .slice(0,100):[];
    const payload={schemaVersion:'SI-C01-v1',
      requestMeta:{correlationId:'SI-C01-'+randomUUID(),actor:input.actor.trim(),
        language:'en',mode:'ADVISORY_ONLY'},
      snapshotHash:s.snapshotHash,policyRevision:s.policyRevision,
      selectionRiskThreshold:s.selectionRiskThreshold,
+     officerPlanChanges,
      riskPolicyRevision:s.riskPolicyRevision,
      pscQuotaPolicyRevision:s.pscQuotaPolicyRevision,
      candidates:s.candidates};
