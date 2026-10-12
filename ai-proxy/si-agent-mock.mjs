@@ -51,6 +51,14 @@ export function mockSiA04(input){
 export function mockSiC01(input){
   if(input?.schemaVersion!=='SI-C01-v1'||!Array.isArray(input.candidates))
     throw new TypeError('SI_C01_MOCK_INPUT_INVALID');
+  // C01 mock returns deterministic selection AND priority fields.
+  // In Airia mode the same JSON contract is expected from the provider.
+  const ranked=input.candidates.filter(c=>
+      c.currentRisk&&Number.isFinite(c.currentRisk.score)&&
+      c.sourceTypes?.includes('NMC_CASE')&&(c.allowedEvidence||[]).length)
+    .sort((a,b)=>b.currentRisk.score-a.currentRisk.score||
+      a.candidateKey.localeCompare(b.candidateKey));
+  const orders=new Map(ranked.map((c,i)=>[c.candidateKey,i+1]));
   return {recommendations:input.candidates.map(c=>{
     if(!c.candidateKey||!Array.isArray(c.allowedEvidence))
       throw new TypeError('SI_C01_MOCK_CANDIDATE_INVALID');
@@ -61,6 +69,8 @@ export function mockSiC01(input){
     const recommendation=noRisk||!evidenceRefs.length?'MANUAL_REVIEW':
       nmc?'SELECT_RECOMMENDED':'MANUAL_REVIEW';
     return {candidateKey:c.candidateKey,recommendation,confidence:0.8,
+      suggestedRank:recommendation==='SELECT_RECOMMENDED'?orders.get(c.candidateKey):null,
+      priorityRationale:'MOCK order uses saved NMC risk descending within protected referral tier. Missing risk remains unknown; officer override is separately audited.',
       reason:noRisk?'MOCK: NMC saved risk unavailable; supervisor must verify, never assume zero risk.':
         nmc?'MOCK: human-approved NMC referral with saved risk; supervisor must decide.':
         'MOCK: external PSC/service input needs human selection and eligibility review.',
