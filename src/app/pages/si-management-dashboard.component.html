@@ -16,10 +16,6 @@
     </header>
 
     <section class="panel access">
-      <label>{{copy('Dashboard Editor key','مفتاح محرر اللوحات')}}
-        <input type="password" autocomplete="off" [(ngModel)]="editorKey"
-          [placeholder]="copy('Required for saved inspection records','مطلوب لقراءة سجلات المعاينة')"/>
-      </label>
       <button type="button" class="primary" [disabled]="busy" (click)="load()">
         {{busy?copy('Loading…','جارٍ التحميل…'):copy('Refresh Saved Records','تحديث السجلات المحفوظة')}}
       </button>
