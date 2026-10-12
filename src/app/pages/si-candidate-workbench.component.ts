@@ -1,6 +1,6 @@
 import {LanguageService} from '../services/language.service';
 import {CommonModule} from '@angular/common';
-import {Component,OnInit} from '@angular/core';
+import {Component,OnInit,ViewChild,ElementRef} from '@angular/core';
 import {FormsModule} from '@angular/forms';
 import {RouterLink} from '@angular/router';
 import {NmcNavigationComponent} from '../components/nmc-navigation.component';
@@ -22,6 +22,11 @@ export class SiCandidateWorkbenchComponent implements OnInit{
   sourceFilter:SourceFilter='ALL';statusFilter:StatusFilter='ALL';search='';
   selectedKey='';selectedImo='';
   reviewer='';decisionNote='';editorKey='';publisherKey='';
+  @ViewChild('editorAccessKey') private editorAccessKey?:ElementRef<HTMLInputElement>;
+  private focusEditorAccess():void{
+    this.editorAccessKey?.nativeElement.scrollIntoView({behavior:'smooth',block:'center'});
+    this.editorAccessKey?.nativeElement.focus({preventScroll:true});
+  }
   c01Preview:SiC01Preview|null=null;
   c01Run:SiC01Run|null=null;
   c01Busy=false;c01Error='';c01Message='';
@@ -38,8 +43,9 @@ export class SiCandidateWorkbenchComponent implements OnInit{
   }
   previewCandidateAi():void{
     if(!this.editorKey.trim()){
-      this.c01Error=this.copy('Editor key is required for C01 preview.',
-        'مطلوب مفتاح المحرر لمعاينة C01.');return;
+      this.c01Error=this.copy('Enter the Editor Key in the Operator & Access fields directly above.',
+        'أدخل مفتاح المحرر في حقول المستخدم والصلاحيات الموجودة بالأعلى.');
+      this.focusEditorAccess();return;
     }
     this.c01Busy=true;this.c01Error='';this.c01Message='';this.c01Run=null;
     this.api.candidateAiPreview(this.editorKey.trim()).subscribe({
@@ -113,8 +119,9 @@ export class SiCandidateWorkbenchComponent implements OnInit{
   }
   refreshAiStatus():void{
     if(!this.editorKey.trim()){
-      this.aiError=this.copy('Editor key is required to view saved AI ranking.',
-        'مطلوب مفتاح المحرر لعرض ترتيب AI المحفوظ.');return;
+      this.aiError=this.copy('Enter the Editor Key in the Operator & Access fields above.',
+        'أدخل مفتاح المحرر في حقول المستخدم والصلاحيات الموجودة بالأعلى.');
+      this.focusEditorAccess();return;
     }
     this.priorityBusy=true;this.aiError='';
     this.api.prioritizationStatus(this.editorKey.trim()).subscribe({
@@ -124,8 +131,9 @@ export class SiCandidateWorkbenchComponent implements OnInit{
   }
   previewPriority():void{
     if(!this.editorKey.trim()){
-      this.aiError=this.copy('Enter Editor key before priority preview.',
-        'أدخل مفتاح المحرر قبل معاينة الأولوية.');return;
+      this.aiError=this.copy('Enter Editor Key in the Operator & Access fields above.',
+        'أدخل مفتاح المحرر في حقول المستخدم والصلاحيات الموجودة بالأعلى.');
+      this.focusEditorAccess();return;
     }
     this.priorityBusy=true;this.aiError='';this.aiSuccess='';this.confirmAiCost=false;
     this.api.prioritizationPreview(this.editorKey.trim()).subscribe({
