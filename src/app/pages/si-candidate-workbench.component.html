@@ -161,7 +161,7 @@
           'تُحسب الدرجة الأولية من الأدلة المتاحة فقط، ولا تُعامل المخاطر غير المتوفرة كصفر. هذه الدرجة ليست تقييم مخاطر NMC الرسمي.')}}</p>
         <div class="ai-run-actions">
           <label class="ai-cost"><input type="checkbox" [(ngModel)]="confirmAiCost"/>
-            {{info.provider==='MOCK'?
+            {{priorityStatus?.provider==='MOCK'?
               copy('I confirm this no-cost MOCK test (max 100 approved inspections).',
                 'أؤكد اختبار MOCK دون تكلفة (بحد أقصى ١٠٠ معاينة معتمدة).'):
               copy('I authorize one potentially billable SI-P01 Airia request (max 100 approved inspections).',
@@ -243,7 +243,7 @@
               <td>
                 <div *ngIf="c01BestVesselAdvice(v) as c01" class="c01-mini">
                   SI-C01: {{statusText(c01.recommendation)}}
-                  <small>MOCK / {{copy('Advisory only','توصية فقط')}}</small>
+                  <small>{{c01Run?.provider||'MOCK'}} / {{copy('Advisory only','توصية فقط')}}</small>
                 </div>
                 <ng-container *ngIf="bestAiRecommendation(v) as rec; else noVesselAi">
                 <strong class="ai-rank">#{{rec.effectiveRank}}</strong>
