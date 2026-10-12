@@ -113,7 +113,6 @@ export interface SiC01Run{
  actor:string;generatedAt:string;externalCalls:number;humanDecisionRequired:true;
  mutations:false;warning:string;recommendations:SiC01Recommendation[];
 }
-@Injectable({providedIn:'root'})
 export interface SiInspectionPlanRow{
  imo:string;vesselName:string;flag:string;vesselType:string;
  sources:string[];regimes:string[];sourceEvents:SiCandidateEvent[];
@@ -141,6 +140,7 @@ export interface SiInspectionPlanResult{
  aiRecommendedVessels:number;selectedForPlan:number;
  humanApprovalStillRequired:true;rows:SiInspectionPlanRow[];
 }
+@Injectable({providedIn:'root'})
 export class SiCandidateTargetingService{
   private readonly api='/api/si/v1';
   constructor(private http:HttpClient){}
