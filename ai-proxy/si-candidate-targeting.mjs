@@ -466,4 +466,84 @@ export class SiCandidateTargeting{
     });
     return {status:'ok',decision,inspectionCase};
   }
+  /**
+   * Atomic human approval of the entire selected inspection plan.
+   * One Oracle transaction (or one JSON state write), with no A04 calls in
+   * the transaction. Every IMO gets exactly one explicitly chosen regime.
+   * A model has no authority to call this.
+   */
+  async decideBatch({items,actor,note,approvedPlanId}={}){
+    if(!Array.isArray(items)||items.length<1||items.length>40||
+       !safeText(actor,120)||!safeText(note,500)||note.trim().length<8||
+       !safeText(approvedPlanId,100))
+      throw new SiTargetingError('SI_BULK_APPROVAL_INVALID',422);
+    const imos=new Set(),keys=new Set();
+    for(const item of items){
+      if(!isImo(item?.imo)||!safeText(item?.candidateKey,100)||
+         imos.has(item.imo)||keys.has(item.candidateKey))
+        throw new SiTargetingError('SI_BULK_SELECTION_INVALID',422);
+      imos.add(item.imo);keys.add(item.candidateKey);
+    }
+    const data=await this.dashboard(),registry=await this.inspectionCaseRegistry();
+    const candidateMap=new Map(data.candidates.map(c=>[c.key,c]));
+    const decisions=[],cases=[];
+    const approvedAt=iso();
+    for(const item of items){
+      const candidate=candidateMap.get(item.candidateKey);
+      if(!candidate||candidate.imo!==item.imo||
+        !(candidate.status==='PENDING_REVIEW'||(
+          candidate.status==='EXTERNALLY_SCHEDULED'&&
+          candidate.events.some(e=>e.sourceType==='NMC_CASE'&&e.approval==='APPROVED'))))
+        throw new SiTargetingError('SI_BULK_CANDIDATE_CHANGED',409);
+      if(registry.cases.some(c=>c.candidateKey===candidate.key))
+        throw new SiTargetingError('SI_INSPECTION_CASE_EXISTS',409);
+      const decision={id:randomUUID(),candidateKey:candidate.key,imo:candidate.imo,
+        action:'APPROVE',actor:actor.trim(),note:note.trim(),at:approvedAt,
+        rulesetVersion:data.policy.version,fleetSnapshotId:data.fleetSnapshotId,
+        sourceEventKeys:candidate.events.map(e=>e.eventKey),approvedPlanId};
+      const inspectionCase={
+        id:randomUUID(),candidateKey:candidate.key,imo:candidate.imo,
+        regime:candidate.regime,status:'CREATED',createdAt:approvedAt,
+        approvedBy:decision.actor,decisionId:decision.id,
+        rulesetVersion:decision.rulesetVersion,approvedPlanId,
+        sourceEventKeys:decision.sourceEventKeys,
+        nmcReferralId:candidate.events.find(e=>e.sourceType==='NMC_CASE')?.sourceEventId||null,
+        nmcCaseId:candidate.events.find(e=>e.sourceType==='NMC_CASE')?.sourceReference||null,
+        evidenceIds:[...new Set(candidate.events.flatMap(e=>e.evidenceIds||[]))],
+        riskAssessmentId:candidate.currentRisk?.assessmentId||null,
+        riskAtApproval:candidate.currentRisk||null,
+        provenance:'POC_HUMAN_APPROVED_NOT_OFFICIAL_INSPECTION_REPORT'
+      };
+      decisions.push(decision);cases.push(inspectionCase);
+    }
+    if(this.mode==='json'){
+      const saved=this._load();
+      if(cases.some(c=>saved.cases.some(existing=>existing.candidateKey===c.candidateKey)))
+        throw new SiTargetingError('SI_INSPECTION_CASE_EXISTS',409);
+      saved.decisions.push(...decisions);saved.cases.push(...cases);
+      this._save(saved); // one atomic persisted state file
+    }else await this._db(async con=>{
+      try{
+        for(let i=0;i<cases.length;i++){
+          const c=cases[i],d=decisions[i];
+          await con.execute(`INSERT INTO SI_INSPECTION_CASE
+            (CASE_ID,CANDIDATE_KEY,IMO,DOC_JSON)
+            VALUES (:id,:key,:imo,:doc)`,{
+            id:c.id,key:c.candidateKey,imo:c.imo,doc:clob(c)});
+          await con.execute(`INSERT INTO SI_CANDIDATE_DECISION
+            (DECISION_ID,CANDIDATE_KEY,IMO,DOC_JSON)
+            VALUES (:id,:key,:imo,:doc)`,{
+            id:d.id,key:d.candidateKey,imo:d.imo,doc:clob(d)});
+        }
+        await con.commit(); // all vessels approved or none
+      }catch(e){
+        await con.rollback();
+        if(e.code==='ORA-00001')
+          throw new SiTargetingError('SI_INSPECTION_CASE_EXISTS',409);
+        throw e;
+      }
+    });
+    return {status:'APPROVED',approvedPlanId,decisions,cases};
+  }
+
 }
