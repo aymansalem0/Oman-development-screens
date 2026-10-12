@@ -165,6 +165,34 @@ export function buildLegacyDashboardRequests(metrics,{vessel,bundle}){
   return {a01,a02,knownEvidence:new Set([...bundle.evidenceIds,
     ...supplied.flatMap(s=>s.evidenceIds)])};
 }
+/** The public fleet snapshot deliberately strips individual risk signals.
+ *  Resolve the underlying saved row by IMO for existing A01/A02 requests.
+ *  Never turn the public summary into fake evidence or re-assess a vessel. */
+export function selectDashboardFocusVessel(fleet,bundleMap){
+  if(!fleet||typeof fleet.getVesselResult!=='function'||
+      !bundleMap||typeof bundleMap.get!=='function')return null;
+  const ids=Object.keys(fleet.snapshot()?.results||{});
+  const factors=['movement','inspection','certificate','dataQuality','history'];
+  const eligible=ids.map(imo=>fleet.getVesselResult(imo)).filter(row=>{
+    if(!row||row.status!=='COMPLETED'||
+       typeof row.assessmentId!=='string'||!row.assessmentId||
+       !/^[0-9]{7}$/.test(row.imo||'')||
+       !Number.isFinite(row.score)||!Array.isArray(row.signals))return false;
+    const bundle=bundleMap.get(row.imo);
+    if(!bundle||!Array.isArray(bundle.evidenceIds)||
+       !bundle.evidenceIds.length||!bundle.inlineContext)return false;
+    return factors.every(factor=>{
+      const matches=row.signals.filter(s=>s?.factor===factor);
+      return matches.length===1&&Number.isFinite(matches[0].severity)&&
+        matches[0].severity>=0&&matches[0].severity<=100&&
+        Array.isArray(matches[0].evidenceIds)&&
+        matches[0].evidenceIds.length>0;
+    });
+  }).sort((a,b)=>b.score-a.score);
+  const vessel=eligible[0]||null;
+  return vessel?{vessel,bundle:bundleMap.get(vessel.imo)}:null;
+}
+
 export class DashboardAiFocus{
   constructor({executeAgent,selectVessel,enabled=false,now=()=>Date.now(),cacheMs=5*60*1000}={}){
     this.executeAgent=executeAgent;this.selectVessel=selectVessel;
