@@ -14,6 +14,7 @@ const chrome=read('src/app/components/nmc-platform-chrome.component.ts');
 const chromeCss=read('src/app/components/nmc-platform-chrome.component.css');
 const navCss=read('src/app/components/nmc-navigation.component.css');
 const globalCss=read('src/styles.css');
+const sidebarMenu=read('src/app/services/nmc-sidebar-menu-state.service.ts');
 
 test('shared header/footer show exact platform name and Arabic equivalence',()=>{
   assert.match(chrome,/MOEI Maritime Unified Platform/);
@@ -117,4 +118,55 @@ test('PSC quota settings auto-load published policy; credentials guard changes, 
   assert.match(server,/POST'&&path==='\/api\/si\/v1\/psc-selection\/policy\/preview'\)\{\s*dashboards\.assertRole\(req,'EDITOR'\)/);
   assert.match(server,/POST'&&path==='\/api\/si\/v1\/psc-selection\/policy\/publish'\)\{\s*dashboards\.assertRole\(req,'PUBLISHER'\)/);
   assert.match(server,/POST'&&path==='\/api\/si\/v1\/psc-selection\/decision'\)\{\s*dashboards\.assertRole\(req,'PUBLISHER'\)/);
+});
+
+test('all sidebar submenus collapse on first load, even on deep links or refresh',()=>{
+  assert.match(sidebarMenu,/main:MainMaritimeGroup\\|null=null/);
+  assert.match(sidebarMenu,/settings:SettingsMaritimeGroup\\|null=null/);
+  assert.match(sidebarMenu,/dashboard:MaritimeDashboardGroup\\|null=null/);
+  assert.match(navTs,/NmcSidebarMenuStateService/);
+  assert.doesNotMatch(navTs,/this\\.expandSelectedDashboard\\(/);
+  assert.doesNotMatch(navTs,/this\\.smartInspectionExpanded\\s*=\\s*true/);
+  assert.doesNotMatch(navTs,/this\\.settingsExpanded\\s*=\\s*true/);
+  assert.doesNotMatch(sidebarMenu,/localStorage|sessionStorage|fetch\\(/);
+});
+
+test('only clicked main menu expands: NMC, Smart Inspection and Settings are exclusive',()=>{
+  for(const section of ['nmc','smart','settings']){
+    assert.ok(nav.includes("toggleMain('"+section+"')"),
+      'Missing explicit click toggle on '+section);
+  }
+  assert.match(sidebarMenu,/toggleMain\\(group:MainMaritimeGroup\\):void/);
+  assert.match(sidebarMenu,/if\\(this\\.main===group\\)\\{/);
+  assert.match(sidebarMenu,/this\\.main=null/);
+  assert.match(sidebarMenu,/this\\.main=group/);
+  for(const expanded of ['nmcExpanded','smartInspectionExpanded','settingsExpanded']){
+    assert.match(nav,new RegExp('\\[attr\\.aria-expanded\\]="'+expanded+'"'));
+    assert.match(nav,new RegExp('\\[hidden\\]="!'+expanded+'"'));
+  }
+});
+
+test('Settings NMC and Inspection subgroups are mutually exclusive and clicked only',()=>{
+  assert.match(nav,/toggleSettings\\('nmc'\\)/);
+  assert.match(nav,/toggleSettings\\('inspection'\\)/);
+  assert.match(sidebarMenu,/this\\.settings=group/);
+  assert.match(sidebarMenu,/this\\.settings=null/);
+  assert.match(nav,/\\[hidden\\]="!nmcSettingsExpanded"/);
+  assert.match(nav,/\\[hidden\\]="!inspectionSettingsExpanded"/);
+  for(const item of ['nmc','smart','settings']){
+    assert.ok(nav.includes("toggleDashboard('"+item+"')"),
+       'Missing dashboard subgroup click for '+item);
+  }
+  assert.match(navTs,/toggleDashboard\\(group:MaritimeDashboardGroup\\)/);
+});
+
+test('sidebar open state persists through SPA route navigation but no auto-expand',()=>{
+  assert.match(sidebarMenu,/@Injectable\\(\\{providedIn:'root'\\}\\)/);
+  assert.match(navTs,/get nmcExpanded\\(\\):boolean\\{return this\\.menuState\\.main==='nmc'/);
+  assert.match(navTs,/get smartInspectionExpanded\\(\\):boolean\\{return this\\.menuState\\.main==='smart'/);
+  assert.match(navTs,/get settingsExpanded\\(\\):boolean\\{return this\\.menuState\\.main==='settings'/);
+  // Routing still computes active links but never expands collapsed menu.
+  assert.match(navTs,/private updateRoute\\(url: string\\): void/);
+  assert.match(navTs,/this\\.currentPath = url/);
+  assert.doesNotMatch(navTs,/expandSelectedDashboard/);
 });
