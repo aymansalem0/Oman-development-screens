@@ -20,6 +20,7 @@ import { SiSourceExcelImport } from './si-source-excel-import.mjs';
 import { SiPscSelection, SiSelectionError } from './si-psc-selection.mjs';
 import { SiAiPrioritization, SiPriorityError } from './si-ai-prioritization.mjs';
 import {SiCandidateAgent,SiCandidateAgentError} from './si-candidate-agent.mjs';
+import {SiInspectionPlan} from './si-inspection-plan.mjs';
 import {mockSiP01,mockSiA04,mockSiC01} from './si-agent-mock.mjs';
 import { SiInspectionPreparation, SiPreparationError } from './si-inspection-preparation.mjs';
 import { SiInspectionLifecycle, SiLifecycleError } from './si-inspection-lifecycle.mjs';
@@ -203,6 +204,9 @@ const siPriority=new SiAiPrioritization({
 const siCandidateAgent=new SiCandidateAgent({
   targeting:siTargeting,pscPolicy:()=>siPscSelection.policy(),provider:siAiProvider,
   executeAgent:async input=>siAiProvider==='mock'?mockSiC01(input):fleetAgentCall('c01',input)
+});
+const siInspectionPlan=new SiInspectionPlan({
+  targeting:siTargeting,candidateAgent:siCandidateAgent
 });
 const siPreparation=new SiInspectionPreparation({mode:dbMode,oracleRepository:repository,
   targeting:siTargeting,riskPolicy,provider:siAiProvider,
@@ -638,6 +642,17 @@ const server = createServer(async (req, res) => {
   // NMC human-approved referrals dynamically. Only publisher may approve a new case.
   if(path==='/api/si/v1'||path.startsWith('/api/si/v1/')){
     try{
+      // The first Smart Inspection screen: one read-only candidate/AI plan grid.
+      // Operator plan changes require Editor authorisation, one confirmed C01
+      // re-evaluation and backend validation; no official inspection approval.
+      if(path==='/api/si/v1/inspection-plan'&&req.method==='GET'){
+        dashboards.assertRole(req,'EDITOR');
+        return respond(res,200,await siInspectionPlan.snapshot());
+      }
+      if(path==='/api/si/v1/inspection-plan/rerank'&&req.method==='POST'){
+        dashboards.assertRole(req,'EDITOR');
+        return respond(res,200,await siInspectionPlan.rerank(await requestJson(req,4096)));
+      }
       // New SI-C01 advisory is NEVER an approval and NEVER changes persisted cases.
       // MOCK branch has zero Airia usage; Airia mode reuses exact payload shape.
       if(path==='/api/si/v1/agents/configuration'&&req.method==='GET'){
