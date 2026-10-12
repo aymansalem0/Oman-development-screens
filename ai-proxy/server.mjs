@@ -3,7 +3,7 @@ import { getPscVessel, getPscHealth } from './psc-reader.mjs';
 import { FleetAssessmentManager } from './fleet-ai.mjs';
 import { FleetAutoScheduler } from './fleet-scheduler.mjs';
 import { DashboardWorkspace, DashboardError } from './dashboard-workspace.mjs';
-import {DashboardAiFocus,DashboardFocusError} from './nmc-dashboard-focus.mjs';
+import {DashboardAiFocus,DashboardFocusError,selectDashboardFocusVessel} from './nmc-dashboard-focus.mjs';
 import { NmcAlertWorkspace, NmcAlertError } from './alert-workspace.mjs';
 import { NmcCaseWorkspace, NmcCaseError } from './case-workspace.mjs';
 import {evaluateCaseAssessment,historicalApprovalValid} from './case-source-provenance.mjs';
@@ -136,15 +136,7 @@ const dashboardAiFocus=new DashboardAiFocus({
   executeAgent:fleetAgentCall,
   enabled:Boolean(apiKey)&&agentAllowed('a01')&&agentAllowed('a02')&&
     process.env.NMC_DASHBOARD_AI_FOCUS_ENABLED==='true',
-  selectVessel:()=>{
-    const completed=Object.values(fleet.snapshot().results||{})
-      .filter(row=>row.status==='COMPLETED'&&row.assessmentId&&
-        Array.isArray(row.signals)&&Number.isFinite(row.score)&&
-        /^[0-9]{7}$/.test(row.imo||'')&&incidentBundleMap.has(row.imo))
-      .sort((a,b)=>b.score-a.score);
-    const vessel=completed[0]||null;
-    return vessel?{vessel,bundle:incidentBundleMap.get(vessel.imo)}:null;
-  }
+  selectVessel:()=>selectDashboardFocusVessel(fleet,incidentBundleMap)
 });
 const alerts=new NmcAlertWorkspace({mode:dbMode,oracleRepository:repository});
 const cases=new NmcCaseWorkspace({mode:dbMode,oracleRepository:repository,alerts});
