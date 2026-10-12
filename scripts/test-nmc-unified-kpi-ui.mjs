@@ -49,3 +49,15 @@ test('no AI badge when source counts changed or Airia is disabled',()=>{
   assert.match(html,/\*ngIf="aiKpiFocus && aiFocusIsCurrent"/);
   assert.match(html,/lang\.isArabic\?aiKpiFocus\.selection\.reasonAr:aiKpiFocus\.selection\.reasonEn/);
 });
+
+test('KPI cards use compact desktop height without hiding mobile AI focus',()=>{
+  const css=read('src/app/pages/nmc-command-center.component.css');
+  const card=css.match(/\.nmc-unified-kpi-card\{([\s\S]*?)\}/);
+  assert.ok(card,'KPI card CSS rule not found');
+  const height=card[1].match(/min-height:(\d+)px/);
+  assert.ok(height,'KPI card minimum height not specified');
+  assert.ok(Number(height[1])<=115,'desktop cards should be compact');
+  assert.match(css,/\.nmc-unified-kpi-grid\{\s*display:grid;grid-template-columns:repeat\(4,minmax\(0,1fr\)\)/);
+  assert.match(css,/\.nmc-unified-kpi-card\.nmc-ai-selected/);
+  assert.match(css,/@media\(max-width:600px\)/);
+});
