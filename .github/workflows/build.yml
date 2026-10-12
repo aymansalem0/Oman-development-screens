@@ -38,9 +38,6 @@ jobs:
         run: |
           node --test scripts/test-nmc-unified-kpi-ui.mjs
           node --test ai-proxy/test/nmc-dashboard-focus.test.mjs
-      - name: SI AI MOCK contract regressions (C01/P01/A04)
-        run: node --test ai-proxy/test/si-agent-mock.test.mjs
-
       - name: SI-09 management read-model regression
         run: node --test ai-proxy/test/si-management-report.test.mjs
 
@@ -60,6 +57,9 @@ jobs:
 
       - name: Install backend dependencies
         run: npm --prefix ai-proxy install --no-audit --no-fund
+
+      - name: SI AI MOCK contract regressions (C01/P01/A04)
+        run: node --test ai-proxy/test/si-agent-mock.test.mjs
 
       - name: Check backend JavaScript syntax
         run: npm --prefix ai-proxy run check
