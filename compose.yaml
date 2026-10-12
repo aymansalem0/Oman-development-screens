@@ -24,6 +24,10 @@ services:
       NMC_FLEET_STORE_PATH: /data/fleet-assessments.json
       # Dashboard administration is read-only unless BOTH server-side keys are configured.
       # Use separate long random secrets for editor and publisher permissions.
+      # Single POC Admin: configure secret in local .env / secured environment,
+      # never commit credentials to Git or pass them in the URL.
+      MOEI_ADMIN_USERNAME: ${MOEI_ADMIN_USERNAME:-admin}
+      MOEI_ADMIN_PASSWORD: ${MOEI_ADMIN_PASSWORD:-}
       NMC_DASHBOARD_EDITOR_KEY: ${NMC_DASHBOARD_EDITOR_KEY:-}
       NMC_DASHBOARD_PUBLISHER_KEY: ${NMC_DASHBOARD_PUBLISHER_KEY:-}
       NMC_DASHBOARD_STORE_PATH: /data/nmc-dashboard-workspace.json
