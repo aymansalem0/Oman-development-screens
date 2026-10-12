@@ -24,10 +24,7 @@ import {SiPscSelectionService,PscSelectionPool,PscPoolItem,PscQuotaBucket}
         <a routerLink="/moei/smart-inspection/candidates">{{copy('Selected Inspection Candidates →','المرشحون المختارون للمعاينة ←')}}</a>
       </header>
       <section class="psc-access">
-        <label>{{copy('Editor key (read pool)','مفتاح المحرر (عرض القائمة)')}}
-          <input type="password" [(ngModel)]="editorKey" autocomplete="off"/></label>
-        <label>{{copy('Publisher key (approve selection)','مفتاح المشرف (اعتماد الاختيار)')}}
-          <input type="password" [(ngModel)]="publisherKey" autocomplete="off"/></label>
+
         <button (click)="load()" [disabled]="busy">{{copy('Load Port Calls','تحميل إخطارات الوصول')}}</button>
         <a routerLink="/moei/smart-inspection/settings/psc-quotas">{{copy('Quota Settings ⚙','إعدادات حصص المعاينة ⚙')}}</a>
       </section>
