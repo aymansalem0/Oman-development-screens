@@ -31,7 +31,7 @@ test('officer can remove/include/change rank directly on vessel row, with mandat
   "(click)=\"openPlanEdit(v,false)\"",
   "(click)=\"openPlanEdit(v,true)\"",
   "(click)=\"openPlanEdit(v,true,true)\"",
-  "(click)=\"savePlanEdit()\"",
+  "(ngSubmit)=\"savePlanEdit()\"",
   "[(ngModel)]=\"planReason\"",
   "[(ngModel)]=\"planRequestedRank\""
  ])assert.ok(html.includes(x),'missing '+x);
