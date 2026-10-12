@@ -33,7 +33,7 @@ export function mockSiA04(input){
   return {
     dossierId:'MOCK-A04-POC',agentRunId:'MOCK-A04',
     focusAreas:[{category:'Documented inspection focus (MOCK)',
-      priority:'REVIEW',
+      priority:'WATCH',
       reason:'MOCK test recommendation only. Review available source evidence and physically inspect before recording any deficiency.',
       evidenceIds:evidenceIds.slice(0,1)}],
     checklistFocus:[{existingItemId:focusCheck,focus:'REVIEW',
