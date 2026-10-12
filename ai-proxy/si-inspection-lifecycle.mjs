@@ -8,6 +8,7 @@ import {randomUUID} from 'node:crypto';
 import {readFileSync,writeFileSync,mkdirSync,renameSync,existsSync} from 'node:fs';
 import {dirname} from 'node:path';
 import oracledb from 'oracledb';
+import {buildInspectionManagementView} from './si-management-report.mjs';
 
 const now=()=>new Date().toISOString();
 const clone=x=>JSON.parse(JSON.stringify(x));
@@ -205,6 +206,31 @@ export class SiInspectionLifecycle{
         findings:current?.findings?.length||0,actions:current?.actions?.length||0};
     }).sort((a,b)=>String(b.updatedAt).localeCompare(String(a.updatedAt)));
     return {status:'ok',count:records.length,cases:records};
+  }
+  /** SI-09 manager view from approved persistent cases and recorded outcomes.
+   *  One batch Oracle read, NO AI invocation and NO business mutation.
+   *  Candidate source failure must produce unknown candidate KPIs, not zero.
+   */
+  async managementSnapshot(){
+    const current=await this.list();
+    let candidateSourceAvailable=true, candidateData;
+    try{candidateData=await this.targeting.dashboard();}
+    catch{
+      candidateSourceAvailable=false;
+      candidateData={summary:{candidateVessels:null,pendingVessels:null}};
+    }
+    let records;
+    if(this.mode==='json')records=this.readJson();
+    else records=await this.db(async con=>{
+      const rows=await con.execute(
+        'SELECT CASE_ID,DOC_JSON FROM SI_INSPECTION_LIFECYCLE',[],
+        {outFormat:oracledb.OUT_FORMAT_OBJECT});
+      return Object.fromEntries(rows.rows.map(row=>
+        [row.CASE_ID,JSON.parse(row.DOC_JSON)]));
+    });
+    return {...buildInspectionManagementView({
+      candidates:candidateData,cases:current.cases,records
+    }),candidateSourceAvailable};
   }
   async apply(id,payload={}){
     const {action,expectedVersion,actor,data={}}=payload;
