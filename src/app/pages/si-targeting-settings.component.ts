@@ -134,9 +134,7 @@ import {SiCandidateTargetingService,SiDashboard,SiImpact,SiPriorityWeights,SiTar
               <p class="policy-note">{{copy('POC example values — not an officially approved regulatory targeting model. Any change requires a new impact preview and supervisor publication.',
                 'قيم تجريبية للـPOC وليست نموذجًا تنظيميًا معتمدًا. أي تغيير يحتاج معاينة أثر جديدة ونشرًا معتمدًا من المشرف.')}}</p>
             </div>
-            <label>{{copy('Editor key','مفتاح المحرر')}}
-              <input type="password" [(ngModel)]="editorKey" autocomplete="off"/>
-            </label>
+            
             <button class="primary" type="button" [disabled]="busy||!dashboard" (click)="preview()">
               {{copy('Preview Fleet Impact','معاينة أثر التغيير على الأسطول')}}
             </button>
@@ -158,15 +156,11 @@ import {SiCandidateTargetingService,SiDashboard,SiImpact,SiPriorityWeights,SiTar
             <h2>{{copy('02 · Controlled Publication','٠٢ · النشر المنضبط')}}</h2>
             <p>{{copy('Publishing creates a new immutable priority-rules version. Previous cases and historical scoring remain unchanged.',
               'يُنشئ النشر إصدارًا جديدًا محفوظًا لقواعد الأولوية، دون تعديل الحالات السابقة أو التقييمات التاريخية.')}}</p>
-            <label>{{copy('Business reviewer','اسم مسؤول المراجعة')}}
-              <input [(ngModel)]="reviewer" maxlength="120" autocomplete="off"/>
-            </label>
+            
             <label>{{copy('Business justification','المبرر الإداري')}}
               <textarea [(ngModel)]="reason" rows="3" maxlength="500"></textarea>
             </label>
-            <label>{{copy('Supervisor / Publisher key','مفتاح المشرف / الناشر')}}
-              <input type="password" [(ngModel)]="publisherKey" autocomplete="off"/>
-            </label>
+            
             <button type="button" class="primary" [disabled]="busy||!impact" (click)="publish()">
               {{copy('Publish Priority Version','نشر إصدار قواعد الأولوية')}}
             </button>
