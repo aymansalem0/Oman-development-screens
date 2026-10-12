@@ -8,7 +8,7 @@ import { ActivityClassificationMappingComponent } from './pages/activity-classif
 
 const base = 'dashboard/maritime-navigation/navigation-aids-installation-approval';
 
-export const routes: Routes = [
+const rawRoutes: Routes = [
   { path: 'moei/login', loadComponent: () => import('./pages/moei-admin-login.component').then(m => m.MoeiAdminLoginComponent) },
   { path: '', pathMatch: 'full', redirectTo: base },
   { path: base, component: ApprovalListComponent },
@@ -45,5 +45,7 @@ export const routes: Routes = [
   { path: 'moei/nmc/vessel/:imo/risk', loadComponent: () => import('./pages/nmc-risk-explainability.component').then(m => m.NmcRiskExplainabilityComponent) },
   { path: 'moei/nmc/vessel/:imo', loadComponent: () => import('./pages/nmc-vessel-360.component').then(m => m.NmcVessel360Component) },
   { path: '**', redirectTo: base }
-].map(route=>route.path?.startsWith('moei/')&&route.path!=='moei/login'?
+];
+export const routes:Routes=rawRoutes.map(route=>
+  route.path?.startsWith('moei/')&&route.path!=='moei/login'?
   {...route,canActivate:[moeiAdminGuard]}:route);
