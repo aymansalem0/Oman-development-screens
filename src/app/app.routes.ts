@@ -1,4 +1,5 @@
 import { Routes } from '@angular/router';
+import {moeiAdminGuard} from './services/moei-admin.guard';
 
 import { ApprovalListComponent } from './pages/approval-list.component';
 import { ApprovalDetailComponent } from './pages/approval-detail.component';
@@ -8,6 +9,7 @@ import { ActivityClassificationMappingComponent } from './pages/activity-classif
 const base = 'dashboard/maritime-navigation/navigation-aids-installation-approval';
 
 export const routes: Routes = [
+  { path: 'moei/login', loadComponent: () => import('./pages/moei-admin-login.component').then(m => m.MoeiAdminLoginComponent) },
   { path: '', pathMatch: 'full', redirectTo: base },
   { path: base, component: ApprovalListComponent },
   { path: base + '/:id', component: ApprovalDetailComponent },
@@ -43,4 +45,5 @@ export const routes: Routes = [
   { path: 'moei/nmc/vessel/:imo/risk', loadComponent: () => import('./pages/nmc-risk-explainability.component').then(m => m.NmcRiskExplainabilityComponent) },
   { path: 'moei/nmc/vessel/:imo', loadComponent: () => import('./pages/nmc-vessel-360.component').then(m => m.NmcVessel360Component) },
   { path: '**', redirectTo: base }
-];
+].map(route=>route.path?.startsWith('moei/')&&route.path!=='moei/login'?
+  {...route,canActivate:[moeiAdminGuard]}:route);
