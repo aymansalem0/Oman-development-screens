@@ -179,6 +179,51 @@ export class SiInspectionPreparation{
       }
     });
   }
+  /**
+   * SI-02 case register uses the immutable approved SI case ledger, NOT the
+   * volatile candidate dashboard (resolved referrals can vanish from it).
+   * Read-only: never invokes Airia, changes NMC risk or creates cases.
+   *
+   * A missing migration 010 must still show approved cases with an explicit
+   * preparationUnavailable warning instead of a misleading empty register.
+   * This list does not depend on the separate lifecycle migration 013.
+   */
+  async list(){
+    const registry=await this.targeting.inspectionCaseRegistry();
+    const approved=registry.cases.filter(c=>c.status==='CREATED');
+    const documents=this.ready?await this.listSavedStatuses():new Map();
+    const cases=approved.map(c=>{
+      const vessel=this.bundles.get(c.imo)?.inlineContext?.vessel||{};
+      const stored=documents.get(c.id)||null;
+      return {
+        id:c.id,imo:c.imo,regime:c.regime,
+        vesselName:vessel.name||vessel.vesselName||('IMO '+c.imo),
+        flag:vessel.flag||null,
+        approvedBy:c.approvedBy||null,
+        approvedAt:c.createdAt||null,
+        riskAtApproval:c.riskAtApproval||null,
+        preparationStatus:stored?.status||'NOT_PREPARED',
+        preparationVersion:stored?.version||0,
+        preparedAt:stored?.preparedAt||null,
+        dossierSource:stored?.dossier?.source||null
+      };
+    }).sort((a,b)=>String(b.approvedAt||'').localeCompare(String(a.approvedAt||'')));
+    return {status:'ok',count:cases.length,cases,
+      preparationAvailable:this.ready,
+      warning:this.ready?null:'SI_MIGRATION_010_REQUIRED'};
+  }
+  async listSavedStatuses(){
+    this.assertReady();
+    if(this.mode==='json'){
+      const documents=this.jsonLoad().documents||{};
+      return new Map(Object.entries(documents));
+    }
+    return this.db(async con=>{
+      const rows=await con.execute('SELECT CASE_ID,DOC_JSON FROM SI_PREPARATION_DOSSIER',[],
+        {outFormat:oracledb.OUT_FORMAT_OBJECT});
+      return new Map(rows.rows.map(r=>[r.CASE_ID,JSON.parse(r.DOC_JSON)]));
+    });
+  }
   async currentContext(id){
     if(!validId(id))throw new SiPreparationError('SI_CASE_ID_INVALID',422);
     const inspectionCase=await this.targeting.inspectionCase(id);
