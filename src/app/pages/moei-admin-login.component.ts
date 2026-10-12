@@ -4,9 +4,10 @@ import {FormsModule} from '@angular/forms';
 import {ActivatedRoute,Router} from '@angular/router';
 import {LanguageService} from '../services/language.service';
 import {MoeiAuthService} from '../services/moei-auth.service';
+import {NmcMinistryLogoComponent} from '../components/nmc-ministry-logo.component';
 
 @Component({
- selector:'app-moei-admin-login',standalone:true,imports:[CommonModule,FormsModule],
+ selector:'app-moei-admin-login',standalone:true,imports:[CommonModule,FormsModule,NmcMinistryLogoComponent],
  templateUrl:'./moei-admin-login.component.html',
  styleUrl:'./moei-admin-login.component.css'
 })
