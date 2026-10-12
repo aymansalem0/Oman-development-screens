@@ -96,7 +96,7 @@ export class SiCandidateAgent{
  }
  async run(input={}){
   if(this.inProgress)throw new SiCandidateAgentError('SI_C01_IN_PROGRESS',409);
-  if(input.confirmRun!==true||typeof input.actor!=='string'||
+  if(input.confirmRun!==true||(this.provider==='airia'&&input.confirmCost!==true)||typeof input.actor!=='string'||
      !input.actor.trim()||input.actor.length>120||
      !/^[a-f0-9]{64}$/i.test(input.expectedSnapshotHash||''))
     throw new SiCandidateAgentError('SI_C01_CONFIRMATION_REQUIRED',422);
