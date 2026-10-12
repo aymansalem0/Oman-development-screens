@@ -80,7 +80,7 @@ export interface SiPriorityPreview{
   items:SiPriorityPreviewItem[];
 }
 export interface SiPriorityStatus{
-  status:string;enabled:boolean;preview:{snapshotHash:string;eligibleCount:number;
+  status:string;enabled:boolean;provider?:'MOCK'|'AIRIA';preview:{snapshotHash:string;eligibleCount:number;
     policyVersion:number;riskPolicyRevision:number};
   latest:SiPriorityRun|null;
 }
