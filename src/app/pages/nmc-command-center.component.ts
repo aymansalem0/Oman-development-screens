@@ -64,6 +64,8 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
   aiKpiFocusStatusLoaded=false;
   aiKpiFocusBusy=false;
   aiKpiFocusError='';
+  /** Session-only confirmation that the UI view was reset, not business data. */
+  dashboardResetNotice='';
   selectedVessel?: NmcVesselProfile;
   now = new Date();
 
@@ -711,6 +713,7 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
   }
   requestAiKpiFocus():void{
     if(this.aiKpiFocusBusy||!this.aiKpiFocusAvailable)return;
+    this.dashboardResetNotice='';
     const values=this.dashboardKpiValues;
     if(Object.values(values).filter(v=>v!==null).length<5){
       this.aiKpiFocusError=this.copy(
@@ -779,6 +782,7 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
   }
 
   onFilterChange(): void {
+    this.dashboardResetNotice='';
     // Do not leave an out-of-filter vessel's route or Vessel 360 action
     // visible when the operator chooses AI Assessed Only.
     if(this.selectedVessel&&!this.filteredVessels.some(v=>v.id===this.selectedVessel?.id)){
@@ -787,6 +791,27 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
       this.drawSelectedTrack();
     }
     this.refreshMapMarkers();
+  }
+
+  /** Reset all dashboard UI state (unlike Map Reset, also clear AI focus,
+   *  selected vessel, expanded incidents and animation pause).
+   *  This calls the existing read-only map reset + saved-status reload.
+   *  It must NEVER alter Oracle, incident sheets, policies or invoke Airia.
+   *  In-flight paid AI requests cannot be cancelled by a cosmetic UI reset.
+   */
+  resetDashboardView():void{
+    if(this.aiKpiFocusBusy)return;
+    this.aiKpiFocus=null;
+    this.aiKpiFocusError='';
+    this.selectedVessel=undefined;
+    this.lastInteractiveVesselId=undefined;
+    this.expandedIncidentImo=null;
+    this.feedLive=true;
+    this.resetMapView();
+    this.dashboardResetNotice=this.copy(
+      'Dashboard view reset. Saved risk, cases and incidents are unchanged.',
+      'تمت إعادة ضبط عرض لوحة القيادة. لم تتغير المخاطر والحالات والحوادث المحفوظة.'
+    );
   }
 
   resetMapView(): void {
