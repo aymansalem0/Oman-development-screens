@@ -51,6 +51,9 @@
                   [title]="aiKpiFocusAvailable
                     ?copy('Uses existing A02 risk signals then A01 situation assessment (up to TWO paid calls). Same request/response fields, with dashboard context.',
                           'يستخدم A02 لمؤشرات المخاطر ثم A01 لتقييم الموقف (قد ينتج استدعاءان مدفوعان). نفس حقول الطلب والاستجابة مع سياق لوحة القيادة.')
+                    :aiKpiFocusStatusLoaded&&!aiKpiFocusContextReady
+                    ?copy('No eligible saved full vessel assessment with all five risk signals and bundle; verify Oracle source readiness before any Airia call.',
+                          'لا يوجد تقييم سفينة محفوظ ومكتمل بالمؤشرات الخمسة والأدلة المطلوبة؛ تحقق من بيانات Oracle قبل أي طلب Airia.')
                     :copy('A01/A02 dashboard review is disabled; opt in from server configuration.',
                           'مراجعة المؤشرات بواسطة A01/A02 معطلة؛ يلزم تفعيلها من إعدادات الخادم.')">
             ✦ {{aiKpiFocusBusy
@@ -110,7 +113,11 @@
           {{latestDatabaseFetchAt|date:'mediumTime'}}</span>
         <span *ngIf="incidentFeedLastUpdatedAt">{{copy('Incident feed checked','مراجعة مصدر الحوادث')}}:
           {{incidentFeedLastUpdatedAt|date:'mediumTime'}}</span>
-        <span *ngIf="!aiKpiFocusAvailable && aiKpiFocusStatusLoaded" class="nmc-kpi-config-warning">
+        <span *ngIf="aiKpiFocusStatusLoaded&&!aiKpiFocusContextReady" class="nmc-kpi-config-warning">
+          {{copy('No complete saved A01/A02 vessel evidence is available. The focus action is unavailable until source verification succeeds.',
+                 'لا توجد أدلة تقييم سفينة مكتملة ومحفوظة لـA01/A02. لا يمكن تشغيل تحديد الأولوية حتى التحقق من المصدر.')}}
+        </span>
+        <span *ngIf="!aiKpiFocusAvailable && aiKpiFocusStatusLoaded&&aiKpiFocusContextReady" class="nmc-kpi-config-warning">
           {{copy('AI KPI focus uses existing A02/A01 agents; enable explicit opt-in on the server.',
                  'أولوية المؤشرات تستخدم الوكيلين A02/A01 الحاليين؛ فعّل الخيار صراحةً في الخادم.')}}
         </span>
