@@ -39,11 +39,26 @@ export interface SiPreparationView{
   stale:boolean;canGenerate:boolean;a04Enabled:boolean;a04Provider?:'MOCK'|'AIRIA';message:string;
   requiresHumanApproval:boolean;
 }
+export interface SiPreparationCaseSummary{
+  id:string;imo:string;regime:string;vesselName:string;flag:string|null;
+  approvedBy:string|null;approvedAt:string|null;
+  riskAtApproval:{score:number;level:string;assessmentId:string;policyRevision:number}|null;
+  preparationStatus:SiPrepStatus|'NOT_PREPARED';
+  preparationVersion:number;preparedAt:string|null;dossierSource:string|null;
+}
+export interface SiPreparationRegister{
+  status:'ok';count:number;cases:SiPreparationCaseSummary[];
+  preparationAvailable:boolean;warning:string|null;
+}
 @Injectable({providedIn:'root'})
 export class SiPreparationService{
   private base='/api/si/v1/preparations/';
   constructor(private http:HttpClient){}
   private headers(key:string){return new HttpHeaders({'X-NMC-DASHBOARD-KEY':key});}
+  list(key:string):Observable<SiPreparationRegister>{
+    return this.http.get<SiPreparationRegister>('/api/si/v1/preparations',
+      {headers:this.headers(key)});
+  }
   get(id:string,key:string):Observable<SiPreparationView>{
     return this.http.get<SiPreparationView>(this.base+encodeURIComponent(id),{
       headers:this.headers(key)});
