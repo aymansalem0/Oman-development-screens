@@ -265,7 +265,7 @@ import {SiCandidateTargetingService,SiDashboard,SiImpact,SiPriorityWeights,SiTar
 export class SiTargetingSettingsComponent implements OnInit{
   dashboard:SiDashboard|null=null;impact:SiImpact|null=null;
   loading=false;busy=false;error='';success='';
-  threshold=65;reviewer='';reason='';editorKey='';publisherKey='';
+  threshold=65;reviewer='admin';reason='';editorKey='MOEI_SESSION';publisherKey='MOEI_SESSION';
   weights:SiPriorityWeights={risk:30,trigger:25,history:20,deadline:15,urgency:10};
   sourceScores={NMC_CASE:90,SERVICE_REQUEST:55,PSC_PORT_CALL:65};
   readonly weightFactors:{
