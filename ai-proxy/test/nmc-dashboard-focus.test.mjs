@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {DashboardAiFocus,DashboardFocusError,validateDashboardMetrics,
   validateA02DashboardResponse,validateA01DashboardResponse,
-  buildLegacyDashboardRequests,NMC_DASHBOARD_METRIC_IDS}
+  buildLegacyDashboardRequests,NMC_DASHBOARD_METRIC_IDS,
+  selectDashboardFocusVessel}
   from '../nmc-dashboard-focus.mjs';
 
 const metrics=()=>({
@@ -39,6 +40,52 @@ const focus=(calls,options={})=>new DashboardAiFocus({
     return agent==='a02'?a02():a01();
   },...options
 });
+test('regression: 60 assessed dashboard rows have no signals; raw saved Oracle records do',async()=>{
+  const fleet={
+    snapshot:()=>({counts:{assessed:60},results:{
+      '9328471':{imo:'9328471',status:'COMPLETED',
+        assessmentId:vessel.assessmentId,score:vessel.score}
+    }}),
+    getVesselResult:imo=>imo==='9328471'?vessel:null
+  };
+  // The public DTO MUST NOT be treated as evidence: it omits signals.
+  assert.equal(fleet.snapshot().results['9328471'].signals,undefined);
+  const bundles=new Map([['9328471',bundle]]);
+  const chosen=selectDashboardFocusVessel(fleet,bundles);
+  assert.equal(chosen.vessel.imo,'9328471');
+  assert.equal(chosen.vessel.signals.length,5);
+  const calls=[];
+  const service=new DashboardAiFocus({
+    enabled:true,
+    selectVessel:()=>selectDashboardFocusVessel(fleet,bundles),
+    executeAgent:async(agent,input)=>{
+      calls.push({agent,input});return agent==='a02'?a02():a01();
+    }
+  });
+  const result=await service.run({metrics:metrics(),confirmCost:true});
+  assert.equal(result.sourceImo,'9328471');
+  assert.equal(calls.length,2);
+  assert.equal(calls[1].input.approvedSignalEvidence.length,5);
+});
+
+test('eligible source fail-closed: no bundle or no verified saved signals means zero paid calls',async()=>{
+  const fake={snapshot:()=>({results:{'9328471':{
+    imo:'9328471',assessmentId:vessel.assessmentId,status:'COMPLETED',score:48}}}),
+    getVesselResult:()=>({...vessel,signals:[]})};
+  const records=new Map([['9328471',bundle]]);
+  assert.equal(selectDashboardFocusVessel(fake,records),null);
+  fake.getVesselResult=()=>vessel;
+  assert.equal(selectDashboardFocusVessel(fake,new Map()),null);
+  let called=0;
+  const focus=new DashboardAiFocus({
+    enabled:true,selectVessel:()=>selectDashboardFocusVessel(fake,new Map()),
+    executeAgent:async()=>{called++;return a01();}
+  });
+  await assert.rejects(focus.run({metrics:metrics(),confirmCost:true}),
+    /DASHBOARD_FOCUS_VESSEL_EVIDENCE_UNAVAILABLE/);
+  assert.equal(called,0);
+});
+
 test('8 distinct operational metrics pass exact schema, High excludes Critical in caller',()=>{
   const x=validateDashboardMetrics(metrics());
   assert.equal(NMC_DASHBOARD_METRIC_IDS.length,8);
