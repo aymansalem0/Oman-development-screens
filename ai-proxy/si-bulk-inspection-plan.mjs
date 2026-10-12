@@ -170,7 +170,7 @@ export class SiBulkInspectionPlan{
     confirmedAiCost:input.confirmAiCost===true,priorityStatus:'WAITING',
     progressMessage:'BATCH_ACCEPTED_PREPARATION_PENDING',items};
   this.put(job);
-  this.submitTask(()=>void this.process(job.id));
+  this.submitTask(()=>this.process(job.id));
   return this.get(job.id);
  }
  async process(id){
