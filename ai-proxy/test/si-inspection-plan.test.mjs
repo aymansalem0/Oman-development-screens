@@ -109,6 +109,9 @@ test('officer includes unselected PSC vessel then C01 re-ranks but respects prot
   assert.equal(out.aiRecommendedVessels,1);
   assert.equal(out.selectedForPlan,2);
   assert.equal(e.calls.length,2,'one explicit C01 rerun per confirmed operation');
+  assert.equal(e.calls[1].officerPlanChanges[0].imo,imoPsc);
+  assert.equal(e.calls[1].officerPlanChanges[0].requestedRank,1);
+  assert.match(e.calls[1].officerPlanChanges[0].reason,/Officer wishes/);
   const saved=JSON.parse(readFileSync(e.file,'utf8'));
   assert.equal(saved.audit[1].change.reason,'Officer wishes to examine arriving PSC vessel');
  }finally{e.cleanup();}
