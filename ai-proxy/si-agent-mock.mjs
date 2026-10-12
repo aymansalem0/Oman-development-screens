@@ -76,9 +76,15 @@ export function mockSiC01(input){
     const nmc=c.sourceTypes.includes('NMC_CASE');
     // Not even a POC demo may imply source selection when evidence is absent.
     const recommendation=eligibleForAdvice(c)?'SELECT_RECOMMENDED':'MANUAL_REVIEW';
+    const officerChange=(input.officerPlanChanges||[]).find(x=>x.imo===c.imo);
+    const officerText=officerChange?
+      ' Officer requested '+(officerChange.selected?'inclusion':'exclusion')+
+        (officerChange.requestedRank?' at position '+officerChange.requestedRank:'')+
+        ' with reason: '+officerChange.reason+'. Backend protected tiers still apply.':'';
     return {candidateKey:c.candidateKey,recommendation,confidence:0.8,
       suggestedRank:recommendation==='SELECT_RECOMMENDED'?orders.get(c.candidateKey):null,
-      priorityRationale:'MOCK order uses published NMC referral tier followed by saved risk descending. It never grants inspection approval; missing risk remains unknown.',
+      priorityRationale:'MOCK order uses published NMC referral tier followed by saved risk descending.'+
+        ' No inspection approval is granted.'+officerText,
       reason:noRisk?'MOCK: NMC saved risk unavailable; supervisor must verify, never assume zero risk.':
         nmc?'MOCK: approved NMC referral with saved risk; officer must decide.':
         recommendation==='SELECT_RECOMMENDED'?
