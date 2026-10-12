@@ -37,7 +37,7 @@ export interface GuidanceEvaluation {
 @Injectable({providedIn:'root'})
 export class NmcOperationalGuidanceService {
   private readonly base='/api/ai/guidance';
-  private editorKey='';private publisherKey='';
+  private editorKey='MOEI_SESSION';private publisherKey='MOEI_SESSION';
   constructor(private readonly http:HttpClient){}
   forVessel(imo:string):Observable<GuidanceEvaluation>{
     return this.http.get<GuidanceEvaluation>(this.base+'/vessels/'+encodeURIComponent(imo));
@@ -72,9 +72,7 @@ export class NmcOperationalGuidanceService {
   private auth(role:'editor'|'publisher'):HttpHeaders{
     let key=role==='editor'?this.editorKey:this.publisherKey;
     if(!key){
-      key=window.prompt(role==='editor'
-        ?'Operational Guidance editor access key (held in this tab only)'
-        :'Operational Guidance supervisor publishing key (held in this tab only)')?.trim()||'';
+      key='MOEI_SESSION';
       if(!key)throw new Error('ACCESS_KEY_REQUIRED');
       if(role==='editor')this.editorKey=key;else this.publisherKey=key;
     }
@@ -82,7 +80,7 @@ export class NmcOperationalGuidanceService {
   }
   private resetOnAuth(e:unknown,role:'editor'|'publisher'):Observable<never>{
     if(e instanceof HttpErrorResponse&&e.status===403){
-      if(role==='editor')this.editorKey='';else this.publisherKey='';
+      if(role==='editor')this.editorKey='MOEI_SESSION';else this.publisherKey='MOEI_SESSION';
     }
     return throwError(()=>e);
   }
