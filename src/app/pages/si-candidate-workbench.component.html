@@ -44,6 +44,37 @@
         <p>{{copy('Before an inspection case is approved: examine pending regimes, saved NMC risk, NMC referrals and selected PSC/service source evidence. MOCK is a fixed test response; it never calls Airia or approves an inspection.',
           'قبل اعتماد حالة المعاينة: مراجعة الأنواع المعلقة ومخاطر NMC والإحالات ومصادر PSC والخدمات. MOCK استجابة اختبار ثابتة لا تستدعي Airia ولا تعتمد معاينة.')}}</p>
       </header>
+      <div class="si-access-strip" id="si-candidate-agent-access">
+        <div class="si-access-strip-title">
+          <strong>{{copy('Operator & Access · Required for SI-C01 / SI-P01',
+            'المستخدم والصلاحيات · مطلوبة لتشغيل SI-C01 / SI-P01')}}</strong>
+          <span>{{copy('Keys are checked on the backend and held only in this page session.',
+              'التحقق من المفاتيح على الخادم وتُحفظ في ذاكرة هذه الصفحة فقط.')}}</span>
+        </div>
+        <div class="si-access-inputs">
+          <label for="si-operator-reviewer">
+            {{copy('Operator / Reviewer','المستخدم / المراجع')}}
+            <input id="si-operator-reviewer" type="text"
+                   [(ngModel)]="reviewer" autocomplete="off"
+                   [placeholder]="copy('Officer name','اسم الموظف')"/>
+          </label>
+          <label for="si-operator-editor">
+            {{copy('Editor Key','مفتاح المحرر')}} <span aria-hidden="true">*</span>
+            <input #editorAccessKey id="si-operator-editor" type="password"
+                   [(ngModel)]="editorKey" autocomplete="off"
+                   [placeholder]="copy('Required to preview and run AI','مطلوب لمعاينة وتشغيل AI')"/>
+          </label>
+          <label for="si-operator-publisher">
+            {{copy('Supervisor / Publisher Key','مفتاح المشرف / الناشر')}}
+            <input id="si-operator-publisher" type="password"
+                   [(ngModel)]="publisherKey" autocomplete="off"
+                   [placeholder]="copy('Required only for approval','مطلوب للاعتماد فقط')"/>
+          </label>
+        </div>
+        <p class="hint">{{copy('For C01 preview: Editor Key. To generate C01 advice: Editor Key and Officer Name. Publisher Key is needed only to approve or create an inspection case.',
+          'لمعاينة C01 أدخل مفتاح المحرر. لإنشاء التوصية أدخل مفتاح المحرر واسم الموظف. مفتاح المشرف مطلوب فقط لاعتماد المعاينة.')}}
+        </p>
+      </div>
       <div class="ai-controls">
         <button type="button" (click)="previewCandidateAi()" [disabled]="loading||c01Busy||busy||!dashboard">
           {{copy('1 · Preview Pending Candidates · No AI','١ · معاينة المرشحين دون AI')}}
@@ -56,8 +87,8 @@
           {{c01Preview.provider}} · {{c01Preview.provider==='MOCK'?'0 AIRIA CALLS':'PAID CALL POSSIBLE'}}
         </span>
       </div>
-      <p class="hint">{{copy('Enter Editor key and reviewer name in the Officer Decision section below. The C01 advisory does not call the existing APPROVE/DEFER/REJECT business endpoint.',
-        'أدخل مفتاح المحرر واسم الموظف في قسم القرار أدناه. لا تنفذ التوصية إجراءات الاعتماد أو التأجيل أو الرفض.')}}</p>
+      <p class="hint">{{copy('The C01 advisory cannot approve, defer or reject an inspection. Official decisions remain human-controlled.',
+        'لا يمكن لتوصية C01 اعتماد معاينة أو تأجيلها أو رفضها. تظل القرارات الرسمية بيد الموظف المختص.')}}</p>
       <p class="notice error" *ngIf="c01Error" role="alert">{{c01Error}}</p>
       <p class="notice success" *ngIf="c01Message" role="status">{{c01Message}}</p>
       <p *ngIf="c01Preview as preview" class="c01-summary">
@@ -345,14 +376,6 @@
         </ng-container>
         <p *ngIf="c.status==='EXTERNALLY_SCHEDULED'" class="notice">{{copy("This approved NMC referral has an existing booking. Supervisor may link it to ONE SI execution case; no new NMC schedule or second visit is created.","لدى إحالة NMC المعتمدة موعد قائم. يمكن للمشرف ربطها بحالة تنفيذ SI واحدة، دون إنشاء موعد جديد أو زيارة ثانية.")}}</p>
         </ng-container>
-      </section>
-
-      <section class="si-panel">
-        <header><h2>{{copy("03 · Operator & Access","٠٣ · المستخدم والصلاحيات")}}</h2><p>{{copy("Permission checks are enforced server-side. Keys stay in memory and are never stored in the browser.","يتم التحقق من الصلاحيات على الخادم. تبقى المفاتيح في الذاكرة ولا تُحفظ في المتصفح.")}}</p></header>
-        <label>{{copy("Operator / reviewer","المستخدم / المراجع")}} <input [(ngModel)]="reviewer" autocomplete="off" [placeholder]="copy('Business user name','اسم مستخدم الأعمال')"/></label>
-        <label>{{copy("Editor key","مفتاح المحرر")}} <input type="password" [(ngModel)]="editorKey" autocomplete="off"/></label>
-        <label>{{copy("Supervisor / Publisher key","مفتاح المشرف / الناشر")}} <input type="password" [(ngModel)]="publisherKey" autocomplete="off"/></label>
-        <p class="hint">{{copy("Editor: defer/reject. Publisher: approve/create inspection case. Source imports are administered in Settings.","المحرر: التأجيل والرفض. الناشر: اعتماد وإنشاء حالة المعاينة. تُدار مصادر Excel من الإعدادات.")}}</p>
       </section>
 
       <section class="si-panel">
