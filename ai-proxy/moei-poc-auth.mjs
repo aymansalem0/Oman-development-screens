@@ -20,9 +20,10 @@ function cookies(header){
 }
 export class MoeiPocAuth {
  constructor({username=process.env.MOEI_ADMIN_USERNAME||'admin',
-   password=process.env.MOEI_ADMIN_PASSWORD||'',clock=()=>Date.now()}={}){
+   password=process.env.MOEI_ADMIN_PASSWORD||'',clock=()=>Date.now(),
+   sessionValidator=()=>true}={}){
   this.username=username.trim();this.password=password;this.clock=clock;
-  this.sessions=new Map();this.failures=new Map();
+  this.sessions=new Map();this.failures=new Map();this.sessionValidator=sessionValidator;
   this.configured=this.username.length>=3&&this.password.length>=12;
  }
  cookie(req,token,age=MAX_AGE_SECONDS){
@@ -30,6 +31,17 @@ export class MoeiPocAuth {
     req.socket?.encrypted===true;
   return cookieName+'='+token+'; Path=/; HttpOnly; SameSite=Strict; '+
     (https?'Secure; ':'')+'Max-Age='+age;
+ }
+ issueSession(identity){
+  if(!['ADMIN','VIEWER'].includes(identity?.role))throw new MoeiAuthError('MOEI_ROLE_INVALID',403);
+  const now=this.clock();
+  const token=randomBytes(32).toString('base64url'),key=sha256(token).toString('hex');
+  const user={username:identity.username,role:identity.role};
+  if(identity.email)user.email=identity.email;
+  if(identity.provider)user.provider=identity.provider;
+  if(identity.sub)user.sub=identity.sub;
+  this.sessions.set(key,{user,expiresAt:now+MAX_AGE_SECONDS*1000});
+  return {token,user,expiresAt:new Date(now+MAX_AGE_SECONDS*1000).toISOString()};
  }
  authenticate(username,password,ip='local'){
   if(!this.configured)throw new MoeiAuthError('MOEI_ADMIN_LOGIN_NOT_CONFIGURED',503);
@@ -44,22 +56,22 @@ export class MoeiPocAuth {
   for(const [key,value] of this.sessions){
     if(value.expiresAt<=now)this.sessions.delete(key);
   }
-  const token=randomBytes(32).toString('base64url'),key=sha256(token).toString('hex');
-  const info={username:this.username,role:'ADMIN',expiresAt:now+MAX_AGE_SECONDS*1000};
-  this.sessions.set(key,info);return {token,user:{username:info.username,role:info.role},
-    expiresAt:new Date(info.expiresAt).toISOString()};
+  return this.issueSession({username:this.username,role:'ADMIN',provider:'local'});
  }
  session(req){
   const token=cookies(req.headers.cookie)[cookieName];
-  if(!token||!this.configured)return null;
+  if(!token)return null;
   const key=sha256(token).toString('hex'),saved=this.sessions.get(key);
   if(!saved)return null;
-  if(saved.expiresAt<=this.clock()){this.sessions.delete(key);return null;}
-  return {username:saved.username,role:saved.role,expiresAt:new Date(saved.expiresAt).toISOString()};
+  if(saved.expiresAt<=this.clock()||!this.sessionValidator(saved.user)){
+   this.sessions.delete(key);return null;
+  }
+  return {...saved.user,expiresAt:new Date(saved.expiresAt).toISOString()};
  }
  require(req,{mutate=false}={}){
   const user=this.session(req);
   if(!user)throw new MoeiAuthError('MOEI_LOGIN_REQUIRED',401);
+  if(mutate&&user.role!=='ADMIN')throw new MoeiAuthError('MOEI_ADMIN_REQUIRED',403);
   if(mutate&&req.headers['x-moei-csrf']!=='1')
     throw new MoeiAuthError('MOEI_CSRF_REQUIRED',403);
   req.moeiUser=user;return user;
