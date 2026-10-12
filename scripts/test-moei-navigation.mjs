@@ -14,6 +14,7 @@ const chrome=read('src/app/components/nmc-platform-chrome.component.ts');
 const chromeCss=read('src/app/components/nmc-platform-chrome.component.css');
 const navCss=read('src/app/components/nmc-navigation.component.css');
 const globalCss=read('src/styles.css');
+const sidebarMenu=read('src/app/services/nmc-sidebar-menu-state.service.ts');
 
 test('shared header/footer show exact platform name and Arabic equivalence',()=>{
   assert.match(chrome,/MOEI Maritime Unified Platform/);
@@ -117,4 +118,54 @@ test('PSC quota settings auto-load published policy; credentials guard changes, 
   assert.match(server,/POST'&&path==='\/api\/si\/v1\/psc-selection\/policy\/preview'\)\{\s*dashboards\.assertRole\(req,'EDITOR'\)/);
   assert.match(server,/POST'&&path==='\/api\/si\/v1\/psc-selection\/policy\/publish'\)\{\s*dashboards\.assertRole\(req,'PUBLISHER'\)/);
   assert.match(server,/POST'&&path==='\/api\/si\/v1\/psc-selection\/decision'\)\{\s*dashboards\.assertRole\(req,'PUBLISHER'\)/);
+});
+
+test('all sidebar submenus collapse initially, even on bookmarks or refresh',()=>{
+  for(const initialization of [
+    "main:MainMaritimeGroup|null=null",
+    "settings:SettingsMaritimeGroup|null=null",
+    "dashboard:MaritimeDashboardGroup|null=null"
+  ])assert.ok(sidebarMenu.includes(initialization),initialization);
+  assert.ok(navTs.includes('NmcSidebarMenuStateService'));
+  for(const bad of [
+    'expandSelectedDashboard','this.smartInspectionExpanded = true',
+    'this.settingsExpanded = true'
+  ])assert.ok(!navTs.includes(bad),'Unexpected route-driven expansion: '+bad);
+  for(const bad of ['localStorage.setItem','sessionStorage.setItem','fetch('])
+    assert.ok(!sidebarMenu.includes(bad),'Menu state must not be persisted: '+bad);
+});
+
+test('NMC, Smart Inspection, Settings: one main submenu open per explicit click',()=>{
+  for(const area of ['nmc','smart','settings'])
+    assert.ok(nav.includes("toggleMain('"+area+"')"));
+  for(const expanded of ['nmcExpanded','smartInspectionExpanded','settingsExpanded']){
+    assert.ok(nav.includes('[attr.aria-expanded]="'+expanded+'"'));
+    assert.ok(nav.includes('[hidden]="!'+expanded+'"'));
+  }
+  assert.ok(sidebarMenu.includes('toggleMain(group:MainMaritimeGroup):void'));
+  assert.ok(sidebarMenu.includes('if(this.main===group){'));
+  assert.ok(sidebarMenu.includes('this.main=null'));
+  assert.ok(sidebarMenu.includes('this.main=group'));
+});
+
+test('nested Settings sections and published Dashboards expand by user click only',()=>{
+  for(const area of ['nmc','inspection'])
+    assert.ok(nav.includes("toggleSettings('"+area+"')"));
+  for(const area of ['nmc','smart','settings'])
+    assert.ok(nav.includes("toggleDashboard('"+area+"')"));
+  assert.ok(sidebarMenu.includes('this.settings=group'));
+  assert.ok(sidebarMenu.includes('this.settings=null'));
+  assert.ok(sidebarMenu.includes("if(this.main!==group)return"));
+  assert.ok(nav.includes('[hidden]="!nmcSettingsExpanded"'));
+  assert.ok(nav.includes('[hidden]="!inspectionSettingsExpanded"'));
+});
+
+test('opened sidebar survives Angular route changes without reopening on deep links',()=>{
+  assert.ok(sidebarMenu.includes("@Injectable({providedIn:'root'})"));
+  assert.ok(navTs.includes("return this.menuState.main==='nmc'"));
+  assert.ok(navTs.includes("return this.menuState.main==='smart'"));
+  assert.ok(navTs.includes("return this.menuState.main==='settings'"));
+  assert.ok(navTs.includes('private updateRoute(url: string): void'));
+  assert.ok(navTs.includes('this.currentPath = url'));
+  assert.ok(!navTs.includes('expandSelectedDashboard'));
 });

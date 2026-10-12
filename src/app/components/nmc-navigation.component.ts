@@ -7,6 +7,10 @@ import { DashboardMenuPlacement } from '../services/nmc-dashboard-store.service'
 import { NmcDashboardNavigationService } from '../services/nmc-dashboard-navigation.service';
 import { PublishedDashboardMenuItem } from '../services/nmc-dashboard-workspace.service';
 import { NmcAlertsService } from '../services/nmc-alerts.service';
+import {
+  NmcSidebarMenuStateService,MainMaritimeGroup,SettingsMaritimeGroup,
+  MaritimeDashboardGroup
+} from '../services/nmc-sidebar-menu-state.service';
 
 /**
  * Unified business navigation. Published dashboard links are server-driven,
@@ -20,14 +24,29 @@ import { NmcAlertsService } from '../services/nmc-alerts.service';
   styleUrl: './nmc-navigation.component.css'
 })
 export class NmcNavigationComponent implements OnInit, OnDestroy {
-  nmcExpanded = true;
-  smartInspectionExpanded = true;
-  settingsExpanded = true;
-  nmcSettingsExpanded = true;
-  inspectionSettingsExpanded = true;
-  nmcDashboardsExpanded = true;
-  smartDashboardsExpanded = true;
-  settingsDashboardsExpanded = true;
+  // Route changes recreate this component. The shared UI-only state preserves
+  // explicit clicks within this SPA session; a browser reload closes all menus.
+  get nmcExpanded():boolean{return this.menuState.main==='nmc';}
+  get smartInspectionExpanded():boolean{return this.menuState.main==='smart';}
+  get settingsExpanded():boolean{return this.menuState.main==='settings';}
+  get nmcSettingsExpanded():boolean{
+    return this.settingsExpanded&&this.menuState.settings==='nmc';
+  }
+  get inspectionSettingsExpanded():boolean{
+    return this.settingsExpanded&&this.menuState.settings==='inspection';
+  }
+  get nmcDashboardsExpanded():boolean{
+    return this.nmcExpanded&&this.menuState.dashboard==='nmc';
+  }
+  get smartDashboardsExpanded():boolean{
+    return this.smartInspectionExpanded&&this.menuState.dashboard==='smart';
+  }
+  get settingsDashboardsExpanded():boolean{
+    return this.nmcSettingsExpanded&&this.menuState.dashboard==='settings';
+  }
+  toggleMain(group:MainMaritimeGroup):void{this.menuState.toggleMain(group);}
+  toggleSettings(group:SettingsMaritimeGroup):void{this.menuState.toggleSettings(group);}
+  toggleDashboard(group:MaritimeDashboardGroup):void{this.menuState.toggleDashboard(group);}
   mobileOpen = false;
   currentPath = '';
   selectedImo: string | null = null;
@@ -41,7 +60,8 @@ export class NmcNavigationComponent implements OnInit, OnDestroy {
     private readonly router: Router,
     public readonly lang: LanguageService,
     private readonly dashboardNavigation: NmcDashboardNavigationService,
-    private readonly alertsService: NmcAlertsService
+    private readonly alertsService: NmcAlertsService,
+    private readonly menuState:NmcSidebarMenuStateService
   ) {}
 
   ngOnInit(): void {
@@ -52,7 +72,6 @@ export class NmcNavigationComponent implements OnInit, OnDestroy {
 
     this.subscriptions.add(this.dashboardNavigation.published$.subscribe(items => {
       this.publishedDashboards = items;
-      this.expandSelectedDashboard();
     }));
     this.updateRoute(this.router.url);
     this.subscriptions.add(this.router.events.pipe(
@@ -185,37 +204,7 @@ export class NmcNavigationComponent implements OnInit, OnDestroy {
       try { localStorage.setItem(this.selectedKey, imo); }
       catch { /* Optional navigation convenience. */ }
     }
-    // Keep the active screen visible in its section when routing from a
-    // bookmarked deep link or from NMC Vessel 360.
-    if (this.isInspectionManagement || this.isPscTargetingPool || this.isInspectionCandidates || this.isInspectionPreparation ||
-        this.isInspectionScheduling || this.isInspectionWorkbench) {
-      this.smartInspectionExpanded = true;
-    }
-    if (this.isRiskConfig || this.isQualityConfig || this.isRuntimeSettings || this.isGuidanceConfig ||
-        this.isDashboardManager) {
-      this.settingsExpanded = true;
-      this.nmcSettingsExpanded = true;
-    }
-    if (this.isErpIntegrationSettings || this.isInspectionTargetingSettings || this.isCandidateSourceSettings || this.isPscQuotaSettings) {
-      this.settingsExpanded = true;
-      this.inspectionSettingsExpanded = true;
-    }
-    this.expandSelectedDashboard();
-  }
-
-  private expandSelectedDashboard(): void {
-    const item = this.publishedDashboards.find(d => this.isPublishedDashboard(d.id));
-    if (!item) return;
-    if (item.menuPlacement === 'NMC_CENTER') {
-      this.nmcExpanded = true;
-      this.nmcDashboardsExpanded = true;
-    } else if (item.menuPlacement === 'SMART_INSPECTION') {
-      this.smartInspectionExpanded = true;
-      this.smartDashboardsExpanded = true;
-    } else {
-      this.settingsExpanded = true;
-      this.nmcSettingsExpanded = true;
-      this.settingsDashboardsExpanded = true;
-    }
+    // Deliberately do NOT expand a menu based on an active route, saved IMO,
+    // or published dashboard refresh. Only the user's explicit menu click opens it.
   }
 }
