@@ -93,7 +93,8 @@ export interface SiImpact{
 export interface SiC01Recommendation{
   candidateKey:string;imo:string;regime:string;
   recommendation:'SELECT_RECOMMENDED'|'DEFER_RECOMMENDED'|'MANUAL_REVIEW';
-  confidence:number;reason:string;evidenceRefs:string[];dataGaps:string[];
+  confidence:number;reason:string;priorityRationale:string;suggestedRank:number|null;
+  evidenceRefs:string[];dataGaps:string[];
   requiresHumanReview:true;regulatoryDecision:false;
 }
 export interface SiC01Preview {
@@ -111,6 +112,33 @@ export interface SiC01Run{
  snapshotHash:string;policyRevision:number;riskPolicyRevision:number;
  actor:string;generatedAt:string;externalCalls:number;humanDecisionRequired:true;
  mutations:false;warning:string;recommendations:SiC01Recommendation[];
+}
+export interface SiInspectionPlanRow{
+ imo:string;vesselName:string;flag:string;vesselType:string;
+ sources:string[];regimes:string[];sourceEvents:SiCandidateEvent[];
+ risk:SiCandidate['currentRisk'];
+ pendingWorkflows:number;approvedCases:number;externalScheduled:number;
+ aiRecommended:boolean|null;planSelected:boolean|null;
+ selectionOrigin:'AI_ADVISORY'|'OFFICER_AMENDED'|'NOT_EVALUATED';
+ officerReason:string|null;officerActor:string|null;
+ requestedRank:number|null;modelRank:number|null;effectiveRank:number|null;
+ priorityReason:string|null;selectionReason:string|null;
+ evidenceRefs:string[];dataGaps:string[];confidence:number|null;
+ editable:boolean;locked:boolean;mandatoryReferral:boolean;
+ regimeAdvisories:SiC01Recommendation[];
+}
+export interface SiInspectionPlanState{
+ status:'ok';provider:'MOCK'|'AIRIA';mock:boolean;
+ sourceHash:string;revision:number;generatedAt:string|null;
+ agentRunId:string|null;stale:boolean;externalCallsOnRead:0;
+ aiRecommendedVessels:number|null;selectedForPlan:number|null;
+ approvedCases:number;warning:string;rows:SiInspectionPlanRow[];
+}
+export interface SiInspectionPlanResult{
+ status:'RECALCULATED';provider:'MOCK'|'AIRIA';mock:boolean;
+ agentRunId:string;externalCalls:number;revision:number;sourceHash:string;
+ aiRecommendedVessels:number;selectedForPlan:number;
+ humanApprovalStillRequired:true;rows:SiInspectionPlanRow[];
 }
 @Injectable({providedIn:'root'})
 export class SiCandidateTargetingService{
@@ -135,6 +163,18 @@ export class SiCandidateTargetingService{
   publish(body:{config:SiTargetingPolicyConfig;
     expectedVersion:number;publishedBy:string;reason:string},key:string):Observable<unknown>{
     return this.http.post(this.api+'/rules/publish',body,{headers:this.headers(key)});
+  }
+  inspectionPlan(key:string):Observable<SiInspectionPlanState>{
+    return this.http.get<SiInspectionPlanState>(this.api+'/inspection-plan',
+      {headers:this.headers(key)});
+  }
+  rerankInspectionPlan(key:string,body:{
+    actor:string;expectedSourceHash:string;expectedRevision:number;
+    confirmRun:true;confirmCost:boolean;
+    change?:{imo:string;selected:boolean;requestedRank:number|null;reason:string}
+  }):Observable<SiInspectionPlanResult>{
+    return this.http.post<SiInspectionPlanResult>(
+      this.api+'/inspection-plan/rerank',body,{headers:this.headers(key)});
   }
   candidateAiConfiguration(key:string):Observable<{status:string;provider:'MOCK'|'AIRIA';mock:boolean;agents:string[];externalCallsInMock:number}>{
     return this.http.get<{status:string;provider:'MOCK'|'AIRIA';mock:boolean;agents:string[];externalCallsInMock:number}>(

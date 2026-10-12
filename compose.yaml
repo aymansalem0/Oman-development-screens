@@ -43,6 +43,9 @@ services:
       # ANY Airia call or expense. NMC A01/A02 fleet/incident paths stay unchanged.
       # Explicitly switch to 'airia' ONLY when each real pipeline is approved.
       SI_AI_PROVIDER: ${SI_AI_PROVIDER:-mock}
+      # Audited POC planning overrides share /data volume. Does NOT change
+      # the Oracle authoritative inspection case/decision ledger.
+      SI_INSPECTION_PLAN_PATH: /data/si-inspection-plan.json
       SI_C01_ENABLED: ${SI_C01_ENABLED:-false}
       AIRIA_SI_C01_PIPELINE_ID: ${AIRIA_SI_C01_PIPELINE_ID:-}
       # A04 may incur paid AI requests. It NEVER runs on page load.

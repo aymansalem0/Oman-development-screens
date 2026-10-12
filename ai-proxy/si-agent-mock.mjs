@@ -51,6 +51,23 @@ export function mockSiA04(input){
 export function mockSiC01(input){
   if(input?.schemaVersion!=='SI-C01-v1'||!Array.isArray(input.candidates))
     throw new TypeError('SI_C01_MOCK_INPUT_INVALID');
+  // C01 mock returns deterministic selection AND priority fields.
+  // In Airia mode the same JSON contract is expected from the provider.
+  const threshold=Number.isInteger(input.selectionRiskThreshold)?
+    input.selectionRiskThreshold:65;
+  const eligibleForAdvice=c=>{
+    const nmc=c.sourceTypes?.includes('NMC_CASE');
+    const risk=c.currentRisk?.score;
+    return Number.isFinite(risk)&&(c.allowedEvidence||[]).length>0&&
+      (nmc||risk>=threshold);
+  };
+  const ranked=input.candidates.filter(eligibleForAdvice)
+    .sort((a,b)=>
+      Number(b.sourceTypes?.includes('NMC_CASE'))-
+        Number(a.sourceTypes?.includes('NMC_CASE'))||
+      b.currentRisk.score-a.currentRisk.score||
+      a.candidateKey.localeCompare(b.candidateKey));
+  const orders=new Map(ranked.map((c,i)=>[c.candidateKey,i+1]));
   return {recommendations:input.candidates.map(c=>{
     if(!c.candidateKey||!Array.isArray(c.allowedEvidence))
       throw new TypeError('SI_C01_MOCK_CANDIDATE_INVALID');
@@ -58,12 +75,21 @@ export function mockSiC01(input){
     const noRisk=!c.currentRisk||!Number.isFinite(c.currentRisk.score);
     const nmc=c.sourceTypes.includes('NMC_CASE');
     // Not even a POC demo may imply source selection when evidence is absent.
-    const recommendation=noRisk||!evidenceRefs.length?'MANUAL_REVIEW':
-      nmc?'SELECT_RECOMMENDED':'MANUAL_REVIEW';
+    const recommendation=eligibleForAdvice(c)?'SELECT_RECOMMENDED':'MANUAL_REVIEW';
+    const officerChange=(input.officerPlanChanges||[]).find(x=>x.imo===c.imo);
+    const officerText=officerChange?
+      ' Officer requested '+(officerChange.selected?'inclusion':'exclusion')+
+        (officerChange.requestedRank?' at position '+officerChange.requestedRank:'')+
+        ' with reason: '+officerChange.reason+'. Backend protected tiers still apply.':'';
     return {candidateKey:c.candidateKey,recommendation,confidence:0.8,
+      suggestedRank:recommendation==='SELECT_RECOMMENDED'?orders.get(c.candidateKey):null,
+      priorityRationale:'MOCK order uses published NMC referral tier followed by saved risk descending.'+
+        ' No inspection approval is granted.'+officerText,
       reason:noRisk?'MOCK: NMC saved risk unavailable; supervisor must verify, never assume zero risk.':
-        nmc?'MOCK: human-approved NMC referral with saved risk; supervisor must decide.':
-        'MOCK: external PSC/service input needs human selection and eligibility review.',
+        nmc?'MOCK: approved NMC referral with saved risk; officer must decide.':
+        recommendation==='SELECT_RECOMMENDED'?
+          'MOCK: source-backed PSC/service candidate meets saved-risk threshold; officer must approve separately.':
+          'MOCK: PSC/service candidate below saved-risk threshold; officer review is required.',
       evidenceRefs,dataGaps:[
         ...(noRisk?['MISSING_NMC_SAVED_RISK']:[]),
         ...(!evidenceRefs.length?['MISSING_SOURCE_EVIDENCE']:[])

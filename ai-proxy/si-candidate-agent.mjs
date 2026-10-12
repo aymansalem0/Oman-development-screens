@@ -32,6 +32,8 @@ export function buildC01Source(dashboard,pscPolicy=null){
         allowedEvidence,reasons:c.reasons||[],rulePriority:c.priority};
     }).sort((a,b)=>a.candidateKey.localeCompare(b.candidateKey));
   const source={schemaVersion:'SI-C01-v1',
+    selectionRiskThreshold:Number.isInteger(dashboard.policy.config?.riskPriorityThreshold)?
+      dashboard.policy.config.riskPriorityThreshold:65,
     policyRevision:dashboard.policy.version,
     riskPolicyRevision:dashboard.riskPolicyRevision,
     pscQuotaPolicyRevision:pscPolicy?.version??null,
@@ -50,6 +52,11 @@ export function validateC01(raw,source){
     if(!c||seen.has(r.candidateKey)||!ADVICE.has(r.recommendation)||
        !Number.isFinite(r.confidence)||r.confidence<0||r.confidence>1||
        typeof r.reason!=='string'||r.reason.trim().length<10||r.reason.length>1500||
+       typeof r.priorityRationale!=='string'||r.priorityRationale.length<12||
+       r.priorityRationale.length>1500||
+       (r.recommendation==='SELECT_RECOMMENDED'?
+         (!Number.isInteger(r.suggestedRank)||r.suggestedRank<1||r.suggestedRank>100):
+         r.suggestedRank!==null)||
        !Array.isArray(r.evidenceRefs)||r.evidenceRefs.length>20||
        r.evidenceRefs.some(e=>!c.allowedEvidence.includes(e))||
        !Array.isArray(r.dataGaps)||r.dataGaps.length>20||
@@ -59,11 +66,12 @@ export function validateC01(raw,source){
     // PSC/service candidates or candidates with missing verified risk.
     if(r.recommendation==='SELECT_RECOMMENDED'&&
       (!c.currentRisk||!Number.isFinite(c.currentRisk.score)||
-       !r.evidenceRefs.length||!c.sourceTypes.includes('NMC_CASE')))
+       !r.evidenceRefs.length||!c.sourceTypes.length))
       throw new SiCandidateAgentError('SI_C01_HARD_RULE_OVERRIDE',502);
     seen.add(r.candidateKey);
     return {candidateKey:c.candidateKey,imo:c.imo,regime:c.regime,
       recommendation:r.recommendation,confidence:r.confidence,
+      suggestedRank:r.suggestedRank,priorityRationale:r.priorityRationale,
       reason:r.reason.trim(),evidenceRefs:unique(r.evidenceRefs),
       dataGaps:unique(r.dataGaps),requiresHumanReview:true,
       regulatoryDecision:false};
@@ -109,10 +117,21 @@ export class SiCandidateAgent{
     throw new SiCandidateAgentError('SI_C01_NO_PENDING_CANDIDATES',422);
    if(s.candidates.length>100)
     throw new SiCandidateAgentError('SI_C01_LIMIT_100_SCOPE_REQUIRED',422);
+   const officerPlanChanges=Array.isArray(input.officerPlanChanges)?
+     input.officerPlanChanges.filter(x=>
+       /^[0-9]{7}$/.test(x?.imo||'')&&
+       s.candidates.some(c=>c.imo===x.imo)&&
+       typeof x.reason==='string'&&x.reason.length>=8&&
+       typeof x.selected==='boolean'&&
+       (x.requestedRank===null||
+        (Number.isInteger(x.requestedRank)&&x.requestedRank>=1&&x.requestedRank<=100)))
+       .slice(0,100):[];
    const payload={schemaVersion:'SI-C01-v1',
      requestMeta:{correlationId:'SI-C01-'+randomUUID(),actor:input.actor.trim(),
        language:'en',mode:'ADVISORY_ONLY'},
      snapshotHash:s.snapshotHash,policyRevision:s.policyRevision,
+     selectionRiskThreshold:s.selectionRiskThreshold,
+     officerPlanChanges,
      riskPolicyRevision:s.riskPolicyRevision,
      pscQuotaPolicyRevision:s.pscQuotaPolicyRevision,
      candidates:s.candidates};

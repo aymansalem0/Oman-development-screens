@@ -92,6 +92,7 @@ test('C01 fails closed on unknown evidence, duplicate candidates, and regulatory
  assert.throws(()=>validateC01(repeated,source),/SI_C01_UNVERIFIED_RECOMMENDATION/);
  const illegal=structuredClone(valid);
  illegal.recommendations[1].recommendation='SELECT_RECOMMENDED';
+ illegal.recommendations[1].suggestedRank=2;
  assert.throws(()=>validateC01(illegal,source),/SI_C01_HARD_RULE_OVERRIDE/);
 });
 test('P01 MOCK response passes unchanged existing validator, without model calls',()=>{
@@ -119,4 +120,25 @@ test('C01 preview is deterministic for identical current evidence',()=>{
  const a=buildC01Source(inputs(),{version:1}),b=buildC01Source(inputs(),{version:1});
  assert.equal(a.snapshotHash,b.snapshotHash);
  assert.notEqual(a.snapshotHash,buildC01Source(inputs(),{version:2}).snapshotHash);
+});
+
+test('C01 proposes high-risk PSC/service candidates as advice; no official selection is mutated',()=>{
+ const testData=inputs();
+ testData.policy.config={riskPriorityThreshold:65};
+ testData.candidates.push(candidate('service-hi','SERVICE_REQUEST','9702281',78));
+ testData.candidates.push(candidate('psc-hi','PSC_PORT_CALL','9716789',85));
+ testData.candidates.push(candidate('service-low','SERVICE_REQUEST','9723891',35));
+ const source=buildC01Source(testData,{version:6});
+ const mock=mockSiC01(source);
+ const output=validateC01(mock,source);
+ for(const key of ['service-hi','psc-hi']){
+   const row=output.find(x=>x.candidateKey===key);
+   assert.equal(row.recommendation,'SELECT_RECOMMENDED');
+   assert.ok(row.suggestedRank>=1);
+   assert.match(row.priorityRationale,/saved risk/i);
+   assert.equal(row.regulatoryDecision,false);
+ }
+ assert.equal(output.find(x=>x.candidateKey==='service-low').recommendation,'MANUAL_REVIEW');
+ assert.equal(output.find(x=>x.candidateKey==='psc').recommendation,'MANUAL_REVIEW');
+ assert.equal(output.find(x=>x.candidateKey==='nmc').suggestedRank,1);
 });

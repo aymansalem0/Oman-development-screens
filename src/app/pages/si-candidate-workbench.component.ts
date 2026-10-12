@@ -5,7 +5,7 @@ import {FormsModule} from '@angular/forms';
 import {RouterLink} from '@angular/router';
 import {NmcNavigationComponent} from '../components/nmc-navigation.component';
 import {SiCandidate,SiCandidateStatus,SiCandidateTargetingService,
-  SiDashboard,SiVesselCandidate,SiC01Run,SiC01Preview,SiC01Recommendation,SiPriorityStatus,SiPriorityPreview,SiPriorityRun,SiPriorityRecommendation,SiPriorityPreviewItem}
+  SiDashboard,SiVesselCandidate,SiInspectionPlanState,SiInspectionPlanRow,SiC01Run,SiC01Preview,SiC01Recommendation,SiPriorityStatus,SiPriorityPreview,SiPriorityRun,SiPriorityRecommendation,SiPriorityPreviewItem}
   from '../services/si-candidate-targeting.service';
 
 type SourceFilter='ALL'|'NMC_CASE'|'SERVICE_REQUEST'|'PSC_PORT_CALL';
@@ -22,6 +22,106 @@ export class SiCandidateWorkbenchComponent implements OnInit{
   sourceFilter:SourceFilter='ALL';statusFilter:StatusFilter='ALL';search='';
   selectedKey='';selectedImo='';
   reviewer='';decisionNote='';editorKey='';publisherKey='';
+  plan:SiInspectionPlanState|null=null;
+  planBusy=false;planError='';planNotice='';
+  expandedImo='';planEditingImo='';
+  planSelection=true;planReason='';planRequestedRank:number|null=null;
+  get planLookup():Map<string,SiInspectionPlanRow>{
+    return new Map((this.plan?.rows||[]).map(x=>[x.imo,x]));
+  }
+  planRow(v:SiVesselCandidate):SiInspectionPlanRow|null{
+    return this.planLookup.get(v.imo)||null;
+  }
+  get aiSelectedCount():number|null{return this.plan?.aiRecommendedVessels??null;}
+  get planSelectedCount():number|null{return this.plan?.selectedForPlan??null;}
+  get providerLabel():string{return this.plan?.provider||'NOT LOADED';}
+  loadInspectionPlan():void{
+    if(!this.editorKey.trim()){
+      this.planError=this.copy('Enter the Editor Key above to load the inspection plan.',
+        'أدخل مفتاح المحرر لعرض خطة المعاينات.');
+      this.focusEditorAccess();return;
+    }
+    this.planBusy=true;this.planError='';
+    this.api.inspectionPlan(this.editorKey.trim()).subscribe({
+      next:x=>{this.plan=x;this.planBusy=false;},
+      error:e=>{this.planBusy=false;this.planError=(e as {error?:{error?:string}})
+        ?.error?.error||'SI_INSPECTION_PLAN_UNAVAILABLE';}
+    });
+  }
+  generateInspectionPlan():void{
+    if(this.planBusy||!this.plan||!this.editorKey.trim()||!this.reviewer.trim()){
+      this.planError=this.copy('Load plan and enter Operator Name and Editor Key before running C01.',
+       'اعرض الخطة وأدخل اسم الموظف ومفتاح المحرر قبل تشغيل C01.');return;
+    }
+    this.submitPlanReevaluation(null);
+  }
+  openPlanEdit(v:SiVesselCandidate,selection:boolean,changePriority=false):void{
+    if(!this.plan?.agentRunId||!this.planRow(v)?.editable){
+      this.planError=this.copy('Run initial C01 selection and choose a pending candidate first.',
+        'شغّل توصية C01 الأولية واختر سفينة مرشحة بانتظار المراجعة.');return;
+    }
+    this.planEditingImo=v.imo;this.planSelection=selection;
+    this.planRequestedRank=changePriority?(this.planRow(v)?.effectiveRank??null):null;
+    this.planReason='';this.planError='';
+  }
+  cancelPlanEdit():void{this.planEditingImo='';this.planReason='';this.planRequestedRank=null;}
+  savePlanEdit():void{
+    if(!this.plan||!this.planEditingImo||this.planBusy)return;
+    if(this.planReason.trim().length<8){
+      this.planError=this.copy('Enter an auditable reason with at least 8 characters.',
+        'اكتب سبباً واضحاً لا يقل عن 8 أحرف.');return;
+    }
+    if(this.planSelection&&this.planRequestedRank!==null&&
+       (!Number.isInteger(this.planRequestedRank)||this.planRequestedRank<1||this.planRequestedRank>100)){
+      this.planError=this.copy('Requested priority position must be from 1 to 100.',
+        'الترتيب المطلوب يجب أن يكون بين 1 و100.');return;
+    }
+    this.submitPlanReevaluation({
+      imo:this.planEditingImo,selected:this.planSelection,
+      requestedRank:this.planSelection?this.planRequestedRank:null,
+      reason:this.planReason.trim()
+    });
+  }
+  private submitPlanReevaluation(change:{
+    imo:string;selected:boolean;requestedRank:number|null;reason:string
+  }|null):void{
+    if(!this.plan||!this.editorKey.trim()||!this.reviewer.trim())return;
+    const mock=this.plan.provider==='MOCK';
+    const message=mock?
+      this.copy('Confirm officer planning change and re-run MOCK C01 with zero Airia calls? No official inspection case will be changed.',
+        'تأكيد تعديل خطة المعاينات وإعادة ترتيب MOCK C01 دون اتصال Airia؟ لن تتغير حالات المعاينة الرسمية.'):
+      this.copy('This will trigger ONE possibly billable Airia SI-C01 request. Confirm before proceeding?',
+        'هذا سيشغل طلب Airia مدفوعاً محتملاً. هل تؤكد؟');
+    if(!window.confirm(message))return;
+    this.planBusy=true;this.planError='';this.planNotice='';
+    this.api.rerankInspectionPlan(this.editorKey.trim(),{
+      actor:this.reviewer.trim(),expectedSourceHash:this.plan.sourceHash,
+      expectedRevision:this.plan.revision,confirmRun:true,confirmCost:!mock,
+      ...(change?{change}:{})
+    }).subscribe({
+      next:r=>{
+        this.planBusy=false;this.cancelPlanEdit();
+        this.planNotice=this.copy(
+         'C01 '+r.provider+' recomputed the inspection plan. Officer approval is still required for actual inspection cases.',
+         'أعاد C01 '+r.provider+' ترتيب خطة المعاينات، ولا يزال اعتماد حالات المعاينة رسمياً من صلاحية الموظف.');
+        this.loadInspectionPlan();
+      },
+      error:e=>{
+        this.planBusy=false;
+        this.planError=(e as {error?:{error?:string}})?.error?.error||
+          'SI_PLAN_RECALCULATION_FAILED';
+        if(this.planError.includes('CHANGED'))this.loadInspectionPlan();
+      }
+    });
+  }
+  toggleVesselDetail(v:SiVesselCandidate):void{
+    if(this.expandedImo===v.imo){
+      this.expandedImo='';return;
+    }
+    this.expandedImo=v.imo;
+    this.selectVessel(v);
+  }
+
   @ViewChild('editorAccessKey') private editorAccessKey?:ElementRef<HTMLInputElement>;
   private focusEditorAccess():void{
     this.editorAccessKey?.nativeElement.scrollIntoView({behavior:'smooth',block:'center'});
@@ -195,14 +295,16 @@ export class SiCandidateWorkbenchComponent implements OnInit{
           this.selectedKey='';
         }
         this.loading=false;
-        if(this.editorKey.trim()&&!this.priorityBusy)this.refreshAiStatus();
+        if(this.editorKey.trim()){
+          this.loadInspectionPlan();
+        }
       },error:e=>{this.loading=false;this.showError(e);}
     });
   }
   /** One visible row per IMO — sources/events accumulate on the vessel. */
   get vessels():SiVesselCandidate[]{
     const term=this.search.toLowerCase().trim();
-    const rank=this.rankingMap;
+    const rank=this.planLookup;
     return (this.dashboard?.vesselCandidates||[]).filter(v=>
       (this.sourceFilter==='ALL'||v.sourceTypes.includes(this.sourceFilter))&&
       (this.statusFilter==='ALL'||v.workflows.some(w=>w.status===this.statusFilter))&&
@@ -210,9 +312,10 @@ export class SiCandidateWorkbenchComponent implements OnInit{
         ...v.sourceEvents.map(e=>e.sourceReference)].some(text=>
           String(text||'').toLowerCase().includes(term))))
       .sort((a,b)=>{
-        const ar=Math.min(...a.candidateKeys.map(key=>rank.get(key)?.effectiveRank??99999));
-        const br=Math.min(...b.candidateKeys.map(key=>rank.get(key)?.effectiveRank??99999));
-        return ar-br||b.pendingWorkflows-a.pendingWorkflows||a.imo.localeCompare(b.imo);
+        const ar=rank.get(a.imo),br=rank.get(b.imo);
+        return Number(Boolean(br?.planSelected))-Number(Boolean(ar?.planSelected))||
+          (ar?.effectiveRank??99999)-(br?.effectiveRank??99999)||
+          b.pendingWorkflows-a.pendingWorkflows||a.imo.localeCompare(b.imo);
       });
   }
   get selectedVessel():SiVesselCandidate|null{
