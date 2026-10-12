@@ -47,3 +47,44 @@ npm run build
 ```
 
 Unit tests are contract mock tests, not proof that production A01 understands the optional `FOCUS_KPI` textual marker. The final Airia test must be authorized and budgeted. A model that refuses the marker is a capability limit **without changing the original response schema**; it must never be quietly replaced with a fake deterministic AI outcome.
+
+
+## Regression discovered from deployed screenshot, 12 October 2026
+
+The user observed 60/420 assessed vessels in the unified dashboard but
+`DASHBOARD_FOCUS_VESSEL_EVIDENCE_UNAVAILABLE` after pressing AI Focus.
+
+**Confirmed software cause:** the initial dashboard focus selector read
+`fleet.snapshot().results`, a public summary whose DTO intentionally omits
+`signals` (five A01/A02 factor details) and other original evidence. It then
+filtered on `Array.isArray(row.signals)` so it rejected every one of the 60
+assessed rows, even when Oracle had complete historical/current risk factors.
+This was not evidence that Oracle lost the assessments.
+
+Fix: the new pure `selectDashboardFocusVessel(fleet,bundles)` uses the public
+snapshot ONLY to enumerate eligible IMO IDs, then reads the exact full
+in-process saved row from `fleet.getVesselResult(imo)`, which was restored by
+`OracleIntelligenceStore.loadLatest()` together with five risk factors and
+their evidence IDs. It validates source completeness, checks that a matching
+immutable bundle is present, and picks the highest saved-risk eligible vessel.
+It makes no Oracle writes or agent requests.
+
+Free preflight now returns `assessmentContextReady` and `sourceImo` on
+`GET /api/ai/nmc/dashboard-focus/status`. Angular disables the paid action
+until those source checks pass and displays a truthful state. When no eligible
+source exists, no A02/A01 request is issued.
+
+Tests reproduce the observed condition: `counts.assessed=60` and public
+snapshot records without signals; the raw persisted records carry five factors
+and allow A02 then A01. A negative fixture rejects incomplete evidence with
+zero paid calls.
+
+Verify after deploying the fixed frontend and ai-proxy:
+```powershell
+Invoke-RestMethod http://localhost:4200/api/ai/nmc/dashboard-focus/status |
+  Select-Object configured, assessmentContextReady, sourceImo, potentialAgentCalls
+```
+A `True` readiness result confirms the saved vessel evidence path works; it
+does NOT establish whether the live A01 model will return the optional
+`FOCUS_KPI` textual marker. A subsequent explicitly authorized paid trial
+is still necessary.
