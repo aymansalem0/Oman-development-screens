@@ -110,8 +110,8 @@ interface RuntimeSnapshot {
         </section>
         <section class="publish-card">
           <h2>{{tr('Publish runtime settings','نشر إعدادات التشغيل')}}</h2>
-          <p>{{tr('Publish only after checking agent costs, scheduler vessel limits and the Airia endpoint. The publisher key is not stored in the browser.',
-                   'انشر بعد مراجعة تكلفة الوكلاء وحدود السفن المجدولة وعنوان Airia. مفتاح المشرف لا يتم تخزينه في المتصفح.')}}</p>
+          <p>{{tr('Publish only after checking agent costs, scheduler vessel limits and the Airia endpoint. The logged Admin session is used for approval, and no extra key is required.',
+                   'انشر بعد مراجعة تكلفة الوكلاء وحدود السفن المجدولة وعنوان Airia. يُستخدم تسجيل دخول المدير الموحد للاعتماد دون إدخال مفتاح إضافي.')}}</p>
           <div class="publish-form">
 
             <label>{{tr('Change reason (min. 8 characters)','سبب التعديل (8 أحرف على الأقل)')}}
