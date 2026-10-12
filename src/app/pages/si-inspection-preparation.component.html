@@ -20,9 +20,9 @@
     <section class="panel access">
       <header><h2>{{copy("01 · Operator Access","٠١ · صلاحيات المستخدم")}}</h2><p>{{copy("Protected case evidence. Keys are used only in request headers and are not saved in localStorage.","أدلة الحالة محمية. تُستخدم المفاتيح في ترويسات الطلبات فقط ولا تُحفظ في المتصفح.")}}</p></header>
       <div class="form-grid">
-        <label>{{copy("Operator name","اسم المستخدم")}}<input [(ngModel)]="actor" [placeholder]="copy('Officer / inspector name','اسم الموظف / المفتش')" autocomplete="off"/></label>
-        <label>{{copy("Editor / inspector key","مفتاح المحرر / المفتش")}}<input type="password" [(ngModel)]="editorKey" autocomplete="off"/></label>
-        <label>{{copy("Supervisor / publisher key","مفتاح المشرف / الناشر")}}<input type="password" [(ngModel)]="publisherKey" autocomplete="off"/></label>
+        
+        
+        
         <div class="load-action"><button class="primary" (click)="load()" [disabled]="busy||loading">{{copy("Load Approved Case","تحميل الحالة المعتمدة")}}</button></div>
       </div>
     </section>
