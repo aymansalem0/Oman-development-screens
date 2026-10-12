@@ -23,3 +23,8 @@ input:focus{outline:2px solid #95d8d0;border-color:#138c7d}
  justify-content:space-between;align-items:center;gap:12px;font-size:9px;color:#8aa0ac}
 .foot button{border:0;background:transparent;color:#167c79;cursor:pointer;font-weight:900}
 @media(max-width:560px){.moei-auth-card{padding:25px 22px}h1{font-size:21px}}
+.google-login{display:flex;align-items:center;justify-content:center;gap:14px;font-size:14px}
+.google-g{font-weight:900;font-size:20px;background:#fff;color:#4285f4;
+  display:inline-flex;align-items:center;justify-content:center;
+  border-radius:5px;width:28px;height:28px}
+.setup{font-size:11px;color:#637c88;line-height:1.8;margin-top:14px}
