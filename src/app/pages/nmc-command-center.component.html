@@ -60,8 +60,21 @@
               ?copy('Analyzing priority…','جارٍ تحديد الأولوية…')
               :copy('Ask AI: What needs focus?','اسأل AI: ما الأهم الآن؟')}}
           </button>
+          <button type="button" class="nmc-kpi-reset"
+                  (click)="resetDashboardView()"
+                  [disabled]="aiKpiFocusBusy"
+                  [attr.aria-label]="copy('Reset dashboard view and clear filters, vessel selection and AI focus',
+                    'إعادة ضبط عرض لوحة القيادة وإلغاء الفلاتر واختيار السفينة وتمييز AI')"
+                  [title]="copy('Reset dashboard view only. Does not delete saved assessments, incidents or cases.',
+                    'إعادة ضبط العرض فقط دون حذف تقييمات السفن أو الحوادث أو الحالات المحفوظة.')">
+            <span aria-hidden="true">↺</span> {{copy('Reset Dashboard','إعادة ضبط اللوحة')}}
+          </button>
         </div>
       </header>
+
+      <p *ngIf="dashboardResetNotice" class="nmc-kpi-reset-notice" role="status" aria-live="polite">
+        {{dashboardResetNotice}}
+      </p>
 
       <div class="nmc-unified-kpi-grid">
         <article class="nmc-unified-kpi-card"
