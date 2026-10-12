@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-label="MOEI Maritime Digital Platform emblem">
+  <defs>
+    <linearGradient id="sea" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#0D4158"/><stop offset="1" stop-color="#052138"/></linearGradient>
+    <linearGradient id="crest" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#79F4D6"/><stop offset=".52" stop-color="#29B6C0"/><stop offset="1" stop-color="#1484A4"/></linearGradient>
+    <linearGradient id="hull" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#F5FFFF"/><stop offset="1" stop-color="#BCE9E7"/></linearGradient>
+    <filter id="glow"><feGaussianBlur stdDeviation="1.6"/></filter>
+  </defs>
+  <rect x="2" y="2" width="92" height="92" rx="25" fill="url(#sea)" stroke="#3ABAB5" stroke-opacity=".66" stroke-width="1.5"/>
+  <circle cx="48" cy="45" r="31" stroke="#39C5C2" stroke-opacity=".19" fill="none" stroke-width="1.5"/>
+  <path d="M 21 43 A 29 29 0 0 1 64 18" stroke="url(#crest)" stroke-width="2.7" fill="none" stroke-linecap="round"/>
+  <path d="M 73 41 A 28 28 0 0 1 65 65" stroke="#E7C68A" stroke-opacity=".78" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+  <path d="M48 14v9M18 46h8M70 46h8" stroke="#A3D7D4" stroke-opacity=".48" stroke-width="1.5"/>
+  <path d="M48 22l3.8 6.2-3.8-1.2-3.8 1.2z" fill="#E9C887"/>
+  <!-- Digital route and three ports across a connected maritime network -->
+  <path d="M24 65Q34 49 46 60T74 54" fill="none" stroke="#67E0D5" stroke-width="2" stroke-dasharray="3 4" opacity=".72"/>
+  <circle cx="24" cy="65" r="3.2" fill="#5DE2C5"/><circle cx="74" cy="54" r="3.2" fill="#F2CF8A"/>
+  <!-- Vessel bow, compass heading and fluid wave form a maritime M -->
+  <path d="M33 35h30l-3.5 11h-23z" fill="url(#hull)"/>
+  <path d="M44 26h8v9h-8z" fill="#9BECE2"/>
+  <path d="M31 47l17 16 17-16-6-2-11 9-11-9z" fill="#79E6D9"/>
+  <path d="M20 69c10-7 17-7 28 0 10 7 17 7 28 0" fill="none" stroke="url(#crest)" stroke-width="5" stroke-linecap="round"/>
+  <path d="M25 77c9-5 16-5 23 0 9 5 17 5 23 0" fill="none" stroke="#B0F8EB" stroke-width="2.6" stroke-linecap="round" opacity=".82"/>
+  <circle cx="72" cy="30" r="3.7" fill="#EAD09A"/><circle cx="72" cy="30" r="7" stroke="#EAD09A" opacity=".24" fill="none"/>
+</svg>
