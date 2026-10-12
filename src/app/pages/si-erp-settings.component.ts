@@ -22,7 +22,7 @@ interface ErpPreview{
 })
 export class SiErpSettingsComponent implements OnInit{
   busy=false;loading=false;error='';success='';
-  editorKey='';erp:ErpSnapshot|null=null;
+  editorKey='MOEI_SESSION';erp:ErpSnapshot|null=null;
   pendingImport:ErpPreview|null=null;
   fileName='';fileSize=0;
   readonly requiredSheets=[
@@ -61,7 +61,7 @@ export class SiErpSettingsComponent implements OnInit{
       'ERP_FILE_SIZE_INVALID':'Workbook must be an XLSX file smaller than 3 MB.'
     };
     this.error=code+(hints[code]?' — '+hints[code]:'');
-    if(r?.status===403)this.editorKey='';
+    if(r?.status===401)this.error='Your login session expired.';
     this.success='';this.loading=false;this.busy=false;
   }
   async uploadExcel(event:Event):Promise<void>{
