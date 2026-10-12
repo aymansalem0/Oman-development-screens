@@ -20,6 +20,9 @@ jobs:
         run: |
           node --check ai-proxy/moei-poc-auth.mjs
           node --test ai-proxy/test/moei-poc-auth.test.mjs
+          node --check ai-proxy/moei-google-sso.mjs
+          node --check ai-proxy/moei-google-users.mjs
+          node --test ai-proxy/test/moei-google-sso.test.mjs
           node --check ai-proxy/server.mjs
           node --check ai-proxy/case-source-provenance.mjs
           node --test ai-proxy/test/case-source-provenance.test.mjs
@@ -40,8 +43,12 @@ jobs:
           cp ai-proxy/test/fleet-ai.test.mjs /tmp/psc-adapter/test-fleet.mjs
           sed -i "s@'../fleet-ai.mjs'@'./fleet-ai.mjs'@" /tmp/psc-adapter/test-fleet.mjs
           node --test /tmp/psc-adapter/test-fleet.mjs
+      # Legacy login smoke is explicitly local-mode CI-only; default deployment
+      # remains Google SSO and requires verified Google account on allowlist.
       - name: Generate CI-only Admin credential
-        run: echo "MOEI_ADMIN_PASSWORD=ci-test-$(openssl rand -hex 24)" >> "$GITHUB_ENV"
+        run: |
+          echo "MOEI_AUTH_MODE=local" >> "$GITHUB_ENV"
+          echo "MOEI_ADMIN_PASSWORD=ci-test-$(openssl rand -hex 24)" >> "$GITHUB_ENV"
       - name: Start local POC
         run: docker compose up -d --wait
       - name: Smoke test Angular and proxy

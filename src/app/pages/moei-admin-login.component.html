@@ -3,10 +3,24 @@
     <div class="seal">⚓</div>
     <p class="eyebrow">MOEI · UAE · MARITIME SERVICES</p>
     <h1>{{copy('Unified Maritime Platform','منصة الشؤون البحرية الموحدة')}}</h1>
-    <p class="intro">{{copy('Sign in once to access National Maritime Centre and Smart Inspection.',
-      'تسجيل دخول واحد للوصول إلى المركز البحري الوطني والمعاينة الذكية.')}}</p>
-    <div class="role-badge">ADMIN · NMC + SMART INSPECTION</div>
-    <form (ngSubmit)="submit()">
+    <p class="intro">{{copy('Secure single sign-on for National Maritime Centre and Smart Inspection.',
+      'تسجيل دخول موحد وآمن للمركز البحري الوطني والمعاينة الذكية.')}}</p>
+    <div class="role-badge">{{copy('Approved Google accounts only','حسابات Google المعتمدة فقط')}}</div>
+    <ng-container *ngIf="!loading && mode==='google'">
+      <p class="error" *ngIf="error" role="alert">{{error}}</p>
+      <button class="submit google-login" type="button" (click)="googleSignIn()"
+              [disabled]="busy||!googleConfigured">
+        <span class="google-g" aria-hidden="true">G</span>
+        {{copy('Continue with Google','المتابعة باستخدام Google')}}
+      </button>
+      <p class="setup" *ngIf="!googleConfigured">
+        {{copy('Google SSO needs OAuth Client ID and Secret on the server before first use.',
+          'يلزم إعداد Google OAuth Client ID وClient Secret على الخادم قبل الاستخدام.')}}
+      </p>
+      <p class="setup">{{copy('Access is restricted to accounts approved by the administrator.',
+        'الدخول مقصور على الحسابات التي يعتمدها مدير النظام.')}}</p>
+    </ng-container>
+    <form *ngIf="!loading && mode==='local'" (ngSubmit)="submit()">
       <label for="moei-user">{{copy('Username','اسم المستخدم')}}</label>
       <input id="moei-user" type="text" name="username" autocomplete="username"
              [(ngModel)]="username" required [disabled]="busy"/>
@@ -19,11 +33,8 @@
       </button>
     </form>
     <div class="foot">
-      <span>{{copy('POC development environment · Single Admin account',
-        'بيئة التطوير التجريبية · حساب مدير واحد')}}</span>
-      <button type="button" (click)="lang.toggle()">
-        {{lang.isArabic?'English':'العربية'}}
-      </button>
+      <span>{{copy('MOEI POC · Restricted Access','بيئة الوزارة التجريبية · وصول مقيد')}}</span>
+      <button type="button" (click)="lang.toggle()">{{lang.isArabic?'English':'العربية'}}</button>
     </div>
   </section>
 </main>

@@ -3,7 +3,7 @@ import {HttpClient} from '@angular/common/http';
 import {Router} from '@angular/router';
 import {Observable,of,tap,catchError,map} from 'rxjs';
 
-export interface MoeiAdminIdentity{username:string;role:'ADMIN'}
+export interface MoeiAdminIdentity{username:string;email?:string;role:'ADMIN'|'VIEWER';provider?:'google'|'local'}
 export interface MoeiSessionReply{
   status:'ok';user:MoeiAdminIdentity;expiresAt:string
 }
@@ -13,6 +13,10 @@ export class MoeiAuthService{
   get user():MoeiAdminIdentity|null{return this.current;}
   get username():string{return this.current?.username||'';}
   get isAdmin():boolean{return this.current?.role==='ADMIN';}
+  providers():Observable<{mode:string;googleConfigured:boolean;googleStart:string}>{
+    return this.http.get<{mode:string;googleConfigured:boolean;googleStart:string}>('/api/moei/auth/providers');
+  }
+  googleSignIn():void{window.location.assign('/api/moei/auth/google/start');}
   constructor(private http:HttpClient,private router:Router){}
   check():Observable<boolean>{
     return this.http.get<MoeiSessionReply>('/api/moei/auth/session').pipe(

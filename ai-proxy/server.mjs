@@ -1,5 +1,7 @@
 import { createServer } from 'node:http';
 import {MoeiPocAuth,MoeiAuthError} from './moei-poc-auth.mjs';
+import {MoeiGoogleUsers,MoeiUsersError} from './moei-google-users.mjs';
+import {MoeiGoogleSso} from './moei-google-sso.mjs';
 import { getPscVessel, getPscHealth } from './psc-reader.mjs';
 import { FleetAssessmentManager } from './fleet-ai.mjs';
 import { FleetAutoScheduler } from './fleet-scheduler.mjs';
@@ -30,7 +32,14 @@ import {buildA03MultipartUserInput,summarizeA03HttpFailure} from './airia-a03-mu
 import { RuntimeSettings, RuntimeSettingsError } from './runtime-settings.mjs';
 
 const port = Number(process.env.PORT || 3000);
-const moeiAuth=new MoeiPocAuth();
+const moeiAuthMode=(process.env.MOEI_AUTH_MODE||'google').toLowerCase();
+const googleUsers=new MoeiGoogleUsers();
+const googleSso=new MoeiGoogleSso();
+const moeiAuth=new MoeiPocAuth({
+  sessionValidator:user=>user.provider!=='google'||
+    (moeiAuthMode==='google'&&Boolean(googleUsers.allowed(user.email,user.sub))&&
+     googleUsers.allowed(user.email,user.sub).role===user.role)
+});
 const apiKey = (process.env.AIRIA_MENA_KEY || '').trim();
 const runtime=new RuntimeSettings();
 runtime.load();
@@ -447,30 +456,84 @@ async function prepareCaseA01Actions(caseId,version,approval={}){
 
 const server = createServer(async (req, res) => {
   const path = new URL(req.url || '/', 'http://localhost').pathname;
-  // Platform-wide login: all NMC + Smart Inspection APIs share one server
-  // Admin session; unauthenticated requests never reach business handlers.
+  // Google SSO is the default. Local password login is an explicitly opt-in
+  // migration/debug mode, never a bypass when Google SSO is enabled.
+  if(path==='/api/moei/auth/providers'&&req.method==='GET')
+    return respond(res,200,{mode:moeiAuthMode,googleConfigured:googleSso.configured,
+      googleStart:'/api/moei/auth/google/start'});
+  if(path==='/api/moei/auth/google/start'&&req.method==='GET'){
+    try{
+      if(moeiAuthMode!=='google')throw new MoeiAuthError('MOEI_GOOGLE_SSO_DISABLED',403);
+      const result=googleSso.start(req);
+      res.setHeader('Set-Cookie',result.cookie);
+      res.writeHead(302,{Location:result.url,'Cache-Control':'no-store'});return res.end();
+    }catch(error){return respond(res,error.status||503,{error:error.code||'MOEI_GOOGLE_SSO_UNAVAILABLE'});}
+  }
+  if(path==='/api/moei/auth/google/callback'&&req.method==='GET'){
+    const url=new URL(req.url||'/', 'http://localhost');
+    let reason='MOEI_GOOGLE_LOGIN_FAILED';
+    try{
+      if(moeiAuthMode!=='google')throw new MoeiAuthError('MOEI_GOOGLE_SSO_DISABLED',403);
+      if(url.searchParams.get('error'))throw new MoeiAuthError('MOEI_GOOGLE_AUTH_CANCELLED',401);
+      const identity=await googleSso.callback(req,{
+        state:url.searchParams.get('state'),code:url.searchParams.get('code')});
+      const user=googleUsers.bind(identity.email,identity.sub); // verified Gmail only
+      const issued=moeiAuth.issueSession(user);
+      res.setHeader('Set-Cookie',[googleSso.cookie(req,'',0),moeiAuth.cookie(req,issued.token)]);
+      res.writeHead(302,{Location:'/#/moei/nmc','Cache-Control':'no-store'});return res.end();
+    }catch(error){
+      reason=error.code||reason;
+      res.setHeader('Set-Cookie',googleSso.cookie(req,'',0));
+      res.writeHead(302,{Location:'/#/moei/login?error='+encodeURIComponent(reason),
+        'Cache-Control':'no-store'});return res.end();
+    }
+  }
   if(path==='/api/moei/auth/login'&&req.method==='POST'){
+    if(moeiAuthMode!=='local')
+      return respond(res,403,{error:'MOEI_GOOGLE_SIGN_IN_REQUIRED'});
     try{
       const data=await requestJson(req,2048);
       const result=moeiAuth.authenticate(data?.username,data?.password,
         String(req.socket?.remoteAddress||'local'));
       res.setHeader('Set-Cookie',moeiAuth.cookie(req,result.token));
-      res.setHeader('Cache-Control','no-store');
       return respond(res,200,{status:'ok',user:result.user,expiresAt:result.expiresAt});
     }catch(e){return respond(res,e.status||400,{error:e.code||'MOEI_LOGIN_INVALID'});}
   }
   if(path==='/api/moei/auth/session'&&req.method==='GET'){
     const user=moeiAuth.session(req);
-    res.setHeader('Cache-Control','no-store');
     return respond(res,user?200:401,user?
-      {status:'ok',user:{username:user.username,role:user.role},expiresAt:user.expiresAt}:
+      {status:'ok',user:{username:user.username,email:user.email,role:user.role,provider:user.provider},
+       expiresAt:user.expiresAt}:
       {error:'MOEI_LOGIN_REQUIRED'});
   }
   if(path==='/api/moei/auth/logout'&&req.method==='POST'){
-    try{moeiAuth.require(req,{mutate:true});moeiAuth.logout(req);
+    try{
+      moeiAuth.require(req);
+      if(req.headers['x-moei-csrf']!=='1')throw new MoeiAuthError('MOEI_CSRF_REQUIRED',403);
+      moeiAuth.logout(req);
       res.setHeader('Set-Cookie',moeiAuth.cookie(req,'',0));
       return respond(res,200,{status:'ok'});
     }catch(e){return respond(res,e.status||401,{error:e.code||'MOEI_LOGIN_REQUIRED'});}
+  }
+  // Deliberately not under /api/ai: these paths also need session, ADMIN,
+  // CSRF and persisted, audited allowlist changes.
+  if(path==='/api/moei/admin/users'&&(req.method==='GET'||req.method==='POST')){
+    try{
+      const actor=moeiAuth.require(req,{mutate:req.method==='POST'});
+      if(actor.role!=='ADMIN')throw new MoeiAuthError('MOEI_ADMIN_REQUIRED',403);
+      if(req.method==='GET')return respond(res,200,{users:googleUsers.list()});
+      const data=await requestJson(req,2048);
+      return respond(res,201,{user:googleUsers.add(data,actor.email||actor.username)});
+    }catch(e){return respond(res,e.status||400,{error:e.code||'MOEI_USERS_REQUEST_FAILED'});}
+  }
+  if(path.startsWith('/api/moei/admin/users/')&&req.method==='PATCH'){
+    try{
+      const actor=moeiAuth.require(req,{mutate:true});
+      if(actor.role!=='ADMIN')throw new MoeiAuthError('MOEI_ADMIN_REQUIRED',403);
+      const email=decodeURIComponent(path.slice('/api/moei/admin/users/'.length));
+      const data=await requestJson(req,2048);
+      return respond(res,200,{user:googleUsers.update(email,data,actor.email||actor.username)});
+    }catch(e){return respond(res,e.status||400,{error:e.code||'MOEI_USERS_REQUEST_FAILED'});}
   }
   if(path.startsWith('/api/ai/')||path.startsWith('/api/si/')||
      path==='/api/ai'||path==='/api/si'){

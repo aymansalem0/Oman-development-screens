@@ -28,6 +28,13 @@ services:
       # never commit credentials to Git or pass them in the URL.
       MOEI_ADMIN_USERNAME: ${MOEI_ADMIN_USERNAME:-admin}
       MOEI_ADMIN_PASSWORD: ${MOEI_ADMIN_PASSWORD:-}
+      # Google OIDC SSO (default): fail closed until OAuth credentials are configured.
+      # Explicit local password mode is for controlled POC troubleshooting ONLY.
+      MOEI_AUTH_MODE: ${MOEI_AUTH_MODE:-google}
+      MOEI_GOOGLE_CLIENT_ID: ${MOEI_GOOGLE_CLIENT_ID:-}
+      MOEI_GOOGLE_CLIENT_SECRET: ${MOEI_GOOGLE_CLIENT_SECRET:-}
+      MOEI_GOOGLE_REDIRECT_URI: ${MOEI_GOOGLE_REDIRECT_URI:-http://localhost:4200/api/moei/auth/google/callback}
+      MOEI_GOOGLE_USERS_PATH: /data/moei-google-users.json
       NMC_DASHBOARD_EDITOR_KEY: ${NMC_DASHBOARD_EDITOR_KEY:-}
       NMC_DASHBOARD_PUBLISHER_KEY: ${NMC_DASHBOARD_PUBLISHER_KEY:-}
       NMC_DASHBOARD_STORE_PATH: /data/nmc-dashboard-workspace.json
