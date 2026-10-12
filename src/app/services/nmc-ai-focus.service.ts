@@ -29,22 +29,20 @@ export interface NmcAiFocusResult {
 @Injectable({providedIn:'root'})
 export class NmcAiFocusService{
   private readonly base='/api/ai/nmc/dashboard-focus';
-  private operatorKey='';
+  private operatorKey='MOEI_SESSION';
   constructor(private http:HttpClient){}
   status():Observable<NmcAiFocusStatus>{
     return this.http.get<NmcAiFocusStatus>(this.base+'/status');
   }
   run(metrics:NmcKpiValues):Observable<NmcAiFocusResult>{
     if(!this.operatorKey){
-      const key=window.prompt('NMC Dashboard Editor action key (not the Airia API key)');
-      if(!key?.trim())return throwError(()=>new Error('ACTION_CANCELLED'));
-      this.operatorKey=key.trim();
+      this.operatorKey='MOEI_SESSION';
     }
     return this.http.post<NmcAiFocusResult>(this.base+'/run',
       {metrics,confirmCost:true},
       {headers:new HttpHeaders({'X-NMC-DASHBOARD-KEY':this.operatorKey})}).pipe(
         catchError(e=>{
-          if(e?.status===403)this.operatorKey='';
+          if(e?.status===403)this.operatorKey='MOEI_SESSION';
           return throwError(()=>e);
         })
       );

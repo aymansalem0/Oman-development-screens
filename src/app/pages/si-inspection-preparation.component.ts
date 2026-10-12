@@ -14,7 +14,7 @@ import {SiPreparationService,SiPreparationView,SiPrepStatus} from '../services/s
 })
 export class SiInspectionPreparationComponent implements OnInit{
   id='';busy=false;loading=false;error='';success='';
-  editorKey='';publisherKey='';actor='';reason='';
+  editorKey='MOEI_SESSION';publisherKey='MOEI_SESSION';actor='admin';reason='';
   reviewDecision:'APPROVE'|'REJECT'='APPROVE';
   language:'en'|'ar'='en';
   data:SiPreparationView|null=null;
@@ -54,7 +54,7 @@ export class SiInspectionPreparationComponent implements OnInit{
     const err=e as {error?:{error?:string};status?:number};
     this.error=err?.error?.error||'Unable to complete the request. Check Oracle migration 010 and backend.';
     this.busy=false;this.loading=false;
-    if(err?.status===403)this.editorKey='';
+    if(err?.status===401)this.error='Your login session expired.';
   }
   private completed(message:string):void{
     this.busy=false;

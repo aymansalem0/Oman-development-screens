@@ -12,7 +12,7 @@
   <main class="guide-main">
     <section class="guide-intro">
       <div class="guide-stat"><strong>{{rules.length}}</strong><small>{{copy('Configured policy rules','قواعد مهيأة')}}</small></div>
-      <div class="guide-notice">{{copy('Advisory-only. Editing requires the editor key; publication requires supervisor approval. Case actions are separate and human-approved.',
+      <div class="guide-notice">{{copy('Advisory-only. Editing and publishing require an authenticated Admin with business confirmation. Case actions are separate and human-approved.',
         'إرشادات فقط. التعديل بمفتاح المحرر، والنشر بموافقة المشرف. إجراءات الحالة منفصلة وتتطلب اعتماد الموظف.')}}</div>
     </section>
     <p *ngIf="loading" class="guide-feedback">{{copy('Loading policy registry…','جارٍ تحميل سجل القواعد…')}}</p>

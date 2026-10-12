@@ -17,12 +17,9 @@
     </header>
 
     <section class="access card">
-      <label>{{copy('Officer / inspector name','اسم الموظف / المفتش')}}
-        <input [(ngModel)]="operator" [placeholder]="copy('Enter exact inspector or reviewer name','أدخل اسم المفتش أو المراجع')" autocomplete="off" /></label>
-      <label>{{copy('Editor key (protected inspection records)','مفتاح المحرر (السجلات المحمية)')}}
-        <input type="password" [(ngModel)]="editorKey" autocomplete="off" /></label>
-      <label>{{copy('Supervisor / Publisher key','مفتاح المشرف / الناشر')}}
-        <input type="password" [(ngModel)]="publisherKey" autocomplete="off" /></label>
+      
+      
+      
       <button class="primary" type="button" (click)="load()" [disabled]="busy||loading">
         {{loading?copy('Loading…','جارٍ التحميل…'):copy('Load / Refresh','تحميل / تحديث')}}</button>
     </section>
@@ -61,7 +58,7 @@
         </tbody></table>
       </div>
       <div class="empty" *ngIf="!cases.length">
-        {{copy('Load the list with Editor key, or approve candidates first.',
+        {{copy('Sign in as Admin to view inspection cases, or approve candidates first.',
           'حمّل القائمة بمفتاح المحرر أو اعتمد المرشحين أولاً.')}}
       </div>
     </section>

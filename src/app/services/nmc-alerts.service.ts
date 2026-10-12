@@ -54,8 +54,8 @@ export interface NmcAlertAudit{
 @Injectable({providedIn:'root'})
 export class NmcAlertsService {
   private readonly root='/api/ai/alerts';
-  private operatorKey='';
-  private supervisorKey='';
+  private operatorKey='MOEI_SESSION';
+  private supervisorKey='MOEI_SESSION';
   constructor(private readonly http:HttpClient){}
 
   overview():Observable<NmcAlertsOverview>{
@@ -80,11 +80,7 @@ export class NmcAlertsService {
     const role=isSupervisor?'supervisor':'operator';
     let key=isSupervisor?this.supervisorKey:this.operatorKey;
     if(!key){
-      const entered=window.prompt(isSupervisor
-        ?'Supervisor approval key'
-        :'Operator action key');
-      if(!entered)return throwError(()=>new Error('ACTION_CANCELLED'));
-      key=entered.trim();
+      key='MOEI_SESSION';
       if(isSupervisor)this.supervisorKey=key;
       else this.operatorKey=key;
     }
@@ -98,8 +94,8 @@ export class NmcAlertsService {
       {headers:new HttpHeaders({'X-NMC-DASHBOARD-KEY':key})}
     ).pipe(catchError(err=>{
       if(err?.status===403||err?.status===503){
-        if(isSupervisor)this.supervisorKey='';
-        else this.operatorKey='';
+        if(isSupervisor)this.supervisorKey='MOEI_SESSION';
+        else this.operatorKey='MOEI_SESSION';
       }
       return throwError(()=>err);
     }));

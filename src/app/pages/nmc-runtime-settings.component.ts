@@ -110,11 +110,10 @@ interface RuntimeSnapshot {
         </section>
         <section class="publish-card">
           <h2>{{tr('Publish runtime settings','نشر إعدادات التشغيل')}}</h2>
-          <p>{{tr('Publish only after checking agent costs, scheduler vessel limits and the Airia endpoint. The publisher key is not stored in the browser.',
-                   'انشر بعد مراجعة تكلفة الوكلاء وحدود السفن المجدولة وعنوان Airia. مفتاح المشرف لا يتم تخزينه في المتصفح.')}}</p>
+          <p>{{tr('Publish only after checking agent costs, scheduler vessel limits and the Airia endpoint. The logged Admin session is used for approval, and no extra key is required.',
+                   'انشر بعد مراجعة تكلفة الوكلاء وحدود السفن المجدولة وعنوان Airia. يُستخدم تسجيل دخول المدير الموحد للاعتماد دون إدخال مفتاح إضافي.')}}</p>
           <div class="publish-form">
-            <label>{{tr('Publisher name','اسم المشرف')}}<input [(ngModel)]="actor" maxlength="100"
-              [placeholder]="tr('Your name','اسم المستخدم')"/></label>
+
             <label>{{tr('Change reason (min. 8 characters)','سبب التعديل (8 أحرف على الأقل)')}}
               <input [(ngModel)]="reason" maxlength="500"/></label>
           </div>
@@ -228,7 +227,7 @@ export class NmcRuntimeSettingsComponent implements OnInit{
   snapshot:RuntimeSnapshot|null=null;
   draft:Record<string,boolean|number|string>={};
   groups=['agents','scheduler','alerts','connectivity'];
-  actor='';reason='';error='';success='';loading=false;saving=false;
+  actor='admin';reason='';error='';success='';loading=false;saving=false;
   constructor(private readonly http:HttpClient,public lang:LanguageService){}
   tr(en:string,ar:string){return this.lang.pick(en,ar);}
   ngOnInit(){this.load();}
@@ -284,7 +283,7 @@ export class NmcRuntimeSettingsComponent implements OnInit{
       'هل تريد نشر إعدادات الخادم؟ '+(risky?'تغيير قد يؤدي إلى استدعاءات AI مدفوعة أو عنوان اتصال جديد. ':'')+
       'قد يبدأ التقييم التلقائي المدفوع بعد النشر.'
     )))return;
-    const accessKey=window.prompt('Publisher access key / مفتاح صلاحية المشرف')?.trim();
+    const accessKey='MOEI_SESSION';
     if(!accessKey)return;
     this.saving=true;this.error='';this.success='';
     const body={expectedVersion:this.snapshot.version,values:{...this.draft},

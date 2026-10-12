@@ -99,7 +99,7 @@
           </label>
         </div>
         <div class="si-decision" *ngIf="p.options.length&&p.status==='PROPOSED'">
-          <span>{{copy("Selected slot will be revalidated before NMC Case is updated. Human approval needs the separate Supervisor key.","يُعاد التحقق من الموعد المختار قبل تحديث حالة المركز البحري. ويتطلب الاعتماد البشري مفتاح المشرف.")}}</span>
+          <span>{{copy("Selected slot will be revalidated before NMC Case is updated. Human approval is recorded under the authenticated Admin session.","يُعاد التحقق من الموعد المختار قبل تحديث حالة المركز البحري. ويُسجل الاعتماد باسم المدير من جلسة الدخول.")}}</span>
           <button type="button" class="primary" [disabled]="busy||!selectedOptionId" (click)="confirm()">✓ {{copy('Confirm Selected Schedule','تأكيد الموعد المختار')}}</button>
         </div>
         <details *ngIf="p.exclusions.length"><summary>{{copy('Excluded inspectors','المفتشون المستبعدون')}} ({{p.exclusions.length}}) · {{copy('Reasons','الأسباب')}}</summary>
@@ -112,7 +112,7 @@
       <section class="si-panel">
         <header class="si-section-head"><div><small>{{copy("04 / BUSINESS CONFIGURATION","٠٤ / إعدادات الأعمال")}}</small><h2>{{copy("Scheduling Approval & Optimization Settings","إعدادات اعتماد الجدولة وتحسين التوزيع")}}</h2></div>
           <span class="si-badge">{{copy('Version','الإصدار')}} {{policy?.revision||'—'}}</span></header>
-        <p class="si-hint">{{copy('These policies determine automatic or supervisor approval. They do not modify NMC risk settings or previous AI results. Publication requires a supervisor key and business justification.','تتحكم هذه الإعدادات في الاعتماد التلقائي أو اعتماد المسؤول. لا تغيّر إعدادات المخاطر أو نتائج AI التاريخية. يتطلب النشر مفتاح المشرف ومبررًا إداريًا.')}}</p>
+        <p class="si-hint">{{copy('These policies determine automatic or supervisor approval. They do not modify NMC risk settings or previous AI results. Publication requires Admin login and a recorded business justification.','تتحكم هذه الإعدادات في الاعتماد التلقائي أو اعتماد المسؤول. لا تغيّر إعدادات المخاطر أو نتائج AI التاريخية. يتطلب النشر صلاحية المدير ومبررًا إداريًا.')}}</p>
         <div class="si-policy-grid" *ngIf="draft as cfg">
           <div><label>{{copy("Scheduling Mode","وضع الجدولة")}}</label>
             <select [(ngModel)]="cfg.approvalMode">

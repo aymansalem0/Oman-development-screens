@@ -65,7 +65,7 @@ export class NmcRiskConfigurationAdminComponent implements OnInit, OnDestroy {
   draftSaveMessage='';
   draftActorName='';
   draftError='';
-  private editorAccessKey='';
+  private editorAccessKey='MOEI_SESSION';
   private draftRequested=false;
   get canSaveDraft():boolean{
     return this.policyReady&&!this.draftSaving&&!!this.draft?.name?.trim();
@@ -73,7 +73,7 @@ export class NmcRiskConfigurationAdminComponent implements OnInit, OnDestroy {
   get draftStale():boolean{
     return !!this.savedDraft&&this.savedDraft.baseRevision!==this.activeRevision;
   }
-  private publisherAccessKey='';
+  private publisherAccessKey='MOEI_SESSION';
   private dirtyDraft=false;
   get policyReady():boolean{return this.riskEngine.centralReady&&!!this.riskEngine.activeVersion;}
   get activeRevision():number{return this.riskEngine.activeVersion?.revision||0;}
@@ -163,11 +163,10 @@ export class NmcRiskConfigurationAdminComponent implements OnInit, OnDestroy {
   }
   saveDraft():void{
     if(!this.canSaveDraft)return;
-    if(!this.editorAccessKey)this.editorAccessKey=window.prompt(
-      'Risk Draft editor key (this browser tab only)')?.trim()||'';
+    if(!this.editorAccessKey)this.editorAccessKey='MOEI_SESSION';
     if(!this.editorAccessKey)return;
     if(!this.draftActorName.trim())
-      this.draftActorName=window.prompt('Name of the Risk Editor saving this draft')?.trim()||'';
+      this.draftActorName='admin';
     if(this.draftActorName.trim().length<3)return;
     this.draftSaving=true;this.draftError='';this.draftSaveMessage='';
     this.subscriptions.add(this.riskEngine.saveCentralDraft(
@@ -182,7 +181,7 @@ export class NmcRiskConfigurationAdminComponent implements OnInit, OnDestroy {
       },
       error:e=>{
         this.draftSaving=false;
-        if(e?.status===403)this.editorAccessKey='';
+        if(e?.status===401)this.draftError='Login session expired.';
         this.draftError=this.copy('Draft save failed: '+(e?.error?.error||'API_ERROR'),
           'تعذر حفظ المسودة: '+(e?.error?.error||'API_ERROR'));
       }
@@ -408,8 +407,7 @@ export class NmcRiskConfigurationAdminComponent implements OnInit, OnDestroy {
         ' saved AI assessments WITHOUT running agents; keep prior versions, audit and cases?',
       'نشر إصدار مخاطر جديد نشط مركزيًا في Oracle لكل المستخدمين وإعادة حساب '+count+
         ' تقييم AI محفوظ دون استدعاء الوكلاء، مع الاحتفاظ بتاريخ الإصدارات والحالات؟')))return;
-    if(!this.publisherAccessKey)
-      this.publisherAccessKey=window.prompt('Risk Policy supervisor publishing key (this browser tab only)')?.trim()||'';
+    if(!this.publisherAccessKey)this.publisherAccessKey='MOEI_SESSION';
     if(!this.publisherAccessKey)return;
     this.publishing=true;this.publicationError='';this.publishedMessage='';
     this.subscriptions.add(this.riskEngine.publishCentral(this.draft,this.activeRevision,
@@ -431,7 +429,7 @@ export class NmcRiskConfigurationAdminComponent implements OnInit, OnDestroy {
       },
       error:e=>{
         this.publishing=false;
-        if(e?.status===403)this.publisherAccessKey='';
+        if(e?.status===401)this.publicationError='Login session expired.';
         const code=e?.error?.error||'RISK_POLICY_PUBLISH_FAILED';
         this.publicationError=this.copy(
           'Central publication failed: '+code+'. The draft was preserved. Refresh policy and retry after checking the migration and key.',

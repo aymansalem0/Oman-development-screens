@@ -18,6 +18,8 @@ jobs:
         run: docker compose build nmc ai-proxy
       - name: Unit-test PSC proxy and schemas
         run: |
+          node --check ai-proxy/moei-poc-auth.mjs
+          node --test ai-proxy/test/moei-poc-auth.test.mjs
           node --check ai-proxy/server.mjs
           node --check ai-proxy/case-source-provenance.mjs
           node --test ai-proxy/test/case-source-provenance.test.mjs
@@ -38,29 +40,41 @@ jobs:
           cp ai-proxy/test/fleet-ai.test.mjs /tmp/psc-adapter/test-fleet.mjs
           sed -i "s@'../fleet-ai.mjs'@'./fleet-ai.mjs'@" /tmp/psc-adapter/test-fleet.mjs
           node --test /tmp/psc-adapter/test-fleet.mjs
+      - name: Generate CI-only Admin credential
+        run: echo "MOEI_ADMIN_PASSWORD=ci-test-$(openssl rand -hex 24)" >> "$GITHUB_ENV"
       - name: Start local POC
         run: docker compose up -d --wait
       - name: Smoke test Angular and proxy
         run: |
-          curl --fail --silent --show-error http://127.0.0.1:4200/ | grep -qi '<html'
-          curl --fail --silent --show-error http://127.0.0.1:4200/api/ai/health | grep -q '"aiConfigured":false'
-          curl --fail --silent --show-error http://127.0.0.1:4200/api/ai/fleet/status | grep -q '"fleetSize":420'
-          curl --fail --silent --show-error http://127.0.0.1:4200/api/si/v1/candidates/dashboard | grep -q '"evaluatedPopulation":420'
-          curl --fail --silent --show-error http://127.0.0.1:4200/api/si/v1/rules | grep -q '"riskPriorityThreshold":65'
-          # Source-specific Excel templates are real XLSX files served over Nginx;
-          # no NMC Excel upload endpoint is permitted.
-          curl -fsS http://127.0.0.1:4200/api/si/v1/candidate-sources/template/SERVICE_REQUEST -o /tmp/si-service.xlsx
-          curl -fsS http://127.0.0.1:4200/api/si/v1/candidate-sources/template/PSC_PORT_CALL -o /tmp/si-psc.xlsx
+          set -eu
+          base=http://127.0.0.1:4200
+          jar=/tmp/moei-admin-ci-session.cookie
+          curl -fsS "$base/" | grep -qi '<html'
+          curl -fsS "$base/api/ai/health" | grep -q '"aiConfigured":false'
+          # Both NMC and Inspection APIs reject unauthenticated browser callers.
+          test "$(curl -s -o /dev/null -w '%{http_code}' "$base/api/ai/fleet/status")" = "401"
+          test "$(curl -s -o /dev/null -w '%{http_code}' "$base/api/si/v1/candidates/dashboard")" = "401"
+          curl -fsS -c "$jar" -H 'Content-Type: application/json' \
+            --data "$(printf '{"username":"admin","password":"%s"}' "$MOEI_ADMIN_PASSWORD")" \
+            "$base/api/moei/auth/login" | grep -q '"role":"ADMIN"'
+          curl -fsS -b "$jar" "$base/api/moei/auth/session" | grep -q '"role":"ADMIN"'
+          curl -fsS -b "$jar" "$base/api/ai/fleet/status" | grep -q '"fleetSize":420'
+          curl -fsS -b "$jar" "$base/api/si/v1/candidates/dashboard" | grep -q '"evaluatedPopulation":420'
+          curl -fsS -b "$jar" "$base/api/si/v1/rules" | grep -q '"riskPriorityThreshold":65'
+          curl -fsS -b "$jar" "$base/api/si/v1/candidate-sources/template/SERVICE_REQUEST" -o /tmp/si-service.xlsx
+          curl -fsS -b "$jar" "$base/api/si/v1/candidate-sources/template/PSC_PORT_CALL" -o /tmp/si-psc.xlsx
           unzip -t /tmp/si-service.xlsx >/dev/null
           unzip -t /tmp/si-psc.xlsx >/dev/null
-          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:4200/api/si/v1/candidate-sources/template/NMC_CASE)" = "405"
-          test "$(curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:4200/api/si/v1/candidates/source-events)" = "503"
-          test "$(curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:4200/api/ai/fleet/start)" = "405"
-          curl --fail --silent --show-error http://127.0.0.1:4200/api/ai/psc/health | grep -q '"sourceMode":"snapshot"'
-          curl --fail --silent --show-error http://127.0.0.1:4200/api/ai/psc/vessels/9328471 | grep -q '"sourceMode":"LOCAL_FIXTURE_SNAPSHOT"'
-          curl --fail --silent --show-error http://127.0.0.1:4200/api/ai/psc/vessels/9328471 | grep -q '"inspections":4'
-          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:4200/api/ai/psc/vessels/1234567)" = "404"
-          test "$(curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:4200/api/ai/execute/a01)" = "503"
+          # Invalid scope stays rejected, even with an authenticated Admin.
+          test "$(curl -s -b "$jar" -o /dev/null -w '%{http_code}' "$base/api/si/v1/candidate-sources/template/NMC_CASE")" = "405"
+          # Mutations require a CSRF header in addition to a signed-in cookie.
+          test "$(curl -s -b "$jar" -o /dev/null -w '%{http_code}' -X POST "$base/api/si/v1/candidates/source-events")" = "403"
+          curl -fsS "$base/api/ai/psc/health" | grep -q '"sourceMode":"snapshot"'
+          curl -fsS -b "$jar" "$base/api/ai/psc/vessels/9328471" | grep -q '"sourceMode":"LOCAL_FIXTURE_SNAPSHOT"'
+          curl -fsS -b "$jar" "$base/api/ai/psc/vessels/9328471" | grep -q '"inspections":4'
+          test "$(curl -s -b "$jar" -o /dev/null -w '%{http_code}' "$base/api/ai/psc/vessels/1234567")" = "404"
+          curl -fsS -b "$jar" -H 'X-MOEI-CSRF: 1' -X POST "$base/api/moei/auth/logout" | grep -q '"status":"ok"'
+          test "$(curl -s -b "$jar" -o /dev/null -w '%{http_code}' "$base/api/ai/fleet/status")" = "401"
       - name: Logs if failing
         if: failure()
         run: docker compose logs --tail=100

@@ -1,4 +1,5 @@
 import { createServer } from 'node:http';
+import {MoeiPocAuth,MoeiAuthError} from './moei-poc-auth.mjs';
 import { getPscVessel, getPscHealth } from './psc-reader.mjs';
 import { FleetAssessmentManager } from './fleet-ai.mjs';
 import { FleetAutoScheduler } from './fleet-scheduler.mjs';
@@ -29,6 +30,7 @@ import {buildA03MultipartUserInput,summarizeA03HttpFailure} from './airia-a03-mu
 import { RuntimeSettings, RuntimeSettingsError } from './runtime-settings.mjs';
 
 const port = Number(process.env.PORT || 3000);
+const moeiAuth=new MoeiPocAuth();
 const apiKey = (process.env.AIRIA_MENA_KEY || '').trim();
 const runtime=new RuntimeSettings();
 runtime.load();
@@ -445,6 +447,40 @@ async function prepareCaseA01Actions(caseId,version,approval={}){
 
 const server = createServer(async (req, res) => {
   const path = new URL(req.url || '/', 'http://localhost').pathname;
+  // Platform-wide login: all NMC + Smart Inspection APIs share one server
+  // Admin session; unauthenticated requests never reach business handlers.
+  if(path==='/api/moei/auth/login'&&req.method==='POST'){
+    try{
+      const data=await requestJson(req,2048);
+      const result=moeiAuth.authenticate(data?.username,data?.password,
+        String(req.socket?.remoteAddress||'local'));
+      res.setHeader('Set-Cookie',moeiAuth.cookie(req,result.token));
+      res.setHeader('Cache-Control','no-store');
+      return respond(res,200,{status:'ok',user:result.user,expiresAt:result.expiresAt});
+    }catch(e){return respond(res,e.status||400,{error:e.code||'MOEI_LOGIN_INVALID'});}
+  }
+  if(path==='/api/moei/auth/session'&&req.method==='GET'){
+    const user=moeiAuth.session(req);
+    res.setHeader('Cache-Control','no-store');
+    return respond(res,user?200:401,user?
+      {status:'ok',user:{username:user.username,role:user.role},expiresAt:user.expiresAt}:
+      {error:'MOEI_LOGIN_REQUIRED'});
+  }
+  if(path==='/api/moei/auth/logout'&&req.method==='POST'){
+    try{moeiAuth.require(req,{mutate:true});moeiAuth.logout(req);
+      res.setHeader('Set-Cookie',moeiAuth.cookie(req,'',0));
+      return respond(res,200,{status:'ok'});
+    }catch(e){return respond(res,e.status||401,{error:e.code||'MOEI_LOGIN_REQUIRED'});}
+  }
+  if(path.startsWith('/api/ai/')||path.startsWith('/api/si/')||
+     path==='/api/ai'||path==='/api/si'){
+    const publicHealth=['/api/ai/health','/api/ai/psc/health',
+      '/api/ai/nmc/incidents/health'];
+    if(!publicHealth.includes(path)){
+      try{moeiAuth.require(req,{mutate:!['GET','HEAD','OPTIONS'].includes(req.method)});}
+      catch(e){return respond(res,e.status||401,{error:e.code||'MOEI_LOGIN_REQUIRED'});}
+    }
+  }
 
   if(path==='/api/ai/admin/runtime-settings'){
     if(req.method==='GET')return respond(res,200,runtime.publicView());

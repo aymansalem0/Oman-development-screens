@@ -38,7 +38,7 @@ export class SiFullLifecycleComponent implements OnInit{
  caseId='';cases:SiLifecycleCase[]=[];view:SiLifecycleView|null=null;
  loading=false;busy=false;error='';success='';search='';
  historyBusy=false;historyError='';versions:SiLifecycleVersion[]=[];showVersions=false;
- operator='';editorKey='';publisherKey='';reason='';
+ operator='admin';editorKey='MOEI_SESSION';publisherKey='MOEI_SESSION';reason='';
  inspector='';port='Jebel Ali';visitLocal='';assignmentMode:'POC_MANUAL'|'NMC_SCHEDULED'='POC_MANUAL';
  scopeChosen:string[]=[];draftChecks:DraftCheck[]=[];reportSummary='';
  draftActions:DraftAction[]=[];

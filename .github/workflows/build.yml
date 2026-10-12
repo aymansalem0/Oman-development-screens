@@ -41,6 +41,9 @@ jobs:
       - name: Unified Smart Inspection candidates one-grid regression
         run: node --test scripts/test-si-unified-candidate-grid.mjs
 
+      - name: MOEI single Admin login and UI regression
+        run: node --test scripts/test-moei-admin-login-ui.mjs
+
       - name: SI-C01 visible access regression
         run: node --test scripts/test-si-c01-visible-access.mjs
 
@@ -66,6 +69,9 @@ jobs:
 
       - name: Unified SI inspection-plan persistence and priority regressions
         run: node --test ai-proxy/test/si-inspection-plan.test.mjs
+
+      - name: Unified MOEI Admin session security regression
+        run: node --test ai-proxy/test/moei-poc-auth.test.mjs
 
       - name: SI AI MOCK contract regressions (C01/P01/A04)
         run: node --test ai-proxy/test/si-agent-mock.test.mjs

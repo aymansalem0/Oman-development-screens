@@ -89,6 +89,9 @@ export class DashboardWorkspace {
   }
 
   assertRole(req,role){
+    // The single authenticated MOEI POC Admin may operate both legacy Editor
+    // and Publisher actions; authentication and CSRF were checked centrally.
+    if(req.moeiUser?.role==='ADMIN')return;
     const provided=req.headers['x-nmc-dashboard-key'];
     const valid=role==='PUBLISHER'
       ? secretEqual(provided,this.publisherKey)

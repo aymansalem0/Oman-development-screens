@@ -152,3 +152,15 @@
   .nav-settings-heading .nav-label,.nav-settings-heading .nav-chevron{display:none}
   .nav-settings-section {margin:3px 0 8px}
 }
+
+/* Unified authenticated POC Admin identity, not another per-screen key field. */
+.nav-user-session{display:flex;align-items:center;justify-content:space-between;
+ gap:10px;padding:9px 11px;margin:6px 8px 9px;background:#e7f5f1;
+ border:1px solid #cde8df;border-radius:10px;min-width:0}
+.nav-user-session div{min-width:0;display:flex;flex-direction:column;gap:3px}
+.nav-user-session strong{font-size:11px;color:#08756e;overflow:hidden;text-overflow:ellipsis}
+.nav-user-session small{font-size:8px;color:#528f84;letter-spacing:.3px}
+.nav-user-session button{background:#fff;border:1px solid #bbdcd1;border-radius:7px;
+ color:#0e6c64;font-size:9px;font-weight:800;cursor:pointer;
+ padding:6px 8px;white-space:nowrap}
+.nav-user-session button:hover{background:#daf0eb}

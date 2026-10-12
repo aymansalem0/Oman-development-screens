@@ -131,11 +131,7 @@
         {{copy('A02/A01 analysis and NMC incident risk are recorded automatically. Only an NMC officer can approve a follow-up. Actions and task ownership are managed here.',
         'يُسجل تحليل A02/A01 ودرجة مخاطر الحادث تلقائيًا. لا تعتمد المتابعة إلا بواسطة موظف، وتدار المهام والمسؤوليات من داخل هذه الحالة.')}}
       </p>
-      <label class="case-incident-officer" *ngIf="(centralCase.incidentEvents||[]).length">
-        {{copy('Reviewing officer','الموظف المراجع')}}
-        <input [(ngModel)]="incidentOfficerName" maxlength="80"
-          [placeholder]="copy('Officer name for incident decisions','اسم الموظف لاعتماد إجراءات الحادث')"/>
-      </label>
+
       <article class="case-incident-event" *ngFor="let inc of centralCase.incidentEvents">
         <div class="case-incident-summary">
           <div>

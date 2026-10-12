@@ -1,0 +1,29 @@
+<main class="moei-auth-page" [attr.dir]="lang.dir">
+  <section class="moei-auth-card" aria-label="MOEI Maritime Platform login">
+    <div class="seal">⚓</div>
+    <p class="eyebrow">MOEI · UAE · MARITIME SERVICES</p>
+    <h1>{{copy('Unified Maritime Platform','منصة الشؤون البحرية الموحدة')}}</h1>
+    <p class="intro">{{copy('Sign in once to access National Maritime Centre and Smart Inspection.',
+      'تسجيل دخول واحد للوصول إلى المركز البحري الوطني والمعاينة الذكية.')}}</p>
+    <div class="role-badge">ADMIN · NMC + SMART INSPECTION</div>
+    <form (ngSubmit)="submit()">
+      <label for="moei-user">{{copy('Username','اسم المستخدم')}}</label>
+      <input id="moei-user" type="text" name="username" autocomplete="username"
+             [(ngModel)]="username" required [disabled]="busy"/>
+      <label for="moei-pass">{{copy('Password','كلمة المرور')}}</label>
+      <input id="moei-pass" type="password" name="password" autocomplete="current-password"
+             [(ngModel)]="password" required [disabled]="busy"/>
+      <p class="error" *ngIf="error" role="alert">{{error}}</p>
+      <button class="submit" type="submit" [disabled]="busy||!username.trim()||!password">
+        {{busy?copy('Signing in…','جارٍ تسجيل الدخول…'):copy('Sign in','تسجيل الدخول')}}
+      </button>
+    </form>
+    <div class="foot">
+      <span>{{copy('POC development environment · Single Admin account',
+        'بيئة التطوير التجريبية · حساب مدير واحد')}}</span>
+      <button type="button" (click)="lang.toggle()">
+        {{lang.isArabic?'English':'العربية'}}
+      </button>
+    </div>
+  </section>
+</main>

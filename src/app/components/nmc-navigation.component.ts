@@ -7,6 +7,7 @@ import { DashboardMenuPlacement } from '../services/nmc-dashboard-store.service'
 import { NmcDashboardNavigationService } from '../services/nmc-dashboard-navigation.service';
 import { PublishedDashboardMenuItem } from '../services/nmc-dashboard-workspace.service';
 import { NmcAlertsService } from '../services/nmc-alerts.service';
+import {MoeiAuthService} from '../services/moei-auth.service';
 import {
   NmcSidebarMenuStateService,MainMaritimeGroup,SettingsMaritimeGroup,
   MaritimeDashboardGroup
@@ -61,6 +62,7 @@ export class NmcNavigationComponent implements OnInit, OnDestroy {
     public readonly lang: LanguageService,
     private readonly dashboardNavigation: NmcDashboardNavigationService,
     private readonly alertsService: NmcAlertsService,
+    public readonly auth:MoeiAuthService,
     private readonly menuState:NmcSidebarMenuStateService
   ) {}
 

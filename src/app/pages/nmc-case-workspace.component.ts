@@ -80,7 +80,7 @@ export class NmcCaseWorkspaceComponent implements OnInit {
     'ESCALATE_TO_AUTHORITY','INCIDENT_RESPONSE','CLOSE_AFTER_VERIFICATION'
   ];
   incidentFollowupSelection:Record<string,string>={};
-  incidentOfficerName='';
+  incidentOfficerName='admin';
   incidentOfficerReasons:Record<string,string>={};
   readonly humanActionTypes=[
     'VERIFY_CERTIFICATE','ENHANCED_MONITORING','PRIORITY_INSPECTION',

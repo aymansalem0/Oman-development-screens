@@ -41,18 +41,11 @@
       </header>
 
       <div class="si-compact-credentials">
-        <label>{{copy('Officer name','اسم الموظف')}}
-          <input type="text" [(ngModel)]="reviewer" autocomplete="off"
-                 [placeholder]="copy('Required to confirm changes','مطلوب لتأكيد التعديل')"/>
-        </label>
-        <label>{{copy('Editor Key','مفتاح المحرر')}}
-          <input #editorAccessKey type="password" [(ngModel)]="editorKey"
-                 autocomplete="off" [placeholder]="copy('Required for AI plan','مطلوب للخطة')"/>
-        </label>
+        <span class="si-admin-user">✓ Admin · {{copy('Authenticated session','جلسة موحدة')}}</span>
         <button type="button" (click)="loadInspectionPlan()" [disabled]="planBusy||loading">
           {{copy('Load Plan','تحميل الخطة')}}</button>
         <button type="button" class="primary" (click)="generateInspectionPlan()"
-                [disabled]="planBusy||loading||!plan||!reviewer.trim()||!editorKey.trim()">
+                [disabled]="planBusy||loading||!plan">
           {{plan?.agentRunId?copy('Re-run AI Selection & Priority','إعادة حساب اختيار وترتيب AI'):
             copy('Generate AI Selection & Priority','إنشاء اختيار وترتيب AI')}}
         </button>
@@ -224,9 +217,6 @@
                         <a *ngIf="c.inspectionCase" [routerLink]="['/moei/smart-inspection/preparation',c.inspectionCase.id]">
                           {{copy('Open Approved Inspection →','فتح المعاينة المعتمدة ←')}}</a>
                         <ng-container *ngIf="!c.inspectionCase">
-                          <label>{{copy('Supervisor / Publisher Key','مفتاح المشرف')}}
-                            <input type="password" [(ngModel)]="publisherKey" autocomplete="off"/>
-                          </label>
                           <label>{{copy('Official decision reason','سبب القرار الرسمي')}}
                             <input type="text" [(ngModel)]="decisionNote" maxlength="500"/>
                           </label>

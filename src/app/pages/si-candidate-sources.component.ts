@@ -20,7 +20,7 @@ export class SiCandidateSourcesComponent implements OnInit,OnDestroy{
   source:SourcePage=null;
   status:SiSourceImportSummary|null=null;
   preview:SiImportPreview|null=null;
-  editorKey='';actor='';selectedName='';selectedSize=0;
+  editorKey='MOEI_SESSION';actor='admin';selectedName='';selectedSize=0;
   busy=false;loading=false;error='';success='';
   private sub:Subscription|null=null;
   readonly sources:{key:SiExcelSource;slug:string;en:string;ar:string}[]=[
@@ -75,7 +75,7 @@ export class SiCandidateSourcesComponent implements OnInit,OnDestroy{
       this.copy(' — Oracle migration 009 is required for candidate events.',
         ' — يجب تنفيذ Oracle Migration 009 لتخزين أحداث الترشيح.'):'');
     this.busy=false;this.success='';
-    if(e?.status===403)this.editorKey='';
+    if(e?.status===401)this.error='Your login session expired. Sign in again.';
   }
   async selectFile(event:Event):Promise<void>{
     const input=event.target as HTMLInputElement;

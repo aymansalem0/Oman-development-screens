@@ -31,7 +31,7 @@ export interface VesselDriveListing{
 }
 @Injectable({providedIn:'root'})
 export class NmcDocumentsService {
-  private editorKey='';
+  private editorKey='MOEI_SESSION';
   constructor(private readonly http:HttpClient){}
   private url(imo:string,fileId?:string){
     return '/api/ai/vessels/'+encodeURIComponent(imo)+'/documents'+
@@ -42,9 +42,7 @@ export class NmcDocumentsService {
   }
   private headers():HttpHeaders|null{
     if(!this.editorKey){
-      const k=window.prompt('NMC Editor access key / مفتاح صلاحية المحرر');
-      if(!k)return null;
-      this.editorKey=k.trim();
+      this.editorKey='MOEI_SESSION';
     }
     return new HttpHeaders({'X-NMC-DASHBOARD-KEY':this.editorKey});
   }

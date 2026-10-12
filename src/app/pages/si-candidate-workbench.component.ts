@@ -21,7 +21,7 @@ export class SiCandidateWorkbenchComponent implements OnInit{
   dashboard:SiDashboard|null=null;
   sourceFilter:SourceFilter='ALL';statusFilter:StatusFilter='ALL';search='';
   selectedKey='';selectedImo='';
-  reviewer='';decisionNote='';editorKey='';publisherKey='';
+  reviewer='admin';decisionNote='';editorKey='MOEI_SESSION';publisherKey='MOEI_SESSION';
   plan:SiInspectionPlanState|null=null;
   planBusy=false;planError='';planNotice='';
   expandedImo='';planEditingImo='';

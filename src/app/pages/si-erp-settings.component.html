@@ -39,9 +39,7 @@
         <div class="notice info">
           {{copy("No Oracle migration required. The ERP snapshot is stored separately from NMC case, assessment and risk-policy history. Uploading Excel never triggers AI.","لا يلزم تعديل Oracle. تُحفظ بيانات ERP التجريبية منفصلة عن تاريخ الحالات والتقييمات والمخاطر. لا يؤدي رفع Excel إلى تشغيل AI.")}}
         </div>
-        <label>{{copy("Editor / integration administrator key","مفتاح المحرر / مسؤول التكامل")}}
-          <input type="password" [(ngModel)]="editorKey" autocomplete="off" [placeholder]="copy('Required for Preview and Commit','مطلوب للمعاينة واعتماد الاستيراد')"/>
-        </label>
+        
         <div *ngIf="erp?.ready" class="counts">
           <h3>{{copy("Currently active ERP snapshot","نسخة بيانات ERP النشطة حاليًا")}}</h3>
           <div *ngFor="let c of countPairs"><span>{{c.name}}</span><strong>{{c.value}}</strong></div>

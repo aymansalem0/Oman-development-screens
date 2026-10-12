@@ -48,7 +48,8 @@ test('AI why-selected and why-ranked explanations appear in a single expandable 
 });
 test('official supervisor inspection approval remains separate from advisory plan changes',()=>{
  assert.match(html,/decide\('APPROVE'\)/);
- assert.match(html,/\[\(ngModel\)\]="publisherKey"/);
+ assert.doesNotMatch(html,/\[\(ngModel\)\]="publisherKey"/);
+ assert.match(html,/decide\('APPROVE'\)/);
  assert.match(backend,/const siInspectionPlan=new SiInspectionPlan/);
  assert.match(backend,/siInspectionPlan\.rerank/);
  assert.match(backend,/dashboards\.assertRole\(req,'EDITOR'\)/);

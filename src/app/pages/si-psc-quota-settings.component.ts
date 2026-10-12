@@ -87,13 +87,11 @@ import {SiPscSelectionService,PscQuotaConfig,PscQuotaPolicy}
           'ضابط حماية: إحالات NMC المعتمدة وطلبات الخدمات البحرية ليست ضمن حصة PSC. لا يوجد اختيار تلقائي بواسطة AI أو حكم تنظيمي.')}}</p>
         <section class="edit-access">
           <h3>{{copy('Preview & Approval Access','صلاحيات المعاينة والاعتماد')}}</h3>
-          <p class="hint">{{copy('The published policy is visible automatically. Enter an Editor key only to preview changes; a Publisher key is required only when publishing a new version.',
-            'تظهر السياسة المنشورة تلقائيًا. استخدم مفتاح المحرر فقط لمعاينة أثر التعديلات، ومفتاح المشرف فقط لاعتماد ونشر إصدار جديد.')}}</p>
+          <p class="hint">{{copy('Admin is authenticated through the unified platform login. Publishing still requires an impact preview and a recorded reason.',
+ 'تم التحقق من صلاحية المدير من تسجيل الدخول الموحد. يظل نشر الإعدادات مشروطاً بمعاينة الأثر وتسجيل السبب.')}}</p>
           <div class="keys">
-            <label>{{copy('Editor key · Preview','مفتاح المحرر · معاينة الأثر')}}
-              <input type="password" [(ngModel)]="editorKey" autocomplete="off"/></label>
-            <label>{{copy('Publisher key · Publish','مفتاح المشرف · النشر')}}
-              <input type="password" [(ngModel)]="publisherKey" autocomplete="off"/></label>
+            
+            
           </div>
         </section>
         <div class="actions">
@@ -124,8 +122,7 @@ import {SiPscSelectionService,PscQuotaConfig,PscQuotaPolicy}
             'بعض الاختيارات السابقة تتجاوز الحصة المقترحة؛ لن تُحذف أي معاينة معتمدة ويلزم مراجعة المشرف.')}}</p>
         <h3>{{copy('Controlled Publication','النشر المنضبط')}}</h3>
         <div class="publish-row">
-          <label>{{copy('Publisher / reviewer','المراجع / المشرف')}}
-            <input [(ngModel)]="reviewer" maxlength="120"/></label>
+          
           <label>{{copy('Business justification','المبرر الإداري')}}
             <textarea [(ngModel)]="reason" rows="2" maxlength="500"></textarea></label>
         </div>
@@ -189,7 +186,7 @@ export class SiPscQuotaSettingsComponent implements OnInit{
     portOverrides:[],mandatoryOutsideQuota:true};
   impact:{status:string;summary:{bucket:string;eligiblePortCalls:number;
     selectionRate:number;targetCount:number;selectedCount:number;overQuota:boolean}[]}|null=null;
-  editorKey='';publisherKey='';reviewer='';reason='';busy=false;error='';success='';
+  editorKey='MOEI_SESSION';publisherKey='MOEI_SESSION';reviewer='admin';reason='';busy=false;error='';success='';
   constructor(private readonly api:SiPscSelectionService,public readonly lang:LanguageService){}
   ngOnInit():void{this.load();}
   copy(en:string,ar:string){return this.lang.pick(en,ar);}
