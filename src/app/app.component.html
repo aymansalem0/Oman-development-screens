@@ -1,4 +1,4 @@
-<div class="app-shell" [class.nmc-mode]="isNmcArea" [class.smart-inspection-mode]="isSmartInspectionArea" [class.rtl]="lang.isArabic" [attr.dir]="lang.dir">
+<div class="app-shell" *ngIf="!isLoginPage; else loginShell" [class.nmc-mode]="isNmcArea" [class.smart-inspection-mode]="isSmartInspectionArea" [class.rtl]="lang.isArabic" [attr.dir]="lang.dir">
   <aside class="sidebar" *ngIf="!isNmcArea">
     <div class="sidebar-user">
       <div class="sidebar-user-icon">✣</div>
@@ -74,3 +74,5 @@
     <app-nmc-platform-footer *ngIf="isSmartInspectionArea"></app-nmc-platform-footer>
   </div>
 </div>
+
+<ng-template #loginShell><router-outlet></router-outlet></ng-template>
