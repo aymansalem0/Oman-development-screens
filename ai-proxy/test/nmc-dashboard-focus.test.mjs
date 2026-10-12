@@ -95,6 +95,8 @@ test('8 distinct operational metrics pass exact schema, High excludes Critical i
 test('no AI request on GET or without explicit user confirmation',async()=>{
   const calls=[],f=focus(calls);
   assert.equal(f.status().automaticAiCalls,false);
+  assert.equal(f.status().assessmentContextReady,true);
+  assert.equal(f.status().sourceImo,'9328471');
   assert.deepEqual(f.status().agentIds,['A02','A01']);
   await assert.rejects(f.run({metrics:metrics()}),/DASHBOARD_FOCUS_CONFIRM_REQUIRED/);
   assert.equal(calls.length,0);
@@ -104,6 +106,7 @@ test('disabled feature does not call existing A01 or A02',async()=>{
   await assert.rejects(f.run({metrics:metrics(),confirmCost:true}),
     /DASHBOARD_FOCUS_A01_A02_NOT_ENABLED/);
   assert.equal(calls.length,0);
+  assert.equal(f.status().assessmentContextReady,false);
 });
 test('uses existing A02 and A01 input KEYS, preserves original five risk evidence values',async()=>{
   const calls=[],f=focus(calls);
