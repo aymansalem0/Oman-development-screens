@@ -26,15 +26,19 @@ const mk=({multiple=false,risk=true}={})=>{
  const targeting={
   dashboard:async()=>({candidates}),
   inspectionCaseRegistry:async()=>({cases:[...cases]}),
-  decide:async payload=>{
-   const matching=candidates.find(c=>c.key===payload.candidateKey);
-   assert.equal(matching?.imo,payload.imo);
-   const existing=cases.find(c=>c.candidateKey===payload.candidateKey);
-   if(existing)throw Error('DUPLICATE_CASE');
-   const item={id:'case-'+payload.imo,imo:payload.imo,
-    regime:matching.regime,candidateKey:payload.candidateKey,approvedBy:payload.actor};
-   cases.push(item);
-   return {inspectionCase:item};
+  decideBatch:async({items,actor,approvedPlanId})=>{
+   // All cases become visible together, matching Oracle transaction semantics.
+   const created=items.map(payload=>{
+    const matching=candidates.find(c=>c.key===payload.candidateKey);
+    assert.equal(matching?.imo,payload.imo);
+    const existing=cases.find(c=>c.candidateKey===payload.candidateKey);
+    if(existing)throw Error('DUPLICATE_CASE');
+    return {id:'case-'+payload.imo,imo:payload.imo,
+     regime:matching.regime,candidateKey:payload.candidateKey,
+     approvedBy:actor,approvedPlanId};
+   });
+   cases.push(...created);
+   return {cases:created};
   }
  };
  const preparation={
@@ -86,6 +90,7 @@ test('one batch approval creates two traceable cases and two A04 drafts; P01 onc
   assert.equal(result.approvedCount,2);
   assert.equal(t.cases.length,2);
   assert.equal(result.items.every(x=>x.dossierStatus==='PREPARED'),true);
+  assert.equal(t.cases.every(x=>x.approvedPlanId===job.id),true);
   assert.equal(result.items.every(x=>x.aiDossierStatus==='DRAFT_REVIEW'),true);
   assert.equal(t.agentCalls.filter(x=>x.agent==='A04').length,2);
   assert.equal(t.agentCalls.filter(x=>x.agent==='P01').length,1);
