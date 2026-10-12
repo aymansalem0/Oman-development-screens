@@ -135,10 +135,7 @@
           </tbody></table>
         </div>
         <div class="commit-area" *ngIf="p.canCommit">
-          <label>{{copy('Import operator / reviewer','مسؤول الاستيراد / المراجع')}}
-            <input [(ngModel)]="actor" maxlength="120" autocomplete="off"
-              [placeholder]="copy('Your name for the audit trail','اسمك في سجل التدقيق')"/>
-          </label>
+
           <button type="button" class="primary" (click)="commit()" [disabled]="!readyToCommit">
             {{copy('Commit Excel Source Events','اعتماد أحداث مصدر Excel')}}
           </button>
