@@ -4,6 +4,7 @@ import {Component,OnInit,ViewChild,ElementRef} from '@angular/core';
 import {FormsModule} from '@angular/forms';
 import {RouterLink} from '@angular/router';
 import {NmcNavigationComponent} from '../components/nmc-navigation.component';
+import {SiBulkApprovalPanelComponent} from './si-bulk-approval-panel.component';
 import {SiCandidate,SiCandidateStatus,SiCandidateTargetingService,
   SiDashboard,SiVesselCandidate,SiInspectionPlanState,SiInspectionPlanRow,SiC01Run,SiC01Preview,SiC01Recommendation,SiPriorityStatus,SiPriorityPreview,SiPriorityRun,SiPriorityRecommendation,SiPriorityPreviewItem}
   from '../services/si-candidate-targeting.service';
@@ -12,7 +13,7 @@ type SourceFilter='ALL'|'NMC_CASE'|'SERVICE_REQUEST'|'PSC_PORT_CALL';
 type StatusFilter='ALL'|SiCandidateStatus;
 @Component({
   selector:'app-si-candidate-workbench',
-  standalone:true,imports:[CommonModule,FormsModule,RouterLink,NmcNavigationComponent],
+  standalone:true,imports:[CommonModule,FormsModule,RouterLink,NmcNavigationComponent,SiBulkApprovalPanelComponent],
   templateUrl:'./si-candidate-workbench.component.html',
   styleUrl:'./si-candidate-workbench.component.css'
 })
