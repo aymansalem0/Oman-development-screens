@@ -70,12 +70,23 @@ export function projectInspectionPlan(dashboard,source,run,overrides={}){
   const ranked=[...grouped.values()].filter(v=>v.planSelected);
   // The provider supplies advisory selection; the rules engine *enforces*
   // approved NMC referral tier and then adjusts operator-requested positions.
-  ranked.sort((a,b)=>
-   Number(b.mandatoryReferral)-Number(a.mandatoryReferral)||
-   (a.requestedRank??100000)-(b.requestedRank??100000)||
-   (a.modelRank??999999)-(b.modelRank??999999)||
-   (riskOf({currentRisk:b.risk})??-1)-(riskOf({currentRisk:a.risk})??-1)||
-   a.imo.localeCompare(b.imo));
+  const byModel=(a,b)=>(a.modelRank??999999)-(b.modelRank??999999)||
+    (riskOf({currentRisk:b.risk})??-1)-(riskOf({currentRisk:a.risk})??-1)||
+    a.imo.localeCompare(b.imo);
+  const tier0=ranked.filter(x=>x.mandatoryReferral).sort(byModel);
+  const tier1=ranked.filter(x=>!x.mandatoryReferral).sort(byModel);
+  const reposition=(tier,startIndex)=>{
+    // Requested rank is an actual desired global slot, not a sort weight.
+    // No override can move a non-NMC item ahead of a protected NMC referral.
+    for(const row of tier.filter(x=>x.requestedRank!==null)
+       .sort((a,b)=>(a.requestedRank-b.requestedRank)||a.imo.localeCompare(b.imo))){
+      const old=tier.indexOf(row);tier.splice(old,1);
+      const pos=Math.max(0,Math.min(tier.length,row.requestedRank-1-startIndex));
+      tier.splice(pos,0,row);
+    }
+  };
+  reposition(tier0,0);reposition(tier1,tier0.length);
+  ranked.splice(0,ranked.length,...tier0,...tier1);
   for(let i=0;i<ranked.length;i++){
    const row=ranked[i];
    row.effectiveRank=i+1;
