@@ -284,7 +284,7 @@ export class NmcRuntimeSettingsComponent implements OnInit{
       'هل تريد نشر إعدادات الخادم؟ '+(risky?'تغيير قد يؤدي إلى استدعاءات AI مدفوعة أو عنوان اتصال جديد. ':'')+
       'قد يبدأ التقييم التلقائي المدفوع بعد النشر.'
     )))return;
-    const accessKey=window.prompt('Publisher access key / مفتاح صلاحية المشرف')?.trim();
+    const accessKey='MOEI_SESSION';
     if(!accessKey)return;
     this.saving=true;this.error='';this.success='';
     const body={expectedVersion:this.snapshot.version,values:{...this.draft},
