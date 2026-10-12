@@ -47,6 +47,9 @@ jobs:
       - name: SI-C01 visible access regression
         run: node --test scripts/test-si-c01-visible-access.mjs
 
+      - name: SI-02 preparation case list and deep-link regression
+        run: node --test scripts/test-si02-preparation-route.mjs
+
       - name: SI-09 management read-model regression
         run: node --test ai-proxy/test/si-management-report.test.mjs
 
@@ -74,6 +77,9 @@ jobs:
         run: node --test ai-proxy/test/moei-poc-auth.test.mjs
       - name: Google SSO allowlist, PKCE and verified-token security tests
         run: node --test ai-proxy/test/moei-google-sso.test.mjs
+
+      - name: SI-02 persistent preparation registry tests
+        run: node --test ai-proxy/test/si-preparation-queue.test.mjs
 
       - name: SI AI MOCK contract regressions (C01/P01/A04)
         run: node --test ai-proxy/test/si-agent-mock.test.mjs
