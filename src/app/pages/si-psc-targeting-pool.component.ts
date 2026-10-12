@@ -107,8 +107,7 @@ import {SiPscSelectionService,PscSelectionPool,PscPoolItem,PscQuotaBucket}
         <p *ngIf="row.selectionDecision">{{copy('Previous decision','القرار السابق')}}:
           {{statusText(row.selectionStatus)}} · {{row.selectionDecision.actor}} ·
           {{row.selectionDecision.reason}}</p>
-        <label>{{copy('Decision officer','مسؤول القرار')}}
-          <input [(ngModel)]="actor" maxlength="120" autocomplete="off"/></label>
+        
         <label>{{copy('Reason (minimum 8 characters)','مبرر القرار (٨ أحرف على الأقل)')}}
           <textarea [(ngModel)]="reason" rows="3" maxlength="500"></textarea></label>
         <div class="action-buttons">
