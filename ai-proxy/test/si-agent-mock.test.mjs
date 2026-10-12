@@ -92,6 +92,7 @@ test('C01 fails closed on unknown evidence, duplicate candidates, and regulatory
  assert.throws(()=>validateC01(repeated,source),/SI_C01_UNVERIFIED_RECOMMENDATION/);
  const illegal=structuredClone(valid);
  illegal.recommendations[1].recommendation='SELECT_RECOMMENDED';
+ illegal.recommendations[1].suggestedRank=2;
  assert.throws(()=>validateC01(illegal,source),/SI_C01_HARD_RULE_OVERRIDE/);
 });
 test('P01 MOCK response passes unchanged existing validator, without model calls',()=>{
