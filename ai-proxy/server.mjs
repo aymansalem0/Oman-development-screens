@@ -800,6 +800,12 @@ const server = createServer(async (req, res) => {
         }
         return respond(res,405,{error:'METHOD_NOT_ALLOWED'});
       }
+      // SI-02 Preparation Queue: a read-only APPROVED case ledger, independent
+      // of live targeting projections or migration 013, never calls AI.
+      if(path==='/api/si/v1/preparations'&&req.method==='GET'){
+        dashboards.assertRole(req,'EDITOR');
+        return respond(res,200,await siPreparation.list());
+      }
       const prepPath=/^\/api\/si\/v1\/preparations\/([a-f0-9-]{36})(?:\/(prepare|generate|review))?$/.exec(path);
       if(prepPath){
         const caseId=prepPath[1],step=prepPath[2]||null;
