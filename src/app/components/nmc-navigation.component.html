@@ -12,7 +12,11 @@
   </div>
 
   <div class="nav-user-session">
-    <div><strong>{{auth.username||'admin'}}</strong><small>ADMIN · NMC &amp; INSPECTION</small></div>
+    <div><strong>{{auth.username}}</strong><small>{{auth.user?.role}} · NMC &amp; INSPECTION</small></div>
+    <a *ngIf="auth.isAdmin" routerLink="/moei/nmc/admin/users"
+       class="nav-link" [class.active]="currentPath==='/moei/nmc/admin/users'">
+      {{copy('Manage Google Users','إدارة مستخدمي Google')}}
+    </a>
     <button type="button" (click)="auth.logout()">
       {{copy('Sign out','تسجيل الخروج')}}</button>
   </div>
