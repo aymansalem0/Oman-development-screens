@@ -19,6 +19,8 @@ import { SiCandidateTargeting, SiTargetingError } from './si-candidate-targeting
 import { SiSourceExcelImport } from './si-source-excel-import.mjs';
 import { SiPscSelection, SiSelectionError } from './si-psc-selection.mjs';
 import { SiAiPrioritization, SiPriorityError } from './si-ai-prioritization.mjs';
+import {SiCandidateAgent,SiCandidateAgentError} from './si-candidate-agent.mjs';
+import {mockSiP01,mockSiA04,mockSiC01} from './si-agent-mock.mjs';
 import { SiInspectionPreparation, SiPreparationError } from './si-inspection-preparation.mjs';
 import { SiInspectionLifecycle, SiLifecycleError } from './si-inspection-lifecycle.mjs';
 import { DriveDocumentIntelligence, DocumentError } from './drive-document-intelligence.mjs';
@@ -29,9 +31,13 @@ const port = Number(process.env.PORT || 3000);
 const apiKey = (process.env.AIRIA_MENA_KEY || '').trim();
 const runtime=new RuntimeSettings();
 runtime.load();
-const agentAllowed=agent=>{const k={a01:'NMC_A01_ENABLED',a02:'NMC_A02_ENABLED',a03:'NMC_A03_ENABLED',a04:'SI_A04_ENABLED',p01:'SI_P01_ENABLED'}[agent];return k?runtime.get(k):false;};
+const agentAllowed=agent=>{
+  if(agent==='c01')return process.env.SI_C01_ENABLED==='true';
+  const k={a01:'NMC_A01_ENABLED',a02:'NMC_A02_ENABLED',a03:'NMC_A03_ENABLED',a04:'SI_A04_ENABLED',p01:'SI_P01_ENABLED'}[agent];return k?runtime.get(k):false;};
 const timeoutMs = Math.min(180000, Math.max(1000, Number(process.env.AIRIA_TIMEOUT_MS || 120000)));
 const maxBytes = 1024 * 1024; // Single agent call body.
+// SI only: no NMC A01/A02 behavior is changed by this feature flag.
+const siAiProvider=process.env.SI_AI_PROVIDER==='airia'?'airia':'mock';
 const autoEnabled = process.env.NMC_FLEET_AUTO_ENABLED === 'true';
 const autoInterval = Number(process.env.NMC_FLEET_REFRESH_SECONDS || 3600) * 1000;
 
@@ -41,7 +47,8 @@ const pipelines = Object.freeze({
   a02: process.env.AIRIA_A02_PIPELINE_ID || '73708937-ba16-47e3-b404-55cc0a54b159',
   a03: process.env.AIRIA_A03_PIPELINE_ID || '603d32f6-2f5f-42a8-a592-77af571a2480',
   a04: process.env.AIRIA_A04_PIPELINE_ID || 'bad751da-0e11-48fd-861d-5bde1afbbd8d',
-  p01: process.env.AIRIA_SI_P01_PIPELINE_ID || null
+  p01: process.env.AIRIA_SI_P01_PIPELINE_ID || null,
+  c01: process.env.AIRIA_SI_C01_PIPELINE_ID || null
 });
 
 async function fleetAgentCall(agent,input) {
@@ -188,17 +195,21 @@ const siSourceImports=new SiSourceExcelImport({targeting:siTargeting});
 const siPscSelection=new SiPscSelection({targeting:siTargeting,mode:dbMode,oracleRepository:repository});
 siTargeting.pscSelection=siPscSelection;
 const siPriority=new SiAiPrioritization({
-  targeting:siTargeting,mode:dbMode,oracleRepository:repository,
-  executeAgent:async input=>fleetAgentCall('p01',input),
-  enabled:runtime.get('SI_P01_ENABLED')&&
-    Boolean(apiKey)&&Boolean(pipelines.p01)
+  targeting:siTargeting,mode:dbMode,oracleRepository:repository,provider:siAiProvider,
+  executeAgent:async input=>siAiProvider==='mock'?mockSiP01(input):fleetAgentCall('p01',input),
+  enabled:siAiProvider==='mock'||(
+    runtime.get('SI_P01_ENABLED')&&Boolean(apiKey)&&Boolean(pipelines.p01))
+});
+const siCandidateAgent=new SiCandidateAgent({
+  targeting:siTargeting,pscPolicy:()=>siPscSelection.policy(),provider:siAiProvider,
+  executeAgent:async input=>siAiProvider==='mock'?mockSiC01(input):fleetAgentCall('c01',input)
 });
 const siPreparation=new SiInspectionPreparation({mode:dbMode,oracleRepository:repository,
-  targeting:siTargeting,riskPolicy,
+  targeting:siTargeting,riskPolicy,provider:siAiProvider,
   approvedDocuments:async imo=>documents.ready?documents.approvedFor(imo):[],
   bundles:siTargeting.bundles,
-  executeA04:async input=>fleetAgentCall('a04',input),
-  enabled:runtime.get('SI_A04_ENABLED')&&Boolean(apiKey)});
+  executeA04:async input=>siAiProvider==='mock'?mockSiA04(input):fleetAgentCall('a04',input),
+  enabled:siAiProvider==='mock'||(runtime.get('SI_A04_ENABLED')&&Boolean(apiKey))});
 const siLifecycle=new SiInspectionLifecycle({mode:dbMode,oracleRepository:repository,
   targeting:siTargeting,preparation:siPreparation,cases});
 const actionPlanRuns=new Set(); // process-local duplicate A01 invocation guard; version-lock remains authoritative
@@ -290,8 +301,8 @@ function applyRuntimeSettings(){
   scheduler.retryFailed=runtime.get('NMC_FLEET_AUTO_RETRY_FAILED');
   alerts.escalationMinutes=runtime.get('NMC_ALERT_ESCALATE_MINUTES');
   documents.enabled=runtime.get('NMC_A03_ENABLED')&&Boolean(apiKey);
-  siPreparation.enabled=runtime.get('SI_A04_ENABLED')&&Boolean(apiKey);
-  siPriority.enabled=runtime.get('SI_P01_ENABLED')&&Boolean(apiKey)&&Boolean(pipelines.p01);
+  siPreparation.enabled=siAiProvider==='mock'||(runtime.get('SI_A04_ENABLED')&&Boolean(apiKey));
+  siPriority.enabled=siAiProvider==='mock'||(runtime.get('SI_P01_ENABLED')&&Boolean(apiKey)&&Boolean(pipelines.p01));
   if(server.listening){scheduler.start();rescheduleAlertScan();}
 }
 runtime.onChange=applyRuntimeSettings;
@@ -627,6 +638,23 @@ const server = createServer(async (req, res) => {
   // NMC human-approved referrals dynamically. Only publisher may approve a new case.
   if(path==='/api/si/v1'||path.startsWith('/api/si/v1/')){
     try{
+      // New SI-C01 advisory is NEVER an approval and NEVER changes persisted cases.
+      // MOCK branch has zero Airia usage; Airia mode reuses exact payload shape.
+      if(path==='/api/si/v1/agents/configuration'&&req.method==='GET'){
+        dashboards.assertRole(req,'EDITOR');
+        return respond(res,200,{status:'ok',provider:siAiProvider.toUpperCase(),
+          mock:siAiProvider==='mock',externalCallsInMock:0,
+          agents:['SI-C01','SI-P01','SI-A04'],
+          caveat:'MOCK responses are templates, not real maritime AI decisions.'});
+      }
+      if(path==='/api/si/v1/agents/candidate-selection/preview'&&req.method==='GET'){
+        dashboards.assertRole(req,'EDITOR');
+        return respond(res,200,await siCandidateAgent.preview());
+      }
+      if(path==='/api/si/v1/agents/candidate-selection/run'&&req.method==='POST'){
+        dashboards.assertRole(req,'EDITOR');
+        return respond(res,200,await siCandidateAgent.run(await requestJson(req,4096)));
+      }
       // SI-09: source-backed manager view, GET only, Editor role required.
       if(path==='/api/si/v1/management'&&req.method==='GET'){
         dashboards.assertRole(req,'EDITOR');
@@ -769,7 +797,7 @@ const server = createServer(async (req, res) => {
       }
       return respond(res,405,{error:'METHOD_NOT_ALLOWED'});
     }catch(e){
-      if(e instanceof SiLifecycleError||e instanceof SiSelectionError||e instanceof SiPriorityError||e instanceof SiPreparationError||e instanceof SiTargetingError||e instanceof DashboardError)
+      if(e instanceof SiCandidateAgentError||e instanceof SiLifecycleError||e instanceof SiSelectionError||e instanceof SiPriorityError||e instanceof SiPreparationError||e instanceof SiTargetingError||e instanceof DashboardError)
         return respond(res,e.status,{error:e.code});
       if(Number.isInteger(e?.status)&&e.status>=400&&e.status<500)
         return respond(res,e.status,{error:'SI_REQUEST_INVALID'});

@@ -141,10 +141,10 @@ export function buildSiPrioritySnapshot(dashboard,clock=Date.now()){
 }
 export class SiAiPrioritization{
   constructor({targeting,mode='json',oracleRepository=null,executeAgent=null,enabled=false,
-    clock=()=>Date.now(),file=process.env.SI_P01_STORE_PATH||'/data/si-ai-priority.json'}={}){
+    provider='airia',clock=()=>Date.now(),file=process.env.SI_P01_STORE_PATH||'/data/si-ai-priority.json'}={}){
     if(!targeting||!['oracle','json'].includes(mode))throw Error('SI_P01_CONFIG_INVALID');
     this.targeting=targeting;this.mode=mode;this.oracle=oracleRepository;
-    this.executeAgent=executeAgent;this.enabled=enabled;this.clock=clock;
+    this.executeAgent=executeAgent;this.enabled=enabled;this.clock=clock;this.provider=provider;
     this.file=file;this.ready=mode==='json';this.inProgress=false;
   }
   async connection(cb){
@@ -214,7 +214,7 @@ export class SiAiPrioritization{
   async status(){
     const preview=await this.preview();
     const records=await this.history(1),latest=records[0]||null;
-    return {status:'ok',enabled:this.enabled,preview:{
+    return {status:'ok',enabled:this.enabled,provider:this.provider.toUpperCase(),preview:{
       snapshotHash:preview.snapshotHash,policyVersion:preview.policyVersion,
       riskPolicyRevision:preview.riskPolicyRevision,eligibleCount:preview.eligibleCount},
       latest:latest?{
@@ -244,7 +244,8 @@ export class SiAiPrioritization{
         snapshotHash:snapshot.snapshotHash,
         rules:snapshot.policy,requestedCandidates:snapshot.items.length,
         inputScope:'APPROVED_INSPECTION_CASES_ONLY',
-        source:'AIRIA_SI_P01_UNVERIFIED_ADVISORY',
+        source:this.provider==='mock'?'MOCK_SI_P01_TEST_ADVISORY':'AIRIA_SI_P01_UNVERIFIED_ADVISORY',
+        mock:this.provider==='mock',externalCalls:this.provider==='mock'?0:1,
         approvedNmcFirst:true,humanDecisionRequired:true};
       let run;
       try{

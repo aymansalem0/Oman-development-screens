@@ -80,7 +80,7 @@ export interface SiPriorityPreview{
   items:SiPriorityPreviewItem[];
 }
 export interface SiPriorityStatus{
-  status:string;enabled:boolean;preview:{snapshotHash:string;eligibleCount:number;
+  status:string;enabled:boolean;provider?:'MOCK'|'AIRIA';preview:{snapshotHash:string;eligibleCount:number;
     policyVersion:number;riskPolicyRevision:number};
   latest:SiPriorityRun|null;
 }
@@ -89,6 +89,28 @@ export interface SiImpact{
   affectedImos:string[];affectedCandidateCount:number;unevaluatedRiskVessels:number;
   warning:string;aiSettingsChanged?:boolean;
   potentialRankingCandidates?:number;requiresManualAiRerun?:boolean;
+}
+export interface SiC01Recommendation{
+  candidateKey:string;imo:string;regime:string;
+  recommendation:'SELECT_RECOMMENDED'|'DEFER_RECOMMENDED'|'MANUAL_REVIEW';
+  confidence:number;reason:string;evidenceRefs:string[];dataGaps:string[];
+  requiresHumanReview:true;regulatoryDecision:false;
+}
+export interface SiC01Preview {
+ status:'PREVIEW_ONLY_NO_AI';provider:'MOCK'|'AIRIA';
+ snapshotHash:string;policyRevision:number;pscQuotaPolicyRevision:number|null;
+ riskPolicyRevision:number;eligibleCount:number;externalCalls:0;
+ candidates:{candidateKey:string;imo:string;regime:string;
+    vesselName:string;sourceTypes:string[];allowedEvidence:string[];
+    currentRisk:SiCandidate['currentRisk']}[];
+ latest:{agentRunId:string;isStale:boolean;provider:string}|null;
+}
+export interface SiC01Run{
+ status:'ADVISORY_REVIEW_REQUIRED';agentCode:'SI-C01';agentRunId:string;
+ provider:'MOCK'|'AIRIA';mock:boolean;simulationLabel:string|null;
+ snapshotHash:string;policyRevision:number;riskPolicyRevision:number;
+ actor:string;generatedAt:string;externalCalls:number;humanDecisionRequired:true;
+ mutations:false;warning:string;recommendations:SiC01Recommendation[];
 }
 @Injectable({providedIn:'root'})
 export class SiCandidateTargetingService{
@@ -113,6 +135,19 @@ export class SiCandidateTargetingService{
   publish(body:{config:SiTargetingPolicyConfig;
     expectedVersion:number;publishedBy:string;reason:string},key:string):Observable<unknown>{
     return this.http.post(this.api+'/rules/publish',body,{headers:this.headers(key)});
+  }
+  candidateAiConfiguration(key:string):Observable<{status:string;provider:'MOCK'|'AIRIA';mock:boolean;agents:string[];externalCallsInMock:number}>{
+    return this.http.get<{status:string;provider:'MOCK'|'AIRIA';mock:boolean;agents:string[];externalCallsInMock:number}>(
+      this.api+'/agents/configuration',{headers:this.headers(key)});
+  }
+  candidateAiPreview(key:string):Observable<SiC01Preview>{
+    return this.http.get<SiC01Preview>(this.api+'/agents/candidate-selection/preview',
+      {headers:this.headers(key)});
+  }
+  candidateAiRun(key:string,body:{actor:string;expectedSnapshotHash:string;
+    confirmRun:true;confirmCost:boolean}):Observable<SiC01Run>{
+    return this.http.post<SiC01Run>(this.api+'/agents/candidate-selection/run',body,
+      {headers:this.headers(key)});
   }
   prioritizationStatus(key:string):Observable<SiPriorityStatus>{
     return this.http.get<SiPriorityStatus>(this.api+'/prioritization',{headers:this.headers(key)});

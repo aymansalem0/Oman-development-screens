@@ -99,10 +99,10 @@ function atomicWrite(path,doc){
 }
 export class SiInspectionPreparation{
   constructor({mode='json',oracleRepository=null,targeting,riskPolicy,bundles=[],
-    executeA04=null,enabled=false,approvedDocuments=null,
+    executeA04=null,enabled=false,approvedDocuments=null,provider='airia',
     file=process.env.SI_PREPARATION_STORE_PATH||'/data/si-preparations.json'}={}){
     this.mode=mode;this.oracle=oracleRepository;this.targeting=targeting;
-    this.riskPolicy=riskPolicy;this.executeA04=executeA04;this.enabled=enabled;
+    this.riskPolicy=riskPolicy;this.executeA04=executeA04;this.enabled=enabled;this.provider=provider;
     this.approvedDocuments=approvedDocuments;
     this.bundles=new Map(bundles.map(b=>[b.imo,b]));this.file=file;
     this.ready=mode==='json';this.active=new Set();
@@ -229,7 +229,7 @@ export class SiInspectionPreparation{
     return {status:'ok',inspectionCase,context,sourceHash,
       saved,stale:Boolean(saved&&saved.sourceHash!==sourceHash),
       canGenerate:Boolean(context.risk)&&this.enabled&&this.ready,
-      a04Enabled:this.enabled,requiresHumanApproval:true,
+      a04Enabled:this.enabled,a04Provider:this.provider.toUpperCase(),requiresHumanApproval:true,
       message:context.risk?'A04 is optional, gated and called only on explicit request.':
         'No stored current NMC risk; preparation is review-only. Do not invent a score.'};
   }
@@ -292,7 +292,10 @@ export class SiInspectionPreparation{
         const raw=await this.executeA04(input);
         const cleanResult=validateA04(raw,{checkIds:context.baseChecklistItemIds,
           evidenceIds:context.evidenceManifestRefs});
-        const dossier={...cleanResult,generatedAt:now(),requestCorrelationId:correlationId,
+        const dossier={...cleanResult,
+          source:this.provider==='mock'?'MOCK_SI_A04_TEST_ADVISORY':cleanResult.source,
+          mock:this.provider==='mock',externalCalls:this.provider==='mock'?0:1,
+          generatedAt:now(),requestCorrelationId:correlationId,
           requestHash:sha(input),sourceHash,baseChecklistVersion:'SI-POC-BASE-1.0'};
         const current=await this.record(id);
         if(current?.version!==generating.version||current?.correlationId!==correlationId)

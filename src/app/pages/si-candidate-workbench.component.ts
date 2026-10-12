@@ -1,11 +1,11 @@
 import {LanguageService} from '../services/language.service';
 import {CommonModule} from '@angular/common';
-import {Component,OnInit} from '@angular/core';
+import {Component,OnInit,ViewChild,ElementRef} from '@angular/core';
 import {FormsModule} from '@angular/forms';
 import {RouterLink} from '@angular/router';
 import {NmcNavigationComponent} from '../components/nmc-navigation.component';
 import {SiCandidate,SiCandidateStatus,SiCandidateTargetingService,
-  SiDashboard,SiVesselCandidate,SiPriorityStatus,SiPriorityPreview,SiPriorityRun,SiPriorityRecommendation,SiPriorityPreviewItem}
+  SiDashboard,SiVesselCandidate,SiC01Run,SiC01Preview,SiC01Recommendation,SiPriorityStatus,SiPriorityPreview,SiPriorityRun,SiPriorityRecommendation,SiPriorityPreviewItem}
   from '../services/si-candidate-targeting.service';
 
 type SourceFilter='ALL'|'NMC_CASE'|'SERVICE_REQUEST'|'PSC_PORT_CALL';
@@ -22,6 +22,61 @@ export class SiCandidateWorkbenchComponent implements OnInit{
   sourceFilter:SourceFilter='ALL';statusFilter:StatusFilter='ALL';search='';
   selectedKey='';selectedImo='';
   reviewer='';decisionNote='';editorKey='';publisherKey='';
+  @ViewChild('editorAccessKey') private editorAccessKey?:ElementRef<HTMLInputElement>;
+  private focusEditorAccess():void{
+    this.editorAccessKey?.nativeElement.scrollIntoView({behavior:'smooth',block:'center'});
+    this.editorAccessKey?.nativeElement.focus({preventScroll:true});
+  }
+  c01Preview:SiC01Preview|null=null;
+  c01Run:SiC01Run|null=null;
+  c01Busy=false;c01Error='';c01Message='';
+  get c01Map():Map<string,SiC01Recommendation>{
+    return new Map((this.c01Run?.recommendations||[]).map(r=>[r.candidateKey,r]));
+  }
+  c01Advice(candidate:SiCandidate|null):SiC01Recommendation|null{
+    return candidate?(this.c01Map.get(candidate.key)||null):null;
+  }
+  c01BestVesselAdvice(v:SiVesselCandidate):SiC01Recommendation|null{
+    const values=v.candidateKeys.map(k=>this.c01Map.get(k))
+      .filter((x):x is SiC01Recommendation=>Boolean(x));
+    return values.find(x=>x.recommendation==='SELECT_RECOMMENDED')||values[0]||null;
+  }
+  previewCandidateAi():void{
+    if(!this.editorKey.trim()){
+      this.c01Error=this.copy('Enter the Editor Key in the Operator & Access fields directly above.',
+        'أدخل مفتاح المحرر في حقول المستخدم والصلاحيات الموجودة بالأعلى.');
+      this.focusEditorAccess();return;
+    }
+    this.c01Busy=true;this.c01Error='';this.c01Message='';this.c01Run=null;
+    this.api.candidateAiPreview(this.editorKey.trim()).subscribe({
+      next:r=>{this.c01Preview=r;this.c01Busy=false;
+        this.c01Message=this.copy('Saved candidate snapshot verified, no AI call.',
+          'تم التحقق من قائمة المرشحين المحفوظة بدون تشغيل AI.');},
+      error:e=>{this.c01Busy=false;this.c01Error=(e as {error?:{error?:string}})
+        ?.error?.error||'SI_C01_PREVIEW_UNAVAILABLE';}
+    });
+  }
+  runCandidateAi():void{
+    if(this.c01Busy||!this.c01Preview||!this.reviewer.trim()||!this.editorKey.trim())return;
+    const isMock=this.c01Preview.provider==='MOCK';
+    const prompt=isMock?
+      this.copy('Generate a MOCK C01 advisory with zero Airia calls? It cannot approve an inspection.',
+        'إنشاء توصية C01 تجريبية دون تشغيل Airia؟ لا تعتمد أي معاينة.'):
+      this.copy('Run one potentially PAID SI-C01 Airia call? Advice only; human approval required.',
+        'تشغيل SI-C01 على Airia مع احتمال تكلفة؟ يتطلب اعتماداً بشرياً.');
+    if(!window.confirm(prompt))return;
+    this.c01Busy=true;this.c01Error='';this.c01Message='';
+    this.api.candidateAiRun(this.editorKey.trim(),{
+      actor:this.reviewer.trim(),expectedSnapshotHash:this.c01Preview.snapshotHash,
+      confirmRun:true,confirmCost:!isMock
+    }).subscribe({
+      next:r=>{this.c01Busy=false;this.c01Run=r;this.c01Preview=null;
+        this.c01Message=this.copy('C01 advisory ready: verify each regime and decide manually.',
+          'توصيات C01 جاهزة: راجع كل نوع معاينة واتخذ القرار بنفسك.');},
+      error:e=>{this.c01Busy=false;this.c01Error=(e as {error?:{error?:string}})
+        ?.error?.error||'SI_C01_RUN_FAILED';}
+    });
+  }
   priorityStatus:SiPriorityStatus|null=null;
   priorityPreview:SiPriorityPreview|null=null;
   priorityBusy=false;aiError='';aiSuccess='';confirmAiCost=false;
@@ -64,8 +119,9 @@ export class SiCandidateWorkbenchComponent implements OnInit{
   }
   refreshAiStatus():void{
     if(!this.editorKey.trim()){
-      this.aiError=this.copy('Editor key is required to view saved AI ranking.',
-        'مطلوب مفتاح المحرر لعرض ترتيب AI المحفوظ.');return;
+      this.aiError=this.copy('Enter the Editor Key in the Operator & Access fields above.',
+        'أدخل مفتاح المحرر في حقول المستخدم والصلاحيات الموجودة بالأعلى.');
+      this.focusEditorAccess();return;
     }
     this.priorityBusy=true;this.aiError='';
     this.api.prioritizationStatus(this.editorKey.trim()).subscribe({
@@ -75,8 +131,9 @@ export class SiCandidateWorkbenchComponent implements OnInit{
   }
   previewPriority():void{
     if(!this.editorKey.trim()){
-      this.aiError=this.copy('Enter Editor key before priority preview.',
-        'أدخل مفتاح المحرر قبل معاينة الأولوية.');return;
+      this.aiError=this.copy('Enter Editor Key in the Operator & Access fields above.',
+        'أدخل مفتاح المحرر في حقول المستخدم والصلاحيات الموجودة بالأعلى.');
+      this.focusEditorAccess();return;
     }
     this.priorityBusy=true;this.aiError='';this.aiSuccess='';this.confirmAiCost=false;
     this.api.prioritizationPreview(this.editorKey.trim()).subscribe({
@@ -93,8 +150,12 @@ export class SiCandidateWorkbenchComponent implements OnInit{
     if(!this.priorityPreview||!this.confirmAiCost||!this.editorKey.trim()||
       !this.reviewer.trim()||this.priorityBusy)return;
     if(!window.confirm(this.copy(
-      'Call the paid SI-P01 Airia pipeline ONCE for the current candidate snapshot? The result is advisory only.',
-      'تشغيل وكيل SI-P01 على Airia مرة واحدة مع احتمال تكلفة تشغيل؟ النتيجة استشارية فقط.')))return;
+      this.priorityStatus?.provider==='MOCK'?
+        'Run MOCK SI-P01 ranking (0 Airia calls)? The result is not model analysis.':
+        'Call the paid SI-P01 Airia pipeline ONCE for the current candidate snapshot? The result is advisory only.',
+      this.priorityStatus?.provider==='MOCK'?
+        'تشغيل ترتيب SI-P01 التجريبي دون استدعاء Airia؟ ليس تحليلاً ذكياً حقيقياً.':
+        'تشغيل وكيل SI-P01 على Airia مرة واحدة مع احتمال تكلفة تشغيل؟ النتيجة استشارية فقط.')))return;
     this.priorityBusy=true;this.aiError='';this.aiSuccess='';
     this.api.runPrioritization(this.editorKey.trim(),{
       actor:this.reviewer.trim(),expectedSnapshotHash:this.priorityPreview.snapshotHash,
@@ -126,6 +187,8 @@ export class SiCandidateWorkbenchComponent implements OnInit{
     this.api.dashboard().subscribe({
       next:data=>{
         this.dashboard=data;
+        // C01 advisories are snapshot-scoped. Never present old advice as current.
+        this.c01Preview=null;this.c01Run=null;
         if(!data.vesselCandidates.some(v=>v.imo===this.selectedImo)){
           this.selectedImo='';this.selectedKey='';
         }else if(!data.candidates.some(x=>x.key===this.selectedKey)){

@@ -24,7 +24,7 @@ export interface SiDossier{
   predictedDeficiencies:{category:string;hypothesisOnly:true;evidenceIds:string[]}[];
   suggestedAdditionalItems:{title:string;reason:string;evidenceIds:string[];recommendationOnly:true}[];
   missingEvidence:string[];agentConfidence:number;requiresInspectorReview:true;
-  agentRunId:string|null;source:string;status:'DRAFT_REVIEW';
+  agentRunId:string|null;source:string;status:'DRAFT_REVIEW';mock?:boolean;externalCalls?:number;
   generatedAt:string;requestCorrelationId:string;sourceHash:string;
 }
 export interface SiPreparedRecord{
@@ -36,7 +36,7 @@ export interface SiPreparedRecord{
 export interface SiPreparationView{
   status:string;inspectionCase:{id:string;imo:string;regime:string;approvedBy:string};
   context:SiPreparationContext;sourceHash:string;saved:SiPreparedRecord|null;
-  stale:boolean;canGenerate:boolean;a04Enabled:boolean;message:string;
+  stale:boolean;canGenerate:boolean;a04Enabled:boolean;a04Provider?:'MOCK'|'AIRIA';message:string;
   requiresHumanApproval:boolean;
 }
 @Injectable({providedIn:'root'})

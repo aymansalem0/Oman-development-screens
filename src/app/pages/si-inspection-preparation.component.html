@@ -32,7 +32,7 @@
         <article><small>{{copy("INSPECTION / IMO","المعاينة / IMO")}}</small><strong>{{d.context.imo}}</strong><span>{{d.context.vessel.name}} · {{d.context.vessel.flag}}</span></article>
         <article><small>{{copy("PREPARATION STATUS","حالة التحضير")}}</small><strong [class.warn]="d.stale">{{statusLabel(d.saved?.status)}}</strong><span>{{copy('Revision','مراجعة')}} {{d.saved?.version||0}}</span></article>
         <article><small>{{copy("CURRENT NMC RISK","مخاطر المركز البحري الحالية")}}</small><strong *ngIf="d.context.risk as risk">{{risk.score}} / 100</strong><strong *ngIf="!d.context.risk" class="warn">{{copy("NO SAVED RISK","لا يوجد تقييم محفوظ")}}</strong><span>{{d.context.risk?.level?statusLabel(d.context.risk?.level):copy('Review only','للمراجعة فقط')}} · v{{d.context.risk?.policyRevision||'—'}}</span></article>
-        <article><small>{{copy("A04 PROVIDER ACCESS","حالة تشغيل وكيل A04")}}</small><strong>{{d.a04Enabled?copy('EXPLICITLY ENABLED','مفعّل بعد موافقة صريحة'):copy('DISABLED','غير مفعّل')}}</strong><span>{{copy("No AI on GET, prepare or review","لا يستدعى AI أثناء العرض أو التحضير أو المراجعة")}}</span></article>
+        <article><small>{{copy("A04 PROVIDER ACCESS","حالة تشغيل وكيل A04")}}</small><strong>{{d.a04Enabled?(d.a04Provider==='MOCK'?copy('MOCK · NO AIRIA','تجريبي · دون Airia'):copy('AIRIA · ENABLED','Airia · مفعّل')):copy('DISABLED','غير مفعّل')}}</strong><span>{{copy("No AI on GET, prepare or review","لا يستدعى AI أثناء العرض أو التحضير أو المراجعة")}}</span></article>
       </div>
       <div class="notice error" *ngIf="d.stale">
         {{copy("Source evidence or active NMC risk has changed since this preparation. Refresh preparation explicitly before any A04 or approval.","تغيرت أدلة المصدر أو تقييم المخاطر منذ التحضير. حدّث التحضير صراحة قبل تشغيل A04 أو الاعتماد.")}}
@@ -84,7 +84,11 @@
             {{copy("Generate AI Pre-Inspection Dossier (A04)","إنشاء ملف التحضير بالذكاء الاصطناعي (A04)")}}
           </button></div>
         </div>
-        <p class="hint">{{copy("Requires PREPARED snapshot, valid saved NMC risk, Editor key, server-side A04 opt-in and explicit confirmation of a potentially billable API call. Results are validated against actual source evidence IDs.","يتطلب التحضير وتقييم مخاطر محفوظًا ومفتاح محرر وتفعيل A04 على الخادم وتأكيد التكلفة المحتملة. يتم التحقق من النتائج مقابل معرفات الأدلة المتاحة.")}}</p>
+        <p class="hint">{{d.a04Provider==='MOCK'?
+          copy('MOCK MODE: fixed response from backend, 0 Airia calls. Requires saved NMC risk, existing evidence and human dossier approval.',
+               'وضع تجريبي: استجابة ثابتة من الخادم دون استدعاء Airia. يلزم تقييم وأدلة محفوظة واعتماد المشرف.'):
+          copy('AIRIA MODE: model call may be billable. Explicit confirmation and current evidence are required.',
+               'وضع Airia: قد يترتب عليه تكلفة ويحتاج تأكيداً صريحاً وأدلة حالية.')}}</p>
         <div *ngIf="d.saved?.status==='GENERATING'" class="notice">{{copy("A04 request started and locked. Refresh later; do not retry blindly.","بدأ طلب A04 وتم قفله. حدّث لاحقًا ولا تعاود الإرسال دون التحقق.")}}</div>
         <div *ngIf="d.saved?.status==='FAILED'" class="notice error">{{copy('A04 validation or provider failed','فشل التحقق من A04 أو الاتصال بالمزوّد')}}: {{d.saved?.lastFailure}}. {{copy('No dossier was fabricated. Explicit retry required.','لم يتم اختلاق ملف أو بيانات، ويلزم إعادة طلب صريحة.')}}</div>
       </section>
