@@ -41,6 +41,9 @@ jobs:
       - name: Unified Smart Inspection candidates one-grid regression
         run: node --test scripts/test-si-unified-candidate-grid.mjs
 
+      - name: MOEI single Admin login and UI regression
+        run: node --test scripts/test-moei-admin-login-ui.mjs
+
       - name: SI-C01 visible access regression
         run: node --test scripts/test-si-c01-visible-access.mjs
 
