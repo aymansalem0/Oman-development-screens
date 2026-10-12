@@ -180,26 +180,42 @@ export class SiBulkInspectionPlan{
    let job=this.read().jobs.find(x=>x.id===id);
    if(!job||job.status===COMPLETED)return;
    job.status=RUNNING;job.updatedAt=now();this.put(job);
+   // One supervisor approval is all-or-nothing at case creation level.
+   // Dossier preparation is deliberately asynchronous and tracked per case.
+   // On process recovery, only reuse cases carrying THIS batch's planId.
+   if(job.items.some(x=>!x.inspectionCaseId)){
+    const registry=await this.targeting.inspectionCaseRegistry();
+    const prior=job.items.map(item=>registry.cases.find(c=>
+      c.candidateKey===item.candidateKey));
+    if(prior.some(Boolean)&&!prior.every(c=>c&&c.approvedPlanId===job.id))
+      throw new SiBulkApprovalError('SI_BULK_EXISTING_CASE_CONFLICT_REVIEW',409);
+    let cases;
+    if(prior.every(c=>c&&c.approvedPlanId===job.id))cases=prior;
+    else{
+      const current=await this.plan.snapshot();
+      if(current.stale||current.sourceHash!==job.sourceHash||
+         current.revision!==job.planRevision||current.agentRunId!==job.agentRunId)
+        throw new SiBulkApprovalError('SI_BULK_SOURCE_CHANGED_BEFORE_COMMIT',409);
+      const approved=await this.targeting.decideBatch({
+        items:job.items.map(x=>({imo:x.imo,candidateKey:x.candidateKey})),
+        actor:job.approvedBy,note:job.approvalReason,approvedPlanId:job.id
+      });
+      cases=approved.cases;
+    }
+    const byKey=new Map(cases.map(c=>[c.candidateKey,c]));
+    for(const item of job.items){
+      item.inspectionCaseId=byKey.get(item.candidateKey)?.id||null;
+      item.state=item.inspectionCaseId?'APPROVED':'APPROVAL_FAILED';
+      item.error=item.inspectionCaseId?null:'SI_BULK_COMMIT_INCOMPLETE';
+    }
+    job.approvedCount=job.items.filter(x=>Boolean(x.inspectionCaseId)).length;
+    job.updatedAt=now();job.progressMessage='BATCH_APPROVAL_COMMITTED';
+    this.put(job);
+   }
    for(const item of job.items){
     if(item.state==='READY')continue;
     try{
-     if(!item.inspectionCaseId){
-      // A crash after an already-committed Oracle case must not replay approval.
-      const registry=await this.targeting.inspectionCaseRegistry();
-      const prior=registry.cases.find(c=>c.candidateKey===item.candidateKey);
-      if(prior){
-       if(prior.approvedBy!==job.approvedBy)
-        throw new SiBulkApprovalError('SI_BULK_CASE_ALREADY_APPROVED_ELSEWHERE',409);
-       item.inspectionCaseId=prior.id;
-      }else{
-       const decision=await this.targeting.decide({
-         candidateKey:item.candidateKey,imo:item.imo,action:'APPROVE',
-         actor:job.approvedBy,note:job.approvalReason});
-       item.inspectionCaseId=decision.inspectionCase.id;
-      }
-      item.state='APPROVED';item.error=null;
-      this.put({...job,updatedAt:now()});
-     }
+     if(!item.inspectionCaseId)throw new SiBulkApprovalError('SI_BULK_CASE_NOT_APPROVED',409);
      // The approved plan snapshot is now linked to the distinct SI case.
      // Build deterministic vessel dossier even if A04 AI is disabled.
      const snapshot=await this.preparation.get(item.inspectionCaseId);
