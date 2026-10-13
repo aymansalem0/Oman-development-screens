@@ -230,8 +230,36 @@ async function incidentCaseView(){
 // are written through the established Oracle-backed case API.
 const siErp=new ErpWorkforceStore();
 const siScheduling=new SiElectronicScheduler({erp:siErp,cases});
+// Incident severity is separate from A02 vessel-risk. Only fresh, officer-
+// reviewed, still-active NMC incident assessments are eligible for SI ordering.
+// Optional synthetic POC feed: no automatic AI call, and never block targeting.
+let incidentPriorityCache={expires:0,items:[]};
+const loadVerifiedIncidentPriorities=async()=>{
+  if(!incidentFeed.configured)return [];
+  if(Date.now()<incidentPriorityCache.expires)return incidentPriorityCache.items;
+  try{
+    const feed=await incidentFeed.load();
+    const rows=feed.incidents.filter(row=>
+      row.imo&&row.aiAssessment&&!row.aiAssessmentStale&&
+      row.aiAssessment.assessmentStatus==='HUMAN_REVIEWED'&&
+      row.nextFollowup?.approval==='OFFICER_APPROVED'&&
+      !['RESOLVED','CLOSED'].includes(row.operationalStatus)&&
+      Number.isFinite(row.aiAssessment.incidentRiskScore)
+    ).map(row=>({
+      imo:row.imo,incidentId:row.incidentId,
+      severity:row.aiAssessment.incidentRiskScore,
+      operationalStatus:row.operationalStatus,humanReviewed:true
+    }));
+    incidentPriorityCache={expires:Date.now()+60000,items:rows};
+  }catch{
+    // Explicitly unknown rather than incident severity 0, never fabricate.
+    incidentPriorityCache={expires:Date.now()+15000,items:[]};
+  }
+  return incidentPriorityCache.items;
+};
 const siTargeting=new SiCandidateTargeting({mode:dbMode,oracleRepository:repository,
-  cases,riskPolicy,bundles:incidentBundleRecords});
+  cases,riskPolicy,bundles:incidentBundleRecords,
+  loadIncidentSignals:loadVerifiedIncidentPriorities});
 const siSourceImports=new SiSourceExcelImport({targeting:siTargeting});
 const siPscSelection=new SiPscSelection({targeting:siTargeting,mode:dbMode,oracleRepository:repository});
 siTargeting.pscSelection=siPscSelection;
