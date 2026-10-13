@@ -84,7 +84,7 @@ export class SiBulkInspectionPlan{
   const eligible=c=>c.status==='PENDING_REVIEW'||
     (c.status==='EXTERNALLY_SCHEDULED'&&
      c.events.some(e=>e.sourceType==='NMC_CASE'&&e.approval==='APPROVED'));
-  const selected=(plan.stale||!plan.agentRunId)?[]:
+  const selected=(plan.stale||(!plan.agentRunId&&!plan.manualSelection))?[]:
     plan.rows.filter(x=>x.planSelected);
   const vessels=selected.map(row=>{
     // One vessel, ALL eligible approval triggers. Never choose just one
@@ -119,13 +119,14 @@ export class SiBulkInspectionPlan{
   });
   const warnings=[];
   if(plan.stale)warnings.push('SI_PLAN_STALE_RERUN_C01');
-  if(!plan.agentRunId)warnings.push('SI_C01_PLAN_NOT_GENERATED');
+  if(!plan.agentRunId&&!plan.manualSelection)warnings.push('SI_SELECTION_NOT_REVIEWED');
   if(!vessels.length)warnings.push('SI_PLAN_NO_SELECTED_VESSELS');
   if(vessels.some(v=>v.missingSource))warnings.push('SI_INSPECTION_SOURCE_UNAVAILABLE_REVIEW');
   return {status:'PREVIEW',planId,planNumber:plan.planNumber||null,
    sourceHash:plan.sourceHash,
     planRevision:plan.revision,agentRunId:plan.agentRunId,
     planGeneratedAt:plan.generatedAt,provider:plan.provider,
+    selectionMode:plan.selectionMode,manualSelection:plan.manualSelection,
     stale:plan.stale,selectedVessels:vessels.length,vessels,
     mandatoryChecksPreserved:true,
     a04Enabled:this.preparation.enabled&&this.preparation.ready,
@@ -147,7 +148,7 @@ export class SiBulkInspectionPlan{
    throw new SiBulkApprovalError('SI_BULK_AI_SELECTION_REQUIRED',422);
   const rollingId=input.planId||null;
   const preview=await this.preview(rollingId);
-  if(preview.stale||!preview.agentRunId||
+  if(preview.stale||(!preview.agentRunId&&!(rollingId&&preview.manualSelection))||
      preview.sourceHash!==input.expectedSourceHash||
      preview.planRevision!==input.expectedRevision||
      input.expectedAgentRunId!==preview.agentRunId)
