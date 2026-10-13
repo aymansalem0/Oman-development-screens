@@ -131,5 +131,11 @@ jobs:
           node-version: 24
       - name: Install backend dependencies
         run: npm --prefix ai-proxy install --no-audit --no-fund
-      - name: Windows atomic write, PSC selection, candidate tests
-        run: node --test ai-proxy/test/atomic-json-store.test.mjs ai-proxy/test/si-psc-selection.test.mjs ai-proxy/test/si-candidate-targeting.test.mjs
+      - name: Windows atomic write, PSC selection, candidate tests (3 successive runs)
+        shell: pwsh
+        run: |
+          1..3 | ForEach-Object {
+            Write-Host "PSC Windows retry regression run $_ / 3"
+            node --test ai-proxy/test/atomic-json-store.test.mjs ai-proxy/test/si-psc-selection.test.mjs ai-proxy/test/si-candidate-targeting.test.mjs
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
