@@ -45,7 +45,12 @@ export class SiCandidateWorkbenchComponent implements OnInit{
   }
   loadRollingPlans():void{
     this.api.rollingPlans().subscribe({
-      next:r=>{this.rollingPlans=r.plans;},
+      next:r=>{
+        this.rollingPlans=r.plans;
+        // An earlier transient API failure must not keep a misleading red
+        // error banner visible after the rolling-plan catalog has recovered.
+        this.planningError='';
+      },
       error:e=>{this.planningError=e?.error?.error||'SI_ROLLING_PLANS_UNAVAILABLE';}
     });
   }
