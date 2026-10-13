@@ -82,6 +82,16 @@
               'لم يرد وصف من المصدر الأصلي؛ تم الاحتفاظ بالمرجع والأدلة المتاحة.')}}</p>
           <div class="evidence-chips"><code *ngFor="let ev of source.evidenceIds">{{ev}}</code></div>
         </div>
+        <div class="evidence-panel">
+          <h3>{{copy('Source-based field inspection objectives','أهداف الفحص الميداني المستمدة من كل إحالة')}}</h3>
+          <div *ngFor="let objective of d.context.sourceInspectionObjectives" class="info">
+            <strong>{{objective.inspectionRegime}} · {{objective.sourceType}}</strong>
+            <span>{{objective.inspectionReason||
+              copy('Inspect the cited referral with supporting source evidence',
+                'التحقق من الإحالة والوثائق المرتبطة بها')}}</span>
+            <code>{{objective.objectiveId}}</code>
+          </div>
+        </div>
         <p class="hint">{{copy('Distinct statutory requirements remain traceable and are not silently combined into an authorization.',
           'تبقى المتطلبات النظامية المستقلة واضحة ولا يتم دمجها تلقائياً في تصريح تنظيمي واحد.')}}</p>
       </section>
