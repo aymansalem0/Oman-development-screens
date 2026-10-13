@@ -305,6 +305,8 @@ export class SiSourceExcelImport{
     this.previews.delete(previewId);
     return {status:'COMMITTED',sourceType,batchId,importedEvents:events.length,
       duplicateEvents:duplicates.length,fileSha256:p.sha256,
-      nmcChanged:false,requiresOfficerReview:true,airiaCalls:0};
+      nmcChanged:false,requiresOfficerReview:true,
+      requiresDateApproval:false,departurePolicy:'FINAL_ETD_ON_IMPORT',
+      requiresPlanAndPscApproval:true,airiaCalls:0};
   }
 }
