@@ -811,6 +811,13 @@ const server = createServer(async (req, res) => {
         if(actor.role!=='ADMIN')throw new SiChecklistError('SI_CHECKLIST_ADMIN_REQUIRED',403);
         return respond(res,201,await siChecklistLibrary.create(await requestJson(req,100000),user));
       }
+      if(rest==='/storage/status'&&req.method==='GET')
+        return respond(res,200,{status:'ok',storage:checklistStorage.toUpperCase(),
+          oracleAuthoritative:checklistStorage==='oracle',
+          oracleMigration:'017',
+          legacyJsonImportAutomatic:false,
+          caseRevisionPinned:true,
+          humanApprovalRequired:true});
       if(rest==='/ai/status'&&req.method==='GET')
         return respond(res,200,siChecklistAiria.status());
       if(rest==='/ai/builder'&&req.method==='POST'){
