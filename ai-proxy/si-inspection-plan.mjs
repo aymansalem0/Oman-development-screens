@@ -12,6 +12,7 @@ import {readFileSync,writeFileSync,existsSync,mkdirSync,renameSync} from 'node:f
 import {dirname} from 'node:path';
 import {randomUUID} from 'node:crypto';
 import {SiCandidateAgentError} from './si-candidate-agent.mjs';
+import {compareInspections,inspectionRanking} from './si-inspection-ranking.mjs';
 
 const iso=()=>new Date().toISOString();
 const empty=()=>({revision:0,overrides:{},latest:null,audit:[]});
@@ -42,7 +43,7 @@ export function projectInspectionPlan(dashboard,source,run,overrides={},carryFor
   // A valid, pending maritime service request must not be excluded by a low
   // saved NMC risk score or by an untrusted/optional AI recommendation.
   const requiredInPlan=c.some(x=>x.requiredInPlan===true);
-  const sourcePriorityScore=Math.max(0,...c.map(x=>x.sourcePriorityScore??0));
+  const rankSignal=inspectionRanking(v);
   const note=overrides[v.imo]||null;
   const prior=carryForward[v.imo]||null;
   const waitingOnDeferred=prior?.disposition==='DEFER'&&prior.reviewAfter&&
@@ -57,7 +58,13 @@ export function projectInspectionPlan(dashboard,source,run,overrides={},carryFor
   grouped.set(v.imo,{
    imo:v.imo,vesselName:v.vesselName,flag:v.flag,vesselType:v.vesselType,
    sources:v.sourceTypes,regimes:v.regimes,sourceEvents:v.sourceEvents,
-   risk:v.currentRisk||null,sourcePriorityScore,requiredInPlan,
+   risk:v.currentRisk||null,requiredInPlan,
+   departureAt:rankSignal.departureAt,
+   departureVerified:rankSignal.criterion==='DEPARTURE_SOON',
+   incidentSeverity:rankSignal.incidentSeverity,
+   incidentHumanReviewed:rankSignal.criterion==='INCIDENT_SEVERITY',
+   incidentEvidenceRef:v.incidentEvidenceRef||null,
+   rankingCriterion:rankSignal.criterion,rankingGroup:rankSignal.group,
    pendingWorkflows:v.pendingWorkflows,
    approvedCases:v.createdWorkflows,externalScheduled:v.scheduledWorkflows,
    aiRecommended:run?aiSelected:null,
@@ -85,42 +92,41 @@ export function projectInspectionPlan(dashboard,source,run,overrides={},carryFor
  }
  if(run||[...grouped.values()].some(x=>x.planSelected)){
   const ranked=[...grouped.values()].filter(v=>v.planSelected);
-  // The published source trigger scores control ordering; AI may explain,
-  // but cannot silently suppress actionable SERVICE_REQUEST referrals.
-  const byModel=(a,b)=>b.sourcePriorityScore-a.sourcePriorityScore||
-    a.imo.localeCompare(b.imo);
-  const tier0=ranked.filter(x=>x.mandatoryReferral).sort(byModel);
-  const tier1=ranked.filter(x=>!x.mandatoryReferral).sort(byModel);
-  const reposition=(tier,startIndex)=>{
-    // Requested rank is an actual desired global slot, not a sort weight.
-    // No override can move a non-NMC item ahead of a protected NMC referral.
-    for(const row of tier.filter(x=>x.requestedRank!==null)
-       .sort((a,b)=>(a.requestedRank-b.requestedRank)||a.imo.localeCompare(b.imo))){
-      const old=tier.indexOf(row);tier.splice(old,1);
-      const pos=Math.max(0,Math.min(tier.length,row.requestedRank-1-startIndex));
-      tier.splice(pos,0,row);
+  // Selection is a separate decision. Order follows the first TWO confirmed
+  // business criteria: earliest verified future ETD; then officer-reviewed
+  // incident-specific severity (desc). Remaining criteria are NOT yet defined.
+  const groups=[0,1,2].map(n=>ranked.filter(x=>x.rankingGroup===n)
+    .sort(compareInspections));
+  const reposition=(rows,start)=>{
+    // Audited manual rank requests may reorder WITHIN a defined group only;
+    // they may never move an unverified vessel above a verified ETD/incident.
+    for(const row of rows.filter(x=>x.requestedRank!==null)
+      .sort((a,b)=>a.requestedRank-b.requestedRank||a.imo.localeCompare(b.imo))){
+      rows.splice(rows.indexOf(row),1);
+      const pos=Math.max(0,Math.min(rows.length,row.requestedRank-1-start));
+      rows.splice(pos,0,row);
     }
   };
-  reposition(tier0,0);reposition(tier1,tier0.length);
-  ranked.splice(0,ranked.length,...tier0,...tier1);
+  let offset=0;
+  for(const group of groups){reposition(group,offset);offset+=group.length;}
+  ranked.splice(0,ranked.length,...groups.flat());
   for(let i=0;i<ranked.length;i++){
    const row=ranked[i];
    row.effectiveRank=i+1;
    const sourceAdvice=row.regimeAdvisories.find(x=>x.recommendation==='SELECT_RECOMMENDED');
-   const modelExplanation='Published source trigger score '+row.sourcePriorityScore+
-     '/100. '+(sourceAdvice?.priorityRationale||
-       'No AI advice; inclusion is source-rule or officer directed.');
+   const signal=inspectionRanking(row);
+   const modelExplanation=signal.reason+'. '+(sourceAdvice?.priorityRationale||
+     'No AI reasoning available; officer must review.');
    row.priorityReason=row.requestedRank!==null?
-    'Officer requested position '+row.requestedRank+' with an auditable reason; C01 reran. '+
-      'Approved NMC referrals retain their protected first tier. '+modelExplanation:
-    (row.mandatoryReferral?'Protected NMC referral priority. ':'')+modelExplanation;
+     'Officer requested position '+row.requestedRank+' (within '+signal.criterion+
+       ') with auditable reason. '+modelExplanation:
+     modelExplanation;
   }
  }
  return [...grouped.values()].sort((a,b)=>
    Number(Boolean(b.planSelected))-Number(Boolean(a.planSelected))||
    (a.effectiveRank??999999)-(b.effectiveRank??999999)||
-   Number(b.mandatoryReferral)-Number(a.mandatoryReferral)||
-   b.sourcePriorityScore-a.sourcePriorityScore||a.imo.localeCompare(b.imo));
+   compareInspections(a,b));
 }
 export class SiInspectionPlan{
  constructor({targeting,candidateAgent,rollingPlans=null,
