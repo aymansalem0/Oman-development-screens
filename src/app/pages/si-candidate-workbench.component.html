@@ -248,16 +248,8 @@
                   </div>
                   <button type="button"
                     *ngIf="plan?.agentRunId&&planRow(v)?.editable&&planRow(v)?.planSelected"
-                    (click)="openPlanEdit(v,false)"
-                    [disabled]="planBusy">{{copy('Remove','استبعاد')}}</button>
-                  <button type="button"
-                    *ngIf="plan?.agentRunId&&planRow(v)?.editable&&planRow(v)?.planSelected===false"
-                    (click)="openPlanEdit(v,true)"
-                    [disabled]="planBusy">{{copy('Include','إدراج')}}</button>
-                  <button type="button"
-                    *ngIf="plan?.agentRunId&&planRow(v)?.editable&&planRow(v)?.planSelected"
                     (click)="openPlanEdit(v,true,true)"
-                    [disabled]="planBusy">{{copy('Change Rank','تغيير الأولوية')}}</button>
+                    [disabled]="planBusy">{{copy('Change Rank via C01','تغيير الأولوية عبر C01')}}</button>
                   <small *ngIf="!planRow(v)?.editable">
                     {{copy('No pending plan action','لا يوجد إجراء تخطيط معلق')}}</small>
                 </td>
