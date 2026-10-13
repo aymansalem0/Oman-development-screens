@@ -26,7 +26,7 @@ export class SiCandidateWorkbenchComponent implements OnInit{
   plan:SiInspectionPlanState|null=null;
   rollingPlans:SiRollingPlan[]=[];activePlanId:string|null=null;
   planningError='';planningBusy=false;newPlanVisible=false;
-  newPlan={title:'',startsOn:'',endsOn:'',port:'',notes:''};
+  newPlan={title:'',startsOn:'',endsOn:'',notes:''};
   get activePlan():SiRollingPlan|undefined{
     return this.rollingPlans.find(p=>p.id===this.activePlanId);
   }
@@ -41,7 +41,7 @@ export class SiCandidateWorkbenchComponent implements OnInit{
     this.newPlanVisible=true;this.planningError='';
     const day=this.localDate();
     this.newPlan={title:'Inspection Plan '+day,startsOn:day,endsOn:day,
-      port:'',notes:''};
+      notes:''};
   }
   loadRollingPlans():void{
     this.api.rollingPlans().subscribe({
