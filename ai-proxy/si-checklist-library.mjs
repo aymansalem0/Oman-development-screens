@@ -96,12 +96,20 @@ export function validateTemplate(body,{existing=null}={}){
   ai:aiOptions(body.ai),groups:validateGroups(body.groups||[])};
 }
 function normalizeVessel(v){
- const x=v||{}, num=y=>typeof y==='number'&&Number.isFinite(y)&&y>=0?y:
-   typeof y==='string'&&/^\d+(\.\d+)?$/.test(y.trim())?Number(y):null;
+ const x=v||{}, num=y=>{
+  if(typeof y==='number')return Number.isFinite(y)&&y>=0?y:null;
+  if(typeof y!=='string')return null;
+  // The shipped MOEI synthetic fleet stores e.g. "42,000 GT" and
+  // "76,000 DWT", not naked numeric fields.
+  const match=/^([0-9][0-9,]*(?:\.[0-9]+)?)\s*(?:GT|DWT)?$/i.exec(y.trim());
+  if(!match)return null;
+  const normalized=Number(match[1].replace(/,/g,''));
+  return Number.isFinite(normalized)&&normalized>=0?normalized:null;
+ };
  return {imo:x.imo||null,name:x.name||x.vesselName||null,
   vesselType:plain(x.vesselType||x.type||'')||null,
   grossTonnage:num(x.grossTonnage??x.gt??x.grossTons),
-  deadweightTonnage:num(x.deadweightTonnage??x.dwt)};
+  deadweightTonnage:num(x.deadweightTonnage??x.deadweight??x.dwt)};
 }
 const matchList=(required,actual)=>!required.length||
   (typeof actual==='string'&&required.some(x=>x.toLowerCase()===actual.toLowerCase()));
