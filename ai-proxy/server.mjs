@@ -35,6 +35,7 @@ import { SiInspectionPreparation, SiPreparationError } from './si-inspection-pre
 import { SiInspectionLifecycle, SiLifecycleError } from './si-inspection-lifecycle.mjs';
 import {runSiPocAdvisor,siFutureAdvisorCoverage,SiPocAdvisorError} from './si-poc-workflow-advisors.mjs';
 import {runSiAiriaAdvisor} from './si-airia-workflow-advisors.mjs';
+import {makeDq01Request,validateDq01Response,DqAgentError} from './nmc-airia-data-quality.mjs';
 import {readFileSync,existsSync} from 'node:fs';
 import {join as joinPath} from 'node:path';
 import {createHash as shaForMedia} from 'node:crypto';
@@ -678,6 +679,60 @@ const server = createServer(async (req, res) => {
     }
     return respond(res,405,{error:'METHOD_NOT_ALLOWED'});
   }
+  // Registered with Airia MENA, but published pipeline IDs alone do not
+  // prove partner contract compatibility or end-to-end deployment readiness.
+  if(path==='/api/ai/admin/agents/coverage'&&req.method==='GET'){
+    const specs=[
+      ['A01','a01','Maritime intelligence','WIRED'],
+      ['A02','a02','Vessel compliance','WIRED'],
+      ['A03','a03','Document intelligence','WIRED_MULTIPART'],
+      ['A04','a04','Inspection dossier','WIRED'],
+      ['DQ-01','dq01','Data-quality factors','CONTRACT_PILOT'],
+      ['SI-C01','c01','Candidate selection','WIRED_CONTRACT_CHECK'],
+      ['SI-P01','p01','Approved execution priority','PIPELINE_NOT_SUPPLIED'],
+      ['SI-S01','s01','Scheduling slot advice','CONTRACT_PILOT'],
+      ['SI-V01','v01','Vision evidence review','CONTRACT_PILOT_MEDIA_REQUIRED'],
+      ['SI-R01','r01','Inspection report drafting','CONTRACT_PILOT'],
+      ['SI-X01','x01','Recurring deficiency advice','CONTRACT_PILOT_HISTORY_REQUIRED']
+    ];
+    return respond(res,200,{status:'ok',provider:'AIRIA',
+      keyConfigured:Boolean(getAiriaKey()),providerContractTestsCompleted:false,
+      siProvider:siAiProvider,agents:specs.map(([code,id,role,integration])=>({
+        code,role,integration,configured:Boolean(pipelines[id]),
+        enabled:agentAllowed(id),pipelineId:pipelines[id]||null,
+        currentlySelectedForSi:code.startsWith('SI-')?siAiProvider==='airia':null,
+        verifiedLiveInUserEnvironment:false})),
+      conversationalCatalog:[
+        {code:'NMC-DESK',pipelineId:runtime.get('AIRIA_NMC_DESK_PIPELINE_ID'),responseType:'PROSE',structuredAdapter:false},
+        {code:'CONVERSATIONAL-SI',pipelineId:runtime.get('AIRIA_CONVERSATIONAL_SI_PIPELINE_ID'),responseType:'PROSE',structuredAdapter:false},
+        {code:'SDB-JOURNEY',pipelineId:runtime.get('AIRIA_SDB_JOURNEY_PIPELINE_ID'),responseType:'PROSE',structuredAdapter:false}
+      ],notes:['Airia provider catalogue is documented; live HTTP/JSON contracts not independently exercised by a GitHub commit.',
+        'No upstream AI invocation occurs when opening this coverage URL.',
+        'NMC risk, data-quality score, inspections, bookings and official findings remain owned by platform workflows.']});
+  }
+  if(path==='/api/ai/data-quality/assessments'){
+    if(req.method!=='POST')return respond(res,405,{error:'METHOD_NOT_ALLOWED'});
+    try{
+      dashboards.assertRole(req,'EDITOR');
+      if(!agentAllowed('dq01'))return respond(res,403,{error:'DQ01_DISABLED'});
+      const body=await requestJson(req,2048);
+      if(body?.confirmRun!==true)return respond(res,422,{error:'DQ01_EXPLICIT_RUN_REQUIRED'});
+      const imo=body.imo;
+      if(typeof imo!=='string'||!/^\\d{7}$/.test(imo))
+        return respond(res,422,{error:'DQ01_IMO_INVALID'});
+      const ctx=makeDq01Request(imo,fleet.getVesselResult(imo),incidentBundleMap.get(imo));
+      let raw;
+      try{raw=await fleetAgentCall('dq01',ctx.request);}
+      catch{return respond(res,502,{error:'DQ01_PROVIDER_UNAVAILABLE'});}
+      return respond(res,200,{...validateDq01Response(raw,ctx.known),imo,
+        sourceAssessmentId:fleet.getVesselResult(imo)?.assessmentId});
+    }catch(error){
+      if(error instanceof DqAgentError||error instanceof DashboardError)
+        return respond(res,error.status,{error:error.code});
+      return respond(res,503,{error:'DQ01_UNAVAILABLE'});
+    }
+  }
+
   if (req.method === 'GET' && path === '/api/ai/health') {
     const db=repository?await repository.health():{mode:'json',ready:true};
     return respond(res, db.ready?200:503, {
