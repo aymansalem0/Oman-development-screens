@@ -72,7 +72,7 @@ export async function generateMswPocFiles(outputDirectory,{overwrite=false}={}){
    ['Combined fleet','60 service + 45 PSC, with 6 overlapping IMOs = exactly 99 unique partner-demo vessels'],
    ['Importer limits','2 MB / 1000 rows, no formulas, exact 8-column row-one headers (legacy 7 accepted)'],
    ['Date fields','ETD local YYYY-MM-DDTHH:mm for both files; PSC ETA is separate. All are synthetic and UNVERIFIED.'],
-   ['Departure provenance','Imported ETD is a reported POC value, NOT an officer-reviewed ETD for priority ranking'],
+   ['Departure provenance','Imported ETD is FINAL for POC scheduling/ranking on import; no separate date approval. Source rows remain SYNTHETIC POC.'],
    ['PSC warning','Port-call import does not bypass PSC quota/selection policy'],
    ['Source validation','Preview -> resolve issues -> Commit; no AI or case approval'],
    ['Document provenance','IMO/name from Airia Partner Guide §8; events/dates/ports/service types are invented POC samples']
