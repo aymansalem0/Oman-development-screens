@@ -77,28 +77,22 @@ test('preparation menu lists persisted approved cases rather than volatile targe
   assert.match(settings,/this\.api\.publish\(/);
 });
 
-test('SI-P01 weights and trigger priorities follow NMC Risk slider + compact number pattern',()=>{
+test('Smart Inspection priority settings expose ONLY source trigger scores; no weights or threshold',()=>{
   const centralRisk=read('src/app/pages/nmc-risk-configuration-admin.component.html');
   const si=read('src/app/pages/si-targeting-settings.component.ts');
   assert.match(centralRisk,/type="range"/);
   assert.match(centralRisk,/normalizeWeights\(\)/);
-  assert.match(si,/class="risk-style-factor" \*ngFor="let factor of weightFactors"/);
   assert.match(si,/class="risk-style-factor" \*ngFor="let reason of triggerReasons"/);
   assert.match(si,/type="range" min="0" max="100" step="1"/);
   assert.match(si,/class="number-input"/);
-  assert.match(si,/normalizeWeights\(\)/);
-  assert.match(si,/\[class.invalid\]="!weightsValid"/);
-  assert.match(si,/get weightsValid\(\):boolean/);
-  assert.match(si,/this\.weightTotal===100/);
   assert.match(si,/this\.onPriorityEdit\(\)/);
-  assert.match(si,/this\.impact=null;this\.success='';this\.error='';/);
-  assert.match(si,/missingRiskAction:'REVIEW_REQUIRED'/);
   assert.match(si,/sourceTriggerScores:\{\.\.\.this\.sourceScores\}/);
+  assert.doesNotMatch(si,/riskPriorityThreshold|weightFactors|weightsValid|normalizeWeights|SI-P01/);
   assert.match(si,/\[attr\.aria-label\]=/);
   assert.match(si,/\.factor-control input\.weight-slider\{[^}]*accent-color:#0f766e/);
-  // This PR must remain UI-only: existing backend protected P01 inputs remain.
+  // P01 historical handler remains inert and no longer controls C01 selection.
   const server=read('ai-proxy/server.mjs');
-  assert.match(server,/SiAiPrioritization/);
+  assert.match(server,/SI_P01_OUT_OF_CURRENT_POC_SCOPE/);
 });
 
 
