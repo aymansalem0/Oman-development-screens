@@ -40,7 +40,7 @@ export function validateMaritimeSchedulingInput(imo,row,erp,nowMs){
  if(!['BERTH','ANCHORAGE','TERMINAL'].includes(row.locationType)||
     !row.locationName||row.siteAccessConfirmed!==true)
   return {reason:'BERTH_ANCHORAGE_AND_ACCESS_CONFIRMATION_REQUIRED'};
- if(!['MSW_FINAL','MSW_VERIFIED','OFFICER_CONFIRMED'].includes(row.windowSource)||
+ if(!['MSW_FINAL','OFFICER_FINAL','OFFICER_CONFIRMED'].includes(row.windowSource)||
     !row.windowEvidenceReference)
   return {reason:'FINAL_VESSEL_ARRIVAL_DEPARTURE_WINDOW_REQUIRED'};
  let start,end;
@@ -132,7 +132,18 @@ export function proposeMaritimeBatchSchedule({
    out=scheduler.buildOptions(input,{snapshot:erpSnapshot,policy:workingPolicy,
     confirmed:existingBookings});
   }catch(e){return {...base,reason:e.code||'SCHEDULER_VALIDATION_FAILED'};}
-  const filtered=out.options;
+  // A combined visit can satisfy multiple source obligations ONLY if the
+  // assigned engineer holds a valid regime/type qualification for EVERY scope.
+  // One PSC engineer alone is not presumed qualified for a service inspection.
+  const required=(v.regimes||[]).map(s=>({
+    PORT_STATE_CONTROL:'PSC',FOCUSED_INSPECTION:'FOCUSED',
+    UAE_SERVICE_INSPECTION:'SERVICE',FOLLOW_UP_INSPECTION:'FOLLOW_UP'
+  }[s])).filter(Boolean);
+  const filtered=out.options.filter(opt=>required.every(r=>
+    erpSnapshot.data.Qualifications.some(q=>
+      q.inspector_id===opt.inspectorId&&q.inspection_regime===r&&
+      ['ANY',input.vesselType].includes(norm(q.vessel_type))&&
+      active(q.active)&&q.valid_until>=localDate(Date.parse(opt.startUtc)))));
   return {...base,input,options:filtered.map(o=>({
    ...o,imo:v.imo,locationType:input.locationType,
    locationName:input.locationName,
