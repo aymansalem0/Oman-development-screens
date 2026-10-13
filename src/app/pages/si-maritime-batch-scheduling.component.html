@@ -1,0 +1,81 @@
+<div class="marine-layout" [attr.dir]="lang.dir">
+ <app-nmc-navigation></app-nmc-navigation>
+ <main class="marine-main">
+  <header class="marine-hero">
+   <small>MOEI · SMART INSPECTION · V2 MARITIME SCHEDULING</small>
+   <h1>{{copy('Comprehensive Electronic Inspection Scheduling','الجدولة الإلكترونية الشاملة للمعاينات')}}</h1>
+   <p>{{copy('Option B: final source ETD needs no extra approval. The supervisor approves the proposed entire schedule, not individual dates.',
+     'الخيار B: تاريخ المغادرة النهائي من المصدر لا يتطلب اعتمادًا. يعتمد المشرف الجدول الكامل وتوزيع المهندسين وليس التواريخ منفردة.')}}</p>
+   <a routerLink="/moei/smart-inspection/candidates">{{copy('← Candidate Center','← مركز الترشيحات')}}</a>
+  </header>
+  <div class="marine-error" *ngIf="error" role="alert">{{error}}</div>
+  <div class="marine-notice" *ngIf="loading">{{copy('Loading approved plan and workforce…','تحميل الخطة المعتمدة والمهندسين…')}}</div>
+  <ng-container *ngIf="context as ctx">
+   <section class="marine-kpis">
+    <div><span>{{copy('Approved vessels','السفن المعتمدة')}}</span><strong>{{ctx.approvedVessels}}</strong></div>
+    <div><span>{{copy('Proposed slots','المواعيد المقترحة')}}</span><strong>{{proposal?.summary?.proposed??'—'}}</strong></div>
+    <div><span>{{copy('Unscheduled','غير المجدولة')}}</span><strong>{{proposal?.summary?.unscheduled??'—'}}</strong></div>
+    <div><span>{{copy('Cases / bookings created','الحالات والحجوزات')}}</span><strong>0 / 0</strong></div>
+   </section>
+   <section class="marine-panel">
+    <h2>{{copy('Vessel visit details and site access','بيانات زيارة السفن وإتاحة الموقع')}}</h2>
+    <p>{{copy('Imported ETA/ETD are final in the POC and locked in this board. For NMC or services without dates, enter final times directly; no date signoff is needed. Site access remains a safety gate.',
+      'تُعامل مواعيد الوصول والمغادرة المستوردة كنهائية في الـPOC ولا تُعدّل هنا. يمكن إدخال المواعيد النهائية لإحالات NMC والخدمات عند غيابها دون اعتماد منفصل. يجب تأكيد إتاحة الموقع.')}}</p>
+    <div class="marine-scroll"><table>
+     <thead><tr>
+      <th>{{copy('Vessel / IMO','السفينة / IMO')}}</th>
+      <th>{{copy('Source / Regimes','المصدر / النطاقات')}}</th>
+      <th>{{copy('Port','الميناء')}}</th>
+      <th>ETA (UAE)</th><th>ETD (UAE)</th>
+      <th>{{copy('Inspection berth / site','موقع المعاينة')}}</th>
+      <th>{{copy('Minutes','الدقائق')}}</th>
+     </tr></thead>
+     <tbody><tr *ngFor="let v of ctx.items">
+      <td><b>{{v.name}}</b><small>IMO {{v.imo}}</small></td>
+      <td><small>{{v.sourceTypes.join(' · ')}}</small>
+       <small>{{v.regimes.join(' · ')}}</small><small>{{v.vesselType}}</small>
+       <small *ngIf="v.nmcReferrals.length">NMC × {{v.nmcReferrals.length}}</small></td>
+      <td><select [(ngModel)]="v.portId" [disabled]="!!v.portId">
+       <option value="">—</option><option *ngFor="let p of ctx.ports" [value]="p.portId">{{p.name}}</option>
+      </select></td>
+      <td><b *ngIf="v.etaLocal">{{v.etaLocal}}</b>
+       <input *ngIf="!v.etaLocal" [(ngModel)]="v.earliestLocal" placeholder="YYYY-MM-DD HH:mm" maxlength="16">
+      </td>
+      <td><b *ngIf="v.etdLocal">{{v.etdLocal}}</b>
+       <input *ngIf="!v.etdLocal" [(ngModel)]="v.latestFinishLocal" placeholder="YYYY-MM-DD HH:mm" maxlength="16">
+       <small>{{v.etdSource}}</small></td>
+      <td><select [(ngModel)]="v.locationType">
+       <option value="BERTH">{{copy('Berth','رصيف')}}</option>
+       <option value="ANCHORAGE">{{copy('Anchorage','مرسى')}}</option>
+       <option value="TERMINAL">{{copy('Terminal','محطة')}}</option></select>
+       <input [(ngModel)]="v.locationName" [placeholder]="copy('Exact location','الموقع المحدد')" maxlength="120">
+       <label class="marine-check"><input type="checkbox" [(ngModel)]="v.siteAccessConfirmed">
+         {{copy('Site accessible','موقع المعاينة متاح')}}</label>
+      </td>
+      <td><input type="number" min="30" max="720" step="30" [(ngModel)]="v.durationMinutes"></td>
+     </tr></tbody>
+    </table></div>
+    <div class="marine-actions"><button type="button" [disabled]="busy" (click)="preview()">
+      {{busy?copy('Calculating…','جارٍ الحساب…'):copy('Generate Complete Schedule Proposal','إنشاء مقترح الجدولة الشاملة')}}</button>
+     <small>{{copy('No paid AI call, inspection case, ERP booking or NMC action is created.',
+      'لا تُنشأ اتصالات AI مدفوعة أو حالات معاينة أو حجوزات ERP أو إجراءات NMC.')}}</small></div>
+   </section>
+   <section *ngIf="proposal as p" class="marine-panel">
+    <h2>{{copy('Inspector assignments and scheduling exceptions','توزيع المهندسين واستثناءات الجدولة')}}</h2>
+    <p class="marine-notice">{{copy('This preview uses verified ERP constraints and a deterministic optimization heuristic. Supervisor schedule confirmation and AI explanations are the next implementation stage.',
+     'هذه المعاينة تستخدم قيود ERP ومحرك تحسين حتمي. اعتماد الجدولة وشرح الذكاء الاصطناعي هما الخطوة التنفيذية التالية.')}}</p>
+    <div class="marine-scroll"><table>
+     <thead><tr><th>IMO</th><th>{{copy('Status','الحالة')}}</th>
+      <th>{{copy('Engineer','المهندس')}}</th><th>{{copy('Time','الميعاد')}}</th>
+      <th>{{copy('Site','المكان')}}</th><th>{{copy('Reason / Score','السبب / التقييم')}}</th></tr></thead>
+     <tbody><tr *ngFor="let r of p.rows">
+      <td>{{r.imo}}</td><td><b [class.unscheduled]="r.status==='UNSCHEDULED'">{{r.status}}</b></td>
+      <td>{{r.assignment?.inspectorName||'—'}}</td>
+      <td>{{r.assignment?.startLocal||'—'}}<br>{{r.assignment?.endLocal||''}}</td>
+      <td>{{r.assignment?.locationName||'—'}}</td>
+      <td>{{r.blocker||((r.assignment?.score??0)+'/100')}}</td>
+     </tr></tbody></table></div>
+   </section>
+  </ng-container>
+ </main>
+</div>
