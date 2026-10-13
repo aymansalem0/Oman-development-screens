@@ -241,4 +241,74 @@ export class SiRollingPlanStore{
    }catch(e){await con.rollback();throw e;}
   });
  }
+ /**
+  * Linked case execution never changes an approved vessel/reason snapshot.
+  * Each transition is a new durable version with an audit entry.
+  */
+ async setExecutionState(planId,target,actor){
+  if(!['IN_EXECUTION','COMPLETED'].includes(target)||!text(actor,160))
+   fail('SI_ROLLING_STATE_INVALID',422);
+  const advance=p=>{
+   if(p.status===target)return p;
+   const required=target==='IN_EXECUTION'?'APPROVED':'IN_EXECUTION';
+   if(p.status!==required)fail('SI_ROLLING_STATE_TRANSITION_INVALID',409);
+   p.status=target;p.revision++;p.updatedAt=now();p.updatedBy=actor;
+   p.audit=[...(p.audit||[]),{event:target,at:p.updatedAt,actor}].slice(-300);
+   return p;
+  };
+  if(this.mode==='json'){
+   const data=this.readFile(),i=data.plans.findIndex(p=>p.id===planId);
+   if(i<0)fail('SI_ROLLING_PLAN_NOT_FOUND',404);
+   const next=advance(clone(data.plans[i]));
+   data.plans[i]=next;this.writeFile(data);return next;
+  }
+  return this.db(async con=>{
+   try{
+    const found=await this.query(con,`SELECT STATE_JSON FROM SI_PLAN_ROLLING
+      WHERE PLAN_ID=:id FOR UPDATE`,{id:planId});
+    if(!found.length)fail('SI_ROLLING_PLAN_NOT_FOUND',404);
+    const before=from(found[0].STATE_JSON);
+    if(before.status===target){await con.rollback();return before;}
+    const next=advance(clone(before));
+    await con.execute(`UPDATE SI_PLAN_ROLLING SET STATUS=:status,
+      VERSION_NO=:version,STATE_JSON=:state,UPDATED_BY=:actor,
+      UPDATED_AT=SYSTIMESTAMP WHERE PLAN_ID=:id`,{
+       id:planId,status:next.status,version:next.revision,
+       state:json(next),actor});
+    await con.execute(`INSERT INTO SI_PLAN_ROLLING_VERSION
+      (PLAN_ID,VERSION_NO,STATE_JSON,ACTOR,EVENT_CODE)
+      VALUES(:id,:version,:state,:actor,:event)`,{
+       id:planId,version:next.revision,state:json(next),actor,event:target});
+    await this.audit(con,planId,target,actor,{linkedCases:next.approvedVessels.length});
+    await con.commit();return next;
+   }catch(e){await con.rollback();throw e;}
+  });
+ }
+ /**
+  * Called only after an INSPECTOR/SUPERVISOR lifecycle CLOSE has actually
+  * persisted. Never infer closure from a planning date, or from AI.
+  */
+ async completeIfAllClosed(changedCaseId,actor,lifecycle){
+  if(!ID.test(changedCaseId||''))return [];
+  let ids;
+  if(this.mode==='json')
+   ids=this.readFile().plans.filter(p=>p.approvedVessels?.some(v=>
+     v.caseId===changedCaseId)).map(p=>p.id);
+  else ids=await this.db(async con=>
+   (await this.query(con,`SELECT PLAN_ID FROM SI_PLAN_ROLLING_VESSEL
+     WHERE CASE_ID=:id`,{id:changedCaseId})).map(r=>r.PLAN_ID));
+  if(!ids.length)return [];
+  const live=await lifecycle.list();
+  const cases=new Map((live.cases||[]).map(c=>[c.id,c.stage]));
+  const results=[];
+  for(const id of ids){
+   const p=await this.get(id);
+   if(p.status!=='IN_EXECUTION')continue;
+   if(!p.approvedVessels.length||
+      !p.approvedVessels.every(v=>cases.get(v.caseId)==='CLOSED'))continue;
+   results.push(await this.setExecutionState(id,'COMPLETED',actor));
+  }
+  return results;
+ }
+
 }
