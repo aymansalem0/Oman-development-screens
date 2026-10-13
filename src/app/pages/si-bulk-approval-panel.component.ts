@@ -1,5 +1,5 @@
 import {CommonModule} from '@angular/common';
-import {Component,EventEmitter,Input,OnChanges,OnDestroy,Output,SimpleChanges} from '@angular/core';
+import {Component,EventEmitter,Input,OnChanges,OnDestroy,OnInit,Output,SimpleChanges} from '@angular/core';
 import {FormsModule} from '@angular/forms';
 import {RouterLink} from '@angular/router';
 import {Subscription,interval,switchMap} from 'rxjs';
@@ -171,7 +171,7 @@ import {SiBulkJob,SiBulkPlanService,SiBulkPreview} from '../services/si-bulk-pla
   .summary-row{grid-template-columns:1fr}select{min-width:0}}
  `]
 })
-export class SiBulkApprovalPanelComponent implements OnChanges,OnDestroy{
+export class SiBulkApprovalPanelComponent implements OnChanges,OnDestroy,OnInit{
  @Input() plan:SiInspectionPlanState|null=null;
  @Output() batchCompleted=new EventEmitter<void>();
  preview:SiBulkPreview|null=null;
@@ -186,6 +186,18 @@ export class SiBulkApprovalPanelComponent implements OnChanges,OnDestroy{
  get BooleanJobBusy():boolean{return this.job?.status==='RUNNING'||this.job?.status==='QUEUED';}
  get allChosen():boolean{return Boolean(this.preview?.vessels.length)&&
    this.preview!.vessels.every(x=>Boolean(this.choices[x.imo]));}
+ ngOnInit():void{
+  // A browser refresh must not hide a batch that is still running on server.
+  this.api.latest().subscribe({
+   next:result=>{
+    const recent=result.batches?.[0];
+    if(recent){
+     this.job=recent;
+     if(recent.status==='QUEUED'||recent.status==='RUNNING')this.startPoll(recent.id);
+    }
+   },error:()=>{ /* The preview will separately display API connectivity errors. */ }
+  });
+ }
  ngOnChanges(_:SimpleChanges):void{
   const key=this.plan?this.plan.sourceHash+'|'+this.plan.revision+'|'+this.plan.agentRunId:'';
   if(key!==this.lastPlanKey){this.lastPlanKey=key;this.refresh();}
