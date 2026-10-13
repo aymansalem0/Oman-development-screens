@@ -118,3 +118,18 @@ jobs:
 
       - name: Dashboard workspace regression tests
         run: npm --prefix ai-proxy test
+
+  windows-si-json-regression:
+    name: Windows Node 24 PSC JSON persistence
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node 24 (POC workstation parity)
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install backend dependencies
+        run: npm --prefix ai-proxy install --no-audit --no-fund
+      - name: Windows atomic write, PSC selection, candidate tests
+        run: node --test ai-proxy/test/atomic-json-store.test.mjs ai-proxy/test/si-psc-selection.test.mjs ai-proxy/test/si-candidate-targeting.test.mjs
