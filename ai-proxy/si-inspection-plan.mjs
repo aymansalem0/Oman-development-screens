@@ -266,6 +266,7 @@ export class SiInspectionPlan{
    if(cycleId){
     await this.rolling.saveDraft(cycleId,state.revision,actor,p=>{
      p.overrides=next.overrides;p.latest=next.latest;
+     p.savedPlanRows=rows;p.selectionSourceHash=source.snapshotHash;
      p.status=rows.some(r=>r.planSelected)?'READY_FOR_APPROVAL':'DRAFT';
      return p;
     });
