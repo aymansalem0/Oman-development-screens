@@ -59,7 +59,7 @@ test('C01 returns stable advisory without approving cases or Airia',async()=>{
  assert.equal(r.humanDecisionRequired,true);
  assert.equal(r.recommendations.length,2);
  assert.equal(r.recommendations.find(x=>x.candidateKey==='nmc').recommendation,'SELECT_RECOMMENDED');
- assert.equal(r.recommendations.find(x=>x.candidateKey==='psc').recommendation,'MANUAL_REVIEW');
+ assert.equal(r.recommendations.find(x=>x.candidateKey==='psc').recommendation,'SELECT_RECOMMENDED');
  assert.equal(r.recommendations.find(x=>x.candidateKey==='psc').dataGaps[0],'MISSING_NMC_SAVED_RISK');
 });
 test('C01 never fabricates risk 0 for missing saved assessment',()=>{
@@ -133,9 +133,9 @@ test('C01 preview is deterministic for identical current evidence',()=>{
  assert.notEqual(a.snapshotHash,buildC01Source(inputs(),{version:2}).snapshotHash);
 });
 
-test('C01 proposes high-risk PSC/service candidates as advice; no official selection is mutated',()=>{
+test('C01 ranks all evidence-backed NMC, Service Requests and quota-selected PSC solely by source priority',()=>{
  const testData=inputs();
- testData.policy.config={riskPriorityThreshold:65};
+ testData.policy.config={sourceTriggerScores:{NMC_CASE:100,SERVICE_REQUEST:100,PSC_PORT_CALL:20}};
  testData.candidates.push(candidate('service-hi','SERVICE_REQUEST','9702281',78));
  testData.candidates.push(candidate('psc-hi','PSC_PORT_CALL','9716789',85));
  testData.candidates.push(candidate('service-low','SERVICE_REQUEST','9723891',35));
@@ -146,10 +146,12 @@ test('C01 proposes high-risk PSC/service candidates as advice; no official selec
    const row=output.find(x=>x.candidateKey===key);
    assert.equal(row.recommendation,'SELECT_RECOMMENDED');
    assert.ok(row.suggestedRank>=1);
-   assert.match(row.priorityRationale,/saved risk/i);
+   assert.match(row.priorityRationale,/source trigger priority/i);
    assert.equal(row.regulatoryDecision,false);
  }
- assert.equal(output.find(x=>x.candidateKey==='service-low').recommendation,'MANUAL_REVIEW');
- assert.equal(output.find(x=>x.candidateKey==='psc').recommendation,'MANUAL_REVIEW');
+ assert.equal(output.find(x=>x.candidateKey==='service-low').recommendation,'SELECT_RECOMMENDED');
+ assert.equal(output.find(x=>x.candidateKey==='psc').recommendation,'SELECT_RECOMMENDED');
+ assert.ok(output.find(x=>x.candidateKey==='service-low').suggestedRank <
+   output.find(x=>x.candidateKey==='psc-hi').suggestedRank);
  assert.equal(output.find(x=>x.candidateKey==='nmc').suggestedRank,1);
 });
