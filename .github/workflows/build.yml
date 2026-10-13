@@ -87,6 +87,9 @@ jobs:
       - name: Central AI governance and Airia credential regression
         run: node --test ai-proxy/test/ai-governance-centralized.test.mjs
 
+      - name: NMC + SI Oracle schema reconciliation and Checklist API router regression
+        run: node --test ai-proxy/test/schema-reconcile.test.mjs
+
       - name: Dynamic maritime checklists and Airia assistant regression
         run: node --test ai-proxy/test/si-checklist-dynamic.test.mjs
 
