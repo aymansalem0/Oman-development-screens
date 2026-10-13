@@ -87,3 +87,65 @@ Expected: `[si-rolling] STORAGE_ORACLE_READY schema=018`. When schema is missing
 - Historical plans before migration 018 are not auto-imported into the new plan history; existing inspection cases remain authoritative.
 - Official maritime scheduling, external PSC quota decisions and ministry audit/legal sign-off remain governed by their existing flows.
 - UAE MOEI final production data baseline remains **Azure SQL**, while Oracle 23c is this local POC environment only.
+
+## 2026-10-13 CI and Docker cutover quality-gate update
+
+Added an **integrated no-cost end-to-end test** `ai-proxy/test/si-rolling-endtoend.test.mjs` which calls the actual planning, C01, batch approval and rolling state modules with **mock data**, asserting:
+- Create two plans on the same day without triggering the AI provider.
+- C01 saves only into the selected plan; the other draft remains untouched.
+- Supervisor batch approval is queued; official SI case appears only when the work item executes.
+- Immutable approved plan stores the exact approved case ID, rank and event source reference.
+- After candidate feed changes next day, opening the **historical plan** shows its frozen approved vessel selection rather than today's live queue.
+- New plan on subsequent day remains independent and does not automatically call C01.
+- When authorized lifecycle closure of all linked cases is confirmed, plan completes; a completed/approved plan cannot be canceled as a draft.
+
+This is *not* proof of an actual Oracle/C01 Airia/live-company deployment. GitHub Actions' isolated rolling tests and Docker image build must pass; unrelated legacy NMC case-workspace regression should remain tracked separately and must not be hidden.
+
+### Safe Windows Docker helper (one command per phase)
+
+The repo now includes `scripts/si-rolling-docker.ps1`:
+```powershell
+# After switching to feature/si-rolling-inspection-plans-20261013:
+.\scripts\si-rolling-docker.ps1 -Action Build
+
+# Connects to the configured Oracle database; READ-ONLY preflight:
+.\scripts\si-rolling-docker.ps1 -Action Preflight
+
+# DBA first applies migration 018 after confirming a verified restorable backup.
+# Only then, replacing APPLICATION containers (NEVER touching Oracle/volumes):
+.\scripts\si-rolling-docker.ps1 -Action Start -BackupVerified
+
+# Verify container status, backend logs and real Oracle 018 objects:
+.\scripts\si-rolling-docker.ps1 -Action Verify
+```
+`-Start` fails closed when required Oracle tables or indexes are missing. The helper **never runs SQL DDL or `docker down -v`**. The operator must independently perform and document the Oracle backup/DBA review/migration; never assume a successful `--plan` on migration 017 alone is enough.
+
+Expected schema **after** 018: 45 known tables / 26 known indexes (40/23 pre-018); confirm also all expected columns and master data in the full schema report. Read-only deployment readiness gate:
+```powershell
+docker compose @dc run --rm --no-deps ai-proxy node tools/check-si-rolling-oracle.mjs
+```
+Expected `status: READY`, owner `NMC_AI`, PDB `FREEPDB1`, `missingTables: []`, `missingIndexes: []`.
+
+### UAT with real Oracle and authorized roles (manual, do not automate approvals)
+
+1. Open `/#/moei/smart-inspection/candidates`; authenticate as authorized staff.
+2. Create **Morning Plan** for October 13–15 and **Afternoon Plan** October 13–14. Confirm different plan numbers and two database records in `SI_PLAN_ROLLING`.
+3. Open Morning Plan and explicitly run C01. Refresh: only Morning is READY_FOR_APPROVAL; Afternoon remains DRAFT. If a real Airia provider is active, its cost requires explicit confirmation.
+4. Open **Review & Approve Plan**, verify all approved reasons/inspections are shown for each IMO. As SUPERVISOR, approve *only test-approved* vessel events; wait for the batch to complete. Confirm linked cases exist in `SI_INSPECTION_CASE`, `SI_PLAN_ROLLING_VESSEL` and `SI_PLAN_ROLLING_REASON`; inspect `SI_PLAN_ROLLING_VERSION` and `SI_PLAN_ROLLING_AUDIT`.
+5. Reopen Morning: approved historical vessel selection is frozen even if new NMC/PSC candidate data arrives. Do **not** run live AI to change historical approvals.
+6. The next day, create another plan. Confirm earlier plans have not been replaced, and a previously inspected IMO may enter only with an independent new source event, not with the same already-approved event.
+7. Run SI lifecycle for the approved case through authorized stages. Plan reaches COMPLETED **only** when all its linked cases reach CLOSED.
+8. Test cancellations of DRAFT with reason, optimistic revision conflict, and rejection of post-approval edits/cancellations.
+9. Keep existing Oracle data and Docker `/data` unchanged. Never invent government approval/source evidence to satisfy test prerequisites; use approved POC test records and the configured authorization flow.
+
+Read-only Oracle verification examples:
+```sql
+SELECT PLAN_NO,STATUS,START_DATE,END_DATE,VERSION_NO,APPROVED_BY
+FROM SI_PLAN_ROLLING ORDER BY CREATED_AT DESC;
+SELECT PLAN_ID,IMO,CASE_ID,PLAN_RANK FROM SI_PLAN_ROLLING_VESSEL;
+SELECT PLAN_ID,IMO,EVENT_KEY FROM SI_PLAN_ROLLING_REASON;
+SELECT PLAN_ID,VERSION_NO,EVENT_CODE,CREATED_AT FROM SI_PLAN_ROLLING_VERSION
+ORDER BY CREATED_AT DESC;
+```
+
+**Release status remains DRAFT** until the DBA applies 018, actual local Oracle UAT passes and existing unrelated NMC regression is resolved or explicitly accepted by the project owner.
