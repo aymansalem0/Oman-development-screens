@@ -105,24 +105,26 @@ test('priority impact preview/revision never changes legal eligibility, NMC risk
     await w.subject.receiveEvent(source());
     const before=(await w.subject.dashboard()).candidates[0];
     assert.equal(before.priority,'PRIORITY');
-    const preview=await w.subject.previewRules({
-      riskPriorityThreshold:80,includeMissingRiskInReview:true
-    });
+    const preview=await w.subject.previewRules({sourceTriggerScores:{
+      NMC_CASE:100,SERVICE_REQUEST:20,PSC_PORT_CALL:20
+    }});
     assert.deepEqual(preview.affectedImos,[fleet[0].imo]);
     assert.equal(preview.evaluatedPopulation,420);
     assert.equal(preview.unevaluatedRiskVessels,419);
     assert.equal((await w.subject.dashboard()).candidates[0].priority,'PRIORITY');
     const published=await w.subject.publishRules({expectedVersion:1,
-      publishedBy:'SME',reason:'Priority trial threshold',
-      config:{riskPriorityThreshold:80,includeMissingRiskInReview:true}});
+      publishedBy:'SME',reason:'Source trigger priority policy',
+      config:{sourceTriggerScores:{NMC_CASE:100,SERVICE_REQUEST:20,PSC_PORT_CALL:20}}});
     assert.equal(published.version,2);
     const after=(await w.subject.dashboard()).candidates[0];
     assert.equal(after.priority,'STANDARD');
+    assert.equal(after.sourcePriorityScore,20);
+    assert.equal(published.config.sourceTriggerScores.SERVICE_REQUEST,20);
     assert.equal(after.eligibility,before.eligibility);
     assert.deepEqual(after.currentRisk,before.currentRisk);
     await assert.rejects(()=>w.subject.publishRules({expectedVersion:1,
       publishedBy:'SME',reason:'Priority trial threshold',
-      config:{riskPriorityThreshold:10,includeMissingRiskInReview:true}}),
+      config:{sourceTriggerScores:{NMC_CASE:100,SERVICE_REQUEST:10,PSC_PORT_CALL:20}}}),
       e=>e.code==='SI_POLICY_VERSION_CONFLICT');
   }finally{w.cleanup();}
 });
