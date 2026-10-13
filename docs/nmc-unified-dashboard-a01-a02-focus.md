@@ -88,3 +88,54 @@ A `True` readiness result confirms the saved vessel evidence path works; it
 does NOT establish whether the live A01 model will return the optional
 `FOCUS_KPI` textual marker. A subsequent explicitly authorized paid trial
 is still necessary.
+
+## 13 October 2026 — Dashboard Focus operational fix (new opt-in governance toggle)
+
+Operator diagnostic: Airia credential status can be `configured: true` with
+`source: SERVER_BOOTSTRAP` and `rotatable: false`. This means the Airia API
+key is already usable by the server; the missing encryption master key blocks
+**UI key rotation only**, not existing A01/A02 calls.
+
+The prior dashboard focus returned `configured: false` even when A01 and A02
+were enabled because it checked `NMC_DASHBOARD_AI_FOCUS_ENABLED` directly from
+an environment variable that was not supplied by the existing Docker Compose
+configuration. The field `assessmentContextReady: false` was misleading:
+while disabled, the old implementation **skipped** checking saved vessel data.
+
+Changes in this branch:
+- Registers `NMC_DASHBOARD_AI_FOCUS_ENABLED` as a **default-OFF, paid** boolean
+  in **AI Settings & Governance**. It can be published as a versioned
+  runtime override with human cost confirmation; it is not an ad-hoc .env tweak.
+- Uses the current published setting dynamically on `/status` and `/run`,
+  together with valid Airia key and A01/A02 runtime enablement. No new pipeline.
+- `/status` checks saved full-vessel evidence independently of the AI enable
+  switch, exposing genuine `assessmentContextReady` and `sourceImo` even if
+  dashboard focus is disabled. It makes **zero paid calls**.
+- `/run` still requires an authenticated authorized operator,
+  `confirmCost:true`, validated saved five-factor evidence, and its existing
+  A02 → A01 sequence (up to two billable calls). No risk, Oracle or case writes.
+
+After a reviewed deployment, open
+`http://localhost:4200/#/moei/settings/ai-governance`, locate
+`NMC_DASHBOARD_AI_FOCUS_ENABLED` in the Agents group, set Enabled, enter a
+reason, acknowledge potential cost and Publish. Open
+`http://localhost:4200/api/ai/nmc/dashboard-focus/status` in another tab
+of the same authenticated browser to check `configured`,
+`assessmentContextReady` and `sourceImo`.
+
+**Cost protection:** Before any application-container restart or Airia trial,
+review the **actual persisted** runtime settings. Fleet auto, A03 automatic
+document extraction, retries and incident auto triage are separate potential
+billable processes and are NOT disabled by this feature. For an isolated
+cost-free preflight, explicitly suspend automatic paid processes with approval,
+then verify `/api/ai/health` reports `fleetAutoEnabled:false`.
+The Airia Partner Guide dated 13 October specifies
+`https://api.mena.airia.ai`; if the existing runtime contains
+`https://mena.api.airia.ai`, confirm the current tenant endpoint with the
+partner **before changing a working global URL**.
+
+**Not proven:** This change does NOT make the original A01 vessel-focused
+response reliably emit the optional text marker `FOCUS_KPI:<id>`. A budgeted,
+authorized real Airia call and response-schema validation are still required
+before claiming successful KPI-focus analysis or a new executive dashboard
+report. This branch stays draft until live browser + Oracle checks pass.
