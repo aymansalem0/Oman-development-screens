@@ -207,8 +207,12 @@ export class OracleSiChecklistLibrary{
   const con=await this.connection();
   try{
    const old=await rows(con,
-    'SELECT TEMPLATE_ID FROM SI_CHK_TEMPLATE WHERE TEMPLATE_ID=:id',{id:t.id});
-   if(old.length)return {skipped:true,id:t.id};
+    'SELECT DRAFT_JSON FROM SI_CHK_TEMPLATE WHERE TEMPLATE_ID=:id',{id:t.id});
+   if(old.length){
+    if(JSON.stringify(parse(old[0].DRAFT_JSON))!==JSON.stringify(t))
+     throw error('SI_CHECKLIST_IMPORT_TEMPLATE_CONFLICT',409);
+    return {skipped:true,id:t.id};
+   }
    await con.execute(`INSERT INTO SI_CHK_TEMPLATE
     (TEMPLATE_ID,TEMPLATE_CODE,TITLE_EN,DESCRIPTION_TEXT,IS_MANDATORY,STATUS,
      DRAFT_JSON,CURRENT_REVISION,CREATED_BY,UPDATED_BY)
@@ -378,7 +382,11 @@ export class OracleSiChecklistField extends SiChecklistField{
   this.assertReady();
   if(!entry?.caseId||entry.version<1)throw error('SI_CHECKLIST_IMPORT_CASE_INVALID',422);
   const existing=await this.read(entry.caseId);
-  if(existing.cases[entry.caseId])return {skipped:true,id:entry.caseId};
+  if(existing.cases[entry.caseId]){
+   if(JSON.stringify(existing.cases[entry.caseId])!==JSON.stringify(entry))
+    throw error('SI_CHECKLIST_IMPORT_CASE_CONFLICT',409);
+   return {skipped:true,id:entry.caseId};
+  }
   // Historical data is inserted as a pinned snapshot, and projections receive
   // every historical review/evidence/audit in one transaction.
   const con=await this.connection();
