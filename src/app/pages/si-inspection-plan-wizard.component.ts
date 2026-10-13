@@ -1,7 +1,7 @@
 import {CommonModule} from '@angular/common';
 import {Component,OnDestroy,OnInit} from '@angular/core';
 import {FormsModule} from '@angular/forms';
-import {RouterLink} from '@angular/router';
+import {RouterLink,ActivatedRoute} from '@angular/router';
 import {Subscription,interval,switchMap} from 'rxjs';
 import {NmcNavigationComponent} from '../components/nmc-navigation.component';
 import {LanguageService} from '../services/language.service';
@@ -18,7 +18,8 @@ import {SiBulkJob,SiBulkPlanService,SiBulkPreview,SiBulkVessel} from '../service
    <header class="wizard-hero">
     <div>
      <p class="eyebrow">MOEI · SMART INSPECTION · SI-01 → SI-02</p>
-     <h1>{{copy('Create Inspection Plan','إنشاء خطة المعاينات')}}</h1>
+     <h1>{{copy('Review & Approve Rolling Plan','مراجعة واعتماد خطة المعاينات')}}</h1>
+     <p *ngIf="preview?.planNumber"><strong>{{preview?.planNumber}}</strong></p>
      <p>{{copy('One approval for all selected vessels. Every source reason is automatically captured.',
        'اعتماد واحد للسفن المختارة، مع إدراج جميع أسباب إحالة كل سفينة تلقائيًا.')}}</p>
     </div>
@@ -280,10 +281,11 @@ export class SiInspectionPlanWizardComponent implements OnInit,OnDestroy{
  readonly stages=[{en:'Selected Vessels',ar:'السفن المختارة'},
   {en:'All Referral Reasons',ar:'أسباب المعاينة'},{en:'AI & Preparation',ar:'التحضير والذكاء الاصطناعي'},
   {en:'Review & Approval',ar:'المراجعة والاعتماد'}];
- step=1;preview:SiBulkPreview|null=null;
+ step=1;preview:SiBulkPreview|null=null;planId:string|null=null;
  job:SiBulkJob|null=null;loading=false;submitting=false;error='';
  reason='';generateA04=false;runP01=false;private timer:Subscription|null=null;
- constructor(private api:SiBulkPlanService,public lang:LanguageService,public auth:MoeiAuthService){}
+ constructor(private api:SiBulkPlanService,private readonly route:ActivatedRoute,
+  public lang:LanguageService,public auth:MoeiAuthService){}
  copy(en:string,ar:string):string{return this.lang.pick(en,ar);}
  sourceLabel(source:string):string{
   const labels:Record<string,[string,string]>={
@@ -300,9 +302,15 @@ export class SiInspectionPlanWizardComponent implements OnInit,OnDestroy{
  get canNext():boolean{return !!this.preview&&this.step<4&&this.preview.selectedVessels>0&&
   !!this.preview.agentRunId&&!this.preview.stale&&!this.hasMissingReasons&&!this.loading;}
  ngOnInit():void{
+  this.planId=this.route.snapshot.paramMap.get('planId');
+  if(!this.planId){
+   this.error=this.copy('Select a numbered rolling plan from Candidate & Targeting first.',
+     'اختر خطة مرقمة من شاشة السفن المرشحة أولًا.');
+   return;
+  }
   this.refresh();
   this.api.latest().subscribe({next:r=>{
-   const newest=r.batches?.[0];
+   const newest=r.batches?.find(b=>b.rollingPlanId===this.planId);
    if(newest){
     this.job=newest;
     if(newest.status==='QUEUED'||newest.status==='RUNNING'){
@@ -313,8 +321,8 @@ export class SiInspectionPlanWizardComponent implements OnInit,OnDestroy{
  }
  ngOnDestroy():void{this.timer?.unsubscribe();}
  refresh():void{
-  if(this.submitting)return;this.loading=true;this.error='';
-  this.api.preview().subscribe({
+  if(this.submitting||!this.planId)return;this.loading=true;this.error='';
+  this.api.preview(this.planId).subscribe({
    next:p=>{
     this.preview=p;this.loading=false;
     this.generateA04=p.a04Enabled&&p.a04Provider==='MOCK';
@@ -327,7 +335,7 @@ export class SiInspectionPlanWizardComponent implements OnInit,OnDestroy{
  previous():void{if(this.step>1&&this.step<5)this.step--;}
  next():void{if(this.canNext)this.step++;}
  approve():void{
-  const p=this.preview;if(!p||this.submitting||this.jobBusy||!this.auth.isAdmin||
+  const p=this.preview;if(!this.planId||!p||this.submitting||this.jobBusy||!this.auth.isAdmin||
    !p.agentRunId||p.stale||this.hasMissingReasons||this.reason.trim().length<8)return;
   const paid=(this.generateA04&&p.a04Provider==='AIRIA')||
    (this.runP01&&p.p01Provider==='AIRIA');
@@ -342,7 +350,7 @@ export class SiInspectionPlanWizardComponent implements OnInit,OnDestroy{
   if(!window.confirm(message))return;
   this.submitting=true;this.error='';
   this.api.approve({
-   reason:this.reason.trim(),expectedRevision:p.planRevision,
+   planId:this.planId!,reason:this.reason.trim(),expectedRevision:p.planRevision,
    expectedSourceHash:p.sourceHash,expectedAgentRunId:p.agentRunId,
    confirmApproval:true,generateA04:this.generateA04,
    runP01:this.runP01,confirmAiCost:paid
