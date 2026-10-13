@@ -6,7 +6,7 @@ import { Subscription, forkJoin, of } from 'rxjs';
 import { catchError } from 'rxjs/operators';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
-import { NMC_OPERATIONAL_VESSELS } from '../data/nmc-expanded-vessel-catalog';
+import { AIRIA_DEMO_99_VESSELS } from '../data/airia-demo-cohort';
 import { NmcFleetAiService, FleetAiAssessment } from '../services/nmc-fleet-ai.service';
 import { NmcVesselProfile, RiskLevel } from '../data/nmc-vessel-catalog';
 import { LanguageService } from '../services/language.service';
@@ -45,7 +45,7 @@ export class NmcRiskConfigurationAdminComponent implements OnInit, OnDestroy {
   savedLoading=true;
   savedError='';
   originalAssessed=0;
-  get pendingAssessments():number{return 420-this.originalAssessed;}
+  get pendingAssessments():number{return AIRIA_DEMO_99_VESSELS.length-this.originalAssessed;}
 
   draft!: RiskEngineConfig;
   published!: RiskEngineConfig;
@@ -226,7 +226,7 @@ export class NmcRiskConfigurationAdminComponent implements OnInit, OnDestroy {
         const validImos=Object.values(snapshot.results)
           .filter(r=>r.status==='COMPLETED'&&r.assessmentId)
           .map(r=>r.imo);
-        const lookup=new Map(NMC_OPERATIONAL_VESSELS.map(v=>[v.imo,v]));
+        const lookup=new Map(AIRIA_DEMO_99_VESSELS.map(v=>[v.imo,v]));
         this.originalAssessed=validImos.length;
         if(!validImos.length){
           this.savedInputs=[];this.savedLoading=false;this.rebuildPreview();

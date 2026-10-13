@@ -8,6 +8,7 @@ import {MoeiGoogleUsers,MoeiUsersError} from './moei-google-users.mjs';
 import {MoeiGoogleSso} from './moei-google-sso.mjs';
 import { getPscVessel, getPscHealth } from './psc-reader.mjs';
 import { FleetAssessmentManager } from './fleet-ai.mjs';
+import {airiaDemoVessels,AIRIA_DEMO_COHORT,AIRIA_DEMO_99_IMOS} from './airia-demo-cohort.mjs';
 import { FleetAutoScheduler } from './fleet-scheduler.mjs';
 import { DashboardWorkspace, DashboardError } from './dashboard-workspace.mjs';
 import {DashboardAiFocus,DashboardFocusError,selectDashboardFocusVessel} from './nmc-dashboard-focus.mjs';
@@ -192,8 +193,8 @@ const cases=new NmcCaseWorkspace({mode:dbMode,oracleRepository:repository,alerts
 // SITUATION_ASSESSMENT contracts; new business evidence is supplied inside
 // already-supported context fields. No separate model/pipeline or new output.
 const incidentAgentEnabled=()=>Boolean(getAiriaKey())&&agentAllowed('a01')&&agentAllowed('a02');
-const incidentBundleRecords=JSON.parse((await import('node:fs')).readFileSync(
-  new URL('./fleet-bundles.json',import.meta.url),'utf8'));
+const incidentBundleRecords=airiaDemoVessels(JSON.parse((await import('node:fs')).readFileSync(
+  new URL('./fleet-bundles.json',import.meta.url),'utf8')));
 const incidentBundleMap=new Map(incidentBundleRecords.map(row=>[row.imo,row]));
 const incidentAiria=createAiriaIncidentTriage({
   executeAgent:fleetAgentCall,
@@ -207,6 +208,7 @@ const incidentFeed=new NmcIncidentFeed({
   onAssessmentReady:async incident=>{
     // Inbound event creates/links a PENDING case only; no task is created until
     // authorized Case Management human review. Never update source incident.
+    if(!AIRIA_DEMO_99_IMOS.has(incident.imo))return null;
     const saved=fleet.getVesselResult(incident.imo);
     return cases.fromIncident(incident,incident.aiAssessment,saved);
   }
@@ -216,7 +218,7 @@ async function incidentCaseView(){
   let persisted=[];
   try{persisted=await cases.list();}
   catch{ /* case store unavailable must not hide source incident records */ }
-  return {...feed,incidents:feed.incidents.map(incident=>{
+  return {...feed,incidents:feed.incidents.filter(x=>AIRIA_DEMO_99_IMOS.has(x.imo)).map(incident=>{
     const linked=persisted.find(row=>
       (row.incidentEvents||[]).some(ev=>ev.incidentId===incident.incidentId&&
         ev.descriptionHash===incident.descriptionHash));
@@ -1410,7 +1412,7 @@ const server = createServer(async (req, res) => {
   // Legacy synthetic targeting candidates remain a separate information source.
   if(path==='/api/ai/inspection-referrals'){
     if(req.method!=='GET')return respond(res,405,{error:'METHOD_NOT_ALLOWED'});
-    try{return respond(res,200,{status:'ok',requests:await cases.listInspectionRequests()});}
+    try{return respond(res,200,{status:'ok',requests:(await cases.listInspectionRequests()).filter(r=>AIRIA_DEMO_99_IMOS.has(r.imo))});}
     catch{return respond(res,503,{error:'CASE_STORE_UNAVAILABLE'});}
   }
 
@@ -1426,7 +1428,7 @@ const server = createServer(async (req, res) => {
           status:'ok',policyVersion:DECISION_POLICY_VERSION,
           pocOnly:true,decisions:catalogueSummaries()
         });
-        if(!first)return respond(res,200,{status:'ok',cases:await cases.list()});
+        if(!first)return respond(res,200,{status:'ok',cases:(await cases.list()).filter(c=>AIRIA_DEMO_99_IMOS.has(c.imo))});
         if(first==='by-imo'&&/^\d{7}$/.test(action)&&!second){
           const item=await cases.byImo(action);
           return respond(res,200,{status:'ok',case:item});
@@ -1588,7 +1590,7 @@ const server = createServer(async (req, res) => {
       if(req.method==='GET'){
         if(!id){
           const projection=riskPolicy.ready?await riskPolicy.projectCurrent():null;
-          return respond(res,200,await alerts.overview(projection));
+          return respond(res,200,await alerts.overview(projection,AIRIA_DEMO_99_IMOS));
         }
         if(action==='history')return respond(res,200,{status:'ok',history:await alerts.history(id)});
         if(action)return respond(res,404,{error:'ALERT_NOT_FOUND'});
@@ -1842,7 +1844,7 @@ try{
     await riskPolicy.initialize();
     // Backfill only the new projection table for pre-existing saved assessments,
     // without altering source assessments, cases or the alert audit.
-    for(const row of Object.values(fleet.results)){
+    for(const row of Object.values(fleet.results).filter(r=>AIRIA_DEMO_99_IMOS.has(r.imo))){
       if(row.status==='COMPLETED'&&row.assessmentId)
         await riskPolicy.materializeCurrent(row);
     }

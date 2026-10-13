@@ -5,7 +5,7 @@ import {Component,OnDestroy,OnInit} from '@angular/core';
 import {Subscription} from 'rxjs';
 import {ActivatedRoute,RouterLink} from '@angular/router';
 import {NmcVesselProfile} from '../data/nmc-vessel-catalog';
-import {getOperationalVesselByImo} from '../data/nmc-expanded-vessel-catalog';
+import {getAiriaDemoVesselByImo} from '../data/airia-demo-cohort';
 import {LanguageService} from '../services/language.service';
 import {NmcFleetAiService,FleetAiAssessment} from '../services/nmc-fleet-ai.service';
 import {NmcRiskEngineService,RiskEngineConfig,RiskEvaluation,RiskFactorKey} from '../services/nmc-risk-engine.service';
@@ -85,7 +85,7 @@ export class NmcRiskExplainabilityComponent implements OnInit,OnDestroy {
     window.addEventListener('storage',this.onPolicyStorageChange);
     this.subscriptions.add(this.route.paramMap.subscribe(params=>{
       const imo=params.get('imo')||'';
-      this.vessel=getOperationalVesselByImo(imo);
+      this.vessel=getAiriaDemoVesselByImo(imo);
       this.assessment=null;this.projectedRisk=null;this.projectionNotice='';
       this.factors=[];this.selectedFactor=undefined;
       this.guidanceItems=[];this.linkedCase=null;

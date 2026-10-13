@@ -9,12 +9,13 @@
  */
 import {readFileSync} from 'node:fs';
 import {createHash} from 'node:crypto';
+import {airiaDemoVessels} from './airia-demo-cohort.mjs';
 
 const HOUR=60*60*1000;
 const RETRY_DELAY=15*60*1000;
 const LOOP_INTERVAL=15000;
 const MAX_BATCH=12;
-const capVessels=value=>Math.max(1,Math.min(420,Number.isFinite(Number(value))?Math.floor(Number(value)):420));
+const capVessels=value=>Math.max(1,Math.min(99,Number.isFinite(Number(value))?Math.floor(Number(value)):99));
 export const DEFAULT_FLEET_RULESET=Object.freeze({
   version:'NMC Risk Ruleset 1.0',mode:'weighted',
   weights:{movement:25,inspection:28,certificate:20,dataQuality:14,history:13,documentIntegrity:0},
@@ -22,7 +23,7 @@ export const DEFAULT_FLEET_RULESET=Object.freeze({
 });
 
 export class FleetAutoScheduler {
-  constructor({fleet,getPscVessel,getRiskConfig=null,getDocumentFingerprint=null,enabled=false,bundles=null,intervalMs=HOUR,config=DEFAULT_FLEET_RULESET,maxVessels=420,retryFailed=false}){
+  constructor({fleet,getPscVessel,getRiskConfig=null,getDocumentFingerprint=null,enabled=false,bundles=null,intervalMs=HOUR,config=DEFAULT_FLEET_RULESET,maxVessels=99,retryFailed=false}){
     this.fleet=fleet;this.getPscVessel=getPscVessel;
     this.getRiskConfig=getRiskConfig;this.getDocumentFingerprint=getDocumentFingerprint;
     this.enabled=enabled;
@@ -31,8 +32,8 @@ export class FleetAutoScheduler {
     // For safe first deployment set maxVessels=1. No browser UI trigger.
     this.maxVessels=capVessels(maxVessels);
     this.retryFailed=Boolean(retryFailed);
-    this.bundles=bundles||JSON.parse(readFileSync(new URL('./fleet-bundles.json',import.meta.url),'utf8'));
-    if(this.bundles.length!==420||new Set(this.bundles.map(v=>v.imo)).size!==420)
+    this.bundles=bundles||airiaDemoVessels(JSON.parse(readFileSync(new URL('./fleet-bundles.json',import.meta.url),'utf8')));
+    if(this.bundles.length!==99||new Set(this.bundles.map(v=>v.imo)).size!==99)
       throw new Error('INVALID_AUTONOMOUS_FLEET_BUNDLES');
     this.runningTick=false;this.timer=null;
     this.lastTickAt=null;this.lastError=null;

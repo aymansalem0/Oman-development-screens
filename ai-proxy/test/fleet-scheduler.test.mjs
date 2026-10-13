@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {FleetAutoScheduler,DEFAULT_FLEET_RULESET} from '../fleet-scheduler.mjs';
-const bundles=Array.from({length:420},(_,i)=>({
+const bundles=Array.from({length:99},(_,i)=>({
   imo:String(1000000+i), evidenceIds:['VES-'+i],
   inlineContext:{vessel:{imo:String(1000000+i)},deficiencies:[]}
 }));
@@ -58,7 +58,7 @@ test('hourly trigger skips unchanged source content, then requeues only changed 
     getPscVessel:async imo=>getPsc(imo,changes.get(imo)||'unchanged'),enabled:true,bundles});
   await scheduler.tick();
   assert.equal(fleet.batches.length,0);
-  assert.equal(scheduler.status().lastUnchanged,420);
+  assert.equal(scheduler.status().lastUnchanged,99);
   assert.equal(fleet.persistCount,1);
   const nextDue=new Date(Date.now()-2000).toISOString();
   for(const v of bundles)fleet.results[v.imo].nextCheckAt=nextDue;
@@ -67,7 +67,7 @@ test('hourly trigger skips unchanged source content, then requeues only changed 
   assert.equal(fleet.batches.length,1);
   assert.equal(fleet.batches[0].vessels.length,1);
   assert.equal(fleet.batches[0].vessels[0].imo,bundles[0].imo);
-  assert.equal(scheduler.status().lastUnchanged,419);
+  assert.equal(scheduler.status().lastUnchanged,98);
 });
 test('PSC outage is fail-closed and retains previously completed assessment',async()=>{
   const fleet=mockFleet();

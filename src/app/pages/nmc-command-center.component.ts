@@ -17,10 +17,10 @@ import * as L from 'leaflet/dist/leaflet-src.esm.js';
 import {
   NmcVesselProfile,
   RiskLevel,
-  RouteDirection,
   SEA_ROUTES
 } from '../data/nmc-vessel-catalog';
-import { NMC_OPERATIONAL_VESSELS } from '../data/nmc-expanded-vessel-catalog';
+import {AIRIA_DEMO_99_VESSELS} from '../data/airia-demo-cohort';
+import {advanceOffshoreVessel} from '../data/airia-maritime-motion';
 import { LanguageService } from '../services/language.service';
 import { NmcRiskEngineService } from '../services/nmc-risk-engine.service';
 import { NmcAlertsService } from '../services/nmc-alerts.service';
@@ -69,7 +69,7 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
   selectedVessel?: NmcVesselProfile;
   now = new Date();
 
-  vessels: NmcVesselProfile[] = NMC_OPERATIONAL_VESSELS.map(vessel => ({ ...vessel, risk: -1 }));
+  vessels: NmcVesselProfile[] = AIRIA_DEMO_99_VESSELS.map(vessel => ({ ...vessel, risk: -1 }));
   fleetSnapshot: FleetAiSnapshot | null = null;
   fleetError = '';
   unreadAlertCount = 0;
@@ -91,11 +91,11 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
   readonly attentionPageSize = 6;
 
   readonly trafficSnapshot = {
-    totalContacts: 420,
-    insideUaeMonitoredArea: 265,
-    approachingUaeArea: 155,
-    correlatedProfiles: NMC_OPERATIONAL_VESSELS.length,
-    source: 'Synthetic AIS / LRIT fixture',
+    totalContacts: AIRIA_DEMO_99_VESSELS.length,
+    insideUaeMonitoredArea: AIRIA_DEMO_99_VESSELS.filter(v=>v.routeKey.startsWith('airiaGulf')).length,
+    approachingUaeArea: AIRIA_DEMO_99_VESSELS.filter(v=>v.routeKey.startsWith('airiaOman')).length,
+    correlatedProfiles: AIRIA_DEMO_99_VESSELS.length,
+    source: 'Airia partner §8 identities / synthetic offshore shipping corridors',
     snapshotTime: '22:42:18'
   };
 
@@ -302,68 +302,14 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
   }
 
   private moveVessels(): void {
-    this.vessels = this.vessels.map((vessel, index) => {
-      const route = SEA_ROUTES[vessel.routeKey];
-      if (!route || route.length < 2) return vessel;
-
-      let direction: RouteDirection = vessel.direction;
-      let segmentIndex = vessel.segmentIndex;
-      let nextIndex = segmentIndex + direction;
-
-      if (nextIndex >= route.length || nextIndex < 0) {
-        direction = direction === 1 ? -1 : 1;
-        nextIndex = segmentIndex + direction;
-      }
-
-      const target = route[nextIndex];
-      let targetLat = target[0];
-      let targetLng = target[1];
-
-      if (vessel.id > 30) {
-        const segmentStart = route[segmentIndex];
-        const dLat = target[0] - segmentStart[0];
-        const dLng = target[1] - segmentStart[1];
-        const segmentLength = Math.max(0.0001, Math.hypot(dLat, dLng));
-        const laneOffset = (((vessel.id * 29) % 17) - 8) * 0.0065;
-        targetLat += (-dLng / segmentLength) * laneOffset;
-        targetLng += (dLat / segmentLength) * laneOffset;
-      }
-
-      const latDiff = targetLat - vessel.lat;
-      const lngDiff = targetLng - vessel.lng;
-      const distance = Math.hypot(latDiff, lngDiff);
-      const visualStep = Math.min(0.075, Math.max(0.022, vessel.speed / 330));
-
-      let lat = vessel.lat + latDiff * visualStep;
-      let lng = vessel.lng + lngDiff * visualStep;
-
-      if (distance < 0.012) {
-        lat = targetLat;
-        lng = targetLng;
-        segmentIndex = nextIndex;
-        if (segmentIndex === route.length - 1 || segmentIndex === 0) {
-          direction = direction === 1 ? -1 : 1;
-        }
-      }
-
-      const futureIndex = Math.max(0, Math.min(route.length - 1, segmentIndex + direction));
-      const future = route[futureIndex];
-
-      return {
-        ...vessel,
-        lat,
-        lng,
-        course: this.bearing(lat, lng, future[0], future[1]),
-        segmentIndex,
-        direction,
-        lastUpdate: 2 + ((vessel.lastUpdate + index) % 12)
-      };
-    });
-
-    if (this.selectedVessel) {
-      this.selectedVessel = this.vessels.find(vessel => vessel.id === this.selectedVessel?.id);
-    }
-
+    // All 99 markers remain on curated offshore polyline segments. Their
+    // starting position and every subsequent interpolated point share geometry.
+    this.vessels=this.vessels.map(v=>({
+      ...advanceOffshoreVessel(v,2.5),
+      lastUpdate:Math.max(1,(v.lastUpdate+1)%15)
+    }));
+    if(this.selectedVessel)
+      this.selectedVessel=this.vessels.find(v=>v.id===this.selectedVessel?.id);
     this.refreshMapMarkers();
     this.drawSelectedTrack();
   }
@@ -383,7 +329,7 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
   }
   // Aggregate counters are authoritative server-side fleet snapshot counts, not locally recalculated scores.
   get assessedCount():number{return this.fleetSnapshot?.counts.assessed ?? 0;}
-  get pendingCount():number{return this.fleetSnapshot?.counts.pending ?? 420;}
+  get pendingCount():number{return this.fleetSnapshot?.counts.pending ?? this.vessels.length;}
   get priorityReviewCount():number{return this.fleetSnapshot?.counts.priorityReview ?? 0;}
   get fleetJobRunning():boolean{return this.fleetSnapshot?.job?.status==='RUNNING';}
   get fleetProgress():string{
@@ -663,7 +609,7 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
     const ready=!!this.fleetSnapshot;
     const asDisplay=(x:number|null)=>x===null?'—':x.toLocaleString('en-US');
     const assessed=ready?this.assessedCount:null;
-    const total=this.fleetSnapshot?.fleetSize||this.trafficSnapshot.totalContacts;
+    const total=this.trafficSnapshot.totalContacts;
     const values:Array<{id:NmcKpiMetricId;value:number|null;
       labelEn:string;labelAr:string;hintEn:string;hintAr:string;icon:string}>=[
       {id:'vesselContacts',value:this.monitoredCount,labelEn:'Monitored contacts',

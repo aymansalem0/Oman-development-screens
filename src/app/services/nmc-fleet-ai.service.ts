@@ -22,7 +22,7 @@ export interface FleetAiVessel {
 export interface FleetAiSnapshot {
   status: 'ok';
   provenance: 'SYNTHETIC_POC_AI_NOT_AUTHORITATIVE';
-  fleetSize: 420;
+  fleetSize: number;
   counts: {
     total: number;
     assessed: number;

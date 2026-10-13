@@ -1,12 +1,13 @@
 import {CommonModule} from '@angular/common';
 import {Component,OnDestroy,OnInit} from '@angular/core';
+import {AIRIA_DEMO_99_VESSELS,getAiriaDemoVesselByImo} from '../data/airia-demo-cohort';
 import {FormsModule} from '@angular/forms';
 import {RouterLink} from '@angular/router';
 import {Subscription} from 'rxjs';
 import {NmcNavigationComponent} from '../components/nmc-navigation.component';
 import {NmcMinistryLogoComponent} from '../components/nmc-ministry-logo.component';
 import {LanguageService} from '../services/language.service';
-import {getOperationalVesselByImo} from '../data/nmc-expanded-vessel-catalog';
+
 import {NmcFleetAiService,FleetAiSnapshot} from '../services/nmc-fleet-ai.service';
 import {NmcRiskEngineService,RiskEngineConfig} from '../services/nmc-risk-engine.service';
 import {
@@ -46,7 +47,7 @@ export class NmcAlertCenterComponent implements OnInit,OnDestroy{
   policyLoading=false;
   policyError='';
   readonly policyCoverageLabel='BROWSER_LOCAL_PROJECTION_ONLY';
-  riskPopulation={monitored:420,assessed:0,projected:0,pending:420,
+  riskPopulation={monitored:AIRIA_DEMO_99_VESSELS.length,assessed:0,projected:0,pending:AIRIA_DEMO_99_VESSELS.length,
     normal:0,watch:0,high:0,critical:0,scoreSum:0,averageScore:0};
   readonly projectedCandidates:RiskCandidate[]=[];
   fleetSourceError='';
@@ -178,7 +179,7 @@ export class NmcAlertCenterComponent implements OnInit,OnDestroy{
         for(const imo of imos){
           const expected=latestByImo.get(imo);
           const assessment=analyticsByImo.get(imo);
-          const vessel=getOperationalVesselByImo(imo);
+          const vessel=getAiriaDemoVesselByImo(imo);
           const sev=assessment?.factorSeverities;
           const ready=expected&&assessment&&vessel&&sev&&
             // Fail open for stale saved alerts: do not hide until matching

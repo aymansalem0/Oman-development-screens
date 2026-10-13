@@ -9,19 +9,21 @@ import {mkdirSync, readFileSync, writeFileSync, renameSync, existsSync} from 'no
 import {dirname} from 'node:path';
 import {timingSafeEqual} from 'node:crypto';
 import {catalogFromNmcSource} from './psc-fixtures.mjs';
+import {AIRIA_DEMO_99_IMOS} from './airia-demo-cohort.mjs';
 import {evaluateDataQuality} from './data-quality.mjs';
 import {documentEvidenceChecks,documentIntegritySignal} from './document-risk-evidence.mjs';
 
 const baseTs=readFileSync(new URL('./nmc-vessel-catalog.ts',import.meta.url),'utf8');
 const extraTs=readFileSync(new URL('./nmc-expanded-vessel-catalog.ts',import.meta.url),'utf8');
-const catalogue=catalogFromNmcSource(baseTs,extraTs);
+const catalogue=catalogFromNmcSource(baseTs,extraTs).filter(x=>AIRIA_DEMO_99_IMOS.has(x.imo));
+if(catalogue.length!==99)throw Error('AIRIA_99_FLEET_CATALOG_MISMATCH');
 const VALID_IMOS=new Set(catalogue.map(v=>v.imo));
 const FACTORS=['movement','inspection','certificate','dataQuality','history'];
 const OPTIONAL_FACTOR='documentIntegrity';
 const AGENT_FACTORS={a01:['movement','history'],a02:['inspection','certificate','dataQuality']};
 const DEFAULT_WEIGHTS={movement:25,inspection:28,certificate:20,dataQuality:14,history:13};
 const DEFAULT_THRESHOLDS={watch:45,high:65,critical:85};
-const MAX_INPUTS=420;
+const MAX_INPUTS=catalogue.length;
 const MAX_CONCURRENCY=1; // One vessel = A01 + A02 concurrently; <=2 Airia requests in flight.
 const REASON_RE=/^[A-Z][A-Z0-9_]{1,95}$/;
 const file=process.env.NMC_FLEET_STORE_PATH || '/data/fleet-assessments.json';
@@ -162,7 +164,7 @@ export class FleetAssessmentManager {
   }
   snapshot(sourceResults=this.results){
     const values=Object.values(sourceResults).filter(x=>VALID_IMOS.has(x.imo));
-    const counts={total:420,assessed:0,pending:420,normal:0,watch:0,high:0,critical:0,
+    const counts={total:catalogue.length,assessed:0,pending:catalogue.length,normal:0,watch:0,high:0,critical:0,
       priorityReview:0,failed:0,refreshFailed:0};
     for(const r of values){
       if(r.status==='COMPLETED'){
@@ -173,9 +175,9 @@ export class FleetAssessmentManager {
         if(r.operationalPriority==='Priority Review')counts.priorityReview++;
       }else if(r.status==='FAILED')counts.failed++;
     }
-    counts.pending=420-counts.assessed;
+    counts.pending=catalogue.length-counts.assessed;
     return {status:'ok',provenance:'SYNTHETIC_POC_AI_NOT_AUTHORITATIVE',
-      fleetSize:420,counts,job:this.job&&{
+      fleetSize:catalogue.length,counts,job:this.job&&{
         id:this.job.id,status:this.job.status,total:this.job.total,completed:this.job.completed,
         failed:this.job.failed,startedAt:this.job.startedAt,finishedAt:this.job.finishedAt||null
       },results:Object.fromEntries(values.map(v=>[v.imo,{imo:v.imo,assessmentId:v.assessmentId||null,status:v.status,score:v.score,level:v.level,operationalPriority:v.operationalPriority,criticalOpenFinding:v.criticalOpenFinding,assessedAt:v.assessedAt,reasonCode:v.reasonCode,configVersion:v.configVersion,sourceMode:v.sourceMode,
@@ -216,7 +218,7 @@ export class FleetAssessmentManager {
         factorSeverities:values
       });
     }
-    return {status:'ok',fleetSize:420,assessments};
+    return {status:'ok',fleetSize:catalogue.length,assessments};
   }
   start(input){
     if(this.job?.status==='RUNNING')throw new Error('FLEET_JOB_ALREADY_RUNNING');
