@@ -49,6 +49,31 @@ export interface SiTargetingPolicyConfig{
   riskPriorityThreshold?:number;includeMissingRiskInReview?:boolean;
   prioritization?:SiPriorityPolicy;
 }
+/** Exact partner-provided IMO/name cohort, detailed profiles from synthetic fixtures. */
+export interface SiAiriaDemoVessel{
+ sequence:number;imo:string;name:string;highlight:string|null;
+ vessel:{imo:string;name:string;mmsi:string;callSign:string;flag:string;
+  vesselType:string;lengthM:number;built:number;grossTonnage:string;
+  deadweight:string;owner:string;operator:string;classSociety:string};
+ registration:{flag:string;status:string;moeiRole:string};
+ tracking:{speed:number;course:number;latitude:number;longitude:number;
+  destination:string;eta:string;navStatus:string;zone:string};
+ certificates:{id:string;type:string;number:string;issuer:string;
+  issued:string;expiry:string;status:string}[];
+ inspections:{id:string;date:string;port:string;type:string;
+  result:string;inspector:string;openDeficiencies:number}[];
+ deficiencies:{id:string;category:string;description:string;severity:string;
+  status:string;raised:string;due:string;evidence:string}[];
+ history:{openDeficiencyCount:number;closedDeficiencyCount:number};
+ dataQuality:{overallConfidence:number;externalSystemsConnected:boolean};
+ documentManifest:{source:string;records:unknown[];contentAvailable:boolean};
+ evidenceIds:string[];dataNature:string;
+}
+export interface SiAiriaDemoPack{
+ status:string;count:99;source:string;sourceDate:string;
+ detailSource:string;documentPackStatus:string;
+ note:string;vessels:SiAiriaDemoVessel[];
+}
 export interface SiDashboard{
   status:string;source:string;fleetSnapshotId:string;evaluatedAt:string;
   policy:{version:number;config:SiTargetingPolicyConfig};
@@ -167,6 +192,9 @@ export interface SiInspectionPlanResult{
 export class SiCandidateTargetingService{
   private readonly api='/api/si/v1';
   constructor(private http:HttpClient){}
+  airiaDemoPack():Observable<SiAiriaDemoPack>{
+    return this.http.get<SiAiriaDemoPack>(this.api+'/airia-demo-pack');
+  }
   dashboard():Observable<SiDashboard>{
     return this.http.get<SiDashboard>(this.api+'/candidates/dashboard');
   }
