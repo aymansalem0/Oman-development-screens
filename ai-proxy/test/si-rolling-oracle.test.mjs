@@ -65,6 +65,10 @@ test('Oracle 018 persists numbered plans, immutable versions, source keys, linke
  await store.initialize();
  const initial=await store.create({title:'Rolling UAT',startsOn:'2026-10-13',
   endsOn:'2026-10-17',port:'Khalifa'},'user@moei');
+ assert.equal(Object.hasOwn(initial,'port'),false,
+  'legacy port payload must not appear on a newly created rolling plan');
+ assert.equal(Object.hasOwn(db.records.get(initial.id),'port'),false,
+  'Oracle STATE_JSON must not save a port');
  assert.match(initial.number,/^IP-/);
  assert.equal((await store.list()).length,1);
  assert.equal(db.versions[0].version,0);
