@@ -46,6 +46,16 @@ test('AI why-selected and why-ranked explanations appear in a single expandable 
  assert.match(html,/planRow\(v\)\?\.evidenceRefs/);
  assert.match(html,/planRow\(v\)\?\.officerReason/);
 });
+test('rolling inspection plan contains no port selector or port payload',()=>{
+ assert.match(html,/Inspection Planning Management/);
+ assert.match(html,/\[\(ngModel\)\]="newPlan\.title"/);
+ assert.match(html,/\[\(ngModel\)\]="newPlan\.startsOn"/);
+ assert.match(html,/\[\(ngModel\)\]="newPlan\.endsOn"/);
+ assert.match(html,/\[\(ngModel\)\]="newPlan\.notes"/);
+ assert.doesNotMatch(html,/newPlan\.port|Port \/ Location|الميناء \/ الموقع/);
+ assert.doesNotMatch(ts,/newPlan\.port|port:''/);
+ assert.doesNotMatch(svc,/port\?:string;notes\?:string/);
+});
 test('one official supervisor approval covers the plan, not each vessel row',()=>{
  assert.match(html,/\[routerLink\]="\['\/moei\/smart-inspection\/plan\/create',activePlanId\]"/);
  assert.match(html,/si-rolling-management/);
