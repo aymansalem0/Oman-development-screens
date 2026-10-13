@@ -86,7 +86,8 @@ test('end-to-end no-cost rolling: create, C01, preview, supervisor approve, case
  try{
   const first=await x.rolling.create({
    title:'Morning inspection',startsOn:'2026-10-13',endsOn:'2026-10-15',
-   port:'Jebel Ali'},'officer@moei');
+   },'officer@moei');
+  assert.equal(Object.hasOwn(first,'port'),false,'inspection plan has no port dimension');
   const second=await x.rolling.create({
    title:'Afternoon inspection',startsOn:'2026-10-13',endsOn:'2026-10-15'},'officer@moei');
   assert.equal(x.c01Calls(),0,'opening/planning never incurs AI costs');
