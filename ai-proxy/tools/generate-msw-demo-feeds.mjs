@@ -17,16 +17,18 @@ const ports=['Jebel Ali','Khalifa Port','Fujairah','Rashid Port','Port Zayed'];
 const types=['Vessel Inspection Request','Maritime Compliance Inspection',
  'Vessel Safety Inspection','Inspection for Marine Service',
  'Registration-related Inspection'];
+// ETD-inclusive POC import gets NEW unique source event IDs. Existing
+// seven-column source events are immutable and cannot be overwritten.
 const service=AIRIA_DEMO_99_RECORDS.slice(0,60).map((v,i)=>[
- 'MSW-DEMO-SR-'+String(i+1).padStart(4,'0'),
- 'MSW-POC-INS-'+String(i+1).padStart(4,'0'),v.imo,
+ 'MSW-DEMO-SR-ETD-'+String(i+1).padStart(4,'0'),
+ 'MSW-POC-INS-ETD-'+String(i+1).padStart(4,'0'),v.imo,
  ports[i%ports.length],'2026-10-'+String(13+i%4).padStart(2,'0'),
  types[i%types.length],'SYNTHETIC POC ONLY — not a verified MSW export; '+v.name,
  '2026-10-'+String(20+i%6).padStart(2,'0')+'T'+String(16+i%4).padStart(2,'0')+':00'
 ]);
 const psc=AIRIA_DEMO_99_RECORDS.slice(54).map((v,i)=>[
- 'MSW-DEMO-PC-'+String(i+1).padStart(4,'0'),
- 'MSW-POC-CALL-'+String(i+1).padStart(4,'0'),v.imo,
+ 'MSW-DEMO-PC-ETD-'+String(i+1).padStart(4,'0'),
+ 'MSW-POC-CALL-ETD-'+String(i+1).padStart(4,'0'),v.imo,
  ports[(i+2)%ports.length],
  '2026-10-'+String(17+i%5).padStart(2,'0')+'T'+
  String(8+i%10).padStart(2,'0')+':'+['00','15','30','45'][i%4],
