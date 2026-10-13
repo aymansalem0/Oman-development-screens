@@ -40,6 +40,8 @@ function load(modulePath){
       map:()=>source=>source,
       tap:()=>source=>source
     };
+    if(request.endsWith('.json')&&request.startsWith('.'))
+      return JSON.parse(readFileSync(resolve(dirname(filename),request),'utf8'));
     if(request.startsWith('.'))return load(resolve(dirname(filename),request));
     throw new Error('Disallowed import for synthetic evidence build: '+request);
   };
@@ -57,9 +59,9 @@ const evidence=load(root+'/src/app/services/nmc-vessel-evidence.service.ts');
 const offlineHttpClient={get:()=>({subscribe:()=>({unsubscribe(){}})})};
 const riskEngine=new risk.NmcRiskEngineService(offlineHttpClient);
 const evidenceService=new evidence.NmcVesselEvidenceService(riskEngine);
-const vessels=expanded.NMC_OPERATIONAL_VESSELS;
-if(!Array.isArray(vessels)||vessels.length!==420||new Set(vessels.map(v=>v.imo)).size!==420)
-  throw new Error('EXPECTED_420_UNIQUE_VESSELS');
+const vessels=load(root+'/src/app/data/airia-demo-cohort.ts').AIRIA_DEMO_99_VESSELS;
+if(!Array.isArray(vessels)||vessels.length!==99||new Set(vessels.map(v=>v.imo)).size!==99)
+  throw new Error('EXPECTED_99_UNIQUE_AIRIA_VESSELS');
 const bundles=vessels.map(v=>{
   const b=evidenceService.create(v);
   if(b.vessel.imo!==v.imo||b.evidenceIds.length!==new Set(b.evidenceIds).size)
