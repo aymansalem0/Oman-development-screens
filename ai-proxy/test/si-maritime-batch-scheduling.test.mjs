@@ -24,7 +24,7 @@ const auth=(id,min=0,max=999999)=>({
 const request=(imo,regime,gt=55000)=>({
  imo,portId:'FUJ',vesselType:'CARGO',regime,grossTonnage:gt,
  locationName:'Fujairah approved inspection berth',locationType:'BERTH',
- siteAccessConfirmed:true,windowSource:'OFFICER_CONFIRMED',
+ siteAccessConfirmed:true,windowSource:'MSW_FINAL',
  windowEvidenceReference:'DEMO-WINDOW-REVIEW-001',
  earliestLocal:'2026-10-20 08:00',latestFinishLocal:'2026-10-20 15:00',
  durationMinutes:90
@@ -118,4 +118,14 @@ test('Require approved plan; reject unknown IMO or duplicate requests',()=>{
   request('9328471','FOCUSED')]}),/SI_V2_DUPLICATE_REQUEST_IMO/);
  assert.throws(()=>invoke({requests:[request('9999999','FOCUSED')]}),
   /SI_V2_OUT_OF_PLAN_IMO/);
+});
+
+test('Imported MSW-final ETD is usable without a second date approval',()=>{
+ const input=request('9328471','FOCUSED');
+ const validated=validateMaritimeSchedulingInput('9328471',input,erp().data,now);
+ assert.equal(validated.reason,undefined);
+ assert.equal(validated.value.windowSource,'MSW_FINAL');
+ const result=invoke({requests:[input,request('9247813','SERVICE',15000)]});
+ assert.equal(result.summary.proposed,2);
+ assert.equal(result.rows[0].assignment.windowSource,'MSW_FINAL');
 });
