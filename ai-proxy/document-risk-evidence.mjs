@@ -25,16 +25,16 @@ const verifiedDate=(year,month,day)=>{
 const dateString=x=>{
   if(!x)return null;
   const value=String(x).trim();
-  const maritime=value.match(/^(\\d{1,2})\\s+([A-Za-z]{3,9})\\s+(\\d{4})$/);
+  const maritime=value.match(/^(\d{1,2})\s+([A-Za-z]{3,9})\s+(\d{4})$/);
   if(maritime){
     const mon=monthNumber[maritime[2].slice(0,3).toUpperCase()];
     return mon?verifiedDate(maritime[3],mon,maritime[1]):null;
   }
-  const simpleIso=value.match(/^(\\d{4})-(\\d{2})-(\\d{2})$/);
+  const simpleIso=value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if(simpleIso)return verifiedDate(simpleIso[1],simpleIso[2],simpleIso[3]);
   // RFC 3339 timestamp with explicit timezone is deterministic; non-standard
   // date formats must not silently acquire a locale-specific interpretation.
-  if(!/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?(?:Z|[+-]\\d{2}:\\d{2})$/i.test(value))
+  if(!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/i.test(value))
     return null;
   const ts=Date.parse(value);
   return Number.isFinite(ts)?new Date(ts).toISOString().slice(0,10):null;
