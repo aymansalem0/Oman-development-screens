@@ -199,11 +199,14 @@ export class DashboardAiFocus{
     this.enabled=enabled;this.now=now;this.cacheMs=cacheMs;
     this.cache=null;this.inFlight=false;
   }
-  /** Status is a free read-only eligibility check, NOT an AI request. */
+  isEnabled(){
+    return typeof this.enabled==='function'?this.enabled()===true:this.enabled===true;
+  }
+  /** Status is a free read-only eligibility check, NOT an AI request.
+   * Source evidence readiness must be visible even if the paid feature is OFF. */
   status(){
-    const candidate=this.enabled&&typeof this.selectVessel==='function'
-      ?this.selectVessel():null;
-    return {configured:this.enabled,
+    const candidate=typeof this.selectVessel==='function'?this.selectVessel():null;
+    return {configured:this.isEnabled(),
       assessmentContextReady:Boolean(candidate?.vessel&&candidate?.bundle),
       sourceImo:candidate?.vessel?.imo||null,
       agentIds:['A02','A01'],requestContracts:'EXISTING_A02_SIGNALS_AND_A01_SITUATION_ASSESSMENT',
@@ -212,7 +215,7 @@ export class DashboardAiFocus{
   }
   async run({metrics,confirmCost}={}){
     if(confirmCost!==true)throw new DashboardFocusError('DASHBOARD_FOCUS_CONFIRM_REQUIRED',400);
-    if(!this.enabled||typeof this.executeAgent!=='function'||
+    if(!this.isEnabled()||typeof this.executeAgent!=='function'||
       typeof this.selectVessel!=='function')
       throw new DashboardFocusError('DASHBOARD_FOCUS_A01_A02_NOT_ENABLED',503);
     const source=validateDashboardMetrics(metrics);
