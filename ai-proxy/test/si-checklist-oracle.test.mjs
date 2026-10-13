@@ -152,3 +152,33 @@ test('Never silently switch existing /data JSON templates or inspector cases to 
   await assert.rejects(x.field.initialize(),/SI_CHECKLIST_LEGACY_CASE_IMPORT_REQUIRED/);
  }finally{x.done();}
 });
+
+test('Oracle captures Airia candidate and photo reference; inspector edits before answers are accepted',async()=>{
+ const x=rig();try{
+  await x.library.initialize();await x.field.initialize();
+  const t0=await x.library.create(t('AI evidence'),'admin');
+  await x.library.publish(t0.id,'admin',t0.updatedAt);
+  const started=await x.field.start(uuid,'inspector');
+  const item=started.templates[0].groups[0].items[0];
+  x.field.airiaSuggest=async()=>({recommendations:[{
+   itemId:item.instanceId,answers:{BOOLEAN:'NO',NOTE:'Visible expiry date',
+    EXPIRY_DATE:'2023-01-01'},
+   rationale:'Photo appears to show a past expiry date, human verification required.',
+   confidence:0.73,dataGaps:['Official document authenticity unknown']}]});
+  const proposed=await x.field.suggest(uuid,{level:'ITEM',itemId:item.instanceId,
+   text:'Review certificate',image:{mimeType:'image/png',base64:'iVBORw0KGgo='},
+   actor:'inspector',confirmCost:true});
+  assert.equal((await x.field.preview(uuid)).saved.templates[0].groups[0].items[0]
+    .answers.BOOLEAN,undefined,'AI must not modify official answer');
+  assert.ok(x.db.log.some(q=>q.sql.startsWith('INSERT INTO SI_CHK_EVIDENCE')));
+  assert.ok(x.db.log.some(q=>q.sql.startsWith('INSERT INTO SI_CHK_AI_PROPOSAL')));
+  const accepted=await x.field.review(uuid,{expectedVersion:proposed.version,
+   proposalId:proposed.proposal.id,itemId:item.instanceId,
+   decision:'EDIT',editedAnswers:{BOOLEAN:'YES',EXPIRY_DATE:'2028-01-01',
+    NOTE:'Inspector verified original document'},actor:'inspector',
+   reviewNote:'Checked original on board'});
+  assert.equal(accepted.templates[0].groups[0].items[0].answers.BOOLEAN,'YES');
+  assert.ok(x.db.log.some(q=>q.sql.startsWith('INSERT INTO SI_CHK_AI_REVIEW')));
+  assert.ok(x.db.log.some(q=>q.sql.startsWith('UPDATE SI_CHK_AI_PROPOSAL')));
+ }finally{x.done();}
+});
