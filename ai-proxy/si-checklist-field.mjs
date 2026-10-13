@@ -314,6 +314,14 @@ export class SiChecklistField{
     proposalId,itemId,edited:decision==='EDIT'});
   this.save(state);return copy(entry);
  }
+ async ensureSubmitted(idValue){
+  const ctx=await this.context(idValue);
+  if(!ctx.resolved.templates.length)return {required:false};
+  const saved=this.read().cases[idValue];
+  if(!saved||saved.status!=='SUBMITTED_FOR_REVIEW')
+   failure('SI_DYNAMIC_CHECKLIST_SUBMISSION_REQUIRED',409);
+  return {required:true,version:saved.version};
+ }
  async complete(idValue,{expectedVersion,actor}){
   if(!safe(actor,120))failure('SI_CHECKLIST_ACTOR_REQUIRED');
   await this.context(idValue);
