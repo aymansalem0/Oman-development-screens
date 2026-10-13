@@ -141,12 +141,12 @@ export class SiChecklistField{
   if(!c||c.status!=='CREATED')failure('SI_APPROVED_CASE_REQUIRED',404);
   const b=this.targeting.bundles.find(x=>x.imo===c.imo);
   const vessel={...b?.inlineContext?.vessel,imo:c.imo};
-  const resolved=this.library.resolve({vessel,inspectionCase:c});
+  const resolved=await this.library.resolve({vessel,inspectionCase:c});
   return {caseId:idValue,inspectionCase:c,resolved};
  }
  async preview(idValue){
   const ctx=await this.context(idValue);
-  const saved=this.read().cases[idValue]||null;
+  const saved=(await this.read(idValue)).cases[idValue]||null;
   return {status:'ok',caseId:idValue,imo:ctx.inspectionCase.imo,
    vessel:ctx.resolved.vessel,inspectionReasons:ctx.inspectionCase.inspectionReasons||[],
    selectedTemplates:ctx.resolved.templates.map(t=>({
@@ -159,7 +159,7 @@ export class SiChecklistField{
  async start(idValue,actor){
   if(!safe(actor,120))failure('SI_CHECKLIST_ACTOR_REQUIRED');
   const ctx=await this.context(idValue);
-  const state=this.read();
+  const state=await this.read(idValue);
   if(state.cases[idValue])return copy(state.cases[idValue]);
   const templates=ctx.resolved.templates.map(t=>({
    templateId:t.templateId,revision:t.revision,title:t.title,
@@ -178,13 +178,13 @@ export class SiChecklistField{
    applicabilityWarnings:ctx.resolved.warnings,
    templates,proposals:[],audit:[{at:now(),action:'INITIALIZED',actor,
     templateRevisions:templates.map(t=>[t.templateId,t.revision])}]};
-  state.cases[idValue]=entry;this.save(state);return copy(entry);
+  state.cases[idValue]=entry;await this.save(state);return copy(entry);
  }
  async saveAnswers(idValue,{expectedVersion,answers,actor}){
   if(!safe(actor,120)||!Array.isArray(answers)||answers.length>100||
    !Number.isInteger(expectedVersion))failure('SI_CHECKLIST_ANSWERS_INVALID');
   await this.context(idValue);
-  const state=this.read(),entry=state.cases[idValue];
+  const state=await this.read(idValue),entry=state.cases[idValue];
   if(!entry)failure('SI_CHECKLIST_NOT_INITIALIZED',409);
   if(entry.version!==expectedVersion)failure('SI_CHECKLIST_VERSION_CONFLICT',409);
   if(entry.status!=='IN_PROGRESS')failure('SI_CHECKLIST_ALREADY_SUBMITTED',409);
@@ -202,7 +202,7 @@ export class SiChecklistField{
   entry.version++;entry.updatedAt=now();entry.updatedBy=actor;
   entry.audit.push({at:now(),actor,action:'INSPECTOR_SAVED_ANSWERS',
     itemIds:[...seen]});
-  this.save(state);return copy(entry);
+  await this.save(state);return copy(entry);
  }
  async suggest(idValue,{level='ITEM',templateId,groupId,itemId,
    text,image,actor,confirmCost}={}){
@@ -212,7 +212,7 @@ export class SiChecklistField{
   if(!this.airiaSuggest)failure('SI_CHECKLIST_AIRIA_NOT_CONFIGURED',503);
   await this.context(idValue);
   if(this.active.has(idValue))failure('SI_CHECKLIST_AI_BUSY',409);
-  const entry=this.read().cases[idValue];
+  const entry=(await this.read(idValue)).cases[idValue];
   if(!entry)failure('SI_CHECKLIST_NOT_INITIALIZED',409);
   if(entry.status!=='IN_PROGRESS')failure('SI_CHECKLIST_ALREADY_SUBMITTED',409);
   const maxCalls=Number(this.getSetting('SI_CHECKLIST_AI_MAX_CALLS_PER_CASE'))||10;
@@ -260,7 +260,7 @@ export class SiChecklistField{
     instructions:'Analyze supplied information only. Propose typed values matching the provided fields. Do not invent vessel certificates, law, missing images, or regulatory compliance. Respond with JSON recommendations[] containing itemId, answers object, rationale, confidence 0..1, dataGaps[]. Inspector approval required.'
    });
    const validated=validateAIResult(raw,entry,scope);
-   const state=this.read(),current=state.cases[idValue];
+   const state=await this.read(idValue),current=state.cases[idValue];
    if(!current||current.version!==entry.version)
     failure('SI_CHECKLIST_SOURCE_CHANGED_DURING_AI',409);
    const proposal={id:id(),at:now(),actor,level,scope,
@@ -279,7 +279,7 @@ export class SiChecklistField{
    current.version++;current.updatedAt=now();current.updatedBy=actor;
    current.audit.push({at:now(),actor,action:'AI_SUGGESTED_NOT_APPROVED',
     proposalId:proposal.id,sourceLevel:level,imageHash:parsed?.hash||null});
-   this.save(state);
+   await this.save(state);
    return {proposal:copy(proposal),version:current.version,
     message:'INSPECTOR_REVIEW_REQUIRED_NO_AUTOMATIC_DECISION'};
   }finally{this.active.delete(idValue);}
@@ -290,7 +290,7 @@ export class SiChecklistField{
    !Number.isInteger(expectedVersion)||!safe(proposalId,90))
     failure('SI_CHECKLIST_AI_REVIEW_INVALID');
   await this.context(idValue);
-  const state=this.read(),entry=state.cases[idValue];
+  const state=await this.read(idValue),entry=state.cases[idValue];
   if(!entry||entry.version!==expectedVersion)failure('SI_CHECKLIST_VERSION_CONFLICT',409);
   if(entry.status!=='IN_PROGRESS')failure('SI_CHECKLIST_ALREADY_SUBMITTED',409);
   const proposal=entry.proposals.find(p=>p.id===proposalId);
@@ -316,12 +316,12 @@ export class SiChecklistField{
   entry.version++;entry.updatedAt=now();entry.updatedBy=actor;
   entry.audit.push({at:now(),actor,action:'AI_SUGGESTION_'+decision,
     proposalId,itemId,edited:decision==='EDIT'});
-  this.save(state);return copy(entry);
+  await this.save(state);return copy(entry);
  }
  async ensureSubmitted(idValue){
   const ctx=await this.context(idValue);
   if(!ctx.resolved.templates.length)return {required:false};
-  const saved=this.read().cases[idValue];
+  const saved=(await this.read(idValue)).cases[idValue];
   if(!saved||saved.status!=='SUBMITTED_FOR_REVIEW')
    failure('SI_DYNAMIC_CHECKLIST_SUBMISSION_REQUIRED',409);
   return {required:true,version:saved.version};
@@ -329,7 +329,7 @@ export class SiChecklistField{
  async complete(idValue,{expectedVersion,actor}){
   if(!safe(actor,120))failure('SI_CHECKLIST_ACTOR_REQUIRED');
   await this.context(idValue);
-  const state=this.read(),entry=state.cases[idValue];
+  const state=await this.read(idValue),entry=state.cases[idValue];
   if(!entry||entry.version!==expectedVersion)failure('SI_CHECKLIST_VERSION_CONFLICT',409);
   if(entry.status!=='IN_PROGRESS')failure('SI_CHECKLIST_ALREADY_SUBMITTED',409);
   const pending=entry.templates.flatMap(t=>t.groups.flatMap(g=>g.items
@@ -340,6 +340,6 @@ export class SiChecklistField{
   entry.status='SUBMITTED_FOR_REVIEW';entry.version++;entry.updatedAt=now();
   entry.updatedBy=actor;
   entry.audit.push({at:now(),actor,action:'INSPECTOR_SUBMITTED_CHECKLIST'});
-  this.save(state);return copy(entry);
+  await this.save(state);return copy(entry);
  }
 }
