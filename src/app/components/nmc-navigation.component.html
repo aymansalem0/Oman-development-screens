@@ -253,6 +253,11 @@
               <span class="nav-icon">◉</span>
               <span class="nav-label">{{copy('PSC Selection Quotas','حصص اختيار PSC')}}</span>
             </a>
+            <a class="nav-link" routerLink="/moei/smart-inspection/settings/checklists"
+               [class.active]="currentPath==='/moei/smart-inspection/settings/checklists'">
+              <span class="nav-icon">☑</span>
+              <span class="nav-label">{{copy('Inspection Checklist Library','مكتبة قوائم المعاينة')}}</span>
+            </a>
             <a class="nav-link" routerLink="/moei/smart-inspection/settings/targeting"
                [class.active]="isInspectionTargetingSettings"
                [attr.aria-current]="isInspectionTargetingSettings?'page':null"
