@@ -17,7 +17,8 @@ COPY ai-proxy/package.json ai-proxy/server.mjs ai-proxy/moei-poc-auth.mjs ai-pro
 COPY ai-proxy/migrations/ ./migrations/
 COPY ai-proxy/tools/reconcile-moei-schema.mjs ./tools/reconcile-moei-schema.mjs
 COPY ai-proxy/tools/migrate-si-checklist-json-to-oracle.mjs ./tools/migrate-si-checklist-json-to-oracle.mjs
-RUN node --check ./tools/reconcile-moei-schema.mjs && node --check ./tools/migrate-si-checklist-json-to-oracle.mjs && node --check ./si-checklist-oracle.mjs && node --check ./si-rolling-plan-store.mjs
+COPY ai-proxy/tools/check-si-rolling-oracle.mjs ./tools/check-si-rolling-oracle.mjs
+RUN node --check ./tools/reconcile-moei-schema.mjs && node --check ./tools/migrate-si-checklist-json-to-oracle.mjs && node --check ./si-checklist-oracle.mjs && node --check ./si-rolling-plan-store.mjs && node --check ./tools/check-si-rolling-oracle.mjs
 RUN npm install --omit=dev --no-audit --no-fund --prefer-offline --loglevel=error --fetch-retries=3
 # Fail image build early when a case-workspace ESM import is missing.
 RUN node --check si-checklist-library.mjs && node --check si-checklist-field.mjs && node --check si-checklist-airia.mjs && node --check si-bulk-inspection-plan.mjs && node --check moei-google-users.mjs && node --check moei-google-sso.mjs && node --check nmc-incident-feed.mjs && node --check nmc-incident-airia.mjs && node --check server.mjs && node --check case-workspace.mjs && node --check case-source-provenance.mjs && node --check nmc-dashboard-focus.mjs && node --check nmc-decision-policy.mjs && node -e "import('./case-workspace.mjs').catch(e=>{console.error(e);process.exit(1)})"
