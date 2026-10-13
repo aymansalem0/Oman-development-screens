@@ -279,7 +279,7 @@ import {SiBulkJob,SiBulkPlanService,SiBulkPreview,SiBulkVessel} from '../service
 })
 export class SiInspectionPlanWizardComponent implements OnInit,OnDestroy{
  readonly stages=[{en:'Selected Vessels',ar:'السفن المختارة'},
-  {en:'All Referral Reasons',ar:'أسباب المعاينة'},{en:'AI & Preparation',ar:'التحضير والذكاء الاصطناعي'},
+  {en:'All Referral Reasons',ar:'أسباب المعاينة'},{en:'Electronic Scheduling',ar:'الجدولة الإلكترونية'},
   {en:'Review & Approval',ar:'المراجعة والاعتماد'}];
  step=1;preview:SiBulkPreview|null=null;planId:string|null=null;
  job:SiBulkJob|null=null;loading=false;submitting=false;error='';
