@@ -18,6 +18,7 @@ export interface SiBulkPreview{
  status:'PREVIEW';planId?:string|null;planNumber?:string|null;sourceHash:string;planRevision:number;
  agentRunId:string|null;planGeneratedAt:string|null;
  provider:'MOCK'|'AIRIA';stale:boolean;selectedVessels:number;
+ selectionMode?:'MANUAL'|'AI_ASSISTED';manualSelection?:boolean;
  vessels:SiBulkVessel[];
  mandatoryChecksPreserved:true;a04Enabled:boolean;p01Enabled:boolean;
  a04Provider:'MOCK'|'AIRIA';p01Provider:'MOCK'|'AIRIA';
@@ -48,7 +49,7 @@ export class SiBulkPlanService{
  }
  approve(input:{
   reason:string;planId?:string;expectedRevision:number;expectedSourceHash:string;
-  expectedAgentRunId:string;confirmApproval:true;
+  expectedAgentRunId:string|null;confirmApproval:true;
   generateA04:boolean;runP01:boolean;confirmAiCost:boolean;
  }):Observable<SiBulkJob>{
   return this.http.post<SiBulkJob>(this.url,input);
