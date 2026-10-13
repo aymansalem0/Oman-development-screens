@@ -90,6 +90,9 @@ jobs:
       - name: NMC + SI Oracle schema reconciliation and Checklist API router regression
         run: node --test ai-proxy/test/schema-reconcile.test.mjs
 
+      - name: Oracle checklist persistence and fail-closed JSON migration tests
+        run: node --test ai-proxy/test/si-checklist-oracle.test.mjs
+
       - name: Dynamic maritime checklists and Airia assistant regression
         run: node --test ai-proxy/test/si-checklist-dynamic.test.mjs
 

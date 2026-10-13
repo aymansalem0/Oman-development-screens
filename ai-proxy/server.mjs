@@ -3,6 +3,7 @@ import {MoeiPocAuth,MoeiAuthError} from './moei-poc-auth.mjs';
 import {SiChecklistLibrary,SiChecklistError} from './si-checklist-library.mjs';
 import {SiChecklistField} from './si-checklist-field.mjs';
 import {SiChecklistAiria} from './si-checklist-airia.mjs';
+import {OracleSiChecklistLibrary,OracleSiChecklistField} from './si-checklist-oracle.mjs';
 import {MoeiGoogleUsers,MoeiUsersError} from './moei-google-users.mjs';
 import {MoeiGoogleSso} from './moei-google-sso.mjs';
 import { getPscVessel, getPscHealth } from './psc-reader.mjs';
@@ -133,6 +134,11 @@ async function a03AgentCall(payload) {
 }
 
 const dbMode=(process.env.NMC_DB_MODE || 'json').toLowerCase();
+const checklistStorage=(process.env.SI_CHECKLIST_STORAGE||
+ (dbMode==='oracle'?'oracle':'json')).toLowerCase();
+if(!['oracle','json'].includes(checklistStorage)||
+ (checklistStorage==='oracle'&&dbMode!=='oracle'))
+ throw new Error('SI_CHECKLIST_STORAGE_MODE_INVALID');
 if(!['json','oracle'].includes(dbMode))throw new Error('NMC_DB_MODE_UNSUPPORTED');
 const repository=dbMode==='oracle'
   ? new (await import('./oracle-store.mjs')).OracleIntelligenceStore()
@@ -236,12 +242,15 @@ const siBulkPlan=new SiBulkInspectionPlan({
   inspectionPlan:siInspectionPlan,targeting:siTargeting,
   preparation:siPreparation,priority:siPriority
 });
-const siChecklistLibrary=new SiChecklistLibrary();
+const siChecklistLibrary=checklistStorage==='oracle'?
+ new OracleSiChecklistLibrary({oracle:repository}):new SiChecklistLibrary();
 const siChecklistAiria=new SiChecklistAiria({
   getSetting:key=>runtime.get(key),
   getApiKey:getAiriaKey
 });
-const siChecklistField=new SiChecklistField({
+const siChecklistField=new (checklistStorage==='oracle'?
+ OracleSiChecklistField:SiChecklistField)({
+  ...(checklistStorage==='oracle'?{oracle:repository}:{}) ,
   library:siChecklistLibrary,targeting:siTargeting,
   airiaSuggest:input=>siChecklistAiria.call('vision',input),
   getSetting:key=>runtime.get(key)
@@ -797,11 +806,18 @@ const server = createServer(async (req, res) => {
       const root='/api/si/v1/checklists';
       const rest=path.slice(root.length);
       if(!rest&&req.method==='GET')
-        return respond(res,200,{templates:siChecklistLibrary.list()});
+        return respond(res,200,{templates:await siChecklistLibrary.list()});
       if(!rest&&req.method==='POST'){
         if(actor.role!=='ADMIN')throw new SiChecklistError('SI_CHECKLIST_ADMIN_REQUIRED',403);
-        return respond(res,201,siChecklistLibrary.create(await requestJson(req,100000),user));
+        return respond(res,201,await siChecklistLibrary.create(await requestJson(req,100000),user));
       }
+      if(rest==='/storage/status'&&req.method==='GET')
+        return respond(res,200,{status:'ok',storage:checklistStorage.toUpperCase(),
+          oracleAuthoritative:checklistStorage==='oracle',
+          oracleMigration:'017',
+          legacyJsonImportAutomatic:false,
+          caseRevisionPinned:true,
+          humanApprovalRequired:true});
       if(rest==='/ai/status'&&req.method==='GET')
         return respond(res,200,siChecklistAiria.status());
       if(rest==='/ai/builder'&&req.method==='POST'){
@@ -813,14 +829,14 @@ const server = createServer(async (req, res) => {
       const editor=/^\/([a-f0-9-]{36})(?:\/(publish))?$/.exec(rest);
       if(editor){
         if(req.method==='GET'&&!editor[2])
-          return respond(res,200,siChecklistLibrary.get(editor[1]));
+          return respond(res,200,await siChecklistLibrary.get(editor[1]));
         if(actor.role!=='ADMIN')throw new SiChecklistError('SI_CHECKLIST_ADMIN_REQUIRED',403);
         if(req.method==='PUT'&&!editor[2])
-          return respond(res,200,siChecklistLibrary.edit(editor[1],
+          return respond(res,200,await siChecklistLibrary.edit(editor[1],
             await requestJson(req,100000),user));
         if(req.method==='POST'&&editor[2]==='publish'){
           const payload=await requestJson(req,2048);
-          return respond(res,200,siChecklistLibrary.publish(editor[1],user,
+          return respond(res,200,await siChecklistLibrary.publish(editor[1],user,
             payload.expectedUpdatedAt));
         }
       }
@@ -1599,6 +1615,14 @@ try{
   }
   try{await documents.initialize();}
   catch(error){console.error('[nmc-a03] MIGRATION_015_REQUIRED - Google Drive document analysis disabled');}
+  // Checklist Oracle storage is fail-closed. A local JSON store with any
+  // data absent from Oracle blocks startup until explicit audited import.
+  // Never silently switch from /data JSON to an empty Oracle repository.
+  if(checklistStorage==='oracle'){
+    await siChecklistLibrary.initialize();
+    await siChecklistField.initialize();
+    console.log('[si-checklist] STORAGE_ORACLE_READY schema=017');
+  }else console.log('[si-checklist] STORAGE_JSON_POC');
   try{await siTargeting.initialize();}
   catch(error){console.error('[si-targeting] SI_MIGRATION_009_REQUIRED - candidate API disabled');}
   try{await siPscSelection.initialize();}
