@@ -128,6 +128,15 @@ import {
           [checked]="item.fields.includes(f)" (change)="toggleField(item,f,$any($event.target).checked)"/>
           {{fieldLabel(f)}}</label>
         </div>
+        <div class="type-grid">
+         <span>{{t('Required answer fields · only checked types must be answered',
+           'حقول الإجابة المطلوبة · الأنواع المختارة فقط إجبارية')}}</span>
+         <label *ngFor="let f of item.fields">
+          <input type="checkbox" [checked]="item.requiredFields.includes(f)"
+           (change)="toggleRequired(item,f,$any($event.target).checked)"/>
+          {{fieldLabel(f)}}
+         </label>
+        </div>
         <div class="row wraps">
          <label class="inline"><input type="checkbox" [(ngModel)]="item.mandatory"/>
           {{t('Required','إلزامي')}}</label>
@@ -239,7 +248,7 @@ export class SiChecklistSettingsComponent implements OnInit{
  freshAi(){return {enabled:false,instructions:'',requiresHumanReview:true};}
  freshItem(title=''):ChecklistItem{
   return {id:crypto.randomUUID(),title,description:'',fields:['BOOLEAN','NOTE'],
-    mandatory:true,order:0,options:[],ai:this.freshAi(),sourceReferences:[]};
+    requiredFields:['BOOLEAN'],mandatory:true,order:0,options:[],ai:this.freshAi(),sourceReferences:[]};
  }
  freshGroup(title=''):ChecklistGroup{
   return {id:crypto.randomUUID(),title,description:'',order:0,
@@ -268,6 +277,11 @@ export class SiChecklistSettingsComponent implements OnInit{
  }
  toggleField(item:ChecklistItem,f:CheckField,on:boolean):void{
   item.fields=on?[...new Set([...item.fields,f])]:item.fields.filter(x=>x!==f);
+  if(!on)item.requiredFields=item.requiredFields.filter(x=>x!==f);
+ }
+ toggleRequired(item:ChecklistItem,f:CheckField,on:boolean):void{
+  item.requiredFields=on?[...new Set([...item.requiredFields,f])]:
+   item.requiredFields.filter(x=>x!==f);
  }
  addGroup():void{this.selected?.draft.groups.push(this.freshGroup());}
  addItem(group:ChecklistGroup):void{group.items.push(this.freshItem());}
@@ -316,7 +330,8 @@ export class SiChecklistSettingsComponent implements OnInit{
    const fields=this.fieldTypes.filter(f=>(it.fields||[]).includes(f));
    return {...this.freshItem(String(it.title||'AI proposed check')),
      description:String(it.description||'').slice(0,1300),
-     fields:fields.length?fields:['NOTE'] as CheckField[],mandatory:false};
+     fields:fields.length?fields:['NOTE'] as CheckField[],
+     requiredFields:[],mandatory:false};
   };
   for(const g of this.suggestion.suggestedGroups){
    const group=this.freshGroup(String(g.title||'AI Proposed Group'));
