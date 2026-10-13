@@ -14,7 +14,7 @@ export const SETTINGS_DESCRIPTORS=Object.freeze([
   {key:'NMC_A01_ENABLED',type:'boolean',group:'agents',description:'Maritime situation intelligence (A01)',cost:true},
   {key:'NMC_A02_ENABLED',type:'boolean',group:'agents',description:'Vessel compliance assessment (A02)',cost:true},
   {key:'NMC_DASHBOARD_AI_FOCUS_ENABLED',type:'boolean',group:'agents',
-    description:'NMC dashboard AI focus: optional operator-confirmed A02 then A01 (up to 2 paid calls)',cost:true},
+    description:'NMC dashboard AI focus: operator-confirmed A02 then A01 (2 tenant agent executions)',cost:true},
   {key:'NMC_A03_ENABLED',type:'boolean',group:'agents',description:'Document extraction pipeline (A03)',cost:true},
   {key:'NMC_A03_AUTO_ENABLED',type:'boolean',group:'agents',description:'Run A03 automatically for changed vessel documents during scheduled fleet assessments',cost:true},
   {key:'SI_A04_ENABLED',type:'boolean',group:'agents',description:'On-demand Smart Inspection AI dossier (A04)',cost:true},
