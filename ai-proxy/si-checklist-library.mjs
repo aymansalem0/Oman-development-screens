@@ -100,7 +100,7 @@ export function validateTemplate(body,{existing=null}={}){
   applicability:applicability(body.applicability||{}),
   ai:aiOptions(body.ai),groups:validateGroups(body.groups||[])};
 }
-function normalizeVessel(v){
+export function normalizeVessel(v){
  const x=v||{}, num=y=>{
   if(typeof y==='number')return Number.isFinite(y)&&y>=0?y:null;
   if(typeof y!=='string')return null;
