@@ -22,7 +22,7 @@ const from=x=>typeof x==='string'?JSON.parse(x):x;
 const empty=()=>({version:1,plans:[]});
 const sanitize=x=>({
  id:x.id,number:x.number,title:x.title,startsOn:x.startsOn,endsOn:x.endsOn,
- port:x.port||null,notes:x.notes||'',status:x.status,revision:x.revision,
+ notes:x.notes||'',status:x.status,revision:x.revision,
  createdBy:x.createdBy,createdAt:x.createdAt,updatedBy:x.updatedBy,
  updatedAt:x.updatedAt,approvedAt:x.approvedAt||null,
  approvedBy:x.approvedBy||null,approvedBatchId:x.approvedBatchId||null,
@@ -98,15 +98,18 @@ export class SiRollingPlanStore{
   });
  }
  async create(input={},actor){
-  const title=text(input.title,180),port=input.port?text(input.port,160):null,
+  // No port belongs to the rolling inspection plan business model.
+  // Legacy input.port is ignored; the nullable Oracle 018 PORT column is kept
+  // for backwards compatibility without any destructive schema operation.
+  const title=text(input.title,180),
    notes=input.notes?text(input.notes,1200):'';
-  if(!title||input.port&&!port||input.notes&&!notes||
+  if(!title||input.notes&&!notes||
    !goodDate(input.startsOn||'')||!goodDate(input.endsOn||'')||
    input.endsOn<input.startsOn||!text(actor,160))
    fail('SI_ROLLING_PLAN_INFORMATION_INVALID',422);
   const createdAt=now();
   const state={id:randomUUID(),number:uniqueNumber(),title,startsOn:input.startsOn,
-   endsOn:input.endsOn,port,notes,status:'DRAFT',revision:0,
+   endsOn:input.endsOn,notes,status:'DRAFT',revision:0,
    createdAt,createdBy:actor,updatedAt:createdAt,updatedBy:actor,
    overrides:{},latest:null,audit:[{event:'CREATED',at:createdAt,actor}],
    approvedBatchId:null,approvedVessels:[],approvedBy:null,approvedAt:null};
@@ -117,12 +120,12 @@ export class SiRollingPlanStore{
   return this.db(async con=>{
    try{
     await con.execute(`INSERT INTO SI_PLAN_ROLLING
-      (PLAN_ID,PLAN_NO,TITLE,START_DATE,END_DATE,PORT,NOTES,
+      (PLAN_ID,PLAN_NO,TITLE,START_DATE,END_DATE,NOTES,
        STATUS,VERSION_NO,STATE_JSON,CREATED_BY,UPDATED_BY)
-      VALUES(:id,:number,:title,:startDate,:endDate,:port,:notes,
+      VALUES(:id,:number,:title,:startDate,:endDate,:notes,
        'DRAFT',0,:state,:actor,:actor)`,{
       id:state.id,number:state.number,title, startDate:state.startsOn,
-      endDate:state.endsOn,port,notes,state:json(state),actor});
+      endDate:state.endsOn,notes,state:json(state),actor});
     await con.execute(`INSERT INTO SI_PLAN_ROLLING_VERSION
      (PLAN_ID,VERSION_NO,STATE_JSON,ACTOR,EVENT_CODE)
      VALUES(:id,0,:state,:actor,'CREATED')`,{
