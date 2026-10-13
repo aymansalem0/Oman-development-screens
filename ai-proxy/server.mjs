@@ -33,6 +33,7 @@ import {SiBulkInspectionPlan,SiBulkApprovalError} from './si-bulk-inspection-pla
 import {mockSiP01,mockSiA04,mockSiC01} from './si-agent-mock.mjs';
 import { SiInspectionPreparation, SiPreparationError } from './si-inspection-preparation.mjs';
 import { SiInspectionLifecycle, SiLifecycleError } from './si-inspection-lifecycle.mjs';
+import {runSiPocAdvisor,siFutureAdvisorCoverage,SiPocAdvisorError} from './si-poc-workflow-advisors.mjs';
 import { DriveDocumentIntelligence, DocumentError } from './drive-document-intelligence.mjs';
 import {buildA03MultipartUserInput,summarizeA03HttpFailure} from './airia-a03-multipart.mjs';
 import { RuntimeSettings, RuntimeSettingsError } from './runtime-settings.mjs';
@@ -991,6 +992,20 @@ const server = createServer(async (req, res) => {
         dashboards.assertRole(req,'EDITOR');
         return respond(res,200,await siLifecycle.list());
       }
+      if(path==='/api/si/v1/advisors/coverage'&&req.method==='GET'){
+        dashboards.assertRole(req,'EDITOR');
+        return respond(res,200,{status:'ok',...siFutureAdvisorCoverage()});
+      }
+      const advisorPath=/^\/api\/si\/v1\/lifecycle\/([a-f0-9-]{36})\/advisors\/(SI-(?:S01|V01|R01|X01))\/run$/.exec(path);
+      if(advisorPath&&req.method==='POST'){
+        dashboards.assertRole(req,'EDITOR');
+        const input=await requestJson(req,4096);
+        const view=await siLifecycle.snapshot(advisorPath[1]);
+        return respond(res,200,runSiPocAdvisor({
+          agentCode:advisorPath[2],caseId:advisorPath[1],
+          scenario:input.scenario||null
+        },view));
+      }
       const lifecyclePath=/^\/api\/si\/v1\/lifecycle\/([0-9a-f-]{36})(?:\/(actions|history))?$/.exec(path);
       if(lifecyclePath){
         const id=lifecyclePath[1],suffix=lifecyclePath[2];
@@ -1134,7 +1149,7 @@ const server = createServer(async (req, res) => {
       }
       return respond(res,405,{error:'METHOD_NOT_ALLOWED'});
     }catch(e){
-      if(e instanceof SiRollingPlanError||e instanceof SiBulkApprovalError||e instanceof SiCandidateAgentError||e instanceof SiLifecycleError||e instanceof SiSelectionError||e instanceof SiPriorityError||e instanceof SiPreparationError||e instanceof SiTargetingError||e instanceof DashboardError)
+      if(e instanceof SiPocAdvisorError||e instanceof SiRollingPlanError||e instanceof SiBulkApprovalError||e instanceof SiCandidateAgentError||e instanceof SiLifecycleError||e instanceof SiSelectionError||e instanceof SiPriorityError||e instanceof SiPreparationError||e instanceof SiTargetingError||e instanceof DashboardError)
         return respond(res,e.status,{error:e.code});
       if(Number.isInteger(e?.status)&&e.status>=400&&e.status<500)
         return respond(res,e.status,{error:'SI_REQUEST_INVALID'});
