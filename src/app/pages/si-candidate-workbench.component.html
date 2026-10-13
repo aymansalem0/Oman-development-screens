@@ -5,8 +5,8 @@
       <div>
         <small>{{copy('MOEI · SMART INSPECTION','وزارة الطاقة والبنية التحتية · المعاينة الذكية')}}</small>
         <h1>{{copy('Inspection Candidate & Targeting','السفن المرشحة للمعاينة والاستهداف')}}</h1>
-        <p>{{copy('One candidate list, one inspection plan. AI recommendations remain subject to officer approval.',
-          'قائمة سفن موحدة وخطة معاينات واحدة؛ توصيات الذكاء الاصطناعي لا تغني عن اعتماد الموظف.')}}</p>
+        <p>{{copy('One candidate pool, independently numbered rolling plans; AI advice requires human approval.',
+          'قائمة مرشحين مستمرة وخطط معاينات مستقلة بأرقام وفترات تنفيذ؛ توصيات AI تتطلب اعتمادًا بشريًا.')}}</p>
       </div>
       <div class="hero-actions">
         <a routerLink="/moei/smart-inspection/management">{{copy('Inspection Management','إدارة المعاينات')}}</a>
@@ -20,6 +20,66 @@
     <p *ngIf="success" class="notice success" role="status">{{success}}</p>
     <p *ngIf="loading" class="notice">{{copy('Loading source-backed candidate vessels…','جارٍ تحميل السفن المرشحة من المصادر…')}}</p>
 
+
+    <section class="si-rolling-management">
+     <div class="si-rolling-top">
+       <div><p class="si-rolling-eyebrow">SMART INSPECTION · ROLLING PLANS</p>
+        <h2>{{copy('Inspection Planning Management','إدارة خطط المعاينات')}}</h2>
+        <p>{{copy('Create independent plans any day, including several per day. Approved cases remain untouched.',
+          'أنشئ خططًا مستقلة في أي وقت، بما فيها أكثر من خطة يوميًا، مع الحفاظ على المعاينات المعتمدة.')}}</p>
+       </div>
+       <button type="button" (click)="openCreatePlan()" [disabled]="planningBusy||!auth.isAdmin">
+         + {{copy('Create New Plan','إنشاء خطة جديدة')}}</button>
+     </div>
+     <p *ngIf="planningError" class="notice error" role="alert">{{planningError}}</p>
+     <div class="si-rolling-form" *ngIf="newPlanVisible">
+       <label>{{copy('Plan Name','اسم الخطة')}}<input [(ngModel)]="newPlan.title" maxlength="180"/></label>
+       <label>{{copy('Execution From','التنفيذ من')}}
+         <input type="date" [(ngModel)]="newPlan.startsOn"/></label>
+       <label>{{copy('Execution To','التنفيذ إلى')}}
+         <input type="date" [(ngModel)]="newPlan.endsOn"/></label>
+       <label>{{copy('Port / Location','الميناء / الموقع')}}
+         <input [(ngModel)]="newPlan.port" maxlength="160"/></label>
+       <label>{{copy('Notes','ملاحظات')}}
+         <input [(ngModel)]="newPlan.notes" maxlength="1200"/></label>
+       <div class="si-rolling-actions">
+         <button type="button" (click)="createRollingPlan()" [disabled]="planningBusy">
+           {{copy('Save New Draft','حفظ المسودة')}}</button>
+         <button type="button" (click)="newPlanVisible=false">
+           {{copy('Back','رجوع')}}</button>
+       </div>
+     </div>
+     <p class="si-rolling-note" *ngIf="!rollingPlans.length">
+      {{copy('No plans yet. Create one to select and rank vessels.',
+        'لا توجد خطط بعد. أنشئ خطة جديدة لاختيار السفن وترتيبها.')}}
+     </p>
+     <div class="si-rolling-cards">
+       <article *ngFor="let p of rollingPlans" class="si-rolling-card"
+        [class.current]="activePlanId===p.id">
+         <div class="si-rolling-card-head"><strong>{{p.number}}</strong>
+           <span>{{p.status.replaceAll('_',' ')}}</span></div>
+         <h3>{{p.title}}</h3>
+         <p>{{p.startsOn}} → {{p.endsOn}} · {{p.vesselCount}} {{copy('vessels','سفن')}}</p>
+         <p>{{copy('Version','إصدار')}} {{p.revision}}</p>
+         <div class="si-rolling-actions">
+          <button type="button" (click)="openRollingPlan(p)" [disabled]="planBusy">
+           {{p.status==='DRAFT'||p.status==='READY_FOR_APPROVAL'?
+             copy('Open Plan','فتح الخطة'):copy('View Plan History','عرض سجل الخطة')}}</button>
+          <button type="button" *ngIf="p.status==='DRAFT'||p.status==='READY_FOR_APPROVAL'"
+             (click)="cancelRollingPlan(p)" [disabled]="planningBusy">
+           {{copy('Cancel Draft','إلغاء المسودة')}}</button>
+         </div>
+       </article>
+     </div>
+     <p *ngIf="activePlan as p" class="si-rolling-current">
+       {{copy('Selected plan','الخطة المختارة')}}: <strong>{{p.number}} · {{p.title}}</strong>
+       · {{p.status.replaceAll('_',' ')}} · {{p.startsOn}} → {{p.endsOn}}
+     </p>
+     <p *ngIf="!activePlanId" class="si-rolling-note">
+      {{copy('Choose a draft plan before running C01 or changing the inspection selection.',
+        'اختر خطة مسودة قبل تشغيل C01 أو تعديل قائمة الاختيار.')}}
+     </p>
+    </section>
     <section class="stats si-kpis" *ngIf="dashboard as d">
       <article><small>{{copy('ACTIVE FLEET','الأسطول النشط')}}</small><strong>{{d.summary.evaluatedPopulation}}</strong><span>{{copy('Tracked source vessels','سفن مصدر البيانات')}}</span></article>
       <article><small>{{copy('ASSESSED RISK','السفن المقيمة')}}</small><strong>{{d.summary.assessedRiskVessels}}</strong><span>{{copy('Saved NMC risk assessments','تقييمات مخاطر NMC المحفوظة')}}</span></article>
@@ -45,7 +105,7 @@
         <button type="button" (click)="loadInspectionPlan()" [disabled]="planBusy||loading">
           {{copy('Load Plan','تحميل الخطة')}}</button>
         <button type="button" class="primary" (click)="generateInspectionPlan()"
-                [disabled]="planBusy||loading||!plan">
+                [disabled]="planBusy||loading||!plan||!activePlanEditable">
           {{plan?.agentRunId?copy('Re-run AI Selection & Priority','إعادة حساب اختيار وترتيب AI'):
             copy('Generate AI Selection & Priority','إنشاء اختيار وترتيب AI')}}
         </button>
@@ -73,9 +133,16 @@
         <h2>{{copy('Create Inspection Plan','إنشاء خطة المعاينات')}}</h2>
         <p>{{copy('Review selected vessels and all referral reasons in a guided approval wizard.',
           'راجع السفن المختارة وجميع أسباب الإحالة في شاشة خطوات منفصلة.')}}</p>
-        <a class="si-plan-wizard-button" routerLink="/moei/smart-inspection/plan/create">
-          {{copy('Create Inspection Plan →','إنشاء خطة المعاينات ←')}}
+        <a *ngIf="activePlan?.status==='READY_FOR_APPROVAL'&&plan?.agentRunId&&!plan?.stale"
+           class="si-plan-wizard-button"
+           [routerLink]="['/moei/smart-inspection/plan/create',activePlanId]">
+          {{copy('Review & Approve Plan →','مراجعة واعتماد الخطة ←')}}
         </a>
+        <span class="si-rolling-note"
+         *ngIf="activePlan?.status!=='READY_FOR_APPROVAL'||!plan?.agentRunId||plan?.stale">
+         {{copy('Select a draft and run C01 before approval.',
+           'اختر مسودة وشغّل C01 قبل تقديم الخطة للاعتماد.')}}
+        </span>
       </section>
 
       <div class="filters si-inline-filters">
