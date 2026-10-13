@@ -7,9 +7,9 @@ import {
   NmcVesselProfile
 } from '../data/nmc-vessel-catalog';
 import {
-  NMC_OPERATIONAL_VESSELS,
-  getOperationalVesselByImo
-} from '../data/nmc-expanded-vessel-catalog';
+  AIRIA_DEMO_99_VESSELS,
+  getAiriaDemoVesselByImo
+} from '../data/airia-demo-cohort';
 import { LanguageService } from '../services/language.service';
 import { NmcLiveAiPanelComponent, NmcLiveRiskResult } from './nmc-live-ai-panel.component';
 import { NmcRiskEngineService } from '../services/nmc-risk-engine.service';
@@ -81,8 +81,8 @@ export class NmcAiSituationAssessmentComponent implements OnInit {
   ) {}
 
   ngOnInit(): void {
-    const imo = this.route.snapshot.paramMap.get('imo') || NMC_OPERATIONAL_VESSELS[0].imo;
-    const profile = getOperationalVesselByImo(imo) || NMC_OPERATIONAL_VESSELS[0];
+    const imo = this.route.snapshot.paramMap.get('imo') || AIRIA_DEMO_99_VESSELS[0].imo;
+    const profile = getAiriaDemoVesselByImo(imo) || AIRIA_DEMO_99_VESSELS[0];
     this.vessel = this.riskEngine.applyToVessel(profile);
     this.rebuildAssessment();
     this.loadCentralCase();
