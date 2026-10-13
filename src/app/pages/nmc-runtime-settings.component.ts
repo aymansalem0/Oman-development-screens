@@ -127,7 +127,7 @@ interface RuntimeSnapshot {
                     <option *ngFor="let choice of item.options" [value]="choice">{{choice}}</option>
                   </select>
                 </ng-container>
-                <span class="paid" *ngIf="item.cost">● {{tr('May incur AI costs','قد يستهلك تكلفة AI')}}</span>
+                <span class="paid" *ngIf="item.cost">● {{tr('AI invocation · operator confirmation','استدعاء AI · يتطلب تأكيد المستخدم')}}</span>
                 <button type="button" class="restore" (click)="draft[item.key]=snapshot.defaults[item.key]">
                   {{tr('Use ENV default','استعادة قيمة ENV')}}</button>
               </div>
@@ -177,7 +177,7 @@ interface RuntimeSnapshot {
         </section>
         <section class="publish-card">
           <h2>{{tr('Publish runtime settings','نشر إعدادات التشغيل')}}</h2>
-          <p>{{tr('Publish only after checking agent costs, scheduler vessel limits and the Airia endpoint. The logged Admin session is used for approval, and no extra key is required.',
+          <p>{{tr('Publish only after reviewing agent usage, scheduler vessel limits and the Airia endpoint. The logged Admin session is used for approval, and no extra key is required.',
                    'انشر بعد مراجعة تكلفة الوكلاء وحدود السفن المجدولة وعنوان Airia. يُستخدم تسجيل دخول المدير الموحد للاعتماد دون إدخال مفتاح إضافي.')}}</p>
           <div class="publish-form">
 
