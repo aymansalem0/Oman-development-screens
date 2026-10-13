@@ -237,6 +237,79 @@ export class SiRollingPlanStore{
    p.status='CANCELLED';p.cancelReason=reason.trim();return p;
   },'CANCELLED');
  }
+
+ /** Supervisor approval of V2 roster: no cases or dossiers until scheduling. */
+ async approveForScheduling(id,{expectedRevision,expectedSourceHash,actor,reason,vessels}={}){
+  if(!ID.test(id||'')||!Number.isInteger(expectedRevision)||
+    !text(actor,160)||!text(reason,500)||reason.trim().length<8||
+    !text(expectedSourceHash,200)||!Array.isArray(vessels)||
+    !vessels.length||vessels.length>40||
+    new Set(vessels.map(v=>v.imo)).size!==vessels.length||
+    vessels.some(v=>!/^[0-9]{7}$/.test(v.imo)||
+      !Number.isInteger(v.planRank)||!Array.isArray(v.regimes)||
+      !v.regimes.length||!Array.isArray(v.inspectionReasons)||
+      !v.inspectionReasons.length||v.inspectionReasons.some(r=>!r.eventKey)))
+   fail('SI_V2_PLAN_APPROVAL_INVALID',422);
+  const change=before=>{
+   if(before.status!=='READY_FOR_APPROVAL'||before.revision!==expectedRevision||
+      before.selectionSourceHash!==expectedSourceHash)
+    fail('SI_V2_PLAN_CHANGED_REVIEW_AGAIN',409);
+   const selected=(before.savedPlanRows||before.latest?.rows||[]).filter(r=>r.planSelected);
+   const allowed=new Set(selected.map(r=>r.imo));
+   if(allowed.size!==vessels.length||vessels.some(v=>!allowed.has(v.imo)))
+    fail('SI_V2_SELECTION_CHANGED_REVIEW_AGAIN',409);
+   const next=clone(before),at=now();
+   next.status='APPROVED';next.approvedAt=at;next.approvedBy=actor;
+   next.scheduleMode='HUMAN_APPROVED_ROSTER_PENDING_AI_SCHEDULE';
+   next.approvalReason=reason.trim();next.approvedBatchId=null;
+   next.approvedVessels=clone(vessels.map(v=>({
+    imo:v.imo,planRank:v.planRank,caseId:null,
+    regimes:v.regimes,inspectionReasons:v.inspectionReasons
+   })));
+   next.approvedRows=clone(selected);
+   next.revision++;next.updatedAt=at;next.updatedBy=actor;
+   next.audit=[...(next.audit||[]),{
+    event:'APPROVED_FOR_ELECTRONIC_SCHEDULING',at,actor,
+    reason:reason.trim(),casesCreated:0
+   }].slice(-300);
+   return next;
+  };
+  if(this.mode==='json'){
+   const state=this.readFile(),index=state.plans.findIndex(p=>p.id===id);
+   if(index<0)fail('SI_ROLLING_PLAN_NOT_FOUND',404);
+   const next=change(state.plans[index]);
+   state.plans[index]=next;this.writeFile(state);return clone(next);
+  }
+  return this.db(async con=>{
+   try{
+    const found=await this.query(con,
+      "SELECT STATE_JSON FROM SI_PLAN_ROLLING WHERE PLAN_ID=:p_plan FOR UPDATE",
+      {p_plan:id});
+    if(!found.length)fail('SI_ROLLING_PLAN_NOT_FOUND',404);
+    const next=change(from(found[0].STATE_JSON));
+    await con.execute(
+      "UPDATE SI_PLAN_ROLLING SET STATUS='APPROVED',VERSION_NO=:p_rev,STATE_JSON=:p_state,APPROVED_BATCH_ID=NULL,APPROVED_BY=:p_actor,APPROVED_AT=SYSTIMESTAMP,UPDATED_BY=:p_actor2,UPDATED_AT=SYSTIMESTAMP WHERE PLAN_ID=:p_plan",
+      {p_plan:id,p_rev:next.revision,p_state:json(next),p_actor:actor,p_actor2:actor});
+    await con.execute(
+      "INSERT INTO SI_PLAN_ROLLING_VERSION (PLAN_ID,VERSION_NO,STATE_JSON,ACTOR,EVENT_CODE) VALUES(:p_plan,:p_rev,:p_state,:p_actor,'APPROVED_FOR_SCHEDULING')",
+      {p_plan:id,p_rev:next.revision,p_state:json(next),p_actor:actor});
+    for(const vessel of next.approvedVessels){
+      await con.execute(
+        "INSERT INTO SI_PLAN_ROLLING_VESSEL (PLAN_ID,IMO,PLAN_RANK,CASE_ID,APPROVED_SCOPE_JSON) VALUES(:p_plan,:p_imo,:p_rank,NULL,:p_scope)",
+        {p_plan:id,p_imo:vessel.imo,p_rank:vessel.planRank,
+         p_scope:json({regimes:vessel.regimes})});
+      for(const evidence of vessel.inspectionReasons){
+        await con.execute(
+          "INSERT INTO SI_PLAN_ROLLING_REASON (PLAN_ID,IMO,EVENT_KEY,REASON_JSON) VALUES(:p_plan,:p_imo,:p_event,:p_doc)",
+          {p_plan:id,p_imo:vessel.imo,p_event:evidence.eventKey,p_doc:json(evidence)});
+      }
+    }
+    await this.audit(con,id,'APPROVED_FOR_ELECTRONIC_SCHEDULING',actor,
+      {vessels:vessels.length,casesCreated:0,reason:reason.trim()});
+    await con.commit();return clone(next);
+   }catch(error){await con.rollback();throw error;}
+  });
+ }
  async approve(id,{expectedRevision,batchId,cases,actor}){
   if(!ID.test(id||'')||!ID.test(batchId||'')||!Array.isArray(cases)||
    !cases.length||!text(actor,160))fail('SI_ROLLING_APPROVAL_INVALID',422);
