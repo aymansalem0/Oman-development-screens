@@ -66,10 +66,15 @@ function validateItems(items){
   if(!arr(x.fields,7)||!x.fields.length||x.fields.some(t=>!TYPES.includes(t)))
    fail('SI_CHECKLIST_ANSWER_TYPES_INVALID');
   const fields=unique(x.fields),options=x.options||[];
+  // One question may display multiple fields simultaneously. Administrators
+  // choose exactly which of those fields are mandatory to answer.
+  const requiredFields=x.requiredFields===undefined?[fields[0]]:x.requiredFields;
+  if(!arr(requiredFields,7)||requiredFields.some(f=>!fields.includes(f)))
+   fail('SI_CHECKLIST_REQUIRED_FIELDS_INVALID');
   if(!arr(options,18)||options.some(z=>!safe(z,160)))
    fail('SI_CHECKLIST_ITEM_OPTIONS_INVALID');
   return {id:itemId,title,description:safe(x.description,1300)||'',
-   fields,mandatory:x.mandatory!==false,options:unique(options),
+   fields,requiredFields:unique(requiredFields),mandatory:x.mandatory!==false,options:unique(options),
    order:Number.isInteger(x.order)&&x.order>=0?x.order:index,
    ai:aiOptions(x.ai),sourceReferences:arr(x.sourceReferences,20)?
     x.sourceReferences.filter(z=>safe(z,180)):[]};
