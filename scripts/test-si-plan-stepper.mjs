@@ -11,7 +11,8 @@ const prep=read('ai-proxy/si-inspection-preparation.mjs');
 const detail=read('src/app/pages/si-inspection-preparation.component.html');
 const server=read('ai-proxy/server.mjs');
 test('candidate screen only proposes plan and navigates to distinct Create Inspection Plan stepper',()=>{
- assert.match(grid,/routerLink="\/moei\/smart-inspection\/plan\/create"/);
+ assert.match(grid,/\[routerLink\]="\['\/moei\/smart-inspection\/plan\/create',activePlanId\]"/);
+ assert.match(routes,/path: 'moei\/smart-inspection\/plan\/create\/:planId'/);
  assert.match(routes,/path: 'moei\/smart-inspection\/plan\/create'/);
  assert.doesNotMatch(grid,/<app-si-bulk-approval-panel/);
  assert.match(wizard,/Selected Vessels/);
