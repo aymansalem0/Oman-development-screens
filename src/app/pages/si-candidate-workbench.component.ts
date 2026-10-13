@@ -5,7 +5,7 @@ import {FormsModule} from '@angular/forms';
 import {RouterLink} from '@angular/router';
 import {NmcNavigationComponent} from '../components/nmc-navigation.component';
 import {SiCandidate,SiCandidateStatus,SiCandidateTargetingService,
-  SiDashboard,SiVesselCandidate,SiInspectionPlanState,SiInspectionPlanRow,SiC01Run,SiC01Preview,SiC01Recommendation,SiPriorityStatus,SiPriorityPreview,SiPriorityRun,SiPriorityRecommendation,SiPriorityPreviewItem}
+  SiDashboard,SiVesselCandidate,SiInspectionPlanState,SiInspectionPlanRow,SiRollingPlan,SiC01Run,SiC01Preview,SiC01Recommendation,SiPriorityStatus,SiPriorityPreview,SiPriorityRun,SiPriorityRecommendation,SiPriorityPreviewItem}
   from '../services/si-candidate-targeting.service';
 
 type SourceFilter='ALL'|'NMC_CASE'|'SERVICE_REQUEST'|'PSC_PORT_CALL';
@@ -23,6 +23,69 @@ export class SiCandidateWorkbenchComponent implements OnInit{
   selectedKey='';selectedImo='';
   reviewer='admin';decisionNote='';editorKey='MOEI_SESSION';publisherKey='MOEI_SESSION';
   plan:SiInspectionPlanState|null=null;
+  rollingPlans:SiRollingPlan[]=[];activePlanId:string|null=null;
+  planningError='';planningBusy=false;newPlanVisible=false;
+  newPlan={title:'',startsOn:'',endsOn:'',port:'',notes:''};
+  get activePlan():SiRollingPlan|undefined{
+    return this.rollingPlans.find(p=>p.id===this.activePlanId);
+  }
+  get activePlanEditable():boolean{
+    return !!this.activePlan&&['DRAFT','READY_FOR_APPROVAL'].includes(this.activePlan.status);
+  }
+  private localDate():string{
+    const date=new Date(),two=(n:number)=>String(n).padStart(2,'0');
+    return [date.getFullYear(),two(date.getMonth()+1),two(date.getDate())].join('-');
+  }
+  openCreatePlan():void{
+    this.newPlanVisible=true;this.planningError='';
+    const day=this.localDate();
+    this.newPlan={title:'Inspection Plan '+day,startsOn:day,endsOn:day,
+      port:'',notes:''};
+  }
+  loadRollingPlans():void{
+    this.api.rollingPlans().subscribe({
+      next:r=>{this.rollingPlans=r.plans;},
+      error:e=>{this.planningError=e?.error?.error||'SI_ROLLING_PLANS_UNAVAILABLE';}
+    });
+  }
+  createRollingPlan():void{
+    if(this.planningBusy)return;
+    if(!this.newPlan.title.trim()||!this.newPlan.startsOn||!this.newPlan.endsOn||
+       this.newPlan.endsOn<this.newPlan.startsOn){
+      this.planningError=this.copy('Enter a title and valid execution period.',
+       'أدخل اسم الخطة وفترة تنفيذ صحيحة.');return;
+    }
+    this.planningBusy=true;this.planningError='';
+    this.api.createRollingPlan(this.newPlan).subscribe({
+      next:p=>{
+       this.planningBusy=false;this.newPlanVisible=false;
+       this.activePlanId=p.id;this.plan=null;this.loadRollingPlans();
+       this.loadInspectionPlan();
+      },
+      error:e=>{this.planningBusy=false;
+        this.planningError=e?.error?.error||'SI_ROLLING_PLAN_CREATE_FAILED';}
+    });
+  }
+  openRollingPlan(p:SiRollingPlan):void{
+    this.activePlanId=p.id;this.plan=null;this.planEditingImo='';
+    this.loadInspectionPlan();
+  }
+  cancelRollingPlan(p:SiRollingPlan):void{
+    const reason=window.prompt(this.copy(
+      'Reason for cancelling this DRAFT plan (min 8 characters):',
+      'سبب إلغاء الخطة غير المعتمدة (8 أحرف على الأقل):'));
+    if(!reason||reason.trim().length<8)return;
+    if(!window.confirm(this.copy('Cancel this draft plan? Existing cases will not be affected.',
+      'إلغاء مسودة الخطة؟ لن تتغير حالات المعاينة المعتمدة.')))return;
+    this.planningBusy=true;
+    this.api.cancelRollingPlan(p.id,p.revision,reason.trim()).subscribe({
+      next:()=>{this.planningBusy=false;this.loadRollingPlans();
+        if(this.activePlanId===p.id){this.activePlanId=null;this.plan=null;}},
+      error:e=>{this.planningBusy=false;
+        this.planningError=e?.error?.error||'SI_ROLLING_PLAN_CANCEL_FAILED';}
+    });
+  }
+
   planBusy=false;planError='';planNotice='';
   expandedImo='';planEditingImo='';
   planSelection=true;planReason='';planRequestedRank:number|null=null;
@@ -36,27 +99,28 @@ export class SiCandidateWorkbenchComponent implements OnInit{
   get planSelectedCount():number|null{return this.plan?.selectedForPlan??null;}
   get providerLabel():string{return this.plan?.provider||'NOT LOADED';}
   loadInspectionPlan():void{
+    if(!this.activePlanId){this.plan=null;return;}
     if(!this.editorKey.trim()){
       this.planError=this.copy('Enter the Editor Key above to load the inspection plan.',
         'أدخل مفتاح المحرر لعرض خطة المعاينات.');
       this.focusEditorAccess();return;
     }
     this.planBusy=true;this.planError='';
-    this.api.inspectionPlan(this.editorKey.trim()).subscribe({
+    this.api.inspectionPlan(this.editorKey.trim(),this.activePlanId).subscribe({
       next:x=>{this.plan=x;this.planBusy=false;},
       error:e=>{this.planBusy=false;this.planError=(e as {error?:{error?:string}})
         ?.error?.error||'SI_INSPECTION_PLAN_UNAVAILABLE';}
     });
   }
   generateInspectionPlan():void{
-    if(this.planBusy||!this.plan||!this.editorKey.trim()||!this.reviewer.trim()){
+    if(this.planBusy||!this.activePlanEditable||!this.plan||!this.editorKey.trim()||!this.reviewer.trim()){
       this.planError=this.copy('Load plan and enter Operator Name and Editor Key before running C01.',
        'اعرض الخطة وأدخل اسم الموظف ومفتاح المحرر قبل تشغيل C01.');return;
     }
     this.submitPlanReevaluation(null);
   }
   openPlanEdit(v:SiVesselCandidate,selection:boolean,changePriority=false):void{
-    if(!this.plan?.agentRunId||!this.planRow(v)?.editable){
+    if(!this.activePlanEditable||!this.plan?.agentRunId||!this.planRow(v)?.editable){
       this.planError=this.copy('Run initial C01 selection and choose a pending candidate first.',
         'شغّل توصية C01 الأولية واختر سفينة مرشحة بانتظار المراجعة.');return;
     }
@@ -66,7 +130,7 @@ export class SiCandidateWorkbenchComponent implements OnInit{
   }
   cancelPlanEdit():void{this.planEditingImo='';this.planReason='';this.planRequestedRank=null;}
   savePlanEdit():void{
-    if(!this.plan||!this.planEditingImo||this.planBusy)return;
+    if(!this.activePlanEditable||!this.plan||!this.planEditingImo||this.planBusy)return;
     if(this.planReason.trim().length<8){
       this.planError=this.copy('Enter an auditable reason with at least 8 characters.',
         'اكتب سبباً واضحاً لا يقل عن 8 أحرف.');return;
@@ -85,7 +149,7 @@ export class SiCandidateWorkbenchComponent implements OnInit{
   private submitPlanReevaluation(change:{
     imo:string;selected:boolean;requestedRank:number|null;reason:string
   }|null):void{
-    if(!this.plan||!this.editorKey.trim()||!this.reviewer.trim())return;
+    if(!this.activePlanId||!this.activePlanEditable||!this.plan||!this.editorKey.trim()||!this.reviewer.trim())return;
     const mock=this.plan.provider==='MOCK';
     const message=mock?
       this.copy('Confirm officer planning change and re-run MOCK C01 with zero Airia calls? No official inspection case will be changed.',
@@ -95,12 +159,12 @@ export class SiCandidateWorkbenchComponent implements OnInit{
     if(!window.confirm(message))return;
     this.planBusy=true;this.planError='';this.planNotice='';
     this.api.rerankInspectionPlan(this.editorKey.trim(),{
-      actor:this.reviewer.trim(),expectedSourceHash:this.plan.sourceHash,
+      actor:this.reviewer.trim(),planId:this.activePlanId,expectedSourceHash:this.plan.sourceHash,
       expectedRevision:this.plan.revision,confirmRun:true,confirmCost:!mock,
       ...(change?{change}:{})
     }).subscribe({
       next:r=>{
-        this.planBusy=false;this.cancelPlanEdit();
+        this.planBusy=false;this.cancelPlanEdit();this.loadRollingPlans();
         this.planNotice=this.copy(
          'C01 '+r.provider+' recomputed the inspection plan. Officer approval is still required for actual inspection cases.',
          'أعاد C01 '+r.provider+' ترتيب خطة المعاينات، ولا يزال اعتماد حالات المعاينة رسمياً من صلاحية الموظف.');
@@ -280,7 +344,7 @@ export class SiCandidateWorkbenchComponent implements OnInit{
 
   constructor(private readonly api:SiCandidateTargetingService,public readonly lang:LanguageService){}
   copy(en:string,ar:string):string{return this.lang.pick(en,ar);}
-  ngOnInit():void{this.refresh();}
+  ngOnInit():void{this.loadRollingPlans();this.refresh();}
   refresh():void{
     if(this.loading)return;
     this.loading=true;this.error='';
