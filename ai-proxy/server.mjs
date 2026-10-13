@@ -208,6 +208,7 @@ const incidentFeed=new NmcIncidentFeed({
   onAssessmentReady:async incident=>{
     // Inbound event creates/links a PENDING case only; no task is created until
     // authorized Case Management human review. Never update source incident.
+    if(!AIRIA_DEMO_99_IMOS.has(incident.imo))return null;
     const saved=fleet.getVesselResult(incident.imo);
     return cases.fromIncident(incident,incident.aiAssessment,saved);
   }
@@ -217,7 +218,7 @@ async function incidentCaseView(){
   let persisted=[];
   try{persisted=await cases.list();}
   catch{ /* case store unavailable must not hide source incident records */ }
-  return {...feed,incidents:feed.incidents.map(incident=>{
+  return {...feed,incidents:feed.incidents.filter(x=>AIRIA_DEMO_99_IMOS.has(x.imo)).map(incident=>{
     const linked=persisted.find(row=>
       (row.incidentEvents||[]).some(ev=>ev.incidentId===incident.incidentId&&
         ev.descriptionHash===incident.descriptionHash));
