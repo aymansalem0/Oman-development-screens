@@ -85,7 +85,7 @@ test('Smart Inspection priority settings expose ONLY source trigger scores; no w
   assert.match(si,/class="risk-style-factor" \*ngFor="let reason of triggerReasons"/);
   assert.match(si,/type="range" min="0" max="100" step="1"/);
   assert.match(si,/class="number-input"/);
-  assert.match(si,/this\.onPriorityEdit\(\)/);
+  assert.match(si,/onPriorityEdit\(\)/);
   assert.match(si,/sourceTriggerScores:\{\.\.\.this\.sourceScores\}/);
   assert.doesNotMatch(si,/riskPriorityThreshold|weightFactors|weightsValid|normalizeWeights|SI-P01/);
   assert.match(si,/\[attr\.aria-label\]=/);
