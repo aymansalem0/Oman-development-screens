@@ -6,7 +6,7 @@ import {FormsModule} from '@angular/forms';
 import {RouterLink} from '@angular/router';
 import {NmcNavigationComponent} from '../components/nmc-navigation.component';
 import {SiCandidate,SiCandidateStatus,SiCandidateTargetingService,
-  SiDashboard,SiVesselCandidate,SiInspectionPlanState,SiInspectionPlanRow,SiRollingPlan,SiC01Run,SiC01Preview,SiC01Recommendation,SiPriorityStatus,SiPriorityPreview,SiPriorityRun,SiPriorityRecommendation,SiPriorityPreviewItem}
+  SiDashboard,SiAiriaDemoPack,SiAiriaDemoVessel,SiVesselCandidate,SiInspectionPlanState,SiInspectionPlanRow,SiRollingPlan,SiC01Run,SiC01Preview,SiC01Recommendation,SiPriorityStatus,SiPriorityPreview,SiPriorityRun,SiPriorityRecommendation,SiPriorityPreviewItem}
   from '../services/si-candidate-targeting.service';
 
 type SourceFilter='ALL'|'NMC_CASE'|'SERVICE_REQUEST'|'PSC_PORT_CALL';
@@ -20,6 +20,33 @@ type StatusFilter='ALL'|SiCandidateStatus;
 export class SiCandidateWorkbenchComponent implements OnInit{
   loading=false;busy=false;error='';success='';
   dashboard:SiDashboard|null=null;
+  demoPack:SiAiriaDemoPack|null=null;
+  demoLoading=false;demoError='';demoSearch='';demoExpandedImo='';
+  demoOpen=true;
+  get demoVessels():SiAiriaDemoVessel[]{
+    const term=this.demoSearch.trim().toLowerCase();
+    return (this.demoPack?.vessels||[]).filter(v=>!term||
+      [v.imo,v.name,v.vessel.flag,v.vessel.vesselType,
+       v.vessel.owner,v.vessel.operator,v.tracking.destination]
+        .some(x=>String(x||'').toLowerCase().includes(term)));
+  }
+  loadAiriaPack():void{
+    if(this.demoLoading)return;
+    this.demoLoading=true;this.demoError='';
+    this.api.airiaDemoPack().subscribe({
+      next:pack=>{
+        if(pack.count!==99||pack.vessels.length!==99){
+          this.demoError='AIRIA_99_COHORT_COUNT_INVALID';
+          this.demoPack=null;
+        }else this.demoPack=pack;
+        this.demoLoading=false;
+      },
+      error:e=>{
+        this.demoLoading=false;this.demoError=e?.error?.error||
+          this.copy('Airia demo vessel pack unavailable','تعذر تحميل مجموعة سفن Airia');
+      }
+    });
+  }
   sourceFilter:SourceFilter='ALL';statusFilter:StatusFilter='ALL';search='';
   selectedKey='';selectedImo='';
   reviewer='admin';decisionNote='';editorKey='MOEI_SESSION';publisherKey='MOEI_SESSION';
@@ -415,6 +442,7 @@ export class SiCandidateWorkbenchComponent implements OnInit{
     // retried candidate targeting, leaving a recovered planning API stuck
     // on SI_TARGETING_UNAVAILABLE until a full browser reload.
     this.loadRollingPlans();
+    this.loadAiriaPack();
     this.loading=true;this.error='';
     this.api.dashboard().subscribe({
       next:data=>{
