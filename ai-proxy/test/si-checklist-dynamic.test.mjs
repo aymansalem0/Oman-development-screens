@@ -51,6 +51,21 @@ test('many published mandatory templates match one vessel by GT/type/source; rev
    'Certificate checks','draft updates never change active field rules');
  }finally{x.done();}
 });
+test('MOEI 420-vessel fixture strings in GT / DWT units select correct rules',()=>{
+ const x=make();try{
+  const t=x.library.create({...template('Actual tanker range','Tanker',42000,66000),
+    applicability:{...template('Actual tanker range','Tanker',42000,66000).applicability,
+      minDWT:76000,maxDWT:130000}},'admin');
+  x.library.publish(t.id,'admin',t.updatedAt);
+  const selection=x.library.resolve({
+    vessel:{...x.vessel,grossTonnage:'52,400 GT',deadweight:'93,500 DWT'},
+    inspectionCase:x.inspectionCase
+  });
+  assert.equal(selection.vessel.grossTonnage,52400);
+  assert.equal(selection.vessel.deadweightTonnage,93500);
+  assert.equal(selection.templates.length,1);
+ }finally{x.done();}
+});
 test('unknown GT never silently matches tonnage-conditional mandatory template',()=>{
  const x=make();try{
   const t=x.library.create(template('GT-dependent','Tanker',10000,25000),'admin');
