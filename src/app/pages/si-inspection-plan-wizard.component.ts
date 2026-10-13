@@ -110,34 +110,28 @@ import {SiBulkJob,SiBulkPlanService,SiBulkPreview,SiBulkVessel} from '../service
     </section>
 
     <section class="panel" *ngIf="step===3">
-     <p class="eyebrow">{{copy('STEP 03 · AUTOMATION','الخطوة ٣ · التحضير الآلي')}}</p>
-     <h2>{{copy('What happens after plan approval?','ماذا سيحدث بعد اعتماد الخطة؟')}}</h2>
+     <p class="eyebrow">{{copy('STEP 03 · AI-PROPOSED SCHEDULING','الخطوة ٣ · الجدولة المقترحة')}}</p>
+     <h2>{{copy('Approval freezes the selected vessels, not inspection cases',
+       'اعتماد قائمة السفن دون إنشاء حالات معاينة')}}</h2>
      <div class="workflow">
-      <div><span class="flow-icon">✓</span><div><b>{{copy('Create approved plan + inspection cases','إنشاء الخطة المعتمدة وحالات المعاينة')}}</b>
-       <p>{{copy('One approved plan and one coordinated case per selected IMO; all referral reasons remain linked.',
-         'خطة معتمدة وحالة منسقة لكل سفينة مختارة، مرتبطة بجميع أسباب الإحالة.')}}</p></div></div>
-      <div><span class="flow-icon">✓</span><div><b>{{copy('Build SI-02 preparation dossier','إنشاء ملف التحضير SI-02')}}</b>
-       <p>{{copy('Deterministic evidence, current saved risk and baseline checklist for every case. No AI charges.',
-         'الأدلة والمخاطر الحالية المحفوظة وقائمة الفحص الأساسية لكل حالة، دون رسوم AI.')}}</p></div></div>
-      <div><span class="flow-icon">AI</span><div><b>{{copy('A04 vessel-specific AI dossier','ملف A04 الذكي لكل سفينة')}}</b>
-       <label class="check"><input type="checkbox" [(ngModel)]="generateA04"
-         [disabled]="!p.a04Enabled"/>
-        {{copy('Generate A04 drafts automatically after approval','إنشاء مسودات A04 تلقائيًا بعد الاعتماد')}}
-       </label><small>{{p.a04Provider}} · {{p.a04Enabled?copy('Available','متاح'):copy('Unavailable','غير متاح')}}</small>
-      </div></div>
-      <div><span class="flow-icon">✓</span><div><b>{{copy('Preserve published execution priority','الاحتفاظ بترتيب التنفيذ المعتمد')}}</b>
-       <p>{{copy('C01 plan priority and deterministic policy are preserved; no post-approval AI reranking.','يظل ترتيب C01 وقواعد الأعمال نافذين؛ لا يتم تشغيل AI لإعادة ترتيب الخطة بعد اعتمادها.')}}</p>
-      </div></div>
+      <div><span class="flow-icon">1</span><div><b>{{copy('Freeze approved vessel roster','تثبيت السفن المعتمدة')}}</b>
+       <p>{{copy('Store all PSC, Service Request and approved NMC referral reasons. No cases or inspector dossiers are created now.',
+        'حفظ كل أسباب إحالة PSC وطلبات الخدمات وNMC. لا تنشأ حالات أو دوسيهات للمفتش في هذه المرحلة.')}}</p></div></div>
+      <div><span class="flow-icon">2</span><div><b>{{copy('Generate comprehensive maritime schedule','إنشاء جدولة بحرية شاملة')}}</b>
+       <p>{{copy('Source-final ETD needs no separate approval. Feasible inspectors are matched by vessel type, inspection regime, port and ERP availability. GT limits are not a requirement.',
+        'تاريخ المغادرة النهائي لا يتطلب اعتمادًا إضافيًا. يتم اختيار المهندس طبقًا لنوع السفينة والمعاينة والموقع والإتاحة، دون شرط نطاقات الحمولة.')}}</p></div></div>
+      <div><span class="flow-icon">3</span><div><b>{{copy('Supervisor approves the proposed schedule','المشرف يعتمد توزيع المواعيد والمهندسين')}}</b>
+       <p>{{copy('Schedule approval is independent of date finality. No auto-booking, case creation or NMC closure before the approved execution workflow.',
+        'اعتماد الجدولة مستقل عن نهائية تاريخ المغادرة. لا يتم الحجز أو إنشاء حالات أو إغلاق NMC قبل إتمام المسار المعتمد.')}}</p></div></div>
      </div>
-     <p class="notice">{{copy('A04 suggestions require inspector review. No automatic scheduling, detention or final report approval.',
-       'توصيات A04 تحتاج مراجعة المفتش. لا تتم جدولة أو احتجاز سفينة أو اعتماد تقرير نهائي تلقائيًا.')}}</p>
+     <p class="notice">{{copy('The ERP workforce import is a POC simulator; missing berth access, final departure date or qualified available inspector causes UNSCHEDULED, never a fabricated booking.',
+       'بيانات ERP في الـPOC تجريبية. غياب معلومات الرصيف أو تاريخ المغادرة أو المهندس المؤهل يؤدي لعرض السفينة كغير مجدولة، وليس اختراع حجز.')}}</p>
     </section>
-
     <section class="panel" *ngIf="step===4">
      <p class="eyebrow">{{copy('STEP 04 · SUPERVISOR APPROVAL','الخطوة ٤ · اعتماد المسؤول')}}</p>
      <h2>{{copy('Review and approve the whole plan','مراجعة واعتماد الخطة بالكامل')}}</h2>
      <div class="review-stats">
-      <p><b>{{p.selectedVessels}}</b><span>{{copy('Vessels / cases','سفن / حالات')}}</span></p>
+      <p><b>{{p.selectedVessels}}</b><span>{{copy('Selected vessels','السفن المختارة')}}</span></p>
       <p><b>{{totalReasons}}</b><span>{{copy('Source reasons preserved','أسباب إحالة محفوظة')}}</span></p>
       <p><b>{{totalScopes}}</b><span>{{copy('Regulatory inspection scopes','نطاقات معاينة نظامية')}}</span></p>
      </div>
@@ -147,19 +141,28 @@ import {SiBulkJob,SiBulkPlanService,SiBulkPreview,SiBulkVessel} from '../service
       <textarea rows="3" maxlength="500" [(ngModel)]="reason"
         [placeholder]="copy('Document why the selected plan is approved','سجل سبب اعتماد الخطة المختارة')"></textarea>
      </label>
-     <div class="review-options">
-      <span>{{copy('SI-02 baseline preparation','التحضير الأساسي SI-02')}}: <b>{{copy('Automatic','تلقائي')}}</b></span>
-      <span>A04: <b>{{generateA04?copy('Generate drafts','إنشاء مسودات'):copy('Not requested','غير مطلوب')}}</b></span>
-      <span>{{copy('Execution priority: approved plan + business rules','ترتيب التنفيذ: الخطة المعتمدة وقواعد الأعمال')}}</span>
-     </div>
+     <p class="notice">{{copy('Only the selected vessel roster is approved now. Electronic scheduling is the next independent step.',
+        'سيتم اعتماد قائمة السفن فقط؛ الخطوة التالية هي الجدولة الإلكترونية واعتماد توزيع المهندسين.')}}</p>
      <button type="button" class="approve" (click)="approve()"
       [disabled]="submitting||jobBusy||!auth.isAdmin||reason.trim().length<8||p.stale||(!p.agentRunId&&!p.manualSelection)||hasMissingReasons">
       {{submitting?copy('Submitting approval…','جارٍ إرسال الاعتماد…'):
-       copy('Approve Full Plan & Create '+p.selectedVessels+' Dossiers',
-        'اعتماد الخطة وإنشاء '+p.selectedVessels+' ملفات تحضير')}}
+       copy('Approve '+p.selectedVessels+' Vessels for Scheduling',
+        'اعتماد '+p.selectedVessels+' سفن للجدولة')}}
      </button>
      <p class="hint">{{copy('Approval is one human-authorized decision. The AI never approves inspections.',
        'الاعتماد قرار واحد يصدر من مستخدم مخول، وليس من الذكاء الاصطناعي.')}}</p>
+    </section>
+    <section class="panel" *ngIf="step===5&&scheduleApproval as approval">
+     <p class="eyebrow">{{copy('STEP 05 · AWAITING MARITIME SCHEDULING','الخطوة الخامسة · في انتظار الجدولة البحرية')}}</p>
+     <h2>{{copy('Plan approved — No inspection cases were created','اعتمدت الخطة دون إنشاء حالات معاينة')}}</h2>
+     <p class="notice">{{copy('Approved vessels','السفن المعتمدة')}}: <b>{{approval.approvedVesselCount}}</b> ·
+      {{copy('Inspection cases created','حالات معاينة منشأة')}}: <b>{{approval.createdInspectionCases}}</b></p>
+     <p>{{copy('All referral reasons are retained. Continue to the comprehensive scheduling board to assign time, location and an available qualified engineer.',
+      'تم الاحتفاظ بجميع أسباب المعاينة. انتقل للجدولة الشاملة لتحديد الموعد والمكان والمهندس المؤهل والمتاح.')}}</p>
+     <div class="step-actions">
+      <a class="next" [routerLink]="['/moei/smart-inspection/scheduling/plan',approval.planId]">
+       {{copy('Open Maritime Scheduling Board →','فتح لوحة الجدولة البحرية ←')}}</a>
+     </div>
     </section>
     <section class="panel" *ngIf="step===5&&job as j">
      <p class="eyebrow">{{copy('STEP 05 · EXECUTION','الخطوة ٥ · التنفيذ')}}</p>
@@ -280,6 +283,7 @@ export class SiInspectionPlanWizardComponent implements OnInit,OnDestroy{
   {en:'Review & Approval',ar:'المراجعة والاعتماد'}];
  step=1;preview:SiBulkPreview|null=null;planId:string|null=null;
  job:SiBulkJob|null=null;loading=false;submitting=false;error='';
+ scheduleApproval:{planId:string;approvedVesselCount:number;createdInspectionCases:number}|null=null;
  reason='';generateA04=false;private timer:Subscription|null=null;
  constructor(private api:SiBulkPlanService,private readonly route:ActivatedRoute,
   public lang:LanguageService,public auth:MoeiAuthService){}
@@ -335,26 +339,28 @@ export class SiInspectionPlanWizardComponent implements OnInit,OnDestroy{
  approve():void{
   const p=this.preview;if(!this.planId||!p||this.submitting||this.jobBusy||!this.auth.isAdmin||
    (!p.agentRunId&&!p.manualSelection)||p.stale||this.hasMissingReasons||this.reason.trim().length<8)return;
-  const paid=this.generateA04&&p.a04Provider==='AIRIA';
   const message=this.copy(
-   'Approve the complete plan ('+p.selectedVessels+' vessels), preserving all '+
-    this.totalReasons+' source reasons, then create preparation dossiers?'+
-    (paid?' This batch may call paid Airia agents.':' No paid Airia calls.'),
-   'هل تعتمد الخطة بالكامل ('+p.selectedVessels+' سفن) وتحفظ جميع أسباب الإحالة ('+
-    this.totalReasons+') وتبدأ ملفات التحضير؟'+
-    (paid?' قد يتم استدعاء Airia المدفوع.':' بدون استدعاء Airia مدفوع.')
+   'Approve the roster of '+p.selectedVessels+' vessels for comprehensive scheduling? No inspection case or dossier will be created at plan approval.',
+   'اعتماد قائمة '+p.selectedVessels+' سفن لجدولتها إلكترونيًا؟ لن يتم إنشاء أي حالة معاينة أو دوسيه الآن.'
   );
   if(!window.confirm(message))return;
   this.submitting=true;this.error='';
-  this.api.approve({
-   planId:this.planId!,reason:this.reason.trim(),expectedRevision:p.planRevision,
-   expectedSourceHash:p.sourceHash,expectedAgentRunId:p.agentRunId,
-   confirmApproval:true,generateA04:this.generateA04,
-   runP01:false,confirmAiCost:paid
-  }).subscribe({next:j=>{this.submitting=false;this.job=j;this.step=5;this.poll(j.id);},
-   error:e=>{this.submitting=false;this.error=e?.error?.error||
-    this.copy('Approval rejected. Review the current source plan again.',
-      'تم رفض الاعتماد؛ راجع الخطة الحالية من جديد.');}});
+  this.api.approveForScheduling({
+    planId:this.planId!,reason:this.reason.trim(),expectedRevision:p.planRevision,
+    expectedSourceHash:p.sourceHash,confirmApproval:true
+  }).subscribe({
+    next:result=>{
+      this.submitting=false;this.scheduleApproval={
+        planId:result.planId,approvedVesselCount:result.approvedVesselCount,
+        createdInspectionCases:result.createdInspectionCases};
+      this.job=null;this.step=5;
+    },
+    error:e=>{
+      this.submitting=false;this.error=e?.error?.error||
+       this.copy('Approval rejected — refresh the source plan and retry.',
+         'تعذر اعتماد الخطة. راجع بيانات المصدر مرة أخرى.');
+    }
+  });
  }
  private poll(id:string):void{
   this.timer?.unsubscribe();
