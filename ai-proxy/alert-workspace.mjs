@@ -79,8 +79,8 @@ export class NmcAlertWorkspace {
     });
   }
 
-  async overview(projections=null){
-    const alerts=await this.list();
+  async overview(projections=null,visibleImos=null){
+    const alerts=(await this.list()).filter(a=>!visibleImos||visibleImos.has(a.imo));
     const byImo=projections?new Map(projections.projections.map(p=>[p.imo,p])):null;
     for(const a of alerts){
       const p=byImo?.get(a.imo);
