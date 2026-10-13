@@ -8,7 +8,9 @@ import {atomicJsonWrite} from '../atomic-json-store.mjs';
 const setup=()=>{
   const directory=mkdtempSync(join(tmpdir(),'moei-atomic-write-'));
   return {directory,file:join(directory,'targeting.json'),
-    close:()=>rmSync(directory,{recursive:true,force:true})};
+    // Windows Node 24 may observe transient Defender/indexer locks in fresh TEMP
+    // workspaces. Retry ENOTEMPTY/EPERM/EBUSY only for this disposable test dir.
+    close:()=>rmSync(directory,{recursive:true,force:true,maxRetries:12,retryDelay:100})};
 };
 test('Windows transient EPERM/EBUSY during rename retries with unique sibling temp, preserves complete JSON',()=>{
   const t=setup();
