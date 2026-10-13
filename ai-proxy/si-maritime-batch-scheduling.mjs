@@ -1,7 +1,7 @@
 /**
  * MOEI Maritime Smart Inspection V2: read-only batch scheduling proposal.
  * Reuses the existing ERP qualifications/shift/leave/booking feasibility
- * engine; adds VERIFIED gross-tonnage authorisations and plan-wide matching.
+ * engine; GT ranges are deliberately NOT an inspector qualification gate.
  * No inspection cases, ERP bookings, NMC decisions or paid AI requests.
  */
 import {createHash} from 'node:crypto';
@@ -32,11 +32,9 @@ const travel=(data,p1,p2)=>{
 export function validateMaritimeSchedulingInput(imo,row,erp,nowMs){
  if(!row)return {reason:'VESSEL_SCHEDULING_DATA_REQUIRED'};
  if(row.imo!==imo)return {reason:'IMO_MISMATCH'};
- const vesselType=norm(row.vesselType),regime=norm(row.regime),gt=Number(row.grossTonnage);
+ const vesselType=norm(row.vesselType),regime=norm(row.regime);
  if(!TYPES.has(vesselType))return {reason:'VERIFIED_VESSEL_TYPE_REQUIRED'};
  if(!REGIMES.has(regime))return {reason:'INSPECTION_REGIME_REQUIRED'};
- if(!Number.isFinite(gt)||gt<=0||gt>1000000)
-  return {reason:'VESSEL_GROSS_TONNAGE_GT_REQUIRED'};
  if(!erp.Ports.some(p=>p.port_id===row.portId&&active(p.active)))
   return {reason:'VALID_INSPECTION_PORT_REQUIRED'};
  if(!['BERTH','ANCHORAGE','TERMINAL'].includes(row.locationType)||
@@ -44,7 +42,7 @@ export function validateMaritimeSchedulingInput(imo,row,erp,nowMs){
   return {reason:'BERTH_ANCHORAGE_AND_ACCESS_CONFIRMATION_REQUIRED'};
  if(!['MSW_VERIFIED','OFFICER_CONFIRMED'].includes(row.windowSource)||
     !row.windowEvidenceReference)
-  return {reason:'VERIFIED_ETA_ETD_OR_OFFICER_WINDOW_REQUIRED'};
+  return {reason:'VERIFIED_VESSEL_ARRIVAL_DEPARTURE_WINDOW_REQUIRED'};
  let start,end;
  try{start=localMs(row.earliestLocal);end=localMs(row.latestFinishLocal);}
  catch{return {reason:'VESSEL_TIME_WINDOW_INVALID'};}
@@ -60,20 +58,7 @@ export function validateMaritimeSchedulingInput(imo,row,erp,nowMs){
    windowSource:row.windowSource,
    evidenceReference:String(row.windowEvidenceReference).trim()}};
 }
-export function hasVerifiedGtAuthority(inspectorId,input,authorizations,slotUtc){
- const date=localDate(Date.parse(slotUtc));
- return authorizations.some(x=>{
-  const lower=Number(x.min_gt),upper=Number(x.max_gt);
-  return x.inspector_id===inspectorId&&active(x.active)&&
-   ['ERP_VERIFIED','MOEI_APPROVED','POC_REVIEWED'].includes(x.authority)&&
-   Boolean(x.qualification_code&&x.evidence_ref)&&
-   ['ANY',input.regime].includes(norm(x.inspection_regime))&&
-   ['ANY',input.vesselType].includes(norm(x.vessel_type))&&
-   Number.isFinite(lower)&&Number.isFinite(upper)&&lower>=0&&upper>=lower&&
-   input.grossTonnage>=lower&&input.grossTonnage<=upper&&
-   typeof x.valid_until==='string'&&x.valid_until>=date;
- });
-}
+
 function collides(first,second,data,bufferMs){
  if(first.inspectorId!==second.inspectorId)return false;
  const early=Date.parse(first.startUtc)<Date.parse(second.startUtc)?first:second;
@@ -87,7 +72,7 @@ const stateSort=(a,b)=>b.schedule.length-a.schedule.length||b.score-a.score||a.k
  * auditable baseline before an optional AI explanation or supervisor action.
  */
 export function proposeMaritimeBatchSchedule({
- plan,erpSnapshot,policy,requests=[],gtAuthorizations=[],existingBookings=[],
+ plan,erpSnapshot,policy,requests=[],nmcReferrals=[],existingBookings=[],
  scheduler,clock=()=>Date.now()
 }){
  if(plan?.status!=='APPROVED'||!Array.isArray(plan.approvedVessels))
@@ -100,10 +85,11 @@ export function proposeMaritimeBatchSchedule({
  if(!erpSnapshot?.snapshotId||!Array.isArray(erpSnapshot.data?.Inspectors))
   throw new SiError('SI_V2_ERP_SNAPSHOT_REQUIRED',409);
  if(!policy?.config||typeof scheduler?.buildOptions!=='function'||
-   !Array.isArray(requests)||!Array.isArray(gtAuthorizations)||
+   !Array.isArray(requests)||!Array.isArray(nmcReferrals)||
    !Array.isArray(existingBookings))
   throw new SiError('SI_V2_SCHEDULING_INPUT_INVALID',422);
  const byImo=new Map();
+ const byNmcRef=new Map(nmcReferrals.map(x=>[x.id,x]));
  for(const request of requests){
   if(!IMO.test(request?.imo)||byImo.has(request.imo))
    throw new SiError('SI_V2_DUPLICATE_REQUEST_IMO',422);
@@ -116,6 +102,24 @@ export function proposeMaritimeBatchSchedule({
  // several alternatives while leaving room for specialist-only inspections.
  const workingPolicy={...policy,config:{...policy.config,maxOptions:10}};
  const jobs=vessels.map((v,i)=>{
+  // The plan's human-approved NMC provenance is authoritative: an NMC
+  // referral cannot be invented through uploaded MSW/PSC source rows.
+  const triggers=v.inspectionReasons||[];
+  const nmc=triggers.filter(x=>x.sourceType==='NMC_CASE');
+  if(nmc.length){
+    const linked=nmc.map(x=>byNmcRef.get(x.sourceEventId));
+    if(linked.some(x=>!x||x.imo!==v.imo||
+      !['PENDING_SCHEDULING','SCHEDULED'].includes(x.status)||
+      x.caseStatus==='RESOLVED'))
+      return {imo:v.imo,rank:Number(v.planRank)||i+1,
+       regimes:v.regimes||[],options:[],
+       reason:'NMC_APPROVED_REFERRAL_MISSING_OR_CLOSED',exclusions:[]};
+    // Do not allocate the same referral twice if it is already scheduled.
+    if(linked.some(x=>x.status==='SCHEDULED'))
+      return {imo:v.imo,rank:Number(v.planRank)||i+1,
+       regimes:v.regimes||[],options:[],
+       reason:'NMC_REFERRAL_ALREADY_SCHEDULED_RECONCILE',exclusions:[]};
+  }
   const validated=validateMaritimeSchedulingInput(v.imo,byImo.get(v.imo),
    erpSnapshot.data,nowMs);
   const base={imo:v.imo,rank:Number(v.planRank)||i+1,
@@ -128,18 +132,15 @@ export function proposeMaritimeBatchSchedule({
    out=scheduler.buildOptions(input,{snapshot:erpSnapshot,policy:workingPolicy,
     confirmed:existingBookings});
   }catch(e){return {...base,reason:e.code||'SCHEDULER_VALIDATION_FAILED'};}
-  const filtered=out.options.filter(o=>hasVerifiedGtAuthority(
-   o.inspectorId,input,gtAuthorizations,o.startUtc));
+  const filtered=out.options;
   return {...base,input,options:filtered.map(o=>({
    ...o,imo:v.imo,locationType:input.locationType,
-   locationName:input.locationName,grossTonnage:input.grossTonnage,
+   locationName:input.locationName,
    vesselType:input.vesselType,regime:input.regime,
    windowSource:input.windowSource,evidenceReference:input.evidenceReference,
    requiresSupervisorApproval:true})),
    exclusions:out.exclusions,
-   reason:filtered.length?null:out.options.length?
-    'VERIFIED_INSPECTOR_GT_AUTHORITY_MISSING_OR_OUT_OF_RANGE':
-    'NO_FEASIBLE_ERP_SHIFT_QUALIFICATION_PORT_OR_WINDOW'};
+   reason:filtered.length?null:'NO_FEASIBLE_ERP_SHIFT_QUALIFICATION_PORT_OR_WINDOW'};
  });
  const schedulable=jobs.filter(j=>j.options.length).sort((a,b)=>
    a.options.length-b.options.length||
@@ -183,7 +184,7 @@ export function proposeMaritimeBatchSchedule({
   createdAt:new Date(nowMs).toISOString(),
   proposalHash:sha({planId:plan.id,planRevision:plan.revision,
    approvedVessels:plan.approvedVessels,erpSnapshotId:erpSnapshot.snapshotId,
-   policyRevision:policy.revision,requests,gtAuthorizations,existingBookings}),
+   policyRevision:policy.revision,requests,nmcReferrals,existingBookings}),
   planId:plan.id,planNumber:plan.number,planRevision:plan.revision,
   erpSnapshotId:erpSnapshot.snapshotId,policyRevision:policy.revision,
   solver:'HARD_CONSTRAINTS_PLUS_BOUNDED_BEAM_SEARCH_NO_GENERATIVE_AI',
@@ -193,7 +194,7 @@ export function proposeMaritimeBatchSchedule({
    'READ_ONLY_NO_CASE_CREATION_OR_BOOKING',
    'SUPERVISOR_MUST_APPROVE_A_FRESHLY_REVALIDATED_SCHEDULE',
    'ETA_ALONE_DOES_NOT_SUPPLY_ETD',
-   'GT_AUTHORIZATION_EXCEL_IS_POC_REVIEWED_NOT_OFFICIAL_CERTIFICATION',
+   'ENGINEER_SELECTION_USES_VERIFIED_REGIME_TYPE_SKILLS_NOT_GT_RANGES',
    'ERP_EXCEL_IS_SIMULATED_POC_NOT_LIVE_HR',
    'SOLVER_IS_HEURISTIC_NOT_GUARANTEED_GLOBAL_OPTIMUM',
    'NO_AIRIA_AI_INVOKED'
