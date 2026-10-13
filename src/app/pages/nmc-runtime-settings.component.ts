@@ -112,6 +112,15 @@ interface RuntimeSnapshot {
                     placeholder="Airia Pipeline UUID — leave blank if not verified"/>
                   <small>{{tr('Use a real pipeline ID. A01–A04 default IDs follow the partner guide; Builder/Vision output contracts must be tested before activation.',
                    'استخدم المعرف الحقيقي. قيم A01–A04 من دليل Airia، ويجب اختبار مخرجات Builder وVision قبل التفعيل.')}}</small>
+                  <button class="restore" type="button"
+                    *ngIf="item.key==='AIRIA_SI_CHECKLIST_VISION_PIPELINE_ID'"
+                    (click)="selectKnownAgent('vision')">
+                    {{tr('Use existing A04 as Vision candidate','استخدام A04 الحالي كمرشح لتحليل الصور')}}</button>
+                  <button class="restore" type="button"
+                    *ngIf="item.key==='AIRIA_SI_CHECKLIST_BUILDER_PIPELINE_ID'"
+                    (click)="selectKnownAgent('builder')">
+                    {{tr('Use existing Conversational SI as Builder candidate',
+                      'استخدام المساعد الحواري الحالي كمرشح لإنشاء القوائم')}}</button>
                 </ng-container>
                 <ng-container *ngIf="item.type==='choice'">
                   <select [ngModel]="draft[item.key]" (ngModelChange)="draft[item.key]=$event">
@@ -354,6 +363,21 @@ export class NmcRuntimeSettingsComponent implements OnInit{
         'تم تغيير مفتاح Airia وحفظه مشفرًا دون عرض قيمته.');
     },error:e=>{this.credentialSaving=false;this.newApiKey='';
       this.error=e?.error?.error||'AI_CREDENTIAL_ROTATION_FAILED';}});
+  }
+  selectKnownAgent(which:'builder'|'vision'):void{
+    if(!this.snapshot)return;
+    const key=which==='builder'?'AIRIA_SI_CHECKLIST_BUILDER_PIPELINE_ID':
+      'AIRIA_SI_CHECKLIST_VISION_PIPELINE_ID';
+    const from=which==='builder'?'AIRIA_CONVERSATIONAL_SI_PIPELINE_ID':
+      'AIRIA_A04_PIPELINE_ID';
+    if(!window.confirm(this.tr(
+      'Reuse this existing Airia pipeline as a TEST CANDIDATE only. Its typed checklist JSON contract must be verified with an actual controlled request before activation.',
+      'هل تريد ربط المسار الموجود كمرشح للاختبار فقط؟ يجب التحقق من توافق مخرجات JSON مع قوائم الفحص قبل تفعيل التشغيل.')))return;
+    this.draft[key]=this.draft[from];
+    this.draft['SI_CHECKLIST_AIRIA_ENABLED']=false;
+    this.success=this.tr(
+      'Candidate pipeline mapped; checklist Airia remains OFF until the output contract is verified.',
+      'تم ربط المسار المرشح، وسيظل AI الخاص بالقوائم متوقفًا حتى اختبار شكل المخرجات.');
   }
   reset(){if(this.snapshot){this.draft={...this.snapshot.values};this.error='';this.success='';}}
   publish(){
