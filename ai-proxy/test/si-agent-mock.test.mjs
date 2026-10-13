@@ -5,6 +5,7 @@ import {mockSiC01,mockSiP01,mockSiA04} from '../si-agent-mock.mjs';
 import {validateP01} from '../si-ai-prioritization.mjs';
 import {validateA04} from '../si-inspection-preparation.mjs';
 import {projectInspectionPlan} from '../si-inspection-plan.mjs';
+import {inspectionRanking,compareInspections} from '../si-inspection-ranking.mjs';
 
 const candidate=(key,sourceType,imo,score)=>({
  key,imo,vesselName:'POC Vessel',regime:'FOCUSED_INSPECTION',
@@ -135,80 +136,75 @@ test('C01 preview is deterministic for identical current evidence',()=>{
  assert.notEqual(a.snapshotHash,buildC01Source(inputs(),{version:2}).snapshotHash);
 });
 
-test('C01 ranks all evidence-backed NMC, Service Requests and quota-selected PSC solely by source priority',()=>{
- const testData=inputs();
- testData.policy.config={sourceTriggerScores:{NMC_CASE:100,SERVICE_REQUEST:100,PSC_PORT_CALL:20}};
- testData.candidates.push(candidate('service-hi','SERVICE_REQUEST','9702281',78));
- testData.candidates.push(candidate('psc-hi','PSC_PORT_CALL','9716789',85));
- testData.candidates.push(candidate('service-low','SERVICE_REQUEST','9723891',35));
- const source=buildC01Source(testData,{version:6});
- const mock=mockSiC01(source);
- const output=validateC01(mock,source);
- for(const key of ['service-hi','psc-hi']){
-   const row=output.find(x=>x.candidateKey===key);
-   assert.equal(row.recommendation,'SELECT_RECOMMENDED');
-   assert.ok(row.suggestedRank>=1);
-   assert.match(row.priorityRationale,/source trigger priority/i);
-   assert.equal(row.regulatoryDecision,false);
- }
- assert.equal(output.find(x=>x.candidateKey==='service-low').recommendation,'SELECT_RECOMMENDED');
- assert.equal(output.find(x=>x.candidateKey==='psc').recommendation,'SELECT_RECOMMENDED');
- assert.ok(output.find(x=>x.candidateKey==='service-low').suggestedRank <
-   output.find(x=>x.candidateKey==='psc-hi').suggestedRank);
- assert.equal(output.find(x=>x.candidateKey==='nmc').suggestedRank,1);
-});
 
-test('All verified source-backed service candidates are C01 ranked even at low or missing NMC risk',()=>{
+test('C01 inclusion is independent of NMC risk and source-trigger scores',()=>{
  const d=inputs();
- d.policy.config={sourceTriggerScores:{NMC_CASE:100,SERVICE_REQUEST:100,PSC_PORT_CALL:20}};
+ d.policy.config={ranking:{criteria:['DEPARTURE_SOON','INCIDENT_SEVERITY']}};
  d.candidates.push(candidate('service-no-risk','SERVICE_REQUEST','9700012',null));
  d.candidates.push(candidate('service-low-risk','SERVICE_REQUEST','9700013',4));
- const input=buildC01Source(d,{version:6});
- const model=mockSiC01(input);
- const checked=validateC01(model,input);
+ d.candidates.push(candidate('psc','PSC_PORT_CALL','9700015',99));
+ const s=buildC01Source(d,{version:6});
+ const advice=validateC01(mockSiC01(s),s);
  for(const key of ['service-no-risk','service-low-risk']){
-   const r=checked.find(x=>x.candidateKey===key);
-   assert.equal(r.recommendation,'SELECT_RECOMMENDED');
-   assert.equal(input.candidates.find(x=>x.candidateKey===key).sourcePriorityScore,100);
+   const a=advice.find(x=>x.candidateKey===key);
+   assert.equal(a.recommendation,'SELECT_RECOMMENDED');
+   assert.equal(s.candidates.find(x=>x.candidateKey===key).requiredInPlan,true);
  }
- assert.equal(input.sourceTriggerScores.SERVICE_REQUEST,100);
- assert.equal(input.sourceTriggerScores.PSC_PORT_CALL,20);
- assert.ok(checked.find(x=>x.candidateKey==='service-low-risk').suggestedRank <
-   checked.find(x=>x.candidateKey==='psc').suggestedRank);
+ assert.deepEqual(s.ranking.criteria,['DEPARTURE_SOON','INCIDENT_SEVERITY']);
+ assert.equal(s.candidates.find(x=>x.candidateKey==='psc').requiredInPlan,false);
 });
 
-test('C01 plan: NMC first, all Service Requests included even if Airia advises MANUAL_REVIEW, PSC last',()=>{
- const scoreConfig={NMC_CASE:100,SERVICE_REQUEST:100,PSC_PORT_CALL:20};
- const d={policy:{version:9,config:{sourceTriggerScores:scoreConfig}},
-   fleetSnapshotId:'fleet-source-only',riskPolicyRevision:2,candidates:[
-     candidate('svc-low','SERVICE_REQUEST','9700013',5),
-     candidate('svc-missing','SERVICE_REQUEST','9700014',null),
-     candidate('psc-high','PSC_PORT_CALL','9700015',99),
-     candidate('nmc-mid','NMC_CASE','9700012',40)
-   ]};
+test('C01 mock and final plan order: verified ETD first, then human-reviewed incident severity',()=>{
+ const now=Date.now();
+ const hours=n=>new Date(now+n*3600000).toISOString();
+ const d={policy:{version:4,config:{ranking:{criteria:['DEPARTURE_SOON','INCIDENT_SEVERITY']}}},
+  fleetSnapshotId:'fixed-fleet',riskPolicyRevision:1,candidates:[
+  candidate('incident45','SERVICE_REQUEST','9700015',95),
+  candidate('departure4','SERVICE_REQUEST','9700014',2),
+  candidate('unknown','SERVICE_REQUEST','9700016',80),
+  candidate('incident90','NMC_CASE','9700013',4),
+  candidate('departure1','SERVICE_REQUEST','9700012',0)
+ ]};
+ const signals={
+  '9700012':{departureAt:hours(1),departureVerified:true},
+  '9700014':{departureAt:hours(4),departureVerified:true},
+  '9700013':{incidentSeverity:90,incidentHumanReviewed:true},
+  '9700015':{incidentSeverity:45,incidentHumanReviewed:true},
+  '9700016':{departureAt:hours(0.5),departureVerified:false,
+    incidentSeverity:100,incidentHumanReviewed:false}
+ };
  d.vesselCandidates=d.candidates.map(c=>({
-   imo:c.imo,vesselName:c.vesselName,flag:'UAE',vesselType:'CARGO',
-   currentRisk:c.currentRisk,sourceTypes:[c.events[0].sourceType],
-   sourceEvents:c.events,regimes:[c.regime],pendingWorkflows:1,
-   createdWorkflows:0,scheduledWorkflows:0
+  imo:c.imo,vesselName:c.vesselName,flag:'UAE',vesselType:'CARGO',
+  currentRisk:c.currentRisk,sourceTypes:[c.events[0].sourceType],
+  sourceEvents:c.events,regimes:[c.regime],pendingWorkflows:1,
+  createdWorkflows:0,scheduledWorkflows:0,...signals[c.imo]
  }));
- const s=buildC01Source(d,{version:4});
- const output=mockSiC01(s);
- const service=output.recommendations.find(r=>r.candidateKey==='svc-low');
- service.recommendation='MANUAL_REVIEW';
- service.suggestedRank=null; // a real provider cannot suppress a valid source rule
- const checked=validateC01(output,s);
- const rows=projectInspectionPlan(d,s,{recommendations:checked}, {},{});
- assert.deepEqual(rows.filter(r=>r.planSelected).map(r=>r.imo),
-   ['9700012','9700013','9700014','9700015']);
- assert.deepEqual(rows.filter(r=>r.planSelected).map(r=>r.sourcePriorityScore),
-   [100,100,100,20]);
- assert.equal(rows.find(r=>r.imo==='9700013').selectionOrigin,'PUBLISHED_SOURCE_RULE');
- assert.equal(rows.find(r=>r.imo==='9700014').risk,null);
- const modified=projectInspectionPlan(d,s,{recommendations:checked}, {
-   '9700013':{selected:false,disposition:'NOT_SELECTED',
-     reason:'Officer reviewed duplicate application',actor:'Supervisor'}
+ const input=buildC01Source(d,{version:1});
+ const response=mockSiC01(input),validated=validateC01(response,input);
+ const rows=projectInspectionPlan(d,input,{recommendations:validated},{},{});
+ assert.deepEqual(rows.filter(x=>x.planSelected).map(x=>x.imo),
+  ['9700012','9700014','9700013','9700015','9700016']);
+ assert.deepEqual(rows.filter(x=>x.planSelected).map(x=>x.rankingCriterion),
+  ['DEPARTURE_SOON','DEPARTURE_SOON','INCIDENT_SEVERITY','INCIDENT_SEVERITY',
+   'PENDING_ADDITIONAL_RULES']);
+ assert.equal(rows.find(x=>x.imo==='9700013').incidentSeverity,90);
+ assert.equal(rows.find(x=>x.imo==='9700014').risk.score,2);
+ const modified=projectInspectionPlan(d,input,{recommendations:validated},{
+  '9700014':{selected:false,disposition:'NOT_SELECTED',reason:'Reviewed by officer',
+    actor:'Supervisor'}
  },{});
- assert.equal(modified.find(r=>r.imo==='9700013').planSelected,false,
-   'explicit officer review is authoritative until changed');
+ assert.equal(modified.find(x=>x.imo==='9700014').planSelected,false);
+});
+
+test('Past ETD, unverified ETA and unreviewed incident are not promoted to priority',()=>{
+ const now=Date.now(),past=new Date(now-3600000).toISOString(),
+  future=new Date(now+3600000).toISOString();
+ assert.equal(inspectionRanking({departureAt:past,departureVerified:true},now).group,2);
+ assert.equal(inspectionRanking({eta:future},now).group,2);
+ assert.equal(inspectionRanking({departureAt:future,departureVerified:false},now).group,2);
+ assert.equal(inspectionRanking({incidentSeverity:95,incidentHumanReviewed:false},now).group,2);
+ assert.equal(inspectionRanking({departureAt:future,departureVerified:true},now).group,0);
+ assert.equal(inspectionRanking({incidentSeverity:95,incidentHumanReviewed:true},now).group,1);
+ assert.ok(compareInspections({imo:'9700012',departureAt:future,departureVerified:true},
+  {imo:'9700013',incidentSeverity:95,incidentHumanReviewed:true},now)<0);
 });
