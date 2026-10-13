@@ -248,3 +248,36 @@ button:disabled{opacity:.55;cursor:not-allowed}
   font-size:12px;font-weight:850;min-height:45px;padding:11px 20px;
   white-space:nowrap}
 @media(max-width:780px){.si-plan-wizard-cta{display:block}.si-plan-wizard-button{margin-top:13px}}
+
+
+/* SI-01 rolling plan management: compact, accessible, bilingual LTR/RTL. */
+.si-rolling-management{background:#fff;border:1px solid #b9dadb;border-radius:14px;
+ padding:18px 21px;margin:18px 0 22px;box-shadow:0 3px 14px #173e530a}
+.si-rolling-top{display:flex;align-items:center;justify-content:space-between;gap:20px}
+.si-rolling-top h2{font-size:19px;margin:2px 0;color:#123e52}
+.si-rolling-top p{margin:6px 0 11px;font-size:11px;color:#587483}
+.si-rolling-eyebrow{font-size:9px!important;letter-spacing:1px;color:#0c8b84!important;font-weight:900}
+.si-rolling-top button,.si-rolling-actions button,.si-rolling-form button{
+ border:0;border-radius:8px;background:#087e75;color:#fff;
+ padding:10px 14px;cursor:pointer;font-size:11px;font-weight:800}
+.si-rolling-management button:disabled{opacity:.55;cursor:wait}
+.si-rolling-form{display:grid;grid-template-columns:2fr repeat(2,minmax(140px,1fr));
+ gap:12px;padding:14px;border:1px solid #c8e5df;border-radius:11px;background:#f4fbf9;margin:10px 0}
+.si-rolling-form label{display:grid;gap:5px;min-width:0;font-weight:700;font-size:11px;color:#426374}
+.si-rolling-form input{width:100%;padding:9px;border:1px solid #c5d8da;border-radius:7px;color:#173d51}
+.si-rolling-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(245px,1fr));gap:12px;margin:12px 0}
+.si-rolling-card{border:1px solid #dce8eb;border-radius:11px;background:#fdfefe;padding:14px;min-width:0}
+.si-rolling-card.current{border-color:#0b998b;background:#f1fbf8}
+.si-rolling-card-head{display:flex;align-items:center;justify-content:space-between;gap:9px}
+.si-rolling-card-head strong{font-size:12px;color:#126d6b}
+.si-rolling-card-head span{border-radius:8px;background:#e8f3fa;color:#2a6379;font-size:9px;font-weight:800;padding:5px 7px}
+.si-rolling-card h3{font-size:13px;color:#193d53;margin:9px 0}
+.si-rolling-card p{font-size:10px;color:#66818b;margin:5px 0}
+.si-rolling-actions{display:flex;flex-wrap:wrap;gap:7px;margin-top:10px}
+.si-rolling-actions button:last-child:not(:first-child){background:#ecf3f4;color:#376273}
+.si-rolling-current{margin:10px 0 0;border-inline-start:4px solid #159487;
+ padding:8px 12px;background:#edfaf7;color:#365c64;font-size:11px}
+.si-rolling-note{display:block;color:#657e87;font-size:11px;line-height:1.6;margin:9px 0}
+@media(max-width:1080px){.si-rolling-form{grid-template-columns:1fr 1fr}}
+@media(max-width:740px){.si-rolling-top{flex-direction:column;align-items:start}
+.si-rolling-form{grid-template-columns:1fr}.si-rolling-management{padding:14px}}
