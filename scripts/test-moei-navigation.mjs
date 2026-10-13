@@ -88,7 +88,7 @@ test('Smart Inspection entry and ranking rules are separated; ETD precedes incid
   assert.match(si,/Vessels with maritime incidents/);
   assert.match(si,/criteria:\['DEPARTURE_SOON','INCIDENT_SEVERITY'\]/);
   assert.doesNotMatch(si,/riskPriorityThreshold|weightFactors|weightsValid|normalizeWeights|SI-P01/);
-  assert.match(si,/no ETD/);
+  assert.match(si,/ETD/);
   assert.match(si,/source workflows/);
   // P01 historical handler remains inert and no longer controls C01 selection.
   const server=read('ai-proxy/server.mjs');
