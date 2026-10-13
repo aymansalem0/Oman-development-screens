@@ -80,7 +80,7 @@ export class SiSourceExcelImport{
     info.addRow(['NMC live referrals','Cannot be uploaded or overwritten by Excel']);
     info.addRow(['Sheet required',def.sheet]);
     info.addRow(['Headers','Row 1 exactly; records begin at row 2']);
-    info.addRow(['Date examples','ETA and ETD YYYY-MM-DDTHH:mm (Dubai local). ETD is separate from ETA; imported values are UNVERIFIED POC.']);
+    info.addRow(['Date examples','ETD YYYY-MM-DDTHH:mm Dubai local. Valid imported ETD is final for POC scheduling without extra date sign-off; synthetic provenance retained.']);
     info.addRow(['File limit','2 MB, up to 1000 records; formulas forbidden']);
     info.getColumn(1).width=34;info.getColumn(2).width=86;
     const sheet=book.addWorksheet(def.sheet);
@@ -190,7 +190,11 @@ export class SiSourceExcelImport{
       try{
         const mapped=def.map(values);
         mapped.provenance='POC_SIMULATOR';
-        mapped.sourceApprovalStatus='UNVERIFIED';
+        // User-approved POC operating rule: imported ETD is FINAL on ingest.
+        // No separate officer review of the DATE; plan/PSC/schedule approvals
+        // remain human actions. Synthetic MSW rows remain POC_SIMULATOR.
+        mapped.sourceApprovalStatus=values.etd_local?'SOURCE_FINAL':'UNVERIFIED';
+        if(values.etd_local)mapped.departureAt=values.etd_local+':00+04:00';
         mapped.evidenceIds=[];
         mapped.createdBy='POC_EXCEL_IMPORT';
         const clean=this.targeting._validateEvent(mapped);
