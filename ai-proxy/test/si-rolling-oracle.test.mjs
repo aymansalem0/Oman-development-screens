@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {SiRollingPlanStore} from '../si-rolling-plan-store.mjs';
+import {readFileSync} from 'node:fs';
 const CASE_ID='0e44926c-f34a-4d5e-91a9-33049ccc6b44';
 const BATCH_ID='31b1552b-f40f-4215-aed3-f0d4d2f7416c';
 class MockOracle{
@@ -86,7 +87,7 @@ test('Oracle 018 persists numbered plans, immutable versions, source keys, linke
     sourceReference:'Human-approved NMC case'}]}]});
  assert.equal(approved.status,'APPROVED');
  assert.equal(db.vessels[0].caseId,CASE_ID);
- assert.equal(db.reasons[0].key,'NMC-CASE-20261013-1');
+ assert.equal(db.reasons[0].eventKey,'NMC-CASE-20261013-1');
  assert.equal(JSON.parse(db.reasons[0].reason.val).sourceType,'NMC_CASE');
  const same=await store.approve(initial.id,{
   expectedRevision:1,batchId:BATCH_ID,actor:'supervisor@moei',cases:approved.approvedVessels});
@@ -105,4 +106,17 @@ test('Oracle 018 persists numbered plans, immutable versions, source keys, linke
  await assert.rejects(store.cancel(initial.id,done.revision,'supervisor',
   'Retrospectively alter legally approved plan'),
   /SI_ROLLING_APPROVED_PLAN_IMMUTABLE/);
+});
+
+test('Oracle 018 never uses reserved SQL bind placeholder names',()=>{
+ const source=readFileSync(new URL('../si-rolling-plan-store.mjs',import.meta.url),'utf8');
+ const risky=/:(?:number|event|rank|key|plan)(?![A-Za-z0-9_])/gi;
+ // Inspect ONLY SQL fragments, not JS ternaries/object literal 'event'.
+ const sqls=[...source.matchAll(/(?:await con\.execute|this\.query)\(\s*`([\s\S]*?)`/g)]
+  .map(m=>m[1]);
+ assert.ok(sqls.length>=6,'Oracle SQL has enough statements to protect');
+ for(const sql of sqls)assert.doesNotMatch(sql,risky,
+  'all SQL placeholders must use unambiguous, nonreserved bind names');
+ assert.match(source,/VALUES\(:id,:planNo,:title,:startDate,:endDate,:notes,/,
+  'plan number must not be bound as Oracle reserved :number');
 });
