@@ -77,19 +77,19 @@ test('preparation menu lists persisted approved cases rather than volatile targe
   assert.match(settings,/this\.api\.publish\(/);
 });
 
-test('Smart Inspection priority settings expose ONLY source trigger scores; no weights or threshold',()=>{
+test('Smart Inspection entry and ranking rules are separated; ETD precedes incidents',()=>{
   const centralRisk=read('src/app/pages/nmc-risk-configuration-admin.component.html');
   const si=read('src/app/pages/si-targeting-settings.component.ts');
   assert.match(centralRisk,/type="range"/);
   assert.match(centralRisk,/normalizeWeights\(\)/);
-  assert.match(si,/class="risk-style-factor" \*ngFor="let reason of triggerReasons"/);
-  assert.match(si,/type="range" min="0" max="100" step="1"/);
-  assert.match(si,/class="number-input"/);
-  assert.match(si,/onPriorityEdit\(\)/);
-  assert.match(si,/sourceTriggerScores:\{\.\.\.this\.sourceScores\}/);
+  assert.match(si,/Inspection Entry Rules/);
+  assert.match(si,/Vessel Ranking Rules/);
+  assert.match(si,/Vessels approaching departure/);
+  assert.match(si,/Vessels with maritime incidents/);
+  assert.match(si,/criteria:\['DEPARTURE_SOON','INCIDENT_SEVERITY'\]/);
   assert.doesNotMatch(si,/riskPriorityThreshold|weightFactors|weightsValid|normalizeWeights|SI-P01/);
-  assert.match(si,/\[attr\.aria-label\]=/);
-  assert.match(si,/\.factor-control input\.weight-slider\{[^}]*accent-color:#0f766e/);
+  assert.match(si,/no ETD/);
+  assert.match(si,/source workflows/);
   // P01 historical handler remains inert and no longer controls C01 selection.
   const server=read('ai-proxy/server.mjs');
   assert.match(server,/SI_P01_OUT_OF_CURRENT_POC_SCOPE/);
