@@ -20,7 +20,7 @@ export class SiFullLifecycleComponent implements OnInit{
  readonly steps=[
   ['01','PSC targeting & sources','استهداف PSC والمصادر'],
   ['02','Candidate / eligibility','الترشيح والأهلية'],
-  ['03','Human approval & SI-P01','اعتماد المعاينة وترتيبها'],
+  ['03','Human plan approval & rule priority','اعتماد الخطة وأولويات القواعد'],
   ['04','Pre-inspection dossier / A04','ملف ما قبل المعاينة A04'],
   ['05','Dynamic scope approval','اعتماد نطاق المعاينة'],
   ['06','Scheduling & assignment','الجدولة والتكليف'],
