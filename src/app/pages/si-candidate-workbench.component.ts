@@ -1,4 +1,5 @@
 import {LanguageService} from '../services/language.service';
+import {MoeiAuthService} from '../services/moei-auth.service';
 import {CommonModule} from '@angular/common';
 import {Component,OnInit,ViewChild,ElementRef} from '@angular/core';
 import {FormsModule} from '@angular/forms';
@@ -342,7 +343,8 @@ export class SiCandidateWorkbenchComponent implements OnInit{
     this.priorityBusy=false;this.aiSuccess='';
   }
 
-  constructor(private readonly api:SiCandidateTargetingService,public readonly lang:LanguageService){}
+  constructor(private readonly api:SiCandidateTargetingService,public readonly lang:LanguageService,
+  public readonly auth:MoeiAuthService){}
   copy(en:string,ar:string):string{return this.lang.pick(en,ar);}
   ngOnInit():void{this.loadRollingPlans();this.refresh();}
   refresh():void{
