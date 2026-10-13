@@ -112,7 +112,7 @@ export class SiElectronicScheduler{
     if(!port)throw new SiError('SI_UNKNOWN_PORT',422);
     if(!['CARGO','TANKER','PASSENGER','OTHER'].includes(input.vesselType?.toUpperCase()))
       throw new SiError('SI_VESSEL_TYPE_REQUIRED');
-    if(!['FOCUSED','PSC','FLAG'].includes(input.regime))throw new SiError('SI_INVALID_REGIME');
+    if(!['FOCUSED','PSC','FLAG','SERVICE','FOLLOW_UP'].includes(input.regime))throw new SiError('SI_INVALID_REGIME');
     if(!Number.isInteger(input.durationMinutes)||input.durationMinutes<30||input.durationMinutes>720)
       throw new SiError('SI_DURATION_INVALID');
     const start=parseLocal(input.earliestLocal),end=parseLocal(input.deadlineLocal);

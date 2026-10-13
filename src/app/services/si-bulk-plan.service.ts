@@ -54,6 +54,15 @@ export class SiBulkPlanService{
  }):Observable<SiBulkJob>{
   return this.http.post<SiBulkJob>(this.url,input);
  }
+ approveForScheduling(input:{
+  planId:string;reason:string;expectedRevision:number;expectedSourceHash:string;confirmApproval:true
+ }):Observable<{status:string;planId:string;revision:number;approvedVesselCount:number;
+  createdInspectionCases:number;createdDossiers:number;schedulingRoute:string}>{
+  return this.http.post<{status:string;planId:string;revision:number;
+   approvedVesselCount:number;createdInspectionCases:number;createdDossiers:number;
+   schedulingRoute:string}>('/api/si/v1/inspection-plans/'+encodeURIComponent(input.planId)+
+    '/approve-for-scheduling',input);
+ }
  job(id:string):Observable<SiBulkJob>{
   return this.http.get<SiBulkJob>(this.url+'/'+encodeURIComponent(id));
  }

@@ -167,16 +167,21 @@ export class SiCandidateTargeting{
       !this.imoSet.has(input.imo)||!allowedRegimes.includes(input.requestedRegime)||
       !safeText(input.sourceEventId,120)||!safeText(input.sourceReference,120)||
       !safeText(input.port,120)||input.provenance!=='POC_SIMULATOR'||
-      !['UNVERIFIED','SOURCE_REVIEWED'].includes(input.sourceApprovalStatus)||
+      !['UNVERIFIED','SOURCE_REVIEWED','SOURCE_FINAL'].includes(input.sourceApprovalStatus)||
       (input.sourceType==='PSC_PORT_CALL'&&input.requestedRegime!=='PORT_STATE_CONTROL')||
       (input.sourceType==='SERVICE_REQUEST'&&input.requestedRegime!=='UAE_SERVICE_INSPECTION'))
       throw new SiTargetingError('SI_EVENT_VALIDATION_FAILED',422);
     return {sourceType:input.sourceType,sourceEventId:input.sourceEventId.trim(),
       sourceReference:input.sourceReference.trim(),imo:input.imo,requestedRegime:input.requestedRegime,
       port:input.port.trim(),eta:typeof input.eta==='string'?input.eta.slice(0,32):null,
-      // Only source-reviewed, timezone-qualified departure facts participate in
-      // ranking. ETA is arrival and is never substituted for ETD.
-      departureAt:input.sourceApprovalStatus==='SOURCE_REVIEWED'&&
+      // Imported ETD is final by POC business rule and has no standalone
+      // review step. Original row remains visibly POC_SIMULATOR.
+      reportedDepartureLocal:typeof input.reportedDepartureLocal==='string'&&
+        /^20\d\d-\d\d-\d\dT\d\d:\d\d$/.test(input.reportedDepartureLocal)
+        ?input.reportedDepartureLocal:null,
+      // SOURCE_FINAL uses source-provided ETD immediately; SOURCE_REVIEWED
+      // remains supported for legacy rows. ETA is NEVER treated as ETD.
+      departureAt:['SOURCE_FINAL','SOURCE_REVIEWED'].includes(input.sourceApprovalStatus)&&
         typeof input.departureAt==='string'&&
         /^20\d\d-\d\d-\d\dT\d\d:\d\d(?::\d\d)?(?:Z|[+-]\d\d:\d\d)$/.test(input.departureAt)&&
         Number.isFinite(Date.parse(input.departureAt))?input.departureAt:null,
@@ -302,9 +307,12 @@ export class SiCandidateTargeting{
           importExcelRow:e.sourceImport?.excelRow||null,
           port:e.payload.port||null,
           eta:e.payload.eta||null,
+          reportedDepartureLocal:e.payload.reportedDepartureLocal||null,
           departureAt:e.payload.departureAt||null,
-          departureVerified:e.payload.sourceApprovalStatus==='SOURCE_REVIEWED'&&
+          departureVerified:['SOURCE_FINAL','SOURCE_REVIEWED'].includes(e.payload.sourceApprovalStatus)&&
             Boolean(e.payload.departureAt),
+          departureAuthority:e.payload.sourceApprovalStatus==='SOURCE_FINAL'?
+            'SOURCE_FINAL_NO_DATE_APPROVAL':e.payload.sourceApprovalStatus,
           contextNote:e.payload.note||null,
           originalSourceRow:e.sourceImport?.sourceRow||null})),
         inspectionCase,lastDecision};

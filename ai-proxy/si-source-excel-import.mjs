@@ -3,7 +3,8 @@
  * NMC CASE is never imported: it stays an authoritative live integration with
  * the existing NMC human-approved case workspace.
  *
- * Excel sources are POC_SIMULATOR / UNVERIFIED, never certified authority data.
+ * Excel sources remain POC_SIMULATOR, never certified authority data.
+ * ETD is FINAL within this POC on import; no additional date sign-off.
  * One preview -> one explicit atomic commit; zero Airia calls; no Oracle DDL.
  * Uses SI_CANDIDATE_EVENT from migration 009 (sourceImport metadata in JSON).
  */
@@ -17,18 +18,18 @@ const sourceDefs=Object.freeze({
   SERVICE_REQUEST:{
     sheet:'SERVICE_REQUESTS',
     display:'Maritime Service Requests',
-    fields:['request_id','request_reference','imo','port','request_date','service_type','notes'],
+    fields:['request_id','request_reference','imo','port','request_date','service_type','notes','etd_local'],
     map:r=>({sourceType:'SERVICE_REQUEST',sourceEventId:r.request_id,
       sourceReference:r.request_reference,imo:r.imo,requestedRegime:'UAE_SERVICE_INSPECTION',
-      port:r.port,eta:null,note:r.notes?('Service type: '+r.service_type+'; '+r.notes):('Service type: '+r.service_type)})
+      port:r.port,eta:null,reportedDepartureLocal:r.etd_local||null,note:r.notes?('Service type: '+r.service_type+'; '+r.notes):('Service type: '+r.service_type)})
   },
   PSC_PORT_CALL:{
     sheet:'PSC_PORT_CALLS',
     display:'PSC Port Call Notifications',
-    fields:['port_call_id','port_call_reference','imo','port','eta_local','visit_purpose','notes'],
+    fields:['port_call_id','port_call_reference','imo','port','eta_local','visit_purpose','notes','etd_local'],
     map:r=>({sourceType:'PSC_PORT_CALL',sourceEventId:r.port_call_id,
       sourceReference:r.port_call_reference,imo:r.imo,requestedRegime:'PORT_STATE_CONTROL',
-      port:r.port,eta:r.eta_local,note:r.notes?('Visit: '+r.visit_purpose+'; '+r.notes):('Visit: '+r.visit_purpose)})
+      port:r.port,eta:r.eta_local,reportedDepartureLocal:r.etd_local||null,note:r.notes?('Visit: '+r.visit_purpose+'; '+r.notes):('Visit: '+r.visit_purpose)})
   }
 });
 export const SI_SOURCE_DEFINITIONS=sourceDefs;
@@ -76,11 +77,11 @@ export class SiSourceExcelImport{
     info.addRow(['MOEI SMART INSPECTION — SOURCE-SPECIFIC POC XLSX TEMPLATE']);
     info.addRow(['Source',def.display]);
     info.addRow(['Usage','Import under Settings > Inspection Settings > Candidate Source Imports']);
-    info.addRow(['Source authority','POC SIMULATOR — UNVERIFIED; officer review is mandatory']);
+    info.addRow(['Source authority','POC SIMULATOR. ETD final immediately; inspection plan and PSC selection still require human authorization.']);
     info.addRow(['NMC live referrals','Cannot be uploaded or overwritten by Excel']);
     info.addRow(['Sheet required',def.sheet]);
     info.addRow(['Headers','Row 1 exactly; records begin at row 2']);
-    info.addRow(['Date examples','Service Request: YYYY-MM-DD; PSC ETA: YYYY-MM-DDTHH:mm (Dubai local)']);
+    info.addRow(['Date examples','ETD YYYY-MM-DDTHH:mm Dubai local. Valid imported ETD is final for POC scheduling without extra date sign-off; synthetic provenance retained.']);
     info.addRow(['File limit','2 MB, up to 1000 records; formulas forbidden']);
     info.getColumn(1).width=34;info.getColumn(2).width=86;
     const sheet=book.addWorksheet(def.sheet);
@@ -89,9 +90,9 @@ export class SiSourceExcelImport{
     if(imo){
       sheet.addRow(source==='SERVICE_REQUEST'
         ?['SR-POC-001','UAE-SVC-POC-001',imo,'Jebel Ali','2026-10-10',
-          'Initial maritime inspection','POC test case — replace with source export']
+          'Initial maritime inspection','POC test case — replace with source export','2026-10-21T18:00']
         :['PSC-POC-001','UAE-PORT-POC-001',imo,'Jebel Ali','2026-10-15T08:00',
-          'Port call inspection','POC test case — replace with source export']);
+          'Port call inspection','POC test case — replace with source export','2026-10-19T18:00']);
     }
     sheet.views=[{state:'frozen',ySplit:1}];
     def.fields.forEach((x,i)=>{sheet.getColumn(i+1).width=x==='notes'?48:Math.max(18,x.length+6)});
@@ -141,9 +142,14 @@ export class SiSourceExcelImport{
     if(!sheet)throw new SiTargetingError('SI_XLSX_SHEET_REQUIRED_'+def.sheet,422);
     if(sheet.rowCount>1001)throw new SiTargetingError('SI_XLSX_ROW_LIMIT',413);
     if(sheet.columnCount>40)throw new SiTargetingError('SI_XLSX_COLUMN_LIMIT',413);
-    const cols=def.fields;
-    if(cols.some((k,i)=>textCell(sheet.getRow(1).getCell(i+1).value)!==k))
+    // Backward-compatible 7-column feeds are accepted; new templates add
+    // ETD as column eight. We never infer ETD from ETA or request date.
+    const legacy=def.fields.slice(0,7);
+    const headerAt=i=>textCell(sheet.getRow(1).getCell(i+1).value);
+    if(legacy.some((key,i)=>headerAt(i)!==key)||
+       (headerAt(7)&&headerAt(7)!=='etd_local'))
       throw new SiTargetingError('SI_XLSX_HEADER_MISMATCH',422);
+    const cols=headerAt(7)==='etd_local'?def.fields:legacy;
     const out=[],issues=[],withinFile=new Set();
     for(let i=2;i<=sheet.rowCount;i++){
       const row=sheet.getRow(i);
@@ -172,10 +178,24 @@ export class SiSourceExcelImport{
           !Number.isFinite(Date.parse(values.eta_local+':00Z')))){
         issues.push(parseIssue(i,'SI_XLSX_ETA_INVALID'));continue;
       }
+      if(values.etd_local){
+        const matches=/^20\d\d-\d\d-\d\dT\d\d:\d\d$/.test(values.etd_local);
+        const etd=Date.parse(values.etd_local+':00+04:00');
+        const eta=values.eta_local?Date.parse(values.eta_local+':00+04:00'):null;
+        const requestDay=values.request_date?Date.parse(values.request_date+'T00:00:00+04:00'):null;
+        if(!matches||!Number.isFinite(etd)||
+          (eta!==null&&etd<=eta)||(requestDay!==null&&etd<requestDay)){
+          issues.push(parseIssue(i,'SI_XLSX_ETD_INVALID_OR_BEFORE_ARRIVAL'));continue;
+        }
+      }
       try{
         const mapped=def.map(values);
         mapped.provenance='POC_SIMULATOR';
-        mapped.sourceApprovalStatus='UNVERIFIED';
+        // User-approved POC operating rule: imported ETD is FINAL on ingest.
+        // No separate officer review of the DATE; plan/PSC/schedule approvals
+        // remain human actions. Synthetic MSW rows remain POC_SIMULATOR.
+        mapped.sourceApprovalStatus=values.etd_local?'SOURCE_FINAL':'UNVERIFIED';
+        if(values.etd_local)mapped.departureAt=values.etd_local+':00+04:00';
         mapped.evidenceIds=[];
         mapped.createdBy='POC_EXCEL_IMPORT';
         const clean=this.targeting._validateEvent(mapped);
@@ -224,7 +244,9 @@ export class SiSourceExcelImport{
       newEvents:fresh.length,replayedEvents:replays,
       issues:issues.slice(0,100),
       sample:rows.slice(0,15).map(x=>({row:x.row,imo:x.payload.imo,
-        reference:x.payload.sourceReference,port:x.payload.port})),
+        reference:x.payload.sourceReference,port:x.payload.port,
+        eta:x.payload.eta||null,departureAt:x.payload.departureAt||null,
+        departureStatus:x.payload.sourceApprovalStatus})),
       canCommit:issues.length===0&&rows.length>0};
   }
   async commit({previewId,sourceType,actor}={}){
@@ -283,6 +305,8 @@ export class SiSourceExcelImport{
     this.previews.delete(previewId);
     return {status:'COMMITTED',sourceType,batchId,importedEvents:events.length,
       duplicateEvents:duplicates.length,fileSha256:p.sha256,
-      nmcChanged:false,requiresOfficerReview:true,airiaCalls:0};
+      nmcChanged:false,requiresOfficerReview:true,
+      requiresDateApproval:false,departurePolicy:'FINAL_ETD_ON_IMPORT',
+      requiresPlanAndPscApproval:true,airiaCalls:0};
   }
 }

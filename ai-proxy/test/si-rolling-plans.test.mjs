@@ -196,3 +196,37 @@ test('approved plan carries forward eligible-but-not-included vessel without fab
    undefined,'new independent source event does not inherit previous deferral/nonselection');
  }finally{x.done()}
 });
+
+test('V2 supervisor approves vessel plan WITHOUT any SI case/dossier; audit frozen for later schedule',async()=>{
+ const x=setup();
+ try{
+  const created=await x.create('V2 plan-wide maritime scheduling');
+  const base=await x.plan.snapshot(created.id);
+  await x.plan.select({planId:created.id,imo:'9328471',action:'INCLUDE',
+   reason:'Final dated NMC inspection source requires maritime visit',
+   expectedRevision:0,expectedSourceHash:base.sourceHash,actor:'operator@moei'});
+  const ready=await x.rolling.get(created.id);
+  assert.equal(ready.status,'READY_FOR_APPROVAL');
+  const approved=await x.rolling.approveForScheduling(created.id,{
+   expectedRevision:ready.revision,expectedSourceHash:ready.selectionSourceHash,
+   actor:'supervisor@moei',reason:'Maritime inspection plan approved for engineer scheduling',
+   vessels:[{imo:'9328471',planRank:1,regimes:['FOCUSED_INSPECTION'],
+    inspectionReasons:[{eventKey:'NMC-123',sourceType:'NMC_CASE',
+     sourceEventId:'ref-123',sourceReference:'NMC-123'}]}]
+  });
+  assert.equal(approved.status,'APPROVED');
+  assert.equal(approved.scheduleMode,'HUMAN_APPROVED_ROSTER_PENDING_AI_SCHEDULE');
+  assert.equal(approved.approvedBatchId,null);
+  assert.equal(approved.approvedVessels.length,1);
+  assert.equal(approved.approvedVessels[0].caseId,null);
+  assert.equal(approved.approvedVessels[0].inspectionReasons[0].sourceType,'NMC_CASE');
+  assert.equal(approved.audit.at(-1).casesCreated,0);
+  assert.equal((await x.rolling.get(created.id)).approvedVessels.length,1);
+  await assert.rejects(x.rolling.approveForScheduling(created.id,{
+   expectedRevision:ready.revision,expectedSourceHash:ready.selectionSourceHash,
+   actor:'supervisor@moei',reason:'Reject a duplicate plan approval',
+   vessels:[{imo:'9328471',planRank:1,regimes:['FOCUSED_INSPECTION'],
+    inspectionReasons:[{eventKey:'NMC-123'}]}]
+  }),/SI_V2_PLAN_CHANGED_REVIEW_AGAIN/);
+ }finally{x.done();}
+});
