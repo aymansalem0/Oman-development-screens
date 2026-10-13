@@ -4,6 +4,7 @@ import {buildC01Source,validateC01,SiCandidateAgent} from '../si-candidate-agent
 import {mockSiC01,mockSiP01,mockSiA04} from '../si-agent-mock.mjs';
 import {validateP01} from '../si-ai-prioritization.mjs';
 import {validateA04} from '../si-inspection-preparation.mjs';
+import {projectInspectionPlan} from '../si-inspection-plan.mjs';
 
 const candidate=(key,sourceType,imo,score)=>({
  key,imo,vesselName:'POC Vessel',regime:'FOCUSED_INSPECTION',
@@ -174,4 +175,40 @@ test('All verified source-backed service candidates are C01 ranked even at low o
  assert.equal(input.sourceTriggerScores.PSC_PORT_CALL,20);
  assert.ok(checked.find(x=>x.candidateKey==='service-low-risk').suggestedRank <
    checked.find(x=>x.candidateKey==='psc').suggestedRank);
+});
+
+test('C01 plan: NMC first, all Service Requests included even if Airia advises MANUAL_REVIEW, PSC last',()=>{
+ const scoreConfig={NMC_CASE:100,SERVICE_REQUEST:100,PSC_PORT_CALL:20};
+ const d={policy:{version:9,config:{sourceTriggerScores:scoreConfig}},
+   fleetSnapshotId:'fleet-source-only',riskPolicyRevision:2,candidates:[
+     candidate('svc-low','SERVICE_REQUEST','9700013',5),
+     candidate('svc-missing','SERVICE_REQUEST','9700014',null),
+     candidate('psc-high','PSC_PORT_CALL','9700015',99),
+     candidate('nmc-mid','NMC_CASE','9700012',40)
+   ]};
+ d.vesselCandidates=d.candidates.map(c=>({
+   imo:c.imo,vesselName:c.vesselName,flag:'UAE',vesselType:'CARGO',
+   currentRisk:c.currentRisk,sourceTypes:[c.events[0].sourceType],
+   sourceEvents:c.events,regimes:[c.regime],pendingWorkflows:1,
+   createdWorkflows:0,scheduledWorkflows:0
+ }));
+ const s=buildC01Source(d,{version:4});
+ const output=mockSiC01(s);
+ const service=output.recommendations.find(r=>r.candidateKey==='svc-low');
+ service.recommendation='MANUAL_REVIEW';
+ service.suggestedRank=null; // a real provider cannot suppress a valid source rule
+ const checked=validateC01(output,s);
+ const rows=projectInspectionPlan(d,s,{recommendations:checked}, {},{});
+ assert.deepEqual(rows.filter(r=>r.planSelected).map(r=>r.imo),
+   ['9700012','9700013','9700014','9700015']);
+ assert.deepEqual(rows.filter(r=>r.planSelected).map(r=>r.sourcePriorityScore),
+   [100,100,100,20]);
+ assert.equal(rows.find(r=>r.imo==='9700013').selectionOrigin,'PUBLISHED_SOURCE_RULE');
+ assert.equal(rows.find(r=>r.imo==='9700014').risk,null);
+ const modified=projectInspectionPlan(d,s,{recommendations:checked}, {
+   '9700013':{selected:false,disposition:'NOT_SELECTED',
+     reason:'Officer reviewed duplicate application',actor:'Supervisor'}
+ },{});
+ assert.equal(modified.find(r=>r.imo==='9700013').planSelected,false,
+   'explicit officer review is authoritative until changed');
 });
