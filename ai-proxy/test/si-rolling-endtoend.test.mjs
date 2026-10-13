@@ -146,3 +146,35 @@ test('end-to-end no-cost rolling: create, C01, preview, supervisor approve, case
    /SI_ROLLING_APPROVED_PLAN_IMMUTABLE/);
  }finally{x.cleanup();}
 });
+
+test('manual rolling plan approved end-to-end without generating any C01 provider result',async()=>{
+ const x=scenario();
+ try{
+  const p=await x.rolling.create({title:'Human-reviewed plan',
+   startsOn:'2026-10-13',endsOn:'2026-10-15'},
+   'officer@moei',{candidates:[{candidateKey:'ref-1',imo:IMO,
+    sourceEvents:[{eventKey:SOURCE}],sourceTypes:['NMC_CASE']}]});
+  const before=await x.plan.snapshot(p.id);
+  assert.equal(before.availableCount,1);
+  assert.equal(before.agentRunId,null);
+  await x.plan.select({planId:p.id,imo:IMO,action:'INCLUDE',
+   reason:'Officer confirmed NMC referral and current maritime risk',
+   expectedSourceHash:before.sourceHash,expectedRevision:before.revision,
+   actor:'officer@moei'});
+  const preview=await x.bulk.preview(p.id);
+  assert.equal(preview.manualSelection,true);
+  assert.equal(preview.agentRunId,null);
+  assert.equal(preview.selectedVessels,1);
+  assert.equal(x.c01Calls(),0);
+  const job=await x.bulk.approve({planId:p.id,actor:'supervisor@moei',
+   reason:'Independent supervisor approved eligible source and reason',
+   expectedRevision:preview.planRevision,expectedSourceHash:preview.sourceHash,
+   expectedAgentRunId:null,confirmApproval:true,
+   generateA04:false,runP01:false,confirmAiCost:false});
+  await x.queue.shift()();
+  assert.equal(x.bulk.get(job.id).status,'COMPLETED');
+  assert.equal(x.cases.length,1);
+  assert.equal((await x.rolling.get(p.id)).status,'IN_EXECUTION');
+  assert.equal(x.c01Calls(),0,'manual acceptance must not create simulated AI call');
+ }finally{x.cleanup();}
+});
