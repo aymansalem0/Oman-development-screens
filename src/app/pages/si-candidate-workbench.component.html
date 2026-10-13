@@ -38,9 +38,7 @@
          <input type="date" [(ngModel)]="newPlan.startsOn"/></label>
        <label>{{copy('Execution To','التنفيذ إلى')}}
          <input type="date" [(ngModel)]="newPlan.endsOn"/></label>
-       <label>{{copy('Port / Location','الميناء / الموقع')}}
-         <input [(ngModel)]="newPlan.port" maxlength="160"/></label>
-       <label>{{copy('Notes','ملاحظات')}}
+       <label class="si-rolling-notes">{{copy('Notes','ملاحظات')}}
          <input [(ngModel)]="newPlan.notes" maxlength="1200"/></label>
        <div class="si-rolling-actions">
          <button type="button" (click)="createRollingPlan()" [disabled]="planningBusy">
