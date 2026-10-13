@@ -21,7 +21,10 @@ export interface NmcAiFocusResult {
   snapshot:NmcKpiValues;snapshotHash:string;
   selection:{metricId:NmcKpiMetricId;value:number;reasonEn:string;
     reasonAr:string;confidence:number|null;a01Priority:string;
-    a01Summary:string;evidenceIds:string[]};
+    a01Summary:string;evidenceIds:string[];
+    a01Evidence?:{title:string;evidenceIds:string[]}[];
+    a01Actions?:{actionType:string;summary:string;priority:string;
+      evidenceIds:string[];requiresHumanApproval:true}[]};
   sourceImo:string;sourceAssessmentId:string;a02VerifiedFactors:string[];
   requiresHumanReview:true;dataNature:'SYNTHETIC_POC_ADVISORY_ONLY';
 }
