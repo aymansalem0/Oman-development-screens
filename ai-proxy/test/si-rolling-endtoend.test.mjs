@@ -119,6 +119,12 @@ test('end-to-end no-cost rolling: create, C01, preview, supervisor approve, case
   assert.equal(x.cases[0].approvedPlanId,job.id);
   assert.equal((await x.rolling.get(first.id)).status,'IN_EXECUTION');
   assert.equal((await x.rolling.get(first.id)).approvedVessels[0].caseId,CASE_ID);
+  // Tomorrow's source data must NOT make the previously approved plan vanish.
+  const history=await x.plan.snapshot(first.id);
+  assert.equal(history.readOnlyHistorical,true);
+  assert.equal(history.historicalSourceChanged,true);
+  assert.equal(history.selectedForPlan,1);
+  assert.equal(history.rows[0].imo,IMO);
   const newPlan=await x.rolling.create({
    title:'Next day plan',startsOn:'2026-10-14',endsOn:'2026-10-16'},'officer@moei');
   const tomorrow=await x.plan.snapshot(newPlan.id);
