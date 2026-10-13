@@ -890,14 +890,28 @@ const server = createServer(async (req, res) => {
       if(path==='/api/si/v1/inspection-plans'&&req.method==='POST'){
         dashboards.assertRole(req,'EDITOR');
         const identity=moeiAuth.session(req);
-        return respond(res,201,await siRollingPlans.create(
-          await requestJson(req,4096),identity?.email||identity?.username||'ADMIN'));
+        const input=await requestJson(req,4096);
+        // Snapshot ONLY genuine, backend-eligible source events. New plans
+        // immediately show those vessels without generating an AI response.
+        const source=await siCandidateAgent.source();
+        return respond(res,201,await siRollingPlans.create(input,
+          identity?.email||identity?.username||'ADMIN',
+          {candidates:source.candidates,sourceHash:source.snapshotHash}));
       }
-      const rollingPath=/^\/api\/si\/v1\/inspection-plans\/([a-f0-9-]{36})(?:\/(cancel))?$/.exec(path);
+      const rollingPath=/^\/api\/si\/v1\/inspection-plans\/([a-f0-9-]{36})(?:\/(cancel|selection))?$/.exec(path);
       if(rollingPath){
         if(req.method==='GET'&&!rollingPath[2]){
           dashboards.assertRole(req,'EDITOR');
           return respond(res,200,await siRollingPlans.get(rollingPath[1]));
+        }
+        if(req.method==='POST'&&rollingPath[2]==='selection'){
+          dashboards.assertRole(req,'EDITOR');
+          const input=await requestJson(req,4096);
+          const identity=moeiAuth.session(req);
+          return respond(res,200,await siInspectionPlan.select({
+            ...input,planId:rollingPath[1],
+            actor:identity?.email||identity?.username||'ADMIN'
+          }));
         }
         if(req.method==='POST'&&rollingPath[2]==='cancel'){
           dashboards.assertRole(req,'PUBLISHER');
