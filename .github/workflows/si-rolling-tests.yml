@@ -16,6 +16,8 @@ jobs:
           node-version: '20'
       - name: Install backend runtime
         run: npm install --prefix ai-proxy --omit=dev --no-audit --no-fund
+      - name: Complete no-cost SI-01 to SI-02 business scenario
+        run: node --test ai-proxy/test/si-rolling-endtoend.test.mjs
       - name: Rolling plans and historical approval guards
         run: node --test ai-proxy/test/si-rolling-plans.test.mjs
       - name: Source event eligibility and duplicate defense
