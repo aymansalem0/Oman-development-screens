@@ -247,6 +247,17 @@ export class SiInspectionPreparation{
       targetRegimes:inspectionCase.regimes||[inspectionCase.regime],
       inspectionReasons:inspectionCase.inspectionReasons||[],
       inspectionScopes:inspectionCase.inspectionScopes||[],
+      sourceInspectionObjectives:(inspectionCase.inspectionReasons||[]).map(reason=>({
+        objectiveId:'SI-SRC-'+reason.eventKey,
+        sourceType:reason.sourceType,
+        sourceReference:reason.sourceReference,
+        inspectionRegime:reason.inspectionRegime,
+        inspectionReason:reason.reason||null,
+        evidenceIds:reason.evidenceIds||[],
+        status:'TO_BE_VERIFIED_BY_INSPECTOR',
+        advisory:false,
+        legallyConfirmed:false
+      })),
       approvedPlanId:inspectionCase.approvedPlanId||null,
       baseChecklistItemIds:[...SI_BASE_CHECKLIST],
       bundleRef:'VBL-'+inspectionCase.imo,
@@ -340,7 +351,8 @@ export class SiInspectionPreparation{
         checklistVersion:'SI-POC-BASE-1.0',
         inlineContext:{...context.evidenceContext,
           allInspectionReasons:context.inspectionReasons,
-          allInspectionScopes:context.inspectionScopes},
+          allInspectionScopes:context.inspectionScopes,
+          sourceInspectionObjectives:context.sourceInspectionObjectives},
         inspectionRegimes:context.targetRegimes,
         provenance:context.provenance,
         officialScoringRequested:false,requestedOutputs:['FOCUS_OVERLAY','MISSING_EVIDENCE']};
