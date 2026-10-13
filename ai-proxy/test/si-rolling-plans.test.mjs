@@ -32,7 +32,8 @@ function setup(){
  const plan=new SiInspectionPlan({targeting,candidateAgent:agent,rollingPlans:rolling,
   file:join(dir,'legacy.json')});
  const create=(name='First plan')=>rolling.create({title:name,startsOn:'2026-10-13',
-  endsOn:'2026-10-16'},'officer@moei');
+  endsOn:'2026-10-16'},'officer@moei',
+  {candidates:[c],sourceHash:'f'.repeat(64)});
  return {dir,rolling,plan,create,
   done:()=>rmSync(dir,{recursive:true,force:true})};
 }
