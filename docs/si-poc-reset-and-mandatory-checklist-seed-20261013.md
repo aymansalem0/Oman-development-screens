@@ -36,8 +36,16 @@ docker compose @compose stop nmc ai-proxy
 docker compose @compose run --rm --no-deps ai-proxy node tools/reset-si-poc-actions.mjs --plan --mode=oracle
 
 # STEP 2 -- BACK UP the local volume AND verify an external/restorable Oracle backup.
-# The volume name may differ; determine actual volume with 'docker volume ls'.
-docker volume ls
+# Backup the entire mounted /data volume to your Windows project folder first.
+# With the app already stopped, this also saves JSON action history and checklist evidence.
+$backupDir = Join-Path (Get-Location) "poc-backups"
+New-Item -ItemType Directory -Force -Path $backupDir | Out-Null
+$archive = "moei-si-pre-reset-$(Get-Date -Format yyyyMMdd-HHmmss).tar.gz"
+docker compose @compose run --rm --no-deps -v "${backupDir}:/backup" ai-proxy sh -c "tar -czf /backup/$archive -C /data ."
+if ($LASTEXITCODE -ne 0) { throw "POC_VOLUME_BACKUP_FAILED" }
+
+# Separately obtain and RESTORE-VERIFY an Oracle DB backup with the DBA.
+# Do NOT proceed to STEP 3 until Oracle recovery is confirmed.
 
 # STEP 3 -- ONLY AFTER REVIEW/EXTERNAL BACKUP; destructive reset:
 docker compose @compose run --rm --no-deps -e SI_POC_MAINTENANCE_WINDOW=true ai-proxy node tools/reset-si-poc-actions.mjs --mode=oracle --apply --ack=RESET_SI_POC_ACTIONS --backup-confirmed=VERIFIED --maintenance-confirmed=STOPPED
