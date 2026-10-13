@@ -329,7 +329,7 @@ export class SiChecklistField{
   if(!entry||entry.version!==expectedVersion)failure('SI_CHECKLIST_VERSION_CONFLICT',409);
   if(entry.status!=='IN_PROGRESS')failure('SI_CHECKLIST_ALREADY_SUBMITTED',409);
   const pending=entry.templates.flatMap(t=>t.groups.flatMap(g=>g.items
-   .filter(item=>item.mandatory&&item.fields.some(f=>
+   .filter(item=>item.mandatory&&(item.requiredFields||item.fields.slice(0,1)).some(f=>
     item.answers[f]===undefined||item.answers[f]===null||item.answers[f]===''))
    .map(item=>item.instanceId)));
   if(pending.length)failure('SI_CHECKLIST_MANDATORY_ANSWERS_MISSING',409);
