@@ -231,6 +231,7 @@ export class SiChecklistSettingsComponent implements OnInit{
  templates:ChecklistSummary[]=[];selected:ChecklistTemplate|null=null;
  busy=false;error='';message='';aiStatus:{builderConfigured:boolean;visionConfigured:boolean}|null=null;
  suggestion:ChecklistBuilderReply|null=null;
+ private savedDraftJson='';
  private scope:{level:AiLevel;groupId?:string;itemId?:string}|null=null;
  readonly fieldTypes:CheckField[]=['BOOLEAN','NOTE','EXPIRY_DATE','DATE','TEXT','NUMBER'];
  constructor(private api:SiChecklistsService,public lang:LanguageService,
@@ -265,11 +266,11 @@ export class SiChecklistSettingsComponent implements OnInit{
  }
  create():void{
   if(this.busy)return;this.error='';this.message='';this.suggestion=null;
-  this.selected={id:'',draft:this.freshDraft(),revision:0,published:[],
+  this.savedDraftJson='';this.selected={id:'',draft:this.freshDraft(),revision:0,published:[],
    updatedAt:'',updatedBy:'',createdAt:'',createdBy:''};
  }
  open(id:string):void{this.busy=true;this.error='';this.suggestion=null;
-  this.api.detail(id).subscribe({next:r=>{this.selected=r;this.busy=false;},
+  this.api.detail(id).subscribe({next:r=>{this.selected=r;this.savedDraftJson=JSON.stringify(r.draft);this.busy=false;},
    error:e=>this.failed(e)});}
  csv(key:'vesselTypes'|'inspectionRegimes',value:string):void{
   if(this.selected)this.selected.draft.applicability[key]=value.split(',')
@@ -294,13 +295,17 @@ export class SiChecklistSettingsComponent implements OnInit{
   }
   this.busy=true;this.error='';this.message='';
   const call=this.selected.id?this.api.save(this.selected):this.api.create(this.selected.draft);
-  call.subscribe({next:t=>{this.selected=t;this.busy=false;this.load();
+  call.subscribe({next:t=>{this.selected=t;this.savedDraftJson=JSON.stringify(t.draft);this.busy=false;this.load();
     this.message=this.t('Draft saved.','تم حفظ المسودة.');},
     error:e=>this.failed(e)});
  }
  publish():void{
   if(!this.selected?.id||this.busy){
    this.error=this.t('Save the draft first.','احفظ المسودة أولاً.');return;
+  }
+  if(JSON.stringify(this.selected.draft)!==this.savedDraftJson){
+    this.error=this.t('Save draft changes before publishing the new revision.',
+      'احفظ تعديلات المسودة قبل نشر الإصدار الجديد.');return;
   }
   if(!window.confirm(this.t(
     'Publish this reviewed revision? It becomes selectable for matching vessels.',
