@@ -28,6 +28,7 @@ import { SiPscSelection, SiSelectionError } from './si-psc-selection.mjs';
 import { SiAiPrioritization, SiPriorityError } from './si-ai-prioritization.mjs';
 import {SiCandidateAgent,SiCandidateAgentError} from './si-candidate-agent.mjs';
 import {SiInspectionPlan} from './si-inspection-plan.mjs';
+import {SiRollingPlanStore,SiRollingPlanError} from './si-rolling-plan-store.mjs';
 import {SiBulkInspectionPlan,SiBulkApprovalError} from './si-bulk-inspection-plan.mjs';
 import {mockSiP01,mockSiA04,mockSiC01} from './si-agent-mock.mjs';
 import { SiInspectionPreparation, SiPreparationError } from './si-inspection-preparation.mjs';
@@ -229,8 +230,9 @@ const siCandidateAgent=new SiCandidateAgent({
   targeting:siTargeting,pscPolicy:()=>siPscSelection.policy(),provider:siAiProvider,
   executeAgent:async input=>siAiProvider==='mock'?mockSiC01(input):fleetAgentCall('c01',input)
 });
+const siRollingPlans=new SiRollingPlanStore({mode:dbMode,oracleRepository:repository});
 const siInspectionPlan=new SiInspectionPlan({
-  targeting:siTargeting,candidateAgent:siCandidateAgent
+  targeting:siTargeting,candidateAgent:siCandidateAgent,rollingPlans:siRollingPlans
 });
 const siPreparation=new SiInspectionPreparation({mode:dbMode,oracleRepository:repository,
   targeting:siTargeting,riskPolicy,provider:siAiProvider,
@@ -874,9 +876,37 @@ const server = createServer(async (req, res) => {
       // The first Smart Inspection screen: one read-only candidate/AI plan grid.
       // Operator plan changes require Editor authorisation, one confirmed C01
       // re-evaluation and backend validation; no official inspection approval.
+      // Rolling plans are independent, numbered and versioned. Creating a plan
+      // never calls C01, approves inspections, or touches legacy JSON.
+      if(path==='/api/si/v1/inspection-plans'&&req.method==='GET'){
+        dashboards.assertRole(req,'EDITOR');
+        return respond(res,200,{plans:await siRollingPlans.list()});
+      }
+      if(path==='/api/si/v1/inspection-plans'&&req.method==='POST'){
+        dashboards.assertRole(req,'EDITOR');
+        const identity=moeiAuth.session(req);
+        return respond(res,201,await siRollingPlans.create(
+          await requestJson(req,4096),identity?.email||identity?.username||'ADMIN'));
+      }
+      const rollingPath=/^\/api\/si\/v1\/inspection-plans\/([a-f0-9-]{36})(?:\/(cancel))?$/.exec(path);
+      if(rollingPath){
+        if(req.method==='GET'&&!rollingPath[2]){
+          dashboards.assertRole(req,'EDITOR');
+          return respond(res,200,await siRollingPlans.get(rollingPath[1]));
+        }
+        if(req.method==='POST'&&rollingPath[2]==='cancel'){
+          dashboards.assertRole(req,'PUBLISHER');
+          const body=await requestJson(req,4096);
+          const identity=moeiAuth.session(req);
+          return respond(res,200,await siRollingPlans.cancel(
+            rollingPath[1],body.expectedRevision,
+            identity?.email||identity?.username||'ADMIN',body.reason));
+        }
+      }
       if(path==='/api/si/v1/inspection-plan'&&req.method==='GET'){
         dashboards.assertRole(req,'EDITOR');
-        return respond(res,200,await siInspectionPlan.snapshot());
+        const planId=new URL(req.url||'/', 'http://localhost').searchParams.get('planId');
+        return respond(res,200,await siInspectionPlan.snapshot(planId));
       }
       if(path==='/api/si/v1/inspection-plan/rerank'&&req.method==='POST'){
         dashboards.assertRole(req,'EDITOR');
@@ -887,7 +917,8 @@ const server = createServer(async (req, res) => {
       // with explicitly authorized optional A04/P01 paid calls.
       if(path==='/api/si/v1/inspection-batches/preview'&&req.method==='GET'){
         dashboards.assertRole(req,'EDITOR');
-        return respond(res,200,await siBulkPlan.preview());
+        const planId=new URL(req.url||'/', 'http://localhost').searchParams.get('planId');
+        return respond(res,200,await siBulkPlan.preview(planId));
       }
       if(path==='/api/si/v1/inspection-batches'&&req.method==='GET'){
         dashboards.assertRole(req,'EDITOR');
@@ -1077,7 +1108,7 @@ const server = createServer(async (req, res) => {
       }
       return respond(res,405,{error:'METHOD_NOT_ALLOWED'});
     }catch(e){
-      if(e instanceof SiBulkApprovalError||e instanceof SiCandidateAgentError||e instanceof SiLifecycleError||e instanceof SiSelectionError||e instanceof SiPriorityError||e instanceof SiPreparationError||e instanceof SiTargetingError||e instanceof DashboardError)
+      if(e instanceof SiRollingPlanError||e instanceof SiBulkApprovalError||e instanceof SiCandidateAgentError||e instanceof SiLifecycleError||e instanceof SiSelectionError||e instanceof SiPriorityError||e instanceof SiPreparationError||e instanceof SiTargetingError||e instanceof DashboardError)
         return respond(res,e.status,{error:e.code});
       if(Number.isInteger(e?.status)&&e.status>=400&&e.status<500)
         return respond(res,e.status,{error:'SI_REQUEST_INVALID'});
