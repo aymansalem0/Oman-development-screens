@@ -17,7 +17,9 @@ function workspace({referrals=[],projection=[]}={}){
     riskPolicy:{ready:true,projectCurrent:async()=>({
       policyRevision:2,projections:projection
     })}});
-  return {subject,cleanup:()=>rmSync(dir,{force:true,recursive:true}),agentCalls:()=>agentCalls};
+  return {subject,// Windows Node 24 may observe transient Defender/indexer locks in fresh TEMP
+    // workspaces. Retry ENOTEMPTY/EPERM/EBUSY only for this disposable test dir.
+    cleanup:()=>rmSync(dir,{force:true,recursive:true,maxRetries:12,retryDelay:100}),agentCalls:()=>agentCalls};
 }
 function source(overrides={}){
   return {sourceType:'SERVICE_REQUEST',sourceEventId:'SR-1',sourceReference:'SVC-1',
