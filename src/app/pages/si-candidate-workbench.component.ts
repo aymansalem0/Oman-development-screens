@@ -351,9 +351,13 @@ export class SiCandidateWorkbenchComponent implements OnInit{
   constructor(private readonly api:SiCandidateTargetingService,public readonly lang:LanguageService,
   public readonly auth:MoeiAuthService){}
   copy(en:string,ar:string):string{return this.lang.pick(en,ar);}
-  ngOnInit():void{this.loadRollingPlans();this.refresh();}
+  ngOnInit():void{this.refresh();}
   refresh():void{
     if(this.loading)return;
+    // Refresh both independent data sources. Previously this button only
+    // retried candidate targeting, leaving a recovered planning API stuck
+    // on SI_TARGETING_UNAVAILABLE until a full browser reload.
+    this.loadRollingPlans();
     this.loading=true;this.error='';
     this.api.dashboard().subscribe({
       next:data=>{
