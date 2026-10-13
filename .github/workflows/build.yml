@@ -47,6 +47,9 @@ jobs:
       - name: SI-C01 visible access regression
         run: node --test scripts/test-si-c01-visible-access.mjs
 
+      - name: Smart Inspection guided plan and reason regression
+        run: node --test scripts/test-si-plan-stepper.mjs
+
       - name: SI-02 preparation case list and deep-link regression
         run: node --test scripts/test-si02-preparation-route.mjs
 
