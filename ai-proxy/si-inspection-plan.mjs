@@ -179,14 +179,14 @@ export class SiInspectionPlan{
   */
  async select({planId,imo,action,reason,reviewAfter=null,expectedRevision,
                expectedSourceHash,actor}={}){
-  if(!planId||!/^\\d{7}$/.test(imo||'')||
+  if(!planId||!/^\d{7}$/.test(imo||'')||
     !['INCLUDE','NOT_SELECTED','DEFER','NOT_APPLICABLE'].includes(action)||
     !Number.isInteger(expectedRevision)||typeof actor!=='string'||
     !actor.trim()||actor.length>120||typeof reason!=='string'||
     reason.trim().length<8||reason.length>500)
    throw new SiCandidateAgentError('SI_PLAN_SELECTION_INVALID',422);
   if(action==='DEFER'&&
-    (typeof reviewAfter!=='string'||!/^\\d{4}-\\d{2}-\\d{2}$/.test(reviewAfter)||
+    (typeof reviewAfter!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(reviewAfter)||
      Number.isNaN(Date.parse(reviewAfter+'T00:00:00Z'))))
    throw new SiCandidateAgentError('SI_PLAN_REVIEW_DATE_REQUIRED',422);
   const state=await this.rolling.get(planId);
