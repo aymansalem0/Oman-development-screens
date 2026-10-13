@@ -3,7 +3,7 @@ import { BehaviorSubject, Observable } from 'rxjs';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { map, tap } from 'rxjs/operators';
 import { NmcVesselProfile, RiskLevel } from '../data/nmc-vessel-catalog';
-import { NMC_OPERATIONAL_VESSELS } from '../data/nmc-expanded-vessel-catalog';
+import {AIRIA_DEMO_99_VESSELS} from '../data/airia-demo-cohort';
 
 export type RiskFactorKey = 'movement' | 'inspection' | 'certificate' | 'dataQuality' | 'history' | 'documentIntegrity';
 export type RiskCalculationMode = 'weighted' | 'conservative' | 'max-signal';
@@ -97,7 +97,7 @@ const DEFAULT_CONFIG: RiskEngineConfig = {
 export class NmcRiskEngineService {
   private readonly storageKey = 'moei-nmc-risk-engine-config:v1';
   private readonly baselineRisk = new Map<number, number>(
-    NMC_OPERATIONAL_VESSELS.map(vessel => [vessel.id, vessel.risk])
+    AIRIA_DEMO_99_VESSELS.map(vessel => [vessel.id, vessel.risk])
   );
 
   private readonly configSubject = new BehaviorSubject<RiskEngineConfig>(this.cloneConfig(DEFAULT_CONFIG));
