@@ -75,3 +75,12 @@ test('Five mandatory POC templates seed as DRAFT, are repeatable, resolve by reg
   assert.equal((await library.list()).length,5);
  }finally{rmSync(dir,{recursive:true,force:true});}
 });
+
+test('Oracle reset metadata snapshot uses non-reserved bind variable (ORA-01745 regression)',()=>{
+ const sql=readFileSync(new URL('../tools/reset-si-poc-actions.mjs',import.meta.url),'utf8');
+ assert.doesNotMatch(sql,/TABLE_NAME\s*=\s*:table\b/i);
+ assert.match(sql,/TABLE_NAME=:p_table_name/);
+ assert.match(sql,/\{p_table_name:row\.table\}/);
+ assert.ok(sql.indexOf("conn.commit()") > sql.indexOf("writePrivate(join(folder,'oracle'"),
+   'oracle pre-delete snapshots must complete before commit');
+});
