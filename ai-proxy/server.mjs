@@ -1124,8 +1124,15 @@ const server = createServer(async (req, res) => {
         return respond(res,e.status,{error:e.code});
       if(Number.isInteger(e?.status)&&e.status>=400&&e.status<500)
         return respond(res,e.status,{error:'SI_REQUEST_INVALID'});
-      console.error('[si-targeting] REQUEST_FAILED '+String(e?.code||'UNAVAILABLE').replace(/[^A-Z0-9_-]/gi,'').slice(0,40));
-      return respond(res,503,{error:'SI_TARGETING_UNAVAILABLE'});
+      const rollingRoute=path==='/api/si/v1/inspection-plans'||
+        path.startsWith('/api/si/v1/inspection-plans/');
+      // These two modules share the SI router but have different Oracle
+      // repositories. Don't report a rolling-catalog failure as targeting.
+      const module=rollingRoute?'si-rolling':'si-targeting';
+      console.error('['+module+'] REQUEST_FAILED '+
+        String(e?.code||'UNAVAILABLE').replace(/[^A-Z0-9_-]/gi,'').slice(0,40));
+      return respond(res,503,{error:rollingRoute?
+        'SI_ROLLING_STORE_UNAVAILABLE':'SI_TARGETING_UNAVAILABLE'});
     }
   }
 
