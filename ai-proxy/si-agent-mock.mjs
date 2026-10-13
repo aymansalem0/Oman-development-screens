@@ -7,6 +7,7 @@
  * C01 uses genuine candidate keys and submitted evidence references.
  * P01 and A04 retain their EXISTING downstream validators and contracts.
  */
+import {compareInspections,inspectionRanking} from './si-inspection-ranking.mjs';
 export const SI_MOCK_MARKER='MOCK_POC_NOT_REAL_AI';
 const unique=a=>[...new Set(a.filter(x=>typeof x==='string'&&x.trim()))];
 
@@ -51,23 +52,15 @@ export function mockSiA04(input){
 export function mockSiC01(input){
   if(input?.schemaVersion!=='SI-C01-v1'||!Array.isArray(input.candidates))
     throw new TypeError('SI_C01_MOCK_INPUT_INVALID');
-  const scores=input.sourceTriggerScores||{NMC_CASE:100,SERVICE_REQUEST:100,PSC_PORT_CALL:20};
-  // Source-trigger scores are the ONLY configured source priorities.
-  // Approved NMC is protected ahead of other sources even when both score 100.
-  // A PSC candidate has already passed the separate quota/selection gate.
   const hasEvidence=c=>Array.isArray(c.allowedEvidence)&&c.allowedEvidence.length>0;
-  const tier=c=>c.sourceEvents?.some(e=>e.sourceType==='NMC_CASE'&&
-    e.approval==='APPROVED')?0:1;
-  const score=c=>Math.max(0,...(c.sourceTypes||[]).map(type=>scores[type]??0));
-  const ranked=input.candidates.filter(hasEvidence).sort((a,b)=>
-    tier(a)-tier(b)||score(b)-score(a)||
-    a.imo.localeCompare(b.imo)||a.candidateKey.localeCompare(b.candidateKey));
+  const ranked=input.candidates.filter(hasEvidence).sort(compareInspections);
   const rank=new Map(ranked.map((c,i)=>[c.candidateKey,i+1]));
   return {recommendations:input.candidates.map(c=>{
     if(!c.candidateKey||!Array.isArray(c.allowedEvidence))
       throw new TypeError('SI_C01_MOCK_CANDIDATE_INVALID');
     const evidenceRefs=unique(c.allowedEvidence).slice(0,12);
     const noRisk=!c.currentRisk||!Number.isFinite(c.currentRisk.score);
+    const signal=inspectionRanking(c);
     const recommendation=hasEvidence(c)?'SELECT_RECOMMENDED':'MANUAL_REVIEW';
     const officerChange=(input.officerPlanChanges||[]).find(x=>x.imo===c.imo);
     const officerText=officerChange?
@@ -76,9 +69,9 @@ export function mockSiC01(input){
         ' with reason: '+officerChange.reason+'. Protected NMC tier still applies.':'';
     return {candidateKey:c.candidateKey,recommendation,confidence:0.8,
       suggestedRank:recommendation==='SELECT_RECOMMENDED'?rank.get(c.candidateKey):null,
-      priorityRationale:'MOCK: published source trigger priority '+score(c)+
-        '/100; approved NMC referrals form protected tier 0; then source score descending.'+
-        ' No NMC risk score used for ranking or inspection approval.'+officerText,
+      priorityRationale:'MOCK deterministic execution ranking: '+signal.criterion+
+        '. '+signal.reason+'. No vessel risk or source-trigger score determines the order.'+
+        officerText,
       reason:recommendation==='SELECT_RECOMMENDED'?
         'MOCK: source-backed candidate eligible for supervisor planning review.':
         'MOCK: no verified source evidence for recommendation; manual review required.',
