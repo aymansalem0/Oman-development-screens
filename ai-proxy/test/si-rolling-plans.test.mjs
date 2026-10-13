@@ -41,6 +41,7 @@ test('independent rolling drafts retain distinct IDs, periods and revisions acro
   const p=await x.create('Morning Inspection');
   const q=await x.create('Afternoon Inspection');
   assert.notEqual(p.id,q.id);
+  assert.equal(Object.hasOwn(p,'port'),false,'new plan has no port field');
   assert.notEqual(p.number,q.number);
   assert.equal((await x.rolling.list()).length,2);
   assert.equal((await x.plan.snapshot(p.id)).agentRunId,null);
