@@ -302,6 +302,17 @@ export class SiBulkInspectionPlan{
    }else job.priorityStatus='NOT_REQUESTED';
    job.status=job.items.every(x=>x.state==='READY')&&
      !job.priorityStatus.startsWith('FAILED')?COMPLETED:PARTIAL;
+   // Plan is now in operational execution (even if a dossier needs review).
+   // Case IDs and prior approved scope are frozen; this is a state-only version.
+   if(job.planId&&job.approvedCount>0&&this.plan.rolling){
+    try{await this.plan.rolling.setExecutionState(job.planId,'IN_EXECUTION',
+      job.approvedBy);}
+    catch(e){
+     job.status=PARTIAL;
+     job.progressMessage='SI_ROLLING_EXECUTION_STATE_REVIEW_REQUIRED';
+     job.priorityStatus=job.priorityStatus+';PLAN_SYNC_'+(e.code||'FAILED');
+    }
+   }
    job.finishedAt=now();job.updatedAt=now();
    job.progressMessage=job.status===COMPLETED?'BATCH_COMPLETED':
       'BATCH_PARTIALLY_COMPLETED_REVIEW_ITEMS';
