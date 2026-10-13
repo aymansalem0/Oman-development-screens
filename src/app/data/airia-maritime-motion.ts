@@ -43,6 +43,7 @@ export function initialOffshoreVessel(v:NmcVesselProfile,position:number):NmcVes
  const routeKey=AIRIA_ROUTE_KEYS[position%AIRIA_ROUTE_KEYS.length];
  const progress=((position*0.137+0.19)%1.92)+0.04;
  return {...v,routeKey,routeProgress:progress,
+  zone:routeKey.startsWith('airiaGulf')?'Arabian Gulf Offshore':'Gulf of Oman Offshore',
   ...offshorePoint(routeKey,progress)};
 }
 export function advanceOffshoreVessel(v:NmcVesselProfile,seconds=2.5):NmcVesselProfile{
