@@ -29,7 +29,7 @@ class Connection{
     [{STATE_JSON:JSON.stringify(db.records.get(binds.id))}]:[]);
   if(q.startsWith('SELECT PLAN_ID FROM SI_PLAN_ROLLING_VESSEL'))
    return answer(db.vessels.filter(v=>v.caseId===binds.id)
-    .map(v=>({PLAN_ID:v.plan})));
+    .map(v=>({PLAN_ID:v.rollingId})));
   if(q.startsWith('INSERT INTO SI_PLAN_ROLLING (')){
    const p=JSON.parse(binds.state.val);db.records.set(p.id,p);
    return {rowsAffected:1};
