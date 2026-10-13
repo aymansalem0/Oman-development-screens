@@ -95,7 +95,7 @@ test('C01 initial confirmed MOCK run persists one vessel row/IMO and protected N
   assert.equal(e.calls.length,1);
  }finally{e.cleanup();}
 });
-test('officer includes unselected PSC vessel then C01 re-ranks but respects protected NMC',async()=>{
+test('officer priority edit works within verified rank tier without changing NMC inclusion rights',async()=>{
  const e=testEnv();
  try{
   await e.plan.rerank(request(await e.plan.snapshot()));
@@ -104,8 +104,8 @@ test('officer includes unselected PSC vessel then C01 re-ranks but respects prot
   }));
   assert.equal(out.rows.find(x=>x.imo===imoPsc).planSelected,true);
   assert.equal(out.rows.find(x=>x.imo===imoPsc).selectionOrigin,'OFFICER_AMENDED');
-  assert.equal(out.rows.find(x=>x.imo===imoNmc).effectiveRank,1);
-  assert.equal(out.rows.find(x=>x.imo===imoPsc).effectiveRank,2);
+  assert.equal(out.rows.find(x=>x.imo===imoPsc).effectiveRank,1);
+  assert.equal(out.rows.find(x=>x.imo===imoNmc).effectiveRank,2);
   assert.equal(out.aiRecommendedVessels,1);
   assert.equal(out.selectedForPlan,2);
   assert.equal(e.calls.length,2,'one explicit C01 rerun per confirmed operation');

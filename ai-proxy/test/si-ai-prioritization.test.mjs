@@ -128,10 +128,8 @@ test('stale fingerprint blocks paid call before execution and flags prior run',a
     await w.prioritization.run({actor:'Officer',confirmCost:true,
       expectedSnapshotHash:newer.snapshotHash});
     await w.targeting.publishRules({expectedVersion:1,publishedBy:'Supervisor',
-      reason:'Change published priority weight',
-      config:{riskPriorityThreshold:65,includeMissingRiskInReview:true,
-        prioritization:{weights:{risk:25,trigger:25,history:25,deadline:15,urgency:10},
-          approvedNmcFirst:true,missingRiskAction:'REVIEW_REQUIRED'}}});
+      reason:'Change published source priority',
+      config:{ranking:{criteria:['DEPARTURE_SOON','INCIDENT_SEVERITY']}}});
     assert.equal((await w.prioritization.status()).latest.isStale,true);
     assert.equal(w.calls(),1);
   }finally{w.cleanup();}
@@ -179,23 +177,19 @@ test('missing-saved-risk cannot be represented as risk zero or fake assessment',
     assert.ok(p.items[0].allowedEvidence.includes(referral.id));
   }finally{w.cleanup();}
 });
-test('settings reject invalid weights, and new publish retains unchanged source risk',async()=>{
+test('settings reject retired source score config, ranking publish retains NMC risk',async()=>{
   const w=context();
   try{
     await assert.rejects(()=>w.targeting.publishRules({
       expectedVersion:1,publishedBy:'Supervisor',reason:'Invalid percentage sum',
-      config:{riskPriorityThreshold:65,includeMissingRiskInReview:true,
-        prioritization:{weights:{risk:99,trigger:25,history:20,deadline:15,urgency:10},
-          approvedNmcFirst:true,missingRiskAction:'REVIEW_REQUIRED'}}
+      config:{riskPriorityThreshold:65,sourceTriggerScores:{NMC_CASE:100,SERVICE_REQUEST:100,PSC_PORT_CALL:20}}
     }),e=>e.code==='SI_POLICY_INPUT_INVALID');
     const before=await w.targeting.dashboard();
     const out=await w.targeting.publishRules({
-      expectedVersion:1,publishedBy:'Supervisor',reason:'Approved new weighting mix',
-      config:{riskPriorityThreshold:70,includeMissingRiskInReview:true,
-        prioritization:{weights:{risk:25,trigger:25,history:25,deadline:15,urgency:10},
-          approvedNmcFirst:true,missingRiskAction:'REVIEW_REQUIRED'}}
+      expectedVersion:1,publishedBy:'Supervisor',reason:'Approved source trigger priority',
+      config:{ranking:{criteria:['DEPARTURE_SOON','INCIDENT_SEVERITY']}}
     });
-    assert.equal(out.config.prioritization.weights.history,25);
+    assert.deepEqual(out.config.ranking.criteria,['DEPARTURE_SOON','INCIDENT_SEVERITY']);
     assert.deepEqual((await w.targeting.dashboard()).candidates[0].currentRisk,
       before.candidates[0].currentRisk);
     assert.equal(w.calls(),0);

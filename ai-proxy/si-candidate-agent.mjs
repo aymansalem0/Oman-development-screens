@@ -5,6 +5,7 @@
  */
 import {createHash,randomUUID} from 'node:crypto';
 import {mockSiC01,SI_MOCK_MARKER} from './si-agent-mock.mjs';
+import {getSiRankingPolicy} from './si-inspection-ranking.mjs';
 
 const hash=x=>createHash('sha256').update(JSON.stringify(x)).digest('hex');
 const unique=a=>[...new Set(a.filter(x=>typeof x==='string'&&x.trim()))];
@@ -15,12 +16,15 @@ export class SiCandidateAgentError extends Error{
 export function buildC01Source(dashboard,pscPolicy=null){
   if(!dashboard?.policy||!Array.isArray(dashboard.candidates))
     throw new SiCandidateAgentError('SI_C01_SOURCE_UNAVAILABLE',503);
+  const ranking=getSiRankingPolicy(dashboard.policy.config);
+  const vesselSignals=new Map((dashboard.vesselCandidates||[]).map(v=>[v.imo,v]));
   const candidates=dashboard.candidates
     .filter(c=>!c.inspectionCase&&(
       c.status==='PENDING_REVIEW'||
       (c.status==='EXTERNALLY_SCHEDULED'&&
         c.events.some(e=>e.sourceType==='NMC_CASE'&&e.approval==='APPROVED'))))
     .map(c=>{
+      const vessel=vesselSignals.get(c.imo)||{};
       const allowedEvidence=unique(c.events.flatMap(e=>[
         e.eventKey,e.sourceEventId,e.sourceReference,...(e.evidenceIds||[])]));
       return {candidateKey:c.key,imo:c.imo,regime:c.regime,
@@ -32,11 +36,17 @@ export function buildC01Source(dashboard,pscPolicy=null){
           sourceReference:e.sourceReference,approval:e.approval,
           evidenceIds:e.evidenceIds||[]
         })),
-        allowedEvidence,reasons:c.reasons||[],rulePriority:c.priority};
+        allowedEvidence,reasons:c.reasons||[],rulePriority:c.priority,
+        departureAt:vessel.departureVerified===true?vessel.departureAt:null,
+        departureVerified:vessel.departureVerified===true,
+        incidentSeverity:vessel.incidentHumanReviewed===true?vessel.incidentSeverity:null,
+        incidentHumanReviewed:vessel.incidentHumanReviewed===true,
+        incidentEvidenceRef:vessel.incidentEvidenceRef||null,
+        requiredInPlan:c.events.some(e=>e.sourceType==='SERVICE_REQUEST'||
+          (e.sourceType==='NMC_CASE'&&e.approval==='APPROVED'))};
     }).sort((a,b)=>a.candidateKey.localeCompare(b.candidateKey));
   const source={schemaVersion:'SI-C01-v1',
-    selectionRiskThreshold:Number.isInteger(dashboard.policy.config?.riskPriorityThreshold)?
-      dashboard.policy.config.riskPriorityThreshold:65,
+    ranking,
     policyRevision:dashboard.policy.version,
     riskPolicyRevision:dashboard.riskPolicyRevision,
     pscQuotaPolicyRevision:pscPolicy?.version??null,
@@ -68,8 +78,7 @@ export function validateC01(raw,source){
     // Business-gated recommendation: a model cannot silently select unapproved
     // PSC/service candidates or candidates with missing verified risk.
     if(r.recommendation==='SELECT_RECOMMENDED'&&
-      (!c.currentRisk||!Number.isFinite(c.currentRisk.score)||
-       !r.evidenceRefs.length||!c.sourceTypes.length))
+      (!r.evidenceRefs.length||!c.sourceTypes.length))
       throw new SiCandidateAgentError('SI_C01_HARD_RULE_OVERRIDE',502);
     seen.add(r.candidateKey);
     return {candidateKey:c.candidateKey,imo:c.imo,regime:c.regime,
@@ -133,7 +142,7 @@ export class SiCandidateAgent{
      requestMeta:{correlationId:'SI-C01-'+randomUUID(),actor:input.actor.trim(),
        language:'en',mode:'ADVISORY_ONLY'},
      snapshotHash:s.snapshotHash,policyRevision:s.policyRevision,
-     selectionRiskThreshold:s.selectionRiskThreshold,
+     ranking:s.ranking,
      officerPlanChanges,
      riskPolicyRevision:s.riskPolicyRevision,
      pscQuotaPolicyRevision:s.pscQuotaPolicyRevision,
