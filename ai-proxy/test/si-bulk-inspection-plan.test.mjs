@@ -76,7 +76,7 @@ function setup(){
   reason:'All source reasons were reviewed before approving the plan.',
   expectedRevision:4,expectedSourceHash:'saved-c01-hash',
   expectedAgentRunId:'C01-OPERATOR-4',confirmApproval:true,
-  generateA04:true,runP01:true,confirmAiCost:false};
+  generateA04:true,runP01:false,confirmAiCost:false};
  return {bulk,request,cases,dossiers,ai,queue,
   change:()=>{sourceHash='another-hash';revision++;},
   stale:()=>{planStale=true;},
@@ -112,7 +112,7 @@ test('one supervisor approval creates one case per vessel with ALL reasons and t
   assert.equal(job.items[1].reasonCount,2);
   assert.equal(t.dossiers.size,2);
   assert.equal(t.ai.filter(x=>x[0]==='A04').length,2);
-  assert.equal(t.ai.filter(x=>x[0]==='P01').length,1);
+  assert.equal(t.ai.filter(x=>x[0]==='P01').length,0);
   const repeated=await t.bulk.approve(t.request);
   assert.equal(repeated.id,accepted.id);
   assert.equal(t.queue.length,0,'duplicate approval never enqueues a second batch');
@@ -130,11 +130,13 @@ test('never accept an old plan or an API payload choosing only one source',async
   assert.equal(t.cases.length,0);
  }finally{t.done()}
 });
-test('explicit cost confirmation required for real Airia A04/P01; baseline prep free',async()=>{
+test('explicit cost confirmation required for real Airia A04; P01 retired',async()=>{
  const t=setup();
  try{
   t.bulk.preparation.provider='airia';
   t.bulk.priority.provider='airia';
+  await assert.rejects(t.bulk.approve({...t.request,generateA04:false,runP01:true}),
+    /SI_P01_OUT_OF_CURRENT_POC_SCOPE/);
   await assert.rejects(t.bulk.approve(t.request),
     /SI_BULK_EXPLICIT_AI_COST_CONFIRMATION_REQUIRED/);
   const p=await t.bulk.approve({...t.request,generateA04:false,runP01:false});
