@@ -41,6 +41,7 @@ const rawRoutes: Routes = [
   { path: 'moei/nmc/dashboards/:id', loadComponent: () => import('./pages/nmc-dashboard-builder.component').then(m => m.NmcDashboardBuilderComponent) },
   { path: 'moei/nmc/admin/risk-configuration', loadComponent: () => import('./pages/nmc-risk-configuration-admin.component').then(m => m.NmcRiskConfigurationAdminComponent) },
   { path: 'moei/nmc/admin/data-quality', loadComponent: () => import('./pages/nmc-data-quality-configuration.component').then(m => m.NmcDataQualityConfigurationComponent) },
+ { path: 'moei/settings/ai-governance', loadComponent: () => import('./pages/nmc-runtime-settings.component').then(m=>m.NmcRuntimeSettingsComponent) },
  { path: 'moei/nmc/admin/runtime-settings', loadComponent: () => import('./pages/nmc-runtime-settings.component').then(m=>m.NmcRuntimeSettingsComponent) },
   { path: 'moei/nmc/admin/operational-guidance', loadComponent: () => import('./pages/nmc-operational-guidance-admin.component').then(m => m.NmcOperationalGuidanceAdminComponent) },
   { path: 'moei/nmc/vessel/:imo/smart-inspection', loadComponent: () => import('./pages/nmc-smart-inspection.component').then(m => m.NmcSmartInspectionComponent) },
