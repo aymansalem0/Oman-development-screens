@@ -60,12 +60,12 @@ test('C01 returns stable advisory without approving cases or Airia',async()=>{
  assert.equal(r.recommendations.length,2);
  assert.equal(r.recommendations.find(x=>x.candidateKey==='nmc').recommendation,'SELECT_RECOMMENDED');
  assert.equal(r.recommendations.find(x=>x.candidateKey==='psc').recommendation,'SELECT_RECOMMENDED');
- assert.equal(r.recommendations.find(x=>x.candidateKey==='psc').dataGaps[0],'MISSING_NMC_SAVED_RISK');
+ assert.equal(r.recommendations.find(x=>x.candidateKey==='psc').dataGaps[0],'MISSING_NMC_SAVED_RISK_INFORMATIONAL_ONLY');
 });
 test('C01 never fabricates risk 0 for missing saved assessment',()=>{
  const source=buildC01Source(inputs(),{version:6});
  const r=mockSiC01(source);
- assert.equal(r.recommendations.find(x=>x.candidateKey==='psc').recommendation,'MANUAL_REVIEW');
+ assert.equal(r.recommendations.find(x=>x.candidateKey==='psc').recommendation,'SELECT_RECOMMENDED');
  assert.equal(source.candidates.find(c=>c.candidateKey==='psc').currentRisk,null);
 });
 test('C01 rejects stale snapshot before any external request',async()=>{
@@ -104,6 +104,7 @@ test('C01 fails closed on unknown evidence, duplicate candidates, and regulatory
  const illegal=structuredClone(valid);
  illegal.recommendations[1].recommendation='SELECT_RECOMMENDED';
  illegal.recommendations[1].suggestedRank=2;
+ illegal.recommendations[1].evidenceRefs=[];
  assert.throws(()=>validateC01(illegal,source),/SI_C01_HARD_RULE_OVERRIDE/);
 });
 test('P01 MOCK response passes unchanged existing validator, without model calls',()=>{
@@ -154,4 +155,23 @@ test('C01 ranks all evidence-backed NMC, Service Requests and quota-selected PSC
  assert.ok(output.find(x=>x.candidateKey==='service-low').suggestedRank <
    output.find(x=>x.candidateKey==='psc-hi').suggestedRank);
  assert.equal(output.find(x=>x.candidateKey==='nmc').suggestedRank,1);
+});
+
+test('All verified source-backed service candidates are C01 ranked even at low or missing NMC risk',()=>{
+ const d=inputs();
+ d.policy.config={sourceTriggerScores:{NMC_CASE:100,SERVICE_REQUEST:100,PSC_PORT_CALL:20}};
+ d.candidates.push(candidate('service-no-risk','SERVICE_REQUEST','9700012',null));
+ d.candidates.push(candidate('service-low-risk','SERVICE_REQUEST','9700013',4));
+ const input=buildC01Source(d,{version:6});
+ const model=mockSiC01(input);
+ const checked=validateC01(model,input);
+ for(const key of ['service-no-risk','service-low-risk']){
+   const r=checked.find(x=>x.candidateKey===key);
+   assert.equal(r.recommendation,'SELECT_RECOMMENDED');
+   assert.equal(input.candidates.find(x=>x.candidateKey===key).sourcePriorityScore,100);
+ }
+ assert.equal(input.sourceTriggerScores.SERVICE_REQUEST,100);
+ assert.equal(input.sourceTriggerScores.PSC_PORT_CALL,20);
+ assert.ok(checked.find(x=>x.candidateKey==='service-low-risk').suggestedRank <
+   checked.find(x=>x.candidateKey==='psc').suggestedRank);
 });
