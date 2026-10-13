@@ -119,20 +119,32 @@ export class SiInspectionPlan{
   if(planId&&!cycle)throw new SiCandidateAgentError('SI_ROLLING_PLAN_NOT_FOUND',404);
   const [source,dashboard]=await Promise.all([this.agent.source(),this.targeting.dashboard()]);
   const state=cycle||this.read();
-  const current=state.latest?.snapshotHash===source.snapshotHash?state.latest:null;
-  const rows=projectInspectionPlan(dashboard,source,current,state.overrides);
+  // Historical approval records are snapshots, NOT live C01 proposals:
+  // opening last month's plan must not erase its vessel selection just
+  // because the current PSC queue/NMC risk has changed overnight.
+  const historical=Boolean(cycle&&
+    ['APPROVED','IN_EXECUTION','COMPLETED','CANCELLED'].includes(cycle.status));
+  const changed=Boolean(state.latest&&state.latest.snapshotHash!==source.snapshotHash);
+  const current=historical?state.latest:
+    changed?null:state.latest;
+  const rows=historical&&Array.isArray(state.latest?.rows)?
+    structuredClone(state.latest.rows):
+    projectInspectionPlan(dashboard,source,current,state.overrides);
   return {status:'ok',planId:cycle?.id||null,
    planNumber:cycle?.number||null,planStatus:cycle?.status||null,
    planPeriod:cycle?{startsOn:cycle.startsOn,endsOn:cycle.endsOn}:null,
    provider:this.agent.provider.toUpperCase(),
    mock:this.agent.provider==='mock',sourceHash:source.snapshotHash,
    revision:state.revision,generatedAt:current?.generatedAt||null,
-   agentRunId:current?.agentRunId||null,stale:Boolean(state.latest&&!current),
+   agentRunId:current?.agentRunId||null,stale:!historical&&changed,
+   historicalSourceChanged:historical&&changed,readOnlyHistorical:historical,
    externalCallsOnRead:0,aiRecommendedVessels:current?
     rows.filter(r=>r.aiRecommended).length:null,
    selectedForPlan:current?rows.filter(r=>r.planSelected).length:null,
    approvedCases:dashboard.summary.inspectionsCreated,
-   warning:'ADVISORY INSPECTION PLAN ONLY: not regulatory approval, PSC quota selection or scheduling.',
+   warning:historical?
+    'HISTORICAL APPROVED/CANCELLED PLAN: showing saved selection; new live source does not rewrite history.':
+    'ADVISORY INSPECTION PLAN ONLY: not regulatory approval, PSC quota selection or scheduling.',
    rows};
  }
  async rerank(input={}){
