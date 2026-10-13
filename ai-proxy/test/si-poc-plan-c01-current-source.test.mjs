@@ -24,7 +24,7 @@ test('C01 on newly created plan only evaluates vessels currently in genuine pend
     evidenceIds:['EVD-'+currentImo]}]});
   const targeting={dashboard:async()=>{
    const c=candidate();
-   return {policy:{version:2,config:{riskPriorityThreshold:65}},
+   return {policy:{version:2,config:{sourceTriggerScores:{NMC_CASE:100,SERVICE_REQUEST:100,PSC_PORT_CALL:20}}},
     riskPolicyRevision:2,fleetSnapshotId:'TEST-FLEET-1',
     summary:{inspectionsCreated:0},candidates:[c],
     vesselCandidates:[{
