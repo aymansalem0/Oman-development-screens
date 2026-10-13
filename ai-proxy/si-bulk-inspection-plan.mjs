@@ -68,7 +68,9 @@ export class SiBulkInspectionPlan{
    totalSelected,sourceHash,planRevision,approvalReason,mode,finishedAt,
    progressMessage,priorityStatus,
    items:items.map(x=>({imo:x.imo,candidateKey:x.candidateKey,
-     regime:x.regime,vesselName:x.vesselName,planRank:x.planRank,
+     regime:x.regime,regimes:x.regimes||[x.regime],
+     reasonCount:x.inspectionReasons?.length||0,
+     vesselName:x.vesselName,planRank:x.planRank,
      state:x.state,inspectionCaseId:x.inspectionCaseId,
      dossierStatus:x.dossierStatus,aiDossierStatus:x.aiDossierStatus,
      error:x.error||null}))};
@@ -77,24 +79,47 @@ export class SiBulkInspectionPlan{
  async preview(){
   const plan=await this.plan.snapshot();
   const dashboard=await this.targeting.dashboard();
-  const pending=new Map(dashboard.candidates.filter(x=>x.status==='PENDING_REVIEW'||
-     (x.status==='EXTERNALLY_SCHEDULED'&&x.events.some(e=>e.sourceType==='NMC_CASE'&&e.approval==='APPROVED')))
-    .map(c=>[c.key,c]));
+  const eligible=c=>c.status==='PENDING_REVIEW'||
+    (c.status==='EXTERNALLY_SCHEDULED'&&
+     c.events.some(e=>e.sourceType==='NMC_CASE'&&e.approval==='APPROVED'));
   const selected=(plan.stale||!plan.agentRunId)?[]:
     plan.rows.filter(x=>x.planSelected);
-  const vessels=selected.map(x=>{
-   const options=(dashboard.candidates||[]).filter(c=>c.imo===x.imo&&pending.has(c.key))
-    .map(c=>({candidateKey:c.key,imo:c.imo,regime:c.regime,
-      eligibility:c.eligibility,sourceTypes:c.events.map(e=>e.sourceType)}));
-   return {imo:x.imo,vesselName:x.vesselName,rank:x.effectiveRank,
-     options,defaultCandidateKey:options.length===1?options[0].candidateKey:null,
-     requiresRegimeChoice:options.length!==1};
+  const vessels=selected.map(row=>{
+    // One vessel, ALL eligible approval triggers. Never choose just one
+    // regulatory regime or discard the second NMC/service/PSC reason.
+    const workflows=(dashboard.candidates||[])
+      .filter(c=>c.imo===row.imo&&eligible(c))
+      .sort((a,b)=>Number(b.events.some(e=>e.sourceType==='NMC_CASE'))-
+        Number(a.events.some(e=>e.sourceType==='NMC_CASE'))||
+        a.regime.localeCompare(b.regime));
+    const triggers=new Map();
+    for(const workflow of workflows){
+      for(const event of workflow.events||[]){
+        const key=event.eventKey||
+          [event.sourceType,event.sourceEventId,workflow.regime].join(':');
+        if(!triggers.has(key))triggers.set(key,{
+          eventKey:key,candidateKey:workflow.key,
+          sourceType:event.sourceType,sourceEventId:event.sourceEventId,
+          sourceReference:event.sourceReference,inspectionRegime:workflow.regime,
+          sourceApproval:event.approval,
+          reason:event.contextNote||null,
+          evidenceIds:[...new Set(event.evidenceIds||[])],
+          sourceProvenance:event.provenance||null
+        });
+      }
+    }
+    return {imo:row.imo,vesselName:row.vesselName,rank:row.effectiveRank,
+      candidateKeys:workflows.map(c=>c.key),
+      primaryCandidateKey:workflows[0]?.key||null,
+      inspectionRegimes:[...new Set(workflows.map(c=>c.regime))],
+      reasons:[...triggers.values()],
+      missingSource:workflows.length===0||triggers.size===0};
   });
   const warnings=[];
   if(plan.stale)warnings.push('SI_PLAN_STALE_RERUN_C01');
   if(!plan.agentRunId)warnings.push('SI_C01_PLAN_NOT_GENERATED');
   if(!vessels.length)warnings.push('SI_PLAN_NO_SELECTED_VESSELS');
-  if(vessels.some(v=>v.requiresRegimeChoice))warnings.push('SI_INSPECTION_REGIME_SELECTION_REQUIRED');
+  if(vessels.some(v=>v.missingSource))warnings.push('SI_INSPECTION_SOURCE_UNAVAILABLE_REVIEW');
   return {status:'PREVIEW',sourceHash:plan.sourceHash,
     planRevision:plan.revision,agentRunId:plan.agentRunId,
     planGeneratedAt:plan.generatedAt,provider:plan.provider,
@@ -111,7 +136,7 @@ export class SiBulkInspectionPlan{
   const reason=text(input?.reason,500),actor=text(input?.actor,120);
   if(!actor||!reason||reason.length<8)
    throw new SiBulkApprovalError('SI_BULK_APPROVAL_REASON_REQUIRED',422);
-  if(input.confirmApproval!==true||!Array.isArray(input.choices)||
+  if(input.confirmApproval!==true||input.choices!==undefined||
      !Number.isInteger(input.expectedRevision)||typeof input.expectedSourceHash!=='string')
    throw new SiBulkApprovalError('SI_BULK_APPROVAL_INVALID',422);
   if(input.generateA04!==true&&input.generateA04!==false||
@@ -128,24 +153,22 @@ export class SiBulkInspectionPlan{
   if(preview.vessels.length>MAX_AI_PER_BATCH&&
     (input.generateA04||input.runP01))
    throw new SiBulkApprovalError('SI_BULK_AI_LIMIT_REVIEW_REQUIRED',422);
-  // UI must explicitly choose exactly one legal regime for every selected IMO.
-  // The batch decision itself is one click; no case is silently double-created.
-  if(input.choices.length!==preview.vessels.length)
-   throw new SiBulkApprovalError('SI_BULK_SELECTION_INCOMPLETE',422);
-  const chosen=new Map();
-  for(const x of input.choices){
-   if(typeof x?.imo!=='string'||typeof x?.candidateKey!=='string'||
-     chosen.has(x.imo))throw new SiBulkApprovalError('SI_BULK_SELECTION_INVALID',422);
-   chosen.set(x.imo,x.candidateKey);
-  }
-  const items=preview.vessels.map(v=>{
-   const option=v.options.find(x=>x.candidateKey===chosen.get(v.imo));
-   if(!option)throw new SiBulkApprovalError('SI_BULK_CANDIDATE_NOT_ELIGIBLE',409);
-   return {imo:v.imo,vesselName:v.vesselName,candidateKey:option.candidateKey,
-    regime:option.regime,planRank:v.rank,inspectionCaseId:null,
-    state:QUEUED,dossierStatus:'PENDING',aiDossierStatus:input.generateA04?'PENDING':'NOT_REQUESTED',
-    error:null};
-  });
+  if(preview.vessels.some(v=>v.missingSource||!v.primaryCandidateKey||
+    v.candidateKeys.length===0||v.reasons.length===0))
+    throw new SiBulkApprovalError('SI_BULK_MISSING_SOURCE_REASONS',409);
+  // ALL provenance and ALL eligible candidate workflows are part of each
+  // single vessel approval; no dropdown, no lossy primary-only selection.
+  const items=preview.vessels.map(v=>({
+    imo:v.imo,vesselName:v.vesselName,
+    candidateKey:v.primaryCandidateKey,
+    candidateKeys:v.candidateKeys,
+    regimes:v.inspectionRegimes,
+    inspectionReasons:v.reasons,
+    regime:v.inspectionRegimes[0],planRank:v.rank,
+    inspectionCaseId:null,state:QUEUED,dossierStatus:'PENDING',
+    aiDossierStatus:input.generateA04?'PENDING':'NOT_REQUESTED',
+    error:null
+  }));
   const needsPaid=(input.generateA04&&preview.a04Provider==='AIRIA')||
    (input.runP01&&preview.p01Provider==='AIRIA');
   if(needsPaid&&input.confirmAiCost!==true)
@@ -155,7 +178,8 @@ export class SiBulkInspectionPlan{
   if(input.runP01&&!preview.p01Enabled)
    throw new SiBulkApprovalError('SI_BULK_P01_NOT_ENABLED',409);
   const fingerprint=hash({sourceHash:preview.sourceHash,
-    revision:preview.planRevision,choices:items.map(x=>x.candidateKey)});
+    revision:preview.planRevision,sources:items.map(x=>({imo:x.imo,keys:x.candidateKeys,
+      eventKeys:x.inspectionReasons.map(r=>r.eventKey)}))});
   // Approval plans are unique per saved source/revision/approved selection.
   // Concurrent submissions are also guarded with a local process lock.
   const existing=this.read().jobs.find(x=>x.fingerprint===fingerprint);
@@ -197,7 +221,9 @@ export class SiBulkInspectionPlan{
          current.revision!==job.planRevision||current.agentRunId!==job.agentRunId)
         throw new SiBulkApprovalError('SI_BULK_SOURCE_CHANGED_BEFORE_COMMIT',409);
       const approved=await this.targeting.decideBatch({
-        items:job.items.map(x=>({imo:x.imo,candidateKey:x.candidateKey})),
+        items:job.items.map(x=>({imo:x.imo,candidateKey:x.candidateKey,
+          candidateKeys:x.candidateKeys,inspectionReasons:x.inspectionReasons,
+          regimes:x.regimes})),
         actor:job.approvedBy,note:job.approvalReason,approvedPlanId:job.id
       });
       cases=approved.cases;
