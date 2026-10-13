@@ -129,7 +129,7 @@ test('stale fingerprint blocks paid call before execution and flags prior run',a
       expectedSnapshotHash:newer.snapshotHash});
     await w.targeting.publishRules({expectedVersion:1,publishedBy:'Supervisor',
       reason:'Change published source priority',
-      config:{sourceTriggerScores:{NMC_CASE:100,SERVICE_REQUEST:90,PSC_PORT_CALL:20}}});
+      config:{ranking:{criteria:['DEPARTURE_SOON','INCIDENT_SEVERITY']}}});
     assert.equal((await w.prioritization.status()).latest.isStale,true);
     assert.equal(w.calls(),1);
   }finally{w.cleanup();}
@@ -177,7 +177,7 @@ test('missing-saved-risk cannot be represented as risk zero or fake assessment',
     assert.ok(p.items[0].allowedEvidence.includes(referral.id));
   }finally{w.cleanup();}
 });
-test('settings reject retired five-weight config, and source-only publish retains saved NMC risk',async()=>{
+test('settings reject retired source score config, ranking publish retains NMC risk',async()=>{
   const w=context();
   try{
     await assert.rejects(()=>w.targeting.publishRules({
@@ -187,9 +187,9 @@ test('settings reject retired five-weight config, and source-only publish retain
     const before=await w.targeting.dashboard();
     const out=await w.targeting.publishRules({
       expectedVersion:1,publishedBy:'Supervisor',reason:'Approved source trigger priority',
-      config:{sourceTriggerScores:{NMC_CASE:100,SERVICE_REQUEST:100,PSC_PORT_CALL:20}}
+      config:{ranking:{criteria:['DEPARTURE_SOON','INCIDENT_SEVERITY']}}
     });
-    assert.equal(out.config.sourceTriggerScores.SERVICE_REQUEST,100);
+    assert.deepEqual(out.config.ranking.criteria,['DEPARTURE_SOON','INCIDENT_SEVERITY']);
     assert.deepEqual((await w.targeting.dashboard()).candidates[0].currentRisk,
       before.candidates[0].currentRisk);
     assert.equal(w.calls(),0);
