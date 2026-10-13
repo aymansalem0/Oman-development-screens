@@ -83,6 +83,7 @@ interface ReviewScope{level:AiLevel;templateId:string;groupId?:string;itemId?:st
       <div class="item" *ngFor="let item of group.items">
        <div class="item-head"><div>
         <h4>{{item.title}} <span *ngIf="item.mandatory" class="required">*</span></h4>
+         <small>{{t('Required fields','الحقول المطلوبة')}}: {{item.requiredFields.join(', ')||'—'}}</small>
         <p *ngIf="item.description">{{item.description}}</p></div>
         <button class="ai-btn" (click)="openAi('ITEM',template,group,item)"
           [disabled]="busy||!aiStatus?.visionConfigured||!auth.isAdmin">
