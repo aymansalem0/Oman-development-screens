@@ -17,6 +17,8 @@ jobs:
           node-version: '20'
       - name: Install backend runtime
         run: npm install --prefix ai-proxy --omit=dev --no-audit --no-fund
+      - name: Missing Airia response contracts — four safe local advisor mocks
+        run: node --test ai-proxy/test/si-poc-workflow-advisors.test.mjs
       - name: Oracle 018 database adapter persistence and audit regression
         run: node --test ai-proxy/test/si-rolling-oracle.test.mjs
 
