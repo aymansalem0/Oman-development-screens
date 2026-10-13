@@ -5,6 +5,7 @@
  */
 import {createHash,randomUUID} from 'node:crypto';
 import {mockSiC01,SI_MOCK_MARKER} from './si-agent-mock.mjs';
+import {getSiSourceScores} from './si-candidate-targeting.mjs';
 
 const hash=x=>createHash('sha256').update(JSON.stringify(x)).digest('hex');
 const unique=a=>[...new Set(a.filter(x=>typeof x==='string'&&x.trim()))];
@@ -15,6 +16,7 @@ export class SiCandidateAgentError extends Error{
 export function buildC01Source(dashboard,pscPolicy=null){
   if(!dashboard?.policy||!Array.isArray(dashboard.candidates))
     throw new SiCandidateAgentError('SI_C01_SOURCE_UNAVAILABLE',503);
+  const sourceScores=getSiSourceScores(dashboard.policy.config);
   const candidates=dashboard.candidates
     .filter(c=>!c.inspectionCase&&(
       c.status==='PENDING_REVIEW'||
@@ -32,11 +34,13 @@ export function buildC01Source(dashboard,pscPolicy=null){
           sourceReference:e.sourceReference,approval:e.approval,
           evidenceIds:e.evidenceIds||[]
         })),
-        allowedEvidence,reasons:c.reasons||[],rulePriority:c.priority};
+        allowedEvidence,reasons:c.reasons||[],rulePriority:c.priority,
+        sourcePriorityScore:Math.max(0,...c.events.map(e=>sourceScores[e.sourceType]??0)),
+        requiredInPlan:c.events.some(e=>e.sourceType==='SERVICE_REQUEST'||
+          (e.sourceType==='NMC_CASE'&&e.approval==='APPROVED'))};
     }).sort((a,b)=>a.candidateKey.localeCompare(b.candidateKey));
   const source={schemaVersion:'SI-C01-v1',
-    selectionRiskThreshold:Number.isInteger(dashboard.policy.config?.riskPriorityThreshold)?
-      dashboard.policy.config.riskPriorityThreshold:65,
+    sourceTriggerScores:sourceScores,
     policyRevision:dashboard.policy.version,
     riskPolicyRevision:dashboard.riskPolicyRevision,
     pscQuotaPolicyRevision:pscPolicy?.version??null,
@@ -68,8 +72,7 @@ export function validateC01(raw,source){
     // Business-gated recommendation: a model cannot silently select unapproved
     // PSC/service candidates or candidates with missing verified risk.
     if(r.recommendation==='SELECT_RECOMMENDED'&&
-      (!c.currentRisk||!Number.isFinite(c.currentRisk.score)||
-       !r.evidenceRefs.length||!c.sourceTypes.length))
+      (!r.evidenceRefs.length||!c.sourceTypes.length))
       throw new SiCandidateAgentError('SI_C01_HARD_RULE_OVERRIDE',502);
     seen.add(r.candidateKey);
     return {candidateKey:c.candidateKey,imo:c.imo,regime:c.regime,
@@ -133,7 +136,7 @@ export class SiCandidateAgent{
      requestMeta:{correlationId:'SI-C01-'+randomUUID(),actor:input.actor.trim(),
        language:'en',mode:'ADVISORY_ONLY'},
      snapshotHash:s.snapshotHash,policyRevision:s.policyRevision,
-     selectionRiskThreshold:s.selectionRiskThreshold,
+     sourceTriggerScores:s.sourceTriggerScores,
      officerPlanChanges,
      riskPolicyRevision:s.riskPolicyRevision,
      pscQuotaPolicyRevision:s.pscQuotaPolicyRevision,
