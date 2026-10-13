@@ -5,7 +5,7 @@ import {ActivatedRoute,RouterLink} from '@angular/router';
 import {NmcNavigationComponent} from '../components/nmc-navigation.component';
 import {LanguageService} from '../services/language.service';
 import {
- SiLifecycleService,SiLifecycleCase,SiLifecycleView,SiLifecycleRecord,SiInspectionCheck,SiCorrection,SiLifecycleVersion
+ SiLifecycleService,SiLifecycleCase,SiLifecycleView,SiLifecycleRecord,SiInspectionCheck,SiCorrection,SiLifecycleVersion,SiPocAdvisorCode,SiPocAdvisorResult
 } from '../services/si-lifecycle.service';
 
 interface DraftCheck extends SiInspectionCheck{evidenceText:string;}
@@ -36,6 +36,14 @@ export class SiFullLifecycleComponent implements OnInit{
    'READY_TO_CLOSE','CLOSED'
  ];
  caseId='';cases:SiLifecycleCase[]=[];view:SiLifecycleView|null=null;
+ advisorBusy=false;advisorError='';advisorOutput:SiPocAdvisorResult|null=null;
+ exceptionDemo=false;
+ readonly mockAdvisors:{id:SiPocAdvisorCode;en:string;ar:string}[]=[
+  {id:'SI-S01',en:'Scheduling assistance',ar:'مساعد الجدولة'},
+  {id:'SI-V01',en:'Evidence review prompts',ar:'مراجعة الأدلة'},
+  {id:'SI-R01',en:'Report draft suggestion',ar:'مسودة تقرير'},
+  {id:'SI-X01',en:'Exception & escalation review',ar:'الاستثناءات والتصعيد'}
+ ];
  loading=false;busy=false;error='';success='';search='';
  historyBusy=false;historyError='';versions:SiLifecycleVersion[]=[];showVersions=false;
  operator='admin';editorKey='MOEI_SESSION';publisherKey='MOEI_SESSION';reason='';
@@ -54,6 +62,19 @@ export class SiFullLifecycleComponent implements OnInit{
  ngOnInit(){
   this.caseId=this.route.snapshot.paramMap.get('caseId')||'';
   // Credentials are intentionally never persisted into localStorage.
+ }
+ runAdvisor(agent:SiPocAdvisorCode):void{
+  if(!this.caseId||!this.view||this.advisorBusy)return;
+  this.advisorBusy=true;this.advisorError='';this.advisorOutput=null;
+  const scenario=agent==='SI-X01'&&this.exceptionDemo?
+   'RECURRING_DEFICIENCY_CERT_EXPIRY_CONFLICT':null;
+  this.api.pocAdvisor(this.caseId,agent,scenario).subscribe({
+   next:r=>{this.advisorBusy=false;this.advisorOutput=r;},
+   error:e=>{
+    this.advisorBusy=false;
+    this.advisorError=e?.error?.error||'SI_POC_ADVISOR_UNAVAILABLE';
+   }
+  });
  }
  get record():SiLifecycleRecord|null{return this.view?.record||null;}
  get stage():string{return this.record?.stage||'NOT_STARTED';}
