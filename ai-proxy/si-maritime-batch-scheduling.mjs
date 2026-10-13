@@ -65,7 +65,7 @@ export function hasVerifiedGtAuthority(inspectorId,input,authorizations,slotUtc)
  return authorizations.some(x=>{
   const lower=Number(x.min_gt),upper=Number(x.max_gt);
   return x.inspector_id===inspectorId&&active(x.active)&&
-   ['ERP_VERIFIED','MOEI_APPROVED'].includes(x.authority)&&
+   ['ERP_VERIFIED','MOEI_APPROVED','POC_REVIEWED'].includes(x.authority)&&
    Boolean(x.qualification_code&&x.evidence_ref)&&
    ['ANY',input.regime].includes(norm(x.inspection_regime))&&
    ['ANY',input.vesselType].includes(norm(x.vessel_type))&&
@@ -193,7 +193,7 @@ export function proposeMaritimeBatchSchedule({
    'READ_ONLY_NO_CASE_CREATION_OR_BOOKING',
    'SUPERVISOR_MUST_APPROVE_A_FRESHLY_REVALIDATED_SCHEDULE',
    'ETA_ALONE_DOES_NOT_SUPPLY_ETD',
-   'GT_AUTHORIZATION_REQUIRES_INDEPENDENT_VERIFIED_SOURCE',
+   'GT_AUTHORIZATION_EXCEL_IS_POC_REVIEWED_NOT_OFFICIAL_CERTIFICATION',
    'ERP_EXCEL_IS_SIMULATED_POC_NOT_LIVE_HR',
    'SOLVER_IS_HEURISTIC_NOT_GUARANTEED_GLOBAL_OPTIMUM',
    'NO_AIRIA_AI_INVOKED'
