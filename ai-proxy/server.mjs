@@ -258,7 +258,8 @@ const siChecklistField=new (checklistStorage==='oracle'?
   getSetting:key=>runtime.get(key)
 });
 const siLifecycle=new SiInspectionLifecycle({mode:dbMode,oracleRepository:repository,
-  targeting:siTargeting,preparation:siPreparation,cases,checklists:siChecklistField});
+  targeting:siTargeting,preparation:siPreparation,cases,checklists:siChecklistField,
+  onClosed:(caseId,actor)=>siRollingPlans.completeIfAllClosed(caseId,actor,siLifecycle)});
 const actionPlanRuns=new Set(); // process-local duplicate A01 invocation guard; version-lock remains authoritative
 let alertScanTimer=null;
 function rescheduleAlertScan(){
