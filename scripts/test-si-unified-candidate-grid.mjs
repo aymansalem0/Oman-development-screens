@@ -47,7 +47,7 @@ test('AI why-selected and why-ranked explanations appear in a single expandable 
  assert.match(html,/planRow\(v\)\?\.officerReason/);
 });
 test('one official supervisor approval covers the plan, not each vessel row',()=>{
- assert.match(html,/<app-si-bulk-approval-panel/);
+ assert.match(html,/routerLink="\/moei\/smart-inspection\/plan\/create"/);
  assert.doesNotMatch(html,/\(click\)="decide\('APPROVE'\)"/);
  assert.doesNotMatch(html,/\[\(ngModel\)\]="publisherKey"/);
  assert.match(backend,/const siInspectionPlan=new SiInspectionPlan/);

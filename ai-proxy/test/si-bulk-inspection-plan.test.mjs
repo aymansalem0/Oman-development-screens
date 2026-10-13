@@ -5,156 +5,159 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {SiBulkInspectionPlan} from '../si-bulk-inspection-plan.mjs';
 
-const mk=({multiple=false,risk=true}={})=>{
- const dir=mkdtempSync(join(tmpdir(),'si-bulk-'));
- const queue=[],cases=[],preparations=new Map(),agentCalls=[];
- const selected=[{imo:'9328471',vesselName:'Vessel One',effectiveRank:1,planSelected:true},
-  {imo:'9400409',vesselName:'Vessel Two',effectiveRank:2,planSelected:true}];
- const candidate=(imo,regime,key)=>({
-  key,imo,regime,status:'PENDING_REVIEW',
-  events:[{sourceType:'NMC_CASE',approval:'APPROVED'}]
+function setup(){
+ const dir=mkdtempSync(join(tmpdir(),'si-all-reasons-'));
+ const queue=[],cases=[],dossiers=new Map(),ai=[];
+ const rec=(key,imo,regime,source,eventKey)=>({
+   key,imo,regime,status:'PENDING_REVIEW',
+   events:[{eventKey,sourceType:source,sourceEventId:eventKey,
+     sourceReference:source+'-REF-'+imo,approval:'APPROVED',
+     contextNote:'Source-reported inspection reason for '+eventKey,
+     evidenceIds:['evidence-'+eventKey],provenance:'POC_SIMULATOR'}]
  });
  const candidates=[
-  candidate('9328471','FOCUSED_INSPECTION','candidate-one'),
-  candidate('9400409','PORT_STATE_CONTROL','candidate-two'),
-  ...(multiple?[candidate('9400409','UAE_SERVICE_INSPECTION','candidate-three')]:[])
+  rec('c1','9328471','FOCUSED_INSPECTION','NMC_CASE','NMC-1'),
+  rec('c2','9400409','UAE_SERVICE_INSPECTION','SERVICE_REQUEST','SVC-2'),
+  rec('c3','9400409','PORT_STATE_CONTROL','PSC_PORT_CALL','PSC-3')
  ];
- let snapshotHash='source-one',revision=3;
- const plan={snapshot:async()=>({stale:false,agentRunId:'C01-RUN-101',
-  sourceHash:snapshotHash,revision,generatedAt:'2026-10-12T10:00:00Z',
-  provider:'MOCK',rows:selected})};
+ const rows=[
+  {imo:'9328471',vesselName:'Desert Voyager',effectiveRank:1,planSelected:true},
+  {imo:'9400409',vesselName:'Gulf Horizon',effectiveRank:2,planSelected:true}
+ ];
+ let sourceHash='saved-c01-hash',revision=4,planStale=false;
+ const inspectionPlan={snapshot:async()=>({
+  sourceHash,revision,stale:planStale,
+  agentRunId:'C01-OPERATOR-4',rows,provider:'MOCK',
+  generatedAt:'2026-10-13T08:00:00Z'
+ })};
  const targeting={
   dashboard:async()=>({candidates}),
   inspectionCaseRegistry:async()=>({cases:[...cases]}),
   decideBatch:async({items,actor,approvedPlanId})=>{
-   // All cases become visible together, matching Oracle transaction semantics.
-   const created=items.map(payload=>{
-    const matching=candidates.find(c=>c.key===payload.candidateKey);
-    assert.equal(matching?.imo,payload.imo);
-    const existing=cases.find(c=>c.candidateKey===payload.candidateKey);
-    if(existing)throw Error('DUPLICATE_CASE');
-    return {id:'case-'+payload.imo,imo:payload.imo,
-     regime:matching.regime,candidateKey:payload.candidateKey,
-     approvedBy:actor,approvedPlanId};
-   });
+   assert.equal(items.length,2);
+   assert.equal(items[1].candidateKeys.length,2);
+   assert.deepEqual(items[1].inspectionReasons.map(x=>x.sourceType),
+    ['PSC_PORT_CALL','SERVICE_REQUEST']);
+   assert.equal(items[1].inspectionReasons.length,2);
+   const created=items.map(x=>({
+    id:'CASE-'+x.imo,imo:x.imo,
+    candidateKey:x.candidateKey,candidateKeys:x.candidateKeys,
+    inspectionReasons:x.inspectionReasons,regimes:x.regimes,
+    approvedBy:actor,approvedPlanId
+   }));
+   if(cases.length)throw Error('DUPLICATE_APPROVAL');
    cases.push(...created);
    return {cases:created};
   }
  };
  const preparation={
   enabled:true,ready:true,provider:'mock',
-  get:async id=>({saved:preparations.get(id)||null,stale:false}),
+  get:async id=>({saved:dossiers.get(id)||null,stale:false}),
   prepare:async(id,{actor,expectedVersion})=>{
-   assert.equal(expectedVersion,0);
-   const record={caseId:id,status:'PREPARED',version:1,actor};
-   preparations.set(id,record);
-   return {saved:record};
+    assert.equal(actor,'test.supervisor');assert.equal(expectedVersion,0);
+    const doc={caseId:id,status:'PREPARED',version:1};
+    dossiers.set(id,doc);return {saved:doc};
   },
-  generate:async(id,{actor,expectedVersion,confirmCost})=>{
-   agentCalls.push({agent:'A04',id});
-   assert.equal(expectedVersion,1);
-   assert.equal(confirmCost,true);
-   assert.equal(actor,'test.supervisor');
-   const record={caseId:id,status:'DRAFT_REVIEW',version:3};
-   preparations.set(id,record);
-   return {saved:record};
+  generate:async(id,{expectedVersion,confirmCost})=>{
+   assert.equal(expectedVersion,1);assert.equal(confirmCost,true);
+   ai.push(['A04',id]);
+   const doc={caseId:id,status:'DRAFT_REVIEW',version:2};
+   dossiers.set(id,doc);return {saved:doc};
   }
  };
- const priority={enabled:true,ready:true,provider:'mock',
-  preview:async()=>({snapshotHash:'approved-cases-hash',eligibleCount:cases.length}),
-  run:async()=>{agentCalls.push({agent:'P01'});return {status:'SUCCEEDED'};}};
- const si=new SiBulkInspectionPlan({inspectionPlan:plan,targeting,preparation,priority,
-  file:join(dir,'batches.json'),submitTask:fn=>queue.push(fn)});
- const settings={actor:'test.supervisor',reason:'Reviewed saved NMC evidence and approved plan as a batch.',
-  expectedSourceHash:'source-one',expectedRevision:3,
-  expectedAgentRunId:'C01-RUN-101',confirmApproval:true,
-  generateA04:true,runP01:true,confirmAiCost:false,
-  choices:[{imo:'9328471',candidateKey:'candidate-one'},
-   {imo:'9400409',candidateKey:'candidate-two'}]};
- return {si,cases,preparations,queue,settings,agentCalls,
-  invalidate:()=>{snapshotHash='changed-source';revision++;},
+ const priority={
+  enabled:true,ready:true,provider:'mock',
+  preview:async()=>({eligibleCount:cases.length,snapshotHash:'risk-4'}),
+  run:async()=>{ai.push(['P01']);return {status:'SUCCEEDED'};}
+ };
+ const bulk=new SiBulkInspectionPlan({inspectionPlan,targeting,preparation,priority,
+  file:join(dir,'jobs.json'),submitTask:fn=>queue.push(fn)});
+ const request={actor:'test.supervisor',
+  reason:'All source reasons were reviewed before approving the plan.',
+  expectedRevision:4,expectedSourceHash:'saved-c01-hash',
+  expectedAgentRunId:'C01-OPERATOR-4',confirmApproval:true,
+  generateA04:true,runP01:true,confirmAiCost:false};
+ return {bulk,request,cases,dossiers,ai,queue,
+  change:()=>{sourceHash='another-hash';revision++;},
+  stale:()=>{planStale=true;},
   done:()=>rmSync(dir,{recursive:true,force:true})};
-};
-test('one batch approval creates two traceable cases and two A04 drafts; P01 once',async()=>{
- const t=mk();try{
-  const preview=await t.si.preview();
-  assert.equal(preview.selectedVessels,2);
-  assert.equal(preview.vessels.every(v=>v.defaultCandidateKey!==null),true);
-  assert.equal(t.agentCalls.length,0);
-  const job=await t.si.approve(t.settings);
-  assert.equal(job.status,'QUEUED');
-  assert.equal(t.cases.length,0,'HTTP approval only accepts async job');
+}
+test('wizard preview includes every source reason, even 2 separate regimes for the same IMO',async()=>{
+ const t=setup();
+ try{
+  const p=await t.bulk.preview();
+  assert.equal(p.selectedVessels,2);
+  assert.equal(p.vessels[1].reasons.length,2);
+  assert.deepEqual(p.vessels[1].inspectionRegimes,['PORT_STATE_CONTROL','UAE_SERVICE_INSPECTION']);
+  assert.deepEqual(p.vessels[1].candidateKeys,['c3','c2']);
+  assert.equal('options' in p.vessels[1],false);
+  assert.equal('defaultCandidateKey' in p.vessels[1],false);
+  assert.equal(t.ai.length,0,'read-only preview never calls AI');
+ }finally{t.done()}
+});
+test('one supervisor approval creates one case per vessel with ALL reasons and two dossiers',async()=>{
+ const t=setup();
+ try{
+  const accepted=await t.bulk.approve(t.request);
+  assert.equal(accepted.status,'QUEUED');
+  assert.equal(t.cases.length,0,'queued job has not committed decisions yet');
   await t.queue.shift()();
-  const result=t.si.get(job.id);
-  assert.equal(result.status,'COMPLETED');
-  assert.equal(result.approvedCount,2);
+  const job=t.bulk.get(accepted.id);
+  assert.equal(job.status,'COMPLETED');
+  assert.equal(job.totalSelected,2);
+  assert.equal(job.approvedCount,2);
   assert.equal(t.cases.length,2);
-  assert.equal(result.items.every(x=>x.dossierStatus==='PREPARED'),true);
-  assert.equal(t.cases.every(x=>x.approvedPlanId===job.id),true);
-  assert.equal(result.items.every(x=>x.aiDossierStatus==='DRAFT_REVIEW'),true);
-  assert.equal(t.agentCalls.filter(x=>x.agent==='A04').length,2);
-  assert.equal(t.agentCalls.filter(x=>x.agent==='P01').length,1);
-  const duplicate=await t.si.approve(t.settings).catch(e=>e.code);
-  // First saved action invalidates the saved C01 snapshot on a real source.
-  // Synthetic stub does not change it, so dedupe returns the same batch.
-  assert.equal(duplicate.id,job.id);
-  assert.equal(t.queue.length,0);
+  assert.equal(t.cases[1].candidateKeys.length,2);
+  assert.equal(t.cases[1].inspectionReasons.length,2);
+  assert.equal(job.items[1].reasonCount,2);
+  assert.equal(t.dossiers.size,2);
+  assert.equal(t.ai.filter(x=>x[0]==='A04').length,2);
+  assert.equal(t.ai.filter(x=>x[0]==='P01').length,1);
+  const repeated=await t.bulk.approve(t.request);
+  assert.equal(repeated.id,accepted.id);
+  assert.equal(t.queue.length,0,'duplicate approval never enqueues a second batch');
  }finally{t.done()}
 });
-test('a stale plan, incomplete selection or mismatched candidate is rejected before any write',async()=>{
- const t=mk({multiple:true});try{
-  const p=await t.si.preview();
-  assert.equal(p.vessels[1].requiresRegimeChoice,true);
-  await assert.rejects(t.si.approve({...t.settings,
-   choices:t.settings.choices.slice(0,1)}),/SI_BULK_SELECTION_INCOMPLETE/);
-  await assert.rejects(t.si.approve({...t.settings,choices:[
-   t.settings.choices[0],{imo:'9400409',candidateKey:'random-other-regime'}
-  ]}),/SI_BULK_CANDIDATE_NOT_ELIGIBLE/);
-  t.invalidate();
-  await assert.rejects(t.si.approve(t.settings),/SI_BULK_SNAPSHOT_CHANGED_REVIEW_AGAIN/);
+test('never accept an old plan or an API payload choosing only one source',async()=>{
+ const t=setup();
+ try{
+  await assert.rejects(t.bulk.approve({...t.request,choices:[
+    {imo:'9328471',candidateKey:'c1'},{imo:'9400409',candidateKey:'c2'}
+  ]}),/SI_BULK_APPROVAL_INVALID/);
+  t.change();
+  await assert.rejects(t.bulk.approve(t.request),
+    /SI_BULK_SNAPSHOT_CHANGED_REVIEW_AGAIN/);
   assert.equal(t.cases.length,0);
  }finally{t.done()}
 });
-test('no automatic Airia charges without explicit batch cost confirmation',async()=>{
- const t=mk();try{
-  t.si.preparation.provider='airia';
-  t.si.priority.provider='airia';
-  await assert.rejects(t.si.approve(t.settings),
-   /SI_BULK_EXPLICIT_AI_COST_CONFIRMATION_REQUIRED/);
-  assert.equal(t.cases.length,0);
-  const safe=await t.si.approve({...t.settings,generateA04:false,runP01:false});
+test('explicit cost confirmation required for real Airia A04/P01; baseline prep free',async()=>{
+ const t=setup();
+ try{
+  t.bulk.preparation.provider='airia';
+  t.bulk.priority.provider='airia';
+  await assert.rejects(t.bulk.approve(t.request),
+    /SI_BULK_EXPLICIT_AI_COST_CONFIRMATION_REQUIRED/);
+  const p=await t.bulk.approve({...t.request,generateA04:false,runP01:false});
   await t.queue.shift()();
-  assert.equal(t.si.get(safe.id).status,'COMPLETED');
-  assert.equal(t.agentCalls.length,0);
-  assert.equal(t.preparations.size,2);
+  assert.equal(t.bulk.get(p.id).status,'COMPLETED');
+  assert.equal(t.dossiers.size,2);assert.equal(t.ai.length,0);
  }finally{t.done()}
 });
-test('no available cases means no fake batch approval',async()=>{
- const t=mk();try{
-  t.si.plan.snapshot=async()=>({stale:true,sourceHash:'different',revision:6,
-   agentRunId:'C01-RUN-101',provider:'MOCK',rows:[]});
-  const preview=await t.si.preview();
-  assert.equal(preview.selectedVessels,0);
-  assert.equal(preview.stale,true);
-  await assert.rejects(t.si.approve(t.settings),
-   /SI_BULK_SNAPSHOT_CHANGED_REVIEW_AGAIN/);
-  assert.equal(t.cases.length,0);
- }finally{t.done()}
-});
-test('failure after one Oracle case is visible as partial and never silently undone',async()=>{
- const t=mk();try{
-  const original=t.si.preparation.get;
-  t.si.preparation.get=async id=>{
-   if(id==='case-9400409')throw Object.assign(Error('missing migration'),{code:'SI_MIGRATION_010_REQUIRED'});
+test('dossier failure is shown as PARTIAL, existing approved cases are not rolled back',async()=>{
+ const t=setup();
+ try{
+  const original=t.bulk.preparation.get;
+  t.bulk.preparation.get=async id=>{
+   if(id==='CASE-9400409')throw Object.assign(Error('missing'),{code:'SI_MIGRATION_010_REQUIRED'});
    return original(id);
   };
-  const job=await t.si.approve(t.settings);
+  const accepted=await t.bulk.approve(t.request);
   await t.queue.shift()();
-  const result=t.si.get(job.id);
-  assert.equal(result.status,'PARTIAL');
-  assert.equal(result.approvedCount,2);
-  assert.equal(result.items[1].state,'PREPARATION_FAILED');
-  assert.equal(result.items[1].inspectionCaseId,'case-9400409');
-  assert.equal(result.items[1].error,'SI_MIGRATION_010_REQUIRED');
+  const job=t.bulk.get(accepted.id);
+  assert.equal(job.status,'PARTIAL');
+  assert.equal(job.approvedCount,2);
+  assert.equal(job.items[1].state,'PREPARATION_FAILED');
+  assert.equal(job.items[1].error,'SI_MIGRATION_010_REQUIRED');
+  assert.equal(t.cases.length,2);
  }finally{t.done()}
 });

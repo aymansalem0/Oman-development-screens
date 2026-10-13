@@ -243,13 +243,32 @@ export class SiInspectionPreparation{
       siCaseId:inspectionCase.id,imo:inspectionCase.imo,
       vessel:{imo:inspectionCase.imo,name:clean(v.name,140),flag:clean(v.flag,80),
         vesselType:clean(v.vesselType,80)},
-      targetRegime:inspectionCase.regime,baseChecklistItemIds:[...SI_BASE_CHECKLIST],
+      targetRegime:inspectionCase.regime,
+      targetRegimes:inspectionCase.regimes||[inspectionCase.regime],
+      inspectionReasons:inspectionCase.inspectionReasons||[],
+      inspectionScopes:inspectionCase.inspectionScopes||[],
+      sourceInspectionObjectives:(inspectionCase.inspectionReasons||[]).map(reason=>({
+        objectiveId:'SI-SRC-'+reason.eventKey,
+        sourceType:reason.sourceType,
+        sourceReference:reason.sourceReference,
+        inspectionRegime:reason.inspectionRegime,
+        inspectionReason:reason.reason||null,
+        evidenceIds:reason.evidenceIds||[],
+        status:'TO_BE_VERIFIED_BY_INSPECTOR',
+        advisory:false,
+        legallyConfirmed:false
+      })),
+      approvedPlanId:inspectionCase.approvedPlanId||null,
+      baseChecklistItemIds:[...SI_BASE_CHECKLIST],
       bundleRef:'VBL-'+inspectionCase.imo,
       risk:risk?{evaluationId:risk.sourceAssessmentId,score:risk.riskScore,
         level:risk.riskLevel,policyRevision:risk.policyRevision,
         rulesetVersion:risk.policyVersion}:null,
       sourceAssessmentId:risk?.sourceAssessmentId||null,
-      evidenceManifestRefs:[...bundle.evidenceIds,...docIds].slice(0,150),
+      evidenceManifestRefs:[...new Set([
+        ...bundle.evidenceIds,...docIds,
+        ...(inspectionCase.inspectionReasons||[]).flatMap(r=>r.evidenceIds||[])
+      ])].slice(0,150),
       openFindingRefs:(bundle.inlineContext?.deficiencies||[])
         .filter(f=>f.status==='Open').map(f=>f.id)
         .filter(e=>bundle.evidenceIds.includes(e)).slice(0,35),
@@ -330,7 +349,11 @@ export class SiInspectionPreparation{
         openFindingRefs:context.openFindingRefs,
         evidenceManifestRefs:context.evidenceManifestRefs,
         checklistVersion:'SI-POC-BASE-1.0',
-        inlineContext:context.evidenceContext,
+        inlineContext:{...context.evidenceContext,
+          allInspectionReasons:context.inspectionReasons,
+          allInspectionScopes:context.inspectionScopes,
+          sourceInspectionObjectives:context.sourceInspectionObjectives},
+        inspectionRegimes:context.targetRegimes,
         provenance:context.provenance,
         officialScoringRequested:false,requestedOutputs:['FOCUS_OVERLAY','MISSING_EVIDENCE']};
       try{

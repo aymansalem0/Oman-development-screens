@@ -248,7 +248,8 @@ export class SiCandidateTargeting{
     }
     const decisions=[...state.decisions].sort((a,b)=>a.at.localeCompare(b.at));
     const last=new Map(decisions.map(d=>[d.candidateKey,d]));
-    const cases=new Map(state.cases.map(c=>[c.candidateKey,c]));
+    const cases=new Map(state.cases.flatMap(c=>
+      [...new Set([c.candidateKey,...(c.candidateKeys||[])])].map(k=>[k,c])));
     const list=[...groups.values()].map(group=>{
       const bundle=byImo.get(group.imo),vessel=bundle.inlineContext?.vessel||bundle,
         risk=risks.get(group.imo)||null,
@@ -467,10 +468,10 @@ export class SiCandidateTargeting{
     return {status:'ok',decision,inspectionCase};
   }
   /**
-   * Atomic human approval of the entire selected inspection plan.
-   * One Oracle transaction (or one JSON state write), with no A04 calls in
-   * the transaction. Every IMO gets exactly one explicitly chosen regime.
-   * A model has no authority to call this.
+   * A single plan approval creates ONE inspection dossier/case per physical
+   * vessel, preserving ALL NMC/PSC/service reasons and regulatory scopes.
+   * Does not collapse distinct statutory obligations: regimes[]/scopeSources[]
+   * remain separately traceable even though field preparation is coordinated.
    */
   async decideBatch({items,actor,note,approvedPlanId}={}){
     if(!Array.isArray(items)||items.length<1||items.length>40||
@@ -480,48 +481,104 @@ export class SiCandidateTargeting{
     const imos=new Set(),keys=new Set();
     for(const item of items){
       if(!isImo(item?.imo)||!safeText(item?.candidateKey,100)||
-         imos.has(item.imo)||keys.has(item.candidateKey))
+         !Array.isArray(item.candidateKeys)||item.candidateKeys.length<1||
+         !Array.isArray(item.inspectionReasons)||!item.inspectionReasons.length||
+         imos.has(item.imo)||!item.candidateKeys.includes(item.candidateKey))
         throw new SiTargetingError('SI_BULK_SELECTION_INVALID',422);
-      imos.add(item.imo);keys.add(item.candidateKey);
+      imos.add(item.imo);
+      for(const key of item.candidateKeys){
+        if(!safeText(key,100)||keys.has(key))
+          throw new SiTargetingError('SI_BULK_SELECTION_INVALID',422);
+        keys.add(key);
+      }
     }
     const data=await this.dashboard(),registry=await this.inspectionCaseRegistry();
     const candidateMap=new Map(data.candidates.map(c=>[c.key,c]));
     const decisions=[],cases=[];
     const approvedAt=iso();
     for(const item of items){
-      const candidate=candidateMap.get(item.candidateKey);
-      if(!candidate||candidate.imo!==item.imo||
-        !(candidate.status==='PENDING_REVIEW'||(
-          candidate.status==='EXTERNALLY_SCHEDULED'&&
-          candidate.events.some(e=>e.sourceType==='NMC_CASE'&&e.approval==='APPROVED'))))
+      // Do not accept source event details supplied by the client or an AI.
+      // Rebuild ALL underlying reasons directly from trusted server sources.
+      const workflows=data.candidates.filter(c=>c.imo===item.imo&&
+        (c.status==='PENDING_REVIEW'||(c.status==='EXTERNALLY_SCHEDULED'&&
+         c.events.some(e=>e.sourceType==='NMC_CASE'&&e.approval==='APPROVED'))));
+      const actualKeys=workflows.map(c=>c.key);
+      if(!workflows.length||actualKeys.length!==item.candidateKeys.length||
+         actualKeys.some(k=>!item.candidateKeys.includes(k))||
+         !item.candidateKeys.every(k=>candidateMap.get(k)?.imo===item.imo))
         throw new SiTargetingError('SI_BULK_CANDIDATE_CHANGED',409);
-      if(registry.cases.some(c=>c.candidateKey===candidate.key))
+      if(registry.cases.some(c=>[c.candidateKey,...(c.candidateKeys||[])]
+          .some(k=>actualKeys.includes(k))))
         throw new SiTargetingError('SI_INSPECTION_CASE_EXISTS',409);
-      const decision={id:randomUUID(),candidateKey:candidate.key,imo:candidate.imo,
-        action:'APPROVE',actor:actor.trim(),note:note.trim(),at:approvedAt,
-        rulesetVersion:data.policy.version,fleetSnapshotId:data.fleetSnapshotId,
-        sourceEventKeys:candidate.events.map(e=>e.eventKey),approvedPlanId};
+      const ordered=[...workflows].sort((a,b)=>
+        Number(b.events.some(e=>e.sourceType==='NMC_CASE'))-
+        Number(a.events.some(e=>e.sourceType==='NMC_CASE'))||
+        a.regime.localeCompare(b.regime));
+      const primary=ordered[0];
+      if(item.candidateKey!==primary.key)
+        throw new SiTargetingError('SI_BULK_PRIMARY_SOURCE_CHANGED',409);
+      const sourceEvents=new Map();
+      for(const workflow of ordered){
+        for(const event of workflow.events){
+          const key=event.eventKey||
+            [event.sourceType,event.sourceEventId,workflow.regime].join(':');
+          if(!sourceEvents.has(key))sourceEvents.set(key,{
+            eventKey:key,candidateKey:workflow.key,
+            sourceType:event.sourceType,
+            sourceEventId:event.sourceEventId,
+            sourceReference:event.sourceReference,
+            inspectionRegime:workflow.regime,
+            sourceApproval:event.approval,
+            reason:event.contextNote||null,
+            evidenceIds:[...new Set(event.evidenceIds||[])],
+            sourceProvenance:event.provenance||null
+          });
+        }
+      }
+      const reasons=[...sourceEvents.values()];
+      if(!reasons.length||JSON.stringify(reasons)!==
+        JSON.stringify(item.inspectionReasons))
+        throw new SiTargetingError('SI_BULK_SOURCE_EVENTS_CHANGED',409);
+      const candidateKeys=ordered.map(c=>c.key);
+      const regimes=[...new Set(ordered.map(c=>c.regime))];
+      const sourceKeys=[...sourceEvents.keys()];
+      const decision={id:randomUUID(),candidateKey:primary.key,candidateKeys,
+        imo:item.imo,action:'APPROVE',actor:actor.trim(),note:note.trim(),
+        at:approvedAt,rulesetVersion:data.policy.version,
+        fleetSnapshotId:data.fleetSnapshotId,sourceEventKeys:sourceKeys,
+        approvedPlanId,approvedAllSources:true};
       const inspectionCase={
-        id:randomUUID(),candidateKey:candidate.key,imo:candidate.imo,
-        regime:candidate.regime,status:'CREATED',createdAt:approvedAt,
+        id:randomUUID(),candidateKey:primary.key,candidateKeys,
+        imo:item.imo,regime:primary.regime,regimes,
+        inspectionReasons:reasons,
+        inspectionScopes:regimes.map(regime=>({
+          regime,reasonEventKeys:reasons.filter(r=>r.inspectionRegime===regime)
+            .map(r=>r.eventKey),
+          requiresRegulatoryReview:true
+        })),
+        status:'CREATED',createdAt:approvedAt,
         approvedBy:decision.actor,decisionId:decision.id,
         rulesetVersion:decision.rulesetVersion,approvedPlanId,
-        sourceEventKeys:decision.sourceEventKeys,
-        nmcReferralId:candidate.events.find(e=>e.sourceType==='NMC_CASE')?.sourceEventId||null,
-        nmcCaseId:candidate.events.find(e=>e.sourceType==='NMC_CASE')?.sourceReference||null,
-        evidenceIds:[...new Set(candidate.events.flatMap(e=>e.evidenceIds||[]))],
-        riskAssessmentId:candidate.currentRisk?.assessmentId||null,
-        riskAtApproval:candidate.currentRisk||null,
-        provenance:'POC_HUMAN_APPROVED_NOT_OFFICIAL_INSPECTION_REPORT'
+        sourceEventKeys:sourceKeys,
+        nmcReferralId:reasons.find(e=>e.sourceType==='NMC_CASE')?.sourceEventId||null,
+        nmcCaseId:reasons.find(e=>e.sourceType==='NMC_CASE')?.sourceReference||null,
+        nmcReferrals:reasons.filter(e=>e.sourceType==='NMC_CASE')
+          .map(e=>e.sourceReference),
+        evidenceIds:[...new Set(reasons.flatMap(e=>e.evidenceIds))],
+        riskAssessmentId:primary.currentRisk?.assessmentId||null,
+        riskAtApproval:primary.currentRisk||null,
+        provenance:'POC_HUMAN_APPROVED_ALL_TRIGGERS_NOT_OFFICIAL_INSPECTION_REPORT'
       };
       decisions.push(decision);cases.push(inspectionCase);
     }
     if(this.mode==='json'){
       const saved=this._load();
-      if(cases.some(c=>saved.cases.some(existing=>existing.candidateKey===c.candidateKey)))
+      if(cases.some(c=>saved.cases.some(existing=>
+          [existing.candidateKey,...(existing.candidateKeys||[])]
+            .some(k=>c.candidateKeys.includes(k)))))
         throw new SiTargetingError('SI_INSPECTION_CASE_EXISTS',409);
       saved.decisions.push(...decisions);saved.cases.push(...cases);
-      this._save(saved); // one atomic persisted state file
+      this._save(saved);
     }else await this._db(async con=>{
       try{
         for(let i=0;i<cases.length;i++){
@@ -535,7 +592,7 @@ export class SiCandidateTargeting{
             VALUES (:id,:key,:imo,:doc)`,{
             id:d.id,key:d.candidateKey,imo:d.imo,doc:clob(d)});
         }
-        await con.commit(); // all vessels approved or none
+        await con.commit();
       }catch(e){
         await con.rollback();
         if(e.code==='ORA-00001')
@@ -545,5 +602,4 @@ export class SiCandidateTargeting{
     });
     return {status:'APPROVED',approvedPlanId,decisions,cases};
   }
-
 }

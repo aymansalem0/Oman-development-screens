@@ -2,13 +2,17 @@ import {Injectable} from '@angular/core';
 import {HttpClient} from '@angular/common/http';
 import {Observable} from 'rxjs';
 
-export interface SiBulkOption{
- candidateKey:string;imo:string;regime:string;eligibility:string;sourceTypes:string[];
+export interface SiBulkSourceReason{
+ eventKey:string;candidateKey:string;sourceType:string;
+ sourceEventId:string;sourceReference:string;inspectionRegime:string;
+ sourceApproval:string;reason:string|null;evidenceIds:string[];
+ sourceProvenance:string|null;
 }
 export interface SiBulkVessel{
  imo:string;vesselName:string;rank:number|null;
- options:SiBulkOption[];defaultCandidateKey:string|null;
- requiresRegimeChoice:boolean;
+ candidateKeys:string[];primaryCandidateKey:string|null;
+ inspectionRegimes:string[];reasons:SiBulkSourceReason[];
+ missingSource:boolean;
 }
 export interface SiBulkPreview{
  status:'PREVIEW';sourceHash:string;planRevision:number;
@@ -21,7 +25,7 @@ export interface SiBulkPreview{
 }
 export type SiBulkItemState='QUEUED'|'APPROVED'|'PREPARED'|'READY'|'APPROVAL_FAILED'|'PREPARATION_FAILED';
 export interface SiBulkItem{
- imo:string;candidateKey:string;regime:string;vesselName:string;
+ imo:string;candidateKey:string;regime:string;regimes:string[];reasonCount:number;vesselName:string;
  planRank:number|null;state:SiBulkItemState;
  inspectionCaseId:string|null;dossierStatus:string;aiDossierStatus:string;
  error:string|null;
@@ -44,7 +48,6 @@ export class SiBulkPlanService{
   reason:string;expectedRevision:number;expectedSourceHash:string;
   expectedAgentRunId:string;confirmApproval:true;
   generateA04:boolean;runP01:boolean;confirmAiCost:boolean;
-  choices:{imo:string;candidateKey:string}[];
  }):Observable<SiBulkJob>{
   return this.http.post<SiBulkJob>(this.url,input);
  }

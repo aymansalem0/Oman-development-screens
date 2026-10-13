@@ -57,6 +57,45 @@
         {{copy("A04 is opt-in: configure AIRIA_MENA_KEY and SI_A04_ENABLED=true on the server only after approving potential usage costs and confirming the actual A04 output schema. No mock dossier is presented as an Airia result.","تشغيل A04 اختياري. يجب إعداد AIRIA_MENA_KEY وSI_A04_ENABLED=true بالخادم بعد الموافقة على تكلفة الاستخدام والتحقق من شكل الاستجابة. لا تُعرض نتائج تجريبية على أنها نتيجة Airia.")}}
       </div>
 
+      <section class="panel" *ngIf="d.context.inspectionReasons?.length">
+        <header>
+          <h2>{{copy('01 · All Reasons for Inspection','٠١ · جميع أسباب المعاينة')}}</h2>
+          <p>{{copy('All linked source referrals are preserved; the case never selects one reason and loses another.',
+            'كل الإحالات المسببة للمعاينة محفوظة؛ لا يتم اختيار سبب وإسقاط سبب آخر.')}}</p>
+        </header>
+        <div class="context-grid">
+          <div><small>{{copy('Approved plan','الخطة المعتمدة')}}</small>
+            <strong>{{d.context.approvedPlanId||'—'}}</strong></div>
+          <div><small>{{copy('Source reasons','أسباب الإحالة')}}</small>
+            <strong>{{d.context.inspectionReasons?.length||0}}</strong></div>
+          <div><small>{{copy('Inspection scopes','نطاقات المعاينة')}}</small>
+            <strong>{{d.context.inspectionScopes?.length||0}}</strong></div>
+        </div>
+        <div class="evidence-panel" *ngFor="let source of d.context.inspectionReasons">
+          <div class="info">
+            <strong>{{source.sourceType}} · {{source.inspectionRegime}}</strong>
+            <span>{{copy('Source reference','مرجع المصدر')}}: {{source.sourceReference}}</span>
+          </div>
+          <p *ngIf="source.reason">{{source.reason}}</p>
+          <p class="muted" *ngIf="!source.reason">
+            {{copy('No narrative was supplied by the original source; its reference and evidence are retained.',
+              'لم يرد وصف من المصدر الأصلي؛ تم الاحتفاظ بالمرجع والأدلة المتاحة.')}}</p>
+          <div class="evidence-chips"><code *ngFor="let ev of source.evidenceIds">{{ev}}</code></div>
+        </div>
+        <div class="evidence-panel">
+          <h3>{{copy('Source-based field inspection objectives','أهداف الفحص الميداني المستمدة من كل إحالة')}}</h3>
+          <div *ngFor="let objective of d.context.sourceInspectionObjectives" class="info">
+            <strong>{{objective.inspectionRegime}} · {{objective.sourceType}}</strong>
+            <span>{{objective.inspectionReason||
+              copy('Inspect the cited referral with supporting source evidence',
+                'التحقق من الإحالة والوثائق المرتبطة بها')}}</span>
+            <code>{{objective.objectiveId}}</code>
+          </div>
+        </div>
+        <p class="hint">{{copy('Distinct statutory requirements remain traceable and are not silently combined into an authorization.',
+          'تبقى المتطلبات النظامية المستقلة واضحة ولا يتم دمجها تلقائياً في تصريح تنظيمي واحد.')}}</p>
+      </section>
+
       <section class="panel">
         <header><h2>{{copy("02 · Approved Case & Evidence Manifest","٠٢ · الحالة المعتمدة وقائمة الأدلة")}}</h2><p>{{copy("The dossier is tied to this exact SI inspection case and saved NMC source assessment.","يرتبط الملف بحالة المعاينة هذه وتقييم المصدر المحفوظ في المركز البحري.")}}</p></header>
         <div class="context-grid">

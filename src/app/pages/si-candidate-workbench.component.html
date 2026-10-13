@@ -69,8 +69,14 @@
           'يُعاد تشغيل C01 عند تأكيد التغيير فقط، مع الحفاظ على أولوية إحالات NMC المعتمدة.')}}
       </p>
 
-      <app-si-bulk-approval-panel [plan]="plan" (batchCompleted)="refresh()">
-      </app-si-bulk-approval-panel>
+      <section class="si-plan-wizard-cta">
+        <h2>{{copy('Create Inspection Plan','إنشاء خطة المعاينات')}}</h2>
+        <p>{{copy('Review selected vessels and all referral reasons in a guided approval wizard.',
+          'راجع السفن المختارة وجميع أسباب الإحالة في شاشة خطوات منفصلة.')}}</p>
+        <a class="si-plan-wizard-button" routerLink="/moei/smart-inspection/plan/create">
+          {{copy('Create Inspection Plan →','إنشاء خطة المعاينات ←')}}
+        </a>
+      </section>
 
       <div class="filters si-inline-filters">
         <input type="search" [(ngModel)]="search"
