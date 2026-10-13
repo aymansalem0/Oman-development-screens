@@ -1,7 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {proposeMaritimeBatchSchedule,validateMaritimeSchedulingInput,
- hasVerifiedGtAuthority} from '../si-maritime-batch-scheduling.mjs';
+import {proposeMaritimeBatchSchedule,validateMaritimeSchedulingInput} from '../si-maritime-batch-scheduling.mjs';
 const now=Date.parse('2026-10-14T09:00:00+04:00');
 const plan={id:'99999999-9999-4999-8999-999999999999',number:'IP-TEST',
  revision:3,status:'APPROVED',approvedBy:'MOEI_TEST_SUPERVISOR',
@@ -72,27 +71,37 @@ test('Preview is a read-only HUMAN-approved-plan maritime schedule for 2 vessels
  assert.equal(invoke().proposalHash,result.proposalHash,'same evidence yields same hash');
 });
 test('Never double-book a single engineer or exceed batch daily limits',()=>{
- const onlyOne=[auth('ENG1')];
- const result=invoke({gtAuthorizations:onlyOne});
+ const result=invoke({existingBookings:[{inspectorId:'ENG2',startUtc:'2026-10-20T08:00:00.000Z',endUtc:'2026-10-20T10:30:00.000Z'}]});
  assert.equal(result.summary.proposed,1);
  assert.equal(result.summary.unscheduled,1);
  assert.equal(result.rows.filter(x=>x.status==='UNSCHEDULED').length,1);
 });
-test('Reject absent GT authorization, unverifiable ETD, missing berth access and invented source',()=>{
- const result=invoke({gtAuthorizations:[]});
- assert.equal(result.summary.proposed,0);
- assert.ok(result.rows.every(x=>x.blocker==='VERIFIED_INSPECTOR_GT_AUTHORITY_MISSING_OR_OUT_OF_RANGE'));
+test('Tonnage limits are NOT required; eligibility uses professional regime/type ERP checks',()=>{
+ const withoutGt=invoke({gtAuthorizations:[]});
+ assert.equal(withoutGt.summary.proposed,2,'No tonnage range required for scheduling');
  const bad=request('9328471','FOCUSED');
  delete bad.windowSource;
  const val=validateMaritimeSchedulingInput('9328471',bad,erp().data,now);
- assert.equal(val.reason,'VERIFIED_ETA_ETD_OR_OFFICER_WINDOW_REQUIRED');
- assert.equal(hasVerifiedGtAuthority('ENG1',{regime:'FOCUSED',vesselType:'CARGO',
-  grossTonnage:55000},[{...auth('ENG1'),authority:'USER_CLAIM'}],
-  '2026-10-20T05:00:00.000Z'),false);
+ assert.equal(val.reason,'VERIFIED_VESSEL_ARRIVAL_DEPARTURE_WINDOW_REQUIRED');
  const missingSite={...request('9328471','FOCUSED'),siteAccessConfirmed:false};
  assert.equal(validateMaritimeSchedulingInput('9328471',missingSite,erp().data,now).reason,
   'BERTH_ANCHORAGE_AND_ACCESS_CONFIRMATION_REQUIRED');
 });
+test('NMC referrals are checked against authoritative live workspace, with no duplicate scheduling',()=>{
+ const nmcPlan={...plan,approvedVessels:[{
+  ...plan.approvedVessels[0],
+  inspectionReasons:[{sourceType:'NMC_CASE',sourceEventId:'ref-1'}]}]};
+ const payload={plan:nmcPlan,requests:[request('9328471','FOCUSED')]};
+ const missing=invoke(payload);
+ assert.equal(missing.rows[0].blocker,'NMC_APPROVED_REFERRAL_MISSING_OR_CLOSED');
+ const live=invoke({...payload,nmcReferrals:[{id:'ref-1',imo:'9328471',
+  status:'PENDING_SCHEDULING',caseStatus:'IN_PROGRESS'}]});
+ assert.equal(live.summary.proposed,1);
+ const double=invoke({...payload,nmcReferrals:[{id:'ref-1',imo:'9328471',
+  status:'SCHEDULED',caseStatus:'IN_PROGRESS'}]});
+ assert.equal(double.rows[0].blocker,'NMC_REFERRAL_ALREADY_SCHEDULED_RECONCILE');
+});
+
 test('Block unsourced vessel automatically; never fabricate a schedule, tonnage or departure',()=>{
  const result=invoke({requests:[request('9328471','FOCUSED')]});
  assert.equal(result.summary.proposed,1);
