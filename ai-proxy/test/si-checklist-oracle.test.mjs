@@ -13,6 +13,16 @@ class MemoryOracle{
 class MockConnection{
  constructor(db){this.db=db;}
  async execute(sql,b={}){
+  // Mimic Oracle's reserved-bind validation, not only the statement result.
+  // Previously :group passed this mock but Oracle rejected draft publication
+  // with ORA-01745. Verify EVERY SQL bind is present as well.
+  const reserved=new Set(['TABLE','GROUP','ORDER','DATE','NUMBER','SORT']);
+  for(const match of sql.matchAll(/:([a-z][a-z0-9_]*)/gi)){
+   const name=match[1];
+   if(reserved.has(name.toUpperCase()))throw Object.assign(
+    new Error('ORA-01745: invalid host/bind variable name'),{code:'ORA-01745'});
+   assert.ok(Object.hasOwn(b,name),'Oracle bind missing: '+name);
+  }
   const c=sql.replace(/\s+/g,' ').trim().toUpperCase();
   this.db.log.push({sql:c,binds:clone(b)});
   const obj=r=>({rows:r});
@@ -32,7 +42,8 @@ class MockConnection{
   if(c.startsWith('UPDATE SI_CHK_TEMPLATE')){
    const t=JSON.parse(b.doc.val);this.db.templates.set(t.id,t);return {rowsAffected:1};}
   if(c.startsWith('INSERT INTO SI_CHK_REVISION')){
-   this.db.revisions.set(b.template+':'+b.revision,JSON.parse(b.snapshot.val));
+   this.db.revisions.set(b.p_template_id+':'+b.p_revision_no,
+    JSON.parse(b.p_snapshot_json.val));
    return {rowsAffected:1};
   }
   if(c.startsWith('SELECT R.TEMPLATE_ID,R.REVISION_NO,R.SNAPSHOT_JSON')){
@@ -190,4 +201,26 @@ test('A published item has case-scoped Oracle primary keys, not global shared UI
  assert.notEqual(a,b);
  assert.equal(a.length,36);
  assert.equal(caseItemOracleId(uuid,instance),a,'ID is deterministic across restarts');
+});
+
+test('Publish draft uses Oracle-safe named binds for all normalized checklist relations',async()=>{
+ const x=rig();
+ try{
+  await x.library.initialize();
+  const draft=await x.library.create(t('POC Safe Bind Publish'),'admin');
+  const result=await x.library.publish(draft.id,'admin',draft.updatedAt);
+  assert.equal(result.revision,1);
+  const publishedTables=['SI_CHK_REVISION','SI_CHK_APPLICABILITY',
+   'SI_CHK_GROUP','SI_CHK_ITEM','SI_CHK_ITEM_FIELD'];
+  for(const table of publishedTables){
+   const writes=x.db.log.filter(x=>x.sql.startsWith('INSERT INTO '+table+' '));
+   assert.ok(writes.length>0,table+' must have at least one published row');
+   for(const write of writes){
+    for(const name of Object.keys(write.binds))
+     assert.match(name,/^(?:p_|id$|template$|event$|actor$|doc$)/);
+   }
+  }
+  assert.equal(x.db.revisions.get(draft.id+':1').title,'POC Safe Bind Publish');
+  assert.equal((await x.library.get(draft.id)).revision,1);
+ }finally{x.done();}
 });

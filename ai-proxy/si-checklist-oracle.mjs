@@ -156,43 +156,51 @@ export class OracleSiChecklistLibrary{
   finally{await con.close();}
  }
  async _publishNormalized(con,item,snapshot,actor){
+  // Named bind variables are deliberately prefixed: Oracle rejects reserved
+  // SQL words such as :group (ORA-01745). The old POC implementation used
+  // :group while writing SI_CHK_ITEM and failed when publishing a DRAFT.
   await con.execute(`INSERT INTO SI_CHK_REVISION
    (TEMPLATE_ID,REVISION_NO,SNAPSHOT_JSON,CONTENT_SHA256,POLICY_REVIEWED,PUBLISHED_BY)
-   VALUES(:template,:revision,:snapshot,:hash,'N',:actor)`,{
-    template:item.id,revision:snapshot.revision,snapshot:json(snapshot),
-    hash:snapshot.contentHash,actor});
+   VALUES(:p_template_id,:p_revision_no,:p_snapshot_json,:p_content_hash,'N',:p_actor)`,{
+    p_template_id:item.id,p_revision_no:snapshot.revision,
+    p_snapshot_json:json(snapshot),p_content_hash:snapshot.contentHash,p_actor:actor});
   const r=snapshot.applicability;
   // Matching is always on full immutable RULE_JSON (lists are OR within each
   // dimension). Scalar columns are null to avoid falsely implying single rule.
   await con.execute(`INSERT INTO SI_CHK_APPLICABILITY
    (RULE_ID,TEMPLATE_ID,REVISION_NO,MIN_GT,MAX_GT,MIN_DWT,MAX_DWT,RULE_JSON)
-   VALUES(:id,:template,:revision,:minGT,:maxGT,:minDWT,:maxDWT,:rule)`,{
-    id:randomUUID(),template:item.id,revision:snapshot.revision,
-    minGT:value(r.minGT),maxGT:value(r.maxGT),
-    minDWT:value(r.minDWT),maxDWT:value(r.maxDWT),rule:json(r)});
+   VALUES(:p_rule_id,:p_template_id,:p_revision_no,:p_min_gt,:p_max_gt,:p_min_dwt,:p_max_dwt,:p_rule_json)`,{
+    p_rule_id:randomUUID(),p_template_id:item.id,p_revision_no:snapshot.revision,
+    p_min_gt:value(r.minGT),p_max_gt:value(r.maxGT),
+    p_min_dwt:value(r.minDWT),p_max_dwt:value(r.maxDWT),
+    p_rule_json:json(r)});
   for(const g of snapshot.groups){
    const groupId=uuidFor('SI-CHK-GROUP-v1',item.id,snapshot.revision,g.id);
    await con.execute(`INSERT INTO SI_CHK_GROUP
       (GROUP_ID,TEMPLATE_ID,REVISION_NO,TITLE,DISPLAY_ORDER,AI_ENABLED,AI_PROMPT)
-      VALUES(:id,:template,:revision,:title,:sort,:ai,:prompt)`,{
-     id:groupId,template:item.id,revision:snapshot.revision,title:g.title,
-     sort:g.order,ai:g.ai.enabled?'Y':'N',prompt:g.ai.instructions||null});
+      VALUES(:p_group_id,:p_template_id,:p_revision_no,:p_title,:p_order,:p_ai_enabled,:p_ai_prompt)`,{
+     p_group_id:groupId,p_template_id:item.id,p_revision_no:snapshot.revision,
+     p_title:g.title,p_order:g.order,p_ai_enabled:g.ai.enabled?'Y':'N',
+     p_ai_prompt:g.ai.instructions||null});
    for(const it of g.items){
     const itemId=versionItemId(item.id,snapshot.revision,g.id,it.id);
     await con.execute(`INSERT INTO SI_CHK_ITEM
      (ITEM_ID,GROUP_ID,TITLE,DESCRIPTION_TEXT,MANDATORY,DISPLAY_ORDER,
       AI_ENABLED,AI_PROMPT,REFERENCE_JSON)
-     VALUES(:id,:group,:title,:description,:mandatory,:sort,:ai,:prompt,:refs)`,{
-      id:itemId,group:groupId,title:it.title,description:it.description||null,
-      mandatory:it.mandatory?'Y':'N',sort:it.order,
-      ai:it.ai.enabled?'Y':'N',prompt:it.ai.instructions||null,
-      refs:json(it.sourceReferences||[])});
+     VALUES(:p_item_id,:p_group_id,:p_title,:p_description,:p_mandatory,:p_order,
+      :p_ai_enabled,:p_ai_prompt,:p_references)`,{
+      p_item_id:itemId,p_group_id:groupId,p_title:it.title,
+      p_description:it.description||null,p_mandatory:it.mandatory?'Y':'N',
+      p_order:it.order,p_ai_enabled:it.ai.enabled?'Y':'N',
+      p_ai_prompt:it.ai.instructions||null,
+      p_references:json(it.sourceReferences||[])});
     for(let i=0;i<it.fields.length;i++){
-     const f=it.fields[i];
+     const fieldType=it.fields[i];
      await con.execute(`INSERT INTO SI_CHK_ITEM_FIELD
       (ITEM_ID,FIELD_TYPE,MASTER_GROUP_CODE,IS_REQUIRED,DISPLAY_ORDER)
-      VALUES(:id,:field,'ANSWER_FIELD_TYPE',:required,:sort)`,{
-       id:itemId,field:f,required:it.requiredFields.includes(f)?'Y':'N',sort:i});
+      VALUES(:p_item_id,:p_field_type,'ANSWER_FIELD_TYPE',:p_is_required,:p_order)`,{
+       p_item_id:itemId,p_field_type:fieldType,
+       p_is_required:it.requiredFields.includes(fieldType)?'Y':'N',p_order:i});
     }
    }
   }
