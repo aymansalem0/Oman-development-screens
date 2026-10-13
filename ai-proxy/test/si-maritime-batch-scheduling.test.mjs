@@ -9,7 +9,10 @@ const plan={id:'99999999-9999-4999-8999-999999999999',number:'IP-TEST',
 const erp=()=>{
  const data={Ports:[{port_id:'FUJ',active:'Y'}],
   Inspectors:[{inspector_id:'ENG1',daily_capacity:'2'},
-   {inspector_id:'ENG2',daily_capacity:'2'}],Travel_Matrix:[]};
+   {inspector_id:'ENG2',daily_capacity:'2'}],
+   Qualifications:['ENG1','ENG2'].flatMap(id=>['FOCUSED','SERVICE','PSC'].map(regime=>({
+    inspector_id:id,inspection_regime:regime,vessel_type:'CARGO',
+    active:'Y',valid_until:'2027-12-31'}))),Travel_Matrix:[]};
  return {snapshotId:'snapshot123',importedAt:'2026-10-14T05:00:00.000Z',data};
 };
 const auth=(id,min=0,max=999999)=>({
@@ -82,7 +85,7 @@ test('Tonnage limits are NOT required; eligibility uses professional regime/type
  const bad=request('9328471','FOCUSED');
  delete bad.windowSource;
  const val=validateMaritimeSchedulingInput('9328471',bad,erp().data,now);
- assert.equal(val.reason,'VERIFIED_VESSEL_ARRIVAL_DEPARTURE_WINDOW_REQUIRED');
+ assert.equal(val.reason,'FINAL_VESSEL_ARRIVAL_DEPARTURE_WINDOW_REQUIRED');
  const missingSite={...request('9328471','FOCUSED'),siteAccessConfirmed:false};
  assert.equal(validateMaritimeSchedulingInput('9328471',missingSite,erp().data,now).reason,
   'BERTH_ANCHORAGE_AND_ACCESS_CONFIRMATION_REQUIRED');
