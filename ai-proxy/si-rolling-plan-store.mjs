@@ -108,12 +108,32 @@ export class SiRollingPlanStore{
   const results={};
   for(const prior of [...plans].reverse()){
    for(const c of candidates){
-    if(results[c.imo]||!prior.overrides?.[c.imo])continue;
-    const choice=prior.overrides[c.imo];
-    results[c.imo]={fromPlan:prior.number,disposition:choice.disposition||
-     (choice.selected?'INCLUDE':'NOT_SELECTED'),
-     reviewAfter:choice.reviewAfter||null,
-     reason:choice.reason||null,decidedAt:choice.at||prior.updatedAt};
+    if(results[c.imo])continue;
+    const older=(prior.candidateSnapshot||[]).filter(x=>x.imo===c.imo);
+    const currentKeys=new Set((c.sourceEvents||[]).map(x=>x.eventKey));
+    const sameEvent=older.some(x=>(x.sourceEventKeys||[]).some(k=>currentKeys.has(k)));
+    const oldKeysKnown=older.some(x=>(x.sourceEventKeys||[]).length);
+    // An entirely NEW maritime referral must never inherit the previous
+    // event's disposition merely because it has the same IMO.
+    if(currentKeys.size&&oldKeysKnown&&!sameEvent)continue;
+    const choice=prior.overrides?.[c.imo];
+    if(choice){
+     results[c.imo]={fromPlan:prior.number,disposition:choice.disposition||
+      (choice.selected?'INCLUDE':'NOT_SELECTED'),
+      reviewAfter:choice.reviewAfter||null,
+      reason:choice.reason||null,decidedAt:choice.at||prior.updatedAt};
+     continue;
+    }
+    // Derive 'not included' from a previously APPROVED plan snapshot. This
+    // is NOT a DEFER/REJECT business decision and never removes eligibility.
+    const approved=['APPROVED','IN_EXECUTION','COMPLETED'].includes(prior.status);
+    const wasApproved=(prior.approvedVessels||[]).some(x=>x.imo===c.imo);
+    if(approved&&sameEvent&&!wasApproved){
+     results[c.imo]={fromPlan:prior.number,
+      disposition:'NOT_SELECTED_IN_PREVIOUS_PLAN',reviewAfter:null,
+      reason:'Vessel remained eligible but was not included in a previous approved plan; no formal deferral.',
+      decidedAt:prior.approvedAt||prior.updatedAt,systemDerived:true};
+    }
    }
   }
   return results;
