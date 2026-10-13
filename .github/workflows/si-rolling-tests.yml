@@ -28,6 +28,8 @@ jobs:
         run: node --test ai-proxy/test/si-rolling-plans.test.mjs
       - name: Source event eligibility and duplicate defense
         run: node --test ai-proxy/test/si-candidate-targeting.test.mjs
+      - name: C01 source-aware live pending / approved scheduled NMC and original A04/P01 mock contracts
+        run: node --test ai-proxy/test/si-agent-mock.test.mjs
       - name: Existing C01 plan compatibility
         run: node --test ai-proxy/test/si-inspection-plan.test.mjs
       - name: Existing bulk plan compatibility
