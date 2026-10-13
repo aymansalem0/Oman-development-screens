@@ -137,6 +137,7 @@ export interface SiRollingPlan{
 }
 export interface SiInspectionPlanState{
  planId?:string|null;planNumber?:string|null;planStatus?:string|null;
+ readOnlyHistorical?:boolean;historicalSourceChanged?:boolean;
  planPeriod?:{startsOn:string;endsOn:string}|null;
  status:'ok';provider:'MOCK'|'AIRIA';mock:boolean;
  sourceHash:string;revision:number;generatedAt:string|null;
