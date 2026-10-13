@@ -13,6 +13,8 @@ const num=(x,fallback,min,max)=>Number.isFinite(Number(x))?Math.max(min,Math.min
 export const SETTINGS_DESCRIPTORS=Object.freeze([
   {key:'NMC_A01_ENABLED',type:'boolean',group:'agents',description:'Maritime situation intelligence (A01)',cost:true},
   {key:'NMC_A02_ENABLED',type:'boolean',group:'agents',description:'Vessel compliance assessment (A02)',cost:true},
+  {key:'NMC_DASHBOARD_AI_FOCUS_ENABLED',type:'boolean',group:'agents',
+    description:'NMC dashboard AI focus: optional operator-confirmed A02 then A01 (up to 2 paid calls)',cost:true},
   {key:'NMC_A03_ENABLED',type:'boolean',group:'agents',description:'Document extraction pipeline (A03)',cost:true},
   {key:'NMC_A03_AUTO_ENABLED',type:'boolean',group:'agents',description:'Run A03 automatically for changed vessel documents during scheduled fleet assessments',cost:true},
   {key:'SI_A04_ENABLED',type:'boolean',group:'agents',description:'On-demand Smart Inspection AI dossier (A04)',cost:true},
@@ -56,6 +58,7 @@ export const SETTINGS_DESCRIPTORS=Object.freeze([
 const allowed=Object.fromEntries(SETTINGS_DESCRIPTORS.map(d=>[d.key,d]));
 const DEFAULTS={
   NMC_A01_ENABLED:true,NMC_A02_ENABLED:true,
+  NMC_DASHBOARD_AI_FOCUS_ENABLED:false,
   NMC_A03_ENABLED:false,NMC_A03_AUTO_ENABLED:false,
   SI_A04_ENABLED:false,SI_P01_ENABLED:false,
   NMC_ALERT_SCAN_ENABLED:true,NMC_ALERT_SCAN_SECONDS:30,

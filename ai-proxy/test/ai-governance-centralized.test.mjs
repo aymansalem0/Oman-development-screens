@@ -113,3 +113,26 @@ test('Airia vision uses live settings and sends images as multipart evidence whe
  await assert.rejects(api.call('vision',{imo:'9328471'}),
   /SI_CHECKLIST_AIRIA_NOT_CONFIGURED/);
 });
+
+test('dashboard focus is OFF by default, explicitly cost-confirmed, versioned and live-publishable',async()=>{
+ const t=data();try{
+  const file=join(t.dir,'settings.json');
+  const s=new RuntimeSettings({env:{},file});s.load();
+  assert.equal(s.get('NMC_DASHBOARD_AI_FOCUS_ENABLED'),false);
+  assert.equal(s.get('NMC_A01_ENABLED'),true);
+  assert.equal(s.get('NMC_A02_ENABLED'),true);
+  const values={...s.publicView().values,NMC_DASHBOARD_AI_FOCUS_ENABLED:true};
+  await assert.rejects(s.publish({expectedVersion:0,values,actor:'admin',
+   reason:'Enable manually requested dashboard AI focus',confirmCost:false}),
+   /RUNTIME_SETTINGS_EXPLICIT_CONFIRMATION_REQUIRED/);
+  assert.equal(s.publicView().version,0);
+  const published=await s.publish({expectedVersion:0,values,actor:'admin',
+   reason:'Enable manually requested dashboard AI focus',confirmCost:true});
+  assert.equal(published.version,1);
+  assert.equal(published.values.NMC_DASHBOARD_AI_FOCUS_ENABLED,true);
+  assert.equal(published.values.NMC_FLEET_AUTO_ENABLED,false);
+  assert.deepEqual(published.history[0].changedKeys,['NMC_DASHBOARD_AI_FOCUS_ENABLED']);
+  const reloaded=new RuntimeSettings({env:{},file});reloaded.load();
+  assert.equal(reloaded.get('NMC_DASHBOARD_AI_FOCUS_ENABLED'),true);
+ }finally{t.done();}
+});

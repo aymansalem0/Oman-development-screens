@@ -106,7 +106,31 @@ test('disabled feature does not call existing A01 or A02',async()=>{
   await assert.rejects(f.run({metrics:metrics(),confirmCost:true}),
     /DASHBOARD_FOCUS_A01_A02_NOT_ENABLED/);
   assert.equal(calls.length,0);
-  assert.equal(f.status().assessmentContextReady,false);
+  // Diagnostically distinguish DISABLED from missing saved Oracle evidence.
+  assert.equal(f.status().assessmentContextReady,true);
+  assert.equal(f.status().configured,false);
+});
+test('governance toggle is live, opt-in and never makes a paid call on status',async()=>{
+  let enabled=false;const calls=[];
+  const f=focus(calls,{enabled:()=>enabled});
+  assert.equal(f.status().configured,false);
+  assert.equal(f.status().assessmentContextReady,true);
+  assert.equal(f.status().sourceImo,'9328471');
+  await assert.rejects(f.run({metrics:metrics(),confirmCost:true}),
+    /DASHBOARD_FOCUS_A01_A02_NOT_ENABLED/);
+  assert.equal(calls.length,0);
+  enabled=true;
+  assert.equal(f.status().configured,true);
+  assert.equal(f.status().potentialAgentCalls,2);
+  assert.equal(calls.length,0);
+  const result=await f.run({metrics:metrics(),confirmCost:true});
+  assert.equal(result.sourceImo,'9328471');
+  assert.deepEqual(calls.map(x=>x.agent),['a02','a01']);
+  enabled=false;
+  assert.equal(f.status().configured,false);
+  await assert.rejects(f.run({metrics:metrics(),confirmCost:true}),
+    /DASHBOARD_FOCUS_A01_A02_NOT_ENABLED/);
+  assert.equal(calls.length,2);
 });
 test('uses existing A02 and A01 input KEYS, preserves original five risk evidence values',async()=>{
   const calls=[],f=focus(calls);
