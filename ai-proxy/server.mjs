@@ -239,7 +239,7 @@ const siBulkPlan=new SiBulkInspectionPlan({
 const siChecklistLibrary=new SiChecklistLibrary();
 const siChecklistAiria=new SiChecklistAiria({
   getSetting:key=>runtime.get(key),
-  getApiKey
+  getApiKey:getAiriaKey
 });
 const siChecklistField=new SiChecklistField({
   library:siChecklistLibrary,targeting:siTargeting,
