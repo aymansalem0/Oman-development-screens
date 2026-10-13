@@ -146,6 +146,8 @@ export class SiBulkInspectionPlan{
   if(input.generateA04!==true&&input.generateA04!==false||
      input.runP01!==true&&input.runP01!==false)
    throw new SiBulkApprovalError('SI_BULK_AI_SELECTION_REQUIRED',422);
+  if(input.runP01===true)
+   throw new SiBulkApprovalError('SI_P01_OUT_OF_CURRENT_POC_SCOPE',409);
   const rollingId=input.planId||null;
   const preview=await this.preview(rollingId);
   if(preview.stale||(!preview.agentRunId&&!(rollingId&&preview.manualSelection))||
@@ -174,16 +176,11 @@ export class SiBulkInspectionPlan{
     aiDossierStatus:input.generateA04?'PENDING':'NOT_REQUESTED',
     error:null
   }));
-  const needsPaid=(input.generateA04&&preview.a04Provider==='AIRIA')||
-   (input.runP01&&preview.p01Provider==='AIRIA');
+  const needsPaid=input.generateA04&&preview.a04Provider==='AIRIA';
   if(needsPaid&&input.confirmAiCost!==true)
    throw new SiBulkApprovalError('SI_BULK_EXPLICIT_AI_COST_CONFIRMATION_REQUIRED',422);
-  if(input.runP01===true)
-   throw new SiBulkApprovalError('SI_P01_OUT_OF_CURRENT_POC_SCOPE',409);
   if(input.generateA04&&!preview.a04Enabled)
    throw new SiBulkApprovalError('SI_BULK_A04_NOT_ENABLED',409);
-  if(input.runP01&&!preview.p01Enabled)
-   throw new SiBulkApprovalError('SI_BULK_P01_NOT_ENABLED',409);
   const fingerprint=hash({planId:rollingId,sourceHash:preview.sourceHash,
     revision:preview.planRevision,sources:items.map(x=>({imo:x.imo,keys:x.candidateKeys,
       eventKeys:x.inspectionReasons.map(r=>r.eventKey)}))});
