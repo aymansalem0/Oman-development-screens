@@ -71,7 +71,7 @@ test('Preview is a read-only HUMAN-approved-plan maritime schedule for 2 vessels
  assert.equal(invoke().proposalHash,result.proposalHash,'same evidence yields same hash');
 });
 test('Never double-book a single engineer or exceed batch daily limits',()=>{
- const result=invoke({existingBookings:[{inspectorId:'ENG2',startUtc:'2026-10-20T08:00:00.000Z',endUtc:'2026-10-20T10:30:00.000Z'}]});
+ const result=invoke({existingBookings:[{inspectorId:'ENG2',startUtc:'2026-10-20T05:00:00.000Z',endUtc:'2026-10-20T06:00:00.000Z'},{inspectorId:'ENG2',startUtc:'2026-10-20T08:00:00.000Z',endUtc:'2026-10-20T10:30:00.000Z'}]});
  assert.equal(result.summary.proposed,1);
  assert.equal(result.summary.unscheduled,1);
  assert.equal(result.rows.filter(x=>x.status==='UNSCHEDULED').length,1);
