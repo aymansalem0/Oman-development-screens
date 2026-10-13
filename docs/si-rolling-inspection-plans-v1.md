@@ -1,7 +1,7 @@
 # MOEI Smart Inspection SI-01 — Dynamic / Rolling Inspection Plans
 
 ## Scope implemented (PR #98)
-Employees can now create multiple independent plans on the **same day** or across days; each plan has an independent ID, business number, execution period, optional port/location, version history, and recorded staff identity.
+Employees can now create multiple independent plans on the **same day** or across days; each plan has an independent ID, business number, execution period, version history, and recorded staff identity.
 
 Business flow:
 1. **Candidate Pool** is continuous. Opening it tomorrow does not create a plan, run C01, incur Airia cost, approve cases or modify prior plans.
@@ -14,7 +14,7 @@ Business flow:
 
 ### Oracle 018 schema
 `ai-proxy/migrations/018_si_rolling_inspection_plans.sql` (additive only):
-- `SI_PLAN_ROLLING`: plan identity, number, period, status and pinned JSON state.
+- `SI_PLAN_ROLLING`: plan identity, number, period, status and pinned JSON state. The legacy nullable PORT column remains only for schema compatibility; new plans do not capture or populate it.
 - `SI_PLAN_ROLLING_VERSION`: append-only version ledger.
 - `SI_PLAN_ROLLING_AUDIT`: actor and event history.
 - `SI_PLAN_ROLLING_VESSEL`: approved vessel rank and FK to existing `SI_INSPECTION_CASE`.
