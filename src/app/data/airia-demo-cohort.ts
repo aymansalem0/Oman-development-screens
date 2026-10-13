@@ -16,3 +16,7 @@ export const AIRIA_DEMO_99_VESSELS:NmcVesselProfile[]=AIRIA_DEMO_99_LIST.map((r,
 if(AIRIA_DEMO_99_IMOS.size!==99||AIRIA_DEMO_99_VESSELS.length!==99)
  throw new Error('AIRIA_DEMO_SIZE_NOT_99');
 export const AIRIA_DEMO_DETAILS_NOTICE='99 partner-supplied IMO/name identities; other particulars and AIS positions are SYNTHETIC POC only.';
+
+export function getAiriaDemoVesselByImo(imo:string):NmcVesselProfile|undefined {
+ return AIRIA_DEMO_99_VESSELS.find(v=>v.imo===imo);
+}
