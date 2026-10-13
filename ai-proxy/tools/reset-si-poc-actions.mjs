@@ -156,8 +156,8 @@ export async function resetPocActions(argv=process.argv.slice(2)){
    for(const row of plans.filter(x=>x.status==='READY'&&x.count>0)){
     if(row.count>25000)throw Error('SI_RESET_ORACLE_TABLE_EXCEEDS_POC_LIMIT');
     const columns=(await conn.execute(
-      'SELECT COLUMN_NAME,DATA_TYPE FROM USER_TAB_COLUMNS WHERE TABLE_NAME=:table',
-      {table:row.table},{outFormat:oracledb.OUT_FORMAT_OBJECT})).rows;
+      'SELECT COLUMN_NAME,DATA_TYPE FROM USER_TAB_COLUMNS WHERE TABLE_NAME=:p_table_name',
+      {p_table_name:row.table},{outFormat:oracledb.OUT_FORMAT_OBJECT})).rows;
     const fetchInfo=Object.fromEntries(columns.filter(x=>x.DATA_TYPE==='CLOB').map(x=>[
       x.COLUMN_NAME,{type:oracledb.STRING}
     ]));
