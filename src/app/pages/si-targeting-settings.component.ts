@@ -63,7 +63,7 @@ import {SiCandidateTargetingService,SiDashboard,SiImpact,SiTargetingPolicyConfig
       <strong>{{copy('PSC Port Call','سفينة PSC')}}</strong>
       <small>{{copy('Only port calls selected under the separate PSC quota/targeting policy become candidates.',
        'يُدرج فقط ما تم اختياره وفق سياسة PSC والحصص المستقلة.')}}</small></div>
-     <a routerLink="/moei/smart-inspection/psc-quota-settings" class="policy-link">{{copy('PSC settings','إعدادات PSC')}}</a>
+     <a routerLink="/moei/smart-inspection/settings/psc-quotas" class="policy-link">{{copy('PSC settings','إعدادات PSC')}}</a>
     </div>
     <p class="helper">{{copy('Entry rules do not decide execution order. Final inspection plan approval remains with the authorised supervisor.',
       'قواعد الدخول لا تحدد ترتيب التنفيذ، واعتماد خطة المعاينة يظل من اختصاص المسؤول المخول.')}}</p>
