@@ -99,6 +99,48 @@
           <b>{{v.preparation.externalDocumentsVerified?'YES':'NO'}}</b></p>
       </div>
 
+      <section class="card si-poc-assistants" *ngIf="view">
+        <div class="section-title"><div>
+          <small>SI · POC ADVISORY RESPONSE SIMULATOR</small>
+          <h2>{{copy('AI-assisted future journey — contract-aware POC',
+             'رحلة المعاينة المدعومة بالذكاء الاصطناعي — عرض تجريبي')}}</h2>
+          <p>{{copy('C01, P01 and A04 use their existing validated provider/mock contracts. Below, S01/V01/R01/X01 are local backend MOCK responses only until Airia supplies approved schemas.',
+             'تستخدم C01 وP01 وA04 العقود الحالية. الخدمات التالية S01/V01/R01/X01 محاكاة من Backend لحين وصول عقود Airia المعتمدة.')}}</p>
+        </div></div>
+        <p class="notice">
+          {{copy('No provider call, image analysis, document verification, scheduling or regulatory approval occurs in this panel.',
+             'لا يتم هنا استدعاء AI حقيقي أو تحليل صور أو التحقق من شهادات أو جدولة أو اتخاذ قرارات تنظيمية.')}}
+        </p>
+        <div class="si-poc-agent-actions">
+          <button *ngFor="let a of mockAdvisors" type="button" class="secondary"
+             (click)="runAdvisor(a.id)" [disabled]="advisorBusy">
+            {{copy(a.en,a.ar)}} · {{a.id}}
+          </button>
+        </div>
+        <label class="si-poc-sample">
+          <input type="checkbox" [(ngModel)]="exceptionDemo" />
+          {{copy('X01 sample: recurring deficiency + expiring certificate + conflicting field evidence (synthetic)',
+             'مثال X01: مخالفة متكررة + شهادة قاربت على الانتهاء + دليل ميداني متعارض (بيانات افتراضية)')}}
+        </label>
+        <p *ngIf="advisorError" class="notice error" role="alert">{{advisorError}}</p>
+        <div *ngIf="advisorOutput as a" class="si-poc-agent-output">
+          <strong>{{a.agentCode}} · {{a.provider}} · {{a.simulationLabel}}</strong>
+          <p>{{copy('Provisional backend response · no actual model analysis · 0 external calls',
+              'استجابة Backend تجريبية · بدون تحليل نموذج فعلي · بدون اتصالات خارجية')}}</p>
+          <div *ngFor="let rec of a.advice" class="si-poc-agent-advice">
+            <b>{{rec.code}} · {{rec.severity}}</b>
+            <span>{{rec.title}}</span>
+            <p>{{rec.explanation}}</p>
+            <small *ngIf="rec.synthetic">{{copy('Synthetic scenario only','سيناريو افتراضي فقط')}}</small>
+          </div>
+          <div *ngIf="a.draft as draft">
+            <b>{{copy('Draft for human review','مسودة للمراجعة البشرية')}}:</b>
+            <p>{{draft.summary}}</p>
+            <small>{{copy('Not saved into official report','لا تحفظ تلقائيًا في التقرير الرسمي')}}</small>
+          </div>
+        </div>
+      </section>
+
       <section class="card" *ngIf="view">
         <div class="section-title"><div><small>01–04 · SELECT / APPROVE / PREPARE</small>
           <h2>{{copy('Inspection Targeting and Pre-Inspection Dossier','الاستهداف وملف التحضير')}}</h2>
