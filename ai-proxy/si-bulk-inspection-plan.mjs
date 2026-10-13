@@ -292,18 +292,8 @@ export class SiBulkInspectionPlan{
     job.approvedCount=job.items.filter(x=>Boolean(x.inspectionCaseId)).length;
     job.updatedAt=now();this.put(job);
    }
-   // Old queued job requests are never allowed to run retired P01.
-   if(false&&job.runP01&&job.items.some(x=>x.inspectionCaseId)){
-    try{
-     const p=await this.priority.preview();
-     if(p.eligibleCount>0){
-      await this.priority.run({actor:job.approvedBy,confirmCost:
-       job.confirmedAiCost||this.priority.provider==='mock',
-       expectedSnapshotHash:p.snapshotHash});
-      job.priorityStatus='RECOMMENDATIONS_SAVED';
-     }else job.priorityStatus='NO_ELIGIBLE_APPROVED_CASES';
-    }catch(e){job.priorityStatus='FAILED_'+(e.code||'UNKNOWN');}
-   }else job.priorityStatus=job.runP01?'SKIPPED_OUT_OF_CURRENT_POC_SCOPE':'NOT_REQUESTED';
+   // Do not execute P01 from legacy queued batches; keep existing approval/cases.
+   job.priorityStatus=job.runP01?'SKIPPED_OUT_OF_CURRENT_POC_SCOPE':'NOT_REQUESTED';
    job.status=job.items.every(x=>x.state==='READY')&&
      !job.priorityStatus.startsWith('FAILED')?COMPLETED:PARTIAL;
    // Plan is now in operational execution (even if a dossier needs review).
