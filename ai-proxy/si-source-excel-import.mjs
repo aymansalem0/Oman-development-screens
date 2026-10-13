@@ -17,18 +17,18 @@ const sourceDefs=Object.freeze({
   SERVICE_REQUEST:{
     sheet:'SERVICE_REQUESTS',
     display:'Maritime Service Requests',
-    fields:['request_id','request_reference','imo','port','request_date','service_type','notes'],
+    fields:['request_id','request_reference','imo','port','request_date','service_type','notes','etd_local'],
     map:r=>({sourceType:'SERVICE_REQUEST',sourceEventId:r.request_id,
       sourceReference:r.request_reference,imo:r.imo,requestedRegime:'UAE_SERVICE_INSPECTION',
-      port:r.port,eta:null,note:r.notes?('Service type: '+r.service_type+'; '+r.notes):('Service type: '+r.service_type)})
+      port:r.port,eta:null,reportedDepartureLocal:r.etd_local||null,note:r.notes?('Service type: '+r.service_type+'; '+r.notes):('Service type: '+r.service_type)})
   },
   PSC_PORT_CALL:{
     sheet:'PSC_PORT_CALLS',
     display:'PSC Port Call Notifications',
-    fields:['port_call_id','port_call_reference','imo','port','eta_local','visit_purpose','notes'],
+    fields:['port_call_id','port_call_reference','imo','port','eta_local','visit_purpose','notes','etd_local'],
     map:r=>({sourceType:'PSC_PORT_CALL',sourceEventId:r.port_call_id,
       sourceReference:r.port_call_reference,imo:r.imo,requestedRegime:'PORT_STATE_CONTROL',
-      port:r.port,eta:r.eta_local,note:r.notes?('Visit: '+r.visit_purpose+'; '+r.notes):('Visit: '+r.visit_purpose)})
+      port:r.port,eta:r.eta_local,reportedDepartureLocal:r.etd_local||null,note:r.notes?('Visit: '+r.visit_purpose+'; '+r.notes):('Visit: '+r.visit_purpose)})
   }
 });
 export const SI_SOURCE_DEFINITIONS=sourceDefs;
@@ -80,7 +80,7 @@ export class SiSourceExcelImport{
     info.addRow(['NMC live referrals','Cannot be uploaded or overwritten by Excel']);
     info.addRow(['Sheet required',def.sheet]);
     info.addRow(['Headers','Row 1 exactly; records begin at row 2']);
-    info.addRow(['Date examples','Service Request: YYYY-MM-DD; PSC ETA: YYYY-MM-DDTHH:mm (Dubai local)']);
+    info.addRow(['Date examples','ETA and ETD YYYY-MM-DDTHH:mm (Dubai local). ETD is separate from ETA; imported values are UNVERIFIED POC.']);
     info.addRow(['File limit','2 MB, up to 1000 records; formulas forbidden']);
     info.getColumn(1).width=34;info.getColumn(2).width=86;
     const sheet=book.addWorksheet(def.sheet);
@@ -89,9 +89,9 @@ export class SiSourceExcelImport{
     if(imo){
       sheet.addRow(source==='SERVICE_REQUEST'
         ?['SR-POC-001','UAE-SVC-POC-001',imo,'Jebel Ali','2026-10-10',
-          'Initial maritime inspection','POC test case — replace with source export']
+          'Initial maritime inspection','POC test case — replace with source export','2026-10-21T18:00']
         :['PSC-POC-001','UAE-PORT-POC-001',imo,'Jebel Ali','2026-10-15T08:00',
-          'Port call inspection','POC test case — replace with source export']);
+          'Port call inspection','POC test case — replace with source export','2026-10-19T18:00']);
     }
     sheet.views=[{state:'frozen',ySplit:1}];
     def.fields.forEach((x,i)=>{sheet.getColumn(i+1).width=x==='notes'?48:Math.max(18,x.length+6)});
@@ -141,9 +141,14 @@ export class SiSourceExcelImport{
     if(!sheet)throw new SiTargetingError('SI_XLSX_SHEET_REQUIRED_'+def.sheet,422);
     if(sheet.rowCount>1001)throw new SiTargetingError('SI_XLSX_ROW_LIMIT',413);
     if(sheet.columnCount>40)throw new SiTargetingError('SI_XLSX_COLUMN_LIMIT',413);
-    const cols=def.fields;
-    if(cols.some((k,i)=>textCell(sheet.getRow(1).getCell(i+1).value)!==k))
+    // Backward-compatible 7-column feeds are accepted; new templates add
+    // ETD as column eight. We never infer ETD from ETA or request date.
+    const legacy=def.fields.slice(0,7);
+    const headerAt=i=>textCell(sheet.getRow(1).getCell(i+1).value);
+    if(legacy.some((key,i)=>headerAt(i)!==key)||
+       (headerAt(7)&&headerAt(7)!=='etd_local'))
       throw new SiTargetingError('SI_XLSX_HEADER_MISMATCH',422);
+    const cols=headerAt(7)==='etd_local'?def.fields:legacy;
     const out=[],issues=[],withinFile=new Set();
     for(let i=2;i<=sheet.rowCount;i++){
       const row=sheet.getRow(i);
@@ -171,6 +176,16 @@ export class SiSourceExcelImport{
          (!/^20\d\d-\d\d-\d\dT\d\d:\d\d$/.test(values.eta_local)||
           !Number.isFinite(Date.parse(values.eta_local+':00Z')))){
         issues.push(parseIssue(i,'SI_XLSX_ETA_INVALID'));continue;
+      }
+      if(values.etd_local){
+        const matches=/^20\d\d-\d\d-\d\dT\d\d:\d\d$/.test(values.etd_local);
+        const etd=Date.parse(values.etd_local+':00+04:00');
+        const eta=values.eta_local?Date.parse(values.eta_local+':00+04:00'):null;
+        const requestDay=values.request_date?Date.parse(values.request_date+'T00:00:00+04:00'):null;
+        if(!matches||!Number.isFinite(etd)||
+          (eta!==null&&etd<=eta)||(requestDay!==null&&etd<requestDay)){
+          issues.push(parseIssue(i,'SI_XLSX_ETD_INVALID_OR_BEFORE_ARRIVAL'));continue;
+        }
       }
       try{
         const mapped=def.map(values);
