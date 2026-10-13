@@ -185,6 +185,15 @@
       </section>
 
       <section class="card" *ngIf="record as r">
+        <p class="dynamic-checklist-entry">
+          <a [routerLink]="['/moei/smart-inspection/checklists',caseId]">
+            {{copy('Open Vessel-Specific Dynamic Checklists & AI Inspector Assistant →',
+              'فتح قوائم المعاينة الديناميكية ومساعد AI للمفتش ←')}}
+          </a>
+          <span>{{copy('Additional published checklist groups are enforced before the field report can be submitted.',
+            'يجب استكمال القوائم الإضافية المنشورة المنطبقة قبل تقديم تقرير المعاينة.')}}
+          </span>
+        </p>
         <div class="section-title"><div><small>07–08 · INSPECTOR FIELD WORKSPACE</small>
           <h2>{{copy('Field Checklist, Evidence and Deficiencies','قائمة المعاينة الميدانية والأدلة والملاحظات')}}</h2>
           <p>{{copy('Inspector starts the field session, completes each item, records auditable observations and evidence references. Photo/video upload, offline sync, voice and CV are planned enhancements, not falsely shown as operational.',
