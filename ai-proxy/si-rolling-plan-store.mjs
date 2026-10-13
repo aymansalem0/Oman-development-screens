@@ -26,7 +26,10 @@ const sanitize=x=>({
  createdBy:x.createdBy,createdAt:x.createdAt,updatedBy:x.updatedBy,
  updatedAt:x.updatedAt,approvedAt:x.approvedAt||null,
  approvedBy:x.approvedBy||null,approvedBatchId:x.approvedBatchId||null,
- vesselCount:x.approvedVessels?.length??x.latest?.rows?.filter(r=>r.planSelected).length??0
+ vesselCount:x.approvedVessels?.length||x.savedPlanRows?.filter(r=>r.planSelected).length||
+    x.latest?.rows?.filter(r=>r.planSelected).length||0,
+ candidateCount:new Set((x.candidateSnapshot||[]).map(c=>c.imo)).size,
+ deferredCount:Object.values(x.overrides||{}).filter(d=>d.disposition==='DEFER').length
 });
 const uniqueNumber=()=>('IP-'+new Date().toISOString().slice(0,10).replaceAll('-','')+
  '-'+randomUUID().slice(0,8).toUpperCase());
@@ -97,6 +100,24 @@ export class SiRollingPlanStore{
    return from(x[0].STATE_JSON);
   });
  }
+ async previousCandidateDecisions(candidates){
+  const plans=this.mode==='json'?this.readFile().plans:
+   await this.db(async con=>(await this.query(con,
+    'SELECT STATE_JSON FROM SI_PLAN_ROLLING ORDER BY CREATED_AT DESC'))
+    .map(row=>from(row.STATE_JSON)));
+  const results={};
+  for(const prior of [...plans].reverse()){
+   for(const c of candidates){
+    if(results[c.imo]||!prior.overrides?.[c.imo])continue;
+    const choice=prior.overrides[c.imo];
+    results[c.imo]={fromPlan:prior.number,disposition:choice.disposition||
+     (choice.selected?'INCLUDE':'NOT_SELECTED'),
+     reviewAfter:choice.reviewAfter||null,
+     reason:choice.reason||null,decidedAt:choice.at||prior.updatedAt};
+   }
+  }
+  return results;
+ }
  async create(input={},actor,{candidates=[],sourceHash=null}={}){
   // No port belongs to the rolling inspection plan business model.
   // Legacy input.port is ignored; the nullable Oracle 018 PORT column is kept
@@ -108,6 +129,7 @@ export class SiRollingPlanStore{
    input.endsOn<input.startsOn||!text(actor,160))
    fail('SI_ROLLING_PLAN_INFORMATION_INVALID',422);
   const createdAt=now();
+  const carryForward=await this.previousCandidateDecisions(candidates);
   const state={id:randomUUID(),number:uniqueNumber(),title,startsOn:input.startsOn,
    endsOn:input.endsOn,notes,status:'DRAFT',revision:0,
    createdAt,createdBy:actor,updatedAt:createdAt,updatedBy:actor,
@@ -117,7 +139,7 @@ export class SiRollingPlanStore{
     sourceEventKeys:(c.sourceEvents||[]).map(e=>e.eventKey),
     sourceTypes:c.sourceTypes||[],risk:c.currentRisk||null
    })),
-   candidateSourceHash:sourceHash,
+   candidateSourceHash:sourceHash,carryForward,
    audit:[{event:'CREATED',at:createdAt,actor}],
    approvedBatchId:null,approvedVessels:[],approvedBy:null,approvedAt:null};
   if(this.mode==='json'){
