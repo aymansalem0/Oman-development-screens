@@ -25,7 +25,8 @@ test('login is the ONLY credential entry within NMC and Smart Inspection workben
 });
 test('AI plan edits remain separate from one supervisor whole-plan approval',()=>{
  assert.match(html,/savePlanEdit\(\)/);
- assert.match(html,/routerLink="\/moei\/smart-inspection\/plan\/create"/);
+ assert.match(html,/\[routerLink\]="\['\/moei\/smart-inspection\/plan\/create',activePlanId\]"/);
+ assert.match(html,/si-rolling-management/);
  assert.doesNotMatch(html,/\(click\)="decide\('APPROVE'\)"/);
  assert.match(html,/Officer Reason/);
 });

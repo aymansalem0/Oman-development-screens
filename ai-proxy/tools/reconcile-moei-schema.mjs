@@ -2,7 +2,7 @@
  * MOEI / NMC / Smart Inspection Oracle schema + master-data reconciliation.
  *
  * DEFAULT = READ-ONLY. --apply requires --backup-confirmed and NMC_DB_* creds.
- * Only creates missing tables/indexes from reviewed 002..017 migrations,
+ * Only creates missing tables/indexes from reviewed 002..018 migrations,
  * repairs nullable SI_CHK_ columns, and inserts absent technical master codes.
  * NEVER drops/truncates tables, rewrites values, changes official risk, or
  * replays ALTER/DROP CONSTRAINT migrations (005/008/014/016).
@@ -68,7 +68,7 @@ function splitColumns(str){
  items.push(str.slice(last).trim());return items.filter(Boolean);
 }
 export function schemaManifest({directory=scriptsDir}={}){
- const files=readdirSync(directory).filter(x=>/^0(?:0[2-9]|1[0-7])_.*\.sql$/i.test(x)).sort();
+ const files=readdirSync(directory).filter(x=>/^0(?:0[2-9]|1[0-8])_.*\.sql$/i.test(x)).sort();
  if(!files.some(x=>x.startsWith('017_')))throw new Error('SI_CHECKLIST_MIGRATION_017_MISSING');
  const tables=new Map(),indexes=new Map(),migrationWarnings=[];
  for(const filename of files){

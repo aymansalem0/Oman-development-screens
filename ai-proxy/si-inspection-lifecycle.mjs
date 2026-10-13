@@ -28,10 +28,11 @@ export class SiLifecycleError extends Error{
 }
 
 export class SiInspectionLifecycle{
-  constructor({mode='json',oracleRepository=null,targeting,preparation,cases,checklists=null,
+  constructor({mode='json',oracleRepository=null,targeting,preparation,cases,checklists=null,onClosed=null,
     file=process.env.SI_LIFECYCLE_STORE_PATH||'/data/si-inspection-lifecycle.json'}={}){
     this.mode=mode;this.oracle=oracleRepository;this.targeting=targeting;
-    this.preparation=preparation;this.cases=cases;this.checklists=checklists;this.file=file;
+    this.preparation=preparation;this.cases=cases;this.checklists=checklists;
+    this.onClosed=onClosed;this.file=file;
     this.ready=mode==='json';this.active=new Set();
   }
   async db(fn){
@@ -470,6 +471,13 @@ export class SiInspectionLifecycle{
       next.audit.push({id:randomUUID(),version:next.version,action,
         actor:str(actor,120),at:now(),reason:str(reason,500)});
       await this.persist(id,previous,next,action,actor,reason);
+      // This is a downstream planning projection, not part of legal case
+      // closure. A synchronization failure can be retried without reopening
+      // or rolling back an already-closed inspection.
+      if(action==='CLOSE'&&this.onClosed){
+       try{await this.onClosed(id,actor);}
+       catch(e){console.error('[si-rolling] CLOSURE_SYNC_RETRY_REQUIRED '+String(e.code||'UNKNOWN'));}
+      }
       return {status:'ok',record:next};
     }finally{this.active.delete(id);}
   }

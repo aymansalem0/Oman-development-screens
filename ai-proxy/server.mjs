@@ -28,6 +28,7 @@ import { SiPscSelection, SiSelectionError } from './si-psc-selection.mjs';
 import { SiAiPrioritization, SiPriorityError } from './si-ai-prioritization.mjs';
 import {SiCandidateAgent,SiCandidateAgentError} from './si-candidate-agent.mjs';
 import {SiInspectionPlan} from './si-inspection-plan.mjs';
+import {SiRollingPlanStore,SiRollingPlanError} from './si-rolling-plan-store.mjs';
 import {SiBulkInspectionPlan,SiBulkApprovalError} from './si-bulk-inspection-plan.mjs';
 import {mockSiP01,mockSiA04,mockSiC01} from './si-agent-mock.mjs';
 import { SiInspectionPreparation, SiPreparationError } from './si-inspection-preparation.mjs';
@@ -229,8 +230,10 @@ const siCandidateAgent=new SiCandidateAgent({
   targeting:siTargeting,pscPolicy:()=>siPscSelection.policy(),provider:siAiProvider,
   executeAgent:async input=>siAiProvider==='mock'?mockSiC01(input):fleetAgentCall('c01',input)
 });
+const siRollingPlans=new SiRollingPlanStore({mode:dbMode,oracleRepository:repository});
+let siRollingPlansReady=false;
 const siInspectionPlan=new SiInspectionPlan({
-  targeting:siTargeting,candidateAgent:siCandidateAgent
+  targeting:siTargeting,candidateAgent:siCandidateAgent,rollingPlans:siRollingPlans
 });
 const siPreparation=new SiInspectionPreparation({mode:dbMode,oracleRepository:repository,
   targeting:siTargeting,riskPolicy,provider:siAiProvider,
@@ -256,7 +259,8 @@ const siChecklistField=new (checklistStorage==='oracle'?
   getSetting:key=>runtime.get(key)
 });
 const siLifecycle=new SiInspectionLifecycle({mode:dbMode,oracleRepository:repository,
-  targeting:siTargeting,preparation:siPreparation,cases,checklists:siChecklistField});
+  targeting:siTargeting,preparation:siPreparation,cases,checklists:siChecklistField,
+  onClosed:(caseId,actor)=>siRollingPlans.completeIfAllClosed(caseId,actor,siLifecycle)});
 const actionPlanRuns=new Set(); // process-local duplicate A01 invocation guard; version-lock remains authoritative
 let alertScanTimer=null;
 function rescheduleAlertScan(){
@@ -874,20 +878,57 @@ const server = createServer(async (req, res) => {
       // The first Smart Inspection screen: one read-only candidate/AI plan grid.
       // Operator plan changes require Editor authorisation, one confirmed C01
       // re-evaluation and backend validation; no official inspection approval.
+      if((path==='/api/si/v1/inspection-plans'||
+           path.startsWith('/api/si/v1/inspection-plans/'))&&!siRollingPlansReady)
+        return respond(res,503,{error:'SI_ROLLING_MIGRATION_018_REQUIRED'});
+      // Rolling plans are independent, numbered and versioned. Creating a plan
+      // never calls C01, approves inspections, or touches legacy JSON.
+      if(path==='/api/si/v1/inspection-plans'&&req.method==='GET'){
+        dashboards.assertRole(req,'EDITOR');
+        return respond(res,200,{plans:await siRollingPlans.list()});
+      }
+      if(path==='/api/si/v1/inspection-plans'&&req.method==='POST'){
+        dashboards.assertRole(req,'EDITOR');
+        const identity=moeiAuth.session(req);
+        return respond(res,201,await siRollingPlans.create(
+          await requestJson(req,4096),identity?.email||identity?.username||'ADMIN'));
+      }
+      const rollingPath=/^\/api\/si\/v1\/inspection-plans\/([a-f0-9-]{36})(?:\/(cancel))?$/.exec(path);
+      if(rollingPath){
+        if(req.method==='GET'&&!rollingPath[2]){
+          dashboards.assertRole(req,'EDITOR');
+          return respond(res,200,await siRollingPlans.get(rollingPath[1]));
+        }
+        if(req.method==='POST'&&rollingPath[2]==='cancel'){
+          dashboards.assertRole(req,'PUBLISHER');
+          const body=await requestJson(req,4096);
+          const identity=moeiAuth.session(req);
+          return respond(res,200,await siRollingPlans.cancel(
+            rollingPath[1],body.expectedRevision,
+            identity?.email||identity?.username||'ADMIN',body.reason));
+        }
+      }
       if(path==='/api/si/v1/inspection-plan'&&req.method==='GET'){
         dashboards.assertRole(req,'EDITOR');
-        return respond(res,200,await siInspectionPlan.snapshot());
+        const planId=new URL(req.url||'/', 'http://localhost').searchParams.get('planId');
+        if(planId&&!siRollingPlansReady)return respond(res,503,{error:'SI_ROLLING_MIGRATION_018_REQUIRED'});
+        return respond(res,200,await siInspectionPlan.snapshot(planId));
       }
       if(path==='/api/si/v1/inspection-plan/rerank'&&req.method==='POST'){
         dashboards.assertRole(req,'EDITOR');
-        return respond(res,200,await siInspectionPlan.rerank(await requestJson(req,4096)));
+        const input=await requestJson(req,4096);
+        if(input.planId&&!siRollingPlansReady)
+          return respond(res,503,{error:'SI_ROLLING_MIGRATION_018_REQUIRED'});
+        return respond(res,200,await siInspectionPlan.rerank(input));
       }
       // One supervisor action for all plan-selected vessels. GET is read-only;
       // POST asynchronously creates per-regime cases and deterministic dossiers,
       // with explicitly authorized optional A04/P01 paid calls.
       if(path==='/api/si/v1/inspection-batches/preview'&&req.method==='GET'){
         dashboards.assertRole(req,'EDITOR');
-        return respond(res,200,await siBulkPlan.preview());
+        const planId=new URL(req.url||'/', 'http://localhost').searchParams.get('planId');
+        if(planId&&!siRollingPlansReady)return respond(res,503,{error:'SI_ROLLING_MIGRATION_018_REQUIRED'});
+        return respond(res,200,await siBulkPlan.preview(planId));
       }
       if(path==='/api/si/v1/inspection-batches'&&req.method==='GET'){
         dashboards.assertRole(req,'EDITOR');
@@ -897,6 +938,8 @@ const server = createServer(async (req, res) => {
         dashboards.assertRole(req,'PUBLISHER');
         const identity=moeiAuth.session(req);
         const input=await requestJson(req,8192);
+        if(input.planId&&!siRollingPlansReady)
+          return respond(res,503,{error:'SI_ROLLING_MIGRATION_018_REQUIRED'});
         return respond(res,202,await siBulkPlan.approve({
           ...input,actor:identity?.email||identity?.username||input.actor
         }));
@@ -1077,12 +1120,19 @@ const server = createServer(async (req, res) => {
       }
       return respond(res,405,{error:'METHOD_NOT_ALLOWED'});
     }catch(e){
-      if(e instanceof SiBulkApprovalError||e instanceof SiCandidateAgentError||e instanceof SiLifecycleError||e instanceof SiSelectionError||e instanceof SiPriorityError||e instanceof SiPreparationError||e instanceof SiTargetingError||e instanceof DashboardError)
+      if(e instanceof SiRollingPlanError||e instanceof SiBulkApprovalError||e instanceof SiCandidateAgentError||e instanceof SiLifecycleError||e instanceof SiSelectionError||e instanceof SiPriorityError||e instanceof SiPreparationError||e instanceof SiTargetingError||e instanceof DashboardError)
         return respond(res,e.status,{error:e.code});
       if(Number.isInteger(e?.status)&&e.status>=400&&e.status<500)
         return respond(res,e.status,{error:'SI_REQUEST_INVALID'});
-      console.error('[si-targeting] REQUEST_FAILED '+String(e?.code||'UNAVAILABLE').replace(/[^A-Z0-9_-]/gi,'').slice(0,40));
-      return respond(res,503,{error:'SI_TARGETING_UNAVAILABLE'});
+      const rollingRoute=path==='/api/si/v1/inspection-plans'||
+        path.startsWith('/api/si/v1/inspection-plans/');
+      // These two modules share the SI router but have different Oracle
+      // repositories. Don't report a rolling-catalog failure as targeting.
+      const module=rollingRoute?'si-rolling':'si-targeting';
+      console.error('['+module+'] REQUEST_FAILED '+
+        String(e?.code||'UNAVAILABLE').replace(/[^A-Z0-9_-]/gi,'').slice(0,40));
+      return respond(res,503,{error:rollingRoute?
+        'SI_ROLLING_STORE_UNAVAILABLE':'SI_TARGETING_UNAVAILABLE'});
     }
   }
 
@@ -1623,6 +1673,16 @@ try{
     await siChecklistField.initialize();
     console.log('[si-checklist] STORAGE_ORACLE_READY schema=017');
   }else console.log('[si-checklist] STORAGE_JSON_POC');
+  // Migration 018 may not yet exist on existing deployments. Keep NMC,
+  // Checklist and SI lifecycle operational, but explicitly reject requests
+  // to the new Rolling Plan API until its schema has been reviewed/applied.
+  try{
+    await siRollingPlans.initialize();siRollingPlansReady=true;
+    console.log('[si-rolling] STORAGE_'+dbMode.toUpperCase()+'_READY schema=018');
+  }catch(e){
+    siRollingPlansReady=false;
+    console.error('[si-rolling] SI_ROLLING_MIGRATION_018_REQUIRED - new planning API disabled');
+  }
   try{await siTargeting.initialize();}
   catch(error){console.error('[si-targeting] SI_MIGRATION_009_REQUIRED - candidate API disabled');}
   try{await siPscSelection.initialize();}

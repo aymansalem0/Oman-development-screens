@@ -251,11 +251,26 @@ export class SiCandidateTargeting{
     const cases=new Map(state.cases.flatMap(c=>
       [...new Set([c.candidateKey,...(c.candidateKeys||[])])].map(k=>[k,c])));
     const list=[...groups.values()].map(group=>{
+      // Repeat visits are legal for a NEW source event even on the same
+      // physical vessel and inspection regime. Never re-use an already
+      // approved eventKey merely because it has the same IMO.
+      const priorCases=state.cases.filter(c=>c.imo===group.imo&&
+        (c.regimes||[c.regime]).includes(group.regime));
+      const handledEvents=new Set(priorCases.flatMap(c=>c.sourceEventKeys||[]));
+      const newEvents=group.events.filter(e=>!handledEvents.has(e.eventKey));
+      const repeat=priorCases.length>0&&newEvents.length>0;
+      const key=repeat?hash('SI_REPEAT|'+group.imo+'|'+group.regime+'|'+
+        newEvents.map(e=>e.eventKey).sort().join('|')):group.key;
+      // A completed referral stays visible as handled, but a separate new
+      // referral is projected as PENDING_REVIEW with its own candidate key.
+      const activeEvents=repeat?newEvents:group.events;
+      const historicalCase=priorCases.at(-1)||null;
+      const inspectionCase=repeat?null:(cases.get(key)||historicalCase);
       const bundle=byImo.get(group.imo),vessel=bundle.inlineContext?.vessel||bundle,
         risk=risks.get(group.imo)||null,
-        nmc=group.events.some(e=>e.payload.sourceType==='NMC_CASE'),
-        booked=group.events.some(e=>e.payload.nmcStatus==='SCHEDULED'),
-        lastDecision=last.get(group.key)||null,inspectionCase=cases.get(group.key)||null;
+        nmc=activeEvents.some(e=>e.payload.sourceType==='NMC_CASE'),
+        booked=activeEvents.some(e=>e.payload.nmcStatus==='SCHEDULED'),
+        lastDecision=last.get(key)||null;
       const eligibility=nmc?'MANDATORY':'MANUAL_REVIEW';
       const priority=risk?.riskScore>=rules.riskPriorityThreshold?'PRIORITY':
         risk?'STANDARD':'RISK_UNASSESSED';
@@ -266,13 +281,13 @@ export class SiCandidateTargeting{
       const status=inspectionCase?'INSPECTION_CREATED':booked?'EXTERNALLY_SCHEDULED':
         lastDecision?.action==='DEFER'?'DEFERRED':
         lastDecision?.action==='REJECT'?'REJECTED':'PENDING_REVIEW';
-      return {key:group.key,imo:group.imo,
+      return {key,imo:group.imo,
         vesselName:vessel.name||vessel.vesselName||vessel.shipName||('IMO '+group.imo),
         flag:vessel.flag||'',vesselType:vessel.vesselType||vessel.type||'',
         regime:group.regime,eligibility,priority,reasons,status,
         currentRisk:risk?{score:risk.riskScore,level:risk.riskLevel,
           assessmentId:risk.sourceAssessmentId,policyRevision:risk.policyRevision}:null,
-        events:group.events.sort((a,b)=>a.createdAt.localeCompare(b.createdAt)).map(e=>({
+        events:activeEvents.sort((a,b)=>a.createdAt.localeCompare(b.createdAt)).map(e=>({
           eventKey:e.eventKey,sourceType:e.payload.sourceType,
           sourceEventId:e.payload.sourceEventId,sourceReference:e.payload.sourceReference,
           provenance:e.payload.provenance,approval:e.payload.sourceApprovalStatus,

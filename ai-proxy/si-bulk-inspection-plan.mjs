@@ -61,10 +61,10 @@ export class SiBulkInspectionPlan{
  get(id){
   const job=this.read().jobs.find(x=>x.id===id);
   if(!job)throw new SiBulkApprovalError('SI_BULK_PLAN_NOT_FOUND',404);
-  const {id:planId,status,createdAt,updatedAt,approvedBy,approvedCount,
-    totalSelected,items,priorityStatus,sourceHash,planRevision,
+  const {id:jobId,status,createdAt,updatedAt,approvedBy,approvedCount,
+    totalSelected,items,priorityStatus,sourceHash,planRevision,planId,
     approvalReason,mode,finishedAt,progressMessage}=job;
-  return {id:planId,status,createdAt,updatedAt,approvedBy,approvedCount,
+  return {id:jobId,rollingPlanId:planId??null,status,createdAt,updatedAt,approvedBy,approvedCount,
    totalSelected,sourceHash,planRevision,approvalReason,mode,finishedAt,
    progressMessage,priorityStatus,
    items:items.map(x=>({imo:x.imo,candidateKey:x.candidateKey,
@@ -76,8 +76,10 @@ export class SiBulkInspectionPlan{
      error:x.error||null}))};
  }
  latest(){return this.read().jobs.slice(-5).reverse().map(x=>this.get(x.id));}
- async preview(){
-  const plan=await this.plan.snapshot();
+ async preview(planId=null){
+  const plan=await this.plan.snapshot(planId);
+  if(planId&&plan.planStatus!=='READY_FOR_APPROVAL')
+   throw new SiBulkApprovalError('SI_ROLLING_PLAN_NOT_READY_FOR_APPROVAL',409);
   const dashboard=await this.targeting.dashboard();
   const eligible=c=>c.status==='PENDING_REVIEW'||
     (c.status==='EXTERNALLY_SCHEDULED'&&
@@ -120,7 +122,8 @@ export class SiBulkInspectionPlan{
   if(!plan.agentRunId)warnings.push('SI_C01_PLAN_NOT_GENERATED');
   if(!vessels.length)warnings.push('SI_PLAN_NO_SELECTED_VESSELS');
   if(vessels.some(v=>v.missingSource))warnings.push('SI_INSPECTION_SOURCE_UNAVAILABLE_REVIEW');
-  return {status:'PREVIEW',sourceHash:plan.sourceHash,
+  return {status:'PREVIEW',planId,planNumber:plan.planNumber||null,
+   sourceHash:plan.sourceHash,
     planRevision:plan.revision,agentRunId:plan.agentRunId,
     planGeneratedAt:plan.generatedAt,provider:plan.provider,
     stale:plan.stale,selectedVessels:vessels.length,vessels,
@@ -142,7 +145,8 @@ export class SiBulkInspectionPlan{
   if(input.generateA04!==true&&input.generateA04!==false||
      input.runP01!==true&&input.runP01!==false)
    throw new SiBulkApprovalError('SI_BULK_AI_SELECTION_REQUIRED',422);
-  const preview=await this.preview();
+  const rollingId=input.planId||null;
+  const preview=await this.preview(rollingId);
   if(preview.stale||!preview.agentRunId||
      preview.sourceHash!==input.expectedSourceHash||
      preview.planRevision!==input.expectedRevision||
@@ -177,7 +181,7 @@ export class SiBulkInspectionPlan{
    throw new SiBulkApprovalError('SI_BULK_A04_NOT_ENABLED',409);
   if(input.runP01&&!preview.p01Enabled)
    throw new SiBulkApprovalError('SI_BULK_P01_NOT_ENABLED',409);
-  const fingerprint=hash({sourceHash:preview.sourceHash,
+  const fingerprint=hash({planId:rollingId,sourceHash:preview.sourceHash,
     revision:preview.planRevision,sources:items.map(x=>({imo:x.imo,keys:x.candidateKeys,
       eventKeys:x.inspectionReasons.map(r=>r.eventKey)}))});
   // Approval plans are unique per saved source/revision/approved selection.
@@ -185,7 +189,7 @@ export class SiBulkInspectionPlan{
   const existing=this.read().jobs.find(x=>x.fingerprint===fingerprint);
   if(existing)return this.get(existing.id);
   const at=now();
-  const job={id:randomUUID(),fingerprint,status:QUEUED,createdAt:at,
+  const job={id:randomUUID(),planId:rollingId,fingerprint,status:QUEUED,createdAt:at,
     updatedAt:at,finishedAt:null,approvedBy:actor,approvalReason:reason,
     approvedCount:0,totalSelected:items.length,
     sourceHash:preview.sourceHash,planRevision:preview.planRevision,
@@ -216,7 +220,7 @@ export class SiBulkInspectionPlan{
     let cases;
     if(prior.every(c=>c&&c.approvedPlanId===job.id))cases=prior;
     else{
-      const current=await this.plan.snapshot();
+      const current=await this.plan.snapshot(job.planId||null);
       if(current.stale||current.sourceHash!==job.sourceHash||
          current.revision!==job.planRevision||current.agentRunId!==job.agentRunId)
         throw new SiBulkApprovalError('SI_BULK_SOURCE_CHANGED_BEFORE_COMMIT',409);
@@ -237,6 +241,15 @@ export class SiBulkInspectionPlan{
     job.approvedCount=job.items.filter(x=>Boolean(x.inspectionCaseId)).length;
     job.updatedAt=now();job.progressMessage='BATCH_APPROVAL_COMMITTED';
     this.put(job);
+    if(job.planId&&this.plan.rolling){
+     await this.plan.rolling.approve(job.planId,{
+      expectedRevision:job.planRevision,batchId:job.id,actor:job.approvedBy,
+      cases:job.items.map(item=>({
+       imo:item.imo,caseId:item.inspectionCaseId,
+       planRank:item.planRank,regimes:item.regimes,
+       inspectionReasons:item.inspectionReasons}))
+     });
+    }
    }
    for(const item of job.items){
     if(item.state==='READY')continue;
@@ -289,6 +302,17 @@ export class SiBulkInspectionPlan{
    }else job.priorityStatus='NOT_REQUESTED';
    job.status=job.items.every(x=>x.state==='READY')&&
      !job.priorityStatus.startsWith('FAILED')?COMPLETED:PARTIAL;
+   // Plan is now in operational execution (even if a dossier needs review).
+   // Case IDs and prior approved scope are frozen; this is a state-only version.
+   if(job.planId&&job.approvedCount>0&&this.plan.rolling){
+    try{await this.plan.rolling.setExecutionState(job.planId,'IN_EXECUTION',
+      job.approvedBy);}
+    catch(e){
+     job.status=PARTIAL;
+     job.progressMessage='SI_ROLLING_EXECUTION_STATE_REVIEW_REQUIRED';
+     job.priorityStatus=job.priorityStatus+';PLAN_SYNC_'+(e.code||'FAILED');
+    }
+   }
    job.finishedAt=now();job.updatedAt=now();
    job.progressMessage=job.status===COMPLETED?'BATCH_COMPLETED':
       'BATCH_PARTIALLY_COMPLETED_REVIEW_ITEMS';

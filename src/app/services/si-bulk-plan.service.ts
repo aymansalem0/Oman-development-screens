@@ -15,7 +15,7 @@ export interface SiBulkVessel{
  missingSource:boolean;
 }
 export interface SiBulkPreview{
- status:'PREVIEW';sourceHash:string;planRevision:number;
+ status:'PREVIEW';planId?:string|null;planNumber?:string|null;sourceHash:string;planRevision:number;
  agentRunId:string|null;planGeneratedAt:string|null;
  provider:'MOCK'|'AIRIA';stale:boolean;selectedVessels:number;
  vessels:SiBulkVessel[];
@@ -33,6 +33,7 @@ export interface SiBulkItem{
 export interface SiBulkJob{
  id:string;status:'QUEUED'|'RUNNING'|'COMPLETED'|'PARTIAL';
  createdAt:string;updatedAt:string;finishedAt?:string|null;
+ rollingPlanId?:string|null;
  approvedBy:string;approvedCount:number;totalSelected:number;
  sourceHash:string;planRevision:number;approvalReason:string;
  priorityStatus:string;mode:string;progressMessage:string;items:SiBulkItem[];
@@ -41,11 +42,12 @@ export interface SiBulkJob{
 export class SiBulkPlanService{
  private readonly url='/api/si/v1/inspection-batches';
  constructor(private readonly http:HttpClient){}
- preview():Observable<SiBulkPreview>{
-  return this.http.get<SiBulkPreview>(this.url+'/preview');
+ preview(planId?:string|null):Observable<SiBulkPreview>{
+  return this.http.get<SiBulkPreview>(this.url+'/preview',
+   {params:planId?{planId}:{}});
  }
  approve(input:{
-  reason:string;expectedRevision:number;expectedSourceHash:string;
+  reason:string;planId?:string;expectedRevision:number;expectedSourceHash:string;
   expectedAgentRunId:string;confirmApproval:true;
   generateA04:boolean;runP01:boolean;confirmAiCost:boolean;
  }):Observable<SiBulkJob>{

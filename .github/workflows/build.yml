@@ -81,6 +81,15 @@ jobs:
       - name: Google SSO allowlist, PKCE and verified-token security tests
         run: node --test ai-proxy/test/moei-google-sso.test.mjs
 
+      - name: Oracle 018 adapter migration readiness, audit and lifecycle
+        run: node --test ai-proxy/test/si-rolling-oracle.test.mjs
+
+      - name: SI-01 rolling to SI-02 approval and day-two cycle end-to-end
+        run: node --test ai-proxy/test/si-rolling-endtoend.test.mjs
+
+      - name: SI-01 rolling plan independent Oracle/JSON lifecycle and versions
+        run: node --test ai-proxy/test/si-rolling-plans.test.mjs
+
       - name: SI-01 bulk plan approval orchestration regression
         run: node --test ai-proxy/test/si-bulk-inspection-plan.test.mjs
 

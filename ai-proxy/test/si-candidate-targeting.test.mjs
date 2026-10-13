@@ -225,3 +225,34 @@ test('pre-scheduled approved NMC referral links to one SI case without booking a
     }),e=>e.code==='SI_CANDIDATE_ALREADY_HANDLED');
   }finally{w.cleanup();}
 });
+
+test('second independent service event on previously approved IMO/regime is eligible in a NEW plan, but old event never re-approved',async()=>{
+ const w=workspace();
+ try{
+  await w.subject.receiveEvent(source());
+  const first=(await w.subject.dashboard()).candidates[0];
+  const original=await w.subject.decide({
+   candidateKey:first.key,imo:first.imo,action:'APPROVE',
+   actor:'Supervisor',note:'First approved service inspection event'});
+  assert.equal((await w.subject.dashboard()).candidates[0].status,'INSPECTION_CREATED');
+  // A separate event from the same source, same IMO, same inspection regime.
+  await w.subject.receiveEvent(source({
+   sourceEventId:'SR-NEW-20261014',sourceReference:'SVC-NEW-20261014'}));
+  const current=(await w.subject.dashboard()).candidates[0];
+  assert.equal(current.status,'PENDING_REVIEW',
+   'new event should remain eligible instead of being blocked forever by IMO');
+  assert.notEqual(current.key,first.key,
+   'Oracle SI_INSPECTION_CASE unique candidate key must not collide');
+  assert.equal(current.events.length,1,'only the NEW source event is eligible');
+  assert.equal(current.events[0].sourceReference,'SVC-NEW-20261014');
+  const next=await w.subject.decide({candidateKey:current.key,imo:current.imo,
+   action:'APPROVE',actor:'Supervisor',
+   note:'Second independently verified source event'});
+  assert.notEqual(next.inspectionCase.id,original.inspectionCase.id);
+  const registry=await w.subject.inspectionCaseRegistry();
+  assert.equal(registry.cases.length,2,'two independently approved inspection cases');
+  assert.equal(new Set(registry.cases.flatMap(c=>c.sourceEventKeys)).size,2,
+   'no source event may be authorized twice');
+  assert.equal((await w.subject.dashboard()).candidates[0].status,'INSPECTION_CREATED');
+ }finally{w.cleanup();}
+});
