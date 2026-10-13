@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync,rmSync,readFileSync} from 'node:fs';
+import {mkdtempSync,rmSync,readFileSync,writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {RuntimeSettings} from '../runtime-settings.mjs';
@@ -163,4 +163,27 @@ test('MENA partner catalogue contains explicit DQ01/C01/S01/V01/R01/X01 IDs; P01
   assert.equal(saved.values.SI_P01_ENABLED,false);
   assert.equal(saved.values.AIRIA_SI_P01_PIPELINE_ID,'');
  }finally{t.done();}
+});
+
+test('P01 stays OFF when legacy runtime persisted true or host ENV enabled; publication cannot reactivate',async()=>{
+  const t=data();try{
+    const file=join(t.dir,'settings.json');
+    writeFileSync(file,JSON.stringify({
+      schema:1,version:3,overrides:{SI_P01_ENABLED:true},
+      history:[],updatedAt:'2026-10-12T10:00:00Z',updatedBy:'legacy-admin'
+    }));
+    const runtime=new RuntimeSettings({env:{SI_P01_ENABLED:'true'},file});
+    runtime.load();
+    assert.equal(runtime.get('SI_P01_ENABLED'),false);
+    assert.equal(runtime.publicView().values.SI_P01_ENABLED,false);
+    assert.equal(runtime.publicView().defaults.SI_P01_ENABLED,false);
+    assert.equal(JSON.parse(readFileSync(file,'utf8')).overrides.SI_P01_ENABLED,true,
+      'historical stored audit remains unmodified until a later authorized publish');
+    await assert.rejects(runtime.publish({
+      expectedVersion:3,values:{...runtime.publicView().values,SI_P01_ENABLED:true},
+      actor:'admin',reason:'Attempt legacy SI-P01 reactivation',confirmCost:true
+    }),/SI_P01_OUT_OF_CURRENT_POC_SCOPE/);
+    assert.equal(runtime.get('SI_P01_ENABLED'),false);
+    assert.equal(JSON.parse(readFileSync(file,'utf8')).version,3);
+  }finally{t.done();}
 });
