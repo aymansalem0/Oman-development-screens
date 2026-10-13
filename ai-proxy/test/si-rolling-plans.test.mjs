@@ -93,7 +93,7 @@ test('approved rolling plan persists immutable frozen case/event links; new plan
 test('canceling a draft requires a human reason and does not affect other plans',async()=>{
  const x=setup();try{
   const p=await x.create(),q=await x.create();
-  await assert.rejects(x.rolling.cancel(p.id,0,'officer','no'),/REASON_REQUIRED/);
+  assert.throws(()=>x.rolling.cancel(p.id,0,'officer','no'),/REASON_REQUIRED/);
   const cancelled=await x.rolling.cancel(p.id,0,'officer','Operational plan withdrawn');
   assert.equal(cancelled.status,'CANCELLED');
   assert.equal((await x.rolling.get(q.id)).status,'DRAFT');
