@@ -355,8 +355,11 @@ export class OracleSiChecklistField extends SiChecklistField{
       EVIDENCE_ID,RESULT_JSON,REVIEW_STATUS,REQUESTED_BY)
      VALUES(:id,:run,:level,:scope,:input,:evidence,:result,:status,:actor)`,{
       id:proposal.id,run:entry.caseId,level:proposal.level,
-      scope:proposal.scope.itemId||proposal.scope.groupId||
-       proposal.scope.templateId||null,
+      scope:(()=>{
+       const key=proposal.scope.itemId||proposal.scope.groupId||
+        proposal.scope.templateId||null;
+       return key&&key.length>160?uuidFor('SI-CHK-AI-SCOPE-v1',entry.caseId,key):key;
+      })(),
       input:proposal.inputText||null,evidence:evidenceId,
       result:json(proposal),status:proposal.status,actor:proposal.actor});
    }else if(before.status!==proposal.status){
