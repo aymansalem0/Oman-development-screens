@@ -31,7 +31,7 @@ function atomicSave(file,data){
  renameSync(tmp,file);
 }
 /** Build IMO-level rows; C01 advice is per inspection regime, not regulatory approval. */
-export function projectInspectionPlan(dashboard,source,run,overrides={}){
+export function projectInspectionPlan(dashboard,source,run,overrides={},carryForward={}){
  const recMap=new Map((run?.recommendations||[]).map(r=>[r.candidateKey,r]));
  const grouped=new Map();
  const all=dashboard.vesselCandidates||[];
@@ -41,11 +41,15 @@ export function projectInspectionPlan(dashboard,source,run,overrides={}){
   const advice=c.map(x=>recMap.get(x.candidateKey)).filter(Boolean);
   const aiSelected=advice.some(x=>x.recommendation==='SELECT_RECOMMENDED');
   const note=overrides[v.imo]||null;
+  const prior=carryForward[v.imo]||null;
+  const waitingOnDeferred=prior?.disposition==='DEFER'&&prior.reviewAfter&&
+   prior.reviewAfter>new Date().toISOString().slice(0,10);
   const eligible=c.length>0;
   // Human inclusion is permitted *before* a provider C01 response exists.
   // The model is advisory, not an authorization gate.
   const planSelected=eligible?
-   (typeof note?.selected==='boolean'?note.selected:run!==null?aiSelected:false):false;
+   (typeof note?.selected==='boolean'?note.selected:
+    run!==null?aiSelected&&!waitingOnDeferred:false):false;
   const locked=!eligible;
   grouped.set(v.imo,{
    imo:v.imo,vesselName:v.vesselName,flag:v.flag,vesselType:v.vesselType,
@@ -55,7 +59,11 @@ export function projectInspectionPlan(dashboard,source,run,overrides={}){
    aiRecommended:run?aiSelected:null,planSelected:run?planSelected:null,
    selectionOrigin:note?'OFFICER_AMENDED':run?'AI_ADVISORY':'NOT_EVALUATED',
    disposition:note?.disposition||'AVAILABLE',
-   reviewAfter:note?.reviewAfter||null,
+   reviewAfter:note?.reviewAfter||prior?.reviewAfter||null,
+   previousDisposition:prior?.disposition||null,
+   previousPlan:prior?.fromPlan||null,
+   reviewDue:Boolean(prior?.disposition==='DEFER'&&prior.reviewAfter&&
+     prior.reviewAfter<=new Date().toISOString().slice(0,10)),
    officerReason:note?.reason||null,officerActor:note?.actor||null,
    requestedRank:note?.requestedRank??null,
    modelRank:advice.length?Math.min(...advice.filter(x=>Number.isInteger(x.suggestedRank))
@@ -135,7 +143,8 @@ export class SiInspectionPlan{
     structuredClone(state.approvedRows):
     historical&&Array.isArray(state.latest?.rows)?
     structuredClone(state.latest.rows):
-    projectInspectionPlan(dashboard,source,current,state.overrides);
+    projectInspectionPlan(dashboard,source,current,state.overrides,
+      state.carryForward||{});
   const manualSelection=rows.some(r=>r.planSelected)&&
     Object.values(state.overrides||{}).some(x=>x?.selected===true);
   const availableCount=rows.filter(r=>r.editable).length;
@@ -201,8 +210,9 @@ export class SiInspectionPlan{
     p.overrides={...(p.overrides||{}),[imo]:change};
     p.selectionSourceHash=source.snapshotHash;
     p.latest?.rows&&(p.latest.rows=projectInspectionPlan(
-      dashboard,source,p.latest,p.overrides));
-    const rows=projectInspectionPlan(dashboard,source,p.latest,p.overrides);
+      dashboard,source,p.latest,p.overrides,p.carryForward||{}));
+    const rows=projectInspectionPlan(dashboard,source,p.latest,p.overrides,
+      p.carryForward||{});
     p.savedPlanRows=rows;
     p.status=rows.some(r=>r.planSelected)?'READY_FOR_APPROVAL':'DRAFT';
     return p;
@@ -257,7 +267,8 @@ export class SiInspectionPlan{
       (cycleId?(await this.rolling.get(cycleId)).revision:this.read().revision)!==state.revision)
     throw new SiCandidateAgentError('SI_PLAN_SOURCE_CHANGED_RETRY',409);
    const dashboard=await this.targeting.dashboard();
-   const rows=projectInspectionPlan(dashboard,source,ai,changes);
+   const rows=projectInspectionPlan(dashboard,source,ai,changes,
+     state.carryForward||{});
    const next={revision:state.revision+1,overrides:changes,
     latest:{...ai,rows,generatedAt:iso()},
     audit:[...state.audit,{id:randomUUID(),at:iso(),actor,
