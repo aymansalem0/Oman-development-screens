@@ -15,6 +15,7 @@ const rawRoutes: Routes = [
   { path: base + '/:id', component: ApprovalDetailComponent },
   { path: 'dashboard/appointment-availability', component: YearlyAvailabilityComponent },
   { path: 'dashboard/master-data/activity-classification-mapping', component: ActivityClassificationMappingComponent },
+  { path: 'moei/smart-inspection/plan/create', loadComponent: () => import('./pages/si-inspection-plan-wizard.component').then(m => m.SiInspectionPlanWizardComponent) },
   { path: 'moei/smart-inspection/management', loadComponent: () => import('./pages/si-management-dashboard.component').then(m => m.SiManagementDashboardComponent) },
   { path: 'moei/smart-inspection/lifecycle', loadComponent: () => import('./pages/si-full-lifecycle.component').then(m => m.SiFullLifecycleComponent) },
   { path: 'moei/smart-inspection/lifecycle/:caseId', loadComponent: () => import('./pages/si-full-lifecycle.component').then(m => m.SiFullLifecycleComponent) },
