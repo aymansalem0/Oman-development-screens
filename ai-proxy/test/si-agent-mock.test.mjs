@@ -142,7 +142,7 @@ test('C01 inclusion is independent of NMC risk and source-trigger scores',()=>{
  d.policy.config={ranking:{criteria:['DEPARTURE_SOON','INCIDENT_SEVERITY']}};
  d.candidates.push(candidate('service-no-risk','SERVICE_REQUEST','9700012',null));
  d.candidates.push(candidate('service-low-risk','SERVICE_REQUEST','9700013',4));
- d.candidates.push(candidate('psc','PSC_PORT_CALL','9700015',99));
+ d.candidates.push(candidate('psc-extra','PSC_PORT_CALL','9700015',99));
  const s=buildC01Source(d,{version:6});
  const advice=validateC01(mockSiC01(s),s);
  for(const key of ['service-no-risk','service-low-risk']){
