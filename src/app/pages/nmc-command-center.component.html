@@ -49,8 +49,8 @@
                   [disabled]="!aiKpiFocusAvailable||aiKpiFocusBusy"
                   [attr.aria-busy]="aiKpiFocusBusy"
                   [title]="aiKpiFocusAvailable
-                    ?copy('Uses existing A02 risk signals then A01 situation assessment (up to TWO paid calls). Same request/response fields, with dashboard context.',
-                          'يستخدم A02 لمؤشرات المخاطر ثم A01 لتقييم الموقف (قد ينتج استدعاءان مدفوعان). نفس حقول الطلب والاستجابة مع سياق لوحة القيادة.')
+                    ?copy('Uses existing A02 risk signals then A01 situation assessment (up to TWO Airia executions). Same request/response fields, with dashboard context.',
+                          'يستخدم A02 لمؤشرات المخاطر ثم A01 لتقييم الموقف (قد ينتج استدعاءان من Airia). نفس حقول الطلب والاستجابة مع سياق لوحة القيادة.')
                     :aiKpiFocusStatusLoaded&&!aiKpiFocusContextReady
                     ?copy('No eligible saved full vessel assessment with all five risk signals and bundle; verify Oracle source readiness before any Airia call.',
                           'لا يوجد تقييم سفينة محفوظ ومكتمل بالمؤشرات الخمسة والأدلة المطلوبة؛ تحقق من بيانات Oracle قبل أي طلب Airia.')
