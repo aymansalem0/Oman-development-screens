@@ -10,7 +10,12 @@ export interface SiRiskSnapshot{
 export interface SiPreparationContext{
   siCaseId:string;inspectionId:string;caseId:string;imo:string;
   vessel:{imo:string;name:string;flag:string;vesselType:string};
-  targetRegime:string;bundleRef:string;baseChecklistItemIds:string[];
+  targetRegime:string;targetRegimes?:string[];
+  inspectionReasons?:{eventKey:string;sourceType:string;sourceReference:string;
+    inspectionRegime:string;reason:string|null;evidenceIds:string[]}[];
+  inspectionScopes?:{regime:string;reasonEventKeys:string[];requiresRegulatoryReview:boolean}[];
+  approvedPlanId?:string|null;
+  bundleRef:string;baseChecklistItemIds:string[];
   risk:SiRiskSnapshot|null;sourceAssessmentId:string|null;
   evidenceManifestRefs:string[];openFindingRefs:string[];
   provenance:string;externalDocumentsVerified:boolean;
