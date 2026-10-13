@@ -91,8 +91,8 @@ test('end-to-end no-cost rolling: create, C01, preview, supervisor approve, case
   const second=await x.rolling.create({
    title:'Afternoon inspection',startsOn:'2026-10-13',endsOn:'2026-10-15'},'officer@moei');
   assert.equal(x.c01Calls(),0,'opening/planning never incurs AI costs');
-  assert.equal((await x.plan.snapshot(first.id)).selectedForPlan,null);
-  assert.equal((await x.plan.snapshot(second.id)).selectedForPlan,null);
+  assert.equal((await x.plan.snapshot(first.id)).selectedForPlan,0);
+  assert.equal((await x.plan.snapshot(second.id)).selectedForPlan,0);
   const pre=await x.plan.snapshot(first.id);
   const selected=await x.plan.rerank({planId:first.id,actor:'officer@moei',
    expectedSourceHash:pre.sourceHash,expectedRevision:pre.revision,
@@ -130,7 +130,7 @@ test('end-to-end no-cost rolling: create, C01, preview, supervisor approve, case
    title:'Next day plan',startsOn:'2026-10-14',endsOn:'2026-10-16'},'officer@moei');
   const tomorrow=await x.plan.snapshot(newPlan.id);
   assert.equal(tomorrow.agentRunId,null);
-  assert.equal(tomorrow.selectedForPlan,null);
+  assert.equal(tomorrow.selectedForPlan,0);
   assert.equal(x.c01Calls(),1,'new day does not automatically run AI');
   assert.equal((await x.rolling.get(second.id)).status,'DRAFT',
    'earlier unfinished independent plan unaffected');
