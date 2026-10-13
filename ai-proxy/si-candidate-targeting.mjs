@@ -174,6 +174,11 @@ export class SiCandidateTargeting{
     return {sourceType:input.sourceType,sourceEventId:input.sourceEventId.trim(),
       sourceReference:input.sourceReference.trim(),imo:input.imo,requestedRegime:input.requestedRegime,
       port:input.port.trim(),eta:typeof input.eta==='string'?input.eta.slice(0,32):null,
+      // Raw MSW/POC ETD is an imported CLAIM, not officer-verified ranking
+      // evidence. It stays separate from source-reviewed departureAt.
+      reportedDepartureLocal:typeof input.reportedDepartureLocal==='string'&&
+        /^20\d\d-\d\d-\d\dT\d\d:\d\d$/.test(input.reportedDepartureLocal)
+        ?input.reportedDepartureLocal:null,
       // Only source-reviewed, timezone-qualified departure facts participate in
       // ranking. ETA is arrival and is never substituted for ETD.
       departureAt:input.sourceApprovalStatus==='SOURCE_REVIEWED'&&
@@ -302,6 +307,7 @@ export class SiCandidateTargeting{
           importExcelRow:e.sourceImport?.excelRow||null,
           port:e.payload.port||null,
           eta:e.payload.eta||null,
+          reportedDepartureLocal:e.payload.reportedDepartureLocal||null,
           departureAt:e.payload.departureAt||null,
           departureVerified:e.payload.sourceApprovalStatus==='SOURCE_REVIEWED'&&
             Boolean(e.payload.departureAt),
