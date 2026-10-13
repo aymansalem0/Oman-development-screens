@@ -23,46 +23,86 @@ export class SiChecklistAiria{
   builderPipelineId=process.env.AIRIA_SI_CHECKLIST_BUILDER_PIPELINE_ID||'',
   visionPipelineId=process.env.AIRIA_SI_CHECKLIST_VISION_PIPELINE_ID||'',
   enabled=process.env.SI_CHECKLIST_AIRIA_ENABLED==='true',
+  getSetting=null,getApiKey=null,
   timeoutMs=120000,transport=fetch}={}){
-  this.apiKey=apiKey;this.baseUrl=baseUrl.replace(/\/$/,'');
-  this.builderPipelineId=builderPipelineId;
-  this.visionPipelineId=visionPipelineId;
-  this.enabled=enabled;this.timeoutMs=timeoutMs;this.transport=transport;
+  this.staticSettings={SI_CHECKLIST_AIRIA_ENABLED:enabled,
+   AIRIA_BASE_URL:baseUrl,
+   AIRIA_SI_CHECKLIST_BUILDER_PIPELINE_ID:builderPipelineId,
+   AIRIA_SI_CHECKLIST_VISION_PIPELINE_ID:visionPipelineId,
+   SI_CHECKLIST_VISION_TRANSPORT:'multipart'};
+  this.setting=getSetting||((key)=>this.staticSettings[key]);
+  this.secret=getApiKey||(()=>apiKey);
+  this.timeoutMs=timeoutMs;this.transport=transport;
  }
+ get enabled(){return this.setting('SI_CHECKLIST_AIRIA_ENABLED')===true;}
+ get provider(){return 'airia';}
+ get builderPipelineId(){return this.setting('AIRIA_SI_CHECKLIST_BUILDER_PIPELINE_ID')||'';}
+ get visionPipelineId(){return this.setting('AIRIA_SI_CHECKLIST_VISION_PIPELINE_ID')||'';}
+ get baseUrl(){return String(this.setting('AIRIA_BASE_URL')||'https://api.mena.airia.ai').replace(/\/$/,'');}
+ get imageTransport(){return this.setting('SI_CHECKLIST_VISION_TRANSPORT')||'multipart';}
+ get apiKey(){return this.secret();}
  status(){
+  const hasKey=Boolean(this.apiKey);
   return {provider:'AIRIA',enabled:this.enabled,
-   builderConfigured:Boolean(this.enabled&&this.apiKey&&this.builderPipelineId),
-   visionConfigured:Boolean(this.enabled&&this.apiKey&&this.visionPipelineId),
-   imageTransport:'JSON_INLINE_BASE64_REQUIRES_MULTIMODAL_AIRIA_PIPELINE',
-   automaticRuns:false};
+   builderConfigured:Boolean(this.enabled&&hasKey&&this.builderPipelineId),
+   visionConfigured:Boolean(this.enabled&&hasKey&&this.visionPipelineId),
+   builderPipelineMapped:Boolean(this.builderPipelineId),
+   visionPipelineMapped:Boolean(this.visionPipelineId),
+   apiKeyConfigured:hasKey,
+   imageTransport:this.imageTransport==='multipart'?
+    'PARTNER_MULTIPART_EVIDENCE':'INLINE_JSON_REQUIRES_VERIFIED_MULTIMODAL_PIPELINE',
+   automaticRuns:false,
+   validatedContract:false,
+   humanReviewRequired:true};
  }
  async call(mode,input){
-  if(!this.enabled||!this.apiKey)
+  const key=this.apiKey;
+  if(!this.enabled||!key)
    throw new SiChecklistError('SI_CHECKLIST_AIRIA_NOT_CONFIGURED',503);
   const pipeline=mode==='builder'?this.builderPipelineId:
-    mode==='vision'?this.visionPipelineId:null;
-  if(!pipeline)throw new SiChecklistError('SI_CHECKLIST_AIRIA_PIPELINE_NOT_CONFIGURED',503);
-  const request=JSON.stringify(input);
+   mode==='vision'?this.visionPipelineId:null;
+  if(!pipeline)
+   throw new SiChecklistError('SI_CHECKLIST_AIRIA_PIPELINE_NOT_CONFIGURED',503);
+  const withImage=mode==='vision'&&input?.image?.base64;
+  const multipart=withImage&&this.imageTransport==='multipart';
+  let request=JSON.stringify(multipart?{...input,image:{
+   mimeType:input.image.mimeType,sha256:input.image.sha256,
+   attachedBy:'multipart-form-data'
+  }}:input);
   if(request.length>3*1024*1024)
    throw new SiChecklistError('SI_CHECKLIST_AI_PAYLOAD_TOO_LARGE',413);
+  const url=this.baseUrl+'/v1/PipelineExecution/'+
+   (multipart?'Multipart/':'')+encodeURIComponent(pipeline);
+  const headers={'X-API-KEY':key,
+    'User-Agent':'moei-smart-inspection-checklist/1.0'};
+  let body;
+  if(multipart){
+   const binary=Buffer.from(input.image.base64,'base64');
+   if(binary.length>2*1024*1024)
+    throw new SiChecklistError('SI_CHECKLIST_IMAGE_TOO_LARGE',413);
+   const form=new FormData();
+   form.append('userInput',request);
+   form.append('file',new Blob([binary],{type:input.image.mimeType}),
+     'inspection-evidence.'+(input.image.mimeType==='image/png'?'png':
+      input.image.mimeType==='image/webp'?'webp':'jpg'));
+   body=form;
+  }else{
+   headers['Content-Type']='application/json';
+   body=JSON.stringify({userInput:request,asyncOutput:false});
+  }
   let response;
   try{
-   response=await this.transport(
-    this.baseUrl+'/v1/PipelineExecution/'+encodeURIComponent(pipeline),{
-     method:'POST',
-     headers:{'X-API-KEY':this.apiKey,'Content-Type':'application/json',
-      'User-Agent':'moei-smart-inspection-checklist/1.0'},
-     body:JSON.stringify({userInput:request,asyncOutput:false}),
-     signal:AbortSignal.timeout(this.timeoutMs)
-    });
+   response=await this.transport(url,{
+    method:'POST',headers,body,signal:AbortSignal.timeout(this.timeoutMs)
+   });
   }catch{throw new SiChecklistError('SI_CHECKLIST_AIRIA_NETWORK_FAILED',502);}
   if(!response.ok)
    throw new SiChecklistError('SI_CHECKLIST_AIRIA_REQUEST_FAILED_'+response.status,502);
-  let body;
-  try{body=await response.json();}catch{
+  let result;
+  try{result=await response.json();}catch{
    throw new SiChecklistError('SI_CHECKLIST_AIRIA_BAD_RESPONSE',502);
   }
-  return extractAiriaResult(body);
+  return extractAiriaResult(result);
  }
  async suggestSettings({level,template,groupId,itemId,instructions,operatorPrompt}){
   if(!['TEMPLATE','GROUP','ITEM'].includes(level)||
