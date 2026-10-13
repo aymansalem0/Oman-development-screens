@@ -8,7 +8,7 @@ export interface CheckAiSettings{
  enabled:boolean;instructions:string;requiresHumanReview?:boolean;
 }
 export interface ChecklistItem{
- id:string;title:string;description:string;fields:CheckField[];
+ id:string;title:string;description:string;fields:CheckField[];requiredFields:CheckField[];
  mandatory:boolean;order:number;options:string[];
  ai:CheckAiSettings;sourceReferences:string[];
 }
