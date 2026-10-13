@@ -1,0 +1,57 @@
+import {Injectable} from '@angular/core';
+import {HttpClient} from '@angular/common/http';
+import {Observable} from 'rxjs';
+
+export interface SiBulkOption{
+ candidateKey:string;imo:string;regime:string;eligibility:string;sourceTypes:string[];
+}
+export interface SiBulkVessel{
+ imo:string;vesselName:string;rank:number|null;
+ options:SiBulkOption[];defaultCandidateKey:string|null;
+ requiresRegimeChoice:boolean;
+}
+export interface SiBulkPreview{
+ status:'PREVIEW';sourceHash:string;planRevision:number;
+ agentRunId:string|null;planGeneratedAt:string|null;
+ provider:'MOCK'|'AIRIA';stale:boolean;selectedVessels:number;
+ vessels:SiBulkVessel[];
+ mandatoryChecksPreserved:true;a04Enabled:boolean;p01Enabled:boolean;
+ a04Provider:'MOCK'|'AIRIA';p01Provider:'MOCK'|'AIRIA';
+ maxAiPerBatch:number;warnings:string[];requiresSupervisorApproval:true;
+}
+export type SiBulkItemState='QUEUED'|'APPROVED'|'PREPARED'|'READY'|'APPROVAL_FAILED'|'PREPARATION_FAILED';
+export interface SiBulkItem{
+ imo:string;candidateKey:string;regime:string;vesselName:string;
+ planRank:number|null;state:SiBulkItemState;
+ inspectionCaseId:string|null;dossierStatus:string;aiDossierStatus:string;
+ error:string|null;
+}
+export interface SiBulkJob{
+ id:string;status:'QUEUED'|'RUNNING'|'COMPLETED'|'PARTIAL';
+ createdAt:string;updatedAt:string;finishedAt?:string|null;
+ approvedBy:string;approvedCount:number;totalSelected:number;
+ sourceHash:string;planRevision:number;approvalReason:string;
+ priorityStatus:string;mode:string;progressMessage:string;items:SiBulkItem[];
+}
+@Injectable({providedIn:'root'})
+export class SiBulkPlanService{
+ private readonly url='/api/si/v1/inspection-batches';
+ constructor(private readonly http:HttpClient){}
+ preview():Observable<SiBulkPreview>{
+  return this.http.get<SiBulkPreview>(this.url+'/preview');
+ }
+ approve(input:{
+  reason:string;expectedRevision:number;expectedSourceHash:string;
+  expectedAgentRunId:string;confirmApproval:true;
+  generateA04:boolean;runP01:boolean;confirmAiCost:boolean;
+  choices:{imo:string;candidateKey:string}[];
+ }):Observable<SiBulkJob>{
+  return this.http.post<SiBulkJob>(this.url,input);
+ }
+ job(id:string):Observable<SiBulkJob>{
+  return this.http.get<SiBulkJob>(this.url+'/'+encodeURIComponent(id));
+ }
+ latest():Observable<{batches:SiBulkJob[]}>{
+  return this.http.get<{batches:SiBulkJob[]}>(this.url);
+ }
+}

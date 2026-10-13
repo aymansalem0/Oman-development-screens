@@ -33,8 +33,8 @@
       <header class="si-list-header">
         <div>
           <h2>{{copy('Inspection Candidate List & AI Priority','قائمة السفن المرشحة وترتيب أولوية AI')}}</h2>
-          <p>{{copy('One vessel per IMO, source-aware. Remove, include or reprioritise in the plan with a reason. Official inspection decisions remain separate.',
-              'صف واحد لكل سفينة ومصادرها. يمكن الاستبعاد أو الإدراج أو تعديل ترتيب الأولوية مع تسجيل السبب؛ اعتماد المعاينة إجراء مستقل.')}}</p>
+          <p>{{copy('One vessel per IMO, source-aware. Remove, include or reprioritise in the plan with a reason. Official inspection approvals use one supervisor decision for the entire selected plan.',
+              'صف واحد لكل سفينة ومصادرها. يمكن الاستبعاد أو الإدراج أو تعديل ترتيب الأولوية مع تسجيل السبب؛ تعتمد جميع السفن المختارة بقرار مشرف واحد.')}}</p>
         </div>
         <span class="si-plan-mode">{{providerLabel}}
           · {{plan?.generatedAt?(plan?.generatedAt|date:'short'):copy('Not evaluated','لم تُقيّم')}}</span>
@@ -68,6 +68,9 @@
         {{copy('Only explicit confirmed changes re-run C01; published NMC-referral precedence remains protected.',
           'يُعاد تشغيل C01 عند تأكيد التغيير فقط، مع الحفاظ على أولوية إحالات NMC المعتمدة.')}}
       </p>
+
+      <app-si-bulk-approval-panel [plan]="plan" (batchCompleted)="refresh()">
+      </app-si-bulk-approval-panel>
 
       <div class="filters si-inline-filters">
         <input type="search" [(ngModel)]="search"
@@ -220,8 +223,10 @@
                           <label>{{copy('Official decision reason','سبب القرار الرسمي')}}
                             <input type="text" [(ngModel)]="decisionNote" maxlength="500"/>
                           </label>
-                          <button type="button" class="primary" (click)="decide('APPROVE')" [disabled]="busy">
-                            {{copy('Approve & Create Inspection','اعتماد وإنشاء المعاينة')}}</button>
+                          <p class="si-helper">{{copy(
+                            'Inspections are now approved at the complete-plan level. Review the vessel list above and use Approve Complete Plan once.',
+                            'يتم اعتماد المعاينات الآن على مستوى الخطة بالكامل. راجع قائمة السفن أعلاه ثم استخدم زر اعتماد الخطة بالكامل.'
+                          )}}</p>
                           <button type="button" (click)="decide('DEFER')" [disabled]="busy">
                             {{copy('Defer','تأجيل')}}</button>
                           <button type="button" (click)="decide('REJECT')" [disabled]="busy">
