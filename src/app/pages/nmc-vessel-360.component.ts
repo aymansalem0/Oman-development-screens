@@ -9,7 +9,7 @@ import {
   NmcVesselProfile,
   SEA_ROUTES
 } from '../data/nmc-vessel-catalog';
-import { NMC_OPERATIONAL_VESSELS, getOperationalVesselByImo } from '../data/nmc-expanded-vessel-catalog';
+import { AIRIA_DEMO_99_VESSELS, getAiriaDemoVesselByImo } from '../data/airia-demo-cohort';
 import { LanguageService } from '../services/language.service';
 import { NmcRiskEngineService, RiskFactorKey } from '../services/nmc-risk-engine.service';
 import { NmcVesselEvidenceService } from '../services/nmc-vessel-evidence.service';
@@ -366,8 +366,8 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
   }
 
   ngOnInit(): void {
-    this.imo = this.route.snapshot.paramMap.get('imo') || NMC_OPERATIONAL_VESSELS[0].imo;
-    const rawProfile = getOperationalVesselByImo(this.imo) || NMC_OPERATIONAL_VESSELS[0];
+    this.imo = this.route.snapshot.paramMap.get('imo') || AIRIA_DEMO_99_VESSELS[0].imo;
+    const rawProfile = getAiriaDemoVesselByImo(this.imo) || AIRIA_DEMO_99_VESSELS[0];
     const profile = this.riskEngine.applyToVessel(rawProfile);
 
     this.vessel = {
