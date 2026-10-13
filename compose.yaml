@@ -20,7 +20,7 @@ services:
       NMC_FLEET_AUTO_ENABLED: ${NMC_FLEET_AUTO_ENABLED:-false}
       NMC_FLEET_REFRESH_SECONDS: ${NMC_FLEET_REFRESH_SECONDS:-3600}
       # Safe staged rollout: first run with MAX_VESSELS=1, inspect 2 Airia requests.
-      NMC_FLEET_AUTO_MAX_VESSELS: ${NMC_FLEET_AUTO_MAX_VESSELS:-420}
+      NMC_FLEET_AUTO_MAX_VESSELS: ${NMC_FLEET_AUTO_MAX_VESSELS:-99}
       NMC_FLEET_AUTO_RETRY_FAILED: ${NMC_FLEET_AUTO_RETRY_FAILED:-false}
       NMC_FLEET_STORE_PATH: /data/fleet-assessments.json
       # Dashboard administration is read-only unless BOTH server-side keys are configured.
