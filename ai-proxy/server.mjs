@@ -8,6 +8,7 @@ import {MoeiGoogleUsers,MoeiUsersError} from './moei-google-users.mjs';
 import {MoeiGoogleSso} from './moei-google-sso.mjs';
 import { getPscVessel, getPscHealth } from './psc-reader.mjs';
 import { FleetAssessmentManager } from './fleet-ai.mjs';
+import {airiaDemoVessels,AIRIA_DEMO_COHORT,AIRIA_DEMO_99_IMOS} from './airia-demo-cohort.mjs';
 import { FleetAutoScheduler } from './fleet-scheduler.mjs';
 import { DashboardWorkspace, DashboardError } from './dashboard-workspace.mjs';
 import {DashboardAiFocus,DashboardFocusError,selectDashboardFocusVessel} from './nmc-dashboard-focus.mjs';
@@ -192,8 +193,8 @@ const cases=new NmcCaseWorkspace({mode:dbMode,oracleRepository:repository,alerts
 // SITUATION_ASSESSMENT contracts; new business evidence is supplied inside
 // already-supported context fields. No separate model/pipeline or new output.
 const incidentAgentEnabled=()=>Boolean(getAiriaKey())&&agentAllowed('a01')&&agentAllowed('a02');
-const incidentBundleRecords=JSON.parse((await import('node:fs')).readFileSync(
-  new URL('./fleet-bundles.json',import.meta.url),'utf8'));
+const incidentBundleRecords=airiaDemoVessels(JSON.parse((await import('node:fs')).readFileSync(
+  new URL('./fleet-bundles.json',import.meta.url),'utf8')));
 const incidentBundleMap=new Map(incidentBundleRecords.map(row=>[row.imo,row]));
 const incidentAiria=createAiriaIncidentTriage({
   executeAgent:fleetAgentCall,
@@ -1842,7 +1843,7 @@ try{
     await riskPolicy.initialize();
     // Backfill only the new projection table for pre-existing saved assessments,
     // without altering source assessments, cases or the alert audit.
-    for(const row of Object.values(fleet.results)){
+    for(const row of Object.values(fleet.results).filter(r=>AIRIA_DEMO_99_IMOS.has(r.imo))){
       if(row.status==='COMPLETED'&&row.assessmentId)
         await riskPolicy.materializeCurrent(row);
     }
