@@ -125,11 +125,8 @@ import {SiBulkJob,SiBulkPlanService,SiBulkPreview,SiBulkVessel} from '../service
         {{copy('Generate A04 drafts automatically after approval','إنشاء مسودات A04 تلقائيًا بعد الاعتماد')}}
        </label><small>{{p.a04Provider}} · {{p.a04Enabled?copy('Available','متاح'):copy('Unavailable','غير متاح')}}</small>
       </div></div>
-      <div><span class="flow-icon">AI</span><div><b>{{copy('P01 approved-case execution priority','ترتيب تنفيذ الحالات المعتمدة P01')}}</b>
-       <label class="check"><input type="checkbox" [(ngModel)]="runP01"
-        [disabled]="!p.p01Enabled"/>
-        {{copy('Re-evaluate execution priority after cases are created','إعادة ترتيب التنفيذ بعد إنشاء الحالات')}}
-       </label><small>{{p.p01Provider}} · {{p.p01Enabled?copy('Available','متاح'):copy('Unavailable','غير متاح')}}</small>
+      <div><span class="flow-icon">✓</span><div><b>{{copy('Preserve published execution priority','الاحتفاظ بترتيب التنفيذ المعتمد')}}</b>
+       <p>{{copy('C01 plan priority and deterministic policy are preserved; no post-approval AI reranking.','يظل ترتيب C01 وقواعد الأعمال نافذين؛ لا يتم تشغيل AI لإعادة ترتيب الخطة بعد اعتمادها.')}}</p>
       </div></div>
      </div>
      <p class="notice">{{copy('A04 suggestions require inspector review. No automatic scheduling, detention or final report approval.',
@@ -153,7 +150,7 @@ import {SiBulkJob,SiBulkPlanService,SiBulkPreview,SiBulkVessel} from '../service
      <div class="review-options">
       <span>{{copy('SI-02 baseline preparation','التحضير الأساسي SI-02')}}: <b>{{copy('Automatic','تلقائي')}}</b></span>
       <span>A04: <b>{{generateA04?copy('Generate drafts','إنشاء مسودات'):copy('Not requested','غير مطلوب')}}</b></span>
-      <span>P01: <b>{{runP01?copy('Reprioritize','إعادة ترتيب'):copy('Not requested','غير مطلوب')}}</b></span>
+      <span>{{copy('Execution priority: approved plan + business rules','ترتيب التنفيذ: الخطة المعتمدة وقواعد الأعمال')}}</span>
      </div>
      <button type="button" class="approve" (click)="approve()"
       [disabled]="submitting||jobBusy||!auth.isAdmin||reason.trim().length<8||p.stale||(!p.agentRunId&&!p.manualSelection)||hasMissingReasons">
@@ -173,7 +170,7 @@ import {SiBulkJob,SiBulkPlanService,SiBulkPreview,SiBulkVessel} from '../service
      <div class="summary">
       <div><strong>{{j.totalSelected}}</strong><span>{{copy('Vessels in approved plan','سفن بالخطة')}}</span></div>
       <div><strong>{{j.approvedCount}}</strong><span>{{copy('Cases committed','حالات تم إنشاؤها')}}</span></div>
-      <div><strong>{{j.priorityStatus}}</strong><span>P01</span></div>
+      <div><strong>{{copy('Published Rules','قواعد معتمدة')}}</strong><span>{{copy('Execution priority','ترتيب التنفيذ')}}</span></div>
      </div>
      <div class="table-scroll"><table>
       <thead><tr><th>{{copy('Vessel','السفينة')}}</th>
@@ -283,7 +280,7 @@ export class SiInspectionPlanWizardComponent implements OnInit,OnDestroy{
   {en:'Review & Approval',ar:'المراجعة والاعتماد'}];
  step=1;preview:SiBulkPreview|null=null;planId:string|null=null;
  job:SiBulkJob|null=null;loading=false;submitting=false;error='';
- reason='';generateA04=false;runP01=false;private timer:Subscription|null=null;
+ reason='';generateA04=false;private timer:Subscription|null=null;
  constructor(private api:SiBulkPlanService,private readonly route:ActivatedRoute,
   public lang:LanguageService,public auth:MoeiAuthService){}
  copy(en:string,ar:string):string{return this.lang.pick(en,ar);}
@@ -327,7 +324,7 @@ export class SiInspectionPlanWizardComponent implements OnInit,OnDestroy{
    next:p=>{
     this.preview=p;this.loading=false;
     this.generateA04=p.a04Enabled&&p.a04Provider==='MOCK';
-    this.runP01=p.p01Enabled&&p.p01Provider==='MOCK';
+    // No SI-P01 in the current POC.
    },error:e=>{this.loading=false;
     this.error=e?.error?.error||this.copy('Plan preview could not be loaded.',
       'تعذر تحميل معاينة الخطة.');}
@@ -338,8 +335,7 @@ export class SiInspectionPlanWizardComponent implements OnInit,OnDestroy{
  approve():void{
   const p=this.preview;if(!this.planId||!p||this.submitting||this.jobBusy||!this.auth.isAdmin||
    (!p.agentRunId&&!p.manualSelection)||p.stale||this.hasMissingReasons||this.reason.trim().length<8)return;
-  const paid=(this.generateA04&&p.a04Provider==='AIRIA')||
-   (this.runP01&&p.p01Provider==='AIRIA');
+  const paid=this.generateA04&&p.a04Provider==='AIRIA';
   const message=this.copy(
    'Approve the complete plan ('+p.selectedVessels+' vessels), preserving all '+
     this.totalReasons+' source reasons, then create preparation dossiers?'+
@@ -354,7 +350,7 @@ export class SiInspectionPlanWizardComponent implements OnInit,OnDestroy{
    planId:this.planId!,reason:this.reason.trim(),expectedRevision:p.planRevision,
    expectedSourceHash:p.sourceHash,expectedAgentRunId:p.agentRunId,
    confirmApproval:true,generateA04:this.generateA04,
-   runP01:this.runP01,confirmAiCost:paid
+   runP01:false,confirmAiCost:paid
   }).subscribe({next:j=>{this.submitting=false;this.job=j;this.step=5;this.poll(j.id);},
    error:e=>{this.submitting=false;this.error=e?.error?.error||
     this.copy('Approval rejected. Review the current source plan again.',

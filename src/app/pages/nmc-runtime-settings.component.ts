@@ -90,6 +90,7 @@ interface RuntimeSnapshot {
               <div class="setting-input">
                 <label *ngIf="item.type==='boolean'" class="switch-row">
                   <input type="checkbox" [ngModel]="draft[item.key]"
+                         [disabled]="item.key==='SI_P01_ENABLED'"
                          (ngModelChange)="draft[item.key]=$event"/>
                   <strong [class.enabled]="draft[item.key]">{{draft[item.key]?
                     tr('Enabled','مفعّل'):tr('Disabled','معطّل')}}</strong>
@@ -333,8 +334,8 @@ export class NmcRuntimeSettingsComponent implements OnInit{
   }
   groupDescription(g:string){
     const s:Record<string,[string,string]>={
-      agents:['Enable/disable A01, A02, A03, A04 and P01.','تفعيل وإيقاف A01 وA02 وA03 وA04 وP01.'],
-      pipelines:['Map real A01/A02/A03/A04 and C01/P01 Airia agent IDs.','ربط المعرفات الحقيقية لوكلاء A01–A04 وC01/P01.'],
+      agents:['Configure supported agents; P01 retired for current POC.','إعداد الوكلاء المعتمدين؛ P01 خارج نطاق النموذج الحالي.'],
+      pipelines:['Map verified Airia IDs; P01 is future-only.','ربط معرفات Airia المؤكدة؛ P01 للاستخدام المستقبلي فقط.'],
       checklist:['Configure Checklist Builder, Vision/Review, image transport, cost and per-case AI usage.','تهيئة مساعد إنشاء القوائم وتحليل الصور وطريقة الرفع وحدود الاستخدام.'],
       scheduler:['Pilot vessel limit, retry and periodic execution.','حدود السفن التجريبية وإعادة المحاولة والتشغيل الدوري.'],
       alerts:['Detection interval and unacknowledged-event escalation.','دورية فحص التنبيهات والتصعيد عند عدم الاستجابة.'],

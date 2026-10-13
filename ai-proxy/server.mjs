@@ -238,8 +238,8 @@ siTargeting.pscSelection=siPscSelection;
 const siPriority=new SiAiPrioritization({
   targeting:siTargeting,mode:dbMode,oracleRepository:repository,provider:siAiProvider,
   executeAgent:async input=>siAiProvider==='mock'?mockSiP01(input):fleetAgentCall('p01',input),
-  enabled:siAiProvider==='mock'||(
-    runtime.get('SI_P01_ENABLED')&&Boolean(getAiriaKey())&&Boolean(pipelines.p01))
+  // P01 retired, including MOCK mode and legacy settings.
+  enabled:false
 });
 const siCandidateAgent=new SiCandidateAgent({
   targeting:siTargeting,pscPolicy:()=>siPscSelection.policy(),provider:siAiProvider,
@@ -414,7 +414,7 @@ function applyRuntimeSettings(){
   alerts.escalationMinutes=runtime.get('NMC_ALERT_ESCALATE_MINUTES');
   documents.enabled=runtime.get('NMC_A03_ENABLED')&&Boolean(getAiriaKey());
   siPreparation.enabled=siAiProvider==='mock'||(runtime.get('SI_A04_ENABLED')&&Boolean(getAiriaKey()));
-  siPriority.enabled=siAiProvider==='mock'||(runtime.get('SI_P01_ENABLED')&&Boolean(getAiriaKey())&&Boolean(pipelines.p01));
+  siPriority.enabled=false; // C01 before plan approval; S01 for feasible slots
   if(server.listening){scheduler.start();rescheduleAlertScan();}
 }
 runtime.onChange=applyRuntimeSettings;
@@ -1204,8 +1204,7 @@ const server = createServer(async (req, res) => {
         dashboards.assertRole(req,'EDITOR');
         return respond(res,201,await siSourceImports.commit(await requestJson(req,2048)));
       }
-      // SI-P01 is an explicitly requested, paid advisory. Nothing automatically
-      // invokes it on GET, source Excel import or Targeting Settings publication.
+      // Read-only P01 status/preview/history retained for historical audit only.
       if(path==='/api/si/v1/prioritization'||path.startsWith('/api/si/v1/prioritization/')){
         if(req.method==='GET'&&path==='/api/si/v1/prioritization'){
           dashboards.assertRole(req,'EDITOR');
@@ -1221,7 +1220,8 @@ const server = createServer(async (req, res) => {
         }
         if(req.method==='POST'&&path==='/api/si/v1/prioritization/run'){
           dashboards.assertRole(req,'EDITOR');
-          return respond(res,201,await siPriority.run(await requestJson(req,2048)));
+          return respond(res,409,{error:'SI_P01_OUT_OF_CURRENT_POC_SCOPE',
+            message:'Use SI-C01 before approval and SI-S01 for feasible slots.'});
         }
       }
       if(req.method==='GET'&&path==='/api/si/v1/psc-selection/pool'){
