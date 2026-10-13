@@ -183,8 +183,6 @@ export async function resetPocActions(argv=process.argv.slice(2)){
    await conn.commit();
   }catch(e){await conn.rollback();throw e;}finally{await conn.close();}
  }
- for(const row of json.filter(x=>x.status==='RESET'))
-  writePrivate(row.path+'.si-reset-'+randomUUID()+'.working',JSON.stringify(row.next,null,2));
  // All baseline files are written only after DB state is safely snapshotted.
  for(const row of json.filter(x=>x.status==='RESET')){
   const tmp=row.path+'.si-reset-'+randomUUID()+'.tmp';
