@@ -129,7 +129,7 @@ export interface SiInspectionPlanRow{
 }
 export interface SiRollingPlan{
  id:string;number:string;title:string;startsOn:string;endsOn:string;
- port:string|null;notes:string;status:'DRAFT'|'READY_FOR_APPROVAL'|
+ notes:string;status:'DRAFT'|'READY_FOR_APPROVAL'|
  'APPROVED'|'IN_EXECUTION'|'COMPLETED'|'CANCELLED';
  revision:number;createdAt:string;createdBy:string;updatedAt:string;
  updatedBy:string;approvedAt:string|null;approvedBy:string|null;
@@ -179,7 +179,7 @@ export class SiCandidateTargetingService{
     return this.http.get<{plans:SiRollingPlan[]}>(this.api+'/inspection-plans');
   }
   createRollingPlan(input:{title:string;startsOn:string;endsOn:string;
-    port?:string;notes?:string}):Observable<SiRollingPlan>{
+    notes?:string}):Observable<SiRollingPlan>{
     return this.http.post<SiRollingPlan>(this.api+'/inspection-plans',input);
   }
   rollingPlan(id:string):Observable<SiRollingPlan>{
