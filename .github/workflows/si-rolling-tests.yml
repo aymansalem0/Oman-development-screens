@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - feature/si-rolling-inspection-plans-20261013
+      - feature/si-poc-business-completion-20261013
   workflow_dispatch:
 
 jobs:
