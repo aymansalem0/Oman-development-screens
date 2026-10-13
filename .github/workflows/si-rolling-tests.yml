@@ -16,6 +16,9 @@ jobs:
           node-version: '20'
       - name: Install backend runtime
         run: npm install --prefix ai-proxy --omit=dev --no-audit --no-fund
+      - name: Oracle 018 database adapter persistence and audit regression
+        run: node --test ai-proxy/test/si-rolling-oracle.test.mjs
+
       - name: Complete no-cost SI-01 to SI-02 business scenario
         run: node --test ai-proxy/test/si-rolling-endtoend.test.mjs
       - name: Rolling plans and historical approval guards
