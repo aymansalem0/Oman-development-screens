@@ -6,16 +6,8 @@ import type {NmcVesselProfile} from './nmc-vessel-catalog';
  * arbitrary lat/lon random walk, no cross-land shortcut, no lateral jitter.
  * These corridors deliberately avoid port basins and coastal waypoints.
  */
-export const AIRIA_OFFSHORE_CORRIDORS:Record<string,[number,number][]>={
- airiaGulfWestA:[[25.82,52.75],[25.86,53.05],[25.89,53.40],[25.91,53.77]],
- airiaGulfWestB:[[25.61,52.95],[25.65,53.25],[25.69,53.55],[25.73,53.89]],
- airiaGulfMidA:[[25.92,53.78],[25.93,54.03],[25.93,54.25],[25.93,54.47]],
- airiaGulfMidB:[[25.70,53.94],[25.74,54.18],[25.76,54.40],[25.77,54.61]],
- airiaGulfEast:[[25.89,54.30],[25.96,54.48],[26.03,54.66],[26.09,54.82]],
- airiaOmanA:[[25.20,57.02],[25.28,57.21],[25.34,57.43],[25.38,57.62]],
- airiaOmanB:[[25.08,57.10],[25.13,57.32],[25.19,57.54],[25.24,57.74]],
- airiaOmanC:[[25.44,57.08],[25.50,57.24],[25.55,57.44],[25.58,57.65]]
-};
+import seaRoutes from './airia-offshore-corridors.json';
+export const AIRIA_OFFSHORE_CORRIDORS=seaRoutes as unknown as Record<string,[number,number][]>;
 export const AIRIA_ROUTE_KEYS=Object.keys(AIRIA_OFFSHORE_CORRIDORS);
 export const AIRIA_MOTION_DISCLAIMER='Illustrative vessel tracks constrained to preselected offshore waypoints, NOT verified AIS or navigational routing.';
 
