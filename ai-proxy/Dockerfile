@@ -3,6 +3,7 @@ WORKDIR /build
 COPY package*.json ./
 RUN npm install --no-audit --no-fund --prefer-offline --loglevel=error --fetch-retries=3
 COPY ai-proxy/build-fleet-evidence.mjs ./ai-proxy/build-fleet-evidence.mjs
+COPY ai-proxy/airia-demo-99.json ./ai-proxy/airia-demo-99.json
 COPY src/app/data/ ./src/app/data/
 COPY src/app/services/nmc-risk-engine.service.ts src/app/services/nmc-vessel-evidence.service.ts ./src/app/services/
 RUN node ./ai-proxy/build-fleet-evidence.mjs
