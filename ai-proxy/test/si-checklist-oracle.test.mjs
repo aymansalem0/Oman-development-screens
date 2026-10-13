@@ -42,7 +42,8 @@ class MockConnection{
   if(c.startsWith('UPDATE SI_CHK_TEMPLATE')){
    const t=JSON.parse(b.doc.val);this.db.templates.set(t.id,t);return {rowsAffected:1};}
   if(c.startsWith('INSERT INTO SI_CHK_REVISION')){
-   this.db.revisions.set(b.template+':'+b.revision,JSON.parse(b.snapshot.val));
+   this.db.revisions.set(b.p_template_id+':'+b.p_revision_no,
+    JSON.parse(b.p_snapshot_json.val));
    return {rowsAffected:1};
   }
   if(c.startsWith('SELECT R.TEMPLATE_ID,R.REVISION_NO,R.SNAPSHOT_JSON')){
