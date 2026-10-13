@@ -127,7 +127,17 @@ export interface SiInspectionPlanRow{
  editable:boolean;locked:boolean;mandatoryReferral:boolean;
  regimeAdvisories:SiC01Recommendation[];
 }
+export interface SiRollingPlan{
+ id:string;number:string;title:string;startsOn:string;endsOn:string;
+ port:string|null;notes:string;status:'DRAFT'|'READY_FOR_APPROVAL'|
+ 'APPROVED'|'IN_EXECUTION'|'COMPLETED'|'CANCELLED';
+ revision:number;createdAt:string;createdBy:string;updatedAt:string;
+ updatedBy:string;approvedAt:string|null;approvedBy:string|null;
+ approvedBatchId:string|null;vesselCount:number;
+}
 export interface SiInspectionPlanState{
+ planId?:string|null;planNumber?:string|null;planStatus?:string|null;
+ planPeriod?:{startsOn:string;endsOn:string}|null;
  status:'ok';provider:'MOCK'|'AIRIA';mock:boolean;
  sourceHash:string;revision:number;generatedAt:string|null;
  agentRunId:string|null;stale:boolean;externalCallsOnRead:0;
@@ -164,13 +174,28 @@ export class SiCandidateTargetingService{
     expectedVersion:number;publishedBy:string;reason:string},key:string):Observable<unknown>{
     return this.http.post(this.api+'/rules/publish',body,{headers:this.headers(key)});
   }
-  inspectionPlan(key:string):Observable<SiInspectionPlanState>{
+  rollingPlans():Observable<{plans:SiRollingPlan[]}>{
+    return this.http.get<{plans:SiRollingPlan[]}>(this.api+'/inspection-plans');
+  }
+  createRollingPlan(input:{title:string;startsOn:string;endsOn:string;
+    port?:string;notes?:string}):Observable<SiRollingPlan>{
+    return this.http.post<SiRollingPlan>(this.api+'/inspection-plans',input);
+  }
+  rollingPlan(id:string):Observable<SiRollingPlan>{
+    return this.http.get<SiRollingPlan>(this.api+'/inspection-plans/'+encodeURIComponent(id));
+  }
+  cancelRollingPlan(id:string,expectedRevision:number,reason:string):Observable<SiRollingPlan>{
+    return this.http.post<SiRollingPlan>(this.api+'/inspection-plans/'+
+      encodeURIComponent(id)+'/cancel',{expectedRevision,reason});
+  }
+  inspectionPlan(key:string,planId?:string|null):Observable<SiInspectionPlanState>{
     return this.http.get<SiInspectionPlanState>(this.api+'/inspection-plan',
-      {headers:this.headers(key)});
+      {headers:this.headers(key),
+       params:planId?{planId}:{}});
   }
   rerankInspectionPlan(key:string,body:{
     actor:string;expectedSourceHash:string;expectedRevision:number;
-    confirmRun:true;confirmCost:boolean;
+    planId?:string;confirmRun:true;confirmCost:boolean;
     change?:{imo:string;selected:boolean;requestedRank:number|null;reason:string}
   }):Observable<SiInspectionPlanResult>{
     return this.http.post<SiInspectionPlanResult>(
