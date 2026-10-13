@@ -48,7 +48,7 @@ test('Settings are versioned and apply on restart; checklist cannot be enabled w
   assert.equal(reread.get('AIRIA_SI_CHECKLIST_BUILDER_PIPELINE_ID'),UUID);
  }finally{t.done();}
 });
-test('Governance rejects non-UUID pipeline, missing P01 UUID when P01 enabled, stale edits and arbitrary endpoints',async()=>{
+test('Governance rejects non-UUID pipeline, retired P01 activation, stale edits and arbitrary endpoints',async()=>{
  const t=data();try{
   const s=new RuntimeSettings({env:{},file:join(t.dir,'settings.json')});
   s.load();
@@ -59,7 +59,7 @@ test('Governance rejects non-UUID pipeline, missing P01 UUID when P01 enabled, s
   await assert.rejects(s.publish({expectedVersion:0,
    values:{...base,SI_AI_PROVIDER:'airia',SI_P01_ENABLED:true},
    actor:'admin',reason:'Try unavailable P01 without real pipeline',confirmCost:true}),
-   /AI_GOVERNANCE_SI_PIPELINES_REQUIRED/);
+   /SI_P01_OUT_OF_CURRENT_POC_SCOPE/);
   await assert.rejects(s.publish({expectedVersion:99,values:base,
    actor:'admin',reason:'Try stale version',confirmCost:true}),
    /RUNTIME_SETTINGS_VERSION_CONFLICT/);
@@ -150,6 +150,7 @@ test('MENA partner catalogue contains explicit DQ01/C01/S01/V01/R01/X01 IDs; P01
   };
   for(const [k,v] of Object.entries(expected))assert.equal(s.get(k),v);
   assert.equal(s.get('AIRIA_SI_P01_PIPELINE_ID'),'');
+  assert.equal(s.get('SI_P01_ENABLED'),false);
   for(const k of ['SI_C01_ENABLED','SI_S01_ENABLED','SI_V01_ENABLED',
                    'SI_R01_ENABLED','SI_X01_ENABLED','NMC_DQ01_ENABLED'])
     assert.equal(s.get(k),false);
