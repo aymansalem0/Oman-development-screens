@@ -596,7 +596,9 @@ const server = createServer(async (req, res) => {
       try{
         dashboards.assertRole(req,'PUBLISHER');
         const input=await requestJson(req,12288);
-        return respond(res,200,await runtime.publish(input));
+        const identity=moeiAuth.require(req,{mutate:true});
+        return respond(res,200,await runtime.publish({...input,
+          actor:identity.email||identity.username}));
       }catch(error){
         if(error instanceof RuntimeSettingsError||error instanceof DashboardError)
           return respond(res,error.status,{error:error.code});
