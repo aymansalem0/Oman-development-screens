@@ -95,7 +95,7 @@ test('human approval is audited and creates exactly one case; replay cannot crea
     assert.equal((await w.subject.dashboard()).summary.inspectionsCreated,1);
   }finally{w.cleanup();}
 });
-test('priority impact preview/revision never changes legal eligibility, NMC risk or AI data',async()=>{
+test('separate ranking policy publish never changes legal eligibility or NMC risk',async()=>{
   const projections=[{
     imo:fleet[0].imo,riskScore:72,riskLevel:'High',
     sourceAssessmentId:'AI-SAVED-01',policyRevision:2
@@ -104,27 +104,24 @@ test('priority impact preview/revision never changes legal eligibility, NMC risk
   try{
     await w.subject.receiveEvent(source());
     const before=(await w.subject.dashboard()).candidates[0];
-    assert.equal(before.priority,'PRIORITY');
-    const preview=await w.subject.previewRules({sourceTriggerScores:{
-      NMC_CASE:100,SERVICE_REQUEST:20,PSC_PORT_CALL:20
-    }});
-    assert.deepEqual(preview.affectedImos,[fleet[0].imo]);
+    assert.equal(before.priority,'SOURCE_ELIGIBLE');
+    const preview=await w.subject.previewRules({ranking:{criteria:['DEPARTURE_SOON','INCIDENT_SEVERITY']}});
+    assert.deepEqual(preview.affectedImos,[]);
     assert.equal(preview.evaluatedPopulation,420);
     assert.equal(preview.unevaluatedRiskVessels,419);
-    assert.equal((await w.subject.dashboard()).candidates[0].priority,'PRIORITY');
+    assert.equal((await w.subject.dashboard()).candidates[0].priority,'SOURCE_ELIGIBLE');
     const published=await w.subject.publishRules({expectedVersion:1,
       publishedBy:'SME',reason:'Source trigger priority policy',
-      config:{sourceTriggerScores:{NMC_CASE:100,SERVICE_REQUEST:20,PSC_PORT_CALL:20}}});
+      config:{ranking:{criteria:['DEPARTURE_SOON','INCIDENT_SEVERITY']}}});
     assert.equal(published.version,2);
     const after=(await w.subject.dashboard()).candidates[0];
-    assert.equal(after.priority,'STANDARD');
-    assert.equal(after.sourcePriorityScore,20);
-    assert.equal(published.config.sourceTriggerScores.SERVICE_REQUEST,20);
+    assert.equal(after.priority,'SOURCE_ELIGIBLE');
+    assert.deepEqual(published.config.ranking.criteria,['DEPARTURE_SOON','INCIDENT_SEVERITY']);
     assert.equal(after.eligibility,before.eligibility);
     assert.deepEqual(after.currentRisk,before.currentRisk);
     await assert.rejects(()=>w.subject.publishRules({expectedVersion:1,
       publishedBy:'SME',reason:'Priority trial threshold',
-      config:{sourceTriggerScores:{NMC_CASE:100,SERVICE_REQUEST:10,PSC_PORT_CALL:20}}}),
+      config:{ranking:{criteria:['DEPARTURE_SOON','INCIDENT_SEVERITY']}}}),
       e=>e.code==='SI_POLICY_VERSION_CONFLICT');
   }finally{w.cleanup();}
 });
