@@ -234,16 +234,16 @@
                   <div *ngIf="activePlanEditable&&plan&&planRow(v)?.editable"
                     class="si-rolling-actions">
                     <button type="button" *ngIf="!planRow(v)?.planSelected"
-                      (click)="selectPlanVessel(v,'INCLUDE')" [disabled]="planBusy">
+                      (click)="openManualDecision(v,'INCLUDE')" [disabled]="planBusy">
                       {{copy('Include','إدراج')}}</button>
                     <button type="button" *ngIf="planRow(v)?.planSelected"
-                      (click)="selectPlanVessel(v,'NOT_SELECTED')" [disabled]="planBusy">
+                      (click)="openManualDecision(v,'NOT_SELECTED')" [disabled]="planBusy">
                       {{copy('Remove','استبعاد')}}</button>
                     <button type="button"
-                      (click)="selectPlanVessel(v,'DEFER')" [disabled]="planBusy">
+                      (click)="openManualDecision(v,'DEFER')" [disabled]="planBusy">
                       {{copy('Defer','تأجيل')}}</button>
                     <button type="button" *ngIf="!planRow(v)?.mandatoryReferral"
-                      (click)="selectPlanVessel(v,'NOT_APPLICABLE')" [disabled]="planBusy">
+                      (click)="openManualDecision(v,'NOT_APPLICABLE')" [disabled]="planBusy">
                       {{copy('Not Applicable','غير منطبق')}}</button>
                   </div>
                   <button type="button"
@@ -256,6 +256,34 @@
                 <td><button type="button" (click)="toggleVesselDetail(v)">
                   {{expandedImo===v.imo?copy('Hide Details','إخفاء'):
                     copy('Why AI? / Review','لماذا اختارها AI؟')}}</button>
+                </td>
+              </tr>
+              <tr class="si-plan-edit-row" *ngIf="manualEditingImo===v.imo">
+                <td colspan="8">
+                  <form (ngSubmit)="saveManualDecision()" class="si-inline-change">
+                    <strong>{{copy('Officer decision','قرار الموظف')}}:
+                      {{manualAction}} · {{v.vesselName}} (IMO {{v.imo}})</strong>
+                    <label>{{copy('Operational reason (required)','سبب القرار التشغيلي (إلزامي)')}}
+                      <input type="text" name="manualReason"
+                        [(ngModel)]="manualReason" required minlength="8" maxlength="500"
+                        [placeholder]="copy('Explain why this vessel is included, omitted or deferred',
+                          'سجل سبب إدراج السفينة أو عدم اختيارها أو تأجيلها')"/>
+                    </label>
+                    <label *ngIf="manualAction==='DEFER'">
+                      {{copy('Reconsider on','تاريخ إعادة النظر')}}
+                      <input type="date" name="manualReviewAfter"
+                        [(ngModel)]="manualReviewAfter" required/>
+                    </label>
+                    <button type="submit" class="primary"
+                      [disabled]="planBusy||manualReason.trim().length<8||
+                         (manualAction==='DEFER'&&!manualReviewAfter)">
+                      {{copy('Save without AI','حفظ دون تشغيل AI')}}
+                    </button>
+                    <button type="button" (click)="closeManualDecision()">
+                      {{copy('Cancel','إلغاء')}}</button>
+                    <small>{{copy('This action is recorded only in the selected draft plan and does not create an inspection case.',
+                      'يسجل القرار في مسودة الخطة المختارة فقط، ولا ينشئ حالة معاينة رسمية.')}}</small>
+                  </form>
                 </td>
               </tr>
               <tr class="si-plan-edit-row" *ngIf="planEditingImo===v.imo">
