@@ -120,6 +120,9 @@ export interface SiInspectionPlanRow{
  pendingWorkflows:number;approvedCases:number;externalScheduled:number;
  aiRecommended:boolean|null;planSelected:boolean|null;
  selectionOrigin:'AI_ADVISORY'|'OFFICER_AMENDED'|'NOT_EVALUATED';
+ disposition?:'AVAILABLE'|'INCLUDE'|'NOT_SELECTED'|'DEFER'|'NOT_APPLICABLE';
+ reviewAfter?:string|null;previousDisposition?:string|null;
+ previousPlan?:string|null;reviewDue?:boolean;
  officerReason:string|null;officerActor:string|null;
  requestedRank:number|null;modelRank:number|null;effectiveRank:number|null;
  priorityReason:string|null;selectionReason:string|null;
@@ -134,10 +137,14 @@ export interface SiRollingPlan{
  revision:number;createdAt:string;createdBy:string;updatedAt:string;
  updatedBy:string;approvedAt:string|null;approvedBy:string|null;
  approvedBatchId:string|null;vesselCount:number;
+ candidateCount?:number;deferredCount?:number;
 }
 export interface SiInspectionPlanState{
  planId?:string|null;planNumber?:string|null;planStatus?:string|null;
  readOnlyHistorical?:boolean;historicalSourceChanged?:boolean;
+ selectionMode?:'MANUAL'|'AI_ASSISTED';manualSelection?:boolean;
+ availableCount?:number;deferredCount?:number;notSelectedCount?:number;
+ candidatesAtCreation?:number|null;
  planPeriod?:{startsOn:string;endsOn:string}|null;
  status:'ok';provider:'MOCK'|'AIRIA';mock:boolean;
  sourceHash:string;revision:number;generatedAt:string|null;
@@ -184,6 +191,16 @@ export class SiCandidateTargetingService{
   }
   rollingPlan(id:string):Observable<SiRollingPlan>{
     return this.http.get<SiRollingPlan>(this.api+'/inspection-plans/'+encodeURIComponent(id));
+  }
+  selectRollingVessel(id:string,input:{
+    imo:string;action:'INCLUDE'|'NOT_SELECTED'|'DEFER'|'NOT_APPLICABLE';
+    reason:string;reviewAfter?:string|null;
+    expectedRevision:number;expectedSourceHash:string
+  }):Observable<{status:'SAVED';planId:string;revision:number;
+    included:number;disposition:string;externalCalls:0}>{
+    return this.http.post<{status:'SAVED';planId:string;revision:number;
+      included:number;disposition:string;externalCalls:0}>(
+      this.api+'/inspection-plans/'+encodeURIComponent(id)+'/selection',input);
   }
   cancelRollingPlan(id:string,expectedRevision:number,reason:string):Observable<SiRollingPlan>{
     return this.http.post<SiRollingPlan>(this.api+'/inspection-plans/'+

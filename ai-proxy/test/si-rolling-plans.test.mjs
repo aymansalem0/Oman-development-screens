@@ -32,7 +32,8 @@ function setup(){
  const plan=new SiInspectionPlan({targeting,candidateAgent:agent,rollingPlans:rolling,
   file:join(dir,'legacy.json')});
  const create=(name='First plan')=>rolling.create({title:name,startsOn:'2026-10-13',
-  endsOn:'2026-10-16'},'officer@moei');
+  endsOn:'2026-10-16'},'officer@moei',
+  {candidates:[c],sourceHash:'f'.repeat(64)});
  return {dir,rolling,plan,create,
   done:()=>rmSync(dir,{recursive:true,force:true})};
 }
@@ -100,4 +101,98 @@ test('canceling a draft requires a human reason and does not affect other plans'
   assert.equal((await x.rolling.get(q.id)).status,'DRAFT');
   assert.equal((await x.rolling.list()).length,2);
  }finally{x.done();}
+});
+
+test('new draft immediately exposes eligible vessel; manual inclusion creates approval-ready plan without AI',async()=>{
+ const x=setup();
+ try{
+  const p=await x.create('Manual plan no AI');
+  const before=await x.plan.snapshot(p.id);
+  assert.equal(before.agentRunId,null);
+  assert.equal(before.availableCount,1);
+  assert.equal(before.selectedForPlan,0);
+  assert.equal(before.rows[0].imo,'9328471');
+  assert.equal(before.rows[0].editable,true);
+  const saved=await x.plan.select({
+   planId:p.id,imo:'9328471',action:'INCLUDE',
+   reason:'Required source-backed inspection within this planning period',
+   expectedRevision:before.revision,expectedSourceHash:before.sourceHash,
+   actor:'officer@moei'});
+  assert.equal(saved.externalCalls,0);
+  const after=await x.plan.snapshot(p.id);
+  assert.equal(after.agentRunId,null);
+  assert.equal(after.manualSelection,true);
+  assert.equal(after.rows[0].planSelected,true);
+  assert.equal(after.rows[0].effectiveRank,1);
+  assert.equal(after.selectedForPlan,1);
+  assert.equal((await x.rolling.get(p.id)).status,'READY_FOR_APPROVAL');
+  assert.equal((await x.rolling.get(p.id)).savedPlanRows[0].disposition,'INCLUDE');
+  await assert.rejects(x.plan.select({planId:p.id,imo:'9328471',
+    action:'NOT_SELECTED',reason:'Remove after officer reviewed evidence',
+    actor:'officer@moei',expectedRevision:0,expectedSourceHash:before.sourceHash}),
+   /SI_PLAN_CHANGED_REFRESH_REQUIRED/);
+ }finally{x.done();}
+});
+test('unselected and deferred vessels carry forward with reason; new plan remains independent',async()=>{
+ const x=setup();try{
+  const old=await x.create('Old day');
+  const base=await x.plan.snapshot(old.id);
+  await x.plan.select({planId:old.id,imo:'9328471',action:'DEFER',
+    reason:'Inspection cannot be performed until vessel returns',
+    reviewAfter:'2099-02-01',actor:'officer@moei',
+    expectedRevision:0,expectedSourceHash:base.sourceHash});
+  const next=await x.create('Next available plan');
+  const carried=await x.rolling.get(next.id);
+  assert.equal(carried.carryForward['9328471'].disposition,'DEFER');
+  assert.equal(carried.carryForward['9328471'].reviewAfter,'2099-02-01');
+  const view=await x.plan.snapshot(next.id);
+  assert.equal(view.rows[0].previousPlan,old.number);
+  assert.equal(view.rows[0].previousDisposition,'DEFER');
+  assert.equal(view.rows[0].planSelected,null);
+  assert.equal(view.rows[0].editable,true,
+   'eligible vessel must remain accessible to an authorized officer');
+  assert.equal((await x.rolling.get(old.id)).status,'DRAFT');
+  await assert.rejects(x.plan.select({
+   planId:next.id,imo:'9328471',action:'NOT_APPLICABLE',
+   reason:'Attempt to suppress legally protected mandatory NMC source',
+   actor:'officer@moei',expectedRevision:0,
+   expectedSourceHash:view.sourceHash}),/SI_MANDATORY_REFERRAL_PROTECTED/);
+  assert.equal((await x.rolling.get(next.id)).revision,0);
+ }finally{x.done();}
+});
+
+test('approved plan carries forward eligible-but-not-included vessel without fabricating a formal deferral',async()=>{
+ const x=setup();try{
+  const vessels=[
+   {candidateKey:'eligible-A',imo:'9328471',regime:'FOCUSED_INSPECTION',
+    sourceTypes:['NMC_CASE'],sourceEvents:[{eventKey:'NMC-A'}]},
+   {candidateKey:'eligible-B',imo:'9400409',regime:'UAE_SERVICE_INSPECTION',
+    sourceTypes:['SERVICE_REQUEST'],sourceEvents:[{eventKey:'SVC-B'}]}
+  ];
+  const initial=await x.rolling.create({
+   title:'Reviewed and approved',startsOn:'2026-10-13',endsOn:'2026-10-14'},
+   'officer@moei',{candidates:vessels,sourceHash:'f'.repeat(64)});
+  await x.rolling.approve(initial.id,{
+   expectedRevision:0,
+   batchId:'22222222-2222-4222-8222-222222222222',
+   actor:'supervisor@moei',
+   cases:[{imo:'9328471',
+    caseId:'11111111-1111-4111-8111-111111111111',planRank:1,
+    inspectionReasons:[{eventKey:'NMC-A',sourceType:'NMC_CASE'}],
+    regimes:['FOCUSED_INSPECTION']}]});
+  const next=await x.rolling.create({
+   title:'Day two',startsOn:'2026-10-14',endsOn:'2026-10-16'},
+   'officer@moei',{candidates:[vessels[1]],sourceHash:'f'.repeat(64)});
+  const c=(await x.rolling.get(next.id)).carryForward['9400409'];
+  assert.equal(c.disposition,'NOT_SELECTED_IN_PREVIOUS_PLAN');
+  assert.equal(c.fromPlan,initial.number);
+  assert.equal(c.reviewAfter,null);
+  assert.equal(c.systemDerived,true);
+  const independent=await x.rolling.create({
+   title:'New independent event',startsOn:'2026-10-15',endsOn:'2026-10-16'},
+   'officer@moei',{candidates:[{...vessels[1],
+     sourceEvents:[{eventKey:'SVC-NEW-INDEPENDENT'}]}]});
+  assert.equal((await x.rolling.get(independent.id)).carryForward['9400409'],
+   undefined,'new independent source event does not inherit previous deferral/nonselection');
+ }finally{x.done()}
 });

@@ -39,22 +39,22 @@ import {SiBulkJob,SiBulkPlanService,SiBulkPreview,SiBulkVessel} from '../service
    <p class="notice error" role="alert" *ngIf="error">{{error}}</p>
 
    <ng-container *ngIf="preview as p">
-    <p class="notice error" *ngIf="p.stale||!p.agentRunId">
-     {{copy('Current C01 recommendations are missing or out of date. Return to Candidate Center, refresh AI selection, then reopen this wizard.',
-     'توصيات C01 قديمة أو غير موجودة. ارجع لمركز المرشحين وأعد حساب اختيار AI ثم افتح معالج الخطة من جديد.')}}
+    <p class="notice error" *ngIf="p.stale||(!p.agentRunId&&!p.manualSelection)">
+     {{copy('Candidate selection is missing or source data has changed. Return to Candidate Center and review the current plan. AI is optional.',
+     'لا توجد سفن مختارة أو تغير مصدر البيانات. عد إلى قائمة المرشحين وراجع الخطة الحالية. تشغيل AI اختياري.')}}
     </p>
     <section class="panel" *ngIf="step===1">
      <div class="panel-head">
       <div><p class="eyebrow">{{copy('STEP 01 · INSPECTION PLAN','الخطوة ١ · خطة المعاينات')}}</p>
        <h2>{{copy('Vessels included in the plan','السفن التي ستدخل خطة المعاينات')}}</h2>
-       <p>{{copy('The current officer-amended C01 plan is the selection source. To include, exclude or reprioritize vessels, return to Candidate Center.',
-         'مصدر الاختيار هو خطة C01 بعد تعديلات الموظف. لتعديل السفن أو ترتيبها، ارجع إلى شاشة الترشيح.')}}</p></div>
+       <p>{{copy('The current officer-reviewed plan is the source. Selection may be manual or C01-assisted; each decision has human accountability.',
+         'مصدر الاعتماد هو الخطة بعد مراجعة الموظف. يمكن الاختيار يدويًا أو بمساعدة C01، والمسؤولية البشرية محفوظة.')}}</p></div>
        <span class="count">{{p.selectedVessels}} {{copy('vessels','سفن')}}</span>
      </div>
      <div class="summary">
       <div><strong>{{p.selectedVessels}}</strong><span>{{copy('Selected vessels','السفن المختارة')}}</span></div>
       <div><strong>v{{p.planRevision}}</strong><span>{{copy('Plan revision','إصدار الخطة')}}</span></div>
-      <div><strong>{{p.provider}}</strong><span>{{copy('C01 provider','مزود C01')}}</span></div>
+      <div><strong>{{p.agentRunId?p.provider:'MANUAL'}}</strong><span>{{copy('Selection method','طريقة الاختيار')}}</span></div>
      </div>
      <div class="table-scroll"><table>
       <thead><tr><th>{{copy('Priority','الأولوية')}}</th>
@@ -156,7 +156,7 @@ import {SiBulkJob,SiBulkPlanService,SiBulkPreview,SiBulkVessel} from '../service
       <span>P01: <b>{{runP01?copy('Reprioritize','إعادة ترتيب'):copy('Not requested','غير مطلوب')}}</b></span>
      </div>
      <button type="button" class="approve" (click)="approve()"
-      [disabled]="submitting||jobBusy||!auth.isAdmin||reason.trim().length<8||p.stale||!p.agentRunId||hasMissingReasons">
+      [disabled]="submitting||jobBusy||!auth.isAdmin||reason.trim().length<8||p.stale||(!p.agentRunId&&!p.manualSelection)||hasMissingReasons">
       {{submitting?copy('Submitting approval…','جارٍ إرسال الاعتماد…'):
        copy('Approve Full Plan & Create '+p.selectedVessels+' Dossiers',
         'اعتماد الخطة وإنشاء '+p.selectedVessels+' ملفات تحضير')}}
@@ -300,7 +300,8 @@ export class SiInspectionPlanWizardComponent implements OnInit,OnDestroy{
  get totalReasons():number{return this.preview?.vessels.reduce((n,v)=>n+v.reasons.length,0)||0;}
  get totalScopes():number{return this.preview?.vessels.reduce((n,v)=>n+v.inspectionRegimes.length,0)||0;}
  get canNext():boolean{return !!this.preview&&this.step<4&&this.preview.selectedVessels>0&&
-  !!this.preview.agentRunId&&!this.preview.stale&&!this.hasMissingReasons&&!this.loading;}
+  (!!this.preview.agentRunId||!!this.preview.manualSelection)&&
+  !this.preview.stale&&!this.hasMissingReasons&&!this.loading;}
  ngOnInit():void{
   this.planId=this.route.snapshot.paramMap.get('planId');
   if(!this.planId){
@@ -336,7 +337,7 @@ export class SiInspectionPlanWizardComponent implements OnInit,OnDestroy{
  next():void{if(this.canNext)this.step++;}
  approve():void{
   const p=this.preview;if(!this.planId||!p||this.submitting||this.jobBusy||!this.auth.isAdmin||
-   !p.agentRunId||p.stale||this.hasMissingReasons||this.reason.trim().length<8)return;
+   (!p.agentRunId&&!p.manualSelection)||p.stale||this.hasMissingReasons||this.reason.trim().length<8)return;
   const paid=(this.generateA04&&p.a04Provider==='AIRIA')||
    (this.runP01&&p.p01Provider==='AIRIA');
   const message=this.copy(

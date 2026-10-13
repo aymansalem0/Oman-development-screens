@@ -59,6 +59,20 @@ export interface SiLifecycleView{
   record:SiLifecycleRecord|null;stages:SiLifecycleStage[];
   readyForInitialization:boolean;limitations:string[];
 }
+export type SiPocAdvisorCode='SI-S01'|'SI-V01'|'SI-R01'|'SI-X01';
+export interface SiPocAdvisorAdvice{
+ code:string;severity:string;title:string;explanation:string;
+ evidenceRefs:string[];requiresHumanReview:true;synthetic?:boolean;
+}
+export interface SiPocAdvisorResult{
+ status:'MOCK_ADVISORY_REVIEW_REQUIRED';schemaVersion:string;
+ agentCode:SiPocAdvisorCode;provider:'MOCK';simulationLabel:'MOCK_POC_NOT_REAL_AI';
+ scenario:string|null;externalCalls:0;caseMutations:0;humanApprovalRequired:true;
+ advice:SiPocAdvisorAdvice[];warning:string;
+ draft:{status:string;title:string;summary:string;
+   findingRefs:{findingId:string;severity:string;description:string;evidenceRefs:string[]}[];
+   evidenceRefs:string[];aiGenerated:false;autoIssued:false}|null;
+}
 @Injectable({providedIn:'root'})
 export class SiLifecycleService{
   private url='/api/si/v1/lifecycle';
@@ -75,6 +89,10 @@ export class SiLifecycleService{
   history(caseId:string,key:string):Observable<{status:string;versions:SiLifecycleVersion[]}>{
     return this.http.get<{status:string;versions:SiLifecycleVersion[]}>(
       this.url+'/'+encodeURIComponent(caseId)+'/history',{headers:this.headers(key)});
+  }
+  pocAdvisor(caseId:string,agent:SiPocAdvisorCode,scenario:string|null=null):Observable<SiPocAdvisorResult>{
+    return this.http.post<SiPocAdvisorResult>(
+      this.url+'/'+encodeURIComponent(caseId)+'/advisors/'+agent+'/run',{scenario});
   }
   apply(caseId:string,key:string,body:{
     action:string;expectedVersion:number;actor:string;data?:Record<string,unknown>

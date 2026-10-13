@@ -16,7 +16,10 @@ export function buildC01Source(dashboard,pscPolicy=null){
   if(!dashboard?.policy||!Array.isArray(dashboard.candidates))
     throw new SiCandidateAgentError('SI_C01_SOURCE_UNAVAILABLE',503);
   const candidates=dashboard.candidates
-    .filter(c=>c.status==='PENDING_REVIEW'&&c.inspectionCase===null)
+    .filter(c=>!c.inspectionCase&&(
+      c.status==='PENDING_REVIEW'||
+      (c.status==='EXTERNALLY_SCHEDULED'&&
+        c.events.some(e=>e.sourceType==='NMC_CASE'&&e.approval==='APPROVED'))))
     .map(c=>{
       const allowedEvidence=unique(c.events.flatMap(e=>[
         e.eventKey,e.sourceEventId,e.sourceReference,...(e.evidenceIds||[])]));
