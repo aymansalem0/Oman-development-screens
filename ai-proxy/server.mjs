@@ -168,8 +168,10 @@ const dashboards=new DashboardWorkspace({mode:dbMode,oracleRepository:repository
  * KPI values are supplementary POC context and never a new risk signal. */
 const dashboardAiFocus=new DashboardAiFocus({
   executeAgent:fleetAgentCall,
-  enabled:Boolean(getAiriaKey())&&agentAllowed('a01')&&agentAllowed('a02')&&
-    process.env.NMC_DASHBOARD_AI_FOCUS_ENABLED==='true',
+  // Read the published governance toggle on every request: no container restart
+  // required after an authorized settings publication. OFF by default.
+  enabled:()=>Boolean(getAiriaKey())&&agentAllowed('a01')&&agentAllowed('a02')&&
+    runtime.get('NMC_DASHBOARD_AI_FOCUS_ENABLED'),
   selectVessel:()=>selectDashboardFocusVessel(fleet,incidentBundleMap)
 });
 const alerts=new NmcAlertWorkspace({mode:dbMode,oracleRepository:repository});
