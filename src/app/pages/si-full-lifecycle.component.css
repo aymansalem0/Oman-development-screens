@@ -103,3 +103,16 @@ td strong{color:#22445b}
   .form-grid,.action-form{grid-template-columns:1fr}}
 @media(max-width:560px){.step-grid,.data-grid{grid-template-columns:1fr}
   .card{padding:14px}.hero h1{font-size:23px}}
+
+/* Advisory-only placeholders for missing Airia S01/V01/R01/X01 response contracts. */
+.si-poc-agent-actions{display:flex;flex-wrap:wrap;gap:9px;margin:14px 0}
+.si-poc-assistants{border-inline-start:5px solid #039489}
+.si-poc-agent-output{border:1px solid #b4ddce;background:#f4fbfa;
+ padding:16px;border-radius:12px;margin-top:12px;font-size:12px}
+.si-poc-agent-output>p{color:#446b75;line-height:1.6}
+.si-poc-agent-advice{border-top:1px solid #d1e7e5;padding:12px 0;display:grid;gap:6px}
+.si-poc-agent-advice b{color:#096c75}.si-poc-agent-advice span{font-weight:750}
+.si-poc-agent-advice p{margin:0;line-height:1.7;color:#416573}
+.si-poc-agent-advice small{color:#b06330;font-weight:850}
+.si-poc-sample{display:flex;align-items:center;gap:9px;color:#385b6d;font-size:12px}
+.si-poc-sample input{accent-color:#068b7c}
