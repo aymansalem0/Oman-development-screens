@@ -107,18 +107,24 @@ export function projectInspectionPlan(dashboard,source,run,overrides={}){
    a.imo.localeCompare(b.imo));
 }
 export class SiInspectionPlan{
- constructor({targeting,candidateAgent,
+ constructor({targeting,candidateAgent,rollingPlans=null,
     file=process.env.SI_INSPECTION_PLAN_PATH||'/data/si-inspection-plan.json'}={}){
   if(!targeting||!candidateAgent)throw Error('SI_PLAN_CONFIGURATION_INVALID');
   this.targeting=targeting;this.agent=candidateAgent;this.file=file;this.busy=false;
+  this.rolling=rollingPlans;
  }
  read(){return existsSync(this.file)?safeRecord(JSON.parse(readFileSync(this.file,'utf8'))):empty();}
- async snapshot(){
+ async snapshot(planId=null){
+  const cycle=planId?await this.rolling?.get(planId):null;
+  if(planId&&!cycle)throw new SiCandidateAgentError('SI_ROLLING_PLAN_NOT_FOUND',404);
   const [source,dashboard]=await Promise.all([this.agent.source(),this.targeting.dashboard()]);
-  const state=this.read();
+  const state=cycle||this.read();
   const current=state.latest?.snapshotHash===source.snapshotHash?state.latest:null;
   const rows=projectInspectionPlan(dashboard,source,current,state.overrides);
-  return {status:'ok',provider:this.agent.provider.toUpperCase(),
+  return {status:'ok',planId:cycle?.id||null,
+   planNumber:cycle?.number||null,planStatus:cycle?.status||null,
+   planPeriod:cycle?{startsOn:cycle.startsOn,endsOn:cycle.endsOn}:null,
+   provider:this.agent.provider.toUpperCase(),
    mock:this.agent.provider==='mock',sourceHash:source.snapshotHash,
    revision:state.revision,generatedAt:current?.generatedAt||null,
    agentRunId:current?.agentRunId||null,stale:Boolean(state.latest&&!current),
@@ -137,7 +143,11 @@ export class SiInspectionPlan{
    throw new SiCandidateAgentError('SI_PLAN_CONFIRMATION_REQUIRED',422);
   this.busy=true;
   try{
-   const state=this.read();
+   const cycleId=input.planId||null;
+   const state=cycleId?await this.rolling?.get(cycleId):this.read();
+   if(!state)throw new SiCandidateAgentError('SI_ROLLING_PLAN_NOT_FOUND',404);
+   if(cycleId&&!['DRAFT','READY_FOR_APPROVAL'].includes(state.status))
+    throw new SiCandidateAgentError('SI_ROLLING_APPROVED_PLAN_IMMUTABLE',409);
    const source=await this.agent.source();
    if(input.expectedSourceHash!==source.snapshotHash||
       input.expectedRevision!==state.revision)
@@ -168,7 +178,7 @@ export class SiInspectionPlan{
      }))});
    const current=await this.agent.source();
    if(current.snapshotHash!==source.snapshotHash||
-      this.read().revision!==state.revision)
+      (cycleId?(await this.rolling.get(cycleId)).revision:this.read().revision)!==state.revision)
     throw new SiCandidateAgentError('SI_PLAN_SOURCE_CHANGED_RETRY',409);
    const dashboard=await this.targeting.dashboard();
    const rows=projectInspectionPlan(dashboard,source,ai,changes);
@@ -177,8 +187,14 @@ export class SiInspectionPlan{
     audit:[...state.audit,{id:randomUUID(),at:iso(),actor,
       action:change?'OFFICER_CHANGE_AND_C01_REEVALUATION':'C01_INITIAL_EVALUATION',
       sourceHash:source.snapshotHash,runId:ai.agentRunId,change}].slice(-200)};
-   atomicSave(this.file,next);
-   return {status:'RECALCULATED',provider:ai.provider,mock:ai.mock,
+   if(cycleId){
+    await this.rolling.saveDraft(cycleId,state.revision,actor,p=>{
+     p.overrides=next.overrides;p.latest=next.latest;
+     p.status=rows.some(r=>r.planSelected)?'READY_FOR_APPROVAL':'DRAFT';
+     return p;
+    });
+   }else atomicSave(this.file,next);
+   return {status:'RECALCULATED',planId:cycleId,provider:ai.provider,mock:ai.mock,
     agentRunId:ai.agentRunId,externalCalls:ai.externalCalls,
     revision:next.revision,sourceHash:source.snapshotHash,
     aiRecommendedVessels:rows.filter(r=>r.aiRecommended).length,
