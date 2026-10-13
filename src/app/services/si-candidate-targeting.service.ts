@@ -41,7 +41,10 @@ export interface SiPriorityPolicy{
   sourceTriggerScores?:{NMC_CASE:number;SERVICE_REQUEST:number;PSC_PORT_CALL:number};
 }
 export interface SiTargetingPolicyConfig{
-  riskPriorityThreshold:number;includeMissingRiskInReview:boolean;
+  /** Sole active planning-priority controls; all other keys are legacy read-only. */
+  sourceTriggerScores?:{NMC_CASE:number;SERVICE_REQUEST:number;PSC_PORT_CALL:number};
+  /** Legacy archived policy shape (historical P01 views only). */
+  riskPriorityThreshold?:number;includeMissingRiskInReview?:boolean;
   prioritization?:SiPriorityPolicy;
 }
 export interface SiDashboard{
