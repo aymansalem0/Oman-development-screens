@@ -50,9 +50,9 @@ const getAiriaKey=()=>aiCredentialVault.get();
 const runtime=new RuntimeSettings();
 runtime.load();
 const agentAllowed=agent=>{
-  if(agent==='c01')return process.env.SI_C01_ENABLED==='true';
+  if(agent==='c01')return runtime.get('SI_C01_ENABLED');
   const k={a01:'NMC_A01_ENABLED',a02:'NMC_A02_ENABLED',a03:'NMC_A03_ENABLED',a04:'SI_A04_ENABLED',p01:'SI_P01_ENABLED'}[agent];return k?runtime.get(k):false;};
-const timeoutMs = Math.min(180000, Math.max(1000, Number(process.env.AIRIA_TIMEOUT_MS || 120000)));
+const airiaTimeout=()=>runtime.get('AIRIA_TIMEOUT_MS');
 const maxBytes = 1024 * 1024; // Single agent call body.
 // SI only: no NMC A01/A02 behavior is changed by this feature flag.
 let siAiProvider=runtime.get('SI_AI_PROVIDER');
@@ -71,13 +71,14 @@ const pipelines = {
 
 async function fleetAgentCall(agent,input) {
   if (!getAiriaKey()) throw new Error('AIRIA_NOT_CONFIGURED');
+  if(!pipelines[agent])throw new Error('AIRIA_PIPELINE_NOT_CONFIGURED');
   if (!pipelines[agent]) throw new Error('AIRIA_PIPELINE_NOT_CONFIGURED');
   if (!agentAllowed(agent)) throw new Error('AIRIA_AGENT_DISABLED');
   const upstream=await fetch(runtime.get('AIRIA_BASE_URL')+'/v1/PipelineExecution/'+pipelines[agent],{
     method:'POST',
     headers:{'X-API-KEY':getAiriaKey(),'Content-Type':'application/json','User-Agent':'moei-nmc-fleet/1.0'},
     body:JSON.stringify({userInput:JSON.stringify(input),asyncOutput:false}),
-    signal:AbortSignal.timeout(timeoutMs)
+    signal:AbortSignal.timeout(airiaTimeout())
   });
   if (!upstream.ok) throw new Error('AIRIA_REQUEST_FAILED_'+upstream.status);
   const raw=await upstream.text();
@@ -90,7 +91,7 @@ async function fleetAgentCall(agent,input) {
  */
 async function a03AgentCall(payload) {
   const {attachment,...input}=payload;
-  if(process.env.AIRIA_A03_TRANSPORT==='inline'||
+  if(runtime.get('AIRIA_A03_TRANSPORT')==='inline'||
      !attachment||attachment.mimeType!=='application/pdf')
     return fleetAgentCall('a03',input);
   if(!getAiriaKey())throw new Error('AIRIA_NOT_CONFIGURED');
