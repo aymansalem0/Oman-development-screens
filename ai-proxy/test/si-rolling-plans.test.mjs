@@ -160,3 +160,39 @@ test('unselected and deferred vessels carry forward with reason; new plan remain
   assert.equal((await x.rolling.get(next.id)).revision,0);
  }finally{x.done();}
 });
+
+test('approved plan carries forward eligible-but-not-included vessel without fabricating a formal deferral',async()=>{
+ const x=setup();try{
+  const vessels=[
+   {candidateKey:'eligible-A',imo:'9328471',regime:'FOCUSED_INSPECTION',
+    sourceTypes:['NMC_CASE'],sourceEvents:[{eventKey:'NMC-A'}]},
+   {candidateKey:'eligible-B',imo:'9400409',regime:'UAE_SERVICE_INSPECTION',
+    sourceTypes:['SERVICE_REQUEST'],sourceEvents:[{eventKey:'SVC-B'}]}
+  ];
+  const initial=await x.rolling.create({
+   title:'Reviewed and approved',startsOn:'2026-10-13',endsOn:'2026-10-14'},
+   'officer@moei',{candidates:vessels,sourceHash:'f'.repeat(64)});
+  await x.rolling.approve(initial.id,{
+   expectedRevision:0,
+   batchId:'22222222-2222-4222-8222-222222222222',
+   actor:'supervisor@moei',
+   cases:[{imo:'9328471',
+    caseId:'11111111-1111-4111-8111-111111111111',planRank:1,
+    inspectionReasons:[{eventKey:'NMC-A',sourceType:'NMC_CASE'}],
+    regimes:['FOCUSED_INSPECTION']}]});
+  const next=await x.rolling.create({
+   title:'Day two',startsOn:'2026-10-14',endsOn:'2026-10-16'},
+   'officer@moei',{candidates:[vessels[1]],sourceHash:'f'.repeat(64)});
+  const c=(await x.rolling.get(next.id)).carryForward['9400409'];
+  assert.equal(c.disposition,'NOT_SELECTED_IN_PREVIOUS_PLAN');
+  assert.equal(c.fromPlan,initial.number);
+  assert.equal(c.reviewAfter,null);
+  assert.equal(c.systemDerived,true);
+  const independent=await x.rolling.create({
+   title:'New independent event',startsOn:'2026-10-15',endsOn:'2026-10-16'},
+   'officer@moei',{candidates:[{...vessels[1],
+     sourceEvents:[{eventKey:'SVC-NEW-INDEPENDENT'}]}]});
+  assert.equal((await x.rolling.get(independent.id)).carryForward['9400409'],
+   undefined,'new independent source event does not inherit previous deferral/nonselection');
+ }finally{x.done()}
+});
