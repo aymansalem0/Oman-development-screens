@@ -7,6 +7,7 @@ import {createHash,randomUUID} from 'node:crypto';
 import {existsSync,readFileSync} from 'node:fs';
 import {atomicJsonWrite} from './atomic-json-store.mjs';
 import oracledb from 'oracledb';
+import {getSiRankingPolicy,compareInspections} from './si-inspection-ranking.mjs';
 
 const copy=x=>JSON.parse(JSON.stringify(x));
 const iso=()=>new Date().toISOString();
@@ -47,24 +48,28 @@ export function getSiPrioritySettings(config){
   return {weights,approvedNmcFirst:true,missingRiskAction:'REVIEW_REQUIRED',
     sourceTriggerScores:getSiSourceScores(config)};
 }
-const defaultRules=Object.freeze({sourceTriggerScores:SI_SOURCE_PRIORITY_DEFAULT});
+// Eligibility is governed by source workflows (approved NMC, actionable
+// Service Request, selected PSC quota), NOT a numerical source priority.
+const defaultRules=Object.freeze({
+  ranking:{criteria:['DEPARTURE_SOON','INCIDENT_SEVERITY']}
+});
 function validateRules(value){
-  // Reject the retired risk threshold and five-factor weight payloads.
   if(!value||typeof value!=='object'||Array.isArray(value)||
-     Object.keys(value).join('|')!=='sourceTriggerScores')return null;
-  try{return {sourceTriggerScores:getSiSourceScores(value)};}
-  catch{return null;}
+     Object.keys(value).join('|')!=='ranking')return null;
+  try{return {ranking:getSiRankingPolicy(value)};}catch{return null;}
 }
 export class SiTargetingError extends Error{
   constructor(code,status=400){super(code);this.code=code;this.status=status;}
 }
 export class SiCandidateTargeting{
   constructor({mode='json',oracleRepository=null,cases,riskPolicy,bundles=[],
+    loadIncidentSignals=null,
     file=process.env.SI_TARGETING_STORE_PATH||'/data/si-candidate-targeting.json'}={}){
     if(!['json','oracle'].includes(mode)||!cases||!riskPolicy||!Array.isArray(bundles))
       throw Error('SI_TARGETING_CONFIG_INVALID');
     this.mode=mode;this.oracle=oracleRepository;this.cases=cases;
     this.riskPolicy=riskPolicy;this.file=file;
+    this.loadIncidentSignals=typeof loadIncidentSignals==='function'?loadIncidentSignals:null;
     this.bundles=bundles.filter(x=>isImo(String(x.imo))&&x.active!==false&&x.active!=='N');
     if(new Set(this.bundles.map(x=>String(x.imo))).size!==this.bundles.length)
       throw Error('SI_TARGETING_DUPLICATE_FLEET');
@@ -169,6 +174,12 @@ export class SiCandidateTargeting{
     return {sourceType:input.sourceType,sourceEventId:input.sourceEventId.trim(),
       sourceReference:input.sourceReference.trim(),imo:input.imo,requestedRegime:input.requestedRegime,
       port:input.port.trim(),eta:typeof input.eta==='string'?input.eta.slice(0,32):null,
+      // Only source-reviewed, timezone-qualified departure facts participate in
+      // ranking. ETA is arrival and is never substituted for ETD.
+      departureAt:input.sourceApprovalStatus==='SOURCE_REVIEWED'&&
+        typeof input.departureAt==='string'&&
+        /^20\d\d-\d\d-\d\dT\d\d:\d\d(?::\d\d)?(?:Z|[+-]\d\d:\d\d)$/.test(input.departureAt)&&
+        Number.isFinite(Date.parse(input.departureAt))?input.departureAt:null,
       sourceApprovalStatus:input.sourceApprovalStatus,
       provenance:'POC_SIMULATOR',evidenceIds:Array.isArray(input.evidenceIds)?
         input.evidenceIds.filter(x=>typeof x==='string'&&x.length<=120).slice(0,20):[],
@@ -265,10 +276,9 @@ export class SiCandidateTargeting{
         booked=activeEvents.some(e=>e.payload.nmcStatus==='SCHEDULED'),
         lastDecision=last.get(key)||null;
       const eligibility=nmc?'MANDATORY':'MANUAL_REVIEW';
-      const sourcePriorityScore=Math.max(0,...activeEvents.map(e=>
-        getSiSourceScores(rules)[e.payload.sourceType]??0));
-      // Priority is derived solely from the published source trigger score.
-      const priority=sourcePriorityScore===100?'PRIORITY':'STANDARD';
+      // Eligibility and operational execution order are independent.
+      // Never turn vessel risk, source weight or ET(A) into an ETD.
+      const priority='SOURCE_ELIGIBLE';
       const reasons=nmc?['NMC_HUMAN_APPROVED_REFERRAL']:
         ['SIMULATED_EXTERNAL_SOURCE_MANUAL_REVIEW'];
       if(!risk)reasons.push('NO_SAVED_NMC_RISK');
@@ -276,7 +286,7 @@ export class SiCandidateTargeting{
       const status=inspectionCase?'INSPECTION_CREATED':booked?'EXTERNALLY_SCHEDULED':
         lastDecision?.action==='DEFER'?'DEFERRED':
         lastDecision?.action==='REJECT'?'REJECTED':'PENDING_REVIEW';
-      return {key,imo:group.imo,sourcePriorityScore,
+      return {key,imo:group.imo,
         vesselName:vessel.name||vessel.vesselName||vessel.shipName||('IMO '+group.imo),
         flag:vessel.flag||'',vesselType:vessel.vesselType||vessel.type||'',
         regime:group.regime,eligibility,priority,reasons,status,
@@ -292,6 +302,9 @@ export class SiCandidateTargeting{
           importExcelRow:e.sourceImport?.excelRow||null,
           port:e.payload.port||null,
           eta:e.payload.eta||null,
+          departureAt:e.payload.departureAt||null,
+          departureVerified:e.payload.sourceApprovalStatus==='SOURCE_REVIEWED'&&
+            Boolean(e.payload.departureAt),
           contextNote:e.payload.note||null,
           originalSourceRow:e.sourceImport?.sourceRow||null})),
         inspectionCase,lastDecision};
@@ -306,13 +319,15 @@ export class SiCandidateTargeting{
    * decisions: PSC and Service Requests are different statutory workflows.
    * A single vessel may have multiple source events and multiple actions.
    */
-  _vesselCandidates(candidates){
+  _vesselCandidates(candidates,incidentSignals=new Map()){
     const vessels=new Map();
     for(const c of candidates){
       let item=vessels.get(c.imo);
       if(!item){
         item={imo:c.imo,vesselName:c.vesselName,flag:c.flag,
           vesselType:c.vesselType,currentRisk:c.currentRisk,
+          departureAt:null,departureVerified:false,
+          incidentSeverity:null,incidentHumanReviewed:false,incidentEvidenceRef:null,
           candidateKeys:[],regimes:[],sourceTypes:[],sourceEvents:[],
           workflows:[],pendingWorkflows:0,createdWorkflows:0,
           scheduledWorkflows:0,highestPriority:'RISK_UNASSESSED',
@@ -348,11 +363,22 @@ export class SiCandidateTargeting{
       item.sourceEvents.sort((a,b)=>sourceOrder.indexOf(a.sourceType)-
         sourceOrder.indexOf(b.sourceType)||
         a.sourceReference.localeCompare(b.sourceReference));
+      const departures=item.sourceEvents.filter(e=>e.departureVerified&&
+          typeof e.departureAt==='string'&&Number.isFinite(Date.parse(e.departureAt))&&
+          Date.parse(e.departureAt)>=Date.now()).sort((a,b)=>
+            Date.parse(a.departureAt)-Date.parse(b.departureAt));
+      if(departures.length){
+        item.departureAt=departures[0].departureAt;item.departureVerified=true;
+      }
+      const incident=incidentSignals.get(item.imo);
+      if(incident&&incident.humanReviewed===true&&
+          Number.isFinite(incident.severity)&&incident.severity>=0&&incident.severity<=100){
+        item.incidentSeverity=incident.severity;
+        item.incidentHumanReviewed=true;
+        item.incidentEvidenceRef=incident.incidentId||null;
+      }
     }
-    return [...vessels.values()].sort((a,b)=>b.pendingWorkflows-a.pendingWorkflows||
-      Number(b.eligibility==='MANDATORY')-Number(a.eligibility==='MANDATORY')||
-      (b.currentRisk?.score??-1)-(a.currentRisk?.score??-1)||
-      a.imo.localeCompare(b.imo));
+    return [...vessels.values()].sort((a,b)=>compareInspections(a,b));
   }
   async dashboard(){
     const state=await this._state(),referrals=await this.cases.listInspectionRequests();
@@ -365,7 +391,23 @@ export class SiCandidateTargeting{
     const selectedPscKeys=this.pscSelection?await this.pscSelection.selectedEventKeys():null;
     const policy=state.rules.at(-1),candidates=this._evaluate(
       state,referrals,risks,policy.config,selectedPscKeys);
-    const vesselCandidates=this._vesselCandidates(candidates);
+    let incidentSignals=new Map();
+    // Read-only incident feed. Missing/unavailable POC feed never blocks
+    // targeting and never fabricates severity.
+    if(this.loadIncidentSignals){
+      try{
+        const signals=await this.loadIncidentSignals();
+        for(const row of Array.isArray(signals)?signals:[]){
+          if(isImo(row.imo)&&row.humanReviewed===true&&
+             Number.isFinite(row.severity)&&row.severity>=0&&row.severity<=100&&
+             !['CLOSED','RESOLVED'].includes(row.operationalStatus)){
+            const old=incidentSignals.get(row.imo);
+            if(!old||row.severity>old.severity)incidentSignals.set(row.imo,row);
+          }
+        }
+      }catch{incidentSignals=new Map();}
+    }
+    const vesselCandidates=this._vesselCandidates(candidates,incidentSignals);
     const summary={evaluatedPopulation:this.bundles.length,assessedRiskVessels:risks.size,
       candidateVessels:vesselCandidates.length,
       pendingVessels:vesselCandidates.filter(v=>v.pendingWorkflows>0).length,
@@ -383,22 +425,17 @@ export class SiCandidateTargeting{
     const parsed=validateRules(config);
     if(!parsed)throw new SiTargetingError('SI_RULES_INVALID',422);
     const data=await this.dashboard();
-    const oldScores=getSiSourceScores(data.policy.config);
-    const newScores=getSiSourceScores(parsed);
-    const priorityOf=(candidate,scores)=>Math.max(0,...candidate.events.map(
-      event=>scores[event.sourceType]??0));
-    const impacted=data.candidates.filter(candidate=>
-      priorityOf(candidate,oldScores)!==priorityOf(candidate,newScores));
-    const changed=Object.keys(newScores).some(k=>newScores[k]!==oldScores[k]);
+    const before=getSiRankingPolicy(data.policy.config);
+    const proposed=getSiRankingPolicy(parsed);
+    const changed=JSON.stringify(before)!==JSON.stringify(proposed);
     return {status:'PREVIEW',fleetSnapshotId:data.fleetSnapshotId,
       evaluatedPopulation:data.summary.evaluatedPopulation,rulesetVersion:data.policy.version,
-      affectedImos:[...new Set(impacted.map(c=>c.imo))],
-      affectedCandidateCount:impacted.length,
+      affectedImos:[],affectedCandidateCount:0,
       potentialRankingCandidates:changed?
         data.candidates.filter(c=>c.status==='PENDING_REVIEW').length:0,
       aiSettingsChanged:changed,requiresManualAiRerun:changed,
       unevaluatedRiskVessels:data.summary.evaluatedPopulation-data.summary.assessedRiskVessels,
-      warning:'SOURCE_TRIGGER_PRIORITY_ONLY_NO_LEGAL_ELIGIBILITY_CHANGE_NO_AI'};
+      warning:'INSPECTION_ENTRY_INDEPENDENT_FROM_ETD_AND_INCIDENT_RANKING; NO_IMPACT_ESTIMATE_WITHOUT_VERIFIED_SIGNALS'};
   }
   async publishRules(request){
     const config=validateRules(request?.config),actor=safeText(request?.publishedBy),
