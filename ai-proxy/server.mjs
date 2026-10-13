@@ -929,9 +929,15 @@ const server = createServer(async (req, res) => {
         return respond(res,410,{error:'SI_SOURCE_EXCEL_IMPORT_REQUIRED'});
       }
       if(req.method==='POST'&&path==='/api/si/v1/candidates/decision'){
-        // All approvals (including manual review overrides) require a supervisor.
         const payload=await requestJson(req,4096);
-        dashboards.assertRole(req,payload.action==='APPROVE'?'PUBLISHER':'EDITOR');
+        // A single source event must never be approved while other vessel
+        // reasons are silently ignored. The complete-plan wizard is mandatory.
+        if(payload.action==='APPROVE'){
+          dashboards.assertRole(req,'PUBLISHER');
+          return respond(res,409,{error:'SI_APPROVAL_REQUIRES_COMPLETE_PLAN',
+            next:'/moei/smart-inspection/plan/create'});
+        }
+        dashboards.assertRole(req,'EDITOR');
         return respond(res,201,await siTargeting.decide(payload));
       }
       if(req.method==='POST'&&path==='/api/si/v1/rules/impact-preview'){
