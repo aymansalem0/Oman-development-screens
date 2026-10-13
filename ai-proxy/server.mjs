@@ -1521,7 +1521,7 @@ const server = createServer(async (req, res) => {
   const match = /^\/api\/ai\/execute\/(a01|a02|a03|a04)$/i.exec(path);
   if (!match) return respond(res, 404, { error: 'NOT_FOUND' });
   if (req.method !== 'POST') return respond(res, 405, { error: 'METHOD_NOT_ALLOWED' });
-  if (!getAiriaKey()) return respond(res, 503, { error: 'AIRIA_NOT_CONFIGURED', message: 'Set AIRIA_MENA_KEY in the local .env file.' });
+  if (!getAiriaKey()) return respond(res, 503, { error: 'AIRIA_NOT_CONFIGURED', message: 'Configure the Airia API key in AI Settings & Governance, or provision a server bootstrap credential.' });
 
   const agent = match[1].toLowerCase();
   if(!agentAllowed(agent))return respond(res,403,{error:'AIRIA_AGENT_DISABLED',agent});
