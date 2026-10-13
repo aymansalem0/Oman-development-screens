@@ -6,9 +6,37 @@
  * which belongs to A02's separate 'certificate' factor.
  */
 const canonical=x=>String(x??'').normalize('NFKC').trim().toUpperCase().replace(/[^\p{L}\p{N}]/gu,'');
+// Certificate source dates include maritime display format "17 Nov 2027".
+// Date.parse on that non-ISO string is runtime/platform dependent (notably
+// Windows Node 24), so normalize explicit English DD Mon YYYY deterministically.
+// Do not interpret invalid/impossible dates as evidence of a mismatch.
+const monthNumber=Object.freeze({JAN:1,FEB:2,MAR:3,APR:4,MAY:5,JUN:6,
+  JUL:7,AUG:8,SEP:9,OCT:10,NOV:11,DEC:12});
+const verifiedDate=(year,month,day)=>{
+  const y=Number(year),m=Number(month),d=Number(day);
+  if(!Number.isInteger(y)||y<1000||y>9999||
+     !Number.isInteger(m)||m<1||m>12||
+     !Number.isInteger(d)||d<1||d>31)return null;
+  const at=new Date(Date.UTC(y,m-1,d));
+  if(at.getUTCFullYear()!==y||at.getUTCMonth()!==m-1||
+     at.getUTCDate()!==d)return null;
+  return at.toISOString().slice(0,10);
+};
 const dateString=x=>{
   if(!x)return null;
-  const ts=Date.parse(String(x));
+  const value=String(x).trim();
+  const maritime=value.match(/^(\\d{1,2})\\s+([A-Za-z]{3,9})\\s+(\\d{4})$/);
+  if(maritime){
+    const mon=monthNumber[maritime[2].slice(0,3).toUpperCase()];
+    return mon?verifiedDate(maritime[3],mon,maritime[1]):null;
+  }
+  const simpleIso=value.match(/^(\\d{4})-(\\d{2})-(\\d{2})$/);
+  if(simpleIso)return verifiedDate(simpleIso[1],simpleIso[2],simpleIso[3]);
+  // RFC 3339 timestamp with explicit timezone is deterministic; non-standard
+  // date formats must not silently acquire a locale-specific interpretation.
+  if(!/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?(?:Z|[+-]\\d{2}:\\d{2})$/i.test(value))
+    return null;
+  const ts=Date.parse(value);
   return Number.isFinite(ts)?new Date(ts).toISOString().slice(0,10):null;
 };
 const types=['construction','equipment','radio','security'];
