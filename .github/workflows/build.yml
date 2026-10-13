@@ -95,6 +95,8 @@ jobs:
 
       - name: Central AI governance and Airia credential regression
         run: node --test ai-proxy/test/ai-governance-centralized.test.mjs
+      - name: Airia DQ and Smart Inspection workflow contract boundary tests
+        run: node --test ai-proxy/test/nmc-airia-data-quality.test.mjs ai-proxy/test/si-airia-workflow-advisors.test.mjs
 
       - name: NMC + SI Oracle schema reconciliation and Checklist API router regression
         run: node --test ai-proxy/test/schema-reconcile.test.mjs
