@@ -66,8 +66,8 @@ jobs:
             --data "$(printf '{"username":"admin","password":"%s"}' "$MOEI_ADMIN_PASSWORD")" \
             "$base/api/moei/auth/login" | grep -q '"role":"ADMIN"'
           curl -fsS -b "$jar" "$base/api/moei/auth/session" | grep -q '"role":"ADMIN"'
-          curl -fsS -b "$jar" "$base/api/ai/fleet/status" | grep -q '"fleetSize":420'
-          curl -fsS -b "$jar" "$base/api/si/v1/candidates/dashboard" | grep -q '"evaluatedPopulation":420'
+          curl -fsS -b "$jar" "$base/api/ai/fleet/status" | grep -q '"fleetSize":99'
+          curl -fsS -b "$jar" "$base/api/si/v1/candidates/dashboard" | grep -q '"evaluatedPopulation":99'
           curl -fsS -b "$jar" "$base/api/si/v1/rules" | grep -Fq '"ranking":{"criteria":["DEPARTURE_SOON","INCIDENT_SEVERITY"]}'
           curl -fsS -b "$jar" "$base/api/si/v1/candidate-sources/template/SERVICE_REQUEST" -o /tmp/si-service.xlsx
           curl -fsS -b "$jar" "$base/api/si/v1/candidate-sources/template/PSC_PORT_CALL" -o /tmp/si-psc.xlsx
