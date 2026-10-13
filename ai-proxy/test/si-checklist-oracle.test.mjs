@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {mkdtempSync,writeFileSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
-import {OracleSiChecklistLibrary,OracleSiChecklistField} from '../si-checklist-oracle.mjs';
+import {OracleSiChecklistLibrary,OracleSiChecklistField,caseItemOracleId} from '../si-checklist-oracle.mjs';
 const uuid='11111111-1111-4111-8111-111111111111';
 const clone=x=>structuredClone(x);
 class MemoryOracle{
@@ -181,4 +181,13 @@ test('Oracle captures Airia candidate and photo reference; inspector edits befor
   assert.ok(x.db.log.some(q=>q.sql.startsWith('INSERT INTO SI_CHK_AI_REVIEW')));
   assert.ok(x.db.log.some(q=>q.sql.startsWith('UPDATE SI_CHK_AI_PROPOSAL')));
  }finally{x.done();}
+});
+
+test('A published item has case-scoped Oracle primary keys, not global shared UI IDs',()=>{
+ const instance='template-uuid:group-id:item-id';
+ const a=caseItemOracleId(uuid,instance);
+ const b=caseItemOracleId('22222222-2222-4222-8222-222222222222',instance);
+ assert.notEqual(a,b);
+ assert.equal(a.length,36);
+ assert.equal(caseItemOracleId(uuid,instance),a,'ID is deterministic across restarts');
 });
