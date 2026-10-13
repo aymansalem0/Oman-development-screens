@@ -27,6 +27,7 @@ const rawRoutes: Routes = [
   { path: 'moei/smart-inspection/candidates', loadComponent: () => import('./pages/si-candidate-workbench.component').then(m => m.SiCandidateWorkbenchComponent) },
   { path: 'moei/smart-inspection/candidates/demo', loadComponent: () => import('./pages/smart-inspection-candidate-center.component').then(m => m.SmartInspectionCandidateCenterComponent) },
   { path: 'moei/smart-inspection/preparation', loadComponent: () => import('./pages/si-preparation-queue.component').then(m => m.SiPreparationQueueComponent) },
+  { path: 'moei/smart-inspection/scheduling/plan/:planId', loadComponent: () => import('./pages/si-maritime-batch-scheduling.component').then(m => m.SiMaritimeBatchSchedulingComponent) },
   { path: 'moei/smart-inspection/scheduling', loadComponent: () => import('./pages/si-electronic-scheduling.component').then(m => m.SiElectronicSchedulingComponent) },
   { path: 'moei/smart-inspection/settings/erp', loadComponent: () => import('./pages/si-erp-settings.component').then(m => m.SiErpSettingsComponent) },
   { path: 'moei/smart-inspection/settings/targeting', loadComponent: () => import('./pages/si-targeting-settings.component').then(m => m.SiTargetingSettingsComponent) },
