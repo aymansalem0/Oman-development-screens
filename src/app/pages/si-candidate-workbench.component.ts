@@ -109,36 +109,50 @@ export class SiCandidateWorkbenchComponent implements OnInit{
       !!this.plan?.selectedForPlan&&!this.plan.stale&&
       (Boolean(this.plan.agentRunId)||Boolean(this.plan.manualSelection));
   }
-  selectPlanVessel(v:SiVesselCandidate,action:'INCLUDE'|'NOT_SELECTED'|'DEFER'|'NOT_APPLICABLE'):void{
+  manualEditingImo='';
+  manualAction:'INCLUDE'|'NOT_SELECTED'|'DEFER'|'NOT_APPLICABLE'='INCLUDE';
+  manualReason='';manualReviewAfter='';
+  openManualDecision(v:SiVesselCandidate,
+    action:'INCLUDE'|'NOT_SELECTED'|'DEFER'|'NOT_APPLICABLE'):void{
     const row=this.planRow(v);
     if(!this.activePlanEditable||!this.activePlanId||!this.plan||!row?.editable||
        this.planBusy||!this.auth.isAdmin)return;
     if(action==='NOT_APPLICABLE'&&row.mandatoryReferral){
-      this.planError=this.copy('Mandatory NMC referral cannot be marked Not Applicable.',
-        'لا يمكن اعتبار إحالة NMC الإلزامية غير منطبقة من شاشة التخطيط.');return;
+      this.planError=this.copy('Mandatory NMC referrals cannot be marked Not Applicable.',
+        'لا يمكن استبعاد إحالات NMC الإلزامية باعتبارها غير منطبقة.');return;
     }
-    const reason=window.prompt(this.copy(
-      'Document the reason for '+action+' (minimum 8 characters):',
-      'أدخل سبب القرار '+action+' (8 أحرف على الأقل):'));
-    if(!reason||reason.trim().length<8)return;
-    let reviewAfter:string|null=null;
-    if(action==='DEFER'){
-      const date=window.prompt(this.copy('Next review date (YYYY-MM-DD):',
-        'تاريخ إعادة النظر (YYYY-MM-DD):'),this.localDate());
-      if(!date||!/^\d{4}-\d{2}-\d{2}$/.test(date)){
-        this.planError=this.copy('Enter a valid review date.','أدخل تاريخ مراجعة صحيح.');return;
-      }
-      reviewAfter=date;
+    this.manualEditingImo=v.imo;this.manualAction=action;
+    this.manualReason='';this.manualReviewAfter=this.localDate();
+    this.planEditingImo='';this.planError='';
+  }
+  closeManualDecision():void{
+    this.manualEditingImo='';this.manualReason='';this.manualReviewAfter='';
+  }
+  saveManualDecision():void{
+    if(!this.manualEditingImo||!this.activePlanEditable||!this.activePlanId||
+       !this.plan||this.planBusy||!this.auth.isAdmin)return;
+    if(this.manualReason.trim().length<8){
+      this.planError=this.copy('Provide an auditable reason of at least eight characters.',
+        'يجب تسجيل سبب لا يقل عن 8 أحرف.');return;
+    }
+    const reviewAfter=this.manualAction==='DEFER'?this.manualReviewAfter:null;
+    if(this.manualAction==='DEFER'&&
+       (!/^\d{4}-\d{2}-\d{2}$/.test(this.manualReviewAfter)||
+        Number.isNaN(Date.parse(this.manualReviewAfter+'T00:00:00Z')))){
+      this.planError=this.copy('Choose a valid review date.',
+        'اختر تاريخ مراجعة صحيحًا.');return;
     }
     this.planBusy=true;this.planError='';
     this.api.selectRollingVessel(this.activePlanId,{
-      imo:v.imo,action,reason:reason.trim(),reviewAfter,
+      imo:this.manualEditingImo,action:this.manualAction,
+      reason:this.manualReason.trim(),reviewAfter,
       expectedRevision:this.plan.revision,expectedSourceHash:this.plan.sourceHash
     }).subscribe({
       next:()=>{
-        this.planBusy=false;this.loadRollingPlans();this.loadInspectionPlan();
-        this.planNotice=this.copy('Planning decision saved; no AI call.',
-          'تم تسجيل قرار التخطيط دون تشغيل AI.');
+        this.planBusy=false;this.closeManualDecision();
+        this.loadRollingPlans();this.loadInspectionPlan();
+        this.planNotice=this.copy('Planning decision saved without an AI call.',
+          'تم تسجيل قرار التخطيط دون استدعاء الذكاء الاصطناعي.');
       },
       error:e=>{
         this.planBusy=false;
