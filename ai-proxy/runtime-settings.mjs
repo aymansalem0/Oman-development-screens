@@ -27,6 +27,11 @@ export const SETTINGS_DESCRIPTORS=Object.freeze([
   {key:'NMC_FLEET_AUTO_RETRY_FAILED',type:'boolean',group:'scheduler',description:'Retry failed paid assessments',cost:true},
   {key:'NMC_FLEET_REFRESH_SECONDS',type:'number',min:60,max:604800,group:'scheduler',description:'Per-vessel refresh interval in seconds'},
   {key:'SI_C01_ENABLED',type:'boolean',group:'agents',description:'Allow C01 selection',cost:true},
+  {key:'NMC_DQ01_ENABLED',type:'boolean',group:'agents',description:'Optional Airia maritime data-quality factor signals; never calculates or overrides final score',cost:true},
+  {key:'SI_S01_ENABLED',type:'boolean',group:'agents',description:'Airia scheduling rank for saved feasible slots; no booking',cost:true},
+  {key:'SI_V01_ENABLED',type:'boolean',group:'agents',description:'Airia field vision on verified case-owned image; inspector confirms',cost:true},
+  {key:'SI_R01_ENABLED',type:'boolean',group:'agents',description:'Airia report/CAPA draft from inspector-confirmed findings only',cost:true},
+  {key:'SI_X01_ENABLED',type:'boolean',group:'agents',description:'Airia repeat/conflict review with proven history; human verification',cost:true},
   {key:'AIRIA_TIMEOUT_MS',type:'number',min:1000,max:180000,group:'connectivity',description:'Airia request timeout milliseconds'},
   {key:'AIRIA_A03_TRANSPORT',type:'choice',options:['multipart','inline'],group:'pipelines',description:'A03 document transport'},
   {key:'SI_AI_PROVIDER',type:'choice',options:['mock','airia'],group:'agents',
@@ -41,7 +46,12 @@ export const SETTINGS_DESCRIPTORS=Object.freeze([
     description:'NMC Situational Desk — conversational partner pipeline (catalog reference)'},
   {key:'AIRIA_SDB_JOURNEY_PIPELINE_ID',type:'pipeline',group:'pipelines',
     description:'SDB Journey — conversational partner pipeline (catalog reference)'},
-  {key:'AIRIA_SI_C01_PIPELINE_ID',type:'pipeline',group:'pipelines',description:'C01 Candidate Selection (must be separately provisioned/verified)'},
+  {key:'AIRIA_NMC_DQ01_PIPELINE_ID',type:'pipeline',group:'pipelines',description:'DQ-01 Data Quality factor signals — not the final weighted score'},
+  {key:'AIRIA_SI_C01_PIPELINE_ID',type:'pipeline',group:'pipelines',description:'C01 Candidate Selection (partner MENA pipeline)'},
+  {key:'AIRIA_SI_S01_PIPELINE_ID',type:'pipeline',group:'pipelines',description:'S01 Scheduling slot ranking — verify current provider response schema'},
+  {key:'AIRIA_SI_V01_PIPELINE_ID',type:'pipeline',group:'pipelines',description:'V01 Field evidence vision — requires case-owned safe media'},
+  {key:'AIRIA_SI_R01_PIPELINE_ID',type:'pipeline',group:'pipelines',description:'R01 Report/CAPA proposals only'},
+  {key:'AIRIA_SI_X01_PIPELINE_ID',type:'pipeline',group:'pipelines',description:'X01 Repeat/conflict evidence advice only'},
   {key:'AIRIA_SI_P01_PIPELINE_ID',type:'pipeline',group:'pipelines',description:'P01 Approved Case Prioritization (must be separately provisioned/verified)'},
   {key:'SI_CHECKLIST_AIRIA_ENABLED',type:'boolean',group:'checklist',cost:true,
     description:'Enable manually-triggered Airia assistance for checklist design and field review'},
@@ -65,7 +75,9 @@ const DEFAULTS={
   NMC_ALERT_ESCALATE_MINUTES:15,NMC_FLEET_AUTO_ENABLED:false,
   NMC_FLEET_AUTO_MAX_VESSELS:420,NMC_FLEET_AUTO_RETRY_FAILED:false,
   NMC_FLEET_REFRESH_SECONDS:3600,
-  SI_C01_ENABLED:false,AIRIA_TIMEOUT_MS:120000,AIRIA_A03_TRANSPORT:'multipart',SI_AI_PROVIDER:'mock',
+  SI_C01_ENABLED:false,NMC_DQ01_ENABLED:false,
+  SI_S01_ENABLED:false,SI_V01_ENABLED:false,SI_R01_ENABLED:false,SI_X01_ENABLED:false,
+  AIRIA_TIMEOUT_MS:120000,AIRIA_A03_TRANSPORT:'multipart',SI_AI_PROVIDER:'mock',
   AIRIA_A01_PIPELINE_ID:'86904bc8-e552-4172-aaa8-1a79cbb9539d',
   AIRIA_A02_PIPELINE_ID:'73708937-ba16-47e3-b404-55cc0a54b159',
   AIRIA_A03_PIPELINE_ID:'603d32f6-2f5f-42a8-a592-77af571a2480',
@@ -73,7 +85,12 @@ const DEFAULTS={
   AIRIA_CONVERSATIONAL_SI_PIPELINE_ID:'e1b776b8-62a4-43e2-abdb-9c114b74d9a1',
   AIRIA_NMC_DESK_PIPELINE_ID:'f332642a-a180-4935-908f-8868984dfcb7',
   AIRIA_SDB_JOURNEY_PIPELINE_ID:'d0b0036d-e8a2-4596-9a65-32164a2b59a7',
-  AIRIA_SI_C01_PIPELINE_ID:'',
+  AIRIA_NMC_DQ01_PIPELINE_ID:'c9f3b21d-dce6-4e66-81f2-db15fdb23256',
+  AIRIA_SI_C01_PIPELINE_ID:'f0799e63-387e-44dd-a451-cdffef96ee0d',
+  AIRIA_SI_S01_PIPELINE_ID:'eee9e630-ec5c-4ad8-b23e-59119696f837',
+  AIRIA_SI_V01_PIPELINE_ID:'5006d8c4-f8b5-4811-b767-704daab16e6a',
+  AIRIA_SI_R01_PIPELINE_ID:'d0efe143-96ee-4fc0-8f15-93cc81ac97d3',
+  AIRIA_SI_X01_PIPELINE_ID:'b82d5bb0-3e84-4265-b8ed-8eb38989b30f',
   AIRIA_SI_P01_PIPELINE_ID:'',
   SI_CHECKLIST_AIRIA_ENABLED:false,
   AIRIA_SI_CHECKLIST_BUILDER_PIPELINE_ID:'',
@@ -195,9 +212,19 @@ export class RuntimeSettings{
       (!next.AIRIA_SI_CHECKLIST_BUILDER_PIPELINE_ID||
        !next.AIRIA_SI_CHECKLIST_VISION_PIPELINE_ID))
       throw new RuntimeSettingsError('AI_GOVERNANCE_CHECKLIST_PIPELINES_REQUIRED');
+    // The Airia Partner Guide supplies C01 but NO SI-P01 MENA pipeline ID.
+    // Never make C01 activation depend on an unavailable, unrelated P01 agent.
     if(next.SI_AI_PROVIDER==='airia'&&
-      (!next.AIRIA_SI_C01_PIPELINE_ID||!next.AIRIA_SI_P01_PIPELINE_ID))
+      (next.SI_C01_ENABLED&&!next.AIRIA_SI_C01_PIPELINE_ID||
+       next.SI_P01_ENABLED&&!next.AIRIA_SI_P01_PIPELINE_ID||
+       next.SI_A04_ENABLED&&!next.AIRIA_A04_PIPELINE_ID))
       throw new RuntimeSettingsError('AI_GOVERNANCE_SI_PIPELINES_REQUIRED');
+    if((next.NMC_DQ01_ENABLED&&!next.AIRIA_NMC_DQ01_PIPELINE_ID)||
+       (next.SI_S01_ENABLED&&!next.AIRIA_SI_S01_PIPELINE_ID)||
+       (next.SI_V01_ENABLED&&!next.AIRIA_SI_V01_PIPELINE_ID)||
+       (next.SI_R01_ENABLED&&!next.AIRIA_SI_R01_PIPELINE_ID)||
+       (next.SI_X01_ENABLED&&!next.AIRIA_SI_X01_PIPELINE_ID))
+      throw new RuntimeSettingsError('AI_GOVERNANCE_PIPELINE_REQUIRED');
     if(next.NMC_A03_AUTO_ENABLED&&!next.NMC_A03_ENABLED)
       throw new RuntimeSettingsError('RUNTIME_A03_AUTO_REQUIRES_A03');
     if(next.NMC_FLEET_AUTO_ENABLED&&(!next.NMC_A01_ENABLED||!next.NMC_A02_ENABLED))
