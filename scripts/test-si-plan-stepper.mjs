@@ -17,7 +17,7 @@ test('candidate screen only proposes plan and navigates to distinct Create Inspe
  assert.doesNotMatch(grid,/<app-si-bulk-approval-panel/);
  assert.match(wizard,/Selected Vessels/);
  assert.match(wizard,/All Referral Reasons/);
- assert.match(wizard,/AI & Preparation/);
+ assert.match(wizard,/Electronic Scheduling/);
  assert.match(wizard,/Review & Approval/);
 });
 test('stepper contains no single-regime selector and shows all reasons automatically',()=>{
@@ -26,7 +26,9 @@ test('stepper contains no single-regime selector and shows all reasons automatic
  assert.match(wizard,/vessel\.reasons\.length/);
  assert.match(wizard,/source\.sourceReference/);
  assert.match(wizard,/source\.inspectionRegime/);
- assert.match(wizard,/this\.api\.approve\(/);
+ assert.match(wizard,/this\.api\.approveForScheduling\(/);
+ assert.doesNotMatch(wizard,/this\.api\.approve\(/);
+ assert.match(wizard,/createdInspectionCases/);
  assert.doesNotMatch(wizard,/candidateKey:this\.choices/);
 });
 test('server rejects old per-vessel approval; full plan creates all linked source scopes',()=>{
@@ -38,6 +40,9 @@ test('server rejects old per-vessel approval; full plan creates all linked sourc
  assert.match(backend,/inspectionReasons:v\.reasons/);
  assert.match(backend,/preview\.vessels\.some\(v=>v\.missingSource/);
  assert.doesNotMatch(backend,/requiresRegimeChoice/);
+ assert.match(server,/approve-for-scheduling/);
+ assert.match(server,/maritime-scheduling/);
+ assert.match(server,/createdInspectionCases:0/);
 });
 test('SI-02 dossier contains preserved reasons and source-based field objectives',()=>{
  assert.match(prep,/sourceInspectionObjectives/);
