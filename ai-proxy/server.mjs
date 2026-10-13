@@ -1411,7 +1411,7 @@ const server = createServer(async (req, res) => {
   // Legacy synthetic targeting candidates remain a separate information source.
   if(path==='/api/ai/inspection-referrals'){
     if(req.method!=='GET')return respond(res,405,{error:'METHOD_NOT_ALLOWED'});
-    try{return respond(res,200,{status:'ok',requests:await cases.listInspectionRequests()});}
+    try{return respond(res,200,{status:'ok',requests:(await cases.listInspectionRequests()).filter(r=>AIRIA_DEMO_99_IMOS.has(r.imo))});}
     catch{return respond(res,503,{error:'CASE_STORE_UNAVAILABLE'});}
   }
 
@@ -1427,7 +1427,7 @@ const server = createServer(async (req, res) => {
           status:'ok',policyVersion:DECISION_POLICY_VERSION,
           pocOnly:true,decisions:catalogueSummaries()
         });
-        if(!first)return respond(res,200,{status:'ok',cases:await cases.list()});
+        if(!first)return respond(res,200,{status:'ok',cases:(await cases.list()).filter(c=>AIRIA_DEMO_99_IMOS.has(c.imo))});
         if(first==='by-imo'&&/^\d{7}$/.test(action)&&!second){
           const item=await cases.byImo(action);
           return respond(res,200,{status:'ok',case:item});
@@ -1589,7 +1589,7 @@ const server = createServer(async (req, res) => {
       if(req.method==='GET'){
         if(!id){
           const projection=riskPolicy.ready?await riskPolicy.projectCurrent():null;
-          return respond(res,200,await alerts.overview(projection));
+          return respond(res,200,await alerts.overview(projection,AIRIA_DEMO_99_IMOS));
         }
         if(action==='history')return respond(res,200,{status:'ok',history:await alerts.history(id)});
         if(action)return respond(res,404,{error:'ALERT_NOT_FOUND'});
