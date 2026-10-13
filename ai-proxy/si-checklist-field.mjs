@@ -319,12 +319,18 @@ export class SiChecklistField{
   await this.save(state);return copy(entry);
  }
  async ensureSubmitted(idValue){
+  // After case start, its pinned revision is authoritative. A later
+  // publication must not silently change existing inspector obligations.
+  const saved=(await this.read(idValue)).cases[idValue];
+  if(saved){
+   if(!saved.templates.length)return {required:false};
+   if(saved.status!=='SUBMITTED_FOR_REVIEW')
+    failure('SI_DYNAMIC_CHECKLIST_SUBMISSION_REQUIRED',409);
+   return {required:true,version:saved.version};
+  }
   const ctx=await this.context(idValue);
   if(!ctx.resolved.templates.length)return {required:false};
-  const saved=(await this.read(idValue)).cases[idValue];
-  if(!saved||saved.status!=='SUBMITTED_FOR_REVIEW')
-   failure('SI_DYNAMIC_CHECKLIST_SUBMISSION_REQUIRED',409);
-  return {required:true,version:saved.version};
+  failure('SI_DYNAMIC_CHECKLIST_SUBMISSION_REQUIRED',409);
  }
  async complete(idValue,{expectedVersion,actor}){
   if(!safe(actor,120))failure('SI_CHECKLIST_ACTOR_REQUIRED');
