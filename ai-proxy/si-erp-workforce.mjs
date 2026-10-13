@@ -61,6 +61,10 @@ const TABLES={
   Scheduling_Policy:['group','setting_key','suggested_value','type','scope','meaning'],
   POC_Requests:['referral_id','imo','risk_level','requested_port','eta_local','deadline_local','regime','vessel_type','duration_minutes','nmc_case_ref','nmc_action_approved','expected_demo_route','notes']
 };
+// Optional v2 Excel worksheet. These are POC claims reviewed by an officer,
+// not official ERP-verified GT authorization. Supervisor sign-off is separate.
+const GT_AUTH_HEADERS=['inspector_id','inspection_regime','vessel_type',
+ 'min_gt','max_gt','qualification_code','valid_until','active','evidence_ref'];
 const clean=x=>{
   if(x===null||x===undefined)return '';
   if(x instanceof Date)return [
@@ -155,6 +159,42 @@ export async function parseErpExcel(buffer){
       records.push(record);
     }
     data[name]=records;
+  }
+  // The legacy 11-sheet workbook remains valid. Missing GT capabilities
+  // must block plan-wide scheduling instead of silently inventing unlimited
+  // tonnage certification.
+  data.GT_Authorizations=[];
+  const gtSheet=book.getWorksheet('GT_Authorizations');
+  if(gtSheet){
+    if(GT_AUTH_HEADERS.some((h,i)=>clean(gtSheet.getRow(4).getCell(i+1).value)!==h))
+      throw new SiError('ERP_HEADER_MISMATCH_GT_AUTHORIZATIONS',422);
+    if(gtSheet.rowCount>1004)throw new SiError('ERP_GT_AUTHORIZATIONS_TOO_LARGE',413);
+    const people=new Set(data.Inspectors.map(x=>x.inspector_id));
+    for(let i=5;i<=gtSheet.rowCount;i++){
+      const row=gtSheet.getRow(i);
+      if(GT_AUTH_HEADERS.every((_,j)=>!clean(row.getCell(j+1).value)))continue;
+      const item={};
+      for(let j=0;j<GT_AUTH_HEADERS.length;j++){
+        const cell=row.getCell(j+1);
+        if(cell.formula||cell.sharedFormula)
+          throw new SiError('ERP_FORMULAS_NOT_ALLOWED',422);
+        item[GT_AUTH_HEADERS[j]]=clean(cell.value);
+      }
+      if(!people.has(item.inspector_id))throw new SiError('ERP_GT_UNKNOWN_INSPECTOR',422);
+      if(!['FOCUSED','PSC','FLAG','SERVICE','FOLLOW_UP','ANY'].includes(item.inspection_regime))
+        throw new SiError('ERP_GT_BAD_REGIME',422);
+      if(!['TANKER','CARGO','PASSENGER','OTHER','ANY'].includes(item.vessel_type))
+        throw new SiError('ERP_GT_BAD_VESSEL_TYPE',422);
+      const low=Number(item.min_gt),high=Number(item.max_gt);
+      if(!Number.isFinite(low)||!Number.isFinite(high)||low<0||high<low||high>1000000)
+        throw new SiError('ERP_GT_RANGE_INVALID',422);
+      if(!item.qualification_code||!item.evidence_ref||!['Y','N'].includes(item.active))
+        throw new SiError('ERP_GT_CREDENTIAL_EVIDENCE_REQUIRED',422);
+      mustLocal(item.valid_until);
+      // An uploaded Excel cannot attest its own regulatory authority.
+      item.authority='POC_REVIEWED';
+      data.GT_Authorizations.push(item);
+    }
   }
   referentialCheck(data);
   return data;
