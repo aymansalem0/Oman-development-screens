@@ -52,3 +52,33 @@ test('matching values produce visible zero-severity AFTER evidence exists',()=>{
   assert.equal(result.consistencyPercent,100);
   assert.equal(documentIntegritySignal(result).severity,0);
 });
+
+test('English maritime certificate dates are deterministic without locale Date.parse (Windows Node 24 regression)',()=>{
+  const parse=Date.parse;
+  // V8/Windows differs on arbitrary display dates. These two supported
+  // formats must not need Date.parse or produce a fabricated expiry conflict.
+  Date.parse=()=>{throw Error('Non-ISO parsing must not be necessary');};
+  try{
+    const full=documentEvidenceChecks({imo,documents:[doc],certificates});
+    assert.equal(full.compared,4);
+    assert.equal(full.mismatched,2);
+    assert.equal(full.consistencyPercent,50);
+    const matching={...doc,reviewStatus:'APPROVED',
+      documentEntries:[doc.documentEntries[1]]};
+    const exact=documentEvidenceChecks({imo,documents:[matching],certificates});
+    assert.equal(exact.compared,2);
+    assert.equal(exact.mismatched,0);
+    assert.equal(exact.consistencyPercent,100);
+    assert.equal(documentIntegritySignal(exact).severity,0);
+  }finally{Date.parse=parse;}
+});
+test('invalid impossible expiry dates stay UNKNOWN instead of invented conflicts',()=>{
+  const broken={...doc,documentEntries:[{
+    ...doc.documentEntries[1],expiryDate:'2027-02-29'
+  }]};
+  const inspected=documentEvidenceChecks({imo,documents:[broken],certificates});
+  assert.equal(inspected.compared,1);
+  assert.equal(inspected.mismatched,0);
+  assert.equal(inspected.consistencyPercent,100);
+  assert.equal(inspected.comparisons[0].field,'A03_RADIO_NUMBER');
+});
