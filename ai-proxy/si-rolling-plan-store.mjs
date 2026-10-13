@@ -122,9 +122,9 @@ export class SiRollingPlanStore{
     await con.execute(`INSERT INTO SI_PLAN_ROLLING
       (PLAN_ID,PLAN_NO,TITLE,START_DATE,END_DATE,NOTES,
        STATUS,VERSION_NO,STATE_JSON,CREATED_BY,UPDATED_BY)
-      VALUES(:id,:number,:title,:startDate,:endDate,:notes,
+      VALUES(:id,:planNo,:title,:startDate,:endDate,:notes,
        'DRAFT',0,:state,:actor,:actor)`,{
-      id:state.id,number:state.number,title, startDate:state.startsOn,
+      id:state.id,planNo:state.number,title, startDate:state.startsOn,
       endDate:state.endsOn,notes,state:json(state),actor});
     await con.execute(`INSERT INTO SI_PLAN_ROLLING_VERSION
      (PLAN_ID,VERSION_NO,STATE_JSON,ACTOR,EVENT_CODE)
@@ -138,8 +138,8 @@ export class SiRollingPlanStore{
  async audit(con,id,event,actor,details){
   await con.execute(`INSERT INTO SI_PLAN_ROLLING_AUDIT
     (AUDIT_ID,PLAN_ID,EVENT_CODE,ACTOR,DETAILS_JSON)
-    VALUES(:id,:plan,:event,:actor,:details)`,{
-     id:randomUUID(),plan:id,event,actor,details:json(details)});
+    VALUES(:id,:rollingId,:eventCode,:actor,:details)`,{
+     id:randomUUID(),rollingId:id,eventCode:event,actor,details:json(details)});
  }
  async mutate(id,expectedRevision,actor,operation,event='UPDATED'){
   if(!Number.isInteger(expectedRevision)||!text(actor,160))
@@ -171,8 +171,8 @@ export class SiRollingPlanStore{
      id,revision:next.revision,status:next.status,state:json(next),actor});
     await con.execute(`INSERT INTO SI_PLAN_ROLLING_VERSION
      (PLAN_ID,VERSION_NO,STATE_JSON,ACTOR,EVENT_CODE)
-     VALUES(:id,:revision,:state,:actor,:event)`,{
-      id,revision:next.revision,state:json(next),actor,event});
+     VALUES(:id,:revision,:state,:actor,:eventCode)`,{
+      id,revision:next.revision,state:json(next),actor,eventCode:event});
     await this.audit(con,id,event,actor,{revision:next.revision});
     await con.commit();return next;
    }catch(e){await con.rollback();throw e;}
@@ -229,14 +229,14 @@ export class SiRollingPlanStore{
     for(const item of next.approvedVessels){
      await con.execute(`INSERT INTO SI_PLAN_ROLLING_VESSEL
        (PLAN_ID,IMO,PLAN_RANK,CASE_ID,APPROVED_SCOPE_JSON)
-       VALUES(:plan,:imo,:rank,:caseId,:scope)`,{
-        plan:id,imo:item.imo,rank:item.planRank,caseId:item.caseId,
+       VALUES(:rollingId,:imo,:planRank,:caseId,:scope)`,{
+        rollingId:id,imo:item.imo,planRank:item.planRank,caseId:item.caseId,
         scope:json({regimes:item.regimes})});
      for(const reason of item.inspectionReasons){
       await con.execute(`INSERT INTO SI_PLAN_ROLLING_REASON
        (PLAN_ID,IMO,EVENT_KEY,REASON_JSON)
-       VALUES(:plan,:imo,:key,:reason)`,{
-        plan:id,imo:item.imo,key:reason.eventKey,reason:json(reason)});
+       VALUES(:rollingId,:imo,:eventKey,:reason)`,{
+        rollingId:id,imo:item.imo,eventKey:reason.eventKey,reason:json(reason)});
      }
     }
     await this.audit(con,id,'APPROVED',actor,{batchId,vessels:cases.length});
@@ -280,8 +280,8 @@ export class SiRollingPlanStore{
        state:json(next),actor});
     await con.execute(`INSERT INTO SI_PLAN_ROLLING_VERSION
       (PLAN_ID,VERSION_NO,STATE_JSON,ACTOR,EVENT_CODE)
-      VALUES(:id,:version,:state,:actor,:event)`,{
-       id:planId,version:next.revision,state:json(next),actor,event:target});
+      VALUES(:id,:version,:state,:actor,:eventCode)`,{
+       id:planId,version:next.revision,state:json(next),actor,eventCode:target});
     await this.audit(con,planId,target,actor,{linkedCases:next.approvedVessels.length});
     await con.commit();return next;
    }catch(e){await con.rollback();throw e;}
