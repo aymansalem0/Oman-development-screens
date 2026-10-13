@@ -186,7 +186,7 @@ export class NmcNavigationComponent implements OnInit, OnDestroy {
   get isRiskConfig(): boolean {
     return this.currentPath === '/moei/nmc/admin/risk-configuration';
   }
-  get isRuntimeSettings():boolean{return this.currentPath==='/moei/nmc/admin/runtime-settings';}
+  get isRuntimeSettings():boolean{return ['/moei/nmc/admin/runtime-settings','/moei/settings/ai-governance'].includes(this.currentPath);}
   get isQualityConfig(): boolean {
     return this.currentPath === '/moei/nmc/admin/data-quality';
   }

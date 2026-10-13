@@ -23,7 +23,11 @@ import {
     <p>{{t('Define multiple mandatory checklists by vessel type, GT, DWT and referral scope. Each group can include many questions and answer types.',
      'صمّم أكثر من قائمة معاينة إلزامية طبقًا لنوع السفينة وحمولتها ونطاق إحالتها، مع مجموعات وبنود متعددة الأنواع.')}}</p>
    </div>
-   <a routerLink="/moei/smart-inspection/candidates">{{t('Back to Smart Inspection','العودة للمعاينة الذكية')}}</a>
+   <div class="actions">
+    <a routerLink="/moei/settings/ai-governance" class="ai-governance-link">
+      ✦ {{t('AI Settings & Governance','إعدادات وحوكمة الذكاء الاصطناعي')}}</a>
+    <a routerLink="/moei/smart-inspection/candidates">{{t('Back to Smart Inspection','العودة للمعاينة الذكية')}}</a>
+   </div>
   </header>
   <p class="banner warning">{{t('Configuration is not official statutory certification. Publish only after responsible maritime SME review; existing published revisions remain immutable.',
    'هذه الإعدادات لا تمثل اعتمادًا نظاميًا رسميًا. لا تنشر قبل مراجعة المختص البحري، وتبقى النسخ المنشورة السابقة محفوظة.')}}
@@ -181,6 +185,7 @@ import {
  .hero{display:flex;justify-content:space-between;gap:20px;margin-bottom:20px;align-items:center}
  .hero h1{font-size:28px;margin:0 0 8px}.hero p{color:#657f8d;font-size:12px;line-height:1.75}
  .hero a{color:#067d77;font-size:12px;font-weight:700}
+ .hero a.ai-governance-link{display:inline-flex;padding:10px 13px;border-radius:8px;background:#e8edff;color:#59449b;text-decoration:none}
  .eyebrow{letter-spacing:1.3px;color:#05897d;font-size:10px;font-weight:900}
  .banner{padding:13px 16px;border-radius:9px;margin-bottom:15px;font-size:12px;line-height:1.65}
  .banner.warning{background:#fff3de;color:#7f5a24}

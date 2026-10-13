@@ -8,6 +8,7 @@ services:
     environment:
       PORT: "3000"
       AIRIA_MENA_KEY: ${AIRIA_MENA_KEY:-}
+      MOEI_AI_VAULT_MASTER_KEY: ${MOEI_AI_VAULT_MASTER_KEY:-}
       AIRIA_BASE_URL: ${AIRIA_BASE_URL:-https://api.mena.airia.ai}
       AIRIA_TIMEOUT_MS: "120000"
       # Dashboard focus reuses configured maritime A02 risk signals followed

@@ -8,6 +8,7 @@ import {existsSync,readFileSync,writeFileSync,mkdirSync,renameSync} from 'node:f
 import {dirname} from 'node:path';
 
 const bool=x=>x===true||x==='true';
+const uuidPattern=/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i;
 const num=(x,fallback,min,max)=>Number.isFinite(Number(x))?Math.max(min,Math.min(max,Math.round(Number(x)))):fallback;
 export const SETTINGS_DESCRIPTORS=Object.freeze([
   {key:'NMC_A01_ENABLED',type:'boolean',group:'agents',description:'Maritime situation intelligence (A01)',cost:true},
@@ -23,6 +24,33 @@ export const SETTINGS_DESCRIPTORS=Object.freeze([
   {key:'NMC_FLEET_AUTO_MAX_VESSELS',type:'number',min:1,max:420,group:'scheduler',description:'Limit the vessels evaluated during the automatic pilot'},
   {key:'NMC_FLEET_AUTO_RETRY_FAILED',type:'boolean',group:'scheduler',description:'Retry failed paid assessments',cost:true},
   {key:'NMC_FLEET_REFRESH_SECONDS',type:'number',min:60,max:604800,group:'scheduler',description:'Per-vessel refresh interval in seconds'},
+  {key:'SI_C01_ENABLED',type:'boolean',group:'agents',description:'Allow C01 selection',cost:true},
+  {key:'AIRIA_TIMEOUT_MS',type:'number',min:1000,max:180000,group:'connectivity',description:'Airia request timeout milliseconds'},
+  {key:'AIRIA_A03_TRANSPORT',type:'choice',options:['multipart','inline'],group:'pipelines',description:'A03 document transport'},
+  {key:'SI_AI_PROVIDER',type:'choice',options:['mock','airia'],group:'agents',
+    description:'Smart Inspection C01/P01/A04 provider (MOCK or AIRIA)',cost:true},
+  {key:'AIRIA_A01_PIPELINE_ID',type:'pipeline',group:'pipelines',description:'A01 Maritime Intelligence — structured JSON'},
+  {key:'AIRIA_A02_PIPELINE_ID',type:'pipeline',group:'pipelines',description:'A02 Vessel Compliance — structured JSON'},
+  {key:'AIRIA_A03_PIPELINE_ID',type:'pipeline',group:'pipelines',description:'A03 Document Intelligence — document attachment'},
+  {key:'AIRIA_A04_PIPELINE_ID',type:'pipeline',group:'pipelines',description:'A04 Smart Inspection — dossier/evidence structured JSON'},
+  {key:'AIRIA_CONVERSATIONAL_SI_PIPELINE_ID',type:'pipeline',group:'pipelines',
+    description:'Conversational Smart Inspection — prose assistant (catalog only; NOT structured JSON Builder)'},
+  {key:'AIRIA_NMC_DESK_PIPELINE_ID',type:'pipeline',group:'pipelines',
+    description:'NMC Situational Desk — conversational partner pipeline (catalog reference)'},
+  {key:'AIRIA_SDB_JOURNEY_PIPELINE_ID',type:'pipeline',group:'pipelines',
+    description:'SDB Journey — conversational partner pipeline (catalog reference)'},
+  {key:'AIRIA_SI_C01_PIPELINE_ID',type:'pipeline',group:'pipelines',description:'C01 Candidate Selection (must be separately provisioned/verified)'},
+  {key:'AIRIA_SI_P01_PIPELINE_ID',type:'pipeline',group:'pipelines',description:'P01 Approved Case Prioritization (must be separately provisioned/verified)'},
+  {key:'SI_CHECKLIST_AIRIA_ENABLED',type:'boolean',group:'checklist',cost:true,
+    description:'Enable manually-triggered Airia assistance for checklist design and field review'},
+  {key:'AIRIA_SI_CHECKLIST_BUILDER_PIPELINE_ID',type:'pipeline',group:'checklist',
+    description:'Builder structured checklist JSON pipeline — do not reuse conversational prose without validation'},
+  {key:'AIRIA_SI_CHECKLIST_VISION_PIPELINE_ID',type:'pipeline',group:'checklist',
+    description:'Inspector evidence review pipeline — A04 reuse requires typed JSON contract verification'},
+  {key:'SI_CHECKLIST_VISION_TRANSPORT',type:'choice',options:['multipart','inline'],group:'checklist',
+    description:'Image evidence transport: partner-documented multipart (recommended), inline only if pipeline verified'},
+  {key:'SI_CHECKLIST_AI_MAX_CALLS_PER_CASE',type:'number',min:1,max:30,group:'checklist',
+    description:'Maximum explicit AI suggestion calls per inspected case'},
   {key:'AIRIA_BASE_URL',type:'url',group:'connectivity',description:'Allowlisted HTTPS Airia MENA API endpoint (no secrets)'}
 ]);
 const allowed=Object.fromEntries(SETTINGS_DESCRIPTORS.map(d=>[d.key,d]));
@@ -33,7 +61,23 @@ const DEFAULTS={
   NMC_ALERT_SCAN_ENABLED:true,NMC_ALERT_SCAN_SECONDS:30,
   NMC_ALERT_ESCALATE_MINUTES:15,NMC_FLEET_AUTO_ENABLED:false,
   NMC_FLEET_AUTO_MAX_VESSELS:420,NMC_FLEET_AUTO_RETRY_FAILED:false,
-  NMC_FLEET_REFRESH_SECONDS:3600,AIRIA_BASE_URL:'https://api.mena.airia.ai'
+  NMC_FLEET_REFRESH_SECONDS:3600,
+  SI_C01_ENABLED:false,AIRIA_TIMEOUT_MS:120000,AIRIA_A03_TRANSPORT:'multipart',SI_AI_PROVIDER:'mock',
+  AIRIA_A01_PIPELINE_ID:'86904bc8-e552-4172-aaa8-1a79cbb9539d',
+  AIRIA_A02_PIPELINE_ID:'73708937-ba16-47e3-b404-55cc0a54b159',
+  AIRIA_A03_PIPELINE_ID:'603d32f6-2f5f-42a8-a592-77af571a2480',
+  AIRIA_A04_PIPELINE_ID:'bad751da-0e11-48fd-861d-5bde1afbbd8d',
+  AIRIA_CONVERSATIONAL_SI_PIPELINE_ID:'e1b776b8-62a4-43e2-abdb-9c114b74d9a1',
+  AIRIA_NMC_DESK_PIPELINE_ID:'f332642a-a180-4935-908f-8868984dfcb7',
+  AIRIA_SDB_JOURNEY_PIPELINE_ID:'d0b0036d-e8a2-4596-9a65-32164a2b59a7',
+  AIRIA_SI_C01_PIPELINE_ID:'',
+  AIRIA_SI_P01_PIPELINE_ID:'',
+  SI_CHECKLIST_AIRIA_ENABLED:false,
+  AIRIA_SI_CHECKLIST_BUILDER_PIPELINE_ID:'',
+  AIRIA_SI_CHECKLIST_VISION_PIPELINE_ID:'',
+  SI_CHECKLIST_VISION_TRANSPORT:'multipart',
+  SI_CHECKLIST_AI_MAX_CALLS_PER_CASE:10,
+  AIRIA_BASE_URL:'https://api.mena.airia.ai'
 };
 export class RuntimeSettingsError extends Error{
   constructor(code,status=422){super(code);this.code=code;this.status=status;}
@@ -58,6 +102,15 @@ const normalize=(key,value)=>{
       throw new RuntimeSettingsError('RUNTIME_SETTING_RANGE_INVALID');
     return value;
   }
+  if(d.type==='pipeline'){
+    if(typeof value!=='string'||(value&&!uuidPattern.test(value)))
+      throw new RuntimeSettingsError('AIRIA_PIPELINE_UUID_INVALID');
+    return value;
+  }
+  if(d.type==='choice'){
+    if(!d.options.includes(value))throw new RuntimeSettingsError('RUNTIME_SETTING_CHOICE_INVALID');
+    return value;
+  }
   return validateAiriaUrl(value);
 };
 function envConfig(env){
@@ -66,6 +119,10 @@ function envConfig(env){
     const raw=env[d.key],def=DEFAULTS[d.key];
     if(d.type==='boolean')value[d.key]=raw===undefined?def:bool(raw);
     if(d.type==='number')value[d.key]=num(raw,def,d.min,d.max);
+    if(d.type==='pipeline'||d.type==='choice'){
+      try{value[d.key]=normalize(d.key,raw===undefined?def:raw);}
+      catch{value[d.key]=def;}
+    }
     if(d.type==='url'){
       try{value[d.key]=validateAiriaUrl(raw||def);}
       catch{value[d.key]=DEFAULTS.AIRIA_BASE_URL;}
@@ -121,8 +178,23 @@ export class RuntimeSettings{
     }
     const enablingCost=SETTINGS_DESCRIPTORS.filter(d=>d.cost&&!this.get(d.key)&&next[d.key]);
     const urlChanged=this.get('AIRIA_BASE_URL')!==next.AIRIA_BASE_URL;
-    if((enablingCost.length||urlChanged)&&confirmCost!==true)
+    const aiChanged=next.SI_AI_PROVIDER==='airia'&&
+      this.get('SI_AI_PROVIDER')!==next.SI_AI_PROVIDER;
+    const checklistConfigChanged=next.SI_CHECKLIST_AIRIA_ENABLED&&
+      ['AIRIA_SI_CHECKLIST_BUILDER_PIPELINE_ID','AIRIA_SI_CHECKLIST_VISION_PIPELINE_ID',
+       'SI_CHECKLIST_VISION_TRANSPORT'].some(k=>this.get(k)!==next[k]);
+    if((enablingCost.length||urlChanged||aiChanged||checklistConfigChanged)&&confirmCost!==true)
       throw new RuntimeSettingsError('RUNTIME_SETTINGS_EXPLICIT_CONFIRMATION_REQUIRED');
+    // Explicitly enabling paid model execution requires a real structured
+    // pipeline. Existing Airia A04 is listed as a CANDIDATE reviewer; the
+    // checklist contract must still be validated by an inspector.
+    if(next.SI_CHECKLIST_AIRIA_ENABLED&&
+      (!next.AIRIA_SI_CHECKLIST_BUILDER_PIPELINE_ID||
+       !next.AIRIA_SI_CHECKLIST_VISION_PIPELINE_ID))
+      throw new RuntimeSettingsError('AI_GOVERNANCE_CHECKLIST_PIPELINES_REQUIRED');
+    if(next.SI_AI_PROVIDER==='airia'&&
+      (!next.AIRIA_SI_C01_PIPELINE_ID||!next.AIRIA_SI_P01_PIPELINE_ID))
+      throw new RuntimeSettingsError('AI_GOVERNANCE_SI_PIPELINES_REQUIRED');
     if(next.NMC_A03_AUTO_ENABLED&&!next.NMC_A03_ENABLED)
       throw new RuntimeSettingsError('RUNTIME_A03_AUTO_REQUIRES_A03');
     if(next.NMC_FLEET_AUTO_ENABLED&&(!next.NMC_A01_ENABLED||!next.NMC_A02_ENABLED))

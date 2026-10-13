@@ -84,6 +84,9 @@ jobs:
       - name: SI-01 bulk plan approval orchestration regression
         run: node --test ai-proxy/test/si-bulk-inspection-plan.test.mjs
 
+      - name: Central AI governance and Airia credential regression
+        run: node --test ai-proxy/test/ai-governance-centralized.test.mjs
+
       - name: Dynamic maritime checklists and Airia assistant regression
         run: node --test ai-proxy/test/si-checklist-dynamic.test.mjs
 

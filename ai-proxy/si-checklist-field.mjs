@@ -119,10 +119,11 @@ export class SiChecklistField{
  constructor({library,targeting,
    file=process.env.SI_CHECKLIST_CASES_PATH||'/data/si-checklist-case-answers.json',
    imageDirectory=process.env.SI_CHECKLIST_EVIDENCE_PATH||'/data/si-checklist-evidence',
-   airiaSuggest=null}={}){
+   airiaSuggest=null,getSetting=()=>10}={}){
   if(!library||!targeting)throw Error('SI_CHECKLIST_FIELD_CONFIGURATION_INVALID');
   this.library=library;this.targeting=targeting;this.file=file;
   this.imageDirectory=imageDirectory;this.airiaSuggest=airiaSuggest;
+  this.getSetting=getSetting;
   this.active=new Set();
  }
  read(){
@@ -214,6 +215,9 @@ export class SiChecklistField{
   const entry=this.read().cases[idValue];
   if(!entry)failure('SI_CHECKLIST_NOT_INITIALIZED',409);
   if(entry.status!=='IN_PROGRESS')failure('SI_CHECKLIST_ALREADY_SUBMITTED',409);
+  const maxCalls=Number(this.getSetting('SI_CHECKLIST_AI_MAX_CALLS_PER_CASE'))||10;
+  if(entry.proposals.length>=maxCalls)
+   failure('SI_CHECKLIST_AI_CASE_CALL_LIMIT_EXCEEDED',429);
   let scope;
   if(level==='ITEM'){
    const found=resolveItem(entry,itemId);
