@@ -107,7 +107,19 @@ export function validateA01DashboardResponse(raw,metrics,knownEvidence){
     reasonAr:reason,confidence:Number.isFinite(out.agentConfidence)&&
       out.agentConfidence>=0&&out.agentConfidence<=1?out.agentConfidence:null,
     a01Priority:toText(out.priority,70)||'UNSPECIFIED',
-    a01Summary:toText(out.summary,500),evidenceIds};
+    a01Summary:toText(out.summary,500),evidenceIds,
+    // The actual A01 response already contains evidence and proposedActions.
+    // Expose a bounded, validated read-only view instead of only highlighting KPI.
+    a01Evidence:out.evidence.slice(0,12).map(e=>({
+      title:toText(e.title||e.description||e.id,180),
+      evidenceIds:(e.evidenceIds||[]).filter(id=>knownEvidence.has(id)).slice(0,15)})),
+    a01Actions:out.proposedActions.slice(0,10).map(a=>({
+      actionType:toText(a.actionType||a.actionId,90),
+      summary:toText(a.rationale||a.reason||a.description||a.title,550),
+      priority:toText(a.priority,60),
+      evidenceIds:(a.evidenceIds||[]).filter(id=>knownEvidence.has(id)).slice(0,15),
+      requiresHumanApproval:true
+    }))};
 }
 const metricsText=metrics=>NMC_DASHBOARD_METRIC_IDS.map(id=>
   id+'='+String(metrics[id])+' ('+METRICS[id]+')').join('; ');
