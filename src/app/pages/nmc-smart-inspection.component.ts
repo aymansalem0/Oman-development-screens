@@ -5,9 +5,9 @@ import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { NmcVesselProfile } from '../data/nmc-vessel-catalog';
 import {
-  NMC_OPERATIONAL_VESSELS,
-  getOperationalVesselByImo
-} from '../data/nmc-expanded-vessel-catalog';
+  AIRIA_DEMO_99_VESSELS,
+  getAiriaDemoVesselByImo
+} from '../data/airia-demo-cohort';
 import { LanguageService } from '../services/language.service';
 import { NmcRiskEngineService } from '../services/nmc-risk-engine.service';
 import {
@@ -60,8 +60,8 @@ export class NmcSmartInspectionComponent implements OnInit {
   ) {}
 
   ngOnInit(): void {
-    const imo = this.route.snapshot.paramMap.get('imo') || NMC_OPERATIONAL_VESSELS[0].imo;
-    const profile = getOperationalVesselByImo(imo) || NMC_OPERATIONAL_VESSELS[0];
+    const imo = this.route.snapshot.paramMap.get('imo') || AIRIA_DEMO_99_VESSELS[0].imo;
+    const profile = getAiriaDemoVesselByImo(imo) || AIRIA_DEMO_99_VESSELS[0];
     this.vessel = this.riskEngine.applyToVessel(profile);
     this.existingOutcome = this.caseState.getInspectionOutcome(this.vessel.imo);
     this.buildChecklist();
