@@ -24,7 +24,11 @@ const uuidFor=(...parts)=>{
 };
 const auditId=()=>randomUUID();
 const versionItemId=(t,r,g,i)=>uuidFor('SI-CHK-ITEM-v1',t,r,g,i);
-const MAX_INSTANCE=160;
+// The UI's item.instanceId identifies an item within a template, and is
+// intentionally reused by MANY approved cases. Oracle's global case-item PK
+// must include CASE_ID to avoid collisions between different vessels/cases.
+export const caseItemOracleId=(caseId,instanceId)=>
+ uuidFor('SI-CHK-CASE-ITEM-v1',caseId,instanceId);
 const SOURCE_TABLES=['SI_CHK_MD_GROUP','SI_CHK_MD_VALUE','SI_CHK_TEMPLATE',
  'SI_CHK_REVISION','SI_CHK_APPLICABILITY','SI_CHK_GROUP','SI_CHK_ITEM',
  'SI_CHK_ITEM_FIELD','SI_CHK_CASE_RUN','SI_CHK_CASE_ITEM','SI_CHK_EVIDENCE',
@@ -304,10 +308,9 @@ export class OracleSiChecklistField extends SiChecklistField{
   for(const t of entry.templates){
    for(const g of t.groups){
     for(const it of g.items){
-     if(it.instanceId.length>MAX_INSTANCE)
-      throw error('SI_CHECKLIST_INSTANCE_ID_TOO_LONG',422);
      const itId=versionItemId(t.templateId,t.revision,g.id,it.id);
-     const binds={instance:it.instanceId,run:entry.caseId,item:itId,
+     const binds={instance:caseItemOracleId(entry.caseId,it.instanceId),
+       run:entry.caseId,item:itId,
        answer:json(it.answers||{}),status:it.answerStatus,
        actor:it.answeredBy||null};
      if(!prev){
@@ -365,7 +368,8 @@ export class OracleSiChecklistField extends SiChecklistField{
       (REVIEW_ID,PROPOSAL_ID,INSTANCE_ID,DECISION,FINAL_ANSWERS_JSON,
        REVIEW_NOTE,REVIEWED_BY)
       VALUES(:id,:proposal,:item,:decision,:answers,:note,:actor)`,{
-       id:randomUUID(),proposal:proposal.id,item:review.itemId,
+       id:randomUUID(),proposal:proposal.id,
+       item:caseItemOracleId(entry.caseId,review.itemId),
        decision:review.decision,answers:json(review.answers),
        note:review.note||null,actor:review.actor});
    }
