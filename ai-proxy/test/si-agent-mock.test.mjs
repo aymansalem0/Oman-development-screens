@@ -38,6 +38,17 @@ test('C01 no-cost preview uses only unapproved real source candidates',async()=>
  assert.ok(p.candidates.every(c=>c.candidateKey!=='approved'));
  assert.equal(p.snapshotHash.length,64);
 });
+test('new rolling plan C01 includes human-approved scheduled NMC and excludes unselected PSC port calls',()=>{
+ const d=inputs();
+ d.candidates.push({...candidate('nmc-scheduled','NMC_CASE','9311128',77),
+   status:'EXTERNALLY_SCHEDULED'});
+ d.candidates.push({...candidate('psc-scheduled','PSC_PORT_CALL','9512344',85),
+   status:'EXTERNALLY_SCHEDULED'});
+ const data=buildC01Source(d,{version:6});
+ assert.ok(data.candidates.some(x=>x.candidateKey==='nmc-scheduled'));
+ assert.ok(!data.candidates.some(x=>x.candidateKey==='psc-scheduled'));
+ assert.ok(!data.candidates.some(x=>x.candidateKey==='approved'));
+});
 test('C01 returns stable advisory without approving cases or Airia',async()=>{
  const a=agent(),p=await a.preview();
  const r=await a.run({actor:'reviewer',confirmRun:true,
