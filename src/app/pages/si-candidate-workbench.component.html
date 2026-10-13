@@ -57,7 +57,7 @@
          <div class="si-rolling-card-head"><strong>{{p.number}}</strong>
            <span>{{p.status.replaceAll('_',' ')}}</span></div>
          <h3>{{p.title}}</h3>
-         <p>{{p.startsOn}} → {{p.endsOn}} · {{p.vesselCount}} {{copy('vessels','سفن')}}</p>
+         <p>{{p.startsOn}} → {{p.endsOn}} · {{p.vesselCount}} {{copy('selected','مختارة')}} / {{p.candidateCount||0}} {{copy('candidates','مرشحة')}} <span *ngIf="p.deferredCount"> · {{p.deferredCount}} {{copy('deferred','مؤجلة')}}</span></p>
          <p>{{copy('Version','إصدار')}} {{p.revision}}</p>
          <div class="si-rolling-actions">
           <button type="button" (click)="openRollingPlan(p)" [disabled]="planBusy">
@@ -78,6 +78,14 @@
         'اختر خطة مسودة قبل تشغيل C01 أو تعديل قائمة الاختيار.')}}
      </p>
     </section>
+    <div class="si-rolling-current" *ngIf="plan&&!plan.readOnlyHistorical">
+       <strong>{{copy('Available for this plan','السفن المتاحة للخطة')}}: {{plan.availableCount||0}}</strong>
+       · {{copy('Included','مدرجة')}}: {{plan.selectedForPlan||0}}
+       · {{copy('Not selected / Carry forward','غير مختارة / تُراجع في خطة لاحقة')}}: {{plan.notSelectedCount||0}}
+       · {{copy('Deferred','مؤجلة')}}: {{plan.deferredCount||0}}
+       <small>{{copy('New draft shows eligible candidates before AI. Unselected vessels remain available for future plans.',
+         'المسودة تعرض السفن المؤهلة قبل تشغيل AI. السفن غير المختارة تظل متاحة للخطط القادمة.')}}</small>
+     </div>
     <p class="si-rolling-note" *ngIf="plan?.readOnlyHistorical" role="status">
       {{copy('Historical plan shown from its saved approval snapshot. Current source data may differ; this plan cannot be edited.',
         'الخطة المعروضة محفوظة من وقت اعتمادها؛ قد تختلف بيانات المصادر الحالية، ولا يمكن تعديل هذه الخطة.')}}
@@ -118,8 +126,8 @@
       <p class="notice error" role="alert" *ngIf="planError">{{planError}}</p>
       <p class="notice success" role="status" *ngIf="planNotice">{{planNotice}}</p>
       <p class="si-helper" *ngIf="!plan?.agentRunId">
-        {{copy('Load Plan then generate a mock C01 recommendation. Until then the AI-selected total is unknown, not zero.',
-          'حمّل الخطة ثم أنشئ توصيات C01 التجريبية. قبل تشغيلها، عدد السفن المختارة من AI غير معروف وليس صفراً.')}}
+        {{copy('Available candidates are shown immediately. Include or defer manually with a reason, or run C01 to propose source-backed vessel priority.',
+          'السفن المتاحة ظاهرة فور إنشاء الخطة. أدرجها أو أجّلها يدويًا مع السبب، أو شغّل C01 لاقتراح الأولويات استنادًا للمصادر.')}}
       </p>
       <p class="si-helper si-stale" *ngIf="plan?.stale">
         {{copy('Candidate source or policy has changed. Previous AI ranks are hidden until explicitly recalculated.',
@@ -135,15 +143,15 @@
         <h2>{{copy('Create Inspection Plan','إنشاء خطة المعاينات')}}</h2>
         <p>{{copy('Review selected vessels and all referral reasons in a guided approval wizard.',
           'راجع السفن المختارة وجميع أسباب الإحالة في شاشة خطوات منفصلة.')}}</p>
-        <a *ngIf="activePlan?.status==='READY_FOR_APPROVAL'&&plan?.agentRunId&&!plan?.stale"
+        <a *ngIf="approvalReady"
            class="si-plan-wizard-button"
            [routerLink]="['/moei/smart-inspection/plan/create',activePlanId]">
           {{copy('Review & Approve Plan →','مراجعة واعتماد الخطة ←')}}
         </a>
         <span class="si-rolling-note"
-         *ngIf="activePlan?.status!=='READY_FOR_APPROVAL'||!plan?.agentRunId||plan?.stale">
-         {{copy('Select a draft and run C01 before approval.',
-           'اختر مسودة وشغّل C01 قبل تقديم الخطة للاعتماد.')}}
+         *ngIf="!approvalReady">
+         {{copy('Include at least one eligible vessel manually or via C01 before supervisor approval.',
+           'أدرج سفينة مؤهلة واحدة على الأقل يدويًا أو من C01 قبل اعتماد المشرف.')}}
         </span>
       </section>
 
@@ -213,8 +221,31 @@
                   <span class="pending" *ngIf="planRow(v)?.planSelected===null||!planRow(v)">—</span>
                   <small *ngIf="planRow(v)?.selectionOrigin==='OFFICER_AMENDED'">
                     {{copy('Officer amended','تعديل الموظف')}}</small>
+                  <small *ngIf="planRow(v)?.disposition==='DEFER'">
+                    {{copy('Deferred until','مؤجلة حتى')}} {{planRow(v)?.reviewAfter}}</small>
+                  <small *ngIf="planRow(v)?.disposition==='NOT_APPLICABLE'">
+                    {{copy('Not Applicable in this plan','غير منطبقة على هذه الخطة')}}</small>
+                  <small *ngIf="planRow(v)?.previousPlan">
+                    {{copy('Previous decision','القرار السابق')}}: {{planRow(v)?.previousDisposition}}
+                    · {{planRow(v)?.previousPlan}}
+                    <span *ngIf="planRow(v)?.reviewDue">· {{copy('Review due','مطلوب إعادة المراجعة')}}</span></small>
                 </td>
                 <td class="si-row-actions">
+                  <div *ngIf="activePlanEditable&&plan&&planRow(v)?.editable"
+                    class="si-rolling-actions">
+                    <button type="button" *ngIf="!planRow(v)?.planSelected"
+                      (click)="selectPlanVessel(v,'INCLUDE')" [disabled]="planBusy">
+                      {{copy('Include','إدراج')}}</button>
+                    <button type="button" *ngIf="planRow(v)?.planSelected"
+                      (click)="selectPlanVessel(v,'NOT_SELECTED')" [disabled]="planBusy">
+                      {{copy('Remove','استبعاد')}}</button>
+                    <button type="button"
+                      (click)="selectPlanVessel(v,'DEFER')" [disabled]="planBusy">
+                      {{copy('Defer','تأجيل')}}</button>
+                    <button type="button" *ngIf="!planRow(v)?.mandatoryReferral"
+                      (click)="selectPlanVessel(v,'NOT_APPLICABLE')" [disabled]="planBusy">
+                      {{copy('Not Applicable','غير منطبق')}}</button>
+                  </div>
                   <button type="button"
                     *ngIf="plan?.agentRunId&&planRow(v)?.editable&&planRow(v)?.planSelected"
                     (click)="openPlanEdit(v,false)"
