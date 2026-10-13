@@ -15,7 +15,6 @@ import {SiCandidateAgentError} from './si-candidate-agent.mjs';
 
 const iso=()=>new Date().toISOString();
 const empty=()=>({revision:0,overrides:{},latest:null,audit:[]});
-const riskOf=x=>Number.isFinite(x?.currentRisk?.score)?x.currentRisk.score:null;
 const priorityTier=x=>x.sourceTypes?.includes('NMC_CASE')&&
   x.sourceEvents?.some(e=>e.sourceType==='NMC_CASE'&&e.approval==='APPROVED')?0:1;
 function safeRecord(data){
@@ -40,6 +39,10 @@ export function projectInspectionPlan(dashboard,source,run,overrides={},carryFor
   const c=source.candidates.filter(x=>x.imo===v.imo&&availableKeys.has(x.candidateKey));
   const advice=c.map(x=>recMap.get(x.candidateKey)).filter(Boolean);
   const aiSelected=advice.some(x=>x.recommendation==='SELECT_RECOMMENDED');
+  // A valid, pending maritime service request must not be excluded by a low
+  // saved NMC risk score or by an untrusted/optional AI recommendation.
+  const requiredInPlan=c.some(x=>x.requiredInPlan===true);
+  const sourcePriorityScore=Math.max(0,...c.map(x=>x.sourcePriorityScore??0));
   const note=overrides[v.imo]||null;
   const prior=carryForward[v.imo]||null;
   const waitingOnDeferred=prior?.disposition==='DEFER'&&prior.reviewAfter&&
@@ -49,16 +52,17 @@ export function projectInspectionPlan(dashboard,source,run,overrides={},carryFor
   // The model is advisory, not an authorization gate.
   const planSelected=eligible?
    (typeof note?.selected==='boolean'?note.selected:
-    run!==null?aiSelected&&!waitingOnDeferred:false):false;
+    run!==null?(requiredInPlan||aiSelected)&&!waitingOnDeferred:false):false;
   const locked=!eligible;
   grouped.set(v.imo,{
    imo:v.imo,vesselName:v.vesselName,flag:v.flag,vesselType:v.vesselType,
    sources:v.sourceTypes,regimes:v.regimes,sourceEvents:v.sourceEvents,
-   risk:v.currentRisk||null,pendingWorkflows:v.pendingWorkflows,
+   risk:v.currentRisk||null,sourcePriorityScore,requiredInPlan,
+   pendingWorkflows:v.pendingWorkflows,
    approvedCases:v.createdWorkflows,externalScheduled:v.scheduledWorkflows,
    aiRecommended:run?aiSelected:null,
    planSelected:run||typeof note?.selected==='boolean'?planSelected:null,
-   selectionOrigin:note?'OFFICER_AMENDED':run?'AI_ADVISORY':'NOT_EVALUATED',
+   selectionOrigin:note?'OFFICER_AMENDED':run&&requiredInPlan?'PUBLISHED_SOURCE_RULE':run?'AI_ADVISORY':'NOT_EVALUATED',
    disposition:note?.disposition||'AVAILABLE',
    reviewAfter:note?.reviewAfter||prior?.reviewAfter||null,
    previousDisposition:prior?.disposition||null,
@@ -81,10 +85,9 @@ export function projectInspectionPlan(dashboard,source,run,overrides={},carryFor
  }
  if(run||[...grouped.values()].some(x=>x.planSelected)){
   const ranked=[...grouped.values()].filter(v=>v.planSelected);
-  // The provider supplies advisory selection; the rules engine *enforces*
-  // approved NMC referral tier and then adjusts operator-requested positions.
-  const byModel=(a,b)=>(a.modelRank??999999)-(b.modelRank??999999)||
-    (riskOf({currentRisk:b.risk})??-1)-(riskOf({currentRisk:a.risk})??-1)||
+  // The published source trigger scores control ordering; AI may explain,
+  // but cannot silently suppress actionable SERVICE_REQUEST referrals.
+  const byModel=(a,b)=>b.sourcePriorityScore-a.sourcePriorityScore||
     a.imo.localeCompare(b.imo);
   const tier0=ranked.filter(x=>x.mandatoryReferral).sort(byModel);
   const tier1=ranked.filter(x=>!x.mandatoryReferral).sort(byModel);
@@ -104,8 +107,9 @@ export function projectInspectionPlan(dashboard,source,run,overrides={},carryFor
    const row=ranked[i];
    row.effectiveRank=i+1;
    const sourceAdvice=row.regimeAdvisories.find(x=>x.recommendation==='SELECT_RECOMMENDED');
-   const modelExplanation=sourceAdvice?.priorityRationale||
-       'No AI ranking available for manual inclusion; requires officer review.';
+   const modelExplanation='Published source trigger score '+row.sourcePriorityScore+
+     '/100. '+(sourceAdvice?.priorityRationale||
+       'No AI advice; inclusion is source-rule or officer directed.');
    row.priorityReason=row.requestedRank!==null?
     'Officer requested position '+row.requestedRank+' with an auditable reason; C01 reran. '+
       'Approved NMC referrals retain their protected first tier. '+modelExplanation:
@@ -116,8 +120,7 @@ export function projectInspectionPlan(dashboard,source,run,overrides={},carryFor
    Number(Boolean(b.planSelected))-Number(Boolean(a.planSelected))||
    (a.effectiveRank??999999)-(b.effectiveRank??999999)||
    Number(b.mandatoryReferral)-Number(a.mandatoryReferral)||
-   (b.risk?.score??-1)-(a.risk?.score??-1)||
-   a.imo.localeCompare(b.imo));
+   b.sourcePriorityScore-a.sourcePriorityScore||a.imo.localeCompare(b.imo));
 }
 export class SiInspectionPlan{
  constructor({targeting,candidateAgent,rollingPlans=null,
