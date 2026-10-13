@@ -722,8 +722,8 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
       return;
     }
     const confirmed=window.confirm(this.copy(
-      'Send these eight synthetic aggregate counts to the EXISTING A02 and A01 maritime-risk agents using the saved assessment of one representative vessel? This may incur TWO paid Airia requests (A02 then A01). The original response schemas remain unchanged. A KPI is highlighted only if A01 explicitly identifies one inside whyItMatters, with cited vessel evidence. Human review only; no risk, cases, alerts, tasks or incident data will change.',
-      'هل تريد إرسال المؤشرات الثمانية التجريبية إلى الوكيلين البحريين الحاليين A02 ثم A01 اعتماداً على تقييم سفينة محفوظ؟ قد يستهلك ذلك استدعاءين مدفوعين من Airia. لن تتغير عقود الاستجابة؛ يميز النظام مؤشراً واحداً فقط إذا حدده A01 صراحةً داخل whyItMatters مع الاستشهاد بأدلة السفينة. النتيجة للمراجعة البشرية دون تغيير المخاطر أو الحالات أو التنبيهات أو المهام أو الحوادث.'
+      'Send these eight synthetic aggregate counts to the EXISTING A02 and A01 maritime-risk agents using the saved assessment of one representative vessel? This runs TWO Airia agent executions (A02 then A01) under the configured tenant agreement. The original response schemas remain unchanged. A KPI is highlighted only if A01 explicitly identifies one inside whyItMatters, with cited vessel evidence. Human review only; no risk, cases, alerts, tasks or incident data will change.',
+      'هل تريد إرسال المؤشرات الثمانية التجريبية إلى الوكيلين البحريين الحاليين A02 ثم A01 اعتماداً على تقييم سفينة محفوظ؟ ينفذ ذلك استدعاءين لوكلاء Airia وفق اتفاق الاشتراك الحالي. لن تتغير عقود الاستجابة؛ يميز النظام مؤشراً واحداً فقط إذا حدده A01 صراحةً داخل whyItMatters مع الاستشهاد بأدلة السفينة. النتيجة للمراجعة البشرية دون تغيير المخاطر أو الحالات أو التنبيهات أو المهام أو الحوادث.'
     ));
     if(!confirmed)return;
     this.aiKpiFocusBusy=true;this.aiKpiFocusError='';
