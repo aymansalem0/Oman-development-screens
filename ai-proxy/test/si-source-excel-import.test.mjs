@@ -176,3 +176,40 @@ test('duplicate event IDs with different source facts cannot overwrite imported 
     assert.equal((await w.service.status()).excelSources.SERVICE_REQUEST.importedEvents,1);
   }finally{w.cleanup();}
 });
+
+test('ETD in the new MSW 8-column PSC feed becomes FINAL on import without a separate date approval',async()=>{
+ const w=makeWorkspace();
+ try{
+  const book=new ExcelJS.Workbook(),sheet=book.addWorksheet('PSC_PORT_CALLS');
+  sheet.addRow(['port_call_id','port_call_reference','imo','port','eta_local',
+   'visit_purpose','notes','etd_local']);
+  sheet.addRow(['PC-FINAL-1','MSW-PORT-FINAL',fleet[2].imo,'Fujairah',
+   '2026-11-18T09:00','PSC visit','SYNTHETIC POC','2026-11-20T18:00']);
+  const imported=await pv(w.service,Buffer.from(await book.xlsx.writeBuffer()),
+   'PSC_PORT_CALL','psc-etd-final.xlsx');
+  assert.equal(imported.canCommit,true);
+  assert.equal(imported.sample[0].departureAt,'2026-11-20T18:00:00+04:00');
+  await w.service.commit({previewId:imported.previewId,sourceType:'PSC_PORT_CALL',actor:'Demo importer'});
+  const candidate=(await w.targeting.dashboard()).candidates.find(c=>c.imo===fleet[2].imo);
+  assert.equal(candidate.events[0].approval,'SOURCE_FINAL');
+  assert.equal(candidate.events[0].departureAt,'2026-11-20T18:00:00+04:00');
+  assert.equal(candidate.events[0].departureVerified,true);
+  assert.equal(candidate.events[0].departureAuthority,'SOURCE_FINAL_NO_DATE_APPROVAL');
+  assert.equal(candidate.eligibility,'MANUAL_REVIEW',
+   'final departure must not approve PSC selection or schedule');
+ }finally{w.cleanup();}
+});
+test('PSC ETD before ETA rejects entire spreadsheet; no synthetic departure-from-arrival fallback',async()=>{
+ const w=makeWorkspace();
+ try{
+  const book=new ExcelJS.Workbook(),sheet=book.addWorksheet('PSC_PORT_CALLS');
+  sheet.addRow(['port_call_id','port_call_reference','imo','port','eta_local',
+   'visit_purpose','notes','etd_local']);
+  sheet.addRow(['PC-INVALID','MSW-PORT-INVALID',fleet[1].imo,'Fujairah',
+   '2026-11-18T09:00','PSC visit','SYNTHETIC POC','2026-11-17T18:00']);
+  const preview=await pv(w.service,Buffer.from(await book.xlsx.writeBuffer()),
+   'PSC_PORT_CALL','etd-invalid.xlsx');
+  assert.equal(preview.canCommit,false);
+  assert.equal(preview.issues[0].code,'SI_XLSX_ETD_INVALID_OR_BEFORE_ARRIVAL');
+ }finally{w.cleanup();}
+});
