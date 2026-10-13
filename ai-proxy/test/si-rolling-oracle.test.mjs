@@ -85,7 +85,7 @@ test('Oracle 018 persists numbered plans, immutable versions, source keys, linke
  assert.equal(db.reasons[0].key,'NMC-CASE-20261013-1');
  assert.equal(JSON.parse(db.reasons[0].reason.val).sourceType,'NMC_CASE');
  const same=await store.approve(initial.id,{
-  expectedRevision:1,batchId:BATCH_ID,actor:'supervisor@moei',cases:[]});
+  expectedRevision:1,batchId:BATCH_ID,actor:'supervisor@moei',cases:approved.approvedVessels});
  assert.deepEqual(same,approved,'idempotent same-batch retries');
  const active=await store.setExecutionState(initial.id,'IN_EXECUTION','supervisor@moei');
  assert.equal(active.status,'IN_EXECUTION');
