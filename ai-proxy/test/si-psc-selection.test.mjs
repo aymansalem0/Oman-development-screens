@@ -25,7 +25,9 @@ function setup({nmc=false,risk=[]}={}){
     })}});
   const selection=new SiPscSelection({mode:'json',targeting,file:join(dir,'selection.json')});
   targeting.pscSelection=selection;
-  return {targeting,selection,cleanup:()=>rmSync(dir,{recursive:true,force:true})};
+  return {targeting,selection,// Windows Node 24 may observe transient Defender/indexer locks in fresh TEMP
+    // workspaces. Retry ENOTEMPTY/EPERM/EBUSY only for this disposable test dir.
+    cleanup:()=>rmSync(dir,{recursive:true,force:true,maxRetries:12,retryDelay:100})};
 }
 function psc(n,{port='Jebel Ali',imo=vessels[n%50].imo,eta='2026-10-15T08:00'}={}){
   return {sourceType:'PSC_PORT_CALL',sourceEventId:'PSC-'+n,
