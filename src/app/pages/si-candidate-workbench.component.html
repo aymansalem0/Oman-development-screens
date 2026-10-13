@@ -80,6 +80,10 @@
         'اختر خطة مسودة قبل تشغيل C01 أو تعديل قائمة الاختيار.')}}
      </p>
     </section>
+    <p class="si-rolling-note" *ngIf="plan?.readOnlyHistorical" role="status">
+      {{copy('Historical plan shown from its saved approval snapshot. Current source data may differ; this plan cannot be edited.',
+        'الخطة المعروضة محفوظة من وقت اعتمادها؛ قد تختلف بيانات المصادر الحالية، ولا يمكن تعديل هذه الخطة.')}}
+    </p>
     <section class="stats si-kpis" *ngIf="dashboard as d">
       <article><small>{{copy('ACTIVE FLEET','الأسطول النشط')}}</small><strong>{{d.summary.evaluatedPopulation}}</strong><span>{{copy('Tracked source vessels','سفن مصدر البيانات')}}</span></article>
       <article><small>{{copy('ASSESSED RISK','السفن المقيمة')}}</small><strong>{{d.summary.assessedRiskVessels}}</strong><span>{{copy('Saved NMC risk assessments','تقييمات مخاطر NMC المحفوظة')}}</span></article>
