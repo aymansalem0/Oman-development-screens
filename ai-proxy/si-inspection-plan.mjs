@@ -56,7 +56,8 @@ export function projectInspectionPlan(dashboard,source,run,overrides={},carryFor
    sources:v.sourceTypes,regimes:v.regimes,sourceEvents:v.sourceEvents,
    risk:v.currentRisk||null,pendingWorkflows:v.pendingWorkflows,
    approvedCases:v.createdWorkflows,externalScheduled:v.scheduledWorkflows,
-   aiRecommended:run?aiSelected:null,planSelected:run?planSelected:null,
+   aiRecommended:run?aiSelected:null,
+   planSelected:run||typeof note?.selected==='boolean'?planSelected:null,
    selectionOrigin:note?'OFFICER_AMENDED':run?'AI_ADVISORY':'NOT_EVALUATED',
    disposition:note?.disposition||'AVAILABLE',
    reviewAfter:note?.reviewAfter||prior?.reviewAfter||null,
@@ -148,7 +149,7 @@ export class SiInspectionPlan{
   const manualSelection=rows.some(r=>r.planSelected)&&
     Object.values(state.overrides||{}).some(x=>x?.selected===true);
   const availableCount=rows.filter(r=>r.editable).length;
-  const deferredCount=rows.filter(r=>r.disposition==='DEFERRED').length;
+  const deferredCount=rows.filter(r=>r.disposition==='DEFER').length;
   const notSelectedCount=rows.filter(r=>r.editable&&!r.planSelected).length;
   return {status:'ok',planId:cycle?.id||null,
    planNumber:cycle?.number||null,planStatus:cycle?.status||null,
