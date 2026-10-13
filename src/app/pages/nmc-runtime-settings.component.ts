@@ -8,8 +8,12 @@ import {NmcMinistryLogoComponent} from '../components/nmc-ministry-logo.componen
 import {LanguageService} from '../services/language.service';
 
 interface SettingDescriptor {
-  key:string;type:'boolean'|'number'|'url';group:string;
+  key:string;type:'boolean'|'number'|'url'|'pipeline'|'choice';group:string;options?:string[];
   min?:number;max?:number;description:string;cost?:boolean;
+}
+interface AiriaCredentialStatus{
+ provider:'AIRIA';configured:boolean;rotatable:boolean;
+ source:string;valueExposed:false;note:string;
 }
 interface RuntimeSnapshot {
   status:'ok';version:number;
@@ -33,13 +37,13 @@ interface RuntimeSnapshot {
         <app-nmc-ministry-logo class="runtime-ministry-logo"></app-nmc-ministry-logo>
         <div class="brand-copy">
           <span class="eyebrow">{{tr('MOEI Maritime Unified Platform','المنصة البحرية الموحدة لوزارة الطاقة والبنية التحتية')}}</span>
-          <h1>{{tr('Runtime Configuration & AI Agents','إعدادات التشغيل ووكلاء الذكاء الاصطناعي')}}</h1>
-          <p>{{tr('NMC Settings · Controlled agent execution and platform operations',
-                  'إعدادات المركز البحري · التحكم في تشغيل الوكلاء وعمليات المنصة')}}</p>
+          <h1>{{tr('AI Settings & Governance','إعدادات وحوكمة الذكاء الاصطناعي')}}</h1>
+          <p>{{tr('Unified NMC + Smart Inspection AI configuration · pipelines, costs, security and human approvals',
+                  'إعدادات موحدة لـNMC وSmart Inspection · الوكلاء والتكلفة والحوكمة والصلاحيات')}}</p>
         </div>
       </div>
       <div class="topbar-actions">
-        <span class="admin-badge">⚙ {{tr('NMC Settings','إعدادات المركز البحري')}}</span>
+        <span class="admin-badge">✦ {{tr('AI Governance','حوكمة الذكاء الاصطناعي')}}</span>
         <a class="topbar-link" routerLink="/moei/nmc">
           {{tr('← Back to Command Center','العودة إلى مركز القيادة →')}}
         </a>
@@ -65,8 +69,8 @@ interface RuntimeSnapshot {
       <p *ngIf="loading">{{tr('Loading effective backend settings…','جارٍ تحميل إعدادات التشغيل الفعلية…')}}</p>
       <div class="runtime-info">
         <strong>{{tr('Safety & operating model','الأمان وطريقة التشغيل')}}</strong>
-        <p>{{tr('Values below override backend ENV defaults immediately for this single-instance POC and survive restarts in its /data volume. They do not alter Docker/OS variables. Secrets, passwords, API keys and arbitrary endpoints cannot be entered. Enabling paid agents or changing the Airia endpoint requires explicit confirmation.',
-                 'هذه القيم تتجاوز إعدادات ENV الافتراضية فورًا داخل نسخة POC واحدة وتبقى بعد إعادة التشغيل في وحدة التخزين /data. لا تغير متغيرات Docker/OS. لا يمكن إدخال مفاتيح سرية أو روابط عشوائية. تفعيل تشغيل مدفوع أو تغيير عنوان Airia يتطلب تأكيدًا صريحًا.')}}</p>
+        <p>{{tr('All NMC and Smart Inspection AI agent IDs, activation switches, checklist Builder/Vision pipelines, image transport and usage limits are managed here and persisted as versioned backend overrides. Credentials can be rotated only in the encrypted write-only vault below. The model used inside an Airia pipeline is controlled by that Airia pipeline, not by a text field here. Paid runs and human-inspector decisions remain governed separately.',
+                 'تدار هنا إعدادات وكلاء NMC وSmart Inspection ومعرفات Pipelines وطرق الصور وحدود الاستهلاك، مع سجل للإصدارات. يمكن تغيير مفتاح Airia فقط عبر مخزن الأسرار المشفر أدناه. نموذج الذكاء المستخدم يُحدد داخل Airia نفسه. التشغيل المدفوع والقرارات المؤثرة يحتاجان ضوابط وموافقة بشرية.')}}</p>
       </div>
       <ng-container *ngIf="snapshot">
         <section *ngFor="let group of groups" class="group-card">
@@ -101,11 +105,65 @@ interface RuntimeSnapshot {
                      (ngModelChange)="draft[item.key]=$event"/>
                   <small>https://api.mena.airia.ai / https://mena.api.airia.ai</small>
                 </ng-container>
+                <ng-container *ngIf="item.type==='pipeline'">
+                  <input class="url-field" type="text" spellcheck="false"
+                    [attr.aria-label]="item.description" [ngModel]="draft[item.key]"
+                    (ngModelChange)="draft[item.key]=$event"
+                    placeholder="Airia Pipeline UUID — leave blank if not verified"/>
+                  <small>{{tr('Use a real pipeline ID. A01–A04 default IDs follow the partner guide; Builder/Vision output contracts must be tested before activation.',
+                   'استخدم المعرف الحقيقي. قيم A01–A04 من دليل Airia، ويجب اختبار مخرجات Builder وVision قبل التفعيل.')}}</small>
+                </ng-container>
+                <ng-container *ngIf="item.type==='choice'">
+                  <select [ngModel]="draft[item.key]" (ngModelChange)="draft[item.key]=$event">
+                    <option *ngFor="let choice of item.options" [value]="choice">{{choice}}</option>
+                  </select>
+                </ng-container>
                 <span class="paid" *ngIf="item.cost">● {{tr('May incur AI costs','قد يستهلك تكلفة AI')}}</span>
                 <button type="button" class="restore" (click)="draft[item.key]=snapshot.defaults[item.key]">
                   {{tr('Use ENV default','استعادة قيمة ENV')}}</button>
               </div>
             </article>
+          </div>
+        </section>
+        <section class="publish-card">
+          <h2>{{tr('AI Governance Controls · Always Enforced',
+            'ضوابط حوكمة الذكاء الاصطناعي · إلزامية دائمًا')}}</h2>
+          <div class="governance-grid">
+            <span>✓ {{tr('Human approval for inspection cases, checklists and AI recommendations',
+              'اعتماد بشري للحالات والقوائم وتوصيات الذكاء الاصطناعي')}}</span>
+            <span>✓ {{tr('AI never overwrites deterministic official risk or statutory checks',
+              'الذكاء الاصطناعي لا يغير التقييم الرسمي للمخاطر أو البنود النظامية')}}</span>
+            <span>✓ {{tr('Paid calls require deliberate confirmation; no AI on GET',
+              'لا تُنفذ المكالمات المدفوعة دون تأكيد؛ ولا تشغيل AI عند فتح الشاشة')}}</span>
+            <span>✓ {{tr('Source evidence, inspector decisions and setting revisions audited',
+              'تدقيق الأدلة وقرارات المفتش وإصدارات الإعدادات')}}</span>
+          </div>
+          <p class="governance-hint">{{tr('A01–A04 pipeline IDs are sourced from the 8 October 2026 Airia Partner Guide. Existing Conversational Smart Inspection may be evaluated as a Builder, but prose is not a validated checklist JSON contract.',
+            'معرفات A01–A04 مأخوذة من دليل Airia بتاريخ ٨ أكتوبر ٢٠٢٦. يمكن تقييم المساعد الحواري كمرشح لـBuilder، لكن النص الحواري ليس نموذج JSON معتمدًا للقائمة.')}}</p>
+        </section>
+        <section class="publish-card">
+          <h2>{{tr('Airia API Key · Encrypted Credential Governance','مفتاح Airia · إدارة الأسرار المشفرة')}}</h2>
+          <p>{{tr('The saved key is NEVER shown. Rotation is separate from pipeline settings and requires Admin, an audit reason, explicit approval and a host-provisioned encryption master key.',
+           'لا يتم عرض المفتاح المخزن مطلقًا. تغييره يتطلب صلاحية Admin وسببًا موثقًا وموافقة صريحة ومفتاح تشفير على الخادم.')}}</p>
+          <div class="credential-status" *ngIf="credentialStatus">
+            <strong>{{credentialStatus.configured?tr('API key configured','مفتاح API مُجهز'):
+              tr('API key not configured','مفتاح API غير مُجهز')}}</strong>
+            <small>{{tr('Source','المصدر')}}: {{credentialStatus.source}}</small>
+            <small *ngIf="!credentialStatus.rotatable">{{credentialStatus.note}}</small>
+          </div>
+          <label>{{tr('Replace Airia API Key (write-only)','استبدال مفتاح Airia API (كتابة فقط)')}}
+            <input [(ngModel)]="newApiKey" type="password" autocomplete="new-password"
+              [disabled]="!credentialStatus?.rotatable" maxlength="2048"
+              [placeholder]="tr('Enter replacement key; existing key never displayed',
+               'اكتب المفتاح البديل؛ لن يتم عرض المفتاح الحالي')"/></label>
+          <label>{{tr('Credential rotation reason','سبب تغيير المفتاح')}}
+            <input [(ngModel)]="credentialReason" maxlength="500"
+              [disabled]="!credentialStatus?.rotatable"/></label>
+          <div class="publish-actions">
+            <button class="primary" type="button" (click)="rotateKey()"
+             [disabled]="credentialSaving||!credentialStatus?.rotatable||newApiKey.trim().length<16||credentialReason.trim().length<8">
+             {{credentialSaving?tr('Saving securely…','جارٍ الحفظ المشفر…'):
+              tr('Rotate API Key Securely','تغيير مفتاح API بأمان')}}</button>
           </div>
         </section>
         <section class="publish-card">
@@ -197,6 +255,13 @@ interface RuntimeSnapshot {
     .outline{background:transparent;color:#186c77;border:1px solid #a8c7cf}
     button:disabled{opacity:.45;cursor:not-allowed}
     .banner{padding:13px;border-radius:9px;margin:15px 0;font-size:12px}
+    .governance-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:15px 0}
+    .governance-grid span{background:#eef9f6;padding:12px;border-radius:9px;font-size:12px;color:#0b675f}
+    .governance-hint{font-size:11px;color:#66828c;line-height:1.7}
+    .credential-status{display:flex;gap:18px;align-items:center;flex-wrap:wrap;margin:16px 0;color:#126d63;font-size:12px}
+    .credential-status small{color:#658190}
+    select{width:100%;padding:10px;border:1px solid #bfdae0;border-radius:8px}
+    @media(max-width:850px){.governance-grid{grid-template-columns:1fr}}
     .banner.alert{color:#a54930;background:#fff0ec}.banner.success{color:#23774d;background:#e6f7ee}
     @media (min-width:961px) and (max-width:1220px){
       .runtime-main{margin-inline-start:66px;width:calc(100% - 66px);padding-inline:20px}
@@ -226,11 +291,13 @@ interface RuntimeSnapshot {
 export class NmcRuntimeSettingsComponent implements OnInit{
   snapshot:RuntimeSnapshot|null=null;
   draft:Record<string,boolean|number|string>={};
-  groups=['agents','scheduler','alerts','connectivity'];
+  groups=['agents','pipelines','checklist','scheduler','alerts','connectivity'];
+  credentialStatus:AiriaCredentialStatus|null=null;
+  newApiKey='';credentialReason='';credentialSaving=false;
   actor='admin';reason='';error='';success='';loading=false;saving=false;
   constructor(private readonly http:HttpClient,public lang:LanguageService){}
   tr(en:string,ar:string){return this.lang.pick(en,ar);}
-  ngOnInit(){this.load();}
+  ngOnInit(){this.load();this.loadCredentialStatus();}
   load(){
     this.loading=true;this.error='';
     this.http.get<RuntimeSnapshot>('/api/ai/admin/runtime-settings').subscribe({
@@ -243,10 +310,12 @@ export class NmcRuntimeSettingsComponent implements OnInit{
     return this.snapshot.descriptors.some(d=>this.draft[d.key]!==this.snapshot?.values[d.key]);
   }
   byGroup(g:string){return this.snapshot?.descriptors.filter(d=>d.group===g)||[];}
-  icon(g:string){return ({agents:'✦',scheduler:'◷',alerts:'♢',connectivity:'⛓'} as Record<string,string>)[g]||'⚙';}
+  icon(g:string){return ({agents:'✦',pipelines:'⛓',checklist:'☑',scheduler:'◷',alerts:'♢',connectivity:'⛓'} as Record<string,string>)[g]||'⚙';}
   groupLabel(g:string){
     const s:Record<string,[string,string]>={
       agents:['AI Agents & Orchestration','وكلاء الذكاء الاصطناعي وتنسيق التشغيل'],
+      pipelines:['Airia Pipeline Registry','سجل مسارات Airia'],
+      checklist:['Smart Inspection Checklist AI','الذكاء الاصطناعي لقوائم المعاينة'],
       scheduler:['Fleet Assessment Scheduler','جدولة تقييم مخاطر السفن'],
       alerts:['Alerts & Escalation','التنبيهات والتصعيد'],
       connectivity:['Airia Connectivity','الاتصال بخدمة Airia']
@@ -256,11 +325,35 @@ export class NmcRuntimeSettingsComponent implements OnInit{
   groupDescription(g:string){
     const s:Record<string,[string,string]>={
       agents:['Enable/disable A01, A02, A03, A04 and P01.','تفعيل وإيقاف A01 وA02 وA03 وA04 وP01.'],
+      pipelines:['Map real A01/A02/A03/A04 and C01/P01 Airia agent IDs.','ربط المعرفات الحقيقية لوكلاء A01–A04 وC01/P01.'],
+      checklist:['Configure Checklist Builder, Vision/Review, image transport, cost and per-case AI usage.','تهيئة مساعد إنشاء القوائم وتحليل الصور وطريقة الرفع وحدود الاستخدام.'],
       scheduler:['Pilot vessel limit, retry and periodic execution.','حدود السفن التجريبية وإعادة المحاولة والتشغيل الدوري.'],
       alerts:['Detection interval and unacknowledged-event escalation.','دورية فحص التنبيهات والتصعيد عند عدم الاستجابة.'],
       connectivity:['Allowlisted secure Airia endpoint; API key remains a server secret.','عنوان Airia آمن ومحدد مسبقًا؛ مفتاح API محفوظ كسر على الخادم.']
     };
     return this.tr(s[g][0],s[g][1]);
+  }
+  loadCredentialStatus():void{
+    this.http.get<AiriaCredentialStatus>('/api/ai/admin/governance/credentials')
+      .subscribe({next:x=>this.credentialStatus=x,
+        error:()=>this.credentialStatus=null});
+  }
+  rotateKey():void{
+    if(this.credentialSaving||!this.credentialStatus?.rotatable||
+      this.newApiKey.trim().length<16||this.credentialReason.trim().length<8)return;
+    if(!window.confirm(this.tr(
+      'Rotate Airia API key? Active NMC and Smart Inspection requests will use the new key immediately.',
+      'هل تؤكد تغيير مفتاح Airia؟ ستستخدم خدمات NMC والمعاينات المفتاح الجديد فورًا.')))return;
+    this.credentialSaving=true;this.error='';this.success='';
+    this.http.post<AiriaCredentialStatus>('/api/ai/admin/governance/credentials',{
+      apiKey:this.newApiKey.trim(),reason:this.credentialReason.trim(),confirm:true
+    }).subscribe({next:status=>{
+      this.credentialSaving=false;this.newApiKey='';this.credentialReason='';
+      this.credentialStatus=status;
+      this.success=this.tr('Airia API key securely rotated; no secret was displayed.',
+        'تم تغيير مفتاح Airia وحفظه مشفرًا دون عرض قيمته.');
+    },error:e=>{this.credentialSaving=false;this.newApiKey='';
+      this.error=e?.error?.error||'AI_CREDENTIAL_ROTATION_FAILED';}});
   }
   reset(){if(this.snapshot){this.draft={...this.snapshot.values};this.error='';this.success='';}}
   publish(){
@@ -276,7 +369,11 @@ export class NmcRuntimeSettingsComponent implements OnInit{
     const keys=this.snapshot.descriptors.filter(d=>d.cost&&
       this.draft[d.key]===true&&this.snapshot?.values[d.key]!==true).map(x=>x.key);
     const urlChanged=this.draft['AIRIA_BASE_URL']!==this.snapshot.values['AIRIA_BASE_URL'];
-    const risky=keys.length>0||urlChanged;
+    const risky=keys.length>0||urlChanged||
+      this.draft['SI_AI_PROVIDER']!==this.snapshot.values['SI_AI_PROVIDER']||
+      (this.draft['SI_CHECKLIST_AIRIA_ENABLED']===true&&
+      ['AIRIA_SI_CHECKLIST_BUILDER_PIPELINE_ID','AIRIA_SI_CHECKLIST_VISION_PIPELINE_ID',
+       'SI_CHECKLIST_VISION_TRANSPORT'].some(k=>this.draft[k]!==this.snapshot?.values[k]));
     if(!window.confirm(this.tr(
       'Publish live backend configuration? '+(risky?'New paid AI/endpoint settings: '+keys.join(', ')+(urlChanged?' AIRIA_BASE_URL':'')+'. ':'')+
       'This may trigger paid fleet/A03 work when automatic options are enabled.',
