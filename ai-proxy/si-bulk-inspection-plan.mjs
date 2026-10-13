@@ -130,7 +130,7 @@ export class SiBulkInspectionPlan{
     stale:plan.stale,selectedVessels:vessels.length,vessels,
     mandatoryChecksPreserved:true,
     a04Enabled:this.preparation.enabled&&this.preparation.ready,
-    p01Enabled:this.priority.enabled&&this.priority.ready,
+    p01Enabled:false, // retired regardless of mock/provider/runtime settings
     a04Provider:this.preparation.provider.toUpperCase(),
     p01Provider:this.priority.provider.toUpperCase(),
     maxAiPerBatch:MAX_AI_PER_BATCH,
@@ -178,6 +178,8 @@ export class SiBulkInspectionPlan{
    (input.runP01&&preview.p01Provider==='AIRIA');
   if(needsPaid&&input.confirmAiCost!==true)
    throw new SiBulkApprovalError('SI_BULK_EXPLICIT_AI_COST_CONFIRMATION_REQUIRED',422);
+  if(input.runP01===true)
+   throw new SiBulkApprovalError('SI_P01_OUT_OF_CURRENT_POC_SCOPE',409);
   if(input.generateA04&&!preview.a04Enabled)
    throw new SiBulkApprovalError('SI_BULK_A04_NOT_ENABLED',409);
   if(input.runP01&&!preview.p01Enabled)
@@ -290,7 +292,8 @@ export class SiBulkInspectionPlan{
     job.approvedCount=job.items.filter(x=>Boolean(x.inspectionCaseId)).length;
     job.updatedAt=now();this.put(job);
    }
-   if(job.runP01&&job.items.some(x=>x.inspectionCaseId)){
+   // Old queued job requests are never allowed to run retired P01.
+   if(false&&job.runP01&&job.items.some(x=>x.inspectionCaseId)){
     try{
      const p=await this.priority.preview();
      if(p.eligibleCount>0){
@@ -300,7 +303,7 @@ export class SiBulkInspectionPlan{
       job.priorityStatus='RECOMMENDATIONS_SAVED';
      }else job.priorityStatus='NO_ELIGIBLE_APPROVED_CASES';
     }catch(e){job.priorityStatus='FAILED_'+(e.code||'UNKNOWN');}
-   }else job.priorityStatus='NOT_REQUESTED';
+   }else job.priorityStatus=job.runP01?'SKIPPED_OUT_OF_CURRENT_POC_SCOPE':'NOT_REQUESTED';
    job.status=job.items.every(x=>x.state==='READY')&&
      !job.priorityStatus.startsWith('FAILED')?COMPLETED:PARTIAL;
    // Plan is now in operational execution (even if a dossier needs review).
