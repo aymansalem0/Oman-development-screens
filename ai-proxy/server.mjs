@@ -24,6 +24,7 @@ import { CentralRiskPolicy, RiskPolicyError } from './risk-policy.mjs';
 import { ErpWorkforceStore, SiError } from './si-erp-workforce.mjs';
 import { SiElectronicScheduler } from './si-electronic-scheduling.mjs';
 import {proposeMaritimeBatchSchedule} from './si-maritime-batch-scheduling.mjs';
+import {maritimePlanSchedulingContext,validateOperatorScheduleAgainstSource} from './si-maritime-plan-source.mjs';
 import { SiCandidateTargeting, SiTargetingError } from './si-candidate-targeting.mjs';
 import { SiSourceExcelImport } from './si-source-excel-import.mjs';
 import { SiPscSelection, SiSelectionError } from './si-psc-selection.mjs';
@@ -1116,6 +1117,14 @@ const server = createServer(async (req, res) => {
       // Whole-plan scheduling read-only preview. The user may provide berth,
       // availability and duration input as operator scheduling facts.
       // Dates are final at source import; there is NO separate ETD review.
+      const v2Context=/^\/api\/si\/v1\/maritime-scheduling\/plans\/([a-f0-9-]{36})\/context$/.exec(path);
+      if(v2Context&&req.method==='GET'){
+        dashboards.assertRole(req,'EDITOR');
+        const plan=await siRollingPlans.get(v2Context[1]);
+        const erp=siErp.requireSnapshot();
+        const dashboard=await siTargeting.dashboard();
+        return respond(res,200,maritimePlanSchedulingContext(plan,dashboard,erp));
+      }
       const v2Preview=/^\/api\/si\/v1\/maritime-scheduling\/plans\/([a-f0-9-]{36})\/preview$/.exec(path);
       if(v2Preview&&req.method==='POST'){
         dashboards.assertRole(req,'EDITOR');
@@ -1125,6 +1134,9 @@ const server = createServer(async (req, res) => {
           return respond(res,422,{error:'SI_V2_SCHEDULING_REQUESTS_INVALID'});
         const plan=await siRollingPlans.get(v2Preview[1]);
         const snapshot=siErp.requireSnapshot();
+        const dashboard=await siTargeting.dashboard();
+        const context=maritimePlanSchedulingContext(plan,dashboard,snapshot);
+        validateOperatorScheduleAgainstSource(context,body.requests);
         const referrals=await cases.listInspectionRequests();
         const confirmed=await siScheduling.centralBookings(snapshot);
         const result=proposeMaritimeBatchSchedule({
@@ -1369,7 +1381,7 @@ const server = createServer(async (req, res) => {
       }
       return respond(res,405,{error:'METHOD_NOT_ALLOWED'});
     }catch(e){
-      if(e instanceof SiPocAdvisorError||e instanceof SiRollingPlanError||e instanceof SiBulkApprovalError||e instanceof SiCandidateAgentError||e instanceof SiLifecycleError||e instanceof SiSelectionError||e instanceof SiPriorityError||e instanceof SiPreparationError||e instanceof SiTargetingError||e instanceof DashboardError)
+      if(e instanceof SiError||e instanceof SiPocAdvisorError||e instanceof SiRollingPlanError||e instanceof SiBulkApprovalError||e instanceof SiCandidateAgentError||e instanceof SiLifecycleError||e instanceof SiSelectionError||e instanceof SiPriorityError||e instanceof SiPreparationError||e instanceof SiTargetingError||e instanceof DashboardError)
         return respond(res,e.status,{error:e.code});
       if(Number.isInteger(e?.status)&&e.status>=400&&e.status<500)
         return respond(res,e.status,{error:'SI_REQUEST_INVALID'});
