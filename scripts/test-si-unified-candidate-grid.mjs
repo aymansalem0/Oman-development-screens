@@ -28,10 +28,10 @@ test('visible AI-selected count is advisory and distinct from approved cases',()
 });
 test('officer can include, remove, defer or mark nonmandatory sources N/A without AI; rerank with explicit cost confirmation',()=>{
  for(const x of [
-  "(click)=\"selectPlanVessel(v,'INCLUDE')\"",
-  "(click)=\"selectPlanVessel(v,'NOT_SELECTED')\"",
-  "(click)=\"selectPlanVessel(v,'DEFER')\"",
-  "(click)=\"selectPlanVessel(v,'NOT_APPLICABLE')\"",
+  "(click)=\"openManualDecision(v,'INCLUDE')\"",
+  "(click)=\"openManualDecision(v,'NOT_SELECTED')\"",
+  "(click)=\"openManualDecision(v,'DEFER')\"",
+  "(click)=\"openManualDecision(v,'NOT_APPLICABLE')\"",
   "(click)=\"openPlanEdit(v,true,true)\"",
   "(ngSubmit)=\"savePlanEdit()\"",
   "[(ngModel)]=\"planReason\"",
@@ -39,6 +39,8 @@ test('officer can include, remove, defer or mark nonmandatory sources N/A withou
  ])assert.ok(html.includes(x),'missing '+x);
  assert.match(html,/required minlength="8"/);
  assert.match(ts,/this\.api\.selectRollingVessel\(/);
+ assert.match(html,/\(ngSubmit\)="saveManualDecision\(\)"/);
+ assert.match(html,/\[\(ngModel\)\]="manualReviewAfter"/);
  assert.match(ts,/this\.submitPlanReevaluation\(\{/);
  assert.match(ts,/confirmRun:true,confirmCost:!mock/);
  assert.match(backend,/siInspectionPlan\.select/);
