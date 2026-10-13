@@ -42,8 +42,10 @@ export function projectInspectionPlan(dashboard,source,run,overrides={}){
   const aiSelected=advice.some(x=>x.recommendation==='SELECT_RECOMMENDED');
   const note=overrides[v.imo]||null;
   const eligible=c.length>0;
-  const planSelected=eligible&&run!==null?
-   (typeof note?.selected==='boolean'?note.selected:aiSelected):false;
+  // Human inclusion is permitted *before* a provider C01 response exists.
+  // The model is advisory, not an authorization gate.
+  const planSelected=eligible?
+   (typeof note?.selected==='boolean'?note.selected:run!==null?aiSelected:false):false;
   const locked=!eligible;
   grouped.set(v.imo,{
    imo:v.imo,vesselName:v.vesselName,flag:v.flag,vesselType:v.vesselType,
@@ -52,6 +54,8 @@ export function projectInspectionPlan(dashboard,source,run,overrides={}){
    approvedCases:v.createdWorkflows,externalScheduled:v.scheduledWorkflows,
    aiRecommended:run?aiSelected:null,planSelected:run?planSelected:null,
    selectionOrigin:note?'OFFICER_AMENDED':run?'AI_ADVISORY':'NOT_EVALUATED',
+   disposition:note?.disposition||'AVAILABLE',
+   reviewAfter:note?.reviewAfter||null,
    officerReason:note?.reason||null,officerActor:note?.actor||null,
    requestedRank:note?.requestedRank??null,
    modelRank:advice.length?Math.min(...advice.filter(x=>Number.isInteger(x.suggestedRank))
@@ -66,7 +70,7 @@ export function projectInspectionPlan(dashboard,source,run,overrides={}){
    mandatoryReferral:priorityTier(v)===0
   });
  }
- if(run){
+ if(run||[...grouped.values()].some(x=>x.planSelected)){
   const ranked=[...grouped.values()].filter(v=>v.planSelected);
   // The provider supplies advisory selection; the rules engine *enforces*
   // approved NMC referral tier and then adjusts operator-requested positions.
@@ -127,25 +131,85 @@ export class SiInspectionPlan{
   const changed=Boolean(state.latest&&state.latest.snapshotHash!==source.snapshotHash);
   const current=historical?state.latest:
     changed?null:state.latest;
-  const rows=historical&&Array.isArray(state.latest?.rows)?
+  const rows=historical&&Array.isArray(state.approvedRows)?
+    structuredClone(state.approvedRows):
+    historical&&Array.isArray(state.latest?.rows)?
     structuredClone(state.latest.rows):
     projectInspectionPlan(dashboard,source,current,state.overrides);
+  const manualSelection=rows.some(r=>r.planSelected)&&
+    Object.values(state.overrides||{}).some(x=>x?.selected===true);
+  const availableCount=rows.filter(r=>r.editable).length;
+  const deferredCount=rows.filter(r=>r.disposition==='DEFERRED').length;
+  const notSelectedCount=rows.filter(r=>r.editable&&!r.planSelected).length;
   return {status:'ok',planId:cycle?.id||null,
    planNumber:cycle?.number||null,planStatus:cycle?.status||null,
    planPeriod:cycle?{startsOn:cycle.startsOn,endsOn:cycle.endsOn}:null,
    provider:this.agent.provider.toUpperCase(),
    mock:this.agent.provider==='mock',sourceHash:source.snapshotHash,
    revision:state.revision,generatedAt:current?.generatedAt||null,
-   agentRunId:current?.agentRunId||null,stale:!historical&&changed,
+   agentRunId:current?.agentRunId||null,
+   selectionMode:current?.agentRunId?'AI_ASSISTED':'MANUAL',
+   manualSelection,availableCount,deferredCount,notSelectedCount,
+   candidatesAtCreation:cycle?.candidateSnapshot?.length??null,
+   stale:!historical&&(changed||
+     Boolean(cycle?.selectionSourceHash&&cycle.selectionSourceHash!==source.snapshotHash)),
    historicalSourceChanged:historical&&changed,readOnlyHistorical:historical,
    externalCallsOnRead:0,aiRecommendedVessels:current?
     rows.filter(r=>r.aiRecommended).length:null,
-   selectedForPlan:current?rows.filter(r=>r.planSelected).length:null,
+   selectedForPlan:cycle||current?rows.filter(r=>r.planSelected).length:null,
    approvedCases:dashboard.summary.inspectionsCreated,
    warning:historical?
     'HISTORICAL APPROVED/CANCELLED PLAN: showing saved selection; new live source does not rewrite history.':
     'ADVISORY INSPECTION PLAN ONLY: not regulatory approval, PSC quota selection or scheduling.',
    rows};
+ }
+ /**
+  * Official-free planning amendment. This is a DRAFT-level selection, not an
+  * inspection case, AI call or statutory defer/rejection decision.
+  * Unselected source events remain in the central candidate pool.
+  */
+ async select({planId,imo,action,reason,reviewAfter=null,expectedRevision,
+               expectedSourceHash,actor}={}){
+  if(!planId||!/^\\d{7}$/.test(imo||'')||
+    !['INCLUDE','NOT_SELECTED','DEFER','NOT_APPLICABLE'].includes(action)||
+    !Number.isInteger(expectedRevision)||typeof actor!=='string'||
+    !actor.trim()||actor.length>120||typeof reason!=='string'||
+    reason.trim().length<8||reason.length>500)
+   throw new SiCandidateAgentError('SI_PLAN_SELECTION_INVALID',422);
+  if(action==='DEFER'&&
+    (typeof reviewAfter!=='string'||!/^\\d{4}-\\d{2}-\\d{2}$/.test(reviewAfter)||
+     Number.isNaN(Date.parse(reviewAfter+'T00:00:00Z'))))
+   throw new SiCandidateAgentError('SI_PLAN_REVIEW_DATE_REQUIRED',422);
+  const state=await this.rolling.get(planId);
+  if(!['DRAFT','READY_FOR_APPROVAL'].includes(state.status))
+   throw new SiCandidateAgentError('SI_ROLLING_APPROVED_PLAN_IMMUTABLE',409);
+  const [source,dashboard]=await Promise.all([this.agent.source(),this.targeting.dashboard()]);
+  if(source.snapshotHash!==expectedSourceHash||state.revision!==expectedRevision)
+   throw new SiCandidateAgentError('SI_PLAN_CHANGED_REFRESH_REQUIRED',409);
+  const eligible=source.candidates.filter(c=>c.imo===imo);
+  const vessel=dashboard.vesselCandidates?.find(v=>v.imo===imo);
+  if(!eligible.length||!vessel)
+   throw new SiCandidateAgentError('SI_PLAN_CANDIDATE_NOT_PENDING',409);
+  // Binding NMC referrals cannot be made Not Applicable by a planning UI.
+  if(action==='NOT_APPLICABLE'&&
+     eligible.some(c=>c.sourceTypes.includes('NMC_CASE')))
+   throw new SiCandidateAgentError('SI_MANDATORY_REFERRAL_PROTECTED',409);
+  const change={imo,selected:action==='INCLUDE',
+   disposition:action,reviewAfter:action==='DEFER'?reviewAfter:null,
+   requestedRank:null,reason:reason.trim(),actor:actor.trim(),at:iso()};
+  const next=await this.rolling.mutate(planId,expectedRevision,actor.trim(),p=>{
+    p.overrides={...(p.overrides||{}),[imo]:change};
+    p.selectionSourceHash=source.snapshotHash;
+    p.latest?.rows&&(p.latest.rows=projectInspectionPlan(
+      dashboard,source,p.latest,p.overrides));
+    const rows=projectInspectionPlan(dashboard,source,p.latest,p.overrides);
+    p.savedPlanRows=rows;
+    p.status=rows.some(r=>r.planSelected)?'READY_FOR_APPROVAL':'DRAFT';
+    return p;
+  },'OFFICER_'+action);
+  return {status:'SAVED',planId,revision:next.revision,
+    included:next.savedPlanRows.filter(x=>x.planSelected).length,
+    disposition:action,externalCalls:0};
  }
  async rerank(input={}){
   if(this.busy)throw new SiCandidateAgentError('SI_PLAN_RECALCULATION_IN_PROGRESS',409);
