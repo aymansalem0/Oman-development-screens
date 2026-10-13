@@ -18,7 +18,7 @@ export const SETTINGS_DESCRIPTORS=Object.freeze([
   {key:'NMC_A03_ENABLED',type:'boolean',group:'agents',description:'Document extraction pipeline (A03)',cost:true},
   {key:'NMC_A03_AUTO_ENABLED',type:'boolean',group:'agents',description:'Run A03 automatically for changed vessel documents during scheduled fleet assessments',cost:true},
   {key:'SI_A04_ENABLED',type:'boolean',group:'agents',description:'On-demand Smart Inspection AI dossier (A04)',cost:true},
-  {key:'SI_P01_ENABLED',type:'boolean',group:'agents',description:'Smart Inspection prioritization P01',cost:true},
+  {key:'SI_P01_ENABLED',type:'boolean',group:'agents',description:'SI-P01 retired from current POC; permanently OFF (history preserved)',cost:false},
   {key:'NMC_ALERT_SCAN_ENABLED',type:'boolean',group:'alerts',description:'Reconcile saved fleet risk alerts'},
   {key:'NMC_ALERT_SCAN_SECONDS',type:'number',min:15,max:3600,group:'alerts',description:'Alert scan interval in seconds'},
   {key:'NMC_ALERT_ESCALATE_MINUTES',type:'number',min:1,max:1440,group:'alerts',description:'Unacknowledged alert escalation time in minutes'},
@@ -52,7 +52,7 @@ export const SETTINGS_DESCRIPTORS=Object.freeze([
   {key:'AIRIA_SI_V01_PIPELINE_ID',type:'pipeline',group:'pipelines',description:'V01 Field evidence vision — requires case-owned safe media'},
   {key:'AIRIA_SI_R01_PIPELINE_ID',type:'pipeline',group:'pipelines',description:'R01 Report/CAPA proposals only'},
   {key:'AIRIA_SI_X01_PIPELINE_ID',type:'pipeline',group:'pipelines',description:'X01 Repeat/conflict evidence advice only'},
-  {key:'AIRIA_SI_P01_PIPELINE_ID',type:'pipeline',group:'pipelines',description:'P01 Approved Case Prioritization (must be separately provisioned/verified)'},
+  {key:'AIRIA_SI_P01_PIPELINE_ID',type:'pipeline',group:'pipelines',description:'P01 future-only (not in current POC; no dedicated MENA UUID)'},
   {key:'SI_CHECKLIST_AIRIA_ENABLED',type:'boolean',group:'checklist',cost:true,
     description:'Enable manually-triggered Airia assistance for checklist design and field review'},
   {key:'AIRIA_SI_CHECKLIST_BUILDER_PIPELINE_ID',type:'pipeline',group:'checklist',
@@ -148,6 +148,8 @@ function envConfig(env){
       catch{value[d.key]=DEFAULTS.AIRIA_BASE_URL;}
     }
   }
+  // Old ENV true must not reactivate SI-P01 in this POC.
+  value.SI_P01_ENABLED=false;
   return value;
 }
 export class RuntimeSettings{
@@ -172,7 +174,11 @@ export class RuntimeSettings{
     this.history=Array.isArray(parsed.history)?parsed.history.slice(-100):[];
     return this.publicView();
   }
-  get(key){if(!Object.hasOwn(allowed,key))throw new RuntimeSettingsError('RUNTIME_SETTING_UNKNOWN');return this.overrides[key]??this.env[key];}
+  get(key){
+    if(!Object.hasOwn(allowed,key))throw new RuntimeSettingsError('RUNTIME_SETTING_UNKNOWN');
+    if(key==='SI_P01_ENABLED')return false; // old persisted true is historical only
+    return this.overrides[key]??this.env[key];
+  }
   publicView(){
     return {status:'ok',version:this.version,values:Object.fromEntries(
       SETTINGS_DESCRIPTORS.map(d=>[d.key,this.get(d.key)])),
@@ -196,6 +202,8 @@ export class RuntimeSettings{
       if(!Object.hasOwn(values,d.key))throw new RuntimeSettingsError('RUNTIME_SETTINGS_REQUIRED_FIELD');
       next[d.key]=normalize(d.key,values[d.key]);
     }
+    if(next.SI_P01_ENABLED===true)
+      throw new RuntimeSettingsError('SI_P01_OUT_OF_CURRENT_POC_SCOPE',409);
     const enablingCost=SETTINGS_DESCRIPTORS.filter(d=>d.cost&&!this.get(d.key)&&next[d.key]);
     const urlChanged=this.get('AIRIA_BASE_URL')!==next.AIRIA_BASE_URL;
     const aiChanged=next.SI_AI_PROVIDER==='airia'&&
