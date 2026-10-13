@@ -34,6 +34,7 @@ import { SiInspectionLifecycle, SiLifecycleError } from './si-inspection-lifecyc
 import { DriveDocumentIntelligence, DocumentError } from './drive-document-intelligence.mjs';
 import {buildA03MultipartUserInput,summarizeA03HttpFailure} from './airia-a03-multipart.mjs';
 import { RuntimeSettings, RuntimeSettingsError } from './runtime-settings.mjs';
+import {AiCredentialVault,AiSecretError} from './ai-credential-vault.mjs';
 
 const port = Number(process.env.PORT || 3000);
 const moeiAuthMode=(process.env.MOEI_AUTH_MODE||'google').toLowerCase();
@@ -44,7 +45,8 @@ const moeiAuth=new MoeiPocAuth({
     (moeiAuthMode==='google'&&Boolean(googleUsers.allowed(user.email,user.sub))&&
      googleUsers.allowed(user.email,user.sub).role===user.role)
 });
-const apiKey = (process.env.AIRIA_MENA_KEY || '').trim();
+const aiCredentialVault=new AiCredentialVault();
+const getAiriaKey=()=>aiCredentialVault.get();
 const runtime=new RuntimeSettings();
 runtime.load();
 const agentAllowed=agent=>{
@@ -53,27 +55,27 @@ const agentAllowed=agent=>{
 const timeoutMs = Math.min(180000, Math.max(1000, Number(process.env.AIRIA_TIMEOUT_MS || 120000)));
 const maxBytes = 1024 * 1024; // Single agent call body.
 // SI only: no NMC A01/A02 behavior is changed by this feature flag.
-const siAiProvider=process.env.SI_AI_PROVIDER==='airia'?'airia':'mock';
+let siAiProvider=runtime.get('SI_AI_PROVIDER');
 const autoEnabled = process.env.NMC_FLEET_AUTO_ENABLED === 'true';
 const autoInterval = Number(process.env.NMC_FLEET_REFRESH_SECONDS || 3600) * 1000;
 
 // Partner API guide, 08 Oct 2026, A01-A04 v3.1.
-const pipelines = Object.freeze({
-  a01: process.env.AIRIA_A01_PIPELINE_ID || '86904bc8-e552-4172-aaa8-1a79cbb9539d',
-  a02: process.env.AIRIA_A02_PIPELINE_ID || '73708937-ba16-47e3-b404-55cc0a54b159',
-  a03: process.env.AIRIA_A03_PIPELINE_ID || '603d32f6-2f5f-42a8-a592-77af571a2480',
-  a04: process.env.AIRIA_A04_PIPELINE_ID || 'bad751da-0e11-48fd-861d-5bde1afbbd8d',
-  p01: process.env.AIRIA_SI_P01_PIPELINE_ID || null,
-  c01: process.env.AIRIA_SI_C01_PIPELINE_ID || null
-});
+const pipelines = {
+  get a01(){return runtime.get('AIRIA_A01_PIPELINE_ID');},
+  get a02(){return runtime.get('AIRIA_A02_PIPELINE_ID');},
+  get a03(){return runtime.get('AIRIA_A03_PIPELINE_ID');},
+  get a04(){return runtime.get('AIRIA_A04_PIPELINE_ID');},
+  get c01(){return runtime.get('AIRIA_SI_C01_PIPELINE_ID');},
+  get p01(){return runtime.get('AIRIA_SI_P01_PIPELINE_ID');}
+};
 
 async function fleetAgentCall(agent,input) {
-  if (!apiKey) throw new Error('AIRIA_NOT_CONFIGURED');
+  if (!getAiriaKey()) throw new Error('AIRIA_NOT_CONFIGURED');
   if (!pipelines[agent]) throw new Error('AIRIA_PIPELINE_NOT_CONFIGURED');
   if (!agentAllowed(agent)) throw new Error('AIRIA_AGENT_DISABLED');
   const upstream=await fetch(runtime.get('AIRIA_BASE_URL')+'/v1/PipelineExecution/'+pipelines[agent],{
     method:'POST',
-    headers:{'X-API-KEY':apiKey,'Content-Type':'application/json','User-Agent':'moei-nmc-fleet/1.0'},
+    headers:{'X-API-KEY':getAiriaKey(),'Content-Type':'application/json','User-Agent':'moei-nmc-fleet/1.0'},
     body:JSON.stringify({userInput:JSON.stringify(input),asyncOutput:false}),
     signal:AbortSignal.timeout(timeoutMs)
   });
@@ -91,7 +93,7 @@ async function a03AgentCall(payload) {
   if(process.env.AIRIA_A03_TRANSPORT==='inline'||
      !attachment||attachment.mimeType!=='application/pdf')
     return fleetAgentCall('a03',input);
-  if(!apiKey)throw new Error('AIRIA_NOT_CONFIGURED');
+  if(!getAiriaKey())throw new Error('AIRIA_NOT_CONFIGURED');
   if(!pipelines.a03)throw new Error('AIRIA_PIPELINE_NOT_CONFIGURED');
   if(!agentAllowed('a03'))throw new Error('AIRIA_AGENT_DISABLED');
   if(!Buffer.isBuffer(attachment.bytes)||!attachment.bytes.length)
@@ -105,7 +107,7 @@ async function a03AgentCall(payload) {
     upstream=await fetch(runtime.get('AIRIA_BASE_URL')+
       '/v1/PipelineExecution/Multipart/'+pipelines.a03,{
       method:'POST',
-      headers:{'X-API-KEY':apiKey,'User-Agent':'moei-nmc-adapter/1.0'},
+      headers:{'X-API-KEY':getAiriaKey(),'User-Agent':'moei-nmc-adapter/1.0'},
       body:form,
       signal:AbortSignal.timeout(timeoutMs)
     });
@@ -138,7 +140,7 @@ let guidance;
 let riskPolicy;
 const documents=new DriveDocumentIntelligence({mode:dbMode,oracleRepository:repository,
   executeA03:a03AgentCall,
-  enabled:runtime.get('NMC_A03_ENABLED')&&Boolean(apiKey)});
+  enabled:runtime.get('NMC_A03_ENABLED')&&Boolean(getAiriaKey())});
 const fleet=new FleetAssessmentManager({executeAgent:fleetAgentCall,getPscVessel,repository,
   approvedDocuments:async imo=>documents.ready?documents.approvedFor(imo):[],
   documentEvidence:async imo=>documents.ready?
@@ -157,7 +159,7 @@ const dashboards=new DashboardWorkspace({mode:dbMode,oracleRepository:repository
  * KPI values are supplementary POC context and never a new risk signal. */
 const dashboardAiFocus=new DashboardAiFocus({
   executeAgent:fleetAgentCall,
-  enabled:Boolean(apiKey)&&agentAllowed('a01')&&agentAllowed('a02')&&
+  enabled:Boolean(getAiriaKey())&&agentAllowed('a01')&&agentAllowed('a02')&&
     process.env.NMC_DASHBOARD_AI_FOCUS_ENABLED==='true',
   selectVessel:()=>selectDashboardFocusVessel(fleet,incidentBundleMap)
 });
@@ -166,7 +168,7 @@ const cases=new NmcCaseWorkspace({mode:dbMode,oracleRepository:repository,alerts
 // Incident POC reuses exactly the existing A02 requestedSignals and A01
 // SITUATION_ASSESSMENT contracts; new business evidence is supplied inside
 // already-supported context fields. No separate model/pipeline or new output.
-const incidentAgentEnabled=()=>Boolean(apiKey)&&agentAllowed('a01')&&agentAllowed('a02');
+const incidentAgentEnabled=()=>Boolean(getAiriaKey())&&agentAllowed('a01')&&agentAllowed('a02');
 const incidentBundleRecords=JSON.parse((await import('node:fs')).readFileSync(
   new URL('./fleet-bundles.json',import.meta.url),'utf8'));
 const incidentBundleMap=new Map(incidentBundleRecords.map(row=>[row.imo,row]));
@@ -214,7 +216,7 @@ const siPriority=new SiAiPrioritization({
   targeting:siTargeting,mode:dbMode,oracleRepository:repository,provider:siAiProvider,
   executeAgent:async input=>siAiProvider==='mock'?mockSiP01(input):fleetAgentCall('p01',input),
   enabled:siAiProvider==='mock'||(
-    runtime.get('SI_P01_ENABLED')&&Boolean(apiKey)&&Boolean(pipelines.p01))
+    runtime.get('SI_P01_ENABLED')&&Boolean(getAiriaKey())&&Boolean(pipelines.p01))
 });
 const siCandidateAgent=new SiCandidateAgent({
   targeting:siTargeting,pscPolicy:()=>siPscSelection.policy(),provider:siAiProvider,
@@ -228,16 +230,20 @@ const siPreparation=new SiInspectionPreparation({mode:dbMode,oracleRepository:re
   approvedDocuments:async imo=>documents.ready?documents.approvedFor(imo):[],
   bundles:siTargeting.bundles,
   executeA04:async input=>siAiProvider==='mock'?mockSiA04(input):fleetAgentCall('a04',input),
-  enabled:siAiProvider==='mock'||(runtime.get('SI_A04_ENABLED')&&Boolean(apiKey))});
+  enabled:siAiProvider==='mock'||(runtime.get('SI_A04_ENABLED')&&Boolean(getAiriaKey()))});
 const siBulkPlan=new SiBulkInspectionPlan({
   inspectionPlan:siInspectionPlan,targeting:siTargeting,
   preparation:siPreparation,priority:siPriority
 });
 const siChecklistLibrary=new SiChecklistLibrary();
-const siChecklistAiria=new SiChecklistAiria();
+const siChecklistAiria=new SiChecklistAiria({
+  getSetting:key=>runtime.get(key),
+  getApiKey
+});
 const siChecklistField=new SiChecklistField({
   library:siChecklistLibrary,targeting:siTargeting,
-  airiaSuggest:input=>siChecklistAiria.call('vision',input)
+  airiaSuggest:input=>siChecklistAiria.call('vision',input),
+  getSetting:key=>runtime.get(key)
 });
 const siLifecycle=new SiInspectionLifecycle({mode:dbMode,oracleRepository:repository,
   targeting:siTargeting,preparation:siPreparation,cases,checklists:siChecklistField});
@@ -317,21 +323,25 @@ const scheduler=new FleetAutoScheduler({fleet,getPscVessel,
   },
   getDocumentFingerprint:async imo=>documents.ready?
     documents.fingerprint(imo):'A03_NOT_READY',
-  enabled:runtime.get('NMC_FLEET_AUTO_ENABLED')&&Boolean(apiKey),
+  enabled:runtime.get('NMC_FLEET_AUTO_ENABLED')&&Boolean(getAiriaKey()),
   intervalMs:runtime.get('NMC_FLEET_REFRESH_SECONDS')*1000,
   maxVessels:runtime.get('NMC_FLEET_AUTO_MAX_VESSELS'),
   retryFailed:runtime.get('NMC_FLEET_AUTO_RETRY_FAILED')});
 function applyRuntimeSettings(){
+  siAiProvider=runtime.get('SI_AI_PROVIDER');
+  siPriority.provider=siAiProvider;
+  siCandidateAgent.provider=siAiProvider;
+  siPreparation.provider=siAiProvider;
   scheduler.stop();
   scheduler.enabled=runtime.get('NMC_FLEET_AUTO_ENABLED')&&
-    runtime.get('NMC_A01_ENABLED')&&runtime.get('NMC_A02_ENABLED')&&Boolean(apiKey);
+    runtime.get('NMC_A01_ENABLED')&&runtime.get('NMC_A02_ENABLED')&&Boolean(getAiriaKey());
   scheduler.intervalMs=runtime.get('NMC_FLEET_REFRESH_SECONDS')*1000;
   scheduler.maxVessels=runtime.get('NMC_FLEET_AUTO_MAX_VESSELS');
   scheduler.retryFailed=runtime.get('NMC_FLEET_AUTO_RETRY_FAILED');
   alerts.escalationMinutes=runtime.get('NMC_ALERT_ESCALATE_MINUTES');
-  documents.enabled=runtime.get('NMC_A03_ENABLED')&&Boolean(apiKey);
-  siPreparation.enabled=siAiProvider==='mock'||(runtime.get('SI_A04_ENABLED')&&Boolean(apiKey));
-  siPriority.enabled=siAiProvider==='mock'||(runtime.get('SI_P01_ENABLED')&&Boolean(apiKey)&&Boolean(pipelines.p01));
+  documents.enabled=runtime.get('NMC_A03_ENABLED')&&Boolean(getAiriaKey());
+  siPreparation.enabled=siAiProvider==='mock'||(runtime.get('SI_A04_ENABLED')&&Boolean(getAiriaKey()));
+  siPriority.enabled=siAiProvider==='mock'||(runtime.get('SI_P01_ENABLED')&&Boolean(getAiriaKey())&&Boolean(pipelines.p01));
   if(server.listening){scheduler.start();rescheduleAlertScan();}
 }
 runtime.onChange=applyRuntimeSettings;
@@ -396,7 +406,7 @@ async function prepareCaseA01Actions(caseId,version,approval={}){
           if(existing.status==='RESOLVED')throw new NmcCaseError('CASE_ALREADY_RESOLVED',409);
           if(existing.actionPlan)throw new NmcCaseError('CASE_ACTION_PLAN_EXISTS',409);
           if(actionPlanRuns.has(caseId))throw new NmcCaseError('CASE_ACTION_PLAN_IN_PROGRESS',409);
-          if(!apiKey)throw new NmcCaseError('AIRIA_NOT_CONFIGURED',503);
+          if(!getAiriaKey())throw new NmcCaseError('AIRIA_NOT_CONFIGURED',503);
           // Strong provenance check: use ONLY the exact saved A01/A02 assessment
           // that initiated this case. Never silently use the synthetic fixture or
           // a newer scored assessment that superseded the event.
@@ -559,6 +569,26 @@ const server = createServer(async (req, res) => {
     }
   }
 
+  // Unified AI Settings & Governance owns all live Airia configuration.
+  // Key rotation is WRITE-ONLY and requires a server-managed AES master key.
+  if(path==='/api/ai/admin/governance/credentials'){
+    try{
+      const user=moeiAuth.require(req,{mutate:req.method!=='GET'});
+      if(user.role!=='ADMIN')return respond(res,403,{error:'AI_GOVERNANCE_ADMIN_REQUIRED'});
+      if(req.method==='GET')return respond(res,200,aiCredentialVault.status());
+      if(req.method==='POST'){
+        const payload=await requestJson(req,4096);
+        return respond(res,200,aiCredentialVault.rotate({
+          ...payload,actor:user.email||user.username
+        }));
+      }
+      return respond(res,405,{error:'METHOD_NOT_ALLOWED'});
+    }catch(error){
+      if(error instanceof AiSecretError||error instanceof MoeiAuthError)
+       return respond(res,error.status||403,{error:error.code});
+      return respond(res,503,{error:'AI_GOVERNANCE_VAULT_UNAVAILABLE'});
+    }
+  }
   if(path==='/api/ai/admin/runtime-settings'){
     if(req.method==='GET')return respond(res,200,runtime.publicView());
     if(req.method==='PUT'){
@@ -577,7 +607,7 @@ const server = createServer(async (req, res) => {
   if (req.method === 'GET' && path === '/api/ai/health') {
     const db=repository?await repository.health():{mode:'json',ready:true};
     return respond(res, db.ready?200:503, {
-      status:db.ready?'ok':'degraded',aiConfigured:Boolean(apiKey),
+      status:db.ready?'ok':'degraded',aiConfigured:Boolean(getAiriaKey()),
       adapter:'nmc-airia-proxy',fleetAutoEnabled:scheduler.enabled,
       persistence:db,persistenceHealthy:fleet.persistenceHealthy
     });
@@ -1160,7 +1190,7 @@ const server = createServer(async (req, res) => {
           const body=await requestJson(req,4096);
           if(body.withAiActionPlan!==true)
             throw new NmcCaseError('CASE_CREATION_AI_REQUIRED',400);
-          if(!apiKey)throw new NmcCaseError('AIRIA_NOT_CONFIGURED',503);
+          if(!getAiriaKey())throw new NmcCaseError('AIRIA_NOT_CONFIGURED',503);
           const item=await cases.fromAlert(body.alertId);
           if(item.actionPlan)
             return respond(res,200,{status:'ok',case:item,aiActionPlanStatus:'READY'});
@@ -1488,7 +1518,7 @@ const server = createServer(async (req, res) => {
   const match = /^\/api\/ai\/execute\/(a01|a02|a03|a04)$/i.exec(path);
   if (!match) return respond(res, 404, { error: 'NOT_FOUND' });
   if (req.method !== 'POST') return respond(res, 405, { error: 'METHOD_NOT_ALLOWED' });
-  if (!apiKey) return respond(res, 503, { error: 'AIRIA_NOT_CONFIGURED', message: 'Set AIRIA_MENA_KEY in the local .env file.' });
+  if (!getAiriaKey()) return respond(res, 503, { error: 'AIRIA_NOT_CONFIGURED', message: 'Set AIRIA_MENA_KEY in the local .env file.' });
 
   const agent = match[1].toLowerCase();
   if(!agentAllowed(agent))return respond(res,403,{error:'AIRIA_AGENT_DISABLED',agent});
@@ -1508,7 +1538,7 @@ const server = createServer(async (req, res) => {
     const upstream = await fetch(`${runtime.get('AIRIA_BASE_URL')}/v1/PipelineExecution/${pipelines[agent]}`, {
       method: 'POST',
       headers: {
-        'X-API-KEY': apiKey,
+        'X-API-KEY': getAiriaKey(),
         'Content-Type': 'application/json',
         'User-Agent': 'moei-nmc-adapter/1.0'
       },
