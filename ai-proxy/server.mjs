@@ -15,6 +15,7 @@ import { NmcAlertWorkspace, NmcAlertError } from './alert-workspace.mjs';
 import { NmcCaseWorkspace, NmcCaseError } from './case-workspace.mjs';
 import {evaluateCaseAssessment,historicalApprovalValid} from './case-source-provenance.mjs';
 import {NmcIncidentFeed,IncidentTriageError} from './nmc-incident-feed.mjs';
+import {onlyAiria99,AIRIA_99_RECORDS,AIRIA_99_METADATA} from './airia-demo-vessel-pack.mjs';
 import {createAiriaIncidentTriage} from './nmc-incident-airia.mjs';
 import { normalizeA01Actions, ActionPlanError } from './nmc-action-plan.mjs';
 import {catalogueSummaries,DECISION_POLICY_VERSION} from './nmc-decision-policy.mjs';
@@ -195,6 +196,19 @@ const incidentAgentEnabled=()=>Boolean(getAiriaKey())&&agentAllowed('a01')&&agen
 const incidentBundleRecords=JSON.parse((await import('node:fs')).readFileSync(
   new URL('./fleet-bundles.json',import.meta.url),'utf8'));
 const incidentBundleMap=new Map(incidentBundleRecords.map(row=>[row.imo,row]));
+// Demo presentation cohort is scoped to exact 99 partner-supplied IMO/name pairs;
+// never delete the other 321 historical source fixtures/approved transactions.
+const airia99Bundles=onlyAiria99(incidentBundleRecords);
+const airia99DetailRecords=AIRIA_99_RECORDS.map((record,index)=>{
+  const context=airia99Bundles[index].inlineContext;
+  return {...record,vessel:context.vessel,registration:context.registration,
+    tracking:context.tracking,certificates:context.certificates,
+    inspections:context.inspections,deficiencies:context.deficiencies,
+    history:context.history,dataQuality:context.dataQuality,
+    documentManifest:context.documentManifest,
+    evidenceIds:airia99Bundles[index].evidenceIds,
+    dataNature:'SYNTHETIC_POC_WITH_PARTNER_PROVIDED_IDENTITY_ONLY'};
+});
 const incidentAiria=createAiriaIncidentTriage({
   executeAgent:fleetAgentCall,
   getFleetResult:imo=>fleet.getVesselResult(imo),
@@ -258,7 +272,7 @@ const loadVerifiedIncidentPriorities=async()=>{
   return incidentPriorityCache.items;
 };
 const siTargeting=new SiCandidateTargeting({mode:dbMode,oracleRepository:repository,
-  cases,riskPolicy,bundles:incidentBundleRecords,
+  cases,riskPolicy,bundles:airia99Bundles,
   loadIncidentSignals:loadVerifiedIncidentPriorities});
 const siSourceImports=new SiSourceExcelImport({targeting:siTargeting});
 const siPscSelection=new SiPscSelection({targeting:siTargeting,mode:dbMode,oracleRepository:repository});
@@ -1103,6 +1117,12 @@ const server = createServer(async (req, res) => {
       if(batchPath&&req.method==='GET'){
         dashboards.assertRole(req,'EDITOR');
         return respond(res,200,siBulkPlan.get(batchPath[1]));
+      }
+      if(path==='/api/si/v1/airia-demo-pack'&&req.method==='GET'){
+        dashboards.assertRole(req,'EDITOR');
+        return respond(res,200,{status:'ok',...AIRIA_99_METADATA,
+          vessels:airia99DetailRecords,
+          note:'99 partner-supplied IMO/name identities matched to detailed synthetic POC fixtures. Airia A03 document packs are partner-reported only, not locally verified.'});
       }
       // New SI-C01 advisory is NEVER an approval and NEVER changes persisted cases.
       // MOCK branch has zero Airia usage; Airia mode reuses exact payload shape.
