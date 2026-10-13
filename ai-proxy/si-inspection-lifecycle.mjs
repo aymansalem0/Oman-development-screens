@@ -28,10 +28,10 @@ export class SiLifecycleError extends Error{
 }
 
 export class SiInspectionLifecycle{
-  constructor({mode='json',oracleRepository=null,targeting,preparation,cases,
+  constructor({mode='json',oracleRepository=null,targeting,preparation,cases,checklists=null,
     file=process.env.SI_LIFECYCLE_STORE_PATH||'/data/si-inspection-lifecycle.json'}={}){
     this.mode=mode;this.oracle=oracleRepository;this.targeting=targeting;
-    this.preparation=preparation;this.cases=cases;this.file=file;
+    this.preparation=preparation;this.cases=cases;this.checklists=checklists;this.file=file;
     this.ready=mode==='json';this.active=new Set();
   }
   async db(fn){
@@ -343,6 +343,7 @@ export class SiInspectionLifecycle{
         }
         case 'SUBMIT_FIELD':{
           requireStage('IN_FIELD');
+          if(this.checklists)await this.checklists.ensureSubmitted(id);
           if(str(actor,120)!==next.assignment.inspector)
             fails('SI_ONLY_ASSIGNED_INSPECTOR',403);
           if(next.checks.some(x=>x.status==='PENDING'))
