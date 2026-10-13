@@ -48,7 +48,7 @@ test('Settings are versioned and apply on restart; checklist cannot be enabled w
   assert.equal(reread.get('AIRIA_SI_CHECKLIST_BUILDER_PIPELINE_ID'),UUID);
  }finally{t.done();}
 });
-test('Governance rejects non-UUID pipeline, unverified C01/P01 switch, stale edits and arbitrary endpoints',async()=>{
+test('Governance rejects non-UUID pipeline, missing P01 UUID when P01 enabled, stale edits and arbitrary endpoints',async()=>{
  const t=data();try{
   const s=new RuntimeSettings({env:{},file:join(t.dir,'settings.json')});
   s.load();
@@ -57,8 +57,8 @@ test('Governance rejects non-UUID pipeline, unverified C01/P01 switch, stale edi
    values:{...base,AIRIA_A04_PIPELINE_ID:'bad-id'},
    actor:'admin',reason:'Try invalid pipeline'}),/AIRIA_PIPELINE_UUID_INVALID/);
   await assert.rejects(s.publish({expectedVersion:0,
-   values:{...base,SI_AI_PROVIDER:'airia'},
-   actor:'admin',reason:'Try live Airia',confirmCost:true}),
+   values:{...base,SI_AI_PROVIDER:'airia',SI_P01_ENABLED:true},
+   actor:'admin',reason:'Try unavailable P01 without real pipeline',confirmCost:true}),
    /AI_GOVERNANCE_SI_PIPELINES_REQUIRED/);
   await assert.rejects(s.publish({expectedVersion:99,values:base,
    actor:'admin',reason:'Try stale version',confirmCost:true}),
