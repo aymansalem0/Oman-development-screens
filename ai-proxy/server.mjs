@@ -23,6 +23,7 @@ import { OperationalGuidance, GuidanceError } from './operational-guidance.mjs';
 import { CentralRiskPolicy, RiskPolicyError } from './risk-policy.mjs';
 import { ErpWorkforceStore, SiError } from './si-erp-workforce.mjs';
 import { SiElectronicScheduler } from './si-electronic-scheduling.mjs';
+import {proposeMaritimeBatchSchedule} from './si-maritime-batch-scheduling.mjs';
 import { SiCandidateTargeting, SiTargetingError } from './si-candidate-targeting.mjs';
 import { SiSourceExcelImport } from './si-source-excel-import.mjs';
 import { SiPscSelection, SiSelectionError } from './si-psc-selection.mjs';
@@ -1081,6 +1082,59 @@ const server = createServer(async (req, res) => {
       // One supervisor action for all plan-selected vessels. GET is read-only;
       // POST asynchronously creates per-regime cases and deterministic dossiers,
       // with explicitly authorized optional A04/P01 paid calls.
+
+      // Smart Inspection V2: approve roster only; NO SI_INSPECTION_CASE rows,
+      // dossiers, Airia/AI calls, ERP bookings or NMC case mutations.
+      const v2Approval=/^\/api\/si\/v1\/inspection-plans\/([a-f0-9-]{36})\/approve-for-scheduling$/.exec(path);
+      if(v2Approval&&req.method==='POST'){
+        dashboards.assertRole(req,'PUBLISHER');
+        if(!siRollingPlansReady)return respond(res,503,{error:'SI_ROLLING_MIGRATION_018_REQUIRED'});
+        const input=await requestJson(req,4096);
+        const approved=await siBulkPlan.preview(v2Approval[1]);
+        if(approved.stale||(!approved.manualSelection&&!approved.agentRunId)||
+           approved.sourceHash!==input.expectedSourceHash||
+           approved.planRevision!==input.expectedRevision||
+           approved.vessels.length===0||approved.vessels.some(x=>x.missingSource)||
+           input.confirmApproval!==true)
+          return respond(res,409,{error:'SI_V2_PLAN_SOURCE_CHANGED_OR_MISSING'});
+        const actor=moeiAuth.session(req)?.email||'MOEI_SUPERVISOR';
+        const roster=approved.vessels.map(v=>({
+          imo:v.imo,planRank:v.rank,regimes:v.inspectionRegimes,
+          inspectionReasons:v.reasons
+        }));
+        const result=await siRollingPlans.approveForScheduling(v2Approval[1],{
+          expectedRevision:input.expectedRevision,
+          expectedSourceHash:input.expectedSourceHash,
+          reason:input.reason,actor,vessels:roster
+        });
+        return respond(res,201,{status:'APPROVED_AWAITING_SCHEDULING',
+          planId:result.id,revision:result.revision,
+          approvedVesselCount:result.approvedVessels.length,
+          createdInspectionCases:0,createdDossiers:0,
+          schedulingRoute:'/api/si/v1/maritime-scheduling/plans/'+result.id+'/preview'});
+      }
+      // Whole-plan scheduling read-only preview. The user may provide berth,
+      // availability and duration input as operator scheduling facts.
+      // Dates are final at source import; there is NO separate ETD review.
+      const v2Preview=/^\/api\/si\/v1\/maritime-scheduling\/plans\/([a-f0-9-]{36})\/preview$/.exec(path);
+      if(v2Preview&&req.method==='POST'){
+        dashboards.assertRole(req,'EDITOR');
+        const body=await requestJson(req,65536);
+        if(!Array.isArray(body.requests)||body.requests.length>40||
+           Object.keys(body).some(key=>!['requests'].includes(key)))
+          return respond(res,422,{error:'SI_V2_SCHEDULING_REQUESTS_INVALID'});
+        const plan=await siRollingPlans.get(v2Preview[1]);
+        const snapshot=siErp.requireSnapshot();
+        const referrals=await cases.listInspectionRequests();
+        const confirmed=await siScheduling.centralBookings(snapshot);
+        const result=proposeMaritimeBatchSchedule({
+          plan,erpSnapshot:snapshot,policy:siScheduling.getPolicy(),
+          requests:body.requests,nmcReferrals:referrals,
+          existingBookings:[...siScheduling.state.confirmed,...confirmed],
+          scheduler:siScheduling
+        });
+        return respond(res,200,{status:'ok',proposal:result});
+      }
       if(path==='/api/si/v1/inspection-batches/preview'&&req.method==='GET'){
         dashboards.assertRole(req,'EDITOR');
         const planId=new URL(req.url||'/', 'http://localhost').searchParams.get('planId');
