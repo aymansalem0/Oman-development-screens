@@ -518,7 +518,7 @@ export class SiCandidateTargeting{
       if(item.candidateKey!==primary.key)
         throw new SiTargetingError('SI_BULK_PRIMARY_SOURCE_CHANGED',409);
       const sourceEvents=new Map();
-      for(const workflow of workflows){
+      for(const workflow of ordered){
         for(const event of workflow.events){
           const key=event.eventKey||
             [event.sourceType,event.sourceEventId,workflow.regime].join(':');
