@@ -20,7 +20,7 @@ import {
   RouteDirection,
   SEA_ROUTES
 } from '../data/nmc-vessel-catalog';
-import { NMC_OPERATIONAL_VESSELS } from '../data/nmc-expanded-vessel-catalog';
+import { AIRIA_DEMO_OPERATIONAL_VESSELS,AIRIA_DEMO_PACK_METADATA } from '../data/airia-demo-vessel-pack';
 import { LanguageService } from '../services/language.service';
 import { NmcRiskEngineService } from '../services/nmc-risk-engine.service';
 import { NmcAlertsService } from '../services/nmc-alerts.service';
@@ -69,7 +69,8 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
   selectedVessel?: NmcVesselProfile;
   now = new Date();
 
-  vessels: NmcVesselProfile[] = NMC_OPERATIONAL_VESSELS.map(vessel => ({ ...vessel, risk: -1 }));
+  vessels: NmcVesselProfile[] = AIRIA_DEMO_OPERATIONAL_VESSELS.map(vessel => ({ ...vessel, risk: -1 }));
+  readonly airiaDemoMetadata=AIRIA_DEMO_PACK_METADATA;
   fleetSnapshot: FleetAiSnapshot | null = null;
   fleetError = '';
   unreadAlertCount = 0;
@@ -91,11 +92,11 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
   readonly attentionPageSize = 6;
 
   readonly trafficSnapshot = {
-    totalContacts: 420,
-    insideUaeMonitoredArea: 265,
-    approachingUaeArea: 155,
-    correlatedProfiles: NMC_OPERATIONAL_VESSELS.length,
-    source: 'Synthetic AIS / LRIT fixture',
+    totalContacts: AIRIA_DEMO_OPERATIONAL_VESSELS.length,
+    insideUaeMonitoredArea: AIRIA_DEMO_OPERATIONAL_VESSELS.filter(v=>v.zone==='UAE Waters').length,
+    approachingUaeArea: AIRIA_DEMO_OPERATIONAL_VESSELS.filter(v=>v.zone!=='UAE Waters').length,
+    correlatedProfiles: AIRIA_DEMO_OPERATIONAL_VESSELS.length,
+    source: 'Airia partner §8 identity cohort + synthetic POC vessel tracks',
     snapshotTime: '22:42:18'
   };
 
@@ -381,10 +382,13 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
   private fleetResult(v: NmcVesselProfile): FleetAiVessel | undefined {
     return this.fleetSnapshot?.results[v.imo];
   }
-  // Aggregate counters are authoritative server-side fleet snapshot counts, not locally recalculated scores.
-  get assessedCount():number{return this.fleetSnapshot?.counts.assessed ?? 0;}
-  get pendingCount():number{return this.fleetSnapshot?.counts.pending ?? 420;}
-  get priorityReviewCount():number{return this.fleetSnapshot?.counts.priorityReview ?? 0;}
+  // Backend still safely holds 420 saved source records. UI counters represent
+  // ONLY Airia's 99 listed vessels; official historical records are untouched.
+  get assessedCount():number{return this.vessels.filter(v=>
+    this.fleetResult(v)?.status==='COMPLETED').length;}
+  get pendingCount():number{return this.vessels.length-this.assessedCount;}
+  get priorityReviewCount():number{return this.vessels.filter(v=>
+    this.fleetResult(v)?.operationalPriority==='Priority Review').length;}
   get fleetJobRunning():boolean{return this.fleetSnapshot?.job?.status==='RUNNING';}
   get fleetProgress():string{
     const j=this.fleetSnapshot?.job;
@@ -663,7 +667,7 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
     const ready=!!this.fleetSnapshot;
     const asDisplay=(x:number|null)=>x===null?'—':x.toLocaleString('en-US');
     const assessed=ready?this.assessedCount:null;
-    const total=this.fleetSnapshot?.fleetSize||this.trafficSnapshot.totalContacts;
+    const total=this.trafficSnapshot.totalContacts;
     const values:Array<{id:NmcKpiMetricId;value:number|null;
       labelEn:string;labelAr:string;hintEn:string;hintAr:string;icon:string}>=[
       {id:'vesselContacts',value:this.monitoredCount,labelEn:'Monitored contacts',
@@ -672,10 +676,10 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
       {id:'assessedVessels',value:assessed,labelEn:'AI assessed vessels',
         labelAr:'السفن المقيمة بالذكاء الاصطناعي',hintEn:'Completed / fleet scope',
         hintAr:'مكتمل / إجمالي السفن',icon:'✦'},
-      {id:'highRiskVessels',value:ready?(this.fleetSnapshot?.counts.high??null):null,
+      {id:'highRiskVessels',value:ready?this.vessels.filter(v=>this.fleetResult(v)?.level==='High').length:null,
         labelEn:'High-risk vessels',labelAr:'سفن مرتفعة المخاطر',
         hintEn:'High only · excludes Critical',hintAr:'مرتفعة فقط دون الحرجة',icon:'▲'},
-      {id:'criticalRiskVessels',value:ready?(this.fleetSnapshot?.counts.critical??null):null,
+      {id:'criticalRiskVessels',value:ready?this.vessels.filter(v=>this.fleetResult(v)?.level==='Critical').length:null,
         labelEn:'Critical-risk vessels',labelAr:'سفن حرجة المخاطر',
         hintEn:'Based on saved risk policy',hintAr:'وفق سياسة المخاطر المحفوظة',icon:'!'},
       {id:'requiresAttention',value:ready?this.attentionCount:null,
@@ -737,8 +741,10 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
   get monitoredCount(): number { return this.trafficSnapshot.totalContacts; }
   get correlatedProfileCount(): number { return this.trafficSnapshot.correlatedProfiles; }
   get attentionCount():number{return this.allAttentionVessels.length;}
-  get highRiskCount():number{return (this.fleetSnapshot?.counts.high ?? 0)+(this.fleetSnapshot?.counts.critical ?? 0);}
-  get criticalCount():number{return this.fleetSnapshot?.counts.critical ?? 0;}
+  get highRiskCount():number{return this.vessels.filter(v=>
+    ['High','Critical'].includes(this.fleetResult(v)?.level||'')).length;}
+  get criticalCount():number{return this.vessels.filter(v=>
+    this.fleetResult(v)?.level==='Critical').length;}
   riskLevel(score:number, imo?:string):RiskLevel|'Pending'{
     if(score<0)return 'Pending';
     const saved=imo?this.fleetSnapshot?.results[imo]:undefined;
