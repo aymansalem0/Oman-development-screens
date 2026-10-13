@@ -40,9 +40,9 @@ export function validateMaritimeSchedulingInput(imo,row,erp,nowMs){
  if(!['BERTH','ANCHORAGE','TERMINAL'].includes(row.locationType)||
     !row.locationName||row.siteAccessConfirmed!==true)
   return {reason:'BERTH_ANCHORAGE_AND_ACCESS_CONFIRMATION_REQUIRED'};
- if(!['MSW_VERIFIED','OFFICER_CONFIRMED'].includes(row.windowSource)||
+ if(!['MSW_FINAL','MSW_VERIFIED','OFFICER_CONFIRMED'].includes(row.windowSource)||
     !row.windowEvidenceReference)
-  return {reason:'VERIFIED_VESSEL_ARRIVAL_DEPARTURE_WINDOW_REQUIRED'};
+  return {reason:'FINAL_VESSEL_ARRIVAL_DEPARTURE_WINDOW_REQUIRED'};
  let start,end;
  try{start=localMs(row.earliestLocal);end=localMs(row.latestFinishLocal);}
  catch{return {reason:'VESSEL_TIME_WINDOW_INVALID'};}
@@ -51,7 +51,7 @@ export function validateMaritimeSchedulingInput(imo,row,erp,nowMs){
     !Number.isInteger(duration)||duration<30||duration>720)
   return {reason:'VESSEL_WINDOW_OR_DURATION_INVALID'};
  if(end-start<duration*MINUTE)return {reason:'VESSEL_WINDOW_SHORTER_THAN_INSPECTION'};
- return {value:{imo,portId:row.portId,vesselType,regime,grossTonnage:gt,
+ return {value:{imo,portId:row.portId,vesselType,regime,
    earliestLocal:row.earliestLocal,deadlineLocal:row.latestFinishLocal,
    durationMinutes:duration,locationType:row.locationType,
    locationName:String(row.locationName).trim(),
