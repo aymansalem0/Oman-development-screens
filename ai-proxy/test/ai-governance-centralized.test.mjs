@@ -136,3 +136,30 @@ test('dashboard focus is OFF by default, explicitly cost-confirmed, versioned an
   assert.equal(reloaded.get('NMC_DASHBOARD_AI_FOCUS_ENABLED'),true);
  }finally{t.done();}
 });
+
+test('MENA partner catalogue contains explicit DQ01/C01/S01/V01/R01/X01 IDs; P01 remains unset',async()=>{
+ const t=data();try{
+  const s=new RuntimeSettings({env:{},file:join(t.dir,'settings.json')});s.load();
+  const expected={
+   AIRIA_NMC_DQ01_PIPELINE_ID:'c9f3b21d-dce6-4e66-81f2-db15fdb23256',
+   AIRIA_SI_C01_PIPELINE_ID:'f0799e63-387e-44dd-a451-cdffef96ee0d',
+   AIRIA_SI_S01_PIPELINE_ID:'eee9e630-ec5c-4ad8-b23e-59119696f837',
+   AIRIA_SI_V01_PIPELINE_ID:'5006d8c4-f8b5-4811-b767-704daab16e6a',
+   AIRIA_SI_R01_PIPELINE_ID:'d0efe143-96ee-4fc0-8f15-93cc81ac97d3',
+   AIRIA_SI_X01_PIPELINE_ID:'b82d5bb0-3e84-4265-b8ed-8eb38989b30f'
+  };
+  for(const [k,v] of Object.entries(expected))assert.equal(s.get(k),v);
+  assert.equal(s.get('AIRIA_SI_P01_PIPELINE_ID'),'');
+  for(const k of ['SI_C01_ENABLED','SI_S01_ENABLED','SI_V01_ENABLED',
+                   'SI_R01_ENABLED','SI_X01_ENABLED','NMC_DQ01_ENABLED'])
+    assert.equal(s.get(k),false);
+  // User can turn on a provisioned C01 without inventing an unrelated P01 ID.
+  const values={...s.publicView().values,SI_AI_PROVIDER:'airia',
+    SI_C01_ENABLED:true};
+  const saved=await s.publish({expectedVersion:0,values,actor:'admin',
+    reason:'Enable reviewed candidate selection pilot',confirmCost:true});
+  assert.equal(saved.values.SI_AI_PROVIDER,'airia');
+  assert.equal(saved.values.SI_P01_ENABLED,false);
+  assert.equal(saved.values.AIRIA_SI_P01_PIPELINE_ID,'');
+ }finally{t.done();}
+});
