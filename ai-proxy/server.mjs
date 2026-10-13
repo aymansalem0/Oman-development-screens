@@ -1,5 +1,8 @@
 import { createServer } from 'node:http';
 import {MoeiPocAuth,MoeiAuthError} from './moei-poc-auth.mjs';
+import {SiChecklistLibrary,SiChecklistError} from './si-checklist-library.mjs';
+import {SiChecklistField} from './si-checklist-field.mjs';
+import {SiChecklistAiria} from './si-checklist-airia.mjs';
 import {MoeiGoogleUsers,MoeiUsersError} from './moei-google-users.mjs';
 import {MoeiGoogleSso} from './moei-google-sso.mjs';
 import { getPscVessel, getPscHealth } from './psc-reader.mjs';
@@ -230,8 +233,14 @@ const siBulkPlan=new SiBulkInspectionPlan({
   inspectionPlan:siInspectionPlan,targeting:siTargeting,
   preparation:siPreparation,priority:siPriority
 });
+const siChecklistLibrary=new SiChecklistLibrary();
+const siChecklistAiria=new SiChecklistAiria();
+const siChecklistField=new SiChecklistField({
+  library:siChecklistLibrary,targeting:siTargeting,
+  airiaSuggest:input=>siChecklistAiria.call('vision',input)
+});
 const siLifecycle=new SiInspectionLifecycle({mode:dbMode,oracleRepository:repository,
-  targeting:siTargeting,preparation:siPreparation,cases});
+  targeting:siTargeting,preparation:siPreparation,cases,checklists:siChecklistField});
 const actionPlanRuns=new Set(); // process-local duplicate A01 invocation guard; version-lock remains authoritative
 let alertScanTimer=null;
 function rescheduleAlertScan(){
@@ -958,6 +967,70 @@ const server = createServer(async (req, res) => {
         return respond(res,e.status,{error:'SI_REQUEST_INVALID'});
       console.error('[si-targeting] REQUEST_FAILED '+String(e?.code||'UNAVAILABLE').replace(/[^A-Z0-9_-]/gi,'').slice(0,40));
       return respond(res,503,{error:'SI_TARGETING_UNAVAILABLE'});
+    }
+  }
+
+  // Configurable maritime inspection checklists; permissions are checked
+  // before every operation. GET never invokes Airia or writes data.
+  if(path==='/api/si/v1/checklists'||path.startsWith('/api/si/v1/checklists/')){
+    try{
+      const mutation=req.method!=='GET';
+      const actor=moeiAuth.require(req,{mutate:mutation});
+      const user=actor.email||actor.username;
+      const root='/api/si/v1/checklists';
+      const rest=path.slice(root.length);
+      if(!rest&&req.method==='GET')
+        return respond(res,200,{templates:siChecklistLibrary.list()});
+      if(!rest&&req.method==='POST'){
+        if(actor.role!=='ADMIN')throw new SiChecklistError('SI_CHECKLIST_ADMIN_REQUIRED',403);
+        return respond(res,201,siChecklistLibrary.create(await requestJson(req,100000),user));
+      }
+      if(rest==='/ai/status'&&req.method==='GET')
+        return respond(res,200,siChecklistAiria.status());
+      if(rest==='/ai/builder'&&req.method==='POST'){
+        if(actor.role!=='ADMIN')throw new SiChecklistError('SI_CHECKLIST_ADMIN_REQUIRED',403);
+        const payload=await requestJson(req,12000);
+        // Suggestions are draft-only. They are NEVER published by a model.
+        return respond(res,200,await siChecklistAiria.suggestSettings(payload));
+      }
+      const editor=/^\/([a-f0-9-]{36})(?:\/(publish))?$/.exec(rest);
+      if(editor){
+        if(req.method==='GET'&&!editor[2])
+          return respond(res,200,siChecklistLibrary.get(editor[1]));
+        if(actor.role!=='ADMIN')throw new SiChecklistError('SI_CHECKLIST_ADMIN_REQUIRED',403);
+        if(req.method==='PUT'&&!editor[2])
+          return respond(res,200,siChecklistLibrary.edit(editor[1],
+            await requestJson(req,100000),user));
+        if(req.method==='POST'&&editor[2]==='publish'){
+          const payload=await requestJson(req,2048);
+          return respond(res,200,siChecklistLibrary.publish(editor[1],user,
+            payload.expectedUpdatedAt));
+        }
+      }
+      const single=/^\/cases\/([a-f0-9-]{36})(?:\/(start|answers|ai\/suggest|ai\/review|submit))?$/.exec(rest);
+      if(single){
+        const id=single[1],operation=single[2];
+        if(req.method==='GET'&&!operation)
+          return respond(res,200,await siChecklistField.preview(id));
+        if(actor.role!=='ADMIN')throw new SiChecklistError('SI_CHECKLIST_INSPECTOR_REQUIRED',403);
+        if(req.method==='POST'&&operation==='start')
+          return respond(res,201,await siChecklistField.start(id,user));
+        const payload=await requestJson(req,3300000);
+        if(operation==='answers'&&req.method==='POST')
+          return respond(res,200,await siChecklistField.saveAnswers(id,{...payload,actor:user}));
+        if(operation==='ai/suggest'&&req.method==='POST')
+          return respond(res,200,await siChecklistField.suggest(id,{...payload,actor:user}));
+        if(operation==='ai/review'&&req.method==='POST')
+          return respond(res,200,await siChecklistField.review(id,{...payload,actor:user}));
+        if(operation==='submit'&&req.method==='POST')
+          return respond(res,200,await siChecklistField.complete(id,{...payload,actor:user}));
+      }
+      return respond(res,405,{error:'METHOD_NOT_ALLOWED'});
+    }catch(e){
+      if(e instanceof SiChecklistError||e instanceof MoeiAuthError)
+        return respond(res,e.status||400,{error:e.code||'SI_CHECKLIST_FAILED'});
+      console.error('[si-checklist] REQUEST_FAILED',String(e?.code||e?.message||'UNKNOWN').slice(0,80));
+      return respond(res,503,{error:'SI_CHECKLIST_BACKEND_UNAVAILABLE'});
     }
   }
 

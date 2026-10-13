@@ -185,10 +185,19 @@
       </section>
 
       <section class="card" *ngIf="record as r">
+        <p class="dynamic-checklist-entry">
+          <a [routerLink]="['/moei/smart-inspection/checklists',caseId]">
+            {{copy('Open Vessel-Specific Dynamic Checklists & AI Inspector Assistant →',
+              'فتح قوائم المعاينة الديناميكية ومساعد AI للمفتش ←')}}
+          </a>
+          <span>{{copy('Additional published checklist groups are enforced before the field report can be submitted.',
+            'يجب استكمال القوائم الإضافية المنشورة المنطبقة قبل تقديم تقرير المعاينة.')}}
+          </span>
+        </p>
         <div class="section-title"><div><small>07–08 · INSPECTOR FIELD WORKSPACE</small>
           <h2>{{copy('Field Checklist, Evidence and Deficiencies','قائمة المعاينة الميدانية والأدلة والملاحظات')}}</h2>
-          <p>{{copy('Inspector starts the field session, completes each item, records auditable observations and evidence references. Photo/video upload, offline sync, voice and CV are planned enhancements, not falsely shown as operational.',
-            'يبدأ المفتش الجلسة ويكمل البنود ويسجل الملاحظات ومراجع الأدلة. ورفع الصور والفيديو والعمل دون اتصال والتعرف الصوتي وتحليل الصور تحسينات لاحقة غير مقدمة على أنها منفذة.')}}</p>
+          <p>{{copy('This legacy baseline records field checks and evidence reference IDs. Use the linked Dynamic Checklist workspace for JPG/PNG/WebP uploads and opt-in Airia suggestions; video, offline sync, voice and legally confirmed CV remain future work.',
+            'تسجل القائمة الأساسية البنود ومراجع الأدلة. استخدم رابط القوائم الديناميكية لرفع صور JPG/PNG/WebP وطلب اقتراحات Airia عند تفعيله؛ الفيديو والعمل دون اتصال والصوت والتحليل المعتمد قانونيًا ليست مفعلة بعد.')}}</p>
         </div></div>
         <button class="primary" type="button" *ngIf="stage==='ASSIGNED'"
           (click)="run('START_FIELD')" [disabled]="busy">

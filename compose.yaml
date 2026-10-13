@@ -65,6 +65,16 @@ services:
       SI_P01_ENABLED: ${SI_P01_ENABLED:-false}
       AIRIA_SI_P01_PIPELINE_ID: ${AIRIA_SI_P01_PIPELINE_ID:-}
       SI_PREPARATION_STORE_PATH: /data/si-preparations.json
+      # Dynamic checklist library and inspector review states survive container updates.
+      SI_CHECKLIST_LIBRARY_PATH: /data/si-checklist-library.json
+      SI_CHECKLIST_CASES_PATH: /data/si-checklist-case-answers.json
+      SI_CHECKLIST_EVIDENCE_PATH: /data/si-checklist-evidence
+      # Airia is opt-in, separate builder and multimodal vision pipelines.
+      # No AI charges until a user explicitly requests a suggestion.
+      SI_CHECKLIST_AIRIA_ENABLED: ${SI_CHECKLIST_AIRIA_ENABLED:-false}
+      AIRIA_SI_CHECKLIST_BUILDER_PIPELINE_ID: ${AIRIA_SI_CHECKLIST_BUILDER_PIPELINE_ID:-}
+      AIRIA_SI_CHECKLIST_VISION_PIPELINE_ID: ${AIRIA_SI_CHECKLIST_VISION_PIPELINE_ID:-}
+
       # A03 Drive PDF extraction and agent calls are OFF until opt-in and approved.
       NMC_A03_ENABLED: ${NMC_A03_ENABLED:-false}
       NMC_DRIVE_ROOT_FOLDER_ID: ${NMC_DRIVE_ROOT_FOLDER_ID:-}
