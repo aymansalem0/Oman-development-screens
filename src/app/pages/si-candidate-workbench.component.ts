@@ -104,6 +104,49 @@ export class SiCandidateWorkbenchComponent implements OnInit{
   get aiSelectedCount():number|null{return this.plan?.aiRecommendedVessels??null;}
   get planSelectedCount():number|null{return this.plan?.selectedForPlan??null;}
   get providerLabel():string{return this.plan?.provider||'NOT LOADED';}
+  get approvalReady():boolean{
+    return !!this.activePlanId&&this.activePlan?.status==='READY_FOR_APPROVAL'&&
+      !!this.plan?.selectedForPlan&&!this.plan.stale&&
+      (Boolean(this.plan.agentRunId)||Boolean(this.plan.manualSelection));
+  }
+  selectPlanVessel(v:SiVesselCandidate,action:'INCLUDE'|'NOT_SELECTED'|'DEFER'|'NOT_APPLICABLE'):void{
+    const row=this.planRow(v);
+    if(!this.activePlanEditable||!this.activePlanId||!this.plan||!row?.editable||
+       this.planBusy||!this.auth.isAdmin)return;
+    if(action==='NOT_APPLICABLE'&&row.mandatoryReferral){
+      this.planError=this.copy('Mandatory NMC referral cannot be marked Not Applicable.',
+        'لا يمكن اعتبار إحالة NMC الإلزامية غير منطبقة من شاشة التخطيط.');return;
+    }
+    const reason=window.prompt(this.copy(
+      'Document the reason for '+action+' (minimum 8 characters):',
+      'أدخل سبب القرار '+action+' (8 أحرف على الأقل):'));
+    if(!reason||reason.trim().length<8)return;
+    let reviewAfter:string|null=null;
+    if(action==='DEFER'){
+      const date=window.prompt(this.copy('Next review date (YYYY-MM-DD):',
+        'تاريخ إعادة النظر (YYYY-MM-DD):'),this.localDate());
+      if(!date||!/^\d{4}-\d{2}-\d{2}$/.test(date)){
+        this.planError=this.copy('Enter a valid review date.','أدخل تاريخ مراجعة صحيح.');return;
+      }
+      reviewAfter=date;
+    }
+    this.planBusy=true;this.planError='';
+    this.api.selectRollingVessel(this.activePlanId,{
+      imo:v.imo,action,reason:reason.trim(),reviewAfter,
+      expectedRevision:this.plan.revision,expectedSourceHash:this.plan.sourceHash
+    }).subscribe({
+      next:()=>{
+        this.planBusy=false;this.loadRollingPlans();this.loadInspectionPlan();
+        this.planNotice=this.copy('Planning decision saved; no AI call.',
+          'تم تسجيل قرار التخطيط دون تشغيل AI.');
+      },
+      error:e=>{
+        this.planBusy=false;
+        this.planError=e?.error?.error||'SI_PLAN_SELECTION_FAILED';
+        if(this.planError.includes('CHANGED'))this.loadInspectionPlan();
+      }
+    });
+  }
   loadInspectionPlan():void{
     if(!this.activePlanId){this.plan=null;return;}
     if(!this.editorKey.trim()){
