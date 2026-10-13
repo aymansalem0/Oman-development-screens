@@ -27,6 +27,8 @@ const JSON_ACTIONS=[
   Array.isArray(o.rules)&&o.rules.length>0],
  ['SI_SELECTION_STORE_PATH','si-psc-selection.json',o=>({...o,decisions:[]}),o=>
   Array.isArray(o.policies)&&o.policies.length>0&&Array.isArray(o.decisions)],
+ ['SI_P01_STORE_PATH','si-ai-priority.json',()=>({runs:[]}),o=>
+  Array.isArray(o.runs)],
  ['SI_INSPECTION_PLAN_PATH','si-inspection-plan.json',()=>({revision:0,overrides:{},latest:null,audit:[]}),o=>
   typeof o==='object'&&!Array.isArray(o)&&Number.isInteger(o.revision)],
  ['SI_ROLLING_PLAN_PATH','si-rolling-plans.json',()=>({version:1,plans:[]}),o=>
