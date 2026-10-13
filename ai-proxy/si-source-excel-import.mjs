@@ -3,7 +3,8 @@
  * NMC CASE is never imported: it stays an authoritative live integration with
  * the existing NMC human-approved case workspace.
  *
- * Excel sources are POC_SIMULATOR / UNVERIFIED, never certified authority data.
+ * Excel sources remain POC_SIMULATOR, never certified authority data.
+ * ETD is FINAL within this POC on import; no additional date sign-off.
  * One preview -> one explicit atomic commit; zero Airia calls; no Oracle DDL.
  * Uses SI_CANDIDATE_EVENT from migration 009 (sourceImport metadata in JSON).
  */
@@ -76,7 +77,7 @@ export class SiSourceExcelImport{
     info.addRow(['MOEI SMART INSPECTION — SOURCE-SPECIFIC POC XLSX TEMPLATE']);
     info.addRow(['Source',def.display]);
     info.addRow(['Usage','Import under Settings > Inspection Settings > Candidate Source Imports']);
-    info.addRow(['Source authority','POC SIMULATOR — UNVERIFIED; officer review is mandatory']);
+    info.addRow(['Source authority','POC SIMULATOR. ETD final immediately; inspection plan and PSC selection still require human authorization.']);
     info.addRow(['NMC live referrals','Cannot be uploaded or overwritten by Excel']);
     info.addRow(['Sheet required',def.sheet]);
     info.addRow(['Headers','Row 1 exactly; records begin at row 2']);
@@ -243,7 +244,9 @@ export class SiSourceExcelImport{
       newEvents:fresh.length,replayedEvents:replays,
       issues:issues.slice(0,100),
       sample:rows.slice(0,15).map(x=>({row:x.row,imo:x.payload.imo,
-        reference:x.payload.sourceReference,port:x.payload.port})),
+        reference:x.payload.sourceReference,port:x.payload.port,
+        eta:x.payload.eta||null,departureAt:x.payload.departureAt||null,
+        departureStatus:x.payload.sourceApprovalStatus})),
       canCommit:issues.length===0&&rows.length>0};
   }
   async commit({previewId,sourceType,actor}={}){
