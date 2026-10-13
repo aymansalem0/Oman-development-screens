@@ -21,7 +21,10 @@ export interface NmcAiFocusResult {
   snapshot:NmcKpiValues;snapshotHash:string;
   selection:{metricId:NmcKpiMetricId;value:number;reasonEn:string;
     reasonAr:string;confidence:number|null;a01Priority:string;
-    a01Summary:string;evidenceIds:string[]};
+    a01Summary:string;evidenceIds:string[];
+    a01Evidence?:{title:string;evidenceIds:string[]}[];
+    a01Actions?:{actionType:string;summary:string;priority:string;
+      evidenceIds:string[];requiresHumanApproval:true}[]};
   sourceImo:string;sourceAssessmentId:string;a02VerifiedFactors:string[];
   requiresHumanReview:true;dataNature:'SYNTHETIC_POC_ADVISORY_ONLY';
 }
@@ -86,8 +89,8 @@ export class NmcAiFocusService{
         'انتظر اكتمال تحميل بيانات لوحة القيادة قبل طلب تحليل AI.'
       ],
       DASHBOARD_FOCUS_CONFIRM_REQUIRED:[
-        'Explicit AI cost confirmation required.',
-        'يلزم تأكيد تكلفة استدعاء AI صراحةً.'
+        'Explicit AI execution confirmation required.',
+        'يلزم التأكيد صراحةً قبل تشغيل وكيل AI.'
       ],
       DASHBOARD_FOCUS_AI_RESPONSE_INVALID:[
         'Airia did not return the required KPI focus contract. No indicator was highlighted.',
@@ -102,8 +105,8 @@ export class NmcAiFocusService{
         'تحليل A01/A02 لأولوية المؤشرات غير متاح مؤقتاً؛ لم يتم اختيار مؤشر.'
       ],
       DASHBOARD_FOCUS_A01_UNAVAILABLE:[
-        'A01 situation assessment failed; an A02 request may have already incurred cost. No KPI was highlighted.',
-        'تعذر تحليل الموقف A01 وقد يكون طلب A02 قد استهلك تكلفة؛ لم يتم تمييز مؤشر.'
+        'A01 situation assessment failed; A02 may already have been invoked. No KPI was highlighted.',
+        'تعذر تحليل الموقف A01 وقد يكون A02 قد تم استدعاؤه؛ لم يتم تمييز مؤشر.'
       ],
       DASHBOARD_FOCUS_A02_UNAVAILABLE:[
         'A02 risk-signals assessment failed; no A01 was started and no KPI was highlighted.',

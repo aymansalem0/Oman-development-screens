@@ -34,6 +34,11 @@ import {mockSiP01,mockSiA04,mockSiC01} from './si-agent-mock.mjs';
 import { SiInspectionPreparation, SiPreparationError } from './si-inspection-preparation.mjs';
 import { SiInspectionLifecycle, SiLifecycleError } from './si-inspection-lifecycle.mjs';
 import {runSiPocAdvisor,siFutureAdvisorCoverage,SiPocAdvisorError} from './si-poc-workflow-advisors.mjs';
+import {runSiAiriaAdvisor} from './si-airia-workflow-advisors.mjs';
+import {makeDq01Request,validateDq01Response,DqAgentError} from './nmc-airia-data-quality.mjs';
+import {readFileSync,existsSync} from 'node:fs';
+import {join as joinPath} from 'node:path';
+import {createHash as shaForMedia} from 'node:crypto';
 import { DriveDocumentIntelligence, DocumentError } from './drive-document-intelligence.mjs';
 import {buildA03MultipartUserInput,summarizeA03HttpFailure} from './airia-a03-multipart.mjs';
 import { RuntimeSettings, RuntimeSettingsError } from './runtime-settings.mjs';
@@ -53,8 +58,11 @@ const getAiriaKey=()=>aiCredentialVault.get();
 const runtime=new RuntimeSettings();
 runtime.load();
 const agentAllowed=agent=>{
-  if(agent==='c01')return runtime.get('SI_C01_ENABLED');
-  const k={a01:'NMC_A01_ENABLED',a02:'NMC_A02_ENABLED',a03:'NMC_A03_ENABLED',a04:'SI_A04_ENABLED',p01:'SI_P01_ENABLED'}[agent];return k?runtime.get(k):false;};
+  const k={a01:'NMC_A01_ENABLED',a02:'NMC_A02_ENABLED',a03:'NMC_A03_ENABLED',
+    a04:'SI_A04_ENABLED',p01:'SI_P01_ENABLED',c01:'SI_C01_ENABLED',
+    dq01:'NMC_DQ01_ENABLED',s01:'SI_S01_ENABLED',v01:'SI_V01_ENABLED',
+    r01:'SI_R01_ENABLED',x01:'SI_X01_ENABLED'}[agent];
+  return k?runtime.get(k):false;};
 const airiaTimeout=()=>runtime.get('AIRIA_TIMEOUT_MS');
 const maxBytes = 1024 * 1024; // Single agent call body.
 // SI only: no NMC A01/A02 behavior is changed by this feature flag.
@@ -69,13 +77,17 @@ const pipelines = {
   get a03(){return runtime.get('AIRIA_A03_PIPELINE_ID');},
   get a04(){return runtime.get('AIRIA_A04_PIPELINE_ID');},
   get c01(){return runtime.get('AIRIA_SI_C01_PIPELINE_ID');},
-  get p01(){return runtime.get('AIRIA_SI_P01_PIPELINE_ID');}
+  get p01(){return runtime.get('AIRIA_SI_P01_PIPELINE_ID');},
+  get dq01(){return runtime.get('AIRIA_NMC_DQ01_PIPELINE_ID');},
+  get s01(){return runtime.get('AIRIA_SI_S01_PIPELINE_ID');},
+  get v01(){return runtime.get('AIRIA_SI_V01_PIPELINE_ID');},
+  get r01(){return runtime.get('AIRIA_SI_R01_PIPELINE_ID');},
+  get x01(){return runtime.get('AIRIA_SI_X01_PIPELINE_ID');}
 };
 
 async function fleetAgentCall(agent,input) {
   if (!getAiriaKey()) throw new Error('AIRIA_NOT_CONFIGURED');
   if(!pipelines[agent])throw new Error('AIRIA_PIPELINE_NOT_CONFIGURED');
-  if (!pipelines[agent]) throw new Error('AIRIA_PIPELINE_NOT_CONFIGURED');
   if (!agentAllowed(agent)) throw new Error('AIRIA_AGENT_DISABLED');
   const upstream=await fetch(runtime.get('AIRIA_BASE_URL')+'/v1/PipelineExecution/'+pipelines[agent],{
     method:'POST',
@@ -113,7 +125,7 @@ async function a03AgentCall(payload) {
       method:'POST',
       headers:{'X-API-KEY':getAiriaKey(),'User-Agent':'moei-nmc-adapter/1.0'},
       body:form,
-      signal:AbortSignal.timeout(timeoutMs)
+      signal:AbortSignal.timeout(airiaTimeout())
     });
   }catch(error){
     // Never log credentials, request body, source PDF or upstream error messages.
@@ -244,6 +256,50 @@ const siPreparation=new SiInspectionPreparation({mode:dbMode,oracleRepository:re
   bundles:siTargeting.bundles,
   executeA04:async input=>siAiProvider==='mock'?mockSiA04(input):fleetAgentCall('a04',input),
   enabled:siAiProvider==='mock'||(runtime.get('SI_A04_ENABLED')&&Boolean(getAiriaKey()))});
+/** Only real, case-owned, inspector-reviewed image bytes can be sent to V01.
+ * A checklist AI draft by itself is NOT sufficient for regulatory evidence. */
+async function verifiedSiVisionMedia(caseId,view){
+  let preview;
+  try{preview=await siChecklistField.preview(caseId);}catch{
+    throw new SiPocAdvisorError('SI_V01_REVIEWED_CHECKLIST_EVIDENCE_REQUIRED',409);
+  }
+  const saved=preview.saved;
+  if(!saved||!Array.isArray(saved.proposals)||!Array.isArray(saved.templates))
+    throw new SiPocAdvisorError('SI_V01_REVIEWED_CHECKLIST_EVIDENCE_REQUIRED',409);
+  const items=saved.templates.flatMap(t=>(t.groups||[]).flatMap(g=>(g.items||[])
+    .map(item=>({item,revision:t.revision}))));
+  for(const proposal of [...saved.proposals].reverse()){
+    const e=proposal.imageEvidenceRef;
+    if(!e||!/^[a-f0-9-]{36}$/i.test(e.id||'')||
+       !(proposal.reviews||[]).some(r=>['ACCEPT','EDIT'].includes(r.decision)))continue;
+    const linked=items.find(x=>(x.item.evidenceRefs||[]).includes('SI-IMG:'+e.id));
+    if(!linked)continue;
+    const ext={'image/png':'.png','image/jpeg':'.jpg','image/webp':'.webp'}[e.mimeType];
+    if(!ext)continue;
+    const path=joinPath(process.env.SI_CHECKLIST_EVIDENCE_PATH||'/data/si-checklist-evidence',caseId,e.id+ext);
+    if(!existsSync(path))continue;
+    const bytes=readFileSync(path);
+    if(!bytes.length||bytes.length>2*1024*1024||
+      shaForMedia('sha256').update(bytes).digest('hex')!==e.sha256)continue;
+    return {caseId,bytes,evidenceId:e.id,checklistItemId:linked.item.id,
+      checklistVersion:String(linked.revision||''),sha256:e.sha256,mimeType:e.mimeType,
+      observation:linked.item.note||'',baseCheckMandatory:linked.item.mandatory||false};
+  }
+  throw new SiPocAdvisorError('SI_V01_REVIEWED_CASE_IMAGE_REQUIRED',409);
+}
+async function callSiVisionAiria(request,media){
+  if(!getAiriaKey()||!agentAllowed('v01')||!pipelines.v01)
+    throw new Error('AIRIA_V01_NOT_CONFIGURED');
+  const form=new FormData();form.set('userInput',JSON.stringify(request));
+  form.set('file',new Blob([media.bytes],{type:media.mimeType}),media.evidenceId+({'image/png':'.png','image/jpeg':'.jpg','image/webp':'.webp'}[media.mimeType]||'.bin'));
+  const upstream=await fetch(runtime.get('AIRIA_BASE_URL')+'/v1/PipelineExecution/Multipart/'+pipelines.v01,{
+    method:'POST',headers:{'X-API-KEY':getAiriaKey(),'User-Agent':'moei-si-v01/1.0'},
+    body:form,signal:AbortSignal.timeout(airiaTimeout())
+  });
+  if(!upstream.ok)throw new Error('AIRIA_V01_HTTP_'+upstream.status);
+  return upstream.json();
+}
+
 const siBulkPlan=new SiBulkInspectionPlan({
   inspectionPlan:siInspectionPlan,targeting:siTargeting,
   preparation:siPreparation,priority:siPriority
@@ -623,6 +679,60 @@ const server = createServer(async (req, res) => {
     }
     return respond(res,405,{error:'METHOD_NOT_ALLOWED'});
   }
+  // Registered with Airia MENA, but published pipeline IDs alone do not
+  // prove partner contract compatibility or end-to-end deployment readiness.
+  if(path==='/api/ai/admin/agents/coverage'&&req.method==='GET'){
+    const specs=[
+      ['A01','a01','Maritime intelligence','WIRED'],
+      ['A02','a02','Vessel compliance','WIRED'],
+      ['A03','a03','Document intelligence','WIRED_MULTIPART'],
+      ['A04','a04','Inspection dossier','WIRED'],
+      ['DQ-01','dq01','Data-quality factors','CONTRACT_PILOT'],
+      ['SI-C01','c01','Candidate selection','WIRED_CONTRACT_CHECK'],
+      ['SI-P01','p01','Approved execution priority','PIPELINE_NOT_SUPPLIED'],
+      ['SI-S01','s01','Scheduling slot advice','CONTRACT_PILOT'],
+      ['SI-V01','v01','Vision evidence review','CONTRACT_PILOT_MEDIA_REQUIRED'],
+      ['SI-R01','r01','Inspection report drafting','CONTRACT_PILOT'],
+      ['SI-X01','x01','Recurring deficiency advice','CONTRACT_PILOT_HISTORY_REQUIRED']
+    ];
+    return respond(res,200,{status:'ok',provider:'AIRIA',
+      keyConfigured:Boolean(getAiriaKey()),providerContractTestsCompleted:false,
+      siProvider:siAiProvider,agents:specs.map(([code,id,role,integration])=>({
+        code,role,integration,configured:Boolean(pipelines[id]),
+        enabled:agentAllowed(id),pipelineId:pipelines[id]||null,
+        currentlySelectedForSi:code.startsWith('SI-')?siAiProvider==='airia':null,
+        verifiedLiveInUserEnvironment:false})),
+      conversationalCatalog:[
+        {code:'NMC-DESK',pipelineId:runtime.get('AIRIA_NMC_DESK_PIPELINE_ID'),responseType:'PROSE',structuredAdapter:false},
+        {code:'CONVERSATIONAL-SI',pipelineId:runtime.get('AIRIA_CONVERSATIONAL_SI_PIPELINE_ID'),responseType:'PROSE',structuredAdapter:false},
+        {code:'SDB-JOURNEY',pipelineId:runtime.get('AIRIA_SDB_JOURNEY_PIPELINE_ID'),responseType:'PROSE',structuredAdapter:false}
+      ],notes:['Airia provider catalogue is documented; live HTTP/JSON contracts not independently exercised by a GitHub commit.',
+        'No upstream AI invocation occurs when opening this coverage URL.',
+        'NMC risk, data-quality score, inspections, bookings and official findings remain owned by platform workflows.']});
+  }
+  if(path==='/api/ai/data-quality/assessments'){
+    if(req.method!=='POST')return respond(res,405,{error:'METHOD_NOT_ALLOWED'});
+    try{
+      dashboards.assertRole(req,'EDITOR');
+      if(!agentAllowed('dq01'))return respond(res,403,{error:'DQ01_DISABLED'});
+      const body=await requestJson(req,2048);
+      if(body?.confirmRun!==true)return respond(res,422,{error:'DQ01_EXPLICIT_RUN_REQUIRED'});
+      const imo=body.imo;
+      if(typeof imo!=='string'||!/^\\d{7}$/.test(imo))
+        return respond(res,422,{error:'DQ01_IMO_INVALID'});
+      const ctx=makeDq01Request(imo,fleet.getVesselResult(imo),incidentBundleMap.get(imo));
+      let raw;
+      try{raw=await fleetAgentCall('dq01',ctx.request);}
+      catch{return respond(res,502,{error:'DQ01_PROVIDER_UNAVAILABLE'});}
+      return respond(res,200,{...validateDq01Response(raw,ctx.known),imo,
+        sourceAssessmentId:fleet.getVesselResult(imo)?.assessmentId});
+    }catch(error){
+      if(error instanceof DqAgentError||error instanceof DashboardError)
+        return respond(res,error.status,{error:error.code});
+      return respond(res,503,{error:'DQ01_UNAVAILABLE'});
+    }
+  }
+
   if (req.method === 'GET' && path === '/api/ai/health') {
     const db=repository?await repository.health():{mode:'json',ready:true};
     return respond(res, db.ready?200:503, {
@@ -996,17 +1106,41 @@ const server = createServer(async (req, res) => {
       }
       if(path==='/api/si/v1/advisors/coverage'&&req.method==='GET'){
         dashboards.assertRole(req,'EDITOR');
-        return respond(res,200,{status:'ok',...siFutureAdvisorCoverage()});
+        return respond(res,200,{status:'ok',...siFutureAdvisorCoverage(),
+          liveAgentOptions:Object.fromEntries(['s01','v01','r01','x01'].map(id=>[
+            'SI-'+id.toUpperCase(),{enabled:agentAllowed(id),pipelineRegistered:Boolean(pipelines[id]),
+              provider:siAiProvider==='airia'&&agentAllowed(id)?'AIRIA':'MOCK',
+              contractStatus:'PARTNER_LIVE_RESPONSE_VALIDATION_REQUIRED'}]))});
       }
       const advisorPath=/^\/api\/si\/v1\/lifecycle\/([a-f0-9-]{36})\/advisors\/(SI-(?:S01|V01|R01|X01))\/run$/.exec(path);
       if(advisorPath&&req.method==='POST'){
         dashboards.assertRole(req,'EDITOR');
         const input=await requestJson(req,4096);
         const view=await siLifecycle.snapshot(advisorPath[1]);
-        return respond(res,200,runSiPocAdvisor({
-          agentCode:advisorPath[2],caseId:advisorPath[1],
-          scenario:input.scenario||null
-        },view));
+        const agentCode=advisorPath[2],agentKey=agentCode.slice(3).toLowerCase();
+        if(siAiProvider!=='airia'||!agentAllowed(agentKey))
+          return respond(res,200,runSiPocAdvisor({agentCode,caseId:advisorPath[1],
+            scenario:input.scenario||null},view));
+        if(input.confirmRun!==true)
+          throw new SiPocAdvisorError('SI_AIRIA_EXPLICIT_INVOCATION_REQUIRED',422);
+        let proposal=null,history=[],media=null;
+        if(agentCode==='SI-S01')proposal=siScheduling.list().find(p=>
+          p.referral?.id===view.inspectionCase.nmcReferralId&&p.status==='PROPOSED')||null;
+        if(agentCode==='SI-V01')media=await verifiedSiVisionMedia(advisorPath[1],view);
+        if(agentCode==='SI-X01'){
+          const all=await siLifecycle.list();
+          const old=all.cases.filter(c=>c.imo===view.inspectionCase.imo&&
+            c.id!==advisorPath[1]).slice(0,8);
+          for(const c of old){
+            const earlier=await siLifecycle.snapshot(c.id);
+            history.push(...(earlier.record?.findings||[]).map(f=>({
+              ...f,caseId:c.id,imo:c.imo})));
+          }
+        }
+        return respond(res,200,await runSiAiriaAdvisor({
+          agentCode,caseId:advisorPath[1],scenario:input.scenario||null
+        },view,{executeAgent:fleetAgentCall,executeVision:callSiVisionAiria,
+          proposal,history,media,actor:req.moeiUser?.email||req.moeiUser?.username||'MOEI_OPERATOR'}));
       }
       const lifecyclePath=/^\/api\/si\/v1\/lifecycle\/([0-9a-f-]{36})(?:\/(actions|history))?$/.exec(path);
       if(lifecyclePath){

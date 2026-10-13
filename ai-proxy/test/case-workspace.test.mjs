@@ -325,6 +325,19 @@ test('MODIFY validates the new officer route and never executes the original A01
      ()=>db.cases.decideAction(row.id,row.version,'verify-certificate','MODIFY',
        'Not allowed','OPERATOR','DETENTION_ORDER'),
      /CASE_MODIFICATION_ROUTE_REQUIRED/);
+   await assert.rejects(
+     ()=>db.cases.decideAction(row.id,row.version,'verify-certificate','ACCEPT',
+       'No replacement expected','OPERATOR','PRIORITY_INSPECTION'),
+     /CASE_MODIFICATION_ROUTE_UNEXPECTED/);
+   // None of the invalid requests may alter the original proposal, risk,
+   // persisted version, case history, tasks or inspection referrals.
+   const unchanged=await db.cases.get(row.id);
+   assert.equal(unchanged.version,row.version);
+   assert.equal(unchanged.sourceScore,initialRisk);
+   assert.equal(unchanged.tasks.length,0);
+   assert.equal(unchanged.inspectionRequests.length,0);
+   assert.equal(unchanged.actionPlan.proposedActions.find(
+     a=>a.actionId==='verify-certificate').decision,'PENDING');
    row=await db.cases.decideAction(row.id,row.version,'verify-certificate','MODIFY',
      'Certificate evidence warrants inspection review','OPERATOR','PRIORITY_INSPECTION');
    const ai=row.actionPlan.proposedActions.find(a=>a.actionId==='verify-certificate');

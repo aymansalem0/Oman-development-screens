@@ -451,6 +451,14 @@ export class NmcCaseWorkspace{
       throw new NmcCaseError('CASE_DECISION_INVALID');
     if(decision!=='ACCEPT'&&!noteValue(note))
       throw new NmcCaseError('CASE_DECISION_REASON_REQUIRED');
+    // Reject unknown replacement actions BEFORE writing any case or task.
+    // An absent/unsupported route must never silently fall back to the
+    // original A01 title, owner or workflow. Regulatory decisions remain
+    // outside the human-approved POC replacement route allowlist.
+    if(decision==='MODIFY'&&!Object.hasOwn(HUMAN_REPLACEMENT_ROUTES,replacementActionType||''))
+      throw new NmcCaseError('CASE_MODIFICATION_ROUTE_REQUIRED');
+    if(decision!=='MODIFY'&&replacementActionType)
+      throw new NmcCaseError('CASE_MODIFICATION_ROUTE_UNEXPECTED');
     return this._update(id,version,'A01_ACTION_'+decision,role,note,row=>{
       if(row.status==='RESOLVED')throw new NmcCaseError('CASE_ALREADY_RESOLVED',409);
       const plan=row.actionPlan;

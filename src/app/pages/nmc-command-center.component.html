@@ -49,8 +49,8 @@
                   [disabled]="!aiKpiFocusAvailable||aiKpiFocusBusy"
                   [attr.aria-busy]="aiKpiFocusBusy"
                   [title]="aiKpiFocusAvailable
-                    ?copy('Uses existing A02 risk signals then A01 situation assessment (up to TWO paid calls). Same request/response fields, with dashboard context.',
-                          'يستخدم A02 لمؤشرات المخاطر ثم A01 لتقييم الموقف (قد ينتج استدعاءان مدفوعان). نفس حقول الطلب والاستجابة مع سياق لوحة القيادة.')
+                    ?copy('Uses existing A02 risk signals then A01 situation assessment (up to TWO Airia executions). Same request/response fields, with dashboard context.',
+                          'يستخدم A02 لمؤشرات المخاطر ثم A01 لتقييم الموقف (قد ينتج استدعاءان من Airia). نفس حقول الطلب والاستجابة مع سياق لوحة القيادة.')
                     :aiKpiFocusStatusLoaded&&!aiKpiFocusContextReady
                     ?copy('No eligible saved full vessel assessment with all five risk signals and bundle; verify Oracle source readiness before any Airia call.',
                           'لا يوجد تقييم سفينة محفوظ ومكتمل بالمؤشرات الخمسة والأدلة المطلوبة؛ تحقق من بيانات Oracle قبل أي طلب Airia.')
@@ -100,6 +100,25 @@
           <strong>{{copy('AI-prioritized attention · officer review only',
                           'المؤشر الأهم وفق AI · للمراجعة البشرية فقط')}}</strong>
           <p>{{lang.isArabic?aiKpiFocus.selection.reasonAr:aiKpiFocus.selection.reasonEn}}</p>
+          <p><b>{{copy('A01 situation assessment','تقييم الموقف من A01')}}:</b>
+            {{aiKpiFocus.selection.a01Summary}}</p>
+          <div *ngIf="aiKpiFocus.selection.a01Actions?.length">
+            <b>{{copy('Evidence-backed recommendations for officer review','التوصيات المدعومة بالأدلة للمراجعة البشرية')}}</b>
+            <div *ngFor="let action of aiKpiFocus.selection.a01Actions" class="si-poc-agent-advice">
+              <strong>{{action.actionType}} · {{action.priority}}</strong>
+              <p>{{action.summary||copy('Review available evidence and validate with duty officer.',
+                'يرجى مراجعة الأدلة والتحقق بواسطة المسؤول.')}}</p>
+              <small>{{copy('Cited evidence IDs','معرّفات الأدلة')}}:
+                {{action.evidenceIds.join(', ')||'—'}}</small>
+              <small> · {{copy('Human approval required','يتطلب موافقة بشرية')}}</small>
+            </div>
+          </div>
+          <div *ngIf="aiKpiFocus.selection.a01Evidence?.length">
+            <b>{{copy('Supporting maritime evidence','الأدلة البحرية الداعمة')}}</b>
+            <p *ngFor="let ev of aiKpiFocus.selection.a01Evidence">
+              {{ev.title}} · {{ev.evidenceIds.join(', ')}}
+            </p>
+          </div>
           <small>{{copy('Anchored to saved vessel assessment','استنادًا إلى تقييم السفينة المحفوظ')}}:
             IMO {{aiKpiFocus.sourceImo}} · {{copy('A01 cited evidence','أدلة A01')}}:
             {{aiKpiFocus.selection.evidenceIds.length}}</small>

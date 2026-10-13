@@ -65,13 +65,14 @@ export interface SiPocAdvisorAdvice{
  evidenceRefs:string[];requiresHumanReview:true;synthetic?:boolean;
 }
 export interface SiPocAdvisorResult{
- status:'MOCK_ADVISORY_REVIEW_REQUIRED';schemaVersion:string;
- agentCode:SiPocAdvisorCode;provider:'MOCK';simulationLabel:'MOCK_POC_NOT_REAL_AI';
- scenario:string|null;externalCalls:0;caseMutations:0;humanApprovalRequired:true;
+ status:'MOCK_ADVISORY_REVIEW_REQUIRED'|'AIRIA_ADVISORY_REVIEW_REQUIRED';schemaVersion:string;
+ agentCode:SiPocAdvisorCode;provider:'MOCK'|'AIRIA';simulationLabel:'MOCK_POC_NOT_REAL_AI'|null;
+ scenario:string|null;externalCalls:number;caseMutations:0;humanApprovalRequired:true;
  advice:SiPocAdvisorAdvice[];warning:string;
  draft:{status:string;title:string;summary:string;
    findingRefs:{findingId:string;severity:string;description:string;evidenceRefs:string[]}[];
-   evidenceRefs:string[];aiGenerated:false;autoIssued:false}|null;
+   evidenceRefs:string[];aiGenerated:boolean;autoIssued:false;
+   correctiveActionDrafts?:{findingId:string;text:string;evidenceRefs:string[];requiresSupervisorInput:true}[]}|null;
 }
 @Injectable({providedIn:'root'})
 export class SiLifecycleService{
@@ -92,7 +93,8 @@ export class SiLifecycleService{
   }
   pocAdvisor(caseId:string,agent:SiPocAdvisorCode,scenario:string|null=null):Observable<SiPocAdvisorResult>{
     return this.http.post<SiPocAdvisorResult>(
-      this.url+'/'+encodeURIComponent(caseId)+'/advisors/'+agent+'/run',{scenario});
+      this.url+'/'+encodeURIComponent(caseId)+'/advisors/'+agent+'/run',
+      {scenario,confirmRun:true});
   }
   apply(caseId:string,key:string,body:{
     action:string;expectedVersion:number;actor:string;data?:Record<string,unknown>

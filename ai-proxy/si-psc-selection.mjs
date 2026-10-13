@@ -5,8 +5,8 @@
  * Quotas are POC operational policy, NOT statutory IMO/PSC selection rules.
  */
 import {randomUUID,createHash} from 'node:crypto';
-import {existsSync,readFileSync,writeFileSync,mkdirSync,renameSync} from 'node:fs';
-import {dirname} from 'node:path';
+import {existsSync,readFileSync} from 'node:fs';
+import {atomicJsonWrite} from './atomic-json-store.mjs';
 import oracledb from 'oracledb';
 
 export class SiSelectionError extends Error{
@@ -71,12 +71,7 @@ export class SiPscSelection{
       throw new SiSelectionError('SI_SELECTION_STORE_INVALID',503);
     return data;
   }
-  _save(data){
-    mkdirSync(dirname(this.file),{recursive:true});
-    const temp=this.file+'.tmp-'+process.pid;
-    writeFileSync(temp,JSON.stringify(data,null,2),{mode:0o600});
-    renameSync(temp,this.file);
-  }
+  _save(data){atomicJsonWrite(this.file,data);}
   async _db(fn){
     if(!this.oracle?.pool)throw new SiSelectionError('SI_SELECTION_ORACLE_UNAVAILABLE',503);
     const con=await this.oracle.pool.getConnection();

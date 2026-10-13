@@ -4,8 +4,8 @@
  * human-approved case workspace. Never call Airia or invent missing risk scores.
  */
 import {createHash,randomUUID} from 'node:crypto';
-import {existsSync,readFileSync,writeFileSync,mkdirSync,renameSync} from 'node:fs';
-import {dirname} from 'node:path';
+import {existsSync,readFileSync} from 'node:fs';
+import {atomicJsonWrite} from './atomic-json-store.mjs';
 import oracledb from 'oracledb';
 
 const copy=x=>JSON.parse(JSON.stringify(x));
@@ -56,12 +56,6 @@ function validateRules(value){
       prioritization:getSiPrioritySettings(value)};
   }catch{return null;}
 }
-function jsonWrite(path,data){
-  mkdirSync(dirname(path),{recursive:true});
-  const tmp=path+'.tmp-'+process.pid;
-  writeFileSync(tmp,JSON.stringify(data,null,2),{mode:0o600});
-  renameSync(tmp,path);
-}
 export class SiTargetingError extends Error{
   constructor(code,status=400){super(code);this.code=code;this.status=status;}
 }
@@ -90,7 +84,7 @@ export class SiCandidateTargeting{
       throw new SiTargetingError('SI_STORE_INVALID',503);
     return data;
   }
-  _save(x){jsonWrite(this.file,x);}
+  _save(x){atomicJsonWrite(this.file,x);}
   async _db(work){
     if(!this.oracle?.pool)throw new SiTargetingError('SI_ORACLE_NOT_READY',503);
     const con=await this.oracle.pool.getConnection();
