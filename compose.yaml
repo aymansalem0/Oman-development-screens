@@ -67,6 +67,10 @@ services:
       AIRIA_SI_P01_PIPELINE_ID: ${AIRIA_SI_P01_PIPELINE_ID:-}
       SI_PREPARATION_STORE_PATH: /data/si-preparations.json
       # Dynamic checklist library and inspector review states survive container updates.
+      # Oracle-authoritative checklist storage when NMC_DB_MODE=oracle.
+      # Explicit SI_CHECKLIST_STORAGE=json allows controlled rollback.
+      # Legacy /data documents are NEVER auto-imported or discarded.
+      SI_CHECKLIST_STORAGE: ${SI_CHECKLIST_STORAGE:-}
       SI_CHECKLIST_LIBRARY_PATH: /data/si-checklist-library.json
       SI_CHECKLIST_CASES_PATH: /data/si-checklist-case-answers.json
       SI_CHECKLIST_EVIDENCE_PATH: /data/si-checklist-evidence
