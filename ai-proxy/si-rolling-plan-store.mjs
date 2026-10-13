@@ -97,7 +97,7 @@ export class SiRollingPlanStore{
    return from(x[0].STATE_JSON);
   });
  }
- async create(input={},actor){
+ async create(input={},actor,{candidates=[],sourceHash=null}={}){
   // No port belongs to the rolling inspection plan business model.
   // Legacy input.port is ignored; the nullable Oracle 018 PORT column is kept
   // for backwards compatibility without any destructive schema operation.
@@ -111,7 +111,14 @@ export class SiRollingPlanStore{
   const state={id:randomUUID(),number:uniqueNumber(),title,startsOn:input.startsOn,
    endsOn:input.endsOn,notes,status:'DRAFT',revision:0,
    createdAt,createdBy:actor,updatedAt:createdAt,updatedBy:actor,
-   overrides:{},latest:null,audit:[{event:'CREATED',at:createdAt,actor}],
+   overrides:{},latest:null,selectionSourceHash:null,savedPlanRows:null,
+   candidateSnapshot:candidates.map(c=>({
+    candidateKey:c.candidateKey,imo:c.imo,regime:c.regime,
+    sourceEventKeys:(c.sourceEvents||[]).map(e=>e.eventKey),
+    sourceTypes:c.sourceTypes||[],risk:c.currentRisk||null
+   })),
+   candidateSourceHash:sourceHash,
+   audit:[{event:'CREATED',at:createdAt,actor}],
    approvedBatchId:null,approvedVessels:[],approvedBy:null,approvedAt:null};
   if(this.mode==='json'){
    const data=this.readFile();data.plans.push(state);this.writeFile(data);
@@ -199,6 +206,10 @@ export class SiRollingPlanStore{
    p.approvedAt=now();p.approvedBy=actor;
    p.approvedVessels=cases.map(({imo,caseId,planRank,inspectionReasons,regimes})=>({
     imo,caseId,planRank,inspectionReasons,regimes}));
+   // Pin the original approved selection for tomorrow's historical reads.
+   // Do not recompute it from a newer PSC/NMC source snapshot.
+   p.approvedRows=clone((p.savedPlanRows||p.latest?.rows||[])
+     .filter(row=>row.planSelected));
    p.revision++;p.updatedAt=now();p.updatedBy=actor;
    p.audit=[...(p.audit||[]),{event:'APPROVED',at:p.approvedAt,actor,
     batchId}].slice(-300);
