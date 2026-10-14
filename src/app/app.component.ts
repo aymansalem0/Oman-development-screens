@@ -23,7 +23,13 @@ export class AppComponent {
   get isNmcArea(): boolean {
     const path = this.router.url.split('?')[0].split('#')[0];
     return path === '/moei/nmc' || path.startsWith('/moei/nmc/') ||
-      path === '/moei/smart-inspection' || path.startsWith('/moei/smart-inspection/');
+      path === '/moei/smart-inspection' || path.startsWith('/moei/smart-inspection/') ||
+      path === '/moei/seafarers' || path.startsWith('/moei/seafarers/');
+  }
+
+  get isSeafarerArea():boolean{
+    const path=this.router.url.split('?')[0].split('#')[0];
+    return path==='/moei/seafarers'||path.startsWith('/moei/seafarers/');
   }
 
   get isSmartInspectionArea(): boolean {
