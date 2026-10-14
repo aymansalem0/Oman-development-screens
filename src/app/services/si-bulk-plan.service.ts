@@ -24,6 +24,33 @@ export interface SiBulkPreview{
  a04Provider:'MOCK'|'AIRIA';p01Provider:'MOCK'|'AIRIA';
  maxAiPerBatch:number;warnings:string[];requiresSupervisorApproval:true;
 }
+export type SiCapacityWeightKey='NMC_CASE'|'SERVICE_REQUEST'|'PSC_PORT_CALL'|'RISK_FACTOR';
+export type SiCapacityWeights=Record<SiCapacityWeightKey,number>;
+export interface SiCapacityAssignment{
+ imo:string;inspectorId:string;inspectorName:string;portId:string;portName:string;
+ startLocal:string;endLocal:string;startUtc:string;endUtc:string;score:number;
+ crossPort?:boolean;originPortName?:string;travelMinutes?:number;
+}
+export interface SiCapacityPreview{
+ status:string;planId:string;planRevision:number;sourceHash:string;capacityHash:string;
+ weights:SiCapacityWeights;mode:'POC_MOCK'|'ERP_EXCEL_POC';readyForApproval:boolean;
+ sourceFactsAreSynthetic:boolean;warnings:string[];
+ proposedVesselCount:number;unmetCapacityCount:number;
+ priorityAdvisory:{imo:string;rank:number;score:number;sourcePoints:number;
+  riskPoints:number|null;riskStatus:string;sourceTypes:string[];
+  statutoryPriorityProtected:boolean}[];
+ proposal:{proposalHash:string;planRevision:number;
+  summary:{total:number;proposed:number;unscheduled:number};
+  rows:{imo:string;status:'PROPOSED'|'UNSCHEDULED';blocker:string|null;
+   assignment:SiCapacityAssignment|null;diagnostics?:{code:string;category:string}|null}[];
+  variants:{optionId:string;objectiveScore:number;allocatedVessels:number;
+   assignments:SiCapacityAssignment[]}[]};
+}
+export interface SiCapacityApproval{
+ status:string;planId:string;revision:number;approvedVesselCount:number;
+ createdInspectionCases:number;createdDossiers:number;schedulingRoute:string;
+ schedule:{id:string;orders:{imo:string;id:string;status:string}[]};
+}
 export type SiBulkItemState='QUEUED'|'APPROVED'|'PREPARED'|'READY'|'APPROVAL_FAILED'|'PREPARATION_FAILED';
 export interface SiBulkItem{
  imo:string;candidateKey:string;regime:string;regimes:string[];reasonCount:number;vesselName:string;
@@ -62,6 +89,29 @@ export class SiBulkPlanService{
    approvedVesselCount:number;createdInspectionCases:number;createdDossiers:number;
    schedulingRoute:string}>('/api/si/v1/inspection-plans/'+encodeURIComponent(input.planId)+
     '/approve-for-scheduling',input);
+ }
+ capacityPreview(planId:string,weights:SiCapacityWeights):Observable<{status:string;capacity:SiCapacityPreview}>{
+  return this.http.post<{status:string;capacity:SiCapacityPreview}>(
+   '/api/si/v1/inspection-plans/'+encodeURIComponent(planId)+'/capacity-preview',
+   {weights,demoMode:true});
+ }
+ capacityAiRecommend(planId:string,weights:SiCapacityWeights,expectedCapacityHash:string):
+  Observable<{status:string;capacityHash:string;chosenOptionId:string;
+   provider:'POC_MOCK'|'AIRIA';rankedOptions:{optionId:string;rank:number;
+   rationale:string;confidence:number}[]}>{
+  return this.http.post<{status:string;capacityHash:string;chosenOptionId:string;
+   provider:'POC_MOCK'|'AIRIA';rankedOptions:{optionId:string;rank:number;
+    rationale:string;confidence:number}[]}>(
+   '/api/si/v1/inspection-plans/'+encodeURIComponent(planId)+'/capacity-ai-recommend',
+   {weights,demoMode:true,expectedCapacityHash,confirmRun:true,confirmCost:true});
+ }
+ approveCapacityPlan(input:{planId:string;weights:SiCapacityWeights;
+  expectedCapacityHash:string;selectedOptionId:string;expectedRevision:number;
+  expectedSourceHash:string;reason:string;confirmApproval:true;
+  confirmCrossPort:boolean}):Observable<SiCapacityApproval>{
+  return this.http.post<SiCapacityApproval>(
+   '/api/si/v1/inspection-plans/'+encodeURIComponent(input.planId)+'/approve-capacity',
+   {...input,demoMode:true});
  }
  job(id:string):Observable<SiBulkJob>{
   return this.http.get<SiBulkJob>(this.url+'/'+encodeURIComponent(id));
