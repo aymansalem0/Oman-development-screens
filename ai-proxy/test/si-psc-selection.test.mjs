@@ -5,7 +5,7 @@ import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 import {SiCandidateTargeting} from '../si-candidate-targeting.mjs';
 import {SiPscSelection} from '../si-psc-selection.mjs';
-import {buildSiPrioritySnapshot} from '../si-ai-prioritization.mjs';
+import {buildC01Source} from '../si-candidate-agent.mjs';
 const vessels=Array.from({length:50},(_,i)=>({
   imo:String(9100000+i),
   inlineContext:{vessel:{name:'PSC Vessel '+i,flag:'UAE',vesselType:'CARGO'}}
@@ -58,8 +58,8 @@ test('Saved PSC Excel events immediately receive the published quota shortlist, 
     assert.equal(d.summary.bySource.NMC_CASE,1);
     assert.equal(d.summary.bySource.SERVICE_REQUEST,1);
     assert.equal(d.summary.candidates,5);
-    assert.equal(buildSiPrioritySnapshot(d).items.some(x=>
-      x.inspectionRegime==='PORT_STATE_CONTROL'),true);
+    assert.equal(buildC01Source(d,{version:1}).candidates.some(x=>
+      x.sourceTypes.includes('PSC_PORT_CALL')),true);
     const pool=await w.selection.pool();
     assert.equal(pool.summary.eligiblePortCalls,20);
     assert.equal(pool.summary.inPoolPortCalls,17);
