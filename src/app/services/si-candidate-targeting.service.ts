@@ -110,7 +110,7 @@ export interface SiC01Recommendation{
   priorityRationaleSource?:'AGENT_OUTPUT'|'DETERMINISTIC_BUSINESS_RULE';
   evidenceRefs:string[];dataGaps:string[];
   modelRecommendation?:'SELECT_RECOMMENDED'|'DEFER_RECOMMENDED'|'MANUAL_REVIEW';
-  selectionReviewGate?:'BELOW_PUBLISHED_CONFIDENCE'|null;
+  selectionReviewGate?:'BELOW_PUBLISHED_CONFIDENCE'|'AIRIA_OUTPUT_NOT_VERIFIED'|null;
   requiresHumanReview:true;regulatoryDecision:false;
 }
 export interface SiC01Preview {
@@ -131,6 +131,8 @@ export interface SiC01Run{
  actor:string;generatedAt:string;externalCalls:number;humanDecisionRequired:true;
  mutations:false;warning:string;recommendations:SiC01Recommendation[];
  batchesValidated?:number;candidatesAnalyzed?:number;
+ verifiedAiRecommendations?:number;manualReviewDueToAiContract?:number;
+ ignoredUnknownRecommendations?:number;verificationFailures?:Record<string,number>;
 }
 export interface SiInspectionPlanRow{
  imo:string;vesselName:string;flag:string;vesselType:string;
@@ -188,6 +190,8 @@ export interface SiInspectionPlanResult{
  status:'RECALCULATED';provider:'MOCK'|'AIRIA';mock:boolean;
  agentRunId:string;externalCalls:number;revision:number;sourceHash:string;
  aiRecommendedVessels:number;selectedForPlan:number;
+ verifiedAiRecommendations?:number;manualReviewDueToAiContract?:number;
+ ignoredUnknownRecommendations?:number;verificationFailures?:Record<string,number>;
  humanApprovalStillRequired:true;rows:SiInspectionPlanRow[];
 }
 @Injectable({providedIn:'root'})

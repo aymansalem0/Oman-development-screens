@@ -276,6 +276,78 @@ export function validateC01(raw,source){
       regulatoryDecision:false};
   });
 }
+
+/**
+ * Quarantine a model's unusable advisory without claiming that it selected
+ * the vessel. Authoritative C01 inputs and statutory ranking remain intact.
+ * A partly valid response can be reviewed without discarding all valid model
+ * output. An entirely unverifiable response still fails closed.
+ */
+export function reconcileC01(raw,source){
+ const body=unwrapC01AiriaResult(raw);
+ if(!body){
+  const e=new SiCandidateAgentError('SI_C01_STRUCTURED_JSON_REQUIRED',502);
+  e.diagnosticCode='RECOMMENDATIONS_ARRAY_REQUIRED';
+  throw e;
+ }
+ const known=new Map(source.candidates.map(c=>[c.candidateKey,c]));
+ const received=new Map(),rejected=new Map();
+ let unexpected=0;
+ for(const row of body.recommendations){
+  const key=typeof row?.candidateKey==='string'?row.candidateKey:null;
+  if(!key||!known.has(key)){unexpected++;continue;}
+  if(received.has(key)||rejected.has(key)){
+   received.delete(key);rejected.set(key,'DUPLICATE_CANDIDATE_KEY');continue;
+  }
+  const original=known.get(key);
+  const problem=c01RecommendationContractFailure(row,original);
+  if(problem){
+   rejected.set(key,problem);continue;
+  }
+  if(row.recommendation==='SELECT_RECOMMENDED'&&
+    (!row.evidenceRefs.length||!original.sourceTypes.length)){
+   rejected.set(key,'UNSUPPORTED_SELECTION_EVIDENCE');continue;
+  }
+  // Only STRICTLY validated items reach the plan as actual AI advice.
+  try{
+   const verified=validateC01({recommendations:[row]},
+     {...source,candidates:[original]});
+   received.set(key,verified[0]);
+  }catch{
+   rejected.set(key,'PROVIDER_ITEM_VERIFICATION_FAILED');
+  }
+ }
+ const verifiedCount=received.size;
+ if(!verifiedCount){
+  const e=new SiCandidateAgentError('SI_C01_NO_VERIFIED_RECOMMENDATIONS',502);
+  e.diagnosticCode=body.recommendations.length?'ALL_ITEMS_FAILED_VERIFICATION':
+   'RECOMMENDATIONS_EMPTY';
+  throw e;
+ }
+ const recommendations=source.candidates.map(c=>{
+  const valid=received.get(c.candidateKey);
+  if(valid)return valid;
+  // Neither source evidence nor a selection rank is fabricated for the model.
+  return {candidateKey:c.candidateKey,imo:c.imo,regime:c.regime,
+   recommendation:'MANUAL_REVIEW',modelRecommendation:null,confidence:0,
+   selectionReviewGate:'AIRIA_OUTPUT_NOT_VERIFIED',suggestedRank:null,
+   priorityRationale:'Platform ranking rules: '+inspectionRanking(c).reason+
+     '. Airia did not supply verifiable advice for this candidate.',
+   priorityRationaleSource:'DETERMINISTIC_BUSINESS_RULE',
+   reason:'AI advisory unavailable or invalid for this candidate; source eligibility is unchanged.',
+   evidenceRefs:[],dataGaps:unique([...(c.missingData||[]),
+    'AI_ADVISORY_NOT_VERIFIED']),requiresHumanReview:true,
+   regulatoryDecision:false};
+ });
+ const quarantinedCount=recommendations.length-verifiedCount;
+ // Audit only code COUNTS, never log provider prose, IMO, references or tokens.
+ if(quarantinedCount||unexpected)
+  console.warn('[si-c01] PARTIAL_ADVICE_VERIFICATION valid='+verifiedCount+
+   ' manualReview='+quarantinedCount+' unknown='+unexpected);
+ return {recommendations,verifiedCount,quarantinedCount,unexpectedCount:unexpected,
+  failuresByCode:Object.fromEntries([...rejected.values()].reduce((map,code)=>{
+   map.set(code,(map.get(code)||0)+1);return map;},new Map()))};
+}
 export class SiCandidateAgent{
  constructor({targeting,pscPolicy=null,executeAgent=null,provider='mock'}={}){
   if(!targeting||!['mock','airia'].includes(provider))
@@ -295,8 +367,9 @@ export class SiCandidateAgent{
    snapshotHash:s.snapshotHash,policyRevision:s.policyRevision,
    pscQuotaPolicyRevision:s.pscQuotaPolicyRevision,
    riskPolicyRevision:s.riskPolicyRevision,eligibleCount:s.candidates.length,
-   aiAdvisory:s.aiAdvisory,expectedBatches:Math.ceil(s.candidates.length/100),
-   estimatedAiriaCalls:this.provider==='airia'?Math.ceil(s.candidates.length/100):0,
+   aiAdvisory:s.aiAdvisory,
+   expectedBatches:Math.ceil(s.candidates.length/(this.provider==='airia'?25:100)),
+   estimatedAiriaCalls:this.provider==='airia'?Math.ceil(s.candidates.length/25):0,
    candidates:s.candidates,externalCalls:0,
    latest:this.latest?{
      agentRunId:this.latest.agentRunId,
@@ -319,7 +392,10 @@ export class SiCandidateAgent{
    // A full 99-vessel fleet can have >100 *regime* candidates after Excel
    // rules activate. Explicitly consent to the REAL number of Airia calls.
    // Keep bounded batches; never truncate inputs or silently run extra calls.
-   const batchSize=100,batchCount=Math.ceil(s.candidates.length/batchSize);
+   // Smaller real-provider chunks reduce response truncation and let the
+   // partner schema return every recommendation. Calls are pre-confirmed.
+   const batchSize=this.provider==='airia'?25:100;
+   const batchCount=Math.ceil(s.candidates.length/batchSize);
    if(s.candidates.length>500)
     throw new SiCandidateAgentError('SI_C01_BATCH_LIMIT_500_SCOPE_REQUIRED',422);
    if(batchCount>1&&input.confirmBatchCount!==batchCount)
@@ -341,6 +417,22 @@ export class SiCandidateAgent{
      // Configurable source-backed guidance is only advisory; always
      // subordinate to these immutable process/evidence/approval constraints.
      aiAdvisory:s.aiAdvisory,
+     outputContract:{
+       format:'STRICT_JSON_OBJECT_NO_MARKDOWN',
+       topLevel:{recommendations:'array: exactly one per supplied candidateKey'},
+       candidateFields:{
+         candidateKey:'exact input candidateKey string',
+         recommendation:'SELECT_RECOMMENDED | DEFER_RECOMMENDED | MANUAL_REVIEW',
+         confidence:'JSON number between 0 and 1',
+         suggestedRank:'integer 1..100 only when SELECT_RECOMMENDED; otherwise null',
+         reason:'source-grounded string at least 10 characters',
+         priorityRationale:'explain the applicable deterministic ranking (string)',
+         evidenceRefs:'array drawn ONLY from that candidate.allowedEvidence; never invent IDs',
+         dataGaps:'array of strings describing genuinely missing source fields'
+       },
+       includeEveryInputCandidate:true,
+       neverReturnProseOrMarkdown:true
+     },
      analysisInstructions:{
        selectionIsAdvisory:true,
        officialExecutionOrder:'Verified future ETD ascending; then human-reviewed active incident severity descending; otherwise pending additional rules.',
@@ -366,6 +458,8 @@ export class SiCandidateAgent{
    // `suggestedRank` is local to each batch; statutory execution order is
    // independently calculated by the deterministic inspection ranking engine.
    const recommendations=[];
+   let verifiedCount=0,quarantinedCount=0,unexpectedCount=0;
+   const verificationFailures={};
    for(let i=0;i<batchCount;i++){
      const subset=s.candidates.slice(i*batchSize,(i+1)*batchSize);
      const batch={...payload,
@@ -380,7 +474,13 @@ export class SiCandidateAgent{
      let raw;
      try{raw=await this.executeAgent(batch);}
      catch{throw new SiCandidateAgentError('SI_C01_PROVIDER_UNAVAILABLE',502);}
-     recommendations.push(...validateC01(raw,scope));
+     const checked=reconcileC01(raw,scope);
+     recommendations.push(...checked.recommendations);
+     verifiedCount+=checked.verifiedCount;
+     quarantinedCount+=checked.quarantinedCount;
+     unexpectedCount+=checked.unexpectedCount;
+     for(const [key,count] of Object.entries(checked.failuresByCode))
+      verificationFailures[key]=(verificationFailures[key]||0)+count;
    }
    const result={status:'ADVISORY_REVIEW_REQUIRED',agentCode:'SI-C01',
      agentRunId:randomUUID(),provider:this.provider.toUpperCase(),
@@ -390,10 +490,15 @@ export class SiCandidateAgent{
      generatedAt:new Date().toISOString(),
      externalCalls:this.provider==='mock'?0:batchCount,
      batchesValidated:batchCount,candidatesAnalyzed:recommendations.length,
+     verifiedAiRecommendations:verifiedCount,
+     manualReviewDueToAiContract:quarantinedCount,
+     ignoredUnknownRecommendations:unexpectedCount,
+     verificationFailures,
      humanDecisionRequired:true,mutations:false,
      warning:this.provider==='mock'?
        'STATIC TEST LOGIC ONLY: NO AIRIA CALL; NO REAL MODEL ANALYSIS OR APPROVAL.':
-       'Advisory only. Supervisor decision must be separately approved.',
+       'Advisory only. '+verifiedCount+' verified AI recommendations; '+
+       quarantinedCount+' candidates require manual review because AI output was not verified. Supervisor approval remains separate.',
      recommendations};
    this.latest=result;return result;
   }finally{this.inProgress=false;}

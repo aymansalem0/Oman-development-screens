@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {buildC01Source,validateC01,unwrapC01AiriaResult,c01RecommendationContractFailure,SiCandidateAgent,summarizeC01Readiness} from '../si-candidate-agent.mjs';
+import {buildC01Source,validateC01,unwrapC01AiriaResult,c01RecommendationContractFailure,SiCandidateAgent,summarizeC01Readiness,reconcileC01} from '../si-candidate-agent.mjs';
 import {mockSiC01,mockSiP01,mockSiA04} from '../si-agent-mock.mjs';
 import {validateP01} from '../si-ai-prioritization.mjs';
 import {validateA04} from '../si-inspection-preparation.mjs';
@@ -440,7 +440,7 @@ test('C01 readiness deduplicates same IMO workflows and makes conflicting ETD vi
  assert.equal(summarizeC01Readiness({candidates:[]}).status,'NO_CANDIDATES');
 });
 
-test('C01 processes >100 quota-selected workflows in verified batches after explicit call-count consent',async()=>{
+test('C01 confirmed small batches validate every candidate, no extra unconfirmed Airia calls',async()=>{
  const dashboard={policy:{version:4},riskPolicyRevision:2,fleetSnapshotId:'PSC-FLEET',
   candidates:Array.from({length:125},(_,i)=>candidate('psc-'+i,
    'PSC_PORT_CALL',String(9300000+i),null))};
@@ -456,49 +456,83 @@ test('C01 processes >100 quota-selected workflows in verified batches after expl
   }});
  const p=await a.preview();
  assert.equal(p.eligibleCount,125);
- assert.equal(p.expectedBatches,2);
- assert.equal(p.estimatedAiriaCalls,2);
+ assert.equal(p.expectedBatches,5);
+ assert.equal(p.estimatedAiriaCalls,5);
  await assert.rejects(()=>a.run({actor:'PSC officer',confirmRun:true,
   confirmCost:true,expectedSnapshotHash:p.snapshotHash}),
   e=>e.code==='SI_C01_BATCH_COUNT_CONFIRMATION_REQUIRED');
  assert.equal(calls.length,0);
  const result=await a.run({actor:'PSC officer',confirmRun:true,
-  confirmCost:true,expectedSnapshotHash:p.snapshotHash,confirmBatchCount:2});
- assert.equal(result.externalCalls,2);
- assert.equal(result.batchesValidated,2);
+  confirmCost:true,expectedSnapshotHash:p.snapshotHash,confirmBatchCount:5});
+ assert.equal(result.externalCalls,5);
+ assert.equal(result.batchesValidated,5);
  assert.equal(result.candidatesAnalyzed,125);
+ assert.equal(result.verifiedAiRecommendations,125);
+ assert.equal(result.manualReviewDueToAiContract,0);
  assert.equal(result.recommendations.length,125);
  assert.equal(new Set(result.recommendations.map(x=>x.candidateKey)).size,125);
- assert.deepEqual(calls.map(c=>c.candidates.length),[100,25]);
+ assert.deepEqual(calls.map(c=>c.candidates.length),[25,25,25,25,25]);
  assert.ok(calls.every(c=>c.pscQuotaSnapshot.modelMayOverrideQuota===false));
- assert.equal(calls[0].requestMeta.batchCount,2);
+ assert.ok(calls.every(c=>c.outputContract?.neverReturnProseOrMarkdown));
+ assert.equal(calls[0].requestMeta.batchCount,5);
  assert.equal(calls[1].requestMeta.batchIndex,2);
  assert.notEqual(calls[0].requestMeta.correlationId,
-   calls[1].requestMeta.correlationId,
-   'Airia batch requests must have distinct correlation IDs');
+   calls[1].requestMeta.correlationId);
  assert.equal(calls[0].requestMeta.parentCorrelationId,
    calls[1].requestMeta.parentCorrelationId);
  assert.ok(result.recommendations.every(x=>x.requiresHumanReview===true));
 });
-test('C01 discards all batch output when one Airia batch violates evidence contract',async()=>{
+test('C01 quarantines forged evidence while accepting verified candidates',async()=>{
  const dashboard={policy:{version:4},riskPolicyRevision:2,fleetSnapshotId:'PSC-FLEET',
   candidates:Array.from({length:105},(_,i)=>candidate('multi-'+i,
    'PSC_PORT_CALL',String(9400000+i),null))};
- let seen=0;
+ let seen=0,forgedKey=null;
  const a=new SiCandidateAgent({provider:'airia',
   targeting:{dashboard:async()=>dashboard},
   executeAgent:async p=>{
    seen++;
    const payload=mockSiC01(p);
-   if(seen===2)payload.recommendations[0].evidenceRefs=['FORGED-EVIDENCE'];
+   if(seen===2){
+    forgedKey=payload.recommendations[0].candidateKey;
+    payload.recommendations[0].evidenceRefs=['FORGED-EVIDENCE'];
+   }
    return payload;
   }});
  const p=await a.preview();
- await assert.rejects(()=>a.run({actor:'PSC officer',confirmRun:true,confirmCost:true,
-  expectedSnapshotHash:p.snapshotHash,confirmBatchCount:2}),
-  e=>e.code==='SI_C01_UNVERIFIED_RECOMMENDATION');
- assert.equal(seen,2);
- assert.equal(a.latest,null,'No partial recommendation set may be persisted');
+ const result=await a.run({actor:'PSC officer',confirmRun:true,confirmCost:true,
+  expectedSnapshotHash:p.snapshotHash,confirmBatchCount:5});
+ assert.equal(seen,5);
+ assert.equal(result.verifiedAiRecommendations,104);
+ assert.equal(result.manualReviewDueToAiContract,1);
+ const excluded=result.recommendations.find(x=>x.candidateKey===forgedKey);
+ assert.equal(excluded.recommendation,'MANUAL_REVIEW');
+ assert.equal(excluded.confidence,0);
+ assert.equal(excluded.suggestedRank,null);
+ assert.deepEqual(excluded.evidenceRefs,[]);
+ assert.equal(excluded.selectionReviewGate,'AIRIA_OUTPUT_NOT_VERIFIED');
+ assert.ok(result.recommendations.every(x=>!x.evidenceRefs.includes('FORGED-EVIDENCE')));
+});
+test('C01 missing recommendation becomes manual review and cannot silently enter the plan',()=>{
+ const source=buildC01Source(inputs(),{version:6});
+ const valid=mockSiC01(source);
+ const checked=reconcileC01({result:JSON.stringify({
+  recommendations:valid.recommendations.slice(0,1)})},source);
+ assert.equal(checked.verifiedCount,1);
+ assert.equal(checked.quarantinedCount,1);
+ assert.equal(checked.recommendations[1].recommendation,'MANUAL_REVIEW');
+ assert.equal(checked.recommendations[1].confidence,0);
+ assert.deepEqual(checked.recommendations[1].evidenceRefs,[]);
+});
+test('C01 does not accept all-unverifiable or unstructured Airia output',()=>{
+ const source=buildC01Source(inputs(),{version:6});
+ assert.throws(()=>reconcileC01({result:'unstructured model prose'},source),
+  e=>e.code==='SI_C01_STRUCTURED_JSON_REQUIRED'&&
+     e.diagnosticCode==='RECOMMENDATIONS_ARRAY_REQUIRED');
+ const valid=mockSiC01(source);
+ for(const r of valid.recommendations)r.evidenceRefs=['FAKE'];
+ assert.throws(()=>reconcileC01(valid,source),
+  e=>e.code==='SI_C01_NO_VERIFIED_RECOMMENDATIONS'&&
+     e.diagnosticCode==='ALL_ITEMS_FAILED_VERIFICATION');
 });
 
 test('Published C01 rules reach Airia and low-confidence choices require manual review',async()=>{

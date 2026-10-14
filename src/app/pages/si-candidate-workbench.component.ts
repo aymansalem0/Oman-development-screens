@@ -226,7 +226,8 @@ export class SiCandidateWorkbenchComponent implements OnInit{
   }|null):void{
     if(!this.activePlanId||!this.activePlanEditable||!this.plan||!this.editorKey.trim()||!this.reviewer.trim())return;
     const mock=this.plan.provider==='MOCK';
-    const calls=Math.max(1,Math.ceil((this.plan?.dataReadiness?.eligibleWorkflows||0)/100));
+    const calls=Math.max(1,Math.ceil((this.plan?.dataReadiness?.eligibleWorkflows||0)/
+      (mock?100:25)));
     const message=mock?
       this.copy('Confirm officer planning change and re-run MOCK C01 with zero Airia calls? No official inspection case will be changed.',
         'تأكيد تعديل خطة المعاينات وإعادة ترتيب MOCK C01 دون اتصال Airia؟ لن تتغير حالات المعاينة الرسمية.'):
@@ -244,20 +245,31 @@ export class SiCandidateWorkbenchComponent implements OnInit{
       next:r=>{
         this.planAiPhase='updating';
         this.cancelPlanEdit();this.loadRollingPlans();
-        this.planNotice=this.copy(
-         'C01 '+r.provider+' completed the advisory analysis. Supervisor approval is still required.',
-         'أكمل C01 التحليل الاستشاري. لا تزال موافقة المشرف مطلوبة.');
+        const partial=r.manualReviewDueToAiContract||0;
+        this.planNotice=partial?
+          this.copy('C01 verified '+(r.verifiedAiRecommendations||0)+
+            ' recommendations. '+partial+' candidates need officer review due to invalid AI output. No automatic selection for these candidates.',
+            'تحقق C01 من '+(r.verifiedAiRecommendations||0)+
+            ' توصية. تحتاج '+partial+' حالة إلى مراجعة المسؤول بسبب استجابة AI غير مطابقة. لم تُطبق عليها توصية إدراج تلقائية.'):
+          this.copy('C01 '+r.provider+' completed '+(r.verifiedAiRecommendations||0)+
+            ' verified advisory recommendations. Supervisor approval is still required.',
+            'أكمل C01 عدد '+(r.verifiedAiRecommendations||0)+
+            ' توصية تم التحقق منها. لا يزال اعتماد المشرف مطلوبًا.');
         this.loadInspectionPlan();
       },
       error:e=>{
         this.planAiPhase='idle';this.planBusy=false;
-        const code=(e as {error?:{error?:string}})?.error?.error||'';
+        const detail=(e as {error?:{error?:string;reasonCode?:string}})?.error;
+        const code=detail?.error||'';
+        const reason=detail?.reasonCode||'';
         const changed=code.includes('CHANGED')||code.includes('STALE');
         this.planError=changed?
           this.copy('Source data changed during analysis. Reload the plan before retrying.',
             'تغيرت بيانات المصادر أثناء التحليل؛ أعد تحميل الخطة قبل إعادة المحاولة.'):
-          this.copy('The AI recommendation could not be verified against the saved vessel sources. No plan was changed. Review source data or ask the administrator to check the Airia contract before retrying.',
-            'تعذر التحقق من توصيات الذكاء الاصطناعي مقابل مصادر بيانات السفن المحفوظة. لم تتغير الخطة. راجع بيانات المصادر أو اطلب فحص تكامل Airia قبل إعادة المحاولة.');
+          this.copy('Airia C01 output failed verification: '+(reason||code)+
+            '. The plan remains unchanged. Check structured JSON recommendations, candidate keys, evidence references and pipeline configuration before another paid run.',
+            'فشل التحقق من استجابة Airia C01: '+(reason||code)+
+            '. الخطة لم تتغير. راجع إعداد Structured JSON وأكواد المرشحين ومراجع الأدلة وإعدادات Pipeline قبل إعادة محاولة مدفوعة.');
         if(changed)this.loadInspectionPlan();
       }
     });
@@ -321,10 +333,20 @@ export class SiCandidateWorkbenchComponent implements OnInit{
       confirmRun:true,confirmCost:!isMock,confirmBatchCount:calls
     }).subscribe({
       next:r=>{this.c01Busy=false;this.c01Run=r;this.c01Preview=null;
-        this.c01Message=this.copy('C01 advisory ready: verify each regime and decide manually.',
-          'توصيات C01 جاهزة: راجع كل نوع معاينة واتخذ القرار بنفسك.');},
-      error:e=>{this.c01Busy=false;this.c01Error=(e as {error?:{error?:string}})
-        ?.error?.error||'SI_C01_RUN_FAILED';}
+        const quarantine=r.manualReviewDueToAiContract||0;
+        this.c01Message=quarantine?
+          this.copy((r.verifiedAiRecommendations||0)+' verified Airia recommendations; '+
+            quarantine+' candidates require manual officer review.',
+            (r.verifiedAiRecommendations||0)+' توصية Airia موثقة، و'+
+            quarantine+' مرشح يحتاج مراجعة بشرية.'):
+          this.copy('C01 verified '+(r.verifiedAiRecommendations||0)+
+            ' recommendations. Official approval remains with the supervisor.',
+            'تحقق C01 من '+(r.verifiedAiRecommendations||0)+
+            ' توصية. يبقى الاعتماد الرسمي من صلاحية المسؤول.');},
+      error:e=>{this.c01Busy=false;
+        const issue=(e as {error?:{error?:string;reasonCode?:string}})?.error;
+        this.c01Error=(issue?.error||'SI_C01_RUN_FAILED')+
+          (issue?.reasonCode?' · '+issue.reasonCode:'');}
     });
   }
   priorityStatus:SiPriorityStatus|null=null;
