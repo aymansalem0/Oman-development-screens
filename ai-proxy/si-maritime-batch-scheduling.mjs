@@ -59,6 +59,48 @@ export function validateMaritimeSchedulingInput(imo,row,erp,nowMs){
    evidenceReference:String(row.windowEvidenceReference).trim()}};
 }
 
+/**
+ * Read-only board projection of the same chosen solver slots. Keeps the
+ * scheduling facts distinct from a supervisor-approved/ERP-booked assignment.
+ * One row per vessel; groups NEVER authorize cases or reserve engineers.
+ */
+export function projectMaritimeSchedulingBoard(rows=[]){
+ if(!Array.isArray(rows))throw new SiError('SI_V2_BOARD_ROWS_INVALID',422);
+ const byEngineer=new Map(),byDate=new Map(),unscheduled=[];
+ for(const row of rows){
+  if(row.status!=='PROPOSED'||!row.assignment){
+   unscheduled.push({imo:row.imo,planRank:row.planRank,
+    blocker:row.blocker||'NO_FEASIBLE_SLOT'});continue;
+  }
+  const a=row.assignment,date=String(a.startLocal||'').slice(0,10);
+  const slot={imo:row.imo,planRank:row.planRank,
+   inspectorId:a.inspectorId,inspectorName:a.inspectorName,
+   dateLocal:date,startLocal:a.startLocal,endLocal:a.endLocal,
+   portId:a.portId,portName:a.portName,locationName:a.locationName,
+   locationType:a.locationType,score:a.score};
+  const engineer=byEngineer.get(a.inspectorId)||{
+   inspectorId:a.inspectorId,inspectorName:a.inspectorName,
+   vesselCount:0,dates:[],assignments:[]};
+  engineer.assignments.push(slot);engineer.vesselCount++;
+  if(!engineer.dates.includes(date))engineer.dates.push(date);
+  byEngineer.set(a.inspectorId,engineer);
+  const day=byDate.get(date)||{dateLocal:date,vesselCount:0,assignments:[]};
+  day.assignments.push(slot);day.vesselCount++;
+  byDate.set(date,day);
+ }
+ const sort=(a,b)=>a.startLocal.localeCompare(b.startLocal)||
+   a.imo.localeCompare(b.imo);
+ const engineers=[...byEngineer.values()].sort((a,b)=>
+   a.inspectorName.localeCompare(b.inspectorName)||
+   a.inspectorId.localeCompare(b.inspectorId));
+ for(const e of engineers){e.dates.sort();e.assignments.sort(sort);}
+ const days=[...byDate.values()].sort((a,b)=>a.dateLocal.localeCompare(b.dateLocal));
+ for(const day of days)day.assignments.sort(sort);
+ return {status:'UNAPPROVED_PREVIEW_ONLY',engineers,days,
+   unscheduled:unscheduled.sort((a,b)=>a.planRank-b.planRank||
+     a.imo.localeCompare(b.imo)),allocatedVessels:rows.length-unscheduled.length,
+   approvalRequired:true,bookingWrites:0,caseWrites:0};
+}
 function collides(first,second,data,bufferMs){
  if(first.inspectorId!==second.inspectorId)return false;
  const early=Date.parse(first.startUtc)<Date.parse(second.startUtc)?first:second;
@@ -201,7 +243,7 @@ export function proposeMaritimeBatchSchedule({
   solver:'HARD_CONSTRAINTS_PLUS_BOUNDED_BEAM_SEARCH_NO_GENERATIVE_AI',
   summary:{total:rows.length,proposed:chosen.length,
    unscheduled:rows.length-chosen.length,caseWrites:0,bookingWrites:0},
-  rows,warnings:[
+  rows,board:projectMaritimeSchedulingBoard(rows),warnings:[
    'READ_ONLY_NO_CASE_CREATION_OR_BOOKING',
    'SUPERVISOR_MUST_APPROVE_A_FRESHLY_REVALIDATED_SCHEDULE',
    'ETA_ALONE_DOES_NOT_SUPPLY_ETD',
