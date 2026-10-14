@@ -334,7 +334,7 @@ export class SiCandidateTargeting{
       if(!item){
         item={imo:c.imo,vesselName:c.vesselName,flag:c.flag,
           vesselType:c.vesselType,currentRisk:c.currentRisk,
-          departureAt:null,departureVerified:false,
+          departureAt:null,departureVerified:false,departureStatus:'MISSING',
           incidentSeverity:null,incidentHumanReviewed:false,incidentEvidenceRef:null,
           candidateKeys:[],regimes:[],sourceTypes:[],sourceEvents:[],
           workflows:[],pendingWorkflows:0,createdWorkflows:0,
@@ -375,8 +375,18 @@ export class SiCandidateTargeting{
           typeof e.departureAt==='string'&&Number.isFinite(Date.parse(e.departureAt))&&
           Date.parse(e.departureAt)>=Date.now()).sort((a,b)=>
             Date.parse(a.departureAt)-Date.parse(b.departureAt));
-      if(departures.length){
-        item.departureAt=departures[0].departureAt;item.departureVerified=true;
+      // A ship can have multiple saved MSW source events, including legacy
+      // imports. Conflicting active ETDs/ports must NEVER be silently ranked
+      // using the earliest arbitrary value.
+      const distinctDepartures=new Set(departures.map(e=>
+        new Date(Date.parse(e.departureAt)).toISOString()+'|'+
+        String(e.port||'').trim().toUpperCase()));
+      if(distinctDepartures.size>1){
+        item.departureStatus='CONFLICT';
+        item.departureAt=null;item.departureVerified=false;
+      }else if(departures.length){
+        item.departureAt=departures[0].departureAt;
+        item.departureVerified=true;item.departureStatus='VERIFIED';
       }
       const incident=incidentSignals.get(item.imo);
       if(incident&&incident.humanReviewed===true&&
