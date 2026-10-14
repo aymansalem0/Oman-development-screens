@@ -96,6 +96,7 @@ export function buildC01Source(dashboard,pscPolicy=null){
     policyRevision:dashboard.policy.version,
     riskPolicyRevision:dashboard.riskPolicyRevision,
     pscQuotaPolicyRevision:pscPolicy?.version??null,
+    pscQuotaSnapshot:pscPolicy?.quotaSnapshot||null,
     fleetSnapshotId:dashboard.fleetSnapshotId,
     candidates};
   return {...source,snapshotHash:hash(source)};
@@ -331,6 +332,9 @@ export class SiCandidateAgent{
      officerPlanChanges,
      riskPolicyRevision:s.riskPolicyRevision,
      pscQuotaPolicyRevision:s.pscQuotaPolicyRevision,
+     // Rules constrain PSC event eligibility; AI ranks/advises only on the
+     // permitted shortlist, never overrides the quota or officer approval.
+     pscQuotaSnapshot:s.pscQuotaSnapshot,
      candidates:s.candidates};
    let raw;
    try{raw=await this.executeAgent(payload);}
