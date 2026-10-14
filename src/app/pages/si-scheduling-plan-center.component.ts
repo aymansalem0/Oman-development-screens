@@ -64,7 +64,7 @@ interface Plan{
      'الجدولة تتطلب خطة سفن معتمدة. استكمل مراجعة المسودة بدل تجاوز الاعتماد.')}}</p>
     <div *ngFor="let p of other" class="pending">
      <span><strong>{{p.number||p.title}}</strong> · {{p.status}}</span>
-     <a [routerLink]="['/moei/smart-inspection/plan',p.id]">
+     <a [routerLink]="['/moei/smart-inspection/plan/create',p.id]">
       {{copy('Review plan','مراجعة الخطة')}}</a>
     </div>
    </section>
