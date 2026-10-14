@@ -135,6 +135,10 @@ export function proposeMaritimeBatchSchedule({
  for(const request of requests){
   if(!IMO.test(request?.imo)||byImo.has(request.imo))
    throw new SiError('SI_V2_DUPLICATE_REQUEST_IMO',422);
+  if(request.preferredInspectorId!==undefined&&request.preferredInspectorId!==null&&
+     (typeof request.preferredInspectorId!=='string'||
+      request.preferredInspectorId.length>120))
+   throw new SiError('SI_V2_PREFERRED_ENGINEER_INVALID',422);
   if(!vessels.some(v=>v.imo===request.imo))
    throw new SiError('SI_V2_OUT_OF_PLAN_IMO',422);
   byImo.set(request.imo,request);
@@ -181,7 +185,9 @@ export function proposeMaritimeBatchSchedule({
     PORT_STATE_CONTROL:'PSC',FOCUSED_INSPECTION:'FOCUSED',
     UAE_SERVICE_INSPECTION:'SERVICE',FOLLOW_UP_INSPECTION:'FOLLOW_UP'
   }[s])).filter(Boolean);
-  const filtered=out.options.filter(opt=>required.every(r=>
+  const preferred=byImo.get(v.imo)?.preferredInspectorId||null;
+  const filtered=out.options.filter(opt=>
+    (!preferred||opt.inspectorId===preferred)&&required.every(r=>
     erpSnapshot.data.Qualifications.some(q=>
       q.inspector_id===opt.inspectorId&&q.inspection_regime===r&&
       ['ANY',input.vesselType].includes(norm(q.vessel_type))&&
@@ -193,7 +199,9 @@ export function proposeMaritimeBatchSchedule({
    windowSource:input.windowSource,evidenceReference:input.evidenceReference,
    requiresSupervisorApproval:true})),
    exclusions:out.exclusions,
-   reason:filtered.length?null:'NO_FEASIBLE_ERP_SHIFT_QUALIFICATION_PORT_OR_WINDOW'};
+   reason:filtered.length?null:(preferred?
+     'REQUESTED_ENGINEER_NOT_FEASIBLE_WITH_ERP_AND_TIME_CONSTRAINTS':
+     'NO_FEASIBLE_ERP_SHIFT_QUALIFICATION_PORT_OR_WINDOW')};
  });
  const schedulable=jobs.filter(j=>j.options.length).sort((a,b)=>
    a.options.length-b.options.length||
