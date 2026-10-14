@@ -1,6 +1,7 @@
 import { NmcNavigationComponent } from '../components/nmc-navigation.component';
 import { NmcMinistryLogoComponent } from '../components/nmc-ministry-logo.component';
 import { CommonModule } from '@angular/common';
+import {HttpClient} from '@angular/common/http';
 import { AfterViewInit, Component, ElementRef, OnDestroy, OnInit, ViewChild } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { Subscription } from 'rxjs';
@@ -101,6 +102,12 @@ interface FieldProvenance {
   note: string;
 }
 
+interface VesselMasterEtd {
+ imo:string;vesselName:string;currentPort:string|null;
+ etdLocal:string|null;etdTimeZone:string;etdStatus:
+ 'FINAL_POC'|'CONFLICT'|'HISTORICAL_ONLY'|'MISSING';
+ etdSourceTypes:string[];sourceReferences:string[];
+}
 interface Vessel360View extends NmcVesselProfile {
   age: number;
   riskScore: number;
@@ -139,6 +146,8 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
   fieldProvenance: Record<string, FieldProvenance> = {};
   selectedProvenance?: FieldProvenance;
   externalPsc: NmcExternalPscRecord | null = null;
+  operationalEtd:VesselMasterEtd|null=null;
+  operationalEtdLoading=true;
   pscLoading = false;
   pscError = '';
   // Oracle-sourced AI data is read-only, provisional and explicitly separated
@@ -166,6 +175,7 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
 
   constructor(
     private route: ActivatedRoute,
+    private readonly http:HttpClient,
     public lang: LanguageService,
     private riskEngine: NmcRiskEngineService,
     private vesselEvidence: NmcVesselEvidenceService,
@@ -385,6 +395,7 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
         if(this.map){this.map.remove();this.map=undefined;setTimeout(()=>this.initMap(),0);}
       }
     }));
+    this.loadOperationalEtd();
     this.loadExternalPsc();
     this.loadVesselIncidents();
     this.loadStoredAi();
@@ -409,6 +420,22 @@ export class NmcVessel360Component implements OnInit, AfterViewInit, OnDestroy {
     this.activeTab = tab;
   }
 
+  // Vessel Master operational ETD is joined dynamically from imported MSW
+  // source events; never present a synthetic AIS ETA as a departure date.
+  private loadOperationalEtd():void{
+    this.operationalEtdLoading=true;
+    this.subscriptions.add(this.http.get<{rows:VesselMasterEtd[]}>(
+      '/api/si/v1/vessel-master?imo='+encodeURIComponent(this.imo))
+      .subscribe({
+        next:result=>{
+          this.operationalEtd=result.rows?.find(x=>x.imo===this.imo)||null;
+          this.operationalEtdLoading=false;
+        },
+        error:()=>{
+          this.operationalEtd=null;this.operationalEtdLoading=false;
+        }
+      }));
+  }
   private loadStoredAi(): void {
     this.storedAiStatus = 'loading';
     this.subscriptions.add(this.fleetAiService.assessment(this.vessel.imo).subscribe({
