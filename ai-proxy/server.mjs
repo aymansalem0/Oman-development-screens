@@ -41,6 +41,7 @@ import {SiBulkInspectionPlan,SiBulkApprovalError} from './si-bulk-inspection-pla
 import {mockSiP01,mockSiA04,mockSiC01} from './si-agent-mock.mjs';
 import { SiInspectionPreparation, SiPreparationError } from './si-inspection-preparation.mjs';
 import { SiInspectionLifecycle, SiLifecycleError } from './si-inspection-lifecycle.mjs';
+import {SiScheduleOrders,SiWorkOrderError} from './si-schedule-orders.mjs';
 import {runSiPocAdvisor,siFutureAdvisorCoverage,SiPocAdvisorError} from './si-poc-workflow-advisors.mjs';
 import {runSiAiriaAdvisor} from './si-airia-workflow-advisors.mjs';
 import {makeDq01Request,validateDq01Response,DqAgentError} from './nmc-airia-data-quality.mjs';
@@ -373,6 +374,11 @@ const siChecklistField=new (checklistStorage==='oracle'?
 const siLifecycle=new SiInspectionLifecycle({mode:dbMode,oracleRepository:repository,
   targeting:siTargeting,preparation:siPreparation,cases,checklists:siChecklistField,
   onClosed:(caseId,actor)=>siRollingPlans.completeIfAllClosed(caseId,actor,siLifecycle)});
+const siScheduleOrders=new SiScheduleOrders({
+ mode:dbMode,oracleRepository:repository,rolling:siRollingPlans,
+ targeting:siTargeting,preparation:siPreparation,
+ checklists:siChecklistField,lifecycle:siLifecycle,cases
+});
 const actionPlanRuns=new Set(); // process-local duplicate A01 invocation guard; version-lock remains authoritative
 let alertScanTimer=null;
 function rescheduleAlertScan(){
@@ -1273,6 +1279,87 @@ const server = createServer(async (req, res) => {
         }
         return respond(res,200,{status:'ok',...validated});
       }
+      // SI-S02: supervisor schedule approval -> traceable per-vessel engineer
+      // work orders -> mandatory checklist initialization -> separately
+      // reviewed A04 additions -> explicit inspector start. Oracle migration
+      // 019 required; existing NMC/PSC source decisions remain independent.
+      const workRoute=/^\/api\/si\/v1\/maritime-scheduling\/plans\/([a-f0-9-]{36})\/(approve|work-orders)(?:\/([a-f0-9-]{36})\/(activate|scope|start))?$/.exec(path);
+      if(workRoute){
+        if(!siScheduleOrders.ready)
+          return respond(res,503,{error:'SI_SCHED_MIGRATION_019_REQUIRED'});
+        const planId=workRoute[1],operation=workRoute[2],
+          orderId=workRoute[3],orderAction=workRoute[4];
+        const supervisor=operation==='approve'||orderAction==='scope';
+        dashboards.assertRole(req,supervisor?'PUBLISHER':'EDITOR');
+        const identity=moeiAuth.session(req);
+        const actor=identity?.email||identity?.username||req.moeiUser?.email||
+          'POC_AUTHENTICATED_OPERATOR';
+        if(req.method==='GET'&&operation==='work-orders'&&!orderId){
+          const value=await siScheduleOrders.byPlan(planId);
+          return respond(res,200,{status:'ok',schedule:value});
+        }
+        if(req.method==='POST'&&operation==='approve'&&!orderId){
+          const body=await requestJson(req,1024*1024);
+          if(!Array.isArray(body.requests)||!body.requests.length||
+             body.requests.length>500||
+             typeof body.demoMode!=='boolean'||
+             body.confirmApproval!==true)
+            return respond(res,422,{error:'SI_SCHED_APPROVAL_INPUT_INVALID'});
+          if(body.demoMode&&process.env.SI_SCHEDULING_DEMO_MODE!=='true')
+            return respond(res,403,{error:'SI_POC_DEMO_MODE_NOT_ENABLED'});
+          const plan=await siRollingPlans.get(planId);
+          const original=siErp.requireSnapshot(),dashboard=await siTargeting.dashboard();
+          const snapshot=body.demoMode?buildPocErpSchedulingOverlay(original):original;
+          const sourceContext=maritimePlanSchedulingContext(plan,dashboard,original);
+          const context=body.demoMode?
+            fillPocSchedulingVisitContext(sourceContext,snapshot):sourceContext;
+          validateOperatorScheduleAgainstSource(sourceContext,body.requests,{
+            demo:body.demoMode,context});
+          if(body.demoMode)validatePocSchedulingDemoRequest(context,body.requests);
+          const refs=await cases.listInspectionRequests();
+          const bookings=body.demoMode?[]:
+            await siScheduling.centralBookings(snapshot);
+          const proposal=proposeMaritimeBatchSchedule({
+            plan,erpSnapshot:snapshot,policy:siScheduling.getPolicy(),
+            requests:body.demoMode?body.requests.map(x=>({...x,pocDemo:true})):
+             body.requests,nmcReferrals:refs,
+            existingBookings:body.demoMode?[]:
+             [...siScheduling.state.confirmed,...bookings],
+            scheduler:siScheduling
+          });
+          const saved=await siScheduleOrders.approve({
+            plan,proposal,selectedOptionId:body.selectedOptionId,
+            expectedHash:body.expectedProposalHash,
+            expectedPlanRevision:body.expectedPlanRevision,
+            actor,reason:body.reason,confirmApproval:true,
+            demoMode:body.demoMode
+          });
+          return respond(res,201,{status:'WORK_ORDERS_ISSUED',schedule:saved,
+            officialErpBookingCreated:false,
+            inspectionCasesCreated:0});
+        }
+        if(req.method==='POST'&&operation==='work-orders'&&orderId){
+          const data=await requestJson(req,4096);
+          let result;
+          if(orderAction==='activate')
+            result=await siScheduleOrders.activate({
+              planId,orderId,actor,generateAi:data.generateAi===true,
+              confirmAiCost:data.confirmAiCost===true});
+          else if(orderAction==='scope')
+            result=await siScheduleOrders.approveScope({
+              planId,orderId,actor,reason:data.reason,
+              includeAiSuggestions:data.includeAiSuggestions===true});
+          else if(orderAction==='start')
+            result=await siScheduleOrders.startField({
+              planId,orderId,actor,
+              confirmPocDelegation:data.confirmPocDelegation===true});
+          else return respond(res,405,{error:'METHOD_NOT_ALLOWED'});
+          return respond(res,200,{status:'ok',order:result,
+            fieldRoute:result.caseId?
+             '/moei/smart-inspection/lifecycle/'+result.caseId:null});
+        }
+        return respond(res,405,{error:'METHOD_NOT_ALLOWED'});
+      }
       if(path==='/api/si/v1/inspection-batches/preview'&&req.method==='GET'){
         dashboards.assertRole(req,'EDITOR');
         const planId=new URL(req.url||'/', 'http://localhost').searchParams.get('planId');
@@ -1536,7 +1623,7 @@ const server = createServer(async (req, res) => {
           ...(Number.isInteger(e.returnedCount)?{returnedCount:e.returnedCount}:{}),
           ...(Number.isInteger(e.batchIndex)?{batchIndex:e.batchIndex}:{}),
           ...(Number.isInteger(e.batchCount)?{batchCount:e.batchCount}:{})});
-      if(e instanceof SiError||e instanceof SiPocAdvisorError||e instanceof SiRollingPlanError||e instanceof SiBulkApprovalError||e instanceof SiCandidateAgentError||e instanceof SiLifecycleError||e instanceof SiSelectionError||e instanceof SiPriorityError||e instanceof SiPreparationError||e instanceof SiTargetingError||e instanceof DashboardError)
+      if(e instanceof SiError||e instanceof SiPocAdvisorError||e instanceof SiRollingPlanError||e instanceof SiBulkApprovalError||e instanceof SiCandidateAgentError||e instanceof SiLifecycleError||e instanceof SiSelectionError||e instanceof SiPriorityError||e instanceof SiPreparationError||e instanceof SiWorkOrderError||e instanceof SiTargetingError||e instanceof DashboardError)
         return respond(res,e.status,{error:e.code});
       if(Number.isInteger(e?.status)&&e.status>=400&&e.status<500)
         return respond(res,e.status,{error:'SI_REQUEST_INVALID'});
@@ -2109,6 +2196,11 @@ try{
   catch(error){console.error('[si-preparation] SI_MIGRATION_010_REQUIRED - A04 dossier disabled');}
   try{await siLifecycle.initialize();}
   catch(error){console.error('[si-lifecycle] SI_MIGRATION_013_REQUIRED - end-to-end cycle disabled');}
+  try{await siScheduleOrders.initialize();
+    console.log('[si-work-orders] STORAGE_'+dbMode.toUpperCase()+'_READY schema=019');
+  }catch(error){
+    console.error('[si-work-orders] SI_SCHED_MIGRATION_019_REQUIRED - schedule approvals disabled');
+  }
   try{await guidance.initialize();}
   catch(error){
     // Guidance requires migration 006, but an optional UI module must never

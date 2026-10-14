@@ -83,3 +83,20 @@ button:disabled{opacity:.5}.marine-notice{padding:13px;background:#eaf4f5;border
 .marine-readiness-panel li:last-child{border-bottom:0}
 .marine-readiness-panel li strong{display:inline-block;margin-inline-end:12px}
 .marine-readiness-panel li span{color:#865c2f}
+
+/* Approved schedule / engineer work orders, MOEI POC only */
+.si-workorders-panel{border-top:4px solid #008d88}
+.si-schedule-approve{background:#007d74;color:white;border:1px solid #04746a;
+ border-radius:9px;padding:12px 16px;cursor:pointer;font-weight:750;min-width:220px}
+.si-schedule-approve:disabled{opacity:.4;cursor:not-allowed}
+.si-workorders-table{min-width:910px}
+.si-workorders-table td{vertical-align:top}
+.si-workorders-table td small{display:block;color:#647e8d;margin-top:5px}
+.si-order-links{display:flex;flex-direction:column;gap:5px;margin-top:8px}
+.si-order-links a{color:#006d8d;text-decoration:underline;font-size:11px}
+.si-workorder-actions{display:flex;flex-direction:column;align-items:start;gap:7px;margin-top:8px}
+.si-workorder-actions button{background:#e7f5f2;color:#06695e;font-size:11px;
+ border:1px solid #b5d9d0;border-radius:7px;padding:8px 11px;cursor:pointer}
+.si-workorder-actions button:disabled{opacity:.5}
+.si-field-started{color:#097c6a;font-weight:700;font-size:11px}
+.si-order-error{color:#a92c37!important;font-weight:700}

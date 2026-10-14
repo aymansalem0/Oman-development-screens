@@ -254,7 +254,10 @@ export function proposeMaritimeBatchSchedule({
    objectiveScore:state.score,
    assignments:ordered.map(x=>({
     imo:x.imo,inspectorId:x.inspectorId,inspectorName:x.inspectorName,
-    portId:x.portId,startUtc:x.startUtc,endUtc:x.endUtc,
+    portId:x.portId,portName:x.portName,
+    startUtc:x.startUtc,endUtc:x.endUtc,
+    startLocal:x.startLocal,endLocal:x.endLocal,
+    locationName:x.locationName,
     optionId:x.optionId,score:x.score
    })),
    rows:alternativeRows,

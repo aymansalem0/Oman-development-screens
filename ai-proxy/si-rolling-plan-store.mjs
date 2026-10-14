@@ -437,6 +437,61 @@ export class SiRollingPlanStore{
   });
  }
  /**
+  * SI-S02 assigns an already human-approved inspection case to an immutable
+  * approved-plan IMO. It may update CASE_ID and version, never change
+  * statutory source reasons, selected roster or scope.
+  */
+ async attachScheduledCase(planId,imo,caseId,actor,scheduleId){
+  if(!ID.test(planId||'')||!/^[0-9]{7}$/.test(imo||'')||
+     !ID.test(caseId||'')||!ID.test(scheduleId||'')||
+     !text(actor,160))fail('SI_ROLLING_CASE_LINK_INVALID',422);
+  const link=before=>{
+   const p=clone(before);
+   if(!['APPROVED','IN_EXECUTION'].includes(p.status))
+    fail('SI_ROLLING_APPROVED_PLAN_REQUIRED',409);
+   const item=p.approvedVessels?.find(v=>v.imo===imo);
+   if(!item)fail('SI_ROLLING_APPROVED_VESSEL_NOT_FOUND',409);
+   if(item.caseId===caseId)return {unchanged:true,next:p};
+   if(item.caseId)fail('SI_ROLLING_DIFFERENT_CASE_ALREADY_LINKED',409);
+   item.caseId=caseId;p.revision++;p.updatedAt=now();p.updatedBy=actor;
+   p.audit=[...(p.audit||[]),{event:'WORK_ORDER_CASE_LINKED',at:p.updatedAt,
+    actor,imo,caseId,scheduleId}].slice(-300);
+   return {unchanged:false,next:p};
+  };
+  if(this.mode==='json'){
+   const state=this.readFile(),i=state.plans.findIndex(p=>p.id===planId);
+   if(i<0)fail('SI_ROLLING_PLAN_NOT_FOUND',404);
+   const value=link(state.plans[i]);
+   if(!value.unchanged){state.plans[i]=value.next;this.writeFile(state);}
+   return value.next;
+  }
+  return this.db(async con=>{
+   try{
+    const found=await this.query(con,
+     'SELECT STATE_JSON FROM SI_PLAN_ROLLING WHERE PLAN_ID=:id FOR UPDATE',
+     {id:planId});
+    if(!found.length)fail('SI_ROLLING_PLAN_NOT_FOUND',404);
+    const value=link(from(found[0].STATE_JSON));
+    if(value.unchanged){await con.rollback();return value.next;}
+    const next=value.next;
+    const updated=await con.execute(
+     'UPDATE SI_PLAN_ROLLING_VESSEL SET CASE_ID=:caseId WHERE PLAN_ID=:id '+
+     'AND IMO=:imo AND CASE_ID IS NULL',{caseId,id:planId,imo});
+    if(updated.rowsAffected!==1)fail('SI_ROLLING_CASE_LINK_CONFLICT',409);
+    await con.execute('UPDATE SI_PLAN_ROLLING SET VERSION_NO=:version, '+
+     'STATE_JSON=:state,UPDATED_BY=:actor,UPDATED_AT=SYSTIMESTAMP '+
+     'WHERE PLAN_ID=:id',{id:planId,version:next.revision,state:json(next),actor});
+    await con.execute('INSERT INTO SI_PLAN_ROLLING_VERSION '+
+     "(PLAN_ID,VERSION_NO,STATE_JSON,ACTOR,EVENT_CODE) "+
+     "VALUES(:id,:version,:state,:actor,'WORK_ORDER_CASE_LINKED')",{
+      id:planId,version:next.revision,state:json(next),actor});
+    await this.audit(con,planId,'WORK_ORDER_CASE_LINKED',actor,
+     {imo,caseId,scheduleId});
+    await con.commit();return next;
+   }catch(e){await con.rollback();throw e;}
+  });
+ }
+ /**
   * Called only after an INSPECTOR/SUPERVISOR lifecycle CLOSE has actually
   * persisted. Never infer closure from a planning date, or from AI.
   */

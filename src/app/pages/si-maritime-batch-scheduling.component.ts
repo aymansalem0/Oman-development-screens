@@ -44,7 +44,7 @@ interface ScheduleBoard{
 interface Variant{optionId:string;allocatedVessels:number;objectiveScore:number;
  assignments:{imo:string;inspectorId:string;portId:string;startUtc:string;endUtc:string}[];
  rows:ScheduleRow[];board:ScheduleBoard;}
-interface Proposal{summary:{total:number;proposed:number;unscheduled:number;
+interface Proposal{planRevision:number;summary:{total:number;proposed:number;unscheduled:number;
  caseWrites:number;bookingWrites:number};rows:ScheduleRow[];status:string;
  proposalHash:string;variants?:Variant[];
  board?:ScheduleBoard;warnings:string[];aiAdvisory?:boolean;chosenOptionId?:string;}
@@ -53,6 +53,17 @@ interface S01Response{status:string;agentCode:'SI-S01';provider:'AIRIA'|'POC_MOC
  rankedOptions:{optionId:string;rank:number;confidence:number;
  rationale:string;evidenceRefs:string[]}[];
  humanApprovalRequired:true;bookingWrites:0;caseWrites:0;}
+interface WorkOrder{
+ id:string;imo:string;status:string;caseId:string|null;checklistStatus:string;
+ aiStatus:string;scopeStatus:string;error:string|null;pocDelegated?:boolean;
+ assignment:{inspectorId:string;inspectorName:string;portName:string;portId:string;
+ startLocal:string;startUtc:string;endUtc:string};
+}
+interface ApprovedSchedule{
+ id:string;planId:string;mode:'POC_MOCK'|'ERP_EXCEL_POC';status:string;
+ approvedBy:string;approvedAt:string;operationalBookingConfirmed:boolean;
+ orders:WorkOrder[];
+}
 @Component({
  selector:'app-si-maritime-batch-scheduling',standalone:true,
  imports:[CommonModule,FormsModule,RouterLink,NmcNavigationComponent],
@@ -62,7 +73,9 @@ interface S01Response{status:string;agentCode:'SI-S01';provider:'AIRIA'|'POC_MOC
 export class SiMaritimeBatchSchedulingComponent implements OnInit{
  context:Context|null=null;proposal:Proposal|null=null;baselineProposal:Proposal|null=null;
  demoMode=true;
- aiAdvice:S01Response|null=null;loading=false;busy=false;aiBusy=false;error='';notice='';
+ aiAdvice:S01Response|null=null;loading=false;busy=false;aiBusy=false;
+ scheduleBusy=false;orderBusyId:string|null=null;error='';notice='';
+ workOrdersError='';approvedSchedule:ApprovedSchedule|null=null;
  boardView:'VESSELS'|'ENGINEERS'|'DATES'='VESSELS';
  // A disabled AI action hides useful guidance. Keep it actionable: the
  // first click preflights the free ERP schedule; only confirmed second step
@@ -105,7 +118,113 @@ export class SiMaritimeBatchSchedulingComponent implements OnInit{
  constructor(private readonly http:HttpClient,private readonly route:ActivatedRoute,
   public readonly lang:LanguageService){}
  copy(en:string,ar:string):string{return this.lang.pick(en,ar);}
- ngOnInit():void{this.loadContext();}
+ ngOnInit():void{this.loadContext();this.loadWorkOrders();}
+ get canApproveSchedule():boolean{
+  return !!this.context&&!!this.proposal&&
+   this.proposal.summary.total>0&&this.proposal.summary.unscheduled===0&&
+   !!(this.baselineProposal?.variants?.length)&&
+   !this.approvedSchedule&&!this.workOrdersError&&
+   !this.busy&&!this.aiBusy&&!this.scheduleBusy;
+ }
+ get preferredOptionId():string{
+  return this.aiAdvice?.chosenOptionId||
+   this.baselineProposal?.variants?.[0]?.optionId||'';
+ }
+ private baseUrl():string{
+  return this.api+encodeURIComponent(this.route.snapshot.paramMap.get('planId')||'');
+ }
+ loadWorkOrders():void{
+  const planId=this.route.snapshot.paramMap.get('planId');
+  if(!planId)return;
+  this.http.get<{schedule:ApprovedSchedule|null}>(
+   this.api+encodeURIComponent(planId)+'/work-orders').subscribe({
+   next:r=>{this.approvedSchedule=r.schedule;this.workOrdersError='';},
+   error:e=>{this.workOrdersError=e?.error?.error||
+    'SI_SCHED_WORK_ORDERS_NOT_READY';
+    if(e?.status!==503)this.error=this.workOrdersError;}
+  });
+ }
+ approveSchedule():void{
+  if(!this.canApproveSchedule||!this.baselineProposal||!this.context||
+   !this.proposal)return;
+  const reason=window.prompt(this.copy(
+   'Reason for approving the complete schedule (minimum 8 characters):',
+   'أدخل سبب اعتماد جدول توزيع المهندسين بالكامل (٨ أحرف على الأقل):'),
+   this.copy('Reviewed feasible vessel visits and POC engineer assignments.',
+    'تمت مراجعة الجدولة الممكنة وتوزيع المهندسين لأوامر التكليف التجريبية.'));
+  if(!reason||reason.trim().length<8)return;
+  const confirmed=window.confirm(this.copy(
+   'Approve '+this.proposal.summary.total+
+    ' assignments and issue work orders? No live ERP booking or regulatory decision is created.',
+   'تأكيد اعتماد جدول '+this.proposal.summary.total+
+    ' سفينة وإصدار أوامر تكليف؟ لا ينشأ حجز ERP فعلي أو قرار تنظيمي تلقائي.'));
+  if(!confirmed)return;
+  this.scheduleBusy=true;this.error='';this.notice='';
+  this.http.post<{schedule:ApprovedSchedule}>(
+   this.baseUrl()+'/approve',{
+    requests:this.requests(),demoMode:this.demoMode,
+    selectedOptionId:this.preferredOptionId,
+    expectedProposalHash:this.baselineProposal.proposalHash,
+    expectedPlanRevision:this.baselineProposal.planRevision,
+    reason:reason.trim(),confirmApproval:true
+   }).subscribe({
+    next:r=>{this.scheduleBusy=false;this.approvedSchedule=r.schedule;
+     this.notice=this.copy('Schedule and inspector work orders saved. No live ERP booking. Activate orders to prepare checklists.',
+      'تم اعتماد الجدولة وحفظ أوامر التكليف دون حجز ERP فعلي. نفّذ الأوامر لتجهيز القوائم.');},
+    error:e=>{this.scheduleBusy=false;this.showError(e);}
+   });
+ }
+ workOrderAction(order:WorkOrder,action:'activate'|'scope'|'start'):void{
+  if(this.orderBusyId||!this.approvedSchedule)return;
+  let request:{[key:string]:unknown}={};
+  if(action==='activate'){
+   const generateAi=window.confirm(this.copy(
+    'Prepare mandatory checklist now. Also request optional A04 AI checklist additions if sources permit? A real Airia call may cost money.',
+    'سيتم تجهيز القائمة الإلزامية الآن. هل تريد أيضًا مقترحات A04 AI إذا سمحت المصادر؟ قد يكون استدعاء Airia مدفوعًا.'));
+   request={generateAi,confirmAiCost:generateAi};
+  }else if(action==='scope'){
+   const reason=window.prompt(this.copy(
+    'Supervisor: reason for mandatory checklist scope approval:',
+    'المشرف: سبب اعتماد نطاق قوائم المعاينة الإلزامية:'));
+   if(!reason||reason.trim().length<8)return;
+   // A04 review happens in the separate preparation page after the
+   // order is issued. The order's earlier status can still show DRAFT even
+   // when a publisher has approved the overlay in that page. The server
+   // checks the LATEST preparation revision before accepting additions.
+   const includeAiSuggestions=order.aiStatus.startsWith('A04_')&&
+    window.confirm(this.copy(
+     'Include A04 additions ONLY if a supervisor has already approved their draft in Dossier Review? Otherwise choose Cancel and approve mandatory scope alone.',
+     'هل تريد ضم إضافات A04 بعد اعتماد مسودتها من المسؤول في شاشة الدوسيه؟ اضغط إلغاء لاعتماد البنود الإلزامية فقط.'));
+   request={reason:reason.trim(),includeAiSuggestions};
+  }else{
+   const poc=this.approvedSchedule.mode==='POC_MOCK';
+   if(!window.confirm(poc?
+    this.copy('POC DEMO: start on behalf of the assigned mock engineer? Audited delegation, not official inspector authentication.',
+     'محاكاة POC: بدء المعاينة نيابة عن المهندس التجريبي؟ سيتم توثيق التفويض وليس إثبات دخول رسمي للمفتش.'):
+    this.copy('Start as the authenticated assigned inspector?',
+     'هل تبدأ المعاينة بهوية المفتش المسند إليه الأمر؟')))return;
+   request={confirmPocDelegation:poc};
+  }
+  this.orderBusyId=order.id;this.error='';this.notice='';
+  this.http.post<{order:WorkOrder}>(
+   this.baseUrl()+'/work-orders/'+encodeURIComponent(order.id)+'/'+action,
+   request).subscribe({
+    next:r=>{
+     this.orderBusyId=null;
+     const idx=this.approvedSchedule?.orders.findIndex(x=>x.id===order.id)??-1;
+     if(this.approvedSchedule&&idx>=0)this.approvedSchedule.orders[idx]=r.order;
+     this.notice=action==='activate'?
+      this.copy('Mandatory checklist prepared. A04 AI additions, if generated, need separate review. Supervisor must approve scope.',
+       'تم تجهيز القائمة الإلزامية. بنود A04 الإضافية تحتاج مراجعة، ثم يعتمد المشرف نطاق المعاينة.'):
+      action==='scope'?
+       this.copy('Scope approved and engineer assigned; inspector may start the field visit.',
+        'تم اعتماد النطاق وإسناد المهندس؛ يمكن الآن بدء المعاينة الميدانية.'):
+       this.copy('Inspection started; open its case checklist.',
+        'بدأت المعاينة؛ افتح قائمة المعاينة الخاصة بالحالة.');
+    },
+    error:e=>{this.orderBusyId=null;this.showError(e);this.loadWorkOrders();}
+   });
+ }
  useDemoMode(enabled:boolean):void{
   if(this.busy||this.aiBusy||this.loading)return;
   this.demoMode=enabled;this.loadContext();

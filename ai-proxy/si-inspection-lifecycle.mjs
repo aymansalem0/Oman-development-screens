@@ -283,7 +283,12 @@ export class SiInspectionLifecycle{
         case 'APPROVE_SCOPE':{
           requireStage('PREPARATION_READY');
           if(!reason||reason.length<8)fails('SI_APPROVAL_REASON_REQUIRED');
-          if(prep.stale||!['PREPARED','APPROVED'].includes(prep.saved?.status))
+          // A04 drafts do not change the immutable mandatory scope. A
+          // supervisor may approve mandatory-only scope while optional model
+          // suggestions remain in DRAFT_REVIEW and cannot enter checks via
+          // ADD_SCOPE until separately reviewed and APPROVED.
+          if(prep.stale||!['PREPARED','APPROVED','DRAFT_REVIEW']
+            .includes(prep.saved?.status))
             fails('SI_PREPARATION_STALE',409);
           next.stage='SCOPE_APPROVED';next.scopeApprovedBy=str(actor,120);
           next.scopeReason=reason;break;
