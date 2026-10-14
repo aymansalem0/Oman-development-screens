@@ -275,7 +275,23 @@ const siPriority=new SiAiPrioritization({
   enabled:false
 });
 const siCandidateAgent=new SiCandidateAgent({
-  targeting:siTargeting,pscPolicy:()=>siPscSelection.policy(),provider:siAiProvider,
+  targeting:siTargeting,pscPolicy:async()=>{
+    const pool=await siPscSelection.pool();
+    return {...pool.policy,quotaSnapshot:{
+      scope:pool.scope,periodMode:pool.periodMode,
+      source:'PUBLISHED_RULES_ON_PERSISTED_PSC_EXCEL',
+      eligibleEvents:pool.summary.eligiblePortCalls,
+      shortlistedEvents:pool.summary.selectedPortCalls,
+      automaticEvents:pool.summary.automaticallyShortlistedPortCalls,
+      buckets:pool.summary.buckets.map(b=>({
+        bucket:b.bucket,ratePercent:b.selectionRate,
+        eligibleEvents:b.eligiblePortCalls,quotaTarget:b.targetCount,
+        shortlistedEvents:b.selectedCount,overQuota:b.overQuota
+      })),
+      modelMayOverrideQuota:false,
+      officialSelectionRequiresOfficer:true
+    }};
+  },provider:siAiProvider,
   executeAgent:async input=>siAiProvider==='mock'?mockSiC01(input):fleetAgentCall('c01',input)
 });
 const siRollingPlans=new SiRollingPlanStore({mode:dbMode,oracleRepository:repository});
