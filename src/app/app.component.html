@@ -1,5 +1,5 @@
 <div class="app-shell" [class.rtl]="lang.isArabic" [attr.dir]="lang.dir">
-  <aside class="sidebar">
+  <aside class="sidebar" *ngIf="!isMoeiSeafarers">
     <div class="sidebar-user">
       <div class="sidebar-user-icon">✣</div>
       <span>{{ lang.t('employee') }}</span>
@@ -36,10 +36,17 @@
         <span>{{ lang.isArabic ? 'تصنيفات وربط الأنشطة البحرية' : 'Marine Activity Mapping' }}</span>
       </a>
     </div>
+    <div class="sidebar-group">
+      <div class="sidebar-group-title">MOEI — UAE POC</div>
+      <a class="sidebar-link" routerLink="/moei/seafarers">
+        <span class="rail-dot"></span>
+        <span>Seafarer Management &amp; SDB</span>
+      </a>
+    </div>
   </aside>
 
-  <div class="workspace">
-    <header class="topbar">
+  <div class="workspace" [style.width]="isMoeiSeafarers ? '100%' : null" [style.margin-left]="isMoeiSeafarers ? '0' : null">
+    <header class="topbar" *ngIf="!isMoeiSeafarers">
       <div class="ministry-brand">
         <div class="oman-mark">⚓</div>
         <div>
@@ -67,8 +74,9 @@
       </div>
     </header>
 
-    <main class="page-content">
+    <main class="page-content" [style.padding]="isMoeiSeafarers ? '0' : null">
       <router-outlet></router-outlet>
     </main>
   </div>
 </div>
+
