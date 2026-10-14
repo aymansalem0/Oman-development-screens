@@ -370,33 +370,41 @@ export class SiV2ScheduleApproval{
    let lifecycle=await this.lifecycle.snapshot(item.caseId);
    const apply=async(action,data,as)=>{
     const result=await this.lifecycle.apply(item.caseId,{
-      action,data,actor:as,expectedVersion:lifecycle.saved?.version||0});
+      action,data,actor:as,expectedVersion:lifecycle.record?.version||0});
     lifecycle=await this.lifecycle.snapshot(item.caseId);
     return result;
    };
-   if(!lifecycle.saved)await apply('INITIALIZE',{},record.approvedBy);
-   if(lifecycle.saved?.stage==='PREPARATION_READY'){
+   if(!lifecycle.record)await apply('INITIALIZE',{},record.approvedBy);
+   if(lifecycle.record?.stage==='PREPARATION_READY'){
     if(additions.length)await apply('ADD_SCOPE',{additions},
       saved.review?.actor||record.approvedBy);
     await apply('APPROVE_SCOPE',{
       reason:saved.review?.reason||record.approvalReason
     },saved.review?.actor||record.approvedBy);
    }
-   if(lifecycle.saved?.stage==='SCOPE_APPROVED'){
+   if(lifecycle.record?.stage==='SCOPE_APPROVED'){
     const d=new Date(item.assignment.startUtc);
     const local=new Intl.DateTimeFormat('sv-SE',{
       timeZone:'Asia/Dubai',year:'numeric',month:'2-digit',
       day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false
     }).format(d).replace(' ','T');
-    await apply('ASSIGN',{inspector:item.assignment.inspectorName,
-      port:item.assignment.portName,startLocal:local,
-      mode:'POC_MANUAL'},record.approvedBy);
+    const inspection=await this.targeting.inspectionCase(item.caseId);
+    if(inspection?.nmcReferralId){
+      // NMC appointment has already been independently confirmed in dispatch.
+      await apply('ASSIGN',{inspector:item.assignment.inspectorName,
+       port:item.assignment.portName,startLocal:local,
+       mode:'NMC_SCHEDULED'},record.approvedBy);
+    }else{
+      await apply('ASSIGN',{inspector:item.assignment.inspectorName,
+       port:item.assignment.portName,startLocal:local,
+       mode:'POC_MANUAL'},record.approvedBy);
+    }
    }
-   if(lifecycle.saved?.stage!=='ASSIGNED'&&lifecycle.saved?.stage!=='IN_FIELD')
+   if(lifecycle.record?.stage!=='ASSIGNED'&&lifecycle.record?.stage!=='IN_FIELD')
     fail('SI_V2_WORK_ORDER_LIFECYCLE_REVIEW_REQUIRED',409);
    // Idempotent checklist seed includes ALL mandatory statutory templates.
    const checklist=await this.checklists.start(item.caseId,actor.trim());
-   if(lifecycle.saved.stage==='ASSIGNED')await apply('START_FIELD',{},actor.trim());
+   if(lifecycle.record.stage==='ASSIGNED')await apply('START_FIELD',{},actor.trim());
    item.orderStatus='IN_EXECUTION';item.startedAt=item.startedAt||now();
    item.checklistVersion=checklist.version;
    item.mandatoryTemplates=checklist.templates
