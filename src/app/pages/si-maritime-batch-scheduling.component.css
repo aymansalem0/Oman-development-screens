@@ -55,3 +55,16 @@ button:disabled{opacity:.5}.marine-notice{padding:13px;background:#eaf4f5;border
 .marine-preview-warning{margin-top:14px;padding:12px;border-radius:8px;
  border:1px solid #d9ccf2;background:#f5f0ff;color:#594179;font-weight:700;font-size:11px}
 @media(max-width:650px){.marine-board-grid{grid-template-columns:1fr}}
+
+/* Airia S01 is a separately confirmed advisory on ERP-verified options. */
+.marine-ai-button{background:#6848a1;border:1px solid #513587;white-space:nowrap}
+.marine-ai-advice{padding:15px;margin:12px 0;border:1px solid #d9cced;
+ border-radius:11px;background:#fbf9ff}
+.marine-ai-advice h3{margin:0;color:#543580;font-size:15px}
+.marine-ai-rank{border-top:1px solid #e1d8ed;padding:11px 0;
+ display:grid;grid-template-columns:minmax(150px,1fr) auto;gap:6px;color:#3a4461}
+.marine-ai-rank strong{font-size:12px}
+.marine-ai-rank p,.marine-ai-rank small{grid-column:1 / -1;margin:0;font-size:11px}
+.marine-ai-rank small{color:#68808d;overflow-wrap:anywhere}
+.marine-actions{flex-wrap:wrap;gap:10px}
+.marine-actions small{display:block;flex-basis:100%;color:#66818e;line-height:1.55}
