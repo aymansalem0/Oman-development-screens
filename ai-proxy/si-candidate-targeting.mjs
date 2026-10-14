@@ -50,13 +50,56 @@ export function getSiPrioritySettings(config){
 }
 // Eligibility is governed by source workflows (approved NMC, actionable
 // Service Request, selected PSC quota), NOT a numerical source priority.
+// Publisher-editable *advisory* guidance. Eligibility, PSC quotas, verified
+// execution order and official approvals remain enforced outside Airia.
+export const SI_C01_ADVISORY_SIGNALS=Object.freeze([
+  'SOURCE_EVENT_EVIDENCE','VERIFIED_ETD','REVIEWED_INCIDENT','SAVED_VESSEL_RISK'
+]);
+export const SI_C01_ADVISORY_DEFAULT=Object.freeze({
+  selectionSignals:[...SI_C01_ADVISORY_SIGNALS],
+  minimumSelectionConfidence:0,
+  selectionInstructions:'',
+  priorityInstructions:''
+});
+export function getSiC01AdvisoryRules(config){
+  const value=config?.aiAdvisory||SI_C01_ADVISORY_DEFAULT;
+  const keys=['selectionSignals','minimumSelectionConfidence',
+    'selectionInstructions','priorityInstructions'];
+  if(!value||typeof value!=='object'||Array.isArray(value)||
+     Object.keys(value).sort().join('|')!==keys.sort().join('|'))
+    throw new SiTargetingError('SI_C01_ADVISORY_RULES_INVALID',422);
+  const signals=value.selectionSignals;
+  if(!Array.isArray(signals)||!signals.length||
+     signals.length>SI_C01_ADVISORY_SIGNALS.length||
+     new Set(signals).size!==signals.length||
+     signals.some(x=>!SI_C01_ADVISORY_SIGNALS.includes(x)))
+    throw new SiTargetingError('SI_C01_SELECTION_SIGNALS_INVALID',422);
+  if(typeof value.minimumSelectionConfidence!=='number'||
+     !Number.isFinite(value.minimumSelectionConfidence)||
+     value.minimumSelectionConfidence<0||value.minimumSelectionConfidence>1)
+    throw new SiTargetingError('SI_C01_CONFIDENCE_RULE_INVALID',422);
+  for(const key of ['selectionInstructions','priorityInstructions']){
+    if(typeof value[key]!=='string'||value[key].length>600||
+       /[\x00-\x08\x0b\x0c\x0e-\x1f]/.test(value[key]))
+      throw new SiTargetingError('SI_C01_GUIDANCE_INVALID',422);
+  }
+  return {
+    selectionSignals:SI_C01_ADVISORY_SIGNALS.filter(x=>signals.includes(x)),
+    minimumSelectionConfidence:value.minimumSelectionConfidence,
+    selectionInstructions:value.selectionInstructions.trim(),
+    priorityInstructions:value.priorityInstructions.trim()
+  };
+}
 const defaultRules=Object.freeze({
-  ranking:{criteria:['DEPARTURE_SOON','INCIDENT_SEVERITY']}
+  ranking:{criteria:['DEPARTURE_SOON','INCIDENT_SEVERITY']},
+  aiAdvisory:SI_C01_ADVISORY_DEFAULT
 });
 function validateRules(value){
   if(!value||typeof value!=='object'||Array.isArray(value)||
-     Object.keys(value).join('|')!=='ranking')return null;
-  try{return {ranking:getSiRankingPolicy(value)};}catch{return null;}
+     Object.keys(value).some(x=>!['ranking','aiAdvisory'].includes(x))||
+     !Object.hasOwn(value,'ranking'))return null;
+  try{return {ranking:getSiRankingPolicy(value),
+    aiAdvisory:getSiC01AdvisoryRules(value)};}catch{return null;}
 }
 export class SiTargetingError extends Error{
   constructor(code,status=400){super(code);this.code=code;this.status=status;}
@@ -467,9 +510,9 @@ export class SiCandidateTargeting{
     const parsed=validateRules(config);
     if(!parsed)throw new SiTargetingError('SI_RULES_INVALID',422);
     const data=await this.dashboard();
-    const before=getSiRankingPolicy(data.policy.config);
-    const proposed=getSiRankingPolicy(parsed);
-    const changed=JSON.stringify(before)!==JSON.stringify(proposed);
+    const before={ranking:getSiRankingPolicy(data.policy.config),
+      aiAdvisory:getSiC01AdvisoryRules(data.policy.config)};
+    const changed=JSON.stringify(before)!==JSON.stringify(parsed);
     return {status:'PREVIEW',fleetSnapshotId:data.fleetSnapshotId,
       evaluatedPopulation:data.summary.evaluatedPopulation,rulesetVersion:data.policy.version,
       affectedImos:[],affectedCandidateCount:0,
