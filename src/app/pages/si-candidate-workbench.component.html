@@ -340,6 +340,13 @@
                       <h3>{{copy('AI Selection Rationale','سبب اختيار السفينة من AI')}}</h3>
                       <p>{{planRow(v)?.selectionReason||copy('Generate the C01 plan to see a source-grounded recommendation.',
                         'شغّل خطة C01 لعرض تفسير مرتبط بالمصدر.')}}</p>
+                      <p *ngIf="planRow(v)?.regimeAdvisories?.length">
+                        <strong>{{copy('Priority explanation source','مصدر تفسير الأولوية')}}:</strong>
+                        {{planRow(v)?.regimeAdvisories?.[0]?.priorityRationaleSource==='DETERMINISTIC_BUSINESS_RULE'?
+                          copy('Configured ranking rules (AI rationale unavailable)','قواعد ترتيب الأولوية المعتمدة (تفسير AI غير متاح)'):
+                          plan?.provider==='AIRIA'?copy('Airia AI response','استجابة Airia'):
+                          copy('POC mock response','استجابة POC التجريبية')}}
+                      </p>
                       <p><strong>{{copy('Evidence IDs','مراجع الأدلة')}}:</strong>
                         {{planRow(v)?.evidenceRefs?.join(' · ')||'—'}}</p>
                       <p><strong>{{copy('Missing Data','البيانات الناقصة')}}:</strong>
