@@ -202,7 +202,7 @@ export function validateC01(raw,source){
     return {candidateKey:c.candidateKey,imo:c.imo,regime:c.regime,
       recommendation:r.recommendation,confidence:r.confidence,
       suggestedRank:r.suggestedRank,priorityRationale,
-      priorityRationaleSource:hasAiRationale?'AIRIA':'DETERMINISTIC_BUSINESS_RULE',
+      priorityRationaleSource:hasAiRationale?'AGENT_OUTPUT':'DETERMINISTIC_BUSINESS_RULE',
       reason:r.reason.trim(),evidenceRefs:unique(r.evidenceRefs),
       dataGaps:unique([...r.dataGaps,...(c.missingData||[])]),requiresHumanReview:true,
       regulatoryDecision:false};
