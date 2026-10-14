@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {buildC01Source,validateC01,SiCandidateAgent} from '../si-candidate-agent.mjs';
+import {buildC01Source,validateC01,unwrapC01AiriaResult,SiCandidateAgent} from '../si-candidate-agent.mjs';
 import {mockSiC01,mockSiP01,mockSiA04} from '../si-agent-mock.mjs';
 import {validateP01} from '../si-ai-prioritization.mjs';
 import {validateA04} from '../si-inspection-preparation.mjs';
@@ -207,4 +207,54 @@ test('Past ETD, unverified ETA and unreviewed incident are not promoted to prior
  assert.equal(inspectionRanking({incidentSeverity:95,incidentHumanReviewed:true},now).group,1);
  assert.ok(compareInspections({imo:'9700012',departureAt:future,departureVerified:true},
   {imo:'9700013',incidentSeverity:95,incidentHumanReviewed:true},now)<0);
+});
+
+test('C01 Airia result envelope accepts JSON string output without relaxing business checks',()=>{
+  const source=buildC01Source(inputs(),{version:6});
+  const valid=mockSiC01(source);
+  const variants=[valid,{result:valid},
+    {result:JSON.stringify(valid)},
+    {result:JSON.stringify({result:valid})},
+    JSON.stringify({result:JSON.stringify(valid)})];
+  for(const response of variants){
+    const parsed=unwrapC01AiriaResult(response);
+    assert.ok(parsed);
+    assert.deepEqual(validateC01(response,source),
+      validateC01(valid,source));
+  }
+  assert.equal(unwrapC01AiriaResult({result:'not valid JSON'}),null);
+  assert.equal(unwrapC01AiriaResult({result:'```json\\n{}\\n```'}),null,
+    'markdown fences are not silently accepted');
+});
+test('C01 rejects truncated Airia result strings and untrusted evidence; no fabricated candidates',()=>{
+  const source=buildC01Source(inputs(),{version:6});
+  const valid=mockSiC01(source);
+  assert.throws(()=>validateC01({
+    result:JSON.stringify({recommendations:valid.recommendations.slice(1)})
+  },source),e=>e.code==='SI_C01_RESPONSE_INVALID');
+  assert.throws(()=>validateC01({result:'unstructured prose'},source),
+    e=>e.code==='SI_C01_RESPONSE_INVALID');
+  const corrupt=structuredClone(valid);
+  corrupt.recommendations[0].evidenceRefs=['INVENTED_BY_MODEL'];
+  assert.throws(()=>validateC01({result:JSON.stringify(corrupt)},source),
+    e=>e.code==='SI_C01_UNVERIFIED_RECOMMENDATION');
+});
+test('C01 AIRIA explicit run consumes JSON-string result and remains advisory',async()=>{
+  let calls=0;
+  const a=new SiCandidateAgent({targeting:{dashboard:async()=>inputs()},
+    provider:'airia',executeAgent:async payload=>{
+      calls++;
+      return {executionId:'partner-test-id',
+        result:JSON.stringify(mockSiC01(payload))};
+    }});
+  const preview=await a.preview();
+  const result=await a.run({actor:'supervisor',confirmRun:true,
+    confirmCost:true,expectedSnapshotHash:preview.snapshotHash});
+  assert.equal(calls,1);
+  assert.equal(result.provider,'AIRIA');
+  assert.equal(result.mock,false);
+  assert.equal(result.externalCalls,1);
+  assert.equal(result.humanDecisionRequired,true);
+  assert.equal(result.mutations,false);
+  assert.equal(result.recommendations.length,preview.eligibleCount);
 });

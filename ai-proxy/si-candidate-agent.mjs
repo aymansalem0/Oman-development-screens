@@ -54,11 +54,45 @@ export function buildC01Source(dashboard,pscPolicy=null){
     candidates};
   return {...source,snapshotHash:hash(source)};
 }
+/**
+ * Airia PipelineExecution returns an envelope with a result property.
+ * The SDK documents result as the execution output, which can be an encoded
+ * JSON STRING even while the HTTP response itself is valid JSON.
+ * Decode ONLY that documented envelope, never repair/model-complete missing
+ * recommendations. Keep every existing regulatory/evidence gate unchanged.
+ */
+export function unwrapC01AiriaResult(raw){
+ let body=raw;
+ for(let i=0;i<3;i++){
+  if(typeof body==='string'){
+   if(body.length>2*1024*1024)return null;
+   try{body=JSON.parse(body);}catch{return null;}
+   continue;
+  }
+  if(!body||typeof body!=='object'||Array.isArray(body))return null;
+  if(Array.isArray(body.recommendations))return body;
+  if(!Object.hasOwn(body,'result'))return null;
+  body=body.result;
+ }
+ return body&&typeof body==='object'&&
+   !Array.isArray(body)&&Array.isArray(body.recommendations)?body:null;
+}
 export function validateC01(raw,source){
-  const body=raw?.recommendations?raw:raw?.result?.recommendations?raw.result:null;
-  if(!body||!Array.isArray(body.recommendations)||
-    body.recommendations.length!==source.candidates.length)
+  const body=unwrapC01AiriaResult(raw);
+  if(!body||body.recommendations.length!==source.candidates.length){
+    // Do NOT print upstream text, candidate identifiers or evidence to logs.
+    // Record only the shape and counts needed to diagnose Airia integration.
+    const shape=raw===null?'null':Array.isArray(raw)?'array':typeof raw;
+    const resultShape=raw&&typeof raw==='object'&&
+      !Array.isArray(raw)&&Object.hasOwn(raw,'result')?
+      (Array.isArray(raw.result)?'array':typeof raw.result):'absent';
+    const actual=Array.isArray(body?.recommendations)?
+      body.recommendations.length:'missing';
+    console.warn('[si-c01] RESPONSE_CONTRACT_MISMATCH top='+shape+
+      ' result='+resultShape+' recommendations='+actual+
+      ' expected='+source.candidates.length);
     throw new SiCandidateAgentError('SI_C01_RESPONSE_INVALID',502);
+  }
   const known=new Map(source.candidates.map(x=>[x.candidateKey,x])),seen=new Set();
   return body.recommendations.map(r=>{
     const c=known.get(r?.candidateKey);
