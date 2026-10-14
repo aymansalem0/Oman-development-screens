@@ -131,3 +131,10 @@ button:disabled{opacity:.36;cursor:not-allowed}
 :host-context([dir="rtl"]) .sdb-main{margin-left:0;margin-right:240px}
 @media(min-width:961px) and (max-width:1220px){:host-context([dir="rtl"]) .sdb-main{margin-right:66px}}
 @media(max-width:960px){:host-context([dir="rtl"]) .sdb-main{margin-right:0}}
+
+/* Internal workflow navigation within the shared MOEI maritime shell. */
+.sdb-module-tabs{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin:0 0 20px;border-bottom:1px solid #dce9ea;padding:0 0 11px}
+.sdb-module-tabs button{border:1px solid #dbe5e8;background:#fff;color:#4d6575;display:flex;align-items:center;gap:7px;padding:11px 12px;font-size:11px;font-weight:700;border-radius:9px;white-space:nowrap}
+.sdb-module-tabs button:hover{background:#edf8f5;color:#0d766a}
+.sdb-module-tabs button.active{background:#e0f5ed;border-color:#a0d6c3;color:#086c5b}
+.sdb-module-tabs button span:first-child{font-size:15px;color:#15927b}
