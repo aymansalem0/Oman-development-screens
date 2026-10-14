@@ -42,7 +42,12 @@ export interface SiCapacityPreview{
  proposal:{proposalHash:string;planRevision:number;
   summary:{total:number;proposed:number;unscheduled:number};
   rows:{imo:string;status:'PROPOSED'|'UNSCHEDULED';blocker:string|null;
-   assignment:SiCapacityAssignment|null;diagnostics?:{code:string;category:string}|null}[];
+   assignment:SiCapacityAssignment|null;diagnostics?:{code:string;category:string;
+   nextAction?:string;candidateOptions?:number;candidateInspectors?:number;
+   timeOrTravelConflicts?:number;dailyCapacityConflicts?:number;
+   competingVisits?:{imo:string;inspectorName:string;inspectorId:string;
+    startLocal:string;endLocal:string;portId:string}[];
+   inspectorExclusions?:{inspectorId:string;reasonCodes:string[]}[]}|null}[];
   variants:{optionId:string;objectiveScore:number;allocatedVessels:number;
    assignments:SiCapacityAssignment[]}[]};
 }
