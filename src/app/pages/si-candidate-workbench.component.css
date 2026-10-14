@@ -283,3 +283,33 @@ button:disabled{opacity:.55;cursor:not-allowed}
 @media(max-width:1080px){.si-rolling-form{grid-template-columns:1fr 1fr}}
 @media(max-width:740px){.si-rolling-top{flex-direction:column;align-items:start}
 .si-rolling-form{grid-template-columns:1fr}.si-rolling-management{padding:14px}}
+
+/* Live SI-C01 analysis: truthful indeterminate progress, no fabricated percent/steps. */
+.si-list-header .si-plan-mode.si-ai-active{
+  border-color:#b8d4ed;background:#e7f3ff;color:#185980;
+}
+.si-analysis-spinner{
+  display:inline-block;flex:none;width:14px;height:14px;
+  border:2px solid #e5d8ff;border-top-color:#6c3cad;
+  border-radius:50%;animation:si-ai-spin .8s linear infinite;vertical-align:middle;
+}
+.si-compact-credentials button .si-analysis-spinner{margin-inline-end:6px;}
+.si-ai-analysis-panel{
+  display:flex;align-items:flex-start;gap:12px;border-radius:10px;
+  border:1px solid #c9dcef;background:#f2f8ff;
+  padding:13px 15px;margin:8px 0 12px;color:#174d72;
+}
+.si-ai-analysis-panel>.si-analysis-spinner{width:19px;height:19px;margin-top:3px;}
+.si-ai-analysis-text{min-width:0;flex:1;}
+.si-ai-analysis-text strong{font-size:12px;line-height:1.5;}
+.si-ai-analysis-text p{font-size:11px;line-height:1.6;margin:5px 0 11px;}
+.si-ai-indeterminate{height:5px;overflow:hidden;border-radius:99px;
+  background:#d8e6f7;position:relative;}
+.si-ai-indeterminate span{position:absolute;top:0;bottom:0;width:35%;
+  border-radius:99px;background:#6b45ad;animation:si-ai-scan 1.8s ease-in-out infinite;}
+@keyframes si-ai-spin{to{transform:rotate(360deg)}}
+@keyframes si-ai-scan{0%{inset-inline-start:-36%}100%{inset-inline-start:101%}}
+@media(prefers-reduced-motion:reduce){
+  .si-analysis-spinner,.si-ai-indeterminate span{animation:none;}
+  .si-ai-indeterminate span{inset-inline-start:0;width:50%;}
+}
