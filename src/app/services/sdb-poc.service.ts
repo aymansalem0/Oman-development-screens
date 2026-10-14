@@ -167,6 +167,11 @@ export class SdbPocService {
     });
   }
 
+  /** Add a fixture-only audit record from the SDB workflow simulator. */
+  recordDemoEvent(id:string,event:string,actor:string,detail:string):void {
+    this.addAudit(id,event,actor,detail);
+  }
+
   getChannel(row: Seafarer): ApplicantChannel {
     return row.category === 'FOREIGN' ? 'COMPANY' : 'SELF';
   }
