@@ -50,6 +50,9 @@ jobs:
       - name: Smart Inspection guided plan and reason regression
         run: node --test scripts/test-si-plan-stepper.mjs
 
+      - name: Smart Inspection independent factor percentages regression
+        run: node --test scripts/test-si-plan-factor-quotas.mjs
+
       - name: SI-02 preparation case list and deep-link regression
         run: node --test scripts/test-si02-preparation-route.mjs
 
