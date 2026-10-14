@@ -23,8 +23,19 @@ interface Context{
  workforce?:{inspectorId:string;inspectorName:string;homePortId:string|null;
    dailyCapacity:number;qualifications:string[]}[];
 }
+interface UnscheduledDiagnostics{
+ code:string;category:string;source:string;scopeCodes:string[];
+ portId:string|null;earliestLocal:string|null;deadlineLocal:string|null;
+ durationMinutes:number|null;candidateOptions:number;candidateInspectors:number;
+ timeOrTravelConflicts:number;dailyCapacityConflicts:number;
+ optionsStillInsertable:number;nextAction:string;advisoryOnly:true;
+ competingVisits:{imo:string;inspectorId:string;inspectorName:string;
+  portId:string;startLocal:string;endLocal:string}[];
+ inspectorExclusions:{inspectorId:string;reasonCodes:string[]}[];
+}
 interface ScheduleRow{
  imo:string;status:'PROPOSED'|'UNSCHEDULED';blocker:string|null;
+ diagnostics?:UnscheduledDiagnostics|null;
  assignment:{inspectorName:string;inspectorId:string;startLocal:string;
  endLocal:string;portName:string;locationName:string;score:number;
  crossPort?:boolean;originPortId?:string;originPortName?:string;
@@ -43,7 +54,8 @@ interface ScheduleBoard{
  engineers:{inspectorId:string;inspectorName:string;vesselCount:number;
  dates:string[];assignments:BoardAssignment[]}[];
  days:{dateLocal:string;vesselCount:number;assignments:BoardAssignment[]}[];
- unscheduled:{imo:string;planRank:number;blocker:string}[];
+ unscheduled:{imo:string;planRank:number;blocker:string;
+  diagnostics?:UnscheduledDiagnostics|null}[];
 }
 interface Variant{optionId:string;allocatedVessels:number;objectiveScore:number;
  assignments:{imo:string;inspectorId:string;portId:string;startUtc:string;endUtc:string;
@@ -85,6 +97,60 @@ export class SiMaritimeBatchSchedulingComponent implements OnInit{
  scheduleBusy=false;orderBusyId:string|null=null;error='';notice='';
  workOrdersError='';approvedSchedule:ApprovedSchedule|null=null;
  boardView:'VESSELS'|'ENGINEERS'|'DATES'='VESSELS';
+ selectedUnscheduledImo:string|null=null;
+ get selectedUnscheduled():ScheduleRow|null{
+  return this.proposal?.rows.find(x=>x.imo===this.selectedUnscheduledImo&&
+   x.status==='UNSCHEDULED')||null;
+ }
+ inspectUnscheduled(imo:string):void{
+  this.selectedUnscheduledImo=this.selectedUnscheduledImo===imo?null:imo;
+ }
+ visitDetails(imo:string):SourceRow|null{
+  return this.context?.items.find(x=>x.imo===imo)||null;
+ }
+ diagnosticsLabel(d:UnscheduledDiagnostics|null|undefined):string{
+  if(!d)return this.copy('Scheduling details unavailable; recalculate preview.',
+   'تفاصيل أسباب التعذر غير متاحة؛ أعد حساب الجدولة.');
+  if(d.category==='OPTIMIZER_SEARCH_LIMIT')
+   return this.copy('A candidate slot still fits the chosen plan; the bounded solver did not select it.',
+    'يوجد موعد مرشح لا يتعارض مع الجدول الحالي، لكن محرك البحث المحدود لم يختره.');
+  if(d.category==='PLAN_RESOURCE_CONTENTION')
+   return this.copy('Candidate slots conflict with selected inspections, engineer daily capacity or inter-port travel.',
+    'تتعارض المواعيد المرشحة مع معاينات مجدولة أو الطاقة اليومية للمهندس أو وقت الانتقال بين الموانئ.');
+  if(d.code==='NO_FEASIBLE_ERP_SHIFT_QUALIFICATION_PORT_OR_WINDOW')
+   return this.copy('No qualified engineer/shift/window combination was returned.',
+    'لم يجد المحرك مهندسًا مؤهلًا بوردية وموعد مناسبين ضمن الفترة المتاحة.');
+  const reasons:Record<string,[string,string]>={
+   VESSEL_SCHEDULING_DATA_REQUIRED:['Visit details have not been provided.','بيانات زيارة السفينة غير مستكملة.'],
+   VALID_INSPECTION_PORT_REQUIRED:['Inspection port is missing or inactive.','ميناء المعاينة غير محدد أو غير نشط.'],
+   BERTH_ANCHORAGE_AND_ACCESS_CONFIRMATION_REQUIRED:['Visit site and site-access confirmation are required.','يلزم تحديد موقع المعاينة وتأكيد إتاحته.'],
+   FINAL_VESSEL_ARRIVAL_DEPARTURE_WINDOW_REQUIRED:['A final evidenced visit window is required.','يلزم تحديد فترة زيارة نهائية موثقة.'],
+   VESSEL_WINDOW_OR_DURATION_INVALID:['Visit window or inspection duration is invalid.','فترة الزيارة أو مدة المعاينة غير صحيحة.'],
+   VESSEL_WINDOW_SHORTER_THAN_INSPECTION:['Visit window is shorter than inspection duration.','الوقت المتاح للسفينة أقصر من مدة المعاينة.'],
+   NMC_APPROVED_REFERRAL_MISSING_OR_CLOSED:['The approved NMC referral is unavailable or closed.','إحالة المركز البحري المعتمدة غير متاحة أو مغلقة.'],
+   NMC_REFERRAL_ALREADY_SCHEDULED_RECONCILE:['NMC referral already scheduled; reconcile before assigning again.','إحالة المركز البحري مجدولة بالفعل؛ راجع الربط قبل إعادة الإسناد.']
+  };
+  const txt=reasons[d.code];
+  return txt?this.copy(txt[0],txt[1]):this.copy(
+   'Review source and inspector eligibility details below.',
+   'راجع بيانات المصدر وأهلية المهندسين بالتفصيل أدناه.');
+ }
+ exclusionLabel(code:string):string{
+  const m:Record<string,[string,string]>={
+   QUALIFICATION_MISSING_OR_EXPIRED:['Qualification missing/expired','التخصص غير متاح أو منتهي'],
+   NO_WORKING_SHIFT:['No matching work shift','لا توجد وردية مناسبة'],
+   BOOKING_CONFLICT:['Conflicting booking','يوجد تعارض مع تكليف آخر'],
+   CAPACITY_EXCEEDED:['Daily capacity exceeded','تجاوز الطاقة اليومية'],
+   PORT_NOT_ELIGIBLE:['Port or travel route not eligible','الميناء أو مسار الانتقال غير مسموح'],
+   APPROVED_LEAVE:['Approved leave','إجازة معتمدة'],
+   PORT_BLACKOUT:['Port access blackout','الميناء مغلق خلال الفترة'],
+   EMPLOYEE_INACTIVE:['Inactive inspector','المهندس غير نشط'],
+   CROSS_PORT_TRAVEL_TIME_UNAVAILABLE:['Travel duration unavailable','وقت الانتقال غير معروف'],
+   NO_FEASIBLE_SLOT:['No matching slot','لا يوجد موعد مناسب']
+  };
+  const txt=m[code];return txt?this.copy(txt[0],txt[1]):code;
+ }
+
  // A disabled AI action hides useful guidance. Keep it actionable: the
  // first click preflights the free ERP schedule; only confirmed second step
  // can make a charged Airia call.
@@ -119,6 +185,7 @@ export class SiMaritimeBatchSchedulingComponent implements OnInit{
   // The inputs changed after preview; never show obsolete slots as though
   // they were still valid, and never carry them into a future approval action.
   this.proposal=null;this.baselineProposal=null;this.aiAdvice=null;
+  this.selectedUnscheduledImo=null;
   this.notice='';this.error='';
  }
 
@@ -280,6 +347,7 @@ export class SiMaritimeBatchSchedulingComponent implements OnInit{
   if(!this.context||this.busy||this.aiBusy)return;
   this.busy=true;this.error='';this.notice='';
   this.proposal=null;this.baselineProposal=null;this.aiAdvice=null;
+  this.selectedUnscheduledImo=null;
   this.http.post<{status:string;proposal:Proposal}>(
     this.api+encodeURIComponent(this.context.planId)+'/preview',
     {requests:this.requests(),demoMode:this.demoMode}).subscribe({
