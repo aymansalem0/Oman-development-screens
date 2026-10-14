@@ -227,8 +227,8 @@ export class SiCandidateWorkbenchComponent implements OnInit{
     const message=mock?
       this.copy('Confirm officer planning change and re-run MOCK C01 with zero Airia calls? No official inspection case will be changed.',
         'تأكيد تعديل خطة المعاينات وإعادة ترتيب MOCK C01 دون اتصال Airia؟ لن تتغير حالات المعاينة الرسمية.'):
-      this.copy('This will trigger ONE possibly billable Airia SI-C01 request. Confirm before proceeding?',
-        'هذا سيشغل طلب Airia مدفوعاً محتملاً. هل تؤكد؟');
+      this.copy('Run ONE real Airia SI-C01 analysis of the current saved candidates? This provides advice only; continue?',
+        'تشغيل تحليل Airia الحقيقي مرة واحدة للسفن المرشحة المحفوظة؟ التوصيات استشارية فقط، هل تستمر؟');
     if(!window.confirm(message))return;
     this.planBusy=true;this.planError='';this.planNotice='';
     this.planAiPhase='analyzing';
@@ -306,8 +306,8 @@ export class SiCandidateWorkbenchComponent implements OnInit{
     const prompt=isMock?
       this.copy('Generate a MOCK C01 advisory with zero Airia calls? It cannot approve an inspection.',
         'إنشاء توصية C01 تجريبية دون تشغيل Airia؟ لا تعتمد أي معاينة.'):
-      this.copy('Run one potentially PAID SI-C01 Airia call? Advice only; human approval required.',
-        'تشغيل SI-C01 على Airia مع احتمال تكلفة؟ يتطلب اعتماداً بشرياً.');
+      this.copy('Run one real SI-C01 Airia analysis? Advice only; human approval required.',
+        'تشغيل تحليل SI-C01 الحقيقي على Airia؟ يتطلب اعتماداً بشرياً.');
     if(!window.confirm(prompt))return;
     this.c01Busy=true;this.c01Error='';this.c01Message='';
     this.api.candidateAiRun(this.editorKey.trim(),{
