@@ -1215,7 +1215,8 @@ const server = createServer(async (req, res) => {
         const confirmed=demo?[]:await siScheduling.centralBookings(snapshot);
         const result=proposeMaritimeBatchSchedule({
           plan,erpSnapshot:snapshot,policy:siScheduling.getPolicy(),
-          requests:body.requests,nmcReferrals:referrals,
+          requests:demo?body.requests.map(x=>({...x,pocDemo:true})):body.requests,
+          nmcReferrals:referrals,
           existingBookings:demo?[]:[...siScheduling.state.confirmed,...confirmed],
           scheduler:siScheduling
         });
