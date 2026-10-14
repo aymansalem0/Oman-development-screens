@@ -4,8 +4,9 @@ import {
  buildPocErpSchedulingOverlay,fillPocSchedulingVisitContext,
  validatePocSchedulingDemoRequest
 } from '../si-scheduling-poc-fixtures.mjs';
-import {validateMaritimeSchedulingInput}
+import {validateMaritimeSchedulingInput,proposeMaritimeBatchSchedule}
  from '../si-maritime-batch-scheduling.mjs';
+import {SiElectronicScheduler} from '../si-electronic-scheduling.mjs';
 import {validateOperatorScheduleAgainstSource}
  from '../si-maritime-plan-source.mjs';
 
@@ -98,4 +99,38 @@ test('POC port/window must match server-generated demo source and cannot fake ap
  assert.throws(()=>validateOperatorScheduleAgainstSource(original,
   requests.map((x,i)=>i===1?{...x,latestFinishLocal:'2026-10-20 12:00'}:x),
   {demo:true,context:filled}),/SI_V2_FINAL_MSW_ETD_IMMUTABLE/);
+});
+
+test('POC user can calculate an actual read-only feasible schedule with complete synthetic data',()=>{
+ const demo=buildPocErpSchedulingOverlay(sourceSnapshot,{clock:()=>now});
+ const filled=fillPocSchedulingVisitContext(cases(),demo,{clock:()=>now});
+ const approved={
+  id:filled.planId,number:'IP-DEMO-20261014',
+  status:'APPROVED',revision:1,approvedVessels:filled.items.map((v,i)=>({
+   imo:v.imo,planRank:i+1,regimes:v.regimes,
+   inspectionReasons:[{eventKey:'SOURCE-EVENT-'+v.imo,
+    sourceType:i===0?'SERVICE_REQUEST':'PSC_PORT_CALL'}]
+  }))
+ };
+ const scheduler=new SiElectronicScheduler({
+  erp:{requireSnapshot:()=>demo},cases:{listInspectionRequests:async()=>[]},
+  path:'/tmp/moei-si-demo-scheduler-not-present-no-writes-test.json',
+  clock:()=>now
+ });
+ const response=proposeMaritimeBatchSchedule({
+  plan:approved,erpSnapshot:demo,policy:scheduler.getPolicy(),
+  requests:filled.items.map(request),nmcReferrals:[],
+  existingBookings:[],scheduler,clock:()=>now
+ });
+ assert.equal(response.summary.total,3);
+ assert.equal(response.summary.proposed,3,
+   JSON.stringify(response.rows.map(r=>({imo:r.imo,blocker:r.blocker}))));
+ assert.equal(response.summary.unscheduled,0);
+ assert.equal(response.summary.caseWrites,0);
+ assert.equal(response.summary.bookingWrites,0);
+ assert.ok(response.variants.length>=1);
+ assert.ok(response.rows.every(r=>r.status==='PROPOSED'&&
+  r.assignment?.inspectorId.startsWith('DEMO-INS-')));
+ assert.ok(response.board.engineers.length>=1);
+ assert.ok(response.board.days.length>=1);
 });
