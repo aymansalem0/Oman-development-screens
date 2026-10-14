@@ -19,7 +19,8 @@ export interface PscPoolItem {
   sourceReference:string;eta:string;period:string;bucket:string;
   importedAt:string;sourceFile:string|null;sourceExcelRow:number|null;
   nmcRisk:{score:number;level:string;assessmentId:string}|null;
-  selectionStatus:'SELECTED'|'NOT_SELECTED'|'IN_POOL';
+  selectionStatus:'SELECTED'|'RULE_SHORTLISTED'|'NOT_SELECTED'|'IN_POOL';
+  selectionOrigin?:'OFFICER_SELECTED'|'RULE_SHORTLISTED'|'NOT_SHORTLISTED';
   selectionDecision:PscSelectionRecord|null;
   ruleRank:number;ruleRecommended:boolean;missingRisk:boolean;
 }
