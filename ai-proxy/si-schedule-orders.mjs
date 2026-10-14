@@ -131,7 +131,7 @@ export class SiScheduleOrders{
  }
  async approve({plan,proposal,selectedOptionId,expectedHash,
   expectedPlanRevision,actor,reason,confirmApproval,demoMode=false,
-  confirmCrossPort=false}={}){
+  confirmCrossPort=false,connection=null}={}){
   this.assertReady();
   if(!UUID.test(plan?.id||'')||!label(actor,160)||!label(reason,500)||
    reason.trim().length<8||confirmApproval!==true||
@@ -233,8 +233,12 @@ export class SiScheduleOrders{
        erpSnapshotId:record.erpSnapshotId,mode:record.mode,
        crossPortApprovalConfirmed:record.crossPortApprovalConfirmed,
        crossPortOrders:record.crossPortOrders})});
-    await con.commit();return record;
+    if(!connection)await con.commit();return record;
    };
+   if(connection){
+    if(this.mode!=='oracle')err('SI_SCHED_SHARED_ORACLE_TRANSACTION_REQUIRED',503);
+    return clone(await perform(connection));
+   }
    if(this.mode==='json')return clone(await perform(null));
    return clone(await this.db(async con=>{
     try{return await perform(con);}
