@@ -357,3 +357,31 @@ button:disabled{opacity:.55;cursor:not-allowed}
  padding:5px 8px;font-size:10px;color:#116677}
 .si-psc-direct-summary>small{display:block;color:#68848c;font-size:10px;line-height:1.5}
 @media(max-width:850px){.si-psc-summary-numbers{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* SI-01 bulk planning actions: explicit current-filter scope, one IMO each. */
+.si-bulk-toolbar{border:1px solid #c7e0e4;border-radius:12px;background:#f5fbfa;
+ padding:13px 15px;margin:12px 0 14px;color:#195466}
+.si-bulk-tools{display:flex;align-items:center;gap:16px;justify-content:space-between;flex-wrap:wrap}
+.si-bulk-description{flex:1;min-width:220px}
+.si-bulk-description strong{display:inline-block;color:#116678;font-size:13px;margin-inline-end:12px}
+.si-bulk-description span{display:inline-block;background:#dcefeb;color:#186858;
+ border-radius:99px;padding:5px 9px;font-size:11px;font-weight:800}
+.si-bulk-description small{display:block;color:#668494;line-height:1.55;margin-top:7px}
+.si-bulk-buttons{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.si-bulk-buttons button{border:1px solid #9fc6cc;border-radius:8px;
+ background:#fff;color:#12586c;padding:9px 12px;cursor:pointer;font-size:11px;font-weight:800}
+.si-bulk-buttons button.primary{background:#087b98;color:#fff;border-color:#087b98}
+.si-bulk-buttons button:disabled{opacity:.5;cursor:not-allowed}
+.si-bulk-form{border-top:1px solid #cce0e6;margin-top:12px;padding-top:10px}
+.si-bulk-form>strong{color:#164e67;font-size:12px}
+.si-bulk-form label{display:block;max-width:720px;font-size:11px;color:#385f70;font-weight:750;margin:10px 0}
+.si-bulk-form textarea{display:block;margin-top:5px;font-weight:400}
+.si-bulk-form input[type=date]{display:block;max-width:250px;margin-top:5px;font-weight:400}
+.si-bulk-form small{display:block;font-size:10px;color:#648392;margin-top:9px}
+.si-unified-table .si-bulk-check-cell{width:45px;min-width:45px;text-align:center}
+.si-unified-table .si-bulk-check-cell input[type=checkbox]{
+ display:inline-block;width:17px;height:17px;padding:0;min-width:17px;margin:0;
+ vertical-align:middle;cursor:pointer;accent-color:#087b98
+}
+.si-unified-table .si-bulk-check-cell input:disabled{cursor:not-allowed}
+@media(max-width:700px){.si-bulk-tools{align-items:stretch}.si-bulk-buttons button{flex:1}}
