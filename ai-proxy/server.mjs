@@ -24,7 +24,11 @@ import { CentralRiskPolicy, RiskPolicyError } from './risk-policy.mjs';
 import { ErpWorkforceStore, SiError } from './si-erp-workforce.mjs';
 import { SiElectronicScheduler } from './si-electronic-scheduling.mjs';
 import {proposeMaritimeBatchSchedule} from './si-maritime-batch-scheduling.mjs';
+import {prepareS01WholePlanRequest,validateS01WholePlanResponse}
+ from './si-plan-s01-advisor.mjs';
 import {maritimePlanSchedulingContext,validateOperatorScheduleAgainstSource} from './si-maritime-plan-source.mjs';
+import {buildPocErpSchedulingOverlay,fillPocSchedulingVisitContext,
+ validatePocSchedulingDemoRequest} from './si-scheduling-poc-fixtures.mjs';
 import { SiCandidateTargeting, SiTargetingError } from './si-candidate-targeting.mjs';
 import { SiSourceExcelImport } from './si-source-excel-import.mjs';
 import {projectVesselMasterEtd} from './si-vessel-master-etd.mjs';
@@ -1159,31 +1163,115 @@ const server = createServer(async (req, res) => {
       if(v2Context&&req.method==='GET'){
         dashboards.assertRole(req,'EDITOR');
         const plan=await siRollingPlans.get(v2Context[1]);
-        const erp=siErp.requireSnapshot();
+        const originalErp=siErp.requireSnapshot();
         const dashboard=await siTargeting.dashboard();
-        return respond(res,200,maritimePlanSchedulingContext(plan,dashboard,erp));
+        const query=new URL(req.url||'/', 'http://localhost').searchParams;
+        const demo=query.get('demo')==='1';
+        if(demo&&process.env.SI_SCHEDULING_DEMO_MODE!=='true')
+          return respond(res,403,{error:'SI_POC_DEMO_MODE_NOT_ENABLED'});
+        const erp=demo?buildPocErpSchedulingOverlay(originalErp):originalErp;
+        const source=maritimePlanSchedulingContext(plan,dashboard,originalErp);
+        return respond(res,200,demo?
+          fillPocSchedulingVisitContext(source,erp):source);
       }
-      const v2Preview=/^\/api\/si\/v1\/maritime-scheduling\/plans\/([a-f0-9-]{36})\/preview$/.exec(path);
-      if(v2Preview&&req.method==='POST'){
+      // A plan's approved vessel roster is the scheduling source for both
+      // the free ERP-constrained preview and a separately confirmed paid S01
+      // analysis. Do not permit the browser to supply feasible AI slot IDs.
+      const v2Schedule=/^\/api\/si\/v1\/maritime-scheduling\/plans\/([a-f0-9-]{36})\/(preview|ai-recommend)$/.exec(path);
+      if(v2Schedule&&req.method==='POST'){
         dashboards.assertRole(req,'EDITOR');
-        const body=await requestJson(req,65536);
-        if(!Array.isArray(body.requests)||body.requests.length>40||
-           Object.keys(body).some(key=>!['requests'].includes(key)))
+        const paid=v2Schedule[2]==='ai-recommend';
+        const body=await requestJson(req,1024*1024);
+        if(!Array.isArray(body.requests)||!body.requests.length||
+           body.requests.length>500||
+           Object.keys(body).some(key=>![
+             'requests','demoMode',...(paid?['confirmRun','confirmCost','expectedProposalHash']:[])
+           ].includes(key)))
           return respond(res,422,{error:'SI_V2_SCHEDULING_REQUESTS_INVALID'});
-        const plan=await siRollingPlans.get(v2Preview[1]);
-        const snapshot=siErp.requireSnapshot();
+        if(paid){
+          // MOCK is a separately-labelled demo-only S01 suggestion; never
+          // silently substitute a fabricated AI response for real Airia.
+          const mockDemo=body.demoMode===true&&siAiProvider==='mock'&&
+            process.env.SI_SCHEDULING_DEMO_MODE==='true';
+          if(!mockDemo&&(siAiProvider!=='airia'||!agentAllowed('s01')))
+            return respond(res,409,{error:'SI_S01_AIRIA_NOT_ENABLED'});
+          if(body.confirmRun!==true||body.confirmCost!==true||
+             !/^[a-f0-9]{64}$/.test(body.expectedProposalHash||''))
+            return respond(res,422,{error:'SI_S01_EXPLICIT_COST_CONFIRMATION_REQUIRED'});
+        }
+        const demo=body.demoMode===true;
+        if(body.demoMode!==undefined&&typeof body.demoMode!=='boolean')
+          return respond(res,422,{error:'SI_POC_DEMO_FLAG_INVALID'});
+        if(demo&&process.env.SI_SCHEDULING_DEMO_MODE!=='true')
+          return respond(res,403,{error:'SI_POC_DEMO_MODE_NOT_ENABLED'});
+        if(!demo&&body.requests.some(x=>x.windowSource==='POC_DEMO'))
+          return respond(res,422,{error:'SI_POC_DEMO_SOURCE_REQUIRES_DEMO_MODE'});
+        const plan=await siRollingPlans.get(v2Schedule[1]);
+        const originalSnapshot=siErp.requireSnapshot();
+        const snapshot=demo?buildPocErpSchedulingOverlay(originalSnapshot):originalSnapshot;
         const dashboard=await siTargeting.dashboard();
-        const context=maritimePlanSchedulingContext(plan,dashboard,snapshot);
-        validateOperatorScheduleAgainstSource(context,body.requests);
+        const sourceContext=maritimePlanSchedulingContext(plan,dashboard,originalSnapshot);
+        const context=demo?
+          fillPocSchedulingVisitContext(sourceContext,snapshot):sourceContext;
+        validateOperatorScheduleAgainstSource(sourceContext,body.requests,{demo,context});
+        if(demo)validatePocSchedulingDemoRequest(context,body.requests);
         const referrals=await cases.listInspectionRequests();
-        const confirmed=await siScheduling.centralBookings(snapshot);
+        const confirmed=demo?[]:await siScheduling.centralBookings(snapshot);
         const result=proposeMaritimeBatchSchedule({
           plan,erpSnapshot:snapshot,policy:siScheduling.getPolicy(),
-          requests:body.requests,nmcReferrals:referrals,
-          existingBookings:[...siScheduling.state.confirmed,...confirmed],
+          requests:demo?body.requests.map(x=>({...x,pocDemo:true})):body.requests,
+          nmcReferrals:referrals,
+          existingBookings:demo?[]:[...siScheduling.state.confirmed,...confirmed],
           scheduler:siScheduling
         });
-        return respond(res,200,{status:'ok',proposal:result});
+        if(demo){
+          result.demoMode=true;
+          result.demoNotice='SYNTHETIC_POC_VISITS_AND_WORKFORCE_NO_REAL_ERP_AVAILABILITY_OR_BOOKING';
+          result.originalErpSnapshotId=originalSnapshot.snapshotId;
+        }
+        if(!paid)return respond(res,200,{status:'ok',proposal:result,
+          airiaCalls:0});
+        if(result.proposalHash!==body.expectedProposalHash)
+          return respond(res,409,{error:'SI_S01_SOURCE_OR_ERP_CHANGED_REPREVIEW'});
+        if(!result.variants?.length||!result.summary.proposed)
+          return respond(res,409,{error:'SI_S01_NO_FEASIBLE_ALTERNATIVES'});
+        const payload=prepareS01WholePlanRequest(result);
+        if(demo){
+          payload.demoMode=true;
+          payload.demoNotice='All source scheduling additions and engineer slots are synthetic POC data. No operational booking or regulatory approval is permitted.';
+          payload.businessGuardrails.mockDataCannotAuthorizeInspection=true;
+        }
+        const mockDemo=demo&&siAiProvider==='mock';
+        let raw;
+        if(mockDemo){
+          // Deterministic presentation fixture, not a model judgement.
+          // Only source-generated feasible optionIds and evidence are echoed.
+          raw={bookingConfirmed:false,
+            slotSetHash:payload.currentSnapshot.slotSetHash,
+            rankedOptions:result.variants.map((v,index)=>({
+              optionId:v.optionId,rank:index+1,confidence:1,
+              rationale:'POC MOCK: deterministic ranking of ERP-synthetic, already feasible whole-plan alternatives. No live AI assessment or approved booking.',
+              evidenceRefs:[payload.currentSnapshot.slotSetHash]
+            }))};
+          // slotSetHash is a structural binding, not evidence. Give the
+          // validator source provenance IDs instead.
+          for(const row of raw.rankedOptions)
+            row.evidenceRefs=[payload.currentSnapshot.erpSnapshotId];
+        }else{
+          try{raw=await fleetAgentCall('s01',payload);}
+          catch{
+            return respond(res,502,{error:'SI_S01_PROVIDER_UNAVAILABLE',
+              planUnchanged:true});
+          }
+        }
+        const validated=validateS01WholePlanResponse(raw,result,payload);
+        if(mockDemo){
+          validated.provider='POC_MOCK';
+          validated.externalCalls=0;
+          validated.proposal.demoMode=true;
+          validated.proposal.demoNotice='SIMULATED_S01_RANKING_NO_LIVE_AI_CALL_OR_OFFICIAL_APPROVAL';
+        }
+        return respond(res,200,{status:'ok',...validated});
       }
       if(path==='/api/si/v1/inspection-batches/preview'&&req.method==='GET'){
         dashboards.assertRole(req,'EDITOR');

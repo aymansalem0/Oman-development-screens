@@ -6,7 +6,7 @@
  */
 import {createHash} from 'node:crypto';
 import {SiError} from './si-erp-workforce.mjs';
-const MINUTE=60000,HOUR=3600000,MAX_BATCH=40,BEAM_WIDTH=32;
+const MINUTE=60000,HOUR=3600000,MAX_BATCH=500,BEAM_WIDTH=32;
 const IMO=/^[0-9]{7}$/;
 const TYPES=new Set(['TANKER','CARGO','PASSENGER','OTHER']);
 const REGIMES=new Set(['FOCUSED','PSC','FLAG','SERVICE','FOLLOW_UP']);
@@ -40,7 +40,8 @@ export function validateMaritimeSchedulingInput(imo,row,erp,nowMs){
  if(!['BERTH','ANCHORAGE','TERMINAL'].includes(row.locationType)||
     !row.locationName||row.siteAccessConfirmed!==true)
   return {reason:'BERTH_ANCHORAGE_AND_ACCESS_CONFIRMATION_REQUIRED'};
- if(!['MSW_FINAL','OFFICER_FINAL','OFFICER_CONFIRMED'].includes(row.windowSource)||
+ if(!['MSW_FINAL','OFFICER_FINAL','OFFICER_CONFIRMED',
+     ...(row.pocDemo===true?['POC_DEMO']:[])].includes(row.windowSource)||
     !row.windowEvidenceReference)
   return {reason:'FINAL_VESSEL_ARRIVAL_DEPARTURE_WINDOW_REQUIRED'};
  let start,end;
@@ -222,15 +223,45 @@ export function proposeMaritimeBatchSchedule({
   }
   branches.sort(stateSort);states=branches.slice(0,BEAM_WIDTH);
  }
- const chosen=states[0]?.schedule||[],assignments=new Map(chosen.map(o=>[o.imo,o]));
- const rows=jobs.sort((a,b)=>a.rank-b.rank).map(j=>({
-  imo:j.imo,planRank:j.rank,regimes:j.regimes,
-  status:assignments.has(j.imo)?'PROPOSED':'UNSCHEDULED',
-  assignment:assignments.get(j.imo)||null,
-  blocker:assignments.has(j.imo)?null:j.reason||'GLOBAL_PLAN_CONFLICT_OR_CAPACITY',
-  alternatives:j.options.length,
-  exclusions:assignments.has(j.imo)?[]:j.exclusions
- }));
+ const chosen=states[0]?.schedule||[];
+ const sortedJobs=[...jobs].sort((a,b)=>a.rank-b.rank||a.imo.localeCompare(b.imo));
+ const rowsFor=schedule=>{
+  const allocations=new Map(schedule.map(o=>[o.imo,o]));
+  return sortedJobs.map(j=>({
+   imo:j.imo,planRank:j.rank,regimes:j.regimes,
+   status:allocations.has(j.imo)?'PROPOSED':'UNSCHEDULED',
+   assignment:allocations.get(j.imo)||null,
+   blocker:allocations.has(j.imo)?null:j.reason||'GLOBAL_PLAN_CONFLICT_OR_CAPACITY',
+   alternatives:j.options.length,
+   exclusions:allocations.has(j.imo)?[]:j.exclusions
+  }));
+ };
+ const rows=rowsFor(chosen);
+ // The AI may rank only complete, already ERP-verified alternative schedules
+ // with the SAME maximum vessel coverage. It cannot invent a slot, exceed
+ // inspector capacity, drop a scheduled vessel or book an engineer.
+ const seen=new Set(),variants=[];
+ for(const state of states){
+  if(state.schedule.length!==chosen.length)continue;
+  const ordered=[...state.schedule].sort((a,b)=>a.imo.localeCompare(b.imo));
+  const signature=ordered.map(x=>x.imo+':'+x.optionId).join('|');
+  if(seen.has(signature))continue;
+  seen.add(signature);
+  const alternativeRows=rowsFor(state.schedule);
+  variants.push({
+   optionId:'SI-S01-'+sha(signature).slice(0,16),
+   allocatedVessels:state.schedule.length,
+   objectiveScore:state.score,
+   assignments:ordered.map(x=>({
+    imo:x.imo,inspectorId:x.inspectorId,inspectorName:x.inspectorName,
+    portId:x.portId,startUtc:x.startUtc,endUtc:x.endUtc,
+    optionId:x.optionId,score:x.score
+   })),
+   rows:alternativeRows,
+   board:projectMaritimeSchedulingBoard(alternativeRows)
+  });
+  if(variants.length===3)break;
+ }
  return {
   schema:'SI-MARITIME-BATCH-SCHEDULE-V1',
   status:'DRAFT_REQUIRES_SUPERVISOR_APPROVAL',
@@ -243,7 +274,7 @@ export function proposeMaritimeBatchSchedule({
   solver:'HARD_CONSTRAINTS_PLUS_BOUNDED_BEAM_SEARCH_NO_GENERATIVE_AI',
   summary:{total:rows.length,proposed:chosen.length,
    unscheduled:rows.length-chosen.length,caseWrites:0,bookingWrites:0},
-  rows,board:projectMaritimeSchedulingBoard(rows),warnings:[
+  rows,variants,board:projectMaritimeSchedulingBoard(rows),warnings:[
    'READ_ONLY_NO_CASE_CREATION_OR_BOOKING',
    'SUPERVISOR_MUST_APPROVE_A_FRESHLY_REVALIDATED_SCHEDULE',
    'ETA_ALONE_DOES_NOT_SUPPLY_ETD',

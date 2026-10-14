@@ -50,6 +50,9 @@ services:
       # Does not modify Oracle schema, fleet assessments or NMC case history.
       SI_ERP_STORE_PATH: /data/si-erp-workforce.json
       SI_SCHEDULING_STORE_PATH: /data/si-scheduling-poc.json
+      # Explicitly marked POC DEMO enrichment. Set false for any real ERP use.
+      # Does not mutate imported workbook or regulatory records.
+      SI_SCHEDULING_DEMO_MODE: ${SI_SCHEDULING_DEMO_MODE:-true}
       SI_SELECTION_STORE_PATH: /data/si-psc-selection.json
       # Smart Inspection AI development: MOCK returns fixture advice without
       # ANY Airia call or expense. NMC A01/A02 fleet/incident paths stay unchanged.

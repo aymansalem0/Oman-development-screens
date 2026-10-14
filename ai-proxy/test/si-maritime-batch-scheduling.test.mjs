@@ -151,3 +151,17 @@ test('Scheduling board groups same preview once per vessel across engineer and U
  assert.equal(blocked.board.unscheduled[0].blocker,'VESSEL_SCHEDULING_DATA_REQUIRED');
  assert.throws(()=>projectMaritimeSchedulingBoard(null),/SI_V2_BOARD_ROWS_INVALID/);
 });
+
+test('Plan-derived scheduler offers only fully ERP-valid equal-coverage alternative plans',()=>{
+ const p=invoke();
+ assert.ok(p.variants.length>=1);
+ assert.ok(p.variants.length<=3);
+ assert.equal(p.variants[0].allocatedVessels,p.summary.proposed);
+ assert.ok(p.variants.every(x=>x.allocatedVessels===p.summary.proposed));
+ assert.equal(new Set(p.variants.map(x=>x.optionId)).size,p.variants.length);
+ assert.ok(p.variants.every(x=>x.rows.length===p.summary.total));
+ assert.ok(p.variants.every(x=>x.board.bookingWrites===0&&x.board.caseWrites===0));
+ assert.equal(p.variants[0].assignments.length,2);
+ assert.deepEqual(p.variants[0].rows.map(x=>x.imo),p.rows.map(x=>x.imo));
+ assert.ok(p.warnings.includes('NO_AIRIA_AI_INVOKED'));
+});
