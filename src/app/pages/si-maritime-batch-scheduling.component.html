@@ -8,18 +8,6 @@
      'خطة المعاينات المعتمدة ← إتاحة مهندسي ERP ← بدائل جدولة صالحة ← ترتيب SI-S01 بالذكاء الاصطناعي ← مراجعة واعتماد المسؤول.')}}</p>
    <a routerLink="/moei/smart-inspection/scheduling">{{copy('← Approved Plans','← الخطط المعتمدة')}}</a>
   </header>
-  <section class="marine-demo-mode" aria-label="POC Data Mode">
-   <div>
-    <strong>{{copy('Presentation data mode','وضع بيانات العرض التقديمي')}}</strong>
-    <p>{{copy('Complete synthetic inspection visits and a separate mock ERP workforce make the walkthrough executable. No official records are changed.',
-     'يتم استكمال بيانات الزيارة واستخدام موارد مهندسين تجريبية مستقلة لاستكمال سيناريو العرض، دون تعديل السجلات الرسمية أو ملفات Excel المستوردة.')}}</p>
-   </div>
-   <label class="marine-demo-switch">
-    <input type="checkbox" [checked]="demoMode" [disabled]="loading||busy||aiBusy"
-      (change)="useDemoMode($any($event.target).checked)">
-    {{copy('Use complete POC mock data','استخدام بيانات POC التجريبية المكتملة')}}
-   </label>
-  </section>
   <div class="marine-error" *ngIf="error" role="alert">{{error}}</div>
   <div class="marine-notice" *ngIf="notice" role="status">{{notice}}</div>
   <div class="marine-notice" *ngIf="loading">{{copy('Loading approved plan and workforce…','تحميل الخطة المعتمدة والمهندسين…')}}</div>
@@ -40,8 +28,8 @@
    </section>
    <section class="marine-panel">
     <h2>{{copy('Vessels from the approved inspection plan · visit inputs','السفن الناتجة عن خطة المعاينات المعتمدة · بيانات الزيارة')}}</h2>
-    <p *ngIf="ctx.demoMode" class="marine-demo-notice">{{copy('The presentation fields below were completed with explicitly synthetic data. Turn off POC mode to inspect original missing ERP and vessel fields.',
-      'تم استكمال حقول العرض أدناه ببيانات تجريبية مميزة. أوقف وضع POC لمراجعة البيانات الأصلية الناقصة من المصادر وERP.')}}</p>
+    <p *ngIf="ctx.demoMode" class="marine-demo-notice">{{copy('The presentation fields below use an explicitly synthetic POC overlay; approved vessel identities and original ERP/source records remain unchanged.',
+      'تستخدم حقول العرض بيانات POC تجريبية واضحة، مع الحفاظ على هوية السفن المعتمدة وسجلات المصادر وERP الأصلية دون تعديل.')}}</p>
     <p>{{copy('Imported ETA/ETD are final in the POC and locked in this board. For NMC or services without dates, enter final times directly; no date signoff is needed. Site access remains a safety gate.',
       'تُعامل مواعيد الوصول والمغادرة المستوردة كنهائية في الـPOC ولا تُعدّل هنا. يمكن إدخال المواعيد النهائية لإحالات NMC والخدمات عند غيابها دون اعتماد منفصل. يجب تأكيد إتاحة الموقع.')}}</p>
     <div class="marine-scroll"><table>
