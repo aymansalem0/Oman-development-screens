@@ -58,13 +58,14 @@ function canonicalItems(plan,dashboard){
 }
 export class SiV2ScheduleApproval{
  constructor({mode='json',oracleRepository=null,rolling,targeting,preparation,
-   erp,scheduler,cases,file=process.env.SI_V2_SCHEDULE_PATH||
+   erp,scheduler,cases,lifecycle=null,checklists=null,file=process.env.SI_V2_SCHEDULE_PATH||
    '/data/si-v2-schedule-approvals.json'}={}){
   if(!rolling||!targeting||!preparation||!erp||!scheduler||!cases)
    throw Error('SI_V2_SCHEDULE_CONFIGURATION_INVALID');
   this.mode=mode;this.oracle=oracleRepository;this.rolling=rolling;
   this.targeting=targeting;this.preparation=preparation;
   this.erp=erp;this.scheduler=scheduler;this.cases=cases;this.file=file;
+  this.lifecycle=lifecycle;this.checklists=checklists;
   this.pending=new Set();this.lock=false;this.ready=false;
  }
  read(){
@@ -154,7 +155,7 @@ export class SiV2ScheduleApproval{
    actor,reason,confirmApproval}={}){
   this.assertReady();
   if(!ID.test(planId||'')||!Array.isArray(requests)||
-   !requests.length||requests.length>40||!Number.isInteger(expectedPlanRevision)||
+   !requests.length||requests.length>500||!Number.isInteger(expectedPlanRevision)||
    !/^[0-9a-f]{64}$/.test(expectedProposalHash||'')||
    !text(actor)||!text(reason,500)||reason.trim().length<8||
    confirmApproval!==true)
@@ -181,7 +182,7 @@ export class SiV2ScheduleApproval{
     const referrals=await this.cases.listInspectionRequests();
     const nmcBookings=await this.scheduler.centralBookings(erp);
     const prior=await this._existing(con);
-    const scheduleBookings=prior.flatMap(x=>x.items.map(item=>({
+    const scheduleBookings=prior.filter(x=>x.planId!==planId).flatMap(x=>x.items.map(item=>({
      inspectorId:item.assignment.inspectorId,
      startUtc:item.assignment.startUtc,endUtc:item.assignment.endUtc,
      portId:item.assignment.portId
@@ -197,7 +198,8 @@ export class SiV2ScheduleApproval{
      fail('SI_V2_ALL_APPROVED_VESSELS_MUST_BE_SCHEDULED',409);
     const id=randomUUID(),at=now();
     const items=proposal.rows.map(row=>({imo:row.imo,planRank:row.planRank,
-     assignment:row.assignment,caseId:null,dossierStatus:'PENDING',
+     assignment:row.assignment,caseId:null,orderId:randomUUID(),
+     orderStatus:'AWAITING_CASE_DISPATCH',dossierStatus:'PENDING',
      dispatchStatus:'PENDING',error:null}));
     const record={id,planId,planRevision:plan.revision,
      proposalHash:proposal.proposalHash,erpSnapshotId:erp.snapshotId,
@@ -282,22 +284,24 @@ export class SiV2ScheduleApproval{
    const registry=await this.targeting.inspectionCaseRegistry();
    const linked=record.items.map(item=>registry.cases.find(c=>
     c.imo===item.imo&&c.approvedPlanId===record.id));
-   if(linked.some(Boolean)&&!linked.every(Boolean)){
-    record.status='DISPATCH_PARTIAL';
-    record.lastIssue='SI_V2_CASE_REGISTRY_RECONCILIATION_REQUIRED';
-    await this._save(record);return record;
-   }
    if(!linked.every(Boolean)){
     const dashboard=await this.targeting.dashboard();
-    const items=canonicalItems(plan,dashboard);
-    try{
-     await this.targeting.decideBatch({
-      items,actor:record.approvedBy,note:record.approvalReason,
-      approvedPlanId:record.id});
-    }catch(e){
-     record.status='DISPATCH_PARTIAL';
-     record.lastIssue=e.code||'SI_V2_CASE_APPROVAL_FAILED';
-     await this._save(record);return record;
+    const all=canonicalItems(plan,dashboard);
+    // Each decideBatch call is atomic up to 40 cases in the existing ledger.
+    // On a restart, the already-created part is reconciled by IMO/plan ID;
+    // never retry the same source candidate twice.
+    const outstanding=all.filter(v=>!linked.some(c=>c?.imo===v.imo));
+    for(let index=0;index<outstanding.length;index+=40){
+     try{
+      await this.targeting.decideBatch({
+       items:outstanding.slice(index,index+40),
+       actor:record.approvedBy,note:record.approvalReason,
+       approvedPlanId:record.id});
+     }catch(e){
+      record.status='DISPATCH_PARTIAL';
+      record.lastIssue=e.code||'SI_V2_CASE_APPROVAL_FAILED';
+      await this._save(record);return record;
+     }
     }
    }
    const fresh=await this.targeting.inspectionCaseRegistry();
@@ -318,7 +322,8 @@ export class SiV2ScheduleApproval{
        actor:record.approvedBy,expectedVersion:current.saved?.version||0});
       item.dossierStatus=result.saved.status;
      }
-     item.dispatchStatus='DOSSIER_PREPARED';item.error=null;
+     item.dispatchStatus='DOSSIER_PREPARED';
+     item.orderStatus='ISSUED';item.error=null;
     }catch(e){
      item.dispatchStatus='DOSSIER_FAILED';
      item.error=e.code||'SI_V2_DOSSIER_PREPARATION_FAILED';
@@ -331,6 +336,79 @@ export class SiV2ScheduleApproval{
     'SI_V2_ITEM_PREPARATION_RETRY_REQUIRED':null;
    await this._save(record);
    return record;
+  }finally{this.pending.delete(planId);}
+ }
+ async executeOrder({planId,imo,actor,confirmExecution}={}){
+  this.assertReady();
+  if(!ID.test(planId||'')||!/^[0-9]{7}$/.test(imo||'')||
+    !text(actor)||confirmExecution!==true)
+   fail('SI_V2_WORK_ORDER_EXECUTION_INVALID',422);
+  if(!this.lifecycle||!this.checklists)
+   fail('SI_V2_FIELD_EXECUTION_NOT_CONFIGURED',503);
+  if(this.pending.has(planId))fail('SI_V2_WORK_ORDER_BUSY',409);
+  this.pending.add(planId);
+  try{
+   const record=await this.get(planId);
+   if(!record||!['DOSSIERS_PREPARED_SCOPE_APPROVAL_PENDING',
+     'DISPATCH_PARTIAL'].includes(record.status))
+    fail('SI_V2_WORK_ORDER_NOT_ISSUED',409);
+   const item=record.items.find(x=>x.imo===imo);
+   if(!item||item.orderStatus!=='ISSUED'||!item.caseId)
+    fail('SI_V2_WORK_ORDER_NOT_READY',409);
+   // Inspections must be executed by the actual assigned engineer.
+   // Never treat the supervisor's session as the inspector's session.
+   if(![item.assignment.inspectorName,item.assignment.inspectorId]
+     .includes(actor.trim()))
+    fail('SI_V2_ONLY_ASSIGNED_ENGINEER_MAY_EXECUTE',403);
+   const prep=await this.preparation.get(item.caseId);
+   if(prep.stale||!['APPROVED','PREPARED'].includes(prep.saved?.status))
+    fail('SI_V2_PREPARATION_REVIEW_REQUIRED',409);
+   const saved=prep.saved;
+   // Unreviewed AI drafts must never become mandatory inspector tasks.
+   const additions=saved.status==='APPROVED'?
+     (saved.dossier?.suggestedAdditionalItems||[]).map(x=>x.title):[];
+   let lifecycle=await this.lifecycle.snapshot(item.caseId);
+   const apply=async(action,data,as)=>{
+    const result=await this.lifecycle.apply(item.caseId,{
+      action,data,actor:as,expectedVersion:lifecycle.saved?.version||0});
+    lifecycle=await this.lifecycle.snapshot(item.caseId);
+    return result;
+   };
+   if(!lifecycle.saved)await apply('INITIALIZE',{},record.approvedBy);
+   if(lifecycle.saved?.stage==='PREPARATION_READY'){
+    if(additions.length)await apply('ADD_SCOPE',{additions},
+      saved.review?.actor||record.approvedBy);
+    await apply('APPROVE_SCOPE',{
+      reason:saved.review?.reason||record.approvalReason
+    },saved.review?.actor||record.approvedBy);
+   }
+   if(lifecycle.saved?.stage==='SCOPE_APPROVED'){
+    const d=new Date(item.assignment.startUtc);
+    const local=new Intl.DateTimeFormat('sv-SE',{
+      timeZone:'Asia/Dubai',year:'numeric',month:'2-digit',
+      day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false
+    }).format(d).replace(' ','T');
+    await apply('ASSIGN',{inspector:item.assignment.inspectorName,
+      port:item.assignment.portName,startLocal:local,
+      mode:'POC_MANUAL'},record.approvedBy);
+   }
+   if(lifecycle.saved?.stage!=='ASSIGNED'&&lifecycle.saved?.stage!=='IN_FIELD')
+    fail('SI_V2_WORK_ORDER_LIFECYCLE_REVIEW_REQUIRED',409);
+   // Idempotent checklist seed includes ALL mandatory statutory templates.
+   const checklist=await this.checklists.start(item.caseId,actor.trim());
+   if(lifecycle.saved.stage==='ASSIGNED')await apply('START_FIELD',{},actor.trim());
+   item.orderStatus='IN_EXECUTION';item.startedAt=item.startedAt||now();
+   item.checklistVersion=checklist.version;
+   item.mandatoryTemplates=checklist.templates
+      .filter(t=>t.mandatory).map(t=>t.templateId);
+   item.aiAdditionalItemsApproved=additions.length;
+   record.audit.push({event:'ENGINEER_STARTED_WORK_ORDER',at:now(),
+     actor:actor.trim(),imo,orderId:item.orderId});
+   await this._save(record);
+   return {status:'IN_EXECUTION',orderId:item.orderId,planId,imo,
+     caseId:item.caseId,mandatoryTemplates:item.mandatoryTemplates,
+     approvedAiAdditionalItems:additions,checklist,
+     fieldStage:'IN_FIELD',realAiriaCalls:0};
   }finally{this.pending.delete(planId);}
  }
 }
