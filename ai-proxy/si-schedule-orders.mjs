@@ -10,6 +10,7 @@ import {randomUUID} from 'node:crypto';
 import {readFileSync,writeFileSync,renameSync,existsSync,mkdirSync} from 'node:fs';
 import {dirname} from 'node:path';
 import oracledb from 'oracledb';
+import {resolveAssignedInspector} from './si-inspector-identity.mjs';
 
 const id=()=>randomUUID(),at=()=>new Date().toISOString();
 const clone=v=>structuredClone(v);
@@ -102,6 +103,24 @@ export class SiScheduleOrders{
  async all(){
   this.assertReady();
   return clone(this.mode==='json'?this.read():await this.db(con=>this._records(con)));
+ }
+ /**
+  * Read-only roster for the signed-in ERP inspector from canonical Oracle 019.
+  * User identity is validated server-side; no actor value from the browser.
+  */
+ async mine(actor){
+  this.assertReady();
+  if(!label(actor,160))err('SI_WORK_ORDER_AUTHENTICATED_INSPECTOR_REQUIRED',403);
+  const schedules=await this.all();
+  return schedules.flatMap(schedule=>schedule.orders
+   .filter(order=>Boolean(resolveAssignedInspector(actor,order.assignment)))
+   .map(order=>({
+    planId:schedule.planId,scheduleId:schedule.id,orderId:order.id,
+    imo:order.imo,status:order.status,caseId:order.caseId,
+    assignment:order.assignment,mode:schedule.mode,
+    checklistStatus:order.checklistStatus,aiStatus:order.aiStatus,
+    scopeStatus:order.scopeStatus
+   })));
  }
  async order(planId,orderId){
   const schedule=await this.byPlan(planId);
@@ -451,13 +470,16 @@ export class SiScheduleOrders{
  async startField({planId,orderId,actor,confirmPocDelegation=false}={}){
   const {schedule,order}=await this.order(planId,orderId);
   if(!label(actor,160))err('SI_WORK_ORDER_ACTOR_REQUIRED',422);
+  const delegated=confirmPocDelegation===true&&schedule.mode==='POC_MOCK';
+  if(confirmPocDelegation&&!delegated)
+   err('SI_POC_DELEGATION_ONLY_FOR_MOCK_SCHEDULE',403);
+  const engineer=resolveAssignedInspector(actor,order.assignment);
+  if(!delegated&&!engineer)
+   err('SI_WORK_ORDER_ONLY_ASSIGNED_INSPECTOR_CAN_START',403);
   if(order.status==='FIELD_STARTED')return order;
   if(order.status!=='READY_FOR_FIELD'||!order.caseId)
    err('SI_WORK_ORDER_SCOPE_NOT_APPROVED',409);
-  const delegated=confirmPocDelegation===true&&schedule.mode==='POC_MOCK';
-  if(!delegated&&actor.trim()!==order.assignment.inspectorName)
-   err('SI_WORK_ORDER_ONLY_ASSIGNED_INSPECTOR_CAN_START',403);
-  const signature=delegated?order.assignment.inspectorName:actor.trim();
+  const signature=order.assignment.inspectorName;
   const state=await this.lifecycle.snapshot(order.caseId);
   if(state.record?.stage==='ASSIGNED')
    await this.lifecycle.apply(order.caseId,{action:'START_FIELD',
@@ -468,6 +490,7 @@ export class SiScheduleOrders{
   order.status='FIELD_STARTED';order.startedAt=at();
   order.pocDelegated=delegated;
   order.startedBySession=actor;
+  order.startedByInspectorId=delegated?null:engineer.id;
   await this.saveOrder(schedule,order,delegated?
    'POC_DELEGATED_FIELD_START':'INSPECTOR_STARTED_FIELD',actor);
   return clone(order);
