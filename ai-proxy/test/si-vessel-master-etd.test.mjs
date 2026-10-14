@@ -28,7 +28,7 @@ test('Operational Vessel Master adds final ETD from source events without date s
  assert.equal(master.rows[0].etdStatus,'FINAL_POC');
  assert.equal(master.rows[0].etdLocal,'2026-10-22T16:00');
  assert.equal(master.rows[0].currentPort,'Jebel Ali');
- assert.deepEqual(master.rows[0].etdSourceTypes,['SERVICE_REQUEST','PSC_PORT_CALL'].sort());
+ assert.deepEqual([...master.rows[0].etdSourceTypes].sort(),['SERVICE_REQUEST','PSC_PORT_CALL'].sort());
  assert.equal(master.rows[1].etdStatus,'MISSING');
  assert.equal(master.rows[1].etdLocal,null);
  assert.equal(master.rows[0].etdBusinessRule,'FINAL_ON_SOURCE_IMPORT_NO_DATE_APPROVAL');
