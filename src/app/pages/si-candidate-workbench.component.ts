@@ -67,7 +67,7 @@ export class SiCandidateWorkbenchComponent implements OnInit{
     this.api.createRollingPlan(this.newPlan).subscribe({
       next:p=>{
        this.planningBusy=false;this.newPlanVisible=false;
-       this.activePlanId=p.id;this.plan=null;this.loadRollingPlans();
+       this.activePlanId=p.id;this.plan=null;this.clearBulkSelection();this.loadRollingPlans();
        this.loadInspectionPlan();
       },
       error:e=>{this.planningBusy=false;
@@ -76,6 +76,7 @@ export class SiCandidateWorkbenchComponent implements OnInit{
   }
   openRollingPlan(p:SiRollingPlan):void{
     this.activePlanId=p.id;this.plan=null;this.planEditingImo='';
+    this.clearBulkSelection();
     this.loadInspectionPlan();
   }
   cancelRollingPlan(p:SiRollingPlan):void{
@@ -88,7 +89,8 @@ export class SiCandidateWorkbenchComponent implements OnInit{
     this.planningBusy=true;
     this.api.cancelRollingPlan(p.id,p.revision,reason.trim()).subscribe({
       next:()=>{this.planningBusy=false;this.loadRollingPlans();
-        if(this.activePlanId===p.id){this.activePlanId=null;this.plan=null;}},
+        if(this.activePlanId===p.id){this.activePlanId=null;this.plan=null;
+          this.clearBulkSelection();}},
       error:e=>{this.planningBusy=false;
         this.planningError=e?.error?.error||'SI_ROLLING_PLAN_CANCEL_FAILED';}
     });
@@ -113,6 +115,97 @@ export class SiCandidateWorkbenchComponent implements OnInit{
     return !!this.activePlanId&&this.activePlan?.status==='READY_FOR_APPROVAL'&&
       !!this.plan?.selectedForPlan&&!this.plan.stale&&
       (Boolean(this.plan.agentRunId)||Boolean(this.plan.manualSelection));
+  }
+  // Independent from per-workflow approval: one checkbox represents ONE IMO
+  // and all its source reasons in the current *draft* plan.
+  bulkSelectedImos=new Set<string>();
+  bulkAction:'NOT_SELECTED'|'DEFER'|null=null;
+  bulkReason='';bulkReviewAfter='';
+  get bulkSelectedCount():number{return this.bulkSelectedImos.size;}
+  get bulkVisibleEligible():SiVesselCandidate[]{
+    return this.vessels.filter(v=>this.bulkEligible(v));
+  }
+  get bulkAllVisibleSelected():boolean{
+    const rows=this.bulkVisibleEligible;
+    return !!rows.length&&rows.every(v=>this.bulkSelectedImos.has(v.imo));
+  }
+  bulkEligible(v:SiVesselCandidate):boolean{
+    return this.activePlanEditable&&!!this.plan&&!this.plan.stale&&
+      !!this.planRow(v)?.editable&&v.pendingWorkflows>0&&!this.planBusy&&
+      this.auth.isAdmin;
+  }
+  toggleBulkVessel(v:SiVesselCandidate,checked:boolean):void{
+    if(!this.bulkEligible(v))return;
+    if(checked)this.bulkSelectedImos.add(v.imo);
+    else this.bulkSelectedImos.delete(v.imo);
+    this.bulkAction=null;this.bulkReason='';this.planError='';
+  }
+  toggleBulkVisible(checked:boolean):void{
+    for(const v of this.bulkVisibleEligible){
+      if(checked)this.bulkSelectedImos.add(v.imo);
+      else this.bulkSelectedImos.delete(v.imo);
+    }
+    this.bulkAction=null;this.bulkReason='';this.planError='';
+  }
+  clearBulkSelection():void{
+    this.bulkSelectedImos.clear();this.bulkAction=null;
+    this.bulkReason='';this.bulkReviewAfter='';
+  }
+  startBulkAction(action:'NOT_SELECTED'|'DEFER'):void{
+    if(!this.bulkSelectedCount||!this.activePlanEditable||!this.plan||
+       this.plan.stale||this.planBusy||!this.auth.isAdmin)return;
+    this.bulkAction=action;this.bulkReason='';
+    this.bulkReviewAfter=this.localDate();this.planError='';
+    this.closeManualDecision();this.cancelPlanEdit();
+  }
+  saveBulkAction():void{
+    if(!this.bulkAction||!this.plan||!this.activePlanId||
+       !this.activePlanEditable||this.plan.stale||this.planBusy||
+       !this.auth.isAdmin)return;
+    const ids=[...this.bulkSelectedImos].sort();
+    const available=new Set((this.dashboard?.vesselCandidates||[])
+      .filter(v=>v.pendingWorkflows>0&&this.planLookup.get(v.imo)?.editable)
+      .map(v=>v.imo));
+    if(!ids.length||ids.some(imo=>!available.has(imo))){
+      this.planError=this.copy('Selection has changed. Reload the plan and select eligible vessels again.',
+        'تغيرت قائمة السفن؛ أعد تحميل الخطة وحدد السفن المؤهلة من جديد.');
+      this.clearBulkSelection();return;
+    }
+    if(this.bulkReason.trim().length<8||this.bulkReason.length>500){
+      this.planError=this.copy('A shared reason of 8–500 characters is required.',
+        'سبب موحد من 8 إلى 500 حرف مطلوب لهذا الإجراء.');return;
+    }
+    if(this.bulkAction==='DEFER'&&(!/^\d{4}-\d{2}-\d{2}$/.test(this.bulkReviewAfter)||
+      !Number.isFinite(Date.parse(this.bulkReviewAfter+'T00:00:00Z')))){
+      this.planError=this.copy('Choose a valid deferral review date.',
+        'حدد تاريخًا صحيحًا لإعادة مراجعة السفن المؤجلة.');return;
+    }
+    const action=this.bulkAction;
+    const verb=action==='DEFER'?this.copy('Defer','تأجيل'):this.copy('Exclude','استبعاد');
+    if(!window.confirm(this.copy(
+      'Apply '+verb+' to '+ids.length+' vessel(s) in this draft plan only? No source event or inspection case will be deleted.',
+      'تأكيد '+verb+' '+ids.length+' سفينة من مسودة الخطة الحالية فقط؟ لن تُحذف أي مصادر أو حالات معاينة.')))return;
+    this.planBusy=true;this.planError='';this.planNotice='';
+    this.api.bulkSelectRollingVessels(this.activePlanId,{
+      imos:ids,action,reason:this.bulkReason.trim(),
+      reviewAfter:action==='DEFER'?this.bulkReviewAfter:null,
+      expectedRevision:this.plan.revision,expectedSourceHash:this.plan.sourceHash
+    }).subscribe({
+      next:r=>{
+        this.planBusy=false;this.clearBulkSelection();
+        this.loadRollingPlans();this.loadInspectionPlan();
+        this.planNotice=this.copy(
+          'Saved '+verb+' for '+r.affectedCount+' vessels in this draft. No AI call or official inspection case change.',
+          'تم تسجيل '+verb+' لعدد '+r.affectedCount+
+          ' سفينة في المسودة دون تشغيل AI أو تغيير حالات المعاينة الرسمية.');
+      },
+      error:e=>{
+        this.planBusy=false;
+        this.planError=e?.error?.error||'SI_PLAN_BULK_SELECTION_FAILED';
+        if(this.planError.includes('CHANGED')||
+           this.planError.includes('CONFLICT'))this.loadInspectionPlan();
+      }
+    });
   }
   manualEditingImo='';
   manualAction:'INCLUDE'|'NOT_SELECTED'|'DEFER'|'NOT_APPLICABLE'='INCLUDE';
@@ -176,6 +269,14 @@ export class SiCandidateWorkbenchComponent implements OnInit{
     this.planBusy=true;this.planError='';
     this.api.inspectionPlan(this.editorKey.trim(),this.activePlanId).subscribe({
       next:x=>{this.plan=x;this.planBusy=false;
+        if(x.stale||x.readOnlyHistorical||!this.activePlanEditable){
+          this.clearBulkSelection();
+        }else{
+          const allowed=new Set(x.rows.filter(r=>r.editable).map(r=>r.imo));
+          for(const imo of [...this.bulkSelectedImos]){
+            if(!allowed.has(imo))this.bulkSelectedImos.delete(imo);
+          }
+        }
         if(this.planAiPhase==='updating')this.planAiPhase='idle';},
       error:e=>{this.planBusy=false;
         if(this.planAiPhase==='updating'){
