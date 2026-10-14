@@ -246,7 +246,8 @@ export class SiRollingPlanStore{
  }
 
  /** Supervisor approval of V2 roster: no cases or dossiers until scheduling. */
- async approveForScheduling(id,{expectedRevision,expectedSourceHash,actor,reason,vessels}={}){
+ async approveForScheduling(id,{expectedRevision,expectedSourceHash,actor,reason,vessels,
+  integratedDecision=null,withinTransaction=null}={}){
   if(!ID.test(id||'')||!Number.isInteger(expectedRevision)||
     !text(actor,160)||!text(reason,500)||reason.trim().length<8||
     !text(expectedSourceHash,200))
@@ -277,13 +278,44 @@ export class SiRollingPlanStore{
    if(before.status!=='READY_FOR_APPROVAL'||before.revision!==expectedRevision||
       before.selectionSourceHash!==expectedSourceHash)
     fail('SI_V2_PLAN_CHANGED_REVIEW_AGAIN',409);
-   const selected=(before.savedPlanRows||before.latest?.rows||[]).filter(r=>r.planSelected);
-   const allowed=new Set(selected.map(r=>r.imo));
-   if(allowed.size!==vessels.length||vessels.some(v=>!allowed.has(v.imo)))
-    fail('SI_V2_SELECTION_CHANGED_REVIEW_AGAIN',409);
+   const sourceRows=before.savedPlanRows||before.latest?.rows||[];
+   let selected=sourceRows.filter(r=>r.planSelected);
+   if(integratedDecision){
+    if(!withinTransaction||typeof withinTransaction!=='function'||
+      integratedDecision.sourceHash!==before.selectionSourceHash||
+      integratedDecision.planRevision!==before.revision||
+      !/^[a-f0-9]{64}$/.test(integratedDecision.selectionHash||'')||
+      !/^[a-f0-9]{64}$/.test(integratedDecision.proposalHash||'')||
+      typeof integratedDecision.erpSnapshotId!=='string'||
+      !integratedDecision.erpSnapshotId||
+      !Array.isArray(integratedDecision.rejected))
+     fail('SI_INTEGRATED_VERIFIED_CAPACITY_DECISION_REQUIRED',409);
+    const byImo=new Map(sourceRows.map(r=>[r.imo,r]));
+    if(vessels.some(v=>!byImo.get(v.imo)?.editable)||
+      sourceRows.some(r=>(r.mandatoryReferral===true||
+       r.requiredInPlan===true)&&!vessels.some(v=>v.imo===r.imo)))
+     fail('SI_INTEGRATED_MANDATORY_VESSEL_NOT_SCHEDULED',409);
+    selected=vessels.map(v=>byImo.get(v.imo));
+   }else{
+    const allowed=new Set(selected.map(r=>r.imo));
+    if(allowed.size!==vessels.length||vessels.some(v=>!allowed.has(v.imo)))
+     fail('SI_V2_SELECTION_CHANGED_REVIEW_AGAIN',409);
+   }
    const next=clone(before),at=now();
    next.status='APPROVED';next.approvedAt=at;next.approvedBy=actor;
-   next.scheduleMode='HUMAN_APPROVED_ROSTER_PENDING_AI_SCHEDULE';
+   next.scheduleMode=integratedDecision?
+    'SINGLE_CAPACITY_VERIFIED_PLAN_APPROVAL':
+    'HUMAN_APPROVED_ROSTER_PENDING_AI_SCHEDULE';
+   if(integratedDecision){
+    const accepted=new Set(vessels.map(v=>v.imo));
+    next.savedPlanRows=clone(sourceRows.map(r=>({
+     ...r,planSelected:accepted.has(r.imo),
+     selectionOrigin:accepted.has(r.imo)?
+      'CAPACITY_VERIFIED_SUPERVISOR':'CAPACITY_REVIEW_NOT_SELECTED'
+    })));
+    next.capacityDecision=clone({...integratedDecision,
+     approvedAt:at,approvedBy:actor,approvedImos:vessels.map(v=>v.imo)});
+   }
    next.approvalReason=reason.trim();next.approvedBatchId=null;
    next.approvedVessels=clone(vessels.map(v=>({
     imo:v.imo,planRank:v.planRank,caseId:null,
@@ -292,11 +324,14 @@ export class SiRollingPlanStore{
    next.approvedRows=clone(selected);
    next.revision++;next.updatedAt=at;next.updatedBy=actor;
    next.audit=[...(next.audit||[]),{
-    event:'APPROVED_FOR_ELECTRONIC_SCHEDULING',at,actor,
+    event:integratedDecision?'CAPACITY_VERIFIED_SINGLE_PLAN_APPROVAL':
+     'APPROVED_FOR_ELECTRONIC_SCHEDULING',at,actor,
     reason:reason.trim(),casesCreated:0
    }].slice(-300);
    return next;
   };
+  if(integratedDecision&&this.mode!=='oracle')
+   fail('SI_INTEGRATED_ATOMIC_ORACLE_REQUIRED',503);
   if(this.mode==='json'){
    const state=this.readFile(),index=state.plans.findIndex(p=>p.id===id);
    if(index<0)fail('SI_ROLLING_PLAN_NOT_FOUND',404);
@@ -327,8 +362,15 @@ export class SiRollingPlanStore{
           {p_plan:id,p_imo:vessel.imo,p_event:evidence.eventKey,p_doc:json(evidence)});
       }
     }
-    await this.audit(con,id,'APPROVED_FOR_ELECTRONIC_SCHEDULING',actor,
-      {vessels:vessels.length,casesCreated:0,reason:reason.trim()});
+    await this.audit(con,id,integratedDecision?
+     'CAPACITY_VERIFIED_SINGLE_PLAN_APPROVAL':
+     'APPROVED_FOR_ELECTRONIC_SCHEDULING',actor,
+     {vessels:vessels.length,casesCreated:0,reason:reason.trim(),
+      integrated:Boolean(integratedDecision),
+      proposalHash:integratedDecision?.proposalHash||null});
+    // One Oracle transaction: roster, work orders and both audit logs.
+    // Any downstream rejection rolls ALL data back.
+    if(integratedDecision)await withinTransaction(con,next);
     await con.commit();return clone(next);
    }catch(error){await con.rollback();throw error;}
   });
