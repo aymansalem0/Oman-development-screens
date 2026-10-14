@@ -232,59 +232,172 @@ interface CapacityPreview{
     </section>
 
     <section class="panel" *ngIf="step===3">
-     <p class="eyebrow">{{copy('STEP 03 · AI-PROPOSED SCHEDULING','الخطوة ٣ · الجدولة المقترحة')}}</p>
-     <h2>{{copy('Approval freezes the selected vessels, not inspection cases',
-       'اعتماد قائمة السفن دون إنشاء حالات معاينة')}}</h2>
-     <div class="workflow">
-      <div><span class="flow-icon">1</span><div><b>{{copy('Freeze approved vessel roster','تثبيت السفن المعتمدة')}}</b>
-       <p>{{copy('Store all PSC, Service Request and approved NMC referral reasons. No cases or inspector dossiers are created now.',
-        'حفظ كل أسباب إحالة PSC وطلبات الخدمات وNMC. لا تنشأ حالات أو دوسيهات للمفتش في هذه المرحلة.')}}</p></div></div>
-      <div><span class="flow-icon">2</span><div><b>{{copy('Generate comprehensive maritime schedule','إنشاء جدولة بحرية شاملة')}}</b>
-       <p>{{copy('Source-final ETD needs no separate approval. Feasible inspectors are matched by vessel type, inspection regime, port and ERP availability. GT limits are not a requirement.',
-        'تاريخ المغادرة النهائي لا يتطلب اعتمادًا إضافيًا. يتم اختيار المهندس طبقًا لنوع السفينة والمعاينة والموقع والإتاحة، دون شرط نطاقات الحمولة.')}}</p></div></div>
-      <div><span class="flow-icon">3</span><div><b>{{copy('Supervisor approves the proposed schedule','المشرف يعتمد توزيع المواعيد والمهندسين')}}</b>
-       <p>{{copy('Schedule approval is independent of date finality. No auto-booking, case creation or NMC closure before the approved execution workflow.',
-        'اعتماد الجدولة مستقل عن نهائية تاريخ المغادرة. لا يتم الحجز أو إنشاء حالات أو إغلاق NMC قبل إتمام المسار المعتمد.')}}</p></div></div>
-     </div>
-     <p class="notice">{{copy('The ERP workforce import is a POC simulator; missing berth access, final departure date or qualified available inspector causes UNSCHEDULED, never a fabricated booking.',
-       'بيانات ERP في الـPOC تجريبية. غياب معلومات الرصيف أو تاريخ المغادرة أو المهندس المؤهل يؤدي لعرض السفينة كغير مجدولة، وليس اختراع حجز.')}}</p>
+     <p class="eyebrow">{{copy('STEP 03 · CAPACITY-FIRST PLAN','الخطوة ٣ · إنشاء خطة حسب الطاقة')}}</p>
+     <h2>{{copy('Build a single capacity-verified inspection plan','إعداد خطة معاينات واحدة متحققة من الطاقة')}}</h2>
+     <p>{{copy('The two percentages separately shortlist eligible IMO candidates. Mandatory NMC referrals and legally required service inspections remain protected. Inspectors and time slots are checked before ANY plan approval.',
+      'تختار النسبتان بشكل مستقل سفنًا مؤهلة دون تكرار IMO، مع حماية إحالات NMC والالتزامات النظامية. يتم التحقق من المهندسين والمواعيد قبل أي اعتماد للخطة.')}}</p>
+     <label class="capacity-mode">
+      <input type="checkbox" [(ngModel)]="capacityDemoMode"
+       (ngModelChange)="invalidateCapacity()"/>
+      {{copy('POC demo only: synthetic staff qualifications, shifts and travel (not official ERP)',
+       'عرض POC تجريبي: مؤهلات وورديات وانتقالات افتراضية وليست ERP رسميًا')}}
+     </label>
+     <button class="secondary" type="button" [disabled]="capacityBusy||capacityAiBusy"
+      (click)="loadCapacityContext()">
+      {{capacityBusy?copy('Loading verified data…','تحميل البيانات…'):
+       copy('01 · Load Candidates & Workforce','١ · تحميل السفن والطاقة التشغيلية')}}</button>
+     <p class="notice error" *ngIf="capacityError" role="alert">{{capacityError}}</p>
+     <ng-container *ngIf="capacityContext as ctx">
+      <div class="review-stats">
+       <p><b>{{ctx.selection.roster.length}}</b>
+        <span>{{copy('Shortlisted candidates','مرشحون طبقًا للنسب والالتزامات')}}</span></p>
+       <p><b>{{ctx.selection.quotas.pscRisk.targetedImos}}</b>
+        <span>{{copy('PSC + Risk target','عدد PSC حسب المخاطر')}}</span></p>
+       <p><b>{{ctx.selection.quotas.uaeFlag.targetedImos}}</b>
+        <span>{{copy('UAE flag target','عدد السفن الإماراتية')}}</span></p>
+      </div>
+      <p class="hint">{{copy('Source-backed mandatory candidates and separately recorded officer inclusions may add vessels beyond the two optional quota totals. The combined roster has one row per IMO.',
+       'قد تزيد السفن الإلزامية والاختيارات اليدوية الموثقة عن إجمالي الحصتين الاختياريتين، مع عدم تكرار أي IMO.')}}</p>
+      <div class="capacity-vessel-form" *ngFor="let v of ctx.items">
+       <div class="capacity-vessel-title"><b>IMO {{v.imo}} · {{v.name}}</b>
+        <span>{{v.regimes.join(' · ')}}</span></div>
+       <div class="capacity-input-grid">
+        <label>{{copy('Inspection port','ميناء المعاينة')}}
+         <select [(ngModel)]="v.portId" [disabled]="v.portSourceLocked||capacityDemoMode"
+          (ngModelChange)="invalidateCapacityPreview()">
+          <option value="">—</option>
+          <option *ngFor="let port of ctx.ports" [value]="port.portId">{{port.name}}</option>
+         </select></label>
+        <label>{{copy('Berth / location','الرصيف / الموقع')}}
+         <input [(ngModel)]="v.locationName" [disabled]="capacityDemoMode"
+          (ngModelChange)="invalidateCapacityPreview()"/></label>
+        <label>{{copy('Inspection duration (min)','مدة المعاينة بالدقائق')}}
+         <input type="number" min="30" max="720" step="30"
+          [(ngModel)]="v.durationMinutes" [disabled]="capacityDemoMode"
+          (ngModelChange)="invalidateCapacityPreview()"/></label>
+        <label>{{copy('Visit from (Dubai local)','بداية الفترة (توقيت الإمارات)')}}
+         <input [(ngModel)]="v.earliestLocal"
+          [disabled]="!!v.etaLocal||capacityDemoMode"
+          (ngModelChange)="invalidateCapacityPreview()"
+          placeholder="YYYY-MM-DD HH:mm"/></label>
+        <label>{{copy('Visit until (Dubai local)','نهاية الفترة (توقيت الإمارات)')}}
+         <input [(ngModel)]="v.latestFinishLocal"
+          [disabled]="!!v.etdLocal||capacityDemoMode"
+          (ngModelChange)="invalidateCapacityPreview()"
+          placeholder="YYYY-MM-DD HH:mm"/></label>
+        <label class="capacity-check">
+         <input type="checkbox" [(ngModel)]="v.siteAccessConfirmed"
+          [disabled]="capacityDemoMode"
+          (ngModelChange)="invalidateCapacityPreview()"/>
+         {{copy('Confirmed berth/site access','تأكيد إتاحة موقع المعاينة')}}</label>
+       </div>
+       <div class="source-ref">{{copy('Source inspection reasons','أسباب المعاينة من المصادر')}}:
+        <span *ngFor="let entry of ctx.selection.roster">
+         <ng-container *ngIf="entry.imo===v.imo">
+          <span *ngFor="let evidence of entry.inspectionReasons">
+           {{evidence.sourceType}} · {{evidence.sourceReference||evidence.eventKey}} |
+          </span>
+         </ng-container>
+        </span></div>
+      </div>
+      <button class="next" type="button" (click)="previewCapacity()"
+       [disabled]="capacityBusy||capacityAiBusy">
+       {{copy('02 · Verify Capacity & Create Plan Alternatives',
+        '٢ · التحقق من الطاقة وإنشاء بدائل الخطة')}}</button>
+     </ng-container>
+     <ng-container *ngIf="capacityProposal as schedule">
+      <div class="review-stats">
+       <p><b>{{schedule.summary.total}}</b>
+        <span>{{copy('Screened','فُحصت إتاحتها')}}</span></p>
+       <p><b>{{schedule.summary.proposed}}</b>
+        <span>{{copy('Feasible assignments','قابلة للتكليف')}}</span></p>
+       <p><b>{{schedule.summary.unscheduled}}</b>
+        <span>{{copy('Capacity exceptions','استثناءات الطاقة')}}</span></p>
+      </div>
+      <p class="notice error" *ngIf="capacityPreview?.selection?.capacity?.mandatoryUnscheduled?.length">
+       {{copy('Mandatory inspection(s) cannot be scheduled: approval is blocked until the constraints are resolved.',
+        'توجد معاينات إلزامية لم تتوفر لها طاقة: الاعتماد موقوف حتى معالجة القيود.')}}
+       {{capacityPreview?.selection?.capacity?.mandatoryUnscheduled?.join(', ')}}
+      </p>
+      <div class="table-scroll"><table>
+       <thead><tr><th>IMO</th><th>{{copy('Status','الحالة')}}</th>
+        <th>{{copy('Reason','السبب')}}</th></tr></thead>
+       <tbody><tr *ngFor="let row of schedule.rows">
+        <td>{{row.imo}}</td><td>{{row.status}}</td>
+        <td>{{row.blocker||copy('Feasible','قابل للجدولة')}}</td></tr></tbody>
+      </table></div>
+      <p class="hint">{{copy('Unscheduled optional candidates remain in the candidate pool with their reasons; they are not silently cancelled or added to the approved work-order roster.',
+       'تظل السفن الاختيارية غير المجدولة في قائمة المرشحين مع أسباب التعذر، ولا تُلغى تلقائيًا أو تصدر لها أوامر تكليف.')}}</p>
+      <button type="button" class="secondary" (click)="runCapacityAi()"
+       [disabled]="capacityAiBusy||capacityBusy||!schedule.variants.length">
+       {{capacityAiBusy?copy('AI evaluating…','جارٍ تحليل AI…'):
+        copy('03 · Ask AI to Rank Verified Plan Alternatives',
+         '٣ · استخدام AI لترتيب بدائل الخطة المتحققة')}}</button>
+      <p class="notice" *ngIf="capacityAiMessage">{{capacityAiMessage}}</p>
+     </ng-container>
     </section>
     <section class="panel" *ngIf="step===4">
-     <p class="eyebrow">{{copy('STEP 04 · SUPERVISOR APPROVAL','الخطوة ٤ · اعتماد المسؤول')}}</p>
-     <h2>{{copy('Review and approve the whole plan','مراجعة واعتماد الخطة بالكامل')}}</h2>
-     <div class="review-stats">
-      <p><b>{{p.selectedVessels}}</b><span>{{copy('Selected vessels','السفن المختارة')}}</span></p>
-      <p><b>{{totalReasons}}</b><span>{{copy('Source reasons preserved','أسباب إحالة محفوظة')}}</span></p>
-      <p><b>{{totalScopes}}</b><span>{{copy('Regulatory inspection scopes','نطاقات معاينة نظامية')}}</span></p>
-     </div>
-     <p class="notice">{{copy('All collected reasons and scopes were shown in Step 2. Approval covers the entire currently selected plan, not a single referral per vessel.',
-       'تم عرض جميع الأسباب والنطاقات في الخطوة الثانية. الاعتماد يشمل الخطة الحالية بالكامل وليس إحالة واحدة لكل سفينة.')}}</p>
-     <label class="approval-notes">{{copy('Supervisor approval notes','ملاحظات اعتماد المشرف')}}
+     <p class="eyebrow">{{copy('STEP 04 · ONE SUPERVISOR APPROVAL','الخطوة ٤ · اعتماد واحد من المشرف')}}</p>
+     <h2>{{copy('Approve vessels, verified inspectors, dates and work orders together',
+      'اعتماد السفن والمهندسين والمواعيد وأوامر التكليف معًا')}}</h2>
+     <ng-container *ngIf="approvedCapacityVariant as selected">
+      <div class="review-stats">
+       <p><b>{{capacityProposal?.summary?.total}}</b>
+        <span>{{copy('Screened vessels','السفن محل التخطيط')}}</span></p>
+       <p><b>{{selected.assignments.length}}</b>
+        <span>{{copy('Ready to approve','معاينات جاهزة للاعتماد')}}</span></p>
+       <p><b>{{capacityProposal?.summary?.unscheduled}}</b>
+        <span>{{copy('Remain outside this plan','لم تدخل هذه الخطة')}}</span></p>
+      </div>
+      <div class="capacity-variant-choices" *ngIf="(capacityProposal?.variants?.length||0)>1">
+       <label>{{copy('Verified plan alternative','بديل الخطة المتحقق')}}
+        <select [ngModel]="preferredCapacityOptionId" (ngModelChange)="capacityAiOptionId=$event">
+         <option *ngFor="let alt of capacityProposal?.variants" [value]="alt.optionId">
+          {{alt.allocatedVessels}} {{copy('assignments','تكليف')}} · {{alt.optionId}}
+         </option>
+        </select></label>
+      </div>
+      <div class="table-scroll"><table>
+       <thead><tr><th>IMO</th><th>{{copy('Inspector','المهندس')}}</th>
+        <th>{{copy('Port','الميناء')}}</th><th>{{copy('Date/time','الموعد')}}</th>
+        <th>{{copy('Travel','الانتقال')}}</th></tr></thead>
+       <tbody><tr *ngFor="let a of selected.assignments">
+        <td>{{a.imo}}</td><td>{{a.inspectorName}}</td>
+        <td>{{a.portName}}</td><td>{{a.startLocal}} → {{a.endLocal}}</td>
+        <td>{{a.crossPort?(a.originPortName+' · '+a.travelMinutes+' min'):'—'}}</td>
+       </tr></tbody></table></div>
+      <p class="notice" *ngIf="capacityDemoMode">{{copy(
+       'POC DEMO: inspector skills/shifts, visit supplements and route travel times may be synthetic. This is not a live official ERP resource reservation.',
+       'وضع POC: قد تكون مؤهلات المهندسين وورديّاتهم وبيانات الزيارة وأوقات الانتقال افتراضية؛ ولا يمثل ذلك حجز موارد ERP رسميًا.')}}</p>
+     </ng-container>
+     <label class="approval-notes">{{copy('Supervisor approval reason','سبب اعتماد المشرف')}}
       <textarea rows="3" maxlength="500" [(ngModel)]="reason"
-        [placeholder]="copy('Document why the selected plan is approved','سجل سبب اعتماد الخطة المختارة')"></textarea>
+       [placeholder]="copy('Document the combined capacity-verified plan approval',
+        'وثّق سبب اعتماد الخطة متضمنة السفن والموارد والمواعيد')"></textarea>
      </label>
-     <p class="notice">{{copy('Only the selected vessel roster is approved now. Electronic scheduling is the next independent step.',
-        'سيتم اعتماد قائمة السفن فقط؛ الخطوة التالية هي الجدولة الإلكترونية واعتماد توزيع المهندسين.')}}</p>
-     <p *ngIf="v2RosterError" class="notice error" role="alert">{{v2RosterError}}</p>
+     <p class="notice error" *ngIf="capacityError" role="alert">{{capacityError}}</p>
      <button type="button" class="approve" (click)="approve()"
-      [disabled]="returnedFromScheduling||submitting||jobBusy||!auth.isAdmin||reason.trim().length<8||p.stale||(!p.agentRunId&&!p.manualSelection)||hasMissingReasons||!!v2RosterError">
-      {{submitting?copy('Submitting approval…','جارٍ إرسال الاعتماد…'):
-       copy('Approve '+p.selectedVessels+' Vessels for Scheduling',
-        'اعتماد '+p.selectedVessels+' سفن للجدولة')}}
-     </button>
-     <p class="hint">{{copy('Approval is one human-authorized decision. The AI never approves inspections.',
-       'الاعتماد قرار واحد يصدر من مستخدم مخول، وليس من الذكاء الاصطناعي.')}}</p>
+      [disabled]="!canApproveCapacity">
+      {{submitting?copy('Saving atomic approval…','جارٍ حفظ الاعتماد الموحد…'):
+       copy('Approve Capacity-Verified Plan & Issue Work Orders',
+        'اعتماد خطة المعاينات والموارد وإصدار أوامر التكليف')}}</button>
+     <p class="hint">{{copy(
+      'One Oracle transaction persists the approved vessel/source roster and work orders. A failure rolls both back. AI cannot approve, change compulsory inspection obligations, or book live ERP resources.',
+      'تُحفظ السفن والأدلة وأوامر التكليف في معاملة Oracle واحدة؛ وأي فشل يلغي العملية بالكامل. لا يعتمد AI المعاينات أو يغير الالتزامات أو يحجز موارد ERP فعليًا.')}}</p>
     </section>
     <section class="panel" *ngIf="step===5&&scheduleApproval as approval">
-     <p class="eyebrow">{{copy('STEP 05 · AWAITING MARITIME SCHEDULING','الخطوة الخامسة · في انتظار الجدولة البحرية')}}</p>
-     <h2>{{copy('Plan approved — No inspection cases were created','اعتمدت الخطة دون إنشاء حالات معاينة')}}</h2>
-     <p class="notice">{{copy('Approved vessels','السفن المعتمدة')}}: <b>{{approval.approvedVesselCount}}</b> ·
-      {{copy('Inspection cases created','حالات معاينة منشأة')}}: <b>{{approval.createdInspectionCases}}</b></p>
-     <p>{{copy('All referral reasons are retained. Continue to the comprehensive scheduling board to assign time, location and an available qualified engineer.',
-      'تم الاحتفاظ بجميع أسباب المعاينة. انتقل للجدولة الشاملة لتحديد الموعد والمكان والمهندس المؤهل والمتاح.')}}</p>
+     <p class="eyebrow">{{copy('STEP 05 · APPROVED & READY FOR DOSSIERS',
+      'الخطوة ٥ · الخطة معتمدة وجاهزة لملفات السفن')}}</p>
+     <h2>{{copy('Capacity-verified plan and work orders issued',
+      'تم اعتماد خطة المعاينات وإصدار أوامر التكليف')}}</h2>
+     <p class="notice">{{copy('Approved vessels and issued work orders','السفن وأوامر التكليف المعتمدة')}}:
+      <strong>{{approval.approvedVesselCount}}</strong></p>
+     <p>{{copy('Open the work-order board. Each order prepares its mandatory checklist and source-evidence dossier; the optional Airia A04 analysis is requested explicitly and reviewed by a supervisor before additions are used.',
+      'افتح أوامر التكليف. يُجهز لكل أمر ملف الأدلة وقائمة المعاينة الإلزامية، ويُطلب تحليل Airia A04 صراحةً ثم يراجعه المشرف قبل تطبيق أي إضافات.')}}</p>
      <div class="step-actions">
       <a class="next" [routerLink]="['/moei/smart-inspection/scheduling/plan',approval.planId]">
-       {{copy('Open Maritime Scheduling Board →','فتح لوحة الجدولة البحرية ←')}}</a>
+       {{copy('Open Approved Work Orders & AI Vessel Dossiers →',
+        'فتح أوامر التكليف وملفات السفن بالذكاء الاصطناعي ←')}}</a>
      </div>
     </section>
     <section class="panel" *ngIf="step===5&&job as j">
@@ -359,6 +472,23 @@ interface CapacityPreview{
  .plan-focus-reason{border-top:1px solid #c6e1e8;padding:10px 0}
  .plan-focus-reason small{color:#63869a}
  tr.plan-focused-row{background:#e7f9ef;outline:2px solid #8fcfb0;outline-offset:-2px}
+ .capacity-mode{display:block;color:#975c1f;background:#fff4df;border:1px solid #e8d4b3;
+  padding:12px;border-radius:8px;font-size:12px;font-weight:800;margin:13px 0}
+ .capacity-vessel-form{border:1px solid #d7e7eb;border-radius:10px;padding:15px;margin:12px 0;background:#fcfefe}
+ .capacity-vessel-title{display:flex;justify-content:space-between;gap:12px;
+  flex-wrap:wrap;font-size:12px;color:#126e7e;margin-bottom:12px}
+ .capacity-vessel-title span{color:#648292}
+ .capacity-input-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+ .capacity-input-grid label{display:grid;gap:5px;font-size:11px;color:#31546a;font-weight:800}
+ .capacity-input-grid input:not([type=checkbox]),.capacity-input-grid select,
+ .capacity-variant-choices select{width:100%;min-width:0;padding:9px;border:1px solid #c8dce3;
+  border-radius:7px;background:#fff;font:inherit}
+ .capacity-input-grid input:disabled,.capacity-input-grid select:disabled{
+  background:#f1f6f6;color:#69838e}
+ .capacity-input-grid .capacity-check{display:flex;align-items:center;gap:9px}
+ .capacity-variant-choices{margin:14px 0}
+ @media(max-width:900px){.capacity-input-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+ @media(max-width:580px){.capacity-input-grid{grid-template-columns:1fr}}
  .si-plan-weights{border-color:#b6d8e0}
  .si-weight-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
  .si-weight-control{display:block;background:#f7fbfd;border:1px solid #d8e7ed;
@@ -622,6 +752,10 @@ export class SiInspectionPlanWizardComponent implements OnInit,OnDestroy{
   if(!this.canNext)return;
   this.step++;
   if(this.step===3&&!this.capacityContext)this.loadCapacityContext();
+ }
+ invalidateCapacityPreview():void{
+  this.capacityPreview=null;this.capacityProposal=null;this.capacityAiOptionId='';
+  this.capacityAiMessage='';
  }
  get preferredCapacityOptionId():string{
   return this.capacityAiOptionId||this.capacityProposal?.variants?.[0]?.optionId||'';
