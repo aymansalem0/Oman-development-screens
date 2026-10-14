@@ -34,9 +34,16 @@ export class SiCandidateSourcesService{
     return this.http.post<SiImportPreview>(this.base+'/preview',body,{headers:this.headers(key)});
   }
   commit(key:string,body:{sourceType:SiExcelSource;previewId:string;actor:string}):Observable<{
-    status:string;sourceType:string;importedEvents:number;duplicateEvents:number;batchId:string
+    status:string;sourceType:string;importedEvents:number;duplicateEvents:number;batchId:string;
+    pscQuota?:{status?:string;policyVersion?:number;ratePercent?:number;
+      scope?:string;eligibleEvents?:number;selectedEvents?:number;
+      automaticEvents?:number;buckets?:{bucket:string;targetCount:number;selectedCount:number}[]}|null;
   }>{
     return this.http.post<{status:string;sourceType:string;importedEvents:number;
-      duplicateEvents:number;batchId:string}>(this.base+'/commit',body,{headers:this.headers(key)});
+      duplicateEvents:number;batchId:string;
+      pscQuota?:{status?:string;policyVersion?:number;ratePercent?:number;
+        scope?:string;eligibleEvents?:number;selectedEvents?:number;
+        automaticEvents?:number;buckets?:{bucket:string;targetCount:number;selectedCount:number}[]}|null
+    }>(this.base+'/commit',body,{headers:this.headers(key)});
   }
 }

@@ -19,7 +19,8 @@ export interface PscPoolItem {
   sourceReference:string;eta:string;period:string;bucket:string;
   importedAt:string;sourceFile:string|null;sourceExcelRow:number|null;
   nmcRisk:{score:number;level:string;assessmentId:string}|null;
-  selectionStatus:'SELECTED'|'NOT_SELECTED'|'IN_POOL';
+  selectionStatus:'SELECTED'|'RULE_SHORTLISTED'|'NOT_SELECTED'|'IN_POOL';
+  selectionOrigin?:'OFFICER_SELECTED'|'RULE_SHORTLISTED'|'NOT_SHORTLISTED';
   selectionDecision:PscSelectionRecord|null;
   ruleRank:number;ruleRecommended:boolean;missingRisk:boolean;
 }
@@ -27,12 +28,14 @@ export interface PscQuotaBucket {
   bucket:string;period:string;port:string;eligiblePortCalls:number;
   selectionRate:number;targetCount:number;selectedCount:number;
   remainingSlots:number;overQuota:boolean;
+  manuallySelectedCount?:number;automaticallyShortlistedCount?:number;
 }
 export interface PscSelectionPool {
   status:string;source:string;policy:PscQuotaPolicy;
   scope:string;periodMode:string;
   summary:{eligiblePortCalls:number;selectedPortCalls:number;
     inPoolPortCalls:number;notSelectedPortCalls:number;
+    automaticallyShortlistedPortCalls?:number;
     distinctVessels:number;buckets:PscQuotaBucket[]};
   items:PscPoolItem[];
 }

@@ -267,6 +267,7 @@ export class SiInspectionPlan{
    // A single explicit mock/real C01 run. No provider calls from GET or page load.
    // If Airia/validation fails, NOT EVEN the officer change is committed.
    const ai=await this.agent.run({actor,confirmRun:true,confirmCost:input.confirmCost===true,
+     confirmBatchCount:input.confirmBatchCount,
      expectedSnapshotHash:source.snapshotHash,
      // The C01 provider sees each human amendment before generating new advice.
      officerPlanChanges:Object.values(changes).map(x=>({

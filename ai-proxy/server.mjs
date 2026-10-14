@@ -275,7 +275,23 @@ const siPriority=new SiAiPrioritization({
   enabled:false
 });
 const siCandidateAgent=new SiCandidateAgent({
-  targeting:siTargeting,pscPolicy:()=>siPscSelection.policy(),provider:siAiProvider,
+  targeting:siTargeting,pscPolicy:async()=>{
+    const pool=await siPscSelection.pool();
+    return {...pool.policy,quotaSnapshot:{
+      scope:pool.scope,periodMode:pool.periodMode,
+      source:'PUBLISHED_RULES_ON_PERSISTED_PSC_EXCEL',
+      eligibleEvents:pool.summary.eligiblePortCalls,
+      shortlistedEvents:pool.summary.selectedPortCalls,
+      automaticEvents:pool.summary.automaticallyShortlistedPortCalls,
+      buckets:pool.summary.buckets.map(b=>({
+        bucket:b.bucket,ratePercent:b.selectionRate,
+        eligibleEvents:b.eligiblePortCalls,quotaTarget:b.targetCount,
+        shortlistedEvents:b.selectedCount,overQuota:b.overQuota
+      })),
+      modelMayOverrideQuota:false,
+      officialSelectionRequiresOfficer:true
+    }};
+  },provider:siAiProvider,
   executeAgent:async input=>siAiProvider==='mock'?mockSiC01(input):fleetAgentCall('c01',input)
 });
 const siRollingPlans=new SiRollingPlanStore({mode:dbMode,oracleRepository:repository});
@@ -1311,7 +1327,28 @@ const server = createServer(async (req, res) => {
       }
       if(req.method==='POST'&&path==='/api/si/v1/candidate-sources/commit'){
         dashboards.assertRole(req,'EDITOR');
-        return respond(res,201,await siSourceImports.commit(await requestJson(req,2048)));
+        const saved=await siSourceImports.commit(await requestJson(req,2048));
+        // The imported source is already committed. Calculate PSC selection
+        // read-only; never turn a later view failure into a misleading import
+        // failure or make a second paid Airia request.
+        let pscQuota=null;
+        if(saved.sourceType==='PSC_PORT_CALL'){
+          try{
+            const pool=await siPscSelection.pool();
+            pscQuota={policyVersion:pool.policy.version,
+              ratePercent:pool.policy.config.ratePercent,
+              scope:pool.scope,
+              eligibleEvents:pool.summary.eligiblePortCalls,
+              selectedEvents:pool.summary.selectedPortCalls,
+              automaticEvents:pool.summary.automaticallyShortlistedPortCalls,
+              buckets:pool.summary.buckets};
+          }catch{
+            pscQuota={status:'READINESS_RECALCULATION_PENDING'};
+          }
+        }
+        return respond(res,201,{...saved,pscQuota,
+          autoRuleShortlisting:true,aiCalls:0,
+          requiresOfficialInspectionApproval:true});
       }
       // Read-only P01 status/preview/history retained for historical audit only.
       if(path==='/api/si/v1/prioritization'||path.startsWith('/api/si/v1/prioritization/')){

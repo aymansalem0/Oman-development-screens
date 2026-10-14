@@ -335,3 +335,25 @@ button:disabled{opacity:.55;cursor:not-allowed}
 .si-readiness-hint{font-size:10px;color:#688293;line-height:1.6;margin:9px 0 0;}
 @media(max-width:1120px){.si-readiness-metrics{grid-template-columns:repeat(3,minmax(0,1fr));}}
 @media(max-width:570px){.si-readiness-metrics{grid-template-columns:repeat(2,minmax(0,1fr));}}
+
+/* PSC rules apply directly to saved Excel events; no separate targeting screen. */
+.si-psc-direct-summary{background:#f3fafb;border:1px solid #b9dfe0;border-radius:12px;
+ padding:13px 15px;margin:12px 0;color:#154f5d}
+.si-psc-summary-title{display:flex;justify-content:space-between;gap:12px;
+ align-items:flex-start;flex-wrap:wrap}
+.si-psc-summary-title strong{font-size:13px;color:#006979}
+.si-psc-summary-title p{font-size:10.5px;max-width:850px;line-height:1.6;margin:5px 0}
+.si-psc-summary-links{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.si-psc-summary-links a{display:inline-block;border:1px solid #afd8d9;
+ background:#fff;border-radius:8px;padding:7px 10px;
+ font-weight:750;color:#135c6c;font-size:10px;text-decoration:none}
+.si-psc-summary-numbers{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));
+ gap:8px;margin:11px 0}
+.si-psc-summary-numbers span{background:#fff;border:1px solid #d3e5e8;
+ border-radius:8px;padding:10px;font-size:10px;line-height:1.5;color:#5b7984}
+.si-psc-summary-numbers strong{display:block;font-size:21px;color:#066b7f;margin-bottom:2px}
+.si-psc-summary-buckets{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}
+.si-psc-summary-buckets span{background:#e5f5f5;border-radius:6px;
+ padding:5px 8px;font-size:10px;color:#116677}
+.si-psc-direct-summary>small{display:block;color:#68848c;font-size:10px;line-height:1.5}
+@media(max-width:850px){.si-psc-summary-numbers{grid-template-columns:repeat(2,minmax(0,1fr))}}

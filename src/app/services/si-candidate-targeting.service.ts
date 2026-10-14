@@ -107,6 +107,7 @@ export interface SiC01Preview {
  status:'PREVIEW_ONLY_NO_AI';provider:'MOCK'|'AIRIA';
  snapshotHash:string;policyRevision:number;pscQuotaPolicyRevision:number|null;
  riskPolicyRevision:number;eligibleCount:number;externalCalls:0;
+ expectedBatches?:number;estimatedAiriaCalls?:number;
  candidates:{candidateKey:string;imo:string;regime:string;
     vesselName:string;sourceTypes:string[];allowedEvidence:string[];
     currentRisk:SiCandidate['currentRisk']}[];
@@ -118,6 +119,7 @@ export interface SiC01Run{
  snapshotHash:string;policyRevision:number;riskPolicyRevision:number;
  actor:string;generatedAt:string;externalCalls:number;humanDecisionRequired:true;
  mutations:false;warning:string;recommendations:SiC01Recommendation[];
+ batchesValidated?:number;candidatesAnalyzed?:number;
 }
 export interface SiInspectionPlanRow{
  imo:string;vesselName:string;flag:string;vesselType:string;
@@ -233,6 +235,7 @@ export class SiCandidateTargetingService{
   rerankInspectionPlan(key:string,body:{
     actor:string;expectedSourceHash:string;expectedRevision:number;
     planId?:string;confirmRun:true;confirmCost:boolean;
+    confirmBatchCount?:number;
     change?:{imo:string;selected:boolean;requestedRank:number|null;reason:string}
   }):Observable<SiInspectionPlanResult>{
     return this.http.post<SiInspectionPlanResult>(
@@ -247,7 +250,7 @@ export class SiCandidateTargetingService{
       {headers:this.headers(key)});
   }
   candidateAiRun(key:string,body:{actor:string;expectedSnapshotHash:string;
-    confirmRun:true;confirmCost:boolean}):Observable<SiC01Run>{
+    confirmRun:true;confirmCost:boolean;confirmBatchCount?:number}):Observable<SiC01Run>{
     return this.http.post<SiC01Run>(this.api+'/agents/candidate-selection/run',body,
       {headers:this.headers(key)});
   }

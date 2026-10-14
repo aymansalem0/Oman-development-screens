@@ -439,3 +439,64 @@ test('C01 readiness deduplicates same IMO workflows and makes conflicting ETD vi
  assert.equal(over.status,'SCOPE_LIMIT');
  assert.equal(summarizeC01Readiness({candidates:[]}).status,'NO_CANDIDATES');
 });
+
+test('C01 processes >100 quota-selected workflows in verified batches after explicit call-count consent',async()=>{
+ const dashboard={policy:{version:4},riskPolicyRevision:2,fleetSnapshotId:'PSC-FLEET',
+  candidates:Array.from({length:125},(_,i)=>candidate('psc-'+i,
+   'PSC_PORT_CALL',String(9300000+i),null))};
+ const calls=[];
+ const quotaSnapshot={scope:'NATIONAL',eligibleEvents:125,
+  shortlistedEvents:125,modelMayOverrideQuota:false};
+ const a=new SiCandidateAgent({provider:'airia',
+  targeting:{dashboard:async()=>dashboard},
+  pscPolicy:async()=>({version:8,quotaSnapshot}),
+  executeAgent:async input=>{
+   calls.push(input);
+   return {result:JSON.stringify(mockSiC01(input))};
+  }});
+ const p=await a.preview();
+ assert.equal(p.eligibleCount,125);
+ assert.equal(p.expectedBatches,2);
+ assert.equal(p.estimatedAiriaCalls,2);
+ await assert.rejects(()=>a.run({actor:'PSC officer',confirmRun:true,
+  confirmCost:true,expectedSnapshotHash:p.snapshotHash}),
+  e=>e.code==='SI_C01_BATCH_COUNT_CONFIRMATION_REQUIRED');
+ assert.equal(calls.length,0);
+ const result=await a.run({actor:'PSC officer',confirmRun:true,
+  confirmCost:true,expectedSnapshotHash:p.snapshotHash,confirmBatchCount:2});
+ assert.equal(result.externalCalls,2);
+ assert.equal(result.batchesValidated,2);
+ assert.equal(result.candidatesAnalyzed,125);
+ assert.equal(result.recommendations.length,125);
+ assert.equal(new Set(result.recommendations.map(x=>x.candidateKey)).size,125);
+ assert.deepEqual(calls.map(c=>c.candidates.length),[100,25]);
+ assert.ok(calls.every(c=>c.pscQuotaSnapshot.modelMayOverrideQuota===false));
+ assert.equal(calls[0].requestMeta.batchCount,2);
+ assert.equal(calls[1].requestMeta.batchIndex,2);
+ assert.notEqual(calls[0].requestMeta.correlationId,
+   calls[1].requestMeta.correlationId,
+   'Airia batch requests must have distinct correlation IDs');
+ assert.equal(calls[0].requestMeta.parentCorrelationId,
+   calls[1].requestMeta.parentCorrelationId);
+ assert.ok(result.recommendations.every(x=>x.requiresHumanReview===true));
+});
+test('C01 discards all batch output when one Airia batch violates evidence contract',async()=>{
+ const dashboard={policy:{version:4},riskPolicyRevision:2,fleetSnapshotId:'PSC-FLEET',
+  candidates:Array.from({length:105},(_,i)=>candidate('multi-'+i,
+   'PSC_PORT_CALL',String(9400000+i),null))};
+ let seen=0;
+ const a=new SiCandidateAgent({provider:'airia',
+  targeting:{dashboard:async()=>dashboard},
+  executeAgent:async p=>{
+   seen++;
+   const payload=mockSiC01(p);
+   if(seen===2)payload.recommendations[0].evidenceRefs=['FORGED-EVIDENCE'];
+   return payload;
+  }});
+ const p=await a.preview();
+ await assert.rejects(()=>a.run({actor:'PSC officer',confirmRun:true,confirmCost:true,
+  expectedSnapshotHash:p.snapshotHash,confirmBatchCount:2}),
+  e=>e.code==='SI_C01_UNVERIFIED_RECOMMENDATION');
+ assert.equal(seen,2);
+ assert.equal(a.latest,null,'No partial recommendation set may be persisted');
+});

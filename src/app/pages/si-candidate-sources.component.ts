@@ -20,6 +20,8 @@ export class SiCandidateSourcesComponent implements OnInit,OnDestroy{
   source:SourcePage=null;
   status:SiSourceImportSummary|null=null;
   preview:SiImportPreview|null=null;
+  lastPscQuota:{selectedEvents?:number;eligibleEvents?:number;
+    automaticEvents?:number;ratePercent?:number;status?:string}|null=null;
   editorKey='MOEI_SESSION';actor='admin';selectedName='';selectedSize=0;
   busy=false;loading=false;error='';success='';
   private sub:Subscription|null=null;
@@ -40,7 +42,7 @@ export class SiCandidateSourcesComponent implements OnInit,OnDestroy{
       this.source=slug==='nmc'?'NMC_CASE':
         this.sources.find(x=>x.slug===slug)?.key||null;
       if(slug&&!this.source){this.router.navigate(['/moei/smart-inspection/settings/sources']);return;}
-      this.preview=null;this.error='';this.success='';
+      this.preview=null;this.lastPscQuota=null;this.error='';this.success='';
       if(this.editorKey.trim())this.refresh();
     });
   }
@@ -120,11 +122,13 @@ export class SiCandidateSourcesComponent implements OnInit,OnDestroy{
       previewId:p.previewId,sourceType:this.source,actor:this.actor.trim()
     }).subscribe({
       next:r=>{
-        this.preview=null;this.busy=false;this.success=
+        this.preview=null;this.busy=false;
+        this.lastPscQuota=r.pscQuota||null;
+        this.success=
           this.copy('Imported ','تم استيراد ')+r.importedEvents+
           this.copy(' new events; ',' حدث جديد؛ وتم تجاهل ')+r.duplicateEvents+
-          this.copy(' repeated events. Candidates now require officer review.',
-            ' حدث مكرر. المرشحون بانتظار مراجعة الموظف.');
+          this.copy(' repeated events. Published PSC quota is applied directly to saved events; officer inspection approval remains separate.',
+            ' حدث مكرر. طُبقت الحصة المنشورة على أحداث PSC المحفوظة تلقائيًا، واعتماد المعاينة ما زال قرارًا منفصلًا للمسؤول.');
         this.refresh();
       },error:e=>this.showError(e)
     });

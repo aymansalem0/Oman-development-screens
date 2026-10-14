@@ -1,7 +1,10 @@
 /**
  * SI-T00: Deterministic PSC Port Call targeting pool / scoped selection quota.
- * Port call != inspection candidate. Only Publisher-selected PSC events
- * enter Candidate Center and SI-P01. No AI calls or fabricated eligibility.
+ * A port call alone NEVER approves a statutory inspection. The published quota
+ * automatically shortlists eligible imported PSC events into Candidate Center
+ * for independent C01 AI advice and officer plan/inspection approval.
+ * Prior explicit Publisher decisions remain authoritative. No AI is called
+ * merely by importing Excel or opening the queue.
  * Quotas are POC operational policy, NOT statutory IMO/PSC selection rules.
  */
 import {randomUUID,createHash} from 'node:crypto';
@@ -52,6 +55,76 @@ function findBucket(event,config){
   if(!date||!port)return null;
   const location=config.scope==='NATIONAL'?'UAE_ALL_PORTS':port;
   return {period:date.period,port,location,key:date.period+'|'+location,etaMs:date.time};
+}
+/**
+ * Pure, no-write quota projection for imported PSC port-call events.
+ *
+ * - Published rate applied to actual eligible EVENT count, per UAE-local month
+ *   and the policy's NATIONAL/PER_PORT scope (floor, never round up).
+ * - Old explicit human SELECT / NOT_SELECT decisions remain honored.
+ * - Unreviewed events use a reproducible source-backed shortlist: saved NMC
+ *   vessel-risk assessment (if present), then ETA and stable event key.
+ *   This is PSC screening, NOT the SI inspection EXECUTION priority.
+ * - SI-C01 subsequently reviews this shortlist; AI cannot enlarge quota or
+ *   create an inspection case. No paid AI calls or automatic DB writes.
+ */
+export function projectPscQuotaShortlist({
+  events=[],config,decisions=[],riskByImo=new Map()
+}={}){
+ const validated=validPolicy(config);
+ if(!validated||!Array.isArray(events)||!Array.isArray(decisions))
+  throw new SiSelectionError('SI_SELECTION_POLICY_INVALID',422);
+ const latest=new Map(decisions.map(d=>[d.eventKey,d]));
+ const eligible=[];
+ for(const e of events){
+  if(e?.payload?.sourceType!=='PSC_PORT_CALL')continue;
+  const bucket=findBucket(e,validated);
+  if(!bucket)continue;
+  const rawRisk=riskByImo.get(e.payload.imo);
+  const nmcRisk=rawRisk&&Number.isFinite(rawRisk.riskScore)?rawRisk:null;
+  eligible.push({event:e,bucket,manualDecision:latest.get(e.eventKey)||null,nmcRisk});
+ }
+ const groups=new Map();
+ for(const item of eligible){
+  if(!groups.has(item.bucket.key))groups.set(item.bucket.key,[]);
+  groups.get(item.bucket.key).push(item);
+ }
+ const selectedKeys=new Set(),selectionMode=new Map(),summaries=[];
+ const compare=(a,b)=>
+  (b.nmcRisk?.riskScore??-1)-(a.nmcRisk?.riskScore??-1)||
+  a.bucket.etaMs-b.bucket.etaMs||
+  a.event.eventKey.localeCompare(b.event.eventKey);
+ for(const [key,items] of [...groups].sort(([a],[b])=>a.localeCompare(b))){
+  const [period,location]=key.split('|');
+  const rate=validated.portOverrides.find(x=>x.port===location)?.ratePercent??
+    validated.ratePercent;
+  const target=Math.floor(items.length*rate/100);
+  const explicit=items.filter(x=>x.manualDecision?.action==='SELECT');
+  const blocked=new Set(items.filter(x=>x.manualDecision?.action==='NOT_SELECT')
+    .map(x=>x.event.eventKey));
+  for(const x of explicit){
+    selectedKeys.add(x.event.eventKey);
+    selectionMode.set(x.event.eventKey,'OFFICER_SELECTED');
+  }
+  const available=items.filter(x=>!x.manualDecision&&!blocked.has(x.event.eventKey))
+    .sort(compare);
+  const automatic=available.slice(0,Math.max(0,target-explicit.length));
+  for(const x of automatic){
+    selectedKeys.add(x.event.eventKey);
+    selectionMode.set(x.event.eventKey,'RULE_SHORTLISTED');
+  }
+  summaries.push({bucket:key,period,port:location,eligiblePortCalls:items.length,
+    selectionRate:rate,targetCount:target,
+    selectedCount:explicit.length+automatic.length,
+    manuallySelectedCount:explicit.length,
+    automaticallyShortlistedCount:automatic.length,
+    remainingSlots:Math.max(0,target-explicit.length-automatic.length),
+    overQuota:explicit.length>target});
+ }
+ return {eligible,selectedKeys,selectionMode,summaries,latest,
+   automaticCount:[...selectionMode.values()].filter(x=>x==='RULE_SHORTLISTED').length,
+   source:'SAVED_EXCEL_EVENTS_AND_PUBLISHED_QUOTA_RULES',
+   aiCalls:0,inspectionApprovals:0};
 }
 export class SiPscSelection{
   constructor({targeting,mode='json',oracleRepository=null,
@@ -112,54 +185,42 @@ export class SiPscSelection{
   async policy(){
     const state=await this._state();return clone(state.policies.at(-1));
   }
+  async _effectiveSelection(){
+    const [state,candidateState,projection]=await Promise.all([
+      this._state(),this.targeting._state(),
+      this.targeting.riskPolicy.projectCurrent()
+    ]);
+    const riskByImo=new Map(projection.projections.filter(x=>x?.sourceAssessmentId)
+      .map(x=>[x.imo,x]));
+    return {state,candidateState,projection:projectPscQuotaShortlist({
+      events:candidateState.events,config:state.policies.at(-1).config,
+      decisions:state.decisions,riskByImo
+    })};
+  }
   async selectedEventKeys(){
-    const state=await this._state();
-    const latest=new Map(state.decisions.map(d=>[d.eventKey,d]));
-    return new Set([...latest.values()].filter(d=>d.action==='SELECT').map(d=>d.eventKey));
+    const selection=await this._effectiveSelection();
+    return selection.projection.selectedKeys;
   }
   async pool({period=null,port=null}={}){
-    const state=await this._state(),candidateState=await this.targeting._state(),
-      policy=state.policies.at(-1),config=policy.config;
-    const decisions=new Map(state.decisions.map(d=>[d.eventKey,d]));
-    const projection=await this.targeting.riskPolicy.projectCurrent();
-    const risk=new Map(projection.projections.filter(x=>x?.sourceAssessmentId).map(x=>[x.imo,x]));
-    const events=candidateState.events.filter(x=>x.payload.sourceType==='PSC_PORT_CALL');
-    const eligible=[];
-    for(const e of events){
-      const bucket=findBucket(e,config);
-      if(!bucket)continue; // Invalid/missing arrival is never implicitly eligible.
-      const savedRisk=risk.get(e.payload.imo)||null;
-      const last=decisions.get(e.eventKey)||null;
-      eligible.push({eventKey:e.eventKey,imo:e.payload.imo,
-        vesselName:this.targeting.bundles.find(v=>String(v.imo)===e.payload.imo)
-          ?.inlineContext?.vessel?.name||('IMO '+e.payload.imo),
-        port:e.payload.port,sourceReference:e.payload.sourceReference,
-        eta:e.payload.eta,period:bucket.period,bucket:bucket.key,
-        importedAt:e.createdAt,sourceFile:e.sourceImport?.fileName||null,
-        sourceExcelRow:e.sourceImport?.excelRow||null,
-        nmcRisk:savedRisk?{score:savedRisk.riskScore,level:savedRisk.riskLevel,
-          assessmentId:savedRisk.sourceAssessmentId}:null,
-        selectionStatus:last?.action==='SELECT'?'SELECTED':
-          last?.action==='NOT_SELECT'?'NOT_SELECTED':'IN_POOL',
-        selectionDecision:last,arrivalTime:bucket.etaMs});
-    }
-    const groups=new Map();
-    for(const row of eligible){
-      if(!groups.has(row.bucket))groups.set(row.bucket,[]);
-      groups.get(row.bucket).push(row);
-    }
-    const summaries=[...groups].sort(([a],[b])=>a.localeCompare(b)).map(([key,rows])=>{
-      const [p,location]=key.split('|'),
-        overridden=config.portOverrides.find(x=>x.port===location),
-        rate=overridden?.ratePercent??config.ratePercent,
-        target=Math.floor(rows.length*rate/100),
-        selected=rows.filter(r=>r.selectionStatus==='SELECTED').length;
-      return {bucket:key,period:p,port:location,eligiblePortCalls:rows.length,
-        selectionRate:rate,targetCount:target,selectedCount:selected,
-        remainingSlots:Math.max(0,target-selected),
-        overQuota:selected>target};
-    });
-    const byBucket=new Map(summaries.map(x=>[x.bucket,x]));
+    const {state,projection}=await this._effectiveSelection();
+    const policy=state.policies.at(-1),config=policy.config;
+    const eligible=projection.eligible.map(({event:e,bucket,nmcRisk,manualDecision})=>({
+      eventKey:e.eventKey,imo:e.payload.imo,
+      vesselName:this.targeting.bundles.find(v=>String(v.imo)===e.payload.imo)
+        ?.inlineContext?.vessel?.name||('IMO '+e.payload.imo),
+      port:e.payload.port,sourceReference:e.payload.sourceReference,
+      eta:e.payload.eta,period:bucket.period,bucket:bucket.key,
+      importedAt:e.createdAt,sourceFile:e.sourceImport?.fileName||null,
+      sourceExcelRow:e.sourceImport?.excelRow||null,
+      nmcRisk:nmcRisk?{score:nmcRisk.riskScore,level:nmcRisk.riskLevel,
+        assessmentId:nmcRisk.sourceAssessmentId}:null,
+      selectionStatus:manualDecision?.action==='SELECT'?'SELECTED':
+        manualDecision?.action==='NOT_SELECT'?'NOT_SELECTED':
+        projection.selectedKeys.has(e.eventKey)?'RULE_SHORTLISTED':'IN_POOL',
+      selectionOrigin:projection.selectionMode.get(e.eventKey)||'NOT_SHORTLISTED',
+      selectionDecision:manualDecision,arrivalTime:bucket.etaMs
+    }));
+    const summaries=projection.summaries;
     const ordered=[...eligible].sort((a,b)=>
       a.period.localeCompare(b.period)||a.bucket.localeCompare(b.bucket)||
       (b.nmcRisk?.score??-1)-(a.nmcRisk?.score??-1)||
@@ -168,8 +229,9 @@ export class SiPscSelection{
     for(const item of ordered){
       const rank=(rankCounter.get(item.bucket)||0)+1;
       rankCounter.set(item.bucket,rank);
-      const g=byBucket.get(item.bucket);
-      item.ruleRank=rank;item.ruleRecommended=rank<=g.targetCount;
+      item.ruleRank=rank;
+      item.ruleRecommended=item.selectionStatus==='RULE_SHORTLISTED'||
+        item.selectionStatus==='SELECTED';
       // Missing risk always identified as a data gap; no invented score.
       item.missingRisk=!item.nmcRisk;
     }
@@ -177,8 +239,12 @@ export class SiPscSelection{
       (!port||cleanPort(x.port)===cleanPort(port)));
     return {status:'ok',source:'PSC_PORT_CALL_EXCEL_POC_ONLY',policy,
       scope:config.scope,periodMode:config.period,
+      selectionMode:'AUTOMATIC_RULE_QUOTA_THEN_C01_ADVISORY',
+      aiCallOnRead:false,
       summary:{eligiblePortCalls:eligible.length,
-        selectedPortCalls:eligible.filter(x=>x.selectionStatus==='SELECTED').length,
+        selectedPortCalls:eligible.filter(x=>x.selectionStatus==='SELECTED'||
+          x.selectionStatus==='RULE_SHORTLISTED').length,
+        automaticallyShortlistedPortCalls:projection.automaticCount,
         inPoolPortCalls:eligible.filter(x=>x.selectionStatus==='IN_POOL').length,
         notSelectedPortCalls:eligible.filter(x=>x.selectionStatus==='NOT_SELECTED').length,
         distinctVessels:new Set(eligible.map(x=>x.imo)).size,

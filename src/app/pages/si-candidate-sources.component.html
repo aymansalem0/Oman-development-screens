@@ -16,6 +16,21 @@
 
     <p *ngIf="error" class="notice error" role="alert">{{error}}</p>
     <p *ngIf="success" class="notice success" role="status">{{success}}</p>
+    <div *ngIf="lastPscQuota as quota" class="notice info">
+      <strong>{{copy('PSC quota after Excel commit','حصة PSC بعد اعتماد Excel')}}</strong>
+      <ng-container *ngIf="quota.selectedEvents!==undefined">
+        · {{quota.selectedEvents}} / {{quota.eligibleEvents}}
+        {{copy('Port Call events shortlisted','حدث وصول مرشح')}}
+        · {{quota.automaticEvents}} {{copy('from published rules','بالقواعد المنشورة')}}
+        · {{quota.ratePercent}}% {{copy('default published rate','النسبة الأساسية المنشورة')}}
+      </ng-container>
+      <span *ngIf="quota.status==='READINESS_RECALCULATION_PENDING'">
+        {{copy('Source is saved; quota projection will be available when Candidate Center reloads.',
+          'تم حفظ المصدر، وسيظهر حساب الحصة عند تحديث مركز الترشيح.')}}
+      </span>
+      <a routerLink="/moei/smart-inspection/candidates">
+        {{copy('Open Candidate Center →','افتح مركز الترشيح ←')}}</a>
+    </div>
     <p *ngIf="loading" class="notice">{{copy('Loading source imports and approved NMC referrals…','جارٍ تحميل المصادر وإحالات NMC المعتمدة…')}}</p>
     <section class="access panel">
       <div>
@@ -44,15 +59,15 @@
         <div class="card-head"><span>⇧</span><span class="pill excel">{{copy('EXCEL · POC','Excel · تجريبي')}}</span></div>
         <h3>{{copy(s.en,s.ar)}}</h3>
         <p>{{s.key==='PSC_PORT_CALL'
-          ?copy('Import PSC arrival events to the targeting pool. The quota/selection stage decides which enter Candidate Center.',
-                'استورد إخطارات PSC إلى قائمة الاستهداف؛ والحصة وقرار الاختيار يحددان ما ينتقل إلى مركز المرشحين.')
+          ?copy('Import PSC events. Published monthly quota rules automatically shortlist eligible Port Calls for review directly in Candidate Center. SI-C01 analysis is requested separately.',
+                'استورد أحداث PSC. تُطبّق حصص الشهر المنشورة تلقائيًا لتظهر الأحداث المؤهلة في مركز الترشيح، ثم يُطلب تحليل SI-C01 بشكل مستقل.')
           :copy('Upload service requests for officer review in Candidate Center.',
                 'ارفع طلبات الخدمات لإتاحتها للمراجعة في مركز المرشحين.')}}</p>
         <strong>{{s.key==='PSC_PORT_CALL'
           ?(status?.excelSources?.[s.key]?.importedEvents??'—')
           :(status?.excelSources?.[s.key]?.candidateVessels??'—')}}</strong>
         <small>{{s.key==='PSC_PORT_CALL'
-          ?copy('Imported Port Call EVENTS (not automatically selected)','أحداث وصول مستوردة (لا تُختار تلقائيًا)')
+          ?copy('Imported Port Call events · quota applied in Candidate Center','أحداث وصول مستوردة · تُطبق الحصة داخل مركز الترشيح')
           :copy('Candidate vessels from source','سفن مرشحة من هذا المصدر')}}</small>
       </a>
     </section>
@@ -75,7 +90,7 @@
           'استيراد مصدر Excel · ليس تغذية حكومية رسمية')}}</small>
         <h2>{{nameFor(source)}}</h2>
         <p>{{copy('This upload creates POC source events only. Events remain UNVERIFIED and MANUAL_REVIEW until an officer makes a separate approval decision.',
-          'ينشئ الاستيراد أحداث مصدر تجريبية فقط؛ وتظل غير موثقة وتحتاج مراجعة بشرية حتى يصدر الموظف قرارًا منفصلًا.')}}</p>
+          'يُنشئ الاستيراد أحداث مصدر تجريبية؛ ثم تُطبّق حصة PSC المنشورة تلقائيًا لإدراج المرشحين للمراجعة. ولا تعتمد أي معاينة دون قرار المسؤول.')}}</p>
       </div>
 
       <div class="upload-grid">
