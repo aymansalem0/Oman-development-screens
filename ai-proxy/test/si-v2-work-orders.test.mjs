@@ -39,7 +39,7 @@ function fixture(){
    this.starts++;assert.equal(who,'POC Engineer One');
    return {version:1,templates:[{templateId:'MANDATORY-PSC',
      mandatory:true,groups:[{items:[{id:'psc-1',mandatory:true}]}]}]};
- },async preview(){return {saved:{version:1,templates:[{templateId:'MANDATORY-PSC'}]}}}};
+ },async preview(){return {selectedTemplates:[{templateId:'MANDATORY-PSC',mandatory:true,itemCount:1}],saved:{version:1,templates:[{templateId:'MANDATORY-PSC'}]}}}};
  const lc={
   async snapshot(){return {record:lifecycle.record?structuredClone(lifecycle.record):null};},
   async apply(_id,{action,data,actor:who,expectedVersion}){
