@@ -2,6 +2,7 @@ import {CommonModule} from '@angular/common';
 import {Component,OnInit,OnDestroy} from '@angular/core';
 import {FormsModule} from '@angular/forms';
 import {ActivatedRoute,RouterLink} from '@angular/router';
+import {HttpClient} from '@angular/common/http';
 import {NmcNavigationComponent} from '../components/nmc-navigation.component';
 import {LanguageService} from '../services/language.service';
 import {MoeiAuthService} from '../services/moei-auth.service';
@@ -12,6 +13,10 @@ import {SiChecklistsService,ChecklistPreview,ChecklistExecution,
 
 type AnswerValues=Partial<Record<CheckField,any>>;
 interface ReviewScope{level:AiLevel;templateId:string;groupId?:string;itemId?:string;label:string;}
+interface A04Additional{title:string;reason:string;evidenceIds?:string[];recommendationOnly?:boolean;}
+interface A04Dossier{saved?:{status:string;dossier?:{
+ suggestedAdditionalItems?:A04Additional[];source?:string;mock?:boolean;
+ }|null}|null;stale?:boolean;}
 @Component({
  selector:'app-si-checklist-execution',standalone:true,
  imports:[CommonModule,FormsModule,RouterLink,NmcNavigationComponent],
@@ -40,6 +45,23 @@ interface ReviewScope{level:AiLevel;templateId:string;groupId?:string;itemId?:st
     <div><span>{{t('Gross Tonnage (GT)','الحمولة الإجمالية GT')}}</span><strong>{{p.vessel.grossTonnage??'UNKNOWN'}}</strong></div>
     <div><span>{{t('Matched Published Templates','القوائم المنشورة المطابقة')}}</span><strong>{{p.selectedTemplates.length}}</strong></div>
    </div>
+   <section class="template ai-a04" *ngIf="a04AdditionalItems.length">
+    <header class="template-title">
+     <div><h2>✦ {{t('SI-A04 Suggested Additional Inspection Checklist',
+       'قائمة البنود الإضافية المقترحة بواسطة SI-A04')}}</h2>
+      <span class="badge">{{a04?.saved?.dossier?.mock?'POC MOCK':'AIRIA ADVISORY'}}</span>
+      <span class="badge">{{a04?.saved?.status||'DRAFT_REVIEW'}}</span></div>
+     <a [routerLink]="['/moei/smart-inspection/preparation',caseId]">
+       {{t('Review & Approve A04 Dossier','مراجعة واعتماد ملف A04')}}</a>
+    </header>
+    <p>{{t('These AI-proposed optional questions are not statutory mandatory checks. They are separate from the frozen published checklist and require supervisor dossier review and scope approval before official inclusion.',
+     'هذه البنود الاختيارية مقترحات AI وليست بنودًا إلزامية تنظيمية. تبقى مستقلة عن القائمة المنشورة وتحتاج اعتماد الدوسيه ونطاق المعاينة قبل إدراجها رسميًا.')}}</p>
+    <div *ngFor="let item of a04AdditionalItems" class="ai-a04-item">
+      <strong>{{item.title}}</strong><p>{{item.reason}}</p>
+      <small>{{t('Evidence references','مراجع الأدلة')}}:
+        {{(item.evidenceIds||[]).join(' · ')||'—'}}</small>
+    </div>
+   </section>
    <p class="notice warning" *ngFor="let warning of preview?.warnings">
     {{t('Applicability needs source review for','تحتاج شروط انطباق القائمة إلى مراجعة المصدر:')}}
     <b>{{warning.title}}</b> · {{warning.missing.join(', ')}}
@@ -205,6 +227,11 @@ interface ReviewScope{level:AiLevel;templateId:string;groupId?:string;itemId?:st
  .init p,.submit-bar span{font-size:12px;color:#65808d;line-height:1.8}
  .execution-header small{display:block;color:#718895;margin-top:5px}
  .template{background:#fff;border:1px solid #d3e4e5;border-radius:13px;padding:22px;margin:18px 0}
+ .ai-a04{border-color:#cbb6e4;background:#fbf9ff}
+ .ai-a04-item{padding:10px 0;border-top:1px solid #e1d6ef}
+ .ai-a04-item strong{display:block;color:#66418b}
+ .ai-a04-item p{font-size:12px;margin:4px 0}
+ .ai-a04-item small{color:#65808b}
  .template-title,.group-head,.item-head,.assistant-head{display:flex;justify-content:space-between;align-items:center;gap:16px}
  .badge{background:#e9f5f0;border-radius:15px;color:#147361;font-size:10px;padding:5px 9px;margin:4px}
  .group{border:1px solid #dde8e8;border-radius:11px;background:#f9fcfc;padding:15px;margin:18px 0}
@@ -238,6 +265,10 @@ interface ReviewScope{level:AiLevel;templateId:string;groupId?:string;itemId?:st
 })
 export class SiChecklistExecutionComponent implements OnInit,OnDestroy{
  caseId='';preview:ChecklistPreview|null=null;execution:ChecklistExecution|null=null;
+ a04:A04Dossier|null=null;
+ get a04AdditionalItems():A04Additional[]{
+  return this.a04?.saved?.dossier?.suggestedAdditionalItems||[];
+ }
  aiStatus:{visionConfigured:boolean}|null=null;
  loading=false;busy=false;error='';message='';
  answers:Record<string,AnswerValues>={};currentAi:ReviewScope|null=null;
@@ -245,7 +276,7 @@ export class SiChecklistExecutionComponent implements OnInit,OnDestroy{
  proposal:ChecklistProposal|null=null;reviewEdits:Record<string,string>={};
  private sub:any;
  constructor(private route:ActivatedRoute,private api:SiChecklistsService,
-  public lang:LanguageService,public auth:MoeiAuthService){}
+  private http:HttpClient,public lang:LanguageService,public auth:MoeiAuthService){}
  t(en:string,ar:string){return this.lang.pick(en,ar);}
  ngOnInit():void{
   this.sub=this.route.paramMap.subscribe(p=>{
@@ -255,7 +286,10 @@ export class SiChecklistExecutionComponent implements OnInit,OnDestroy{
  }
  ngOnDestroy():void{this.sub?.unsubscribe();}
  reload():void{
-  if(!this.caseId)return;this.loading=true;this.error='';
+  if(!this.caseId)return;this.loading=true;this.error='';this.a04=null;
+  this.http.get<A04Dossier>('/api/si/v1/preparations/'+
+   encodeURIComponent(this.caseId)).subscribe({
+    next:r=>this.a04=r,error:()=>this.a04=null});
   this.api.preview(this.caseId).subscribe({
    next:p=>{this.preview=p;this.execution=p.saved;this.loading=false;
     this.copyAnswers();},
