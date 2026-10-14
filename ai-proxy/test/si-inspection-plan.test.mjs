@@ -72,6 +72,10 @@ test('GET plan: source-backed all vessel rows, no automatic C01 call or invented
   assert.equal(s.aiRecommendedVessels,null);
   assert.equal(s.selectedForPlan,null);
   assert.equal(s.externalCallsOnRead,0);
+  assert.equal(s.dataReadiness.externalAiCalls,0);
+  assert.equal(s.dataReadiness.eligibleVessels,3);
+  assert.equal(s.dataReadiness.eligibleWorkflows,3);
+  assert.equal(s.dataReadiness.missingConfirmedEtdVessels,3);
   assert.equal(s.approvedCases,1);
   assert.equal(e.calls.length,0);
   assert.equal(existsSync(e.file),false);
