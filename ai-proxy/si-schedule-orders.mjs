@@ -354,6 +354,13 @@ export class SiScheduleOrders{
      prepared.saved.status==='DRAFT_REVIEW'?'A04_DRAFT_REVIEW_PENDING':
       'NOT_REQUESTED';
     if(generateAi&&prepared.saved.status==='PREPARED'){
+     // An interrupted paid A04 request is never replayed automatically.
+     // Reconcile the Airia run and saved dossier before manually requesting
+     // another call, even after container restart.
+     if(order.aiStatus==='A04_REQUESTED_NO_AUTOMATIC_RETRY'){
+      order.aiStatus='A04_PREVIOUS_REQUEST_RECONCILIATION_REQUIRED';
+      await this.saveOrder(schedule,order,'A04_RETRY_BLOCKED',actor);
+     }else{
      const safeAi=await this.preparation.get(caseId);
      if(!safeAi.canGenerate){
       order.aiStatus='A04_BLOCKED_SOURCE_RISK_OR_PROVIDER';
@@ -372,6 +379,7 @@ export class SiScheduleOrders{
        order.aiStatus='A04_FAILED_MANUAL_REVIEW_REQUIRED';
        order.aiError=e.code||'SI_A04_PROVIDER_FAILURE';
       }
+     }
      }
     }
     order.status='READY_FOR_SCOPE_REVIEW';order.error=null;
@@ -398,8 +406,18 @@ export class SiScheduleOrders{
   if(includeAiSuggestions&&prep.saved?.status!=='APPROVED')
    err('SI_WORK_ORDER_A04_ADDITIONS_NOT_REVIEWED',409);
   const curr=await this.lifecycle.snapshot(order.caseId);
-  if(curr.record?.stage!=='PREPARATION_READY')
+  // Recover from a crash after the authoritative lifecycle applied scope
+  // approval / ASSIGN but before the order projection was updated.
+  if(curr.record?.stage==='ASSIGNED'||curr.record?.stage==='IN_FIELD'){
+   order.scopeStatus='MANUAL_SCOPE_APPROVED';
+   order.status=curr.record.stage==='IN_FIELD'?'FIELD_STARTED':'READY_FOR_FIELD';
+   await this.saveOrder(schedule,order,'ORDER_RECOVERED_FROM_LIFECYCLE',actor);
+   return clone(order);
+  }
+  if(!['PREPARATION_READY','SCOPE_APPROVED'].includes(curr.record?.stage))
    err('SI_WORK_ORDER_LIFECYCLE_SCOPE_CONFLICT',409);
+  if(includeAiSuggestions&&curr.record.stage!=='PREPARATION_READY')
+   err('SI_WORK_ORDER_SCOPE_ALREADY_APPROVED',409);
   if(includeAiSuggestions){
    const names=(prep.saved.dossier?.suggestedAdditionalItems||[])
      .slice(0,12).map(x=>x.title).filter(Boolean);
@@ -408,9 +426,9 @@ export class SiScheduleOrders{
     data:{additions:names}});
   }
   const newState=await this.lifecycle.snapshot(order.caseId);
-  await this.lifecycle.apply(order.caseId,{action:'APPROVE_SCOPE',
-   expectedVersion:newState.record.version,actor,
-   data:{reason}});
+  if(newState.record.stage==='PREPARATION_READY')
+   await this.lifecycle.apply(order.caseId,{action:'APPROVE_SCOPE',
+    expectedVersion:newState.record.version,actor,data:{reason}});
   const approved=await this.lifecycle.snapshot(order.caseId);
   await this.lifecycle.apply(order.caseId,{action:'ASSIGN',
    expectedVersion:approved.record.version,actor,
