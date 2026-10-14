@@ -174,3 +174,46 @@ test('approval refuses unscheduled vessels, stale hash and colliding inspector s
   assert.equal((await x.orders.all()).length,1);
  }finally{x.done();}
 });
+
+test('PR125 inspector roster is limited to ERP identity mapping on PR124 canonical orders',async()=>{
+ const previous=process.env.SI_V2_INSPECTOR_IDENTITY_MAP_JSON;
+ process.env.SI_V2_INSPECTOR_IDENTITY_MAP_JSON=
+  JSON.stringify({'engineer@moei.example':'ENG-1','another@moei.example':'ENG-99'});
+ const x=workspace();
+ try{
+  const saved=await x.approve(),orderId=saved.orders[0].id;
+  assert.equal((await x.orders.mine('stranger@moei.example')).length,0);
+  assert.equal((await x.orders.mine('another@moei.example')).length,0);
+  const assigned=await x.orders.mine('engineer@moei.example');
+  assert.equal(assigned.length,1);
+  assert.equal(assigned[0].orderId,orderId);
+  assert.equal(assigned[0].planId,x.p.id);
+  await x.orders.activate({planId:x.p.id,orderId,actor:'supervisor@moei'});
+  await x.orders.approveScope({planId:x.p.id,orderId,
+   actor:'supervisor@moei',reason:'Mandated items independently reviewed'});
+  await assert.rejects(()=>x.orders.startField({
+   planId:x.p.id,orderId,actor:'supervisor@moei'}),
+   e=>e.code==='SI_WORK_ORDER_ONLY_ASSIGNED_INSPECTOR_CAN_START');
+  const started=await x.orders.startField({
+   planId:x.p.id,orderId,actor:'engineer@moei.example',confirmPocDelegation:false});
+  assert.equal(started.status,'FIELD_STARTED');
+  assert.equal(started.startedByInspectorId,'ENG-1');
+  assert.equal(started.pocDelegated,false);
+ }finally{
+  x.done();
+  if(previous===undefined)delete process.env.SI_V2_INSPECTOR_IDENTITY_MAP_JSON;
+  else process.env.SI_V2_INSPECTOR_IDENTITY_MAP_JSON=previous;
+ }
+});
+test('non-MOCK schedule cannot use supervisor POC delegation for field start',async()=>{
+ const x=workspace();
+ try{
+  const saved=await x.approve({demoMode:false}),orderId=saved.orders[0].id;
+  await x.orders.activate({planId:x.p.id,orderId,actor:'supervisor@moei'});
+  await x.orders.approveScope({planId:x.p.id,orderId,
+   actor:'supervisor@moei',reason:'Mandatory items approved'});
+  await assert.rejects(()=>x.orders.startField({
+   planId:x.p.id,orderId,actor:'supervisor@moei',confirmPocDelegation:true}),
+   e=>e.code==='SI_POC_DELEGATION_ONLY_FOR_MOCK_SCHEDULE');
+ }finally{x.done();}
+});
