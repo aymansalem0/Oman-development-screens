@@ -1279,6 +1279,15 @@ const server = createServer(async (req, res) => {
         }
         return respond(res,200,{status:'ok',...validated});
       }
+      // Signed-in inspector work orders, projected only from canonical Oracle 019.
+      if(path==='/api/si/v1/maritime-scheduling/my-work-orders'&&req.method==='GET'){
+        if(!siScheduleOrders.ready)
+          return respond(res,503,{error:'SI_SCHED_MIGRATION_019_REQUIRED'});
+        dashboards.assertRole(req,'EDITOR');
+        const identity=moeiAuth.require(req);
+        const actor=identity.email||identity.username;
+        return respond(res,200,{status:'ok',orders:await siScheduleOrders.mine(actor)});
+      }
       // SI-S02: supervisor schedule approval -> traceable per-vessel engineer
       // work orders -> mandatory checklist initialization -> separately
       // reviewed A04 additions -> explicit inspector start. Oracle migration
@@ -1291,9 +1300,9 @@ const server = createServer(async (req, res) => {
           orderId=workRoute[3],orderAction=workRoute[4];
         const supervisor=operation==='approve'||orderAction==='scope';
         dashboards.assertRole(req,supervisor?'PUBLISHER':'EDITOR');
-        const identity=moeiAuth.session(req);
-        const actor=identity?.email||identity?.username||req.moeiUser?.email||
-          'POC_AUTHENTICATED_OPERATOR';
+        const identity=moeiAuth.require(req,{mutate:req.method==='POST'});
+        const actor=identity.email||identity.username;
+        if(!actor)return respond(res,403,{error:'SI_WORK_ORDER_AUTHENTICATED_OPERATOR_REQUIRED'});
         if(req.method==='GET'&&operation==='work-orders'&&!orderId){
           const value=await siScheduleOrders.byPlan(planId);
           return respond(res,200,{status:'ok',schedule:value});
@@ -1349,10 +1358,13 @@ const server = createServer(async (req, res) => {
             result=await siScheduleOrders.approveScope({
               planId,orderId,actor,reason:data.reason,
               includeAiSuggestions:data.includeAiSuggestions===true});
-          else if(orderAction==='start')
+          else if(orderAction==='start'){
+            // POC mock delegation is an explicit publisher-supervisor action.
+            if(data.confirmPocDelegation===true)dashboards.assertRole(req,'PUBLISHER');
             result=await siScheduleOrders.startField({
               planId,orderId,actor,
               confirmPocDelegation:data.confirmPocDelegation===true});
+          }
           else return respond(res,405,{error:'METHOD_NOT_ALLOWED'});
           return respond(res,200,{status:'ok',order:result,
             fieldRoute:result.caseId?
@@ -1623,7 +1635,7 @@ const server = createServer(async (req, res) => {
           ...(Number.isInteger(e.returnedCount)?{returnedCount:e.returnedCount}:{}),
           ...(Number.isInteger(e.batchIndex)?{batchIndex:e.batchIndex}:{}),
           ...(Number.isInteger(e.batchCount)?{batchCount:e.batchCount}:{})});
-      if(e instanceof SiError||e instanceof SiPocAdvisorError||e instanceof SiRollingPlanError||e instanceof SiBulkApprovalError||e instanceof SiCandidateAgentError||e instanceof SiLifecycleError||e instanceof SiSelectionError||e instanceof SiPriorityError||e instanceof SiPreparationError||e instanceof SiWorkOrderError||e instanceof SiTargetingError||e instanceof DashboardError)
+      if(e instanceof SiError||e instanceof SiPocAdvisorError||e instanceof SiRollingPlanError||e instanceof SiBulkApprovalError||e instanceof SiCandidateAgentError||e instanceof SiLifecycleError||e instanceof SiSelectionError||e instanceof SiPriorityError||e instanceof SiPreparationError||e instanceof SiWorkOrderError||e instanceof SiTargetingError||e instanceof MoeiAuthError||e instanceof DashboardError)
         return respond(res,e.status,{error:e.code});
       if(Number.isInteger(e?.status)&&e.status>=400&&e.status<500)
         return respond(res,e.status,{error:'SI_REQUEST_INVALID'});
