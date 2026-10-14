@@ -72,7 +72,7 @@ interface ApprovedSchedule{
 })
 export class SiMaritimeBatchSchedulingComponent implements OnInit{
  context:Context|null=null;proposal:Proposal|null=null;baselineProposal:Proposal|null=null;
- demoMode=true;
+ readonly demoMode=true; // POC demo data always enabled on this presentation screen.
  aiAdvice:S01Response|null=null;loading=false;busy=false;aiBusy=false;
  scheduleBusy=false;orderBusyId:string|null=null;error='';notice='';
  workOrdersError='';approvedSchedule:ApprovedSchedule|null=null;
@@ -224,10 +224,6 @@ export class SiMaritimeBatchSchedulingComponent implements OnInit{
     },
     error:e=>{this.orderBusyId=null;this.showError(e);this.loadWorkOrders();}
    });
- }
- useDemoMode(enabled:boolean):void{
-  if(this.busy||this.aiBusy||this.loading)return;
-  this.demoMode=enabled;this.loadContext();
  }
  loadContext():void{
   const id=this.route.snapshot.paramMap.get('planId');
