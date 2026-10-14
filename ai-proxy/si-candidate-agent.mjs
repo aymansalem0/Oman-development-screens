@@ -352,7 +352,12 @@ export class SiCandidateAgent{
    for(let i=0;i<batchCount;i++){
      const subset=s.candidates.slice(i*batchSize,(i+1)*batchSize);
      const batch={...payload,
-       requestMeta:{...payload.requestMeta,batchIndex:i+1,batchCount},
+       requestMeta:batchCount===1?payload.requestMeta:{
+         ...payload.requestMeta,
+         parentCorrelationId:payload.requestMeta.correlationId,
+         correlationId:'SI-C01-'+randomUUID(),
+         batchIndex:i+1,batchCount
+       },
        candidates:subset};
      const scope={...s,candidates:subset};
      let raw;
