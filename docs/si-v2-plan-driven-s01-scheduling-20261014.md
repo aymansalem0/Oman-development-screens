@@ -39,6 +39,31 @@ The feasibility engine must verify qualifications for each regime, shift capacit
 
 For large rosters the bounded heuristic is not guaranteed globally optimal. The 500-vessel cap is only technical input validation; actual ERP capacity may leave many vessels unscheduled. **Schedule approval, Oracle reservation ledger Migration 019, case creation and dossier dispatch are NOT provided by this PR**; these are subsequent work items, do not activate incomplete Migration 019 from another branch.
 
+
+## Complete, synthetic POC presentation data (NEW)
+
+The page defaults to **Use complete POC mock data** for demonstrations, while retaining a switch back to the imported raw ERP dataset. The feature is permitted only when `SI_SCHEDULING_DEMO_MODE=true` (local POC Compose defaults to true; set `false` for any non-demo installation). Turning it off restores untouched source data and original absence/constraints. Production regulator booking and approvals do not use demo projections.
+
+**Missing facts filled from saved source first, then explicitly tagged presentation fixtures:**
+
+| Required scheduling input | Controlled POC action |
+|---|---|
+| Approved IMOs, regimes, NMC/PSC/service triggers | **Always** original approved Inspection Plan; never fabricate a candidate or approval |
+| Known source-final port, ETA and ETD | Preserve and lock, retain original provenance; no source-final-date tampering |
+| Missing port | Choose a port from currently imported ACTIVE ERP ports, honoring a matching POC_Requests port when present |
+| Missing arrival/start or departure/deadline | Generate deterministic future UAE local planning windows per vessel; `POC_DEMO` source marker and source-bound DEMO reference |
+| Berth / exact location / access | Fill explicitly synthetic berth and synthetic access confirmation, clearly labelled **POC MOCK**, not a verified berth |
+| Visit duration and type | Preserve stored values, otherwise synthetic PSC 180-minute / other 120-minute duration |
+| Inspector qualifications, shifts, active ports, capacity, travel | Generate an **independent in-memory ERP mock snapshot** with 8+ fictional demo inspector identities, valid demo scope qualifications, seven-day shifts, port access and travel |
+| Leave/blackouts/bookings | Synthetic unbooked/free schedule for POC; never mutate the original uploaded Excel rows |
+| Plan / slot evidence to Airia | Source-bound slot hashes and `demoMode:true`, visible statement that engineering availability and site data are fictitious |
+
+All calculations still run through the same ERP constraint solver and keep no automatic booking, case creation or statutory approval. No Airia calls on page load. Clicking AI first performs the free availability check, then requires separate confirmation before a **potentially billable** real SI-S01 Airia call. Real SI-S01 recommendations using mock data remain **demo advisory results**, not evidence of actual inspector availability.
+
+**API:** GET `/api/si/v1/maritime-scheduling/plans/:id/context?demo=1` returns labelled, completed POC context. POST `/preview` and `/ai-recommend` accept `demoMode:true`; the Backend regenerates the mock ERP overlay from the **current saved** source and compares request fields and the proposal hash against the server copy. Arbitrary mock refs, changed imported ETD, or switching paid-call inputs to a different overlay are rejected. No new database tables or data migrations.
+
+**Acceptance test:** `node --test ai-proxy/test/si-scheduling-poc-fixtures.test.mjs`. Covers the three Golden demo vessels, complete visit fields, stable future windows, imported-source immutability, no modifications to original ERP and actual feasible scheduling results using synthetic personnel.
+
 ## Local activation and safe test
 
 ```powershell
