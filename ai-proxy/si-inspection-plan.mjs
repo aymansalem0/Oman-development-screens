@@ -11,7 +11,7 @@
 import {readFileSync,writeFileSync,existsSync,mkdirSync,renameSync} from 'node:fs';
 import {dirname} from 'node:path';
 import {randomUUID} from 'node:crypto';
-import {SiCandidateAgentError} from './si-candidate-agent.mjs';
+import {SiCandidateAgentError,summarizeC01Readiness} from './si-candidate-agent.mjs';
 import {compareInspections,inspectionRanking} from './si-inspection-ranking.mjs';
 
 const iso=()=>new Date().toISOString();
@@ -169,6 +169,7 @@ export class SiInspectionPlan{
    agentRunId:current?.agentRunId||null,
    selectionMode:current?.agentRunId?'AI_ASSISTED':'MANUAL',
    manualSelection,availableCount,deferredCount,notSelectedCount,
+   dataReadiness:summarizeC01Readiness(source),
    candidatesAtCreation:cycle?.candidateSnapshot?.length??null,
    stale:!historical&&(changed||
      Boolean(cycle?.selectionSourceHash&&cycle.selectionSourceHash!==source.snapshotHash)),
