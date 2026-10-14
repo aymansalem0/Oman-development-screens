@@ -93,6 +93,9 @@ export class SiCandidateWorkbenchComponent implements OnInit{
   }
 
   planBusy=false;planError='';planNotice='';
+  // The API is synchronous per call; never pretend that intermediate AI steps
+  // or a percentage are known. Indeterminate status remains truthful.
+  planAiPhase:'idle'|'analyzing'|'updating'='idle';
   expandedImo='';planEditingImo='';
   planSelection=true;planReason='';planRequestedRank:number|null=null;
   get planLookup():Map<string,SiInspectionPlanRow>{
@@ -170,9 +173,16 @@ export class SiCandidateWorkbenchComponent implements OnInit{
     }
     this.planBusy=true;this.planError='';
     this.api.inspectionPlan(this.editorKey.trim(),this.activePlanId).subscribe({
-      next:x=>{this.plan=x;this.planBusy=false;},
-      error:e=>{this.planBusy=false;this.planError=(e as {error?:{error?:string}})
-        ?.error?.error||'SI_INSPECTION_PLAN_UNAVAILABLE';}
+      next:x=>{this.plan=x;this.planBusy=false;
+        if(this.planAiPhase==='updating')this.planAiPhase='idle';},
+      error:e=>{this.planBusy=false;
+        if(this.planAiPhase==='updating'){
+          this.planAiPhase='idle';
+          this.planError=this.copy(
+            'AI results were received, but the saved plan could not be refreshed. Reload the plan before proceeding.',
+            'وصلت نتيجة التحليل، لكن تعذر تحديث عرض الخطة المحفوظة. أعد تحميل الخطة قبل المتابعة.');
+        }else this.planError=(e as {error?:{error?:string}})
+          ?.error?.error||'SI_INSPECTION_PLAN_UNAVAILABLE';}
     });
   }
   generateInspectionPlan():void{
@@ -217,29 +227,34 @@ export class SiCandidateWorkbenchComponent implements OnInit{
     const message=mock?
       this.copy('Confirm officer planning change and re-run MOCK C01 with zero Airia calls? No official inspection case will be changed.',
         'تأكيد تعديل خطة المعاينات وإعادة ترتيب MOCK C01 دون اتصال Airia؟ لن تتغير حالات المعاينة الرسمية.'):
-      this.copy('This will trigger ONE possibly billable Airia SI-C01 request. Confirm before proceeding?',
-        'هذا سيشغل طلب Airia مدفوعاً محتملاً. هل تؤكد؟');
+      this.copy('Run ONE real Airia SI-C01 analysis of the current saved candidates? This provides advice only; continue?',
+        'تشغيل تحليل Airia الحقيقي مرة واحدة للسفن المرشحة المحفوظة؟ التوصيات استشارية فقط، هل تستمر؟');
     if(!window.confirm(message))return;
     this.planBusy=true;this.planError='';this.planNotice='';
+    this.planAiPhase='analyzing';
     this.api.rerankInspectionPlan(this.editorKey.trim(),{
       actor:this.reviewer.trim(),planId:this.activePlanId,expectedSourceHash:this.plan.sourceHash,
       expectedRevision:this.plan.revision,confirmRun:true,confirmCost:!mock,
       ...(change?{change}:{})
     }).subscribe({
       next:r=>{
-        this.planBusy=false;this.cancelPlanEdit();this.loadRollingPlans();
+        this.planAiPhase='updating';
+        this.cancelPlanEdit();this.loadRollingPlans();
         this.planNotice=this.copy(
-         'C01 '+r.provider+' recomputed the inspection plan. Officer approval is still required for actual inspection cases.',
-         'أعاد C01 '+r.provider+' ترتيب خطة المعاينات، ولا يزال اعتماد حالات المعاينة رسمياً من صلاحية الموظف.');
+         'C01 '+r.provider+' completed the advisory analysis. Supervisor approval is still required.',
+         'أكمل C01 التحليل الاستشاري. لا تزال موافقة المشرف مطلوبة.');
         this.loadInspectionPlan();
       },
       error:e=>{
-        this.planBusy=false;
-        const failure=(e as {error?:{error?:string;reasonCode?:string}})?.error;
-        const code=failure?.error||'SI_PLAN_RECALCULATION_FAILED';
-        const reason=failure?.reasonCode;
-        this.planError=code+(reason&&/^[A-Z0-9_]+$/.test(reason)?' — '+reason:'');
-        if(this.planError.includes('CHANGED'))this.loadInspectionPlan();
+        this.planAiPhase='idle';this.planBusy=false;
+        const code=(e as {error?:{error?:string}})?.error?.error||'';
+        const changed=code.includes('CHANGED')||code.includes('STALE');
+        this.planError=changed?
+          this.copy('Source data changed during analysis. Reload the plan before retrying.',
+            'تغيرت بيانات المصادر أثناء التحليل؛ أعد تحميل الخطة قبل إعادة المحاولة.'):
+          this.copy('The AI recommendation could not be verified against the saved vessel sources. No plan was changed. Review source data or ask the administrator to check the Airia contract before retrying.',
+            'تعذر التحقق من توصيات الذكاء الاصطناعي مقابل مصادر بيانات السفن المحفوظة. لم تتغير الخطة. راجع بيانات المصادر أو اطلب فحص تكامل Airia قبل إعادة المحاولة.');
+        if(changed)this.loadInspectionPlan();
       }
     });
   }
@@ -291,8 +306,8 @@ export class SiCandidateWorkbenchComponent implements OnInit{
     const prompt=isMock?
       this.copy('Generate a MOCK C01 advisory with zero Airia calls? It cannot approve an inspection.',
         'إنشاء توصية C01 تجريبية دون تشغيل Airia؟ لا تعتمد أي معاينة.'):
-      this.copy('Run one potentially PAID SI-C01 Airia call? Advice only; human approval required.',
-        'تشغيل SI-C01 على Airia مع احتمال تكلفة؟ يتطلب اعتماداً بشرياً.');
+      this.copy('Run one real SI-C01 Airia analysis? Advice only; human approval required.',
+        'تشغيل تحليل SI-C01 الحقيقي على Airia؟ يتطلب اعتماداً بشرياً.');
     if(!window.confirm(prompt))return;
     this.c01Busy=true;this.c01Error='';this.c01Message='';
     this.api.candidateAiRun(this.editorKey.trim(),{

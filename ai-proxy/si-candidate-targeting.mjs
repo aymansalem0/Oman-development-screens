@@ -327,16 +327,17 @@ export class SiCandidateTargeting{
    * decisions: PSC and Service Requests are different statutory workflows.
    * A single vessel may have multiple source events and multiple actions.
    */
-  _vesselCandidates(candidates,incidentSignals=new Map()){
+  _vesselCandidates(candidates,incidentSignals=new Map(),operationalEvents=[]){
     const vessels=new Map();
     for(const c of candidates){
       let item=vessels.get(c.imo);
       if(!item){
         item={imo:c.imo,vesselName:c.vesselName,flag:c.flag,
           vesselType:c.vesselType,currentRisk:c.currentRisk,
-          departureAt:null,departureVerified:false,
+          departureAt:null,departureVerified:false,departureStatus:'MISSING',
           incidentSeverity:null,incidentHumanReviewed:false,incidentEvidenceRef:null,
           candidateKeys:[],regimes:[],sourceTypes:[],sourceEvents:[],
+          operationalSourceEvents:[],
           workflows:[],pendingWorkflows:0,createdWorkflows:0,
           scheduledWorkflows:0,highestPriority:'RISK_UNASSESSED',
           eligibility:'MANUAL_REVIEW'};
@@ -371,12 +372,45 @@ export class SiCandidateTargeting{
       item.sourceEvents.sort((a,b)=>sourceOrder.indexOf(a.sourceType)-
         sourceOrder.indexOf(b.sourceType)||
         a.sourceReference.localeCompare(b.sourceReference));
-      const departures=item.sourceEvents.filter(e=>e.departureVerified&&
+      // MSW arrival/departure records are operational evidence whether or not
+      // a PSC candidate was separately admitted into the inspection pool.
+      // Such events may inform ETD but NEVER create/approve a PSC inspection.
+      item.operationalSourceEvents=operationalEvents.filter(e=>
+        e?.payload?.imo===item.imo&&
+        ['SERVICE_REQUEST','PSC_PORT_CALL'].includes(e.payload.sourceType)&&
+        ['SOURCE_FINAL','SOURCE_REVIEWED'].includes(e.payload.sourceApprovalStatus))
+       .map(e=>({
+        eventKey:e.eventKey,sourceType:e.payload.sourceType,
+        sourceEventId:e.payload.sourceEventId,
+        sourceReference:e.payload.sourceReference,
+        provenance:e.payload.provenance,approval:e.payload.sourceApprovalStatus,
+        port:e.payload.port||null,eta:e.payload.eta||null,
+        departureAt:e.payload.departureAt||null,
+        departureVerified:Boolean(e.payload.departureAt),
+        departureAuthority:e.payload.sourceApprovalStatus,
+        evidenceIds:e.payload.evidenceIds||[],
+        importFile:e.sourceImport?.fileName||null,
+        importBatchId:e.sourceImport?.batchId||null,
+        importExcelRow:e.sourceImport?.excelRow||null
+      }));
+      const allDepartureEvidence=new Map([
+        ...item.sourceEvents,...item.operationalSourceEvents].map(e=>[e.eventKey,e]));
+      const departures=[...allDepartureEvidence.values()].filter(e=>e.departureVerified&&
           typeof e.departureAt==='string'&&Number.isFinite(Date.parse(e.departureAt))&&
           Date.parse(e.departureAt)>=Date.now()).sort((a,b)=>
             Date.parse(a.departureAt)-Date.parse(b.departureAt));
-      if(departures.length){
-        item.departureAt=departures[0].departureAt;item.departureVerified=true;
+      // A ship can have multiple saved MSW source events, including legacy
+      // imports. Conflicting active ETDs/ports must NEVER be silently ranked
+      // using the earliest arbitrary value.
+      const distinctDepartures=new Set(departures.map(e=>
+        new Date(Date.parse(e.departureAt)).toISOString()+'|'+
+        String(e.port||'').trim().toUpperCase()));
+      if(distinctDepartures.size>1){
+        item.departureStatus='CONFLICT';
+        item.departureAt=null;item.departureVerified=false;
+      }else if(departures.length){
+        item.departureAt=departures[0].departureAt;
+        item.departureVerified=true;item.departureStatus='VERIFIED';
       }
       const incident=incidentSignals.get(item.imo);
       if(incident&&incident.humanReviewed===true&&
@@ -415,7 +449,7 @@ export class SiCandidateTargeting{
         }
       }catch{incidentSignals=new Map();}
     }
-    const vesselCandidates=this._vesselCandidates(candidates,incidentSignals);
+    const vesselCandidates=this._vesselCandidates(candidates,incidentSignals,state.events);
     const summary={evaluatedPopulation:this.bundles.length,assessedRiskVessels:risks.size,
       candidateVessels:vesselCandidates.length,
       pendingVessels:vesselCandidates.filter(v=>v.pendingWorkflows>0).length,

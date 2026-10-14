@@ -106,8 +106,12 @@
           <p>{{copy('One vessel per IMO, source-aware. Remove, include or reprioritise in the plan with a reason. Official inspection approvals use one supervisor decision for the entire selected plan.',
               'صف واحد لكل سفينة ومصادرها. يمكن الاستبعاد أو الإدراج أو تعديل ترتيب الأولوية مع تسجيل السبب؛ تعتمد جميع السفن المختارة بقرار مشرف واحد.')}}</p>
         </div>
-        <span class="si-plan-mode">{{providerLabel}}
-          · {{plan?.generatedAt?(plan?.generatedAt|date:'short'):copy('Not evaluated','لم تُقيّم')}}</span>
+        <span class="si-plan-mode" [class.si-ai-active]="planAiPhase!=='idle'" aria-live="polite">
+          {{planAiPhase==='analyzing'?copy('AIRIA · Analysing candidates…','Airia · جاري تحليل السفن…'):
+            planAiPhase==='updating'?copy('Updating plan…','جاري تحديث الخطة…'):
+            providerLabel+' · '+
+            (plan?.generatedAt?(plan?.generatedAt|date:'short'):copy('Not evaluated','لم تُقيّم'))}}
+        </span>
       </header>
 
       <div class="si-compact-credentials">
@@ -115,13 +119,32 @@
         <button type="button" (click)="loadInspectionPlan()" [disabled]="planBusy||loading">
           {{copy('Load Plan','تحميل الخطة')}}</button>
         <button type="button" class="primary" (click)="generateInspectionPlan()"
-                [disabled]="planBusy||loading||!plan||!activePlanEditable">
-          {{plan?.agentRunId?copy('Re-run AI Selection & Priority','إعادة حساب اختيار وترتيب AI'):
+                [disabled]="planBusy||loading||!plan||!activePlanEditable"
+                [attr.aria-busy]="planAiPhase!=='idle'">
+          <span *ngIf="planAiPhase!=='idle'" class="si-analysis-spinner" aria-hidden="true"></span>
+          {{planAiPhase==='analyzing'?copy('AI analysing priority…','AI يحلل الأولويات…'):
+            planAiPhase==='updating'?copy('Updating selection…','جاري تحديث الاختيار…'):
+            plan?.agentRunId?copy('Re-run AI Selection & Priority','إعادة حساب اختيار وترتيب AI'):
             copy('Generate AI Selection & Priority','إنشاء اختيار وترتيب AI')}}
         </button>
         <span class="si-zero-ai">{{plan?.provider==='AIRIA'?
-          copy('AIRIA: confirmed call may incur cost','Airia: الطلب المؤكد قد يترتب عليه تكلفة'):
+          copy('AIRIA: explicit confirmed analysis','Airia: تحليل يبدأ بتأكيد المستخدم'):
           copy('MOCK: 0 Airia calls','MOCK: بدون اتصال Airia')}}</span>
+      </div>
+      <div *ngIf="planAiPhase!=='idle'" class="si-ai-analysis-panel" role="status" aria-live="polite">
+        <span class="si-analysis-spinner" aria-hidden="true"></span>
+        <div class="si-ai-analysis-text">
+          <strong>{{planAiPhase==='analyzing'?
+            copy('AI priority analysis in progress','جاري تحليل أولويات المعاينات'):
+            copy('Applying validated results to the plan','جاري تحديث الخطة بالنتائج المتحقق منها')}}</strong>
+          <p>{{planAiPhase==='analyzing'?
+            copy('Sending available saved candidate sources, verified ETDs (where present), reviewed incident signals and evidence to Airia. Missing or conflicting data are identified, not invented. Waiting for the actual response; no inspection is approved automatically.',
+              'يتم إرسال مصادر الترشيح المحفوظة وتواريخ المغادرة المؤكدة إن وُجدت، وإشارات الحوادث المعتمدة والأدلة إلى Airia، مع توضيح البيانات الناقصة أو المتعارضة دون اختلاقها. لا تُعتمد أي معاينة تلقائيًا.'):
+            copy('Airia returned its recommendations. Refreshing the persisted plan for officer review.',
+              'وصلت توصيات Airia، ويجري تحديث بيانات الخطة المحفوظة لمراجعة المسؤول.')}}
+          </p>
+          <div class="si-ai-indeterminate" aria-hidden="true"><span></span></div>
+        </div>
       </div>
       <p class="notice error" role="alert" *ngIf="planError">{{planError}}</p>
       <p class="notice success" role="status" *ngIf="planNotice">{{planNotice}}</p>
@@ -175,7 +198,7 @@
         </select>
       </div>
 
-      <div class="table-scroll">
+      <div class="table-scroll" [attr.aria-busy]="planAiPhase!=='idle'">
         <table class="si-unified-table">
           <thead><tr>
             <th>{{copy('AI Priority','أولوية AI')}}</th>
@@ -317,6 +340,13 @@
                       <h3>{{copy('AI Selection Rationale','سبب اختيار السفينة من AI')}}</h3>
                       <p>{{planRow(v)?.selectionReason||copy('Generate the C01 plan to see a source-grounded recommendation.',
                         'شغّل خطة C01 لعرض تفسير مرتبط بالمصدر.')}}</p>
+                      <p *ngIf="planRow(v)?.regimeAdvisories?.length">
+                        <strong>{{copy('Priority explanation source','مصدر تفسير الأولوية')}}:</strong>
+                        {{planRow(v)?.regimeAdvisories?.[0]?.priorityRationaleSource==='DETERMINISTIC_BUSINESS_RULE'?
+                          copy('Configured ranking rules (AI rationale unavailable)','قواعد ترتيب الأولوية المعتمدة (تفسير AI غير متاح)'):
+                          plan?.provider==='AIRIA'?copy('Airia AI response','استجابة Airia'):
+                          copy('POC mock response','استجابة POC التجريبية')}}
+                      </p>
                       <p><strong>{{copy('Evidence IDs','مراجع الأدلة')}}:</strong>
                         {{planRow(v)?.evidenceRefs?.join(' · ')||'—'}}</p>
                       <p><strong>{{copy('Missing Data','البيانات الناقصة')}}:</strong>

@@ -5,7 +5,7 @@
  */
 import {createHash,randomUUID} from 'node:crypto';
 import {mockSiC01,SI_MOCK_MARKER} from './si-agent-mock.mjs';
-import {getSiRankingPolicy} from './si-inspection-ranking.mjs';
+import {getSiRankingPolicy,inspectionRanking} from './si-inspection-ranking.mjs';
 
 const hash=x=>createHash('sha256').update(JSON.stringify(x)).digest('hex');
 const unique=a=>[...new Set(a.filter(x=>typeof x==='string'&&x.trim()))];
@@ -25,23 +25,69 @@ export function buildC01Source(dashboard,pscPolicy=null){
         c.events.some(e=>e.sourceType==='NMC_CASE'&&e.approval==='APPROVED'))))
     .map(c=>{
       const vessel=vesselSignals.get(c.imo)||{};
-      const allowedEvidence=unique(c.events.flatMap(e=>[
-        e.eventKey,e.sourceEventId,e.sourceReference,...(e.evidenceIds||[])]));
+      // Forward the saved source fields needed for a grounded recommendation.
+      // No invented ETD, incident severity or alternate vessel risk is allowed.
+      const departureAt=vessel.departureVerified===true?vessel.departureAt:null;
+      const incidentSeverity=vessel.incidentHumanReviewed===true?vessel.incidentSeverity:null;
+      const rankingDecision=inspectionRanking({
+        departureAt,departureVerified:vessel.departureVerified===true,
+        incidentSeverity,incidentHumanReviewed:vessel.incidentHumanReviewed===true});
+      const missingData=[
+        ...(!departureAt?[vessel.departureStatus==='CONFLICT'?
+          'CONFLICTING_VERIFIED_ETD':'VERIFIED_ETD_UNAVAILABLE']:[]),
+        ...(!Number.isFinite(incidentSeverity)?['HUMAN_REVIEWED_INCIDENT_SEVERITY_UNAVAILABLE']:[]),
+        ...(!c.currentRisk?['SAVED_NMC_VESSEL_RISK_UNAVAILABLE_INFORMATIONAL_ONLY']:[])
+      ];
+      const operationalSourceEvents=(vessel.operationalSourceEvents||[])
+        .map(e=>({
+          sourceType:e.sourceType,eventKey:e.eventKey,
+          sourceEventId:e.sourceEventId,sourceReference:e.sourceReference,
+          provenance:e.provenance,approval:e.approval,
+          port:e.port||null,eta:e.eta||null,
+          departureAt:e.departureAt||null,
+          departureVerified:e.departureVerified===true,
+          departureAuthority:e.departureAuthority||null,
+          evidenceIds:e.evidenceIds||[],
+          importFile:e.importFile||null,importBatchId:e.importBatchId||null,
+          importExcelRow:e.importExcelRow||null
+        }));
+      const allowedEvidence=unique([...c.events,...operationalSourceEvents]
+        .flatMap(e=>[e.eventKey,e.sourceEventId,
+          e.sourceReference,...(e.evidenceIds||[])]));
       return {candidateKey:c.key,imo:c.imo,regime:c.regime,
         vesselName:c.vesselName,eligibility:c.eligibility,
         currentRisk:c.currentRisk||null,
         sourceTypes:unique(c.events.map(e=>e.sourceType)),
         sourceEvents:c.events.map(e=>({
           sourceType:e.sourceType,eventKey:e.eventKey,
-          sourceReference:e.sourceReference,approval:e.approval,
-          evidenceIds:e.evidenceIds||[]
+          sourceEventId:e.sourceEventId,sourceReference:e.sourceReference,
+          provenance:e.provenance,approval:e.approval,
+          evidenceIds:e.evidenceIds||[],
+          port:e.port||null,eta:e.eta||null,
+          reportedDepartureLocal:e.reportedDepartureLocal||null,
+          departureAt:e.departureAt||null,
+          departureVerified:e.departureVerified===true,
+          departureAuthority:e.departureAuthority||null,
+          contextNote:e.contextNote||null,
+          importFile:e.importFile||null,importBatchId:e.importBatchId||null,
+          importExcelRow:e.importExcelRow||null
         })),
+        // Operational MSW records may explain an ETD without separately
+        // making a PSC port call an approved inspection candidate.
+        operationalSourceEvents,
         allowedEvidence,reasons:c.reasons||[],rulePriority:c.priority,
-        departureAt:vessel.departureVerified===true?vessel.departureAt:null,
-        departureVerified:vessel.departureVerified===true,
-        incidentSeverity:vessel.incidentHumanReviewed===true?vessel.incidentSeverity:null,
-        incidentHumanReviewed:vessel.incidentHumanReviewed===true,
+        departureAt,departureVerified:vessel.departureVerified===true,
+        departureStatus:vessel.departureStatus||(!departureAt?'MISSING':'VERIFIED'),
+        incidentSeverity,incidentHumanReviewed:vessel.incidentHumanReviewed===true,
         incidentEvidenceRef:vessel.incidentEvidenceRef||null,
+        rankingContext:{criterion:rankingDecision.criterion,
+          reason:rankingDecision.reason,
+          source:'DETERMINISTIC_BUSINESS_RULE',policyOrder:ranking.criteria,
+          departureEvidenceRefs:departureAt?unique(operationalSourceEvents
+            .filter(e=>e.departureAt&&
+              Date.parse(e.departureAt)===Date.parse(departureAt))
+            .flatMap(e=>[e.eventKey,e.sourceReference,...e.evidenceIds])):[]},
+        missingData,
         requiredInPlan:c.events.some(e=>e.sourceType==='SERVICE_REQUEST'||
           (e.sourceType==='NMC_CASE'&&e.approval==='APPROVED'))};
     }).sort((a,b)=>a.candidateKey.localeCompare(b.candidateKey));
@@ -94,9 +140,9 @@ export function c01RecommendationContractFailure(r,c,seen=new Set()){
   return 'CONFIDENCE_INVALID_NUMBER_OR_RANGE_0_TO_1';
  if(typeof r.reason!=='string'||r.reason.trim().length<10||r.reason.length>1500)
   return 'REASON_MISSING_OR_INVALID_LENGTH';
- if(typeof r.priorityRationale!=='string'||r.priorityRationale.length<12||
-   r.priorityRationale.length>1500)
-  return 'PRIORITY_RATIONALE_MISSING_OR_INVALID_LENGTH';
+ // Priority wording is presentation, not a risk score, selection authority or
+ // evidence check. The platform can explain its own deterministic ranking if
+ // the provider omits prose; all other model/evidence checks remain strict.
  if(r.recommendation==='SELECT_RECOMMENDED'){
   if(!Number.isInteger(r.suggestedRank)||r.suggestedRank<1||r.suggestedRank>100)
    return 'SELECTED_SUGGESTED_RANK_INVALID';
@@ -146,11 +192,19 @@ export function validateC01(raw,source){
       (!r.evidenceRefs.length||!c.sourceTypes.length))
       throw new SiCandidateAgentError('SI_C01_HARD_RULE_OVERRIDE',502);
     seen.add(r.candidateKey);
+    const hasAiRationale=typeof r.priorityRationale==='string'&&
+      r.priorityRationale.trim().length>=12&&r.priorityRationale.length<=1500;
+    const signal=inspectionRanking(c);
+    const priorityRationale=hasAiRationale?r.priorityRationale.trim():
+      'Platform business-rule explanation ('+signal.criterion+'): '+
+      signal.reason+'. The AI did not provide usable priority wording; '+
+      'official execution order remains deterministic and officer-reviewed.';
     return {candidateKey:c.candidateKey,imo:c.imo,regime:c.regime,
       recommendation:r.recommendation,confidence:r.confidence,
-      suggestedRank:r.suggestedRank,priorityRationale:r.priorityRationale,
+      suggestedRank:r.suggestedRank,priorityRationale,
+      priorityRationaleSource:hasAiRationale?'AGENT_OUTPUT':'DETERMINISTIC_BUSINESS_RULE',
       reason:r.reason.trim(),evidenceRefs:unique(r.evidenceRefs),
-      dataGaps:unique(r.dataGaps),requiresHumanReview:true,
+      dataGaps:unique([...r.dataGaps,...(c.missingData||[])]),requiresHumanReview:true,
       regulatoryDecision:false};
   });
 }
@@ -208,6 +262,15 @@ export class SiCandidateAgent{
        language:'en',mode:'ADVISORY_ONLY'},
      snapshotHash:s.snapshotHash,policyRevision:s.policyRevision,
      ranking:s.ranking,
+     analysisInstructions:{
+       selectionIsAdvisory:true,
+       officialExecutionOrder:'Verified future ETD ascending; then human-reviewed active incident severity descending; otherwise pending additional rules.',
+       vesselRiskDoesNotSetExecutionRank:true,
+       citeOnlyAllowedEvidence:true,
+       includeReasonAndPriorityRationale:true,
+       doNotInventMissingSignals:true,
+       approvalAndSchedulingRequireOfficer:true
+     },
      officerPlanChanges,
      riskPolicyRevision:s.riskPolicyRevision,
      pscQuotaPolicyRevision:s.pscQuotaPolicyRevision,

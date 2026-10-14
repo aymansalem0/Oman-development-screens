@@ -6,6 +6,7 @@ import {validateP01} from '../si-ai-prioritization.mjs';
 import {validateA04} from '../si-inspection-preparation.mjs';
 import {projectInspectionPlan} from '../si-inspection-plan.mjs';
 import {inspectionRanking,compareInspections} from '../si-inspection-ranking.mjs';
+import {SiCandidateTargeting} from '../si-candidate-targeting.mjs';
 
 const candidate=(key,sourceType,imo,score)=>({
  key,imo,vesselName:'POC Vessel',regime:'FOCUSED_INSPECTION',
@@ -270,7 +271,6 @@ test('C01 diagnoses the exact invalid provider field without accepting it',()=>{
   [{...first,recommendation:'SCHEDULE_DIRECTLY'},'RECOMMENDATION_ENUM_INVALID',null],
   [{...first,confidence:'0.8'},'CONFIDENCE_INVALID_NUMBER_OR_RANGE_0_TO_1',null],
   [{...first,reason:''},'REASON_MISSING_OR_INVALID_LENGTH',null],
-  [{...first,priorityRationale:'short'},'PRIORITY_RATIONALE_MISSING_OR_INVALID_LENGTH',null],
   [{...first,suggestedRank:'1'},'SELECTED_SUGGESTED_RANK_INVALID',null],
   [{...first,recommendation:'MANUAL_REVIEW',suggestedRank:1},'NON_SELECTED_RANK_MUST_BE_NULL',null],
   [{...first,evidenceRefs:null},'EVIDENCE_REFS_MISSING_OR_TOO_MANY',null],
@@ -304,4 +304,92 @@ test('C01 safe warning logs only static reason + index; never ship/source identi
  assert.equal(messages.length,1);
  assert.match(messages[0],/RECOMMENDATION_CONTRACT_REJECTED field=EVIDENCE_REF_NOT_IN_SOURCE itemIndex=0/);
  assert.doesNotMatch(messages[0],/secret-source-ref|9328471|9400409|evt-nmc/);
+});
+
+test('C01 safely explains missing Airia priority prose using deterministic rank rules',()=>{
+ const source=buildC01Source(inputs(),{version:6});
+ for(const missing of [undefined,'', 'short', 'x'.repeat(1600)]){
+  const response=mockSiC01(source);
+  response.recommendations[0].priorityRationale=missing;
+  const result=validateC01({result:JSON.stringify(response)},source);
+  assert.equal(result[0].priorityRationaleSource,'DETERMINISTIC_BUSINESS_RULE');
+  assert.match(result[0].priorityRationale,/PENDING_ADDITIONAL_RULES/);
+  assert.match(result[0].priorityRationale,/AI did not provide usable/);
+  assert.equal(result[0].requiresHumanReview,true);
+  assert.equal(result[1].priorityRationaleSource,'AGENT_OUTPUT');
+ }
+});
+test('C01 sends the actual imported MSW ETD, port, ETA and evidence; no invented data',()=>{
+ const d=inputs(),future=new Date(Date.now()+86400000).toISOString();
+ d.candidates[0].events[0]={
+  ...d.candidates[0].events[0],
+  port:'Jebel Ali',eta:'2026-10-20T09:00:00+04:00',
+  departureAt:future,departureVerified:true,
+  departureAuthority:'SOURCE_FINAL_NO_DATE_APPROVAL',
+  importFile:'MSW_Service_Requests_POC_99_WITH_ETD.xlsx',
+  importBatchId:'saved-import-batch',importExcelRow:2,
+  contextNote:'Source event requires inspection'
+ };
+ d.vesselCandidates=[{imo:'9328471',
+  departureAt:future,departureVerified:true,departureStatus:'VERIFIED',
+  incidentSeverity:65,incidentHumanReviewed:true,incidentEvidenceRef:'incident-001'
+ }];
+ const source=buildC01Source(d,{version:6}),item=source.candidates[0];
+ assert.equal(item.departureAt,future);
+ assert.equal(item.rankingContext.criterion,'DEPARTURE_SOON');
+ assert.equal(item.sourceEvents[0].port,'Jebel Ali');
+ assert.equal(item.sourceEvents[0].eta,'2026-10-20T09:00:00+04:00');
+ assert.equal(item.sourceEvents[0].departureAt,future);
+ assert.equal(item.sourceEvents[0].importBatchId,'saved-import-batch');
+ assert.ok(item.allowedEvidence.includes(item.sourceEvents[0].eventKey));
+ assert.ok(!item.missingData.includes('VERIFIED_ETD_UNAVAILABLE'));
+ assert.equal(source.candidates[1].departureAt,null);
+ assert.ok(source.candidates[1].missingData.includes('VERIFIED_ETD_UNAVAILABLE'));
+});
+test('C01 treats contradictory saved future ETDs as conflict and never prioritises a made-up date',()=>{
+ const dates=[new Date(Date.now()+86400000).toISOString(),
+   new Date(Date.now()+2*86400000).toISOString()];
+ const rows=[0,1].map(i=>({
+  ...candidate('duplicate-'+i,i?'PSC_PORT_CALL':'SERVICE_REQUEST','9328471',null),
+  events:[{eventKey:'evt-conflict-'+i,sourceType:i?'PSC_PORT_CALL':'SERVICE_REQUEST',
+    sourceReference:'source-'+i,port:'Jebel Ali',departureVerified:true,
+    departureAt:dates[i],evidenceIds:['evidence-'+i]}]
+ }));
+ const vessels=SiCandidateTargeting.prototype._vesselCandidates.call({},rows);
+ assert.equal(vessels.length,1);
+ assert.equal(vessels[0].departureStatus,'CONFLICT');
+ assert.equal(vessels[0].departureAt,null);
+ assert.equal(vessels[0].departureVerified,false);
+ const d={policy:{version:1},riskPolicyRevision:1,fleetSnapshotId:'test',
+  candidates:rows,vesselCandidates:vessels};
+ const c=buildC01Source(d,{version:1}).candidates[0];
+ assert.equal(c.departureStatus,'CONFLICT');
+ assert.ok(c.missingData.includes('CONFLICTING_VERIFIED_ETD'));
+ assert.equal(c.rankingContext.criterion,'PENDING_ADDITIONAL_RULES');
+});
+
+test('Saved unselected PSC operational ETD informs NMC ranking but not PSC selection',()=>{
+ const future=new Date(Date.now()+24*3600000).toISOString();
+ const nmc=candidate('nmc-ref','NMC_CASE','9328471',72);
+ const sourceEvents=[{eventKey:'msw-psc-saved',payload:{
+  sourceType:'PSC_PORT_CALL',imo:'9328471',
+  sourceApprovalStatus:'SOURCE_FINAL',sourceEventId:'psc-visit-1',
+  sourceReference:'PSC-REF-1',provenance:'POC_SIMULATOR',
+  port:'Jebel Ali',departureAt:future,evidenceIds:['PSC-EVIDENCE-1']
+ }}];
+ const vessels=SiCandidateTargeting.prototype._vesselCandidates.call({},
+  [nmc],new Map(),sourceEvents);
+ assert.equal(vessels[0].departureAt,future);
+ assert.equal(vessels[0].departureVerified,true);
+ assert.deepEqual(vessels[0].sourceTypes,['NMC_CASE']);
+ assert.equal(vessels[0].operationalSourceEvents.length,1);
+ const d={policy:{version:1},riskPolicyRevision:1,fleetSnapshotId:'fleet',
+  candidates:[nmc],vesselCandidates:vessels};
+ const input=buildC01Source(d,{version:1});
+ assert.equal(input.candidates[0].rankingContext.criterion,'DEPARTURE_SOON');
+ assert.ok(input.candidates[0].allowedEvidence.includes('PSC-EVIDENCE-1'));
+ assert.ok(input.candidates[0].rankingContext.departureEvidenceRefs.includes('PSC-EVIDENCE-1'));
+ assert.deepEqual(input.candidates[0].sourceTypes,['NMC_CASE']);
+ assert.equal(input.candidates[0].requiredInPlan,true);
+ assert.equal(input.candidates[0].operationalSourceEvents[0].port,'Jebel Ali');
 });

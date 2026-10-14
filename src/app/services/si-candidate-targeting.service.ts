@@ -99,6 +99,7 @@ export interface SiC01Recommendation{
   candidateKey:string;imo:string;regime:string;
   recommendation:'SELECT_RECOMMENDED'|'DEFER_RECOMMENDED'|'MANUAL_REVIEW';
   confidence:number;reason:string;priorityRationale:string;suggestedRank:number|null;
+  priorityRationaleSource?:'AGENT_OUTPUT'|'DETERMINISTIC_BUSINESS_RULE';
   evidenceRefs:string[];dataGaps:string[];
   requiresHumanReview:true;regulatoryDecision:false;
 }
