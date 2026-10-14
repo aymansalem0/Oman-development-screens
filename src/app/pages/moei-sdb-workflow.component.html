@@ -1,0 +1,289 @@
+<div class="sdb-flow-page">
+  <app-nmc-navigation></app-nmc-navigation>
+  <div class="sdb-flow-workspace">
+    <div class="sdb-flow-body" *ngIf="seafarer as s">
+      <ng-container *ngIf="case as c">
+        <header class="flow-heading">
+          <div>
+            <div class="flow-crumb"><a routerLink="/moei/seafarers">Seafarer Management</a> <span>›</span> SDB Services <span>›</span> {{s.id}}</div>
+            <div class="flow-eyebrow">MOEI · SEAFERERS AFFAIRS &amp; MET / DEMO JOURNEY</div>
+            <h1>Seaman’s Discharge Book <span>Workflow</span></h1>
+            <p>End-to-end maritime service journey, integrated with the National Maritime Center platform.</p>
+          </div>
+          <div class="heading-actions">
+            <span class="demo-label">SYNTHETIC POC — NO REAL ISSUANCE</span>
+            <a class="flow-secondary" routerLink="/moei/seafarers">← Module dashboard</a>
+            <button type="button" class="flow-reset" (click)="reset()">Reset mock journey</button>
+          </div>
+        </header>
+
+        <div class="flow-context-bar">
+          <div class="context-person"><span class="flow-avatar">{{s.name.charAt(0)}}</span>
+            <div><strong>{{s.name}}</strong><small>{{s.id}} · {{s.rank}} · {{s.nationality}} · {{s.sid||'New SID on issuance'}}</small></div></div>
+          <div><small>Service</small><strong>{{s.service==='FIRST_ISSUE'?'First-time issuance':'Renewal'}}</strong></div>
+          <div><small>Readiness</small><strong [class.good-text]="isReady" [class.warn-text]="!isReady">{{status.replace('_',' ')}}</strong></div>
+          <div><small>SDB case</small><strong>{{appState.replace('_',' ')}}</strong></div>
+          <div><label for="case-picker">Select demo case</label>
+            <select id="case-picker" [ngModel]="selectedId" (ngModelChange)="selectSeafarer($event)">
+              <option *ngFor="let candidate of registry.seafarers" [value]="candidate.id">{{candidate.id}} · {{candidate.name}}</option>
+            </select>
+          </div>
+          <div><label for="demo-persona">Demo persona</label>
+            <select id="demo-persona" [(ngModel)]="persona">
+              <option value="OPERATIONS">MOEI Operations</option>
+              <option value="COMPANY">Company Representative</option>
+              <option value="SELF">UAE Seafarer</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="flow-layout">
+          <nav class="flow-stages" aria-label="SDB business workflow stages">
+            <div class="stage-heading"><span>WORKFLOW</span><b>11 screens</b></div>
+            <button *ngFor="let item of screens;let idx=index" type="button"
+              (click)="show(item.id)" [class.selected]="activeScreen===item.id"
+              [attr.aria-current]="activeScreen===item.id?'step':null">
+              <span class="stage-number">{{item.number}}</span>
+              <span class="stage-name"><strong>{{item.title}}</strong><small>{{item.caption}}</small></span>
+              <span class="stage-chevron">›</span>
+            </button>
+            <div class="stage-footnote"><span class="online-dot"></span> All data, events and decisions are mock. Regulatory sign-off is outside this POC.</div>
+          </nav>
+
+          <main class="flow-main">
+            <div class="flow-notice" *ngIf="feedback" role="status">
+              <span>ⓘ</span><p>{{feedback}}</p>
+              <button type="button" (click)="feedback=''">Dismiss</button>
+            </div>
+
+            <!-- 01 - Orchestration dashboard -->
+            <section *ngIf="activeScreen==='overview'">
+              <div class="screen-title"><div><span class="screen-index">01 / 11</span><h2>End-to-End Journey Overview</h2><p>From source discovery and proactive readiness through controlled physical handover.</p></div><span class="screen-state">LIVE MOCK WORKSPACE</span></div>
+              <div class="flow-metric-grid">
+                <article><small>Source rules</small><strong>{{evidence.length}}</strong><span>Deterministic evidence gates</span></article>
+                <article><small>Passed / N/A</small><strong class="success-text">{{passing}}</strong><span>From mock source adapters</span></article>
+                <article><small>Failed</small><strong class="warning-text">{{failures}}</strong><span>Require source correction</span></article>
+                <article><small>Pending</small><strong>{{pending}}</strong><span>Fail-closed on outages</span></article>
+              </div>
+              <div class="flow-card">
+                <div class="card-head"><div><h3>Process status and dependencies</h3><p>Each milestone is independent: readiness ≠ application ≠ printing.</p></div><span class="tag-outline">POC RULESET v1.0</span></div>
+                <div class="process-grid">
+                  <div *ngFor="let m of milestones;let i=index" class="milestone" [class.finished]="m.done">
+                    <span class="milestone-bullet">{{m.done?'✓':(i+1)}}</span>
+                    <div><strong>{{m.label}}</strong><small>{{m.detail}}</small></div>
+                  </div>
+                </div>
+              </div>
+              <div class="two-flow-cards">
+                <article class="flow-card compact"><h3>Current next action</h3><div class="next-action">↗ {{nextAction}}</div><p>AI advice is informative; every official decision must be enforced by rules on source-backed evidence.</p><button class="flow-primary" type="button" (click)="show('verification')">Inspect source rules →</button></article>
+                <article class="flow-card compact"><h3>Service ownership</h3><dl><div><dt>Applicant</dt><dd>{{s.category==='FOREIGN'?'Authorised company representative':'UAE seafarer / UAE PASS'}}</dd></div><div><dt>Clearance owner</dt><dd>{{s.clearanceSource}}</dd></div><div><dt>Decision owner</dt><dd>Versioned deterministic rule engine (POC)</dd></div><div><dt>Physical fulfilment</dt><dd>MOEI printing / collection or courier (mock)</dd></div></dl></article>
+              </div>
+            </section>
+
+            <!-- 02 - Seafarer 360 -->
+            <section *ngIf="activeScreen==='profile'">
+              <div class="screen-title"><div><span class="screen-index">02 / 11</span><h2>Seafarer 360 — Unified Registry</h2><p>One profile across SID, qualifications, medical clearance and SDB history.</p></div><span class="screen-state">SYNTHETIC MASTER RECORD</span></div>
+              <div class="flow-card">
+                <div class="card-head"><h3>Personal and maritime profile</h3><span class="tag-outline">Record {{s.id}}</span></div>
+                <div class="field-grid">
+                  <div><label>Full name (verified source)</label><strong>{{s.name}}</strong></div>
+                  <div><label>Seafarer ID (SID)</label><strong>{{s.sid||'Not yet allocated — first issue'}}</strong></div>
+                  <div><label>Nationality</label><strong>{{s.nationality}}</strong></div>
+                  <div><label>Rank / category</label><strong>{{s.rank}} · {{s.category}}</strong></div>
+                  <div><label>Applicant channel</label><strong>{{s.category==='FOREIGN'?'Company-sponsored': 'UAE PASS self-service'}}</strong></div>
+                  <div><label>Service</label><strong>{{serviceTitle}}</strong></div>
+                  <div><label>Employer / Academy</label><strong>{{s.company||s.academy||'—'}}</strong></div>
+                  <div><label>Source verification date</label><strong>{{s.lastVerified}}</strong></div>
+                  <div><label>Existing SDB expiry</label><strong>{{s.bookletExpiry||'Not applicable'}}</strong></div>
+                  <div><label>Company representation</label><strong>{{s.category==='UAE'?'Self-service':s.companyAuthorised?'Demo authorised':'Not verified'}}</strong></div>
+                  <div><label>Foreign endorsement</label><strong>{{s.category==='FOREIGN'?(s.endorsementValid?(s.endorsementReference||'Verified'):'Expired / missing'):'Not applicable'}}</strong></div>
+                  <div><label>Academy / company clearance</label><strong>{{s.clearanceStatus}}</strong></div>
+                </div>
+              </div>
+              <div class="flow-info-strip"><span>ⓘ</span> The registry links qualifications and booklets to the same SID. Renewal preserves an existing SID; a first issue allocates a new identifier only at simulated issuance.</div>
+              <div class="flow-card compact"><h3>Historical lifecycle</h3><p>Previous SDB expiry: {{s.bookletExpiry||'No previous booklet'}}. Current application state: {{s.applicationState}}.</p><p>No official seafarer record is modified by this demonstration.</p></div>
+            </section>
+
+            <!-- 03 - source evidence -->
+            <section *ngIf="activeScreen==='verification'">
+              <div class="screen-title"><div><span class="screen-index">03 / 11</span><h2>Source Verification &amp; Eligibility</h2><p>Direct verification from ICP, MARASI, Academy, CoC and endorsement ledgers.</p></div><span class="screen-state">FAIL-CLOSED VALIDATION</span></div>
+              <div class="flow-card">
+                <div class="card-head"><div><h3>Mandatory evidence checklist</h3><p>Eight independently evaluated rules, with applicability by category and service.</p></div><span class="rule-count">{{passing}} / {{evidence.length}} passed or N/A</span></div>
+                <div class="evidence-rows">
+                  <div *ngFor="let ev of evidence" class="evidence-row">
+                    <div class="rule-code">{{ev.rule}}</div>
+                    <div class="evidence-description"><strong>{{ev.label}}</strong><small>{{ev.source}}</small><p>{{ev.explanation}}</p></div>
+                    <span class="rule-badge" [class.rule-pass]="ev.result==='PASS'" [class.rule-fail]="ev.result==='FAIL'" [class.rule-pending]="ev.result==='PENDING'">{{ev.result.replace('_',' ')}}</span>
+                  </div>
+                </div>
+              </div>
+              <div class="flow-card ai-explanation"><div class="ai-heading"><span class="ai-star">✦</span><div><strong>Readiness Agent — Maritime Explanation</strong><small>EXPLANATION FIXTURE · NOT A LIVE AIRIA RUN</small></div></div><p>{{registry.mockAiSummary(s)}}</p><div class="ai-boundary">The AI cannot approve, override, release HOLD, or issue SDB. Rule engine and original data sources remain authoritative.</div></div>
+            </section>
+
+            <!-- 04 - HOLD -->
+            <section *ngIf="activeScreen==='exceptions'">
+              <div class="screen-title"><div><span class="screen-index">04 / 11</span><h2>HOLD &amp; Exception Resolution</h2><p>Return corrections to the owning source; do not introduce a ministry approval bottleneck.</p></div><span class="screen-state">SOURCE-OWNED ACTIONS</span></div>
+              <div class="flow-card">
+                <div class="card-head"><div><h3>Open evidence exceptions</h3><p>Current source status: {{s.clearanceStatus}} · {{s.clearanceSource}}</p></div><span class="rule-count">{{blockers.length}} blocker(s)</span></div>
+                <div class="issue-item" *ngFor="let ev of blockers">
+                  <div class="issue-mark">!</div><div><strong>{{ev.label}}</strong><p>{{ev.explanation}}</p><small>Authority: {{ev.source}}</small></div><span class="rule-badge rule-fail">{{ev.result}}</span>
+                </div>
+                <div class="empty-good" *ngIf="!blockers.length">✓ No open blockers — all available authoritative source checks passed.</div>
+              </div>
+              <div class="flow-card">
+                <div class="card-head"><div><h3>Controlled source-event simulator</h3><p>Buttons simulate inbound third-party source messages, not MOEI officer overrides.</p></div><span class="tag-outline">DEMO ONLY</span></div>
+                <div class="source-action-grid">
+                  <div *ngFor="let act of sourceActions" class="source-action"><div><strong>{{act.name}}</strong><small>{{act.owner}}</small></div><button type="button" [disabled]="!canSource(act.id)" (click)="source(act.id)">Simulate update</button></div>
+                </div>
+                <div class="flow-info-strip"><span>ⓘ</span> An Academy/Company HOLD can only be cleared by a new signed NO_OBJECTION source status. Missing endorsement is not an Academy HOLD. A source outage remains PENDING_VERIFICATION.</div>
+              </div>
+            </section>
+
+            <!-- 05 - pre application invitation -->
+            <section *ngIf="activeScreen==='invitation'">
+              <div class="screen-title"><div><span class="screen-index">05 / 11</span><h2>Ready-to-Apply Invitation</h2><p>The system notifies the correct applicant only after every prerequisite is source-verified.</p></div><span class="screen-state">PRE-APPLICATION STATE</span></div>
+              <div class="flow-card decision-box">
+                <div class="decision-symbol" [class.negative]="!isReady">{{isReady?'✓':'!'}}</div>
+                <div><h3>{{isReady?'Ready to Apply':'Not Ready to Apply'}}</h3><p>{{isReady?'All required gates are satisfied. Applicant invitation can be simulated.':nextAction}}</p><small>Invitation status: {{s.applicationState==='NOT_STARTED'?'Not queued':s.applicationState}}</small></div>
+              </div>
+              <div class="flow-card">
+                <div class="card-head"><h3>Invitation destination and content</h3><span class="tag-outline">EMAIL · DEMO</span></div>
+                <div class="field-grid">
+                  <div><label>Intended recipient</label><strong>{{s.category==='FOREIGN'?'Verified representative of '+s.company:s.name}}</strong></div>
+                  <div><label>Applicant login route</label><strong>{{s.category==='FOREIGN'?'Corporate representative authorization':'UAE PASS self-service'}}</strong></div>
+                  <div><label>Action</label><strong>Open SDB application and confirm source-verified details</strong></div>
+                  <div><label>Service instance</label><strong>{{s.service==='FIRST_ISSUE'?'SDB first issuance':'SDB renewal'}}</strong></div>
+                </div>
+                <div class="card-actions"><button class="flow-primary" type="button" (click)="invite()" [disabled]="!isOperations||!isReady||appState!=='NOT_STARTED'">Queue mock invitation</button><button class="flow-secondary" type="button" (click)="show('application')">Go to applicant form →</button></div>
+                <p class="small-disclaimer">No email is sent. Invitation queueing never constitutes an application submission or regulatory decision.</p>
+              </div>
+            </section>
+
+            <!-- 06 - application -->
+            <section *ngIf="activeScreen==='application'">
+              <div class="screen-title"><div><span class="screen-index">06 / 11</span><h2>SDB Application &amp; Declaration</h2><p>Role-correct submission with pre-filled, verified registry data and no repeated document uploads.</p></div><span class="screen-state">APPLICANT-OWNED STEP</span></div>
+              <div class="flow-card applicant-card">
+                <div class="card-head"><div><h3>Applicant and delegated authority</h3><p>Current persona: {{roleName}}</p></div><span class="rule-badge" [class.rule-pass]="canSubmit" [class.rule-fail]="!canSubmit">{{canSubmit?'APPLICANT MATCH':'CHANGE DEMO PERSONA'}}</span></div>
+                <div class="field-grid">
+                  <div><label>Required submitter</label><strong>{{s.category==='FOREIGN'?'Company representative':'UAE seafarer'}}</strong></div>
+                  <div><label>Application service</label><strong>{{serviceTitle}}</strong></div>
+                  <div><label>Verified identity / SID</label><strong>{{s.name}} · {{s.sid||'New SID pending'}}</strong></div>
+                  <div><label>Company mandate</label><strong>{{s.category==='UAE'?'N/A':s.companyAuthorised?'Confirmed in demo registry':'Not verified — blocked'}}</strong></div>
+                </div>
+                <p class="flow-info-strip"><span>ⓘ</span> The corporate / UAE PASS role is simulated by the selector above; real identity, delegated access and company scoping must be enforced by the production IAM/backend.</p>
+              </div>
+              <div class="flow-card">
+                <div class="card-head"><h3>Review &amp; contact information</h3><span class="tag-outline">MOCK FORM</span></div>
+                <div class="form-grid">
+                  <label><span>Contact email <em>*</em></span><input type="email" [(ngModel)]="c.contactEmail" placeholder="applicant@example.com" [disabled]="appState!=='INVITED'"/></label>
+                  <label><span>Contact phone (optional)</span><input type="tel" [(ngModel)]="c.contactPhone" placeholder="+971 ..." [disabled]="appState!=='INVITED'"/></label>
+                  <label><span>Fulfilment method</span><select [(ngModel)]="c.deliveryMode" [disabled]="appState!=='INVITED'"><option value="COLLECTION">Collection from service center</option><option value="COURIER">Courier delivery</option></select></label>
+                  <label *ngIf="c.deliveryMode==='COURIER'"><span>Courier address <em>*</em></span><input [(ngModel)]="c.deliveryAddress" placeholder="Service delivery address" [disabled]="appState!=='INVITED'"/></label>
+                </div>
+                <div class="declarations">
+                  <label><input type="checkbox" [(ngModel)]="c.applicantConfirmed" [disabled]="appState!=='INVITED'"/><span>I confirm the presented seafarer identity, service and employer/academy details.</span></label>
+                  <label><input type="checkbox" [(ngModel)]="c.documentsReviewed" [disabled]="appState!=='INVITED'"/><span>I reviewed the source-verified qualifications, medical status and clearance.</span></label>
+                  <label><input type="checkbox" [(ngModel)]="c.declarationAccepted" [disabled]="appState!=='INVITED'"/><span>I confirm this application request and acknowledge official conditions will be rechecked.</span></label>
+                </div>
+                <div class="card-actions"><button class="flow-primary" type="button" (click)="submit()" [disabled]="!canSubmit||!isReady||appState!=='INVITED'">Submit mock application</button><span class="helper-note">Applicant route: {{applicantPersona}} · current status: {{appState}}</span></div>
+              </div>
+            </section>
+
+            <!-- 07 - rule engine -->
+            <section *ngIf="activeScreen==='authorization'">
+              <div class="screen-title"><div><span class="screen-index">07 / 11</span><h2>Automated Regulatory Authorization</h2><p>Recheck all source evidence at decision time. No routine MOEI officer approval.</p></div><span class="screen-state">DETERMINISTIC · HUMAN GOVERNED</span></div>
+              <div class="flow-card decision-box">
+                <div class="decision-symbol" [class.negative]="c.decision==='FAILED'">{{c.decision==='AUTHORISED'?'✓':c.decision==='FAILED'?'!':'○'}}</div>
+                <div><h3>Rules engine decision: {{c.decision.replace('_',' ')}}</h3><p>Version: {{c.decisionRuleVersion||'POC-SDB-RULESET-v1.0'}} · Evaluated: {{displayEventTime(c.decisionTime||'')}}</p><small>Application {{appState}} · Readiness {{status}} · all mandatory evidence gates re-evaluated.</small></div>
+              </div>
+              <div class="flow-card">
+                <div class="card-head"><div><h3>Authorisation gates</h3><p>Source truth prevails; an advisory AI cannot decide an entitlement.</p></div><span class="tag-outline">AUTO IF FORMALLY APPROVED</span></div>
+                <div class="policy-row"><span class="policy-indicator" [class.pass]="appState==='SUBMITTED'">1</span><div><strong>Applicant-authenticated submission</strong><p>UAE self-service or authorized company representative; mock persona enforced in UI.</p></div></div>
+                <div class="policy-row"><span class="policy-indicator" [class.pass]="isReady">2</span><div><strong>Full final source re-verification</strong><p>Medical, identity, basic CoPs, CoC where relevant, foreign endorsement, source availability and NO_OBJECTION.</p></div></div>
+                <div class="policy-row"><span class="policy-indicator" [class.pass]="s.clearanceStatus==='NO_OBJECTION'">3</span><div><strong>No source-owned HOLD</strong><p>Pending or HOLD is never interpreted as approval. All exceptions stay with source custodians.</p></div></div>
+                <div class="policy-row"><span class="policy-indicator" [class.pass]="c.decision==='AUTHORISED'">4</span><div><strong>Regulatory rule set and evidence snapshot</strong><p>Versioned result with explanation and audit, subject to formal MOEI auto-issuance authorization.</p></div></div>
+                <div class="card-actions"><button class="flow-primary" type="button" [disabled]="!isOperations||appState!=='SUBMITTED'" (click)="authorize()">Run mock rules engine</button><button class="flow-secondary" type="button" (click)="showDecisionEvidence=!showDecisionEvidence">Show decision evidence</button></div>
+                <div class="decision-evidence" *ngIf="showDecisionEvidence"><div *ngFor="let ev of c.decisionEvidence"><b>{{ev.rule}}</b><span>{{ev.label}}</span><strong>{{ev.result}}</strong></div><p *ngIf="!c.decisionEvidence.length">No final decision snapshot recorded yet.</p></div>
+              </div>
+              <div class="regulatory-note">MOEI must formally approve the legal/regulatory authority for automatic SDB issuance. This POC demonstrates workflow behavior, not a legally valid authorization.</div>
+            </section>
+
+            <!-- 08 - payment -->
+            <section *ngIf="activeScreen==='payment'">
+              <div class="screen-title"><div><span class="screen-index">08 / 11</span><h2>Payment &amp; Reconciliation</h2><p>Only an authorised application can enter the controlled payment workflow.</p></div><span class="screen-state">GATEWAY SIMULATION</span></div>
+              <div class="flow-card">
+                <div class="card-head"><h3>Payment instruction</h3><span class="tag-outline">NO REAL TRANSACTION</span></div>
+                <div class="payment-panel">
+                  <div><small>Application reference</small><strong>{{s.applicationReference||'Not submitted'}}</strong></div>
+                  <div><small>Rules authorization</small><strong>{{c.decision}}</strong></div>
+                  <div><small>MOEI fee schedule</small><strong>Not connected in POC</strong></div>
+                  <div><small>Payment reference</small><strong>{{c.paymentReference||'Awaiting callback'}}</strong></div>
+                </div>
+                <div class="card-actions"><button class="flow-primary" type="button" (click)="pay()" [disabled]="!isOperations||c.decision!=='AUTHORISED'||appState!=='SUBMITTED'">Simulate successful payment callback</button></div>
+                <p class="small-disclaimer">No payment gateway, amount, VAT, banking operation or official receipt is produced.</p>
+              </div>
+            </section>
+
+            <!-- 09 - issue -->
+            <section *ngIf="activeScreen==='issuance'">
+              <div class="screen-title"><div><span class="screen-index">09 / 11</span><h2>SDB Issuance / Renewal</h2><p>Generate a synthetic issuance event only after rule authorization and payment callback.</p></div><span class="screen-state">ZERO-ROUTINE-APPROVAL MODEL</span></div>
+              <div class="flow-card">
+                <div class="card-head"><h3>Issuance summary</h3><span class="tag-outline">SIMULATED ONLY</span></div>
+                <div class="field-grid">
+                  <div><label>Service type</label><strong>{{s.service==='FIRST_ISSUE'?'Initial booklet issuance':'Renewal / new booklet version'}}</strong></div>
+                  <div><label>Seafarer SID</label><strong>{{s.sid||'Assigned only after mock issue'}}</strong></div>
+                  <div><label>Application reference</label><strong>{{s.applicationReference||'Not yet submitted'}}</strong></div>
+                  <div><label>Authorization</label><strong>{{c.decision}}</strong></div>
+                  <div><label>Payment confirmation</label><strong>{{c.paymentReference||'Not confirmed'}}</strong></div>
+                  <div><label>Issuance state</label><strong>{{appState}}</strong></div>
+                </div>
+                <div class="card-actions"><button class="flow-primary" type="button" (click)="issue()" [disabled]="!isOperations||c.decision!=='AUTHORISED'||!c.paymentReference||appState!=='PAYMENT_SIMULATED'">Issue SDB (mock)</button><button type="button" class="flow-secondary" (click)="show('fulfilment')">Go to printing →</button></div>
+                <p class="small-disclaimer">First issue generates a test-only SID. Renewal preserves existing SID. No official booklet, certificate, print template or government registry update occurs.</p>
+              </div>
+            </section>
+
+            <!-- 10 - print and delivery -->
+            <section *ngIf="activeScreen==='fulfilment'">
+              <div class="screen-title"><div><span class="screen-index">10 / 11</span><h2>Printing, Dispatch &amp; Delivery</h2><p>Issuance status, print production and physical delivery are separately tracked.</p></div><span class="screen-state">FULFILMENT OPERATIONS · MOCK</span></div>
+              <div class="flow-card">
+                <div class="card-head"><h3>Fulfilment job</h3><span class="tag-outline">{{c.deliveryMode}}</span></div>
+                <div class="fulfilment-status">
+                  <div><span>1</span><strong>SDB Issued</strong><small>{{appState==='ISSUED'?'Complete':'Pending'}}</small></div>
+                  <div><span>2</span><strong>Print Queued</strong><small>{{c.printReference||'Not started'}}</small></div>
+                  <div><span>3</span><strong>Print Confirmed</strong><small>{{c.printState}}</small></div>
+                  <div><span>4</span><strong>Delivered / Collected</strong><small>{{c.deliveryState}}</small></div>
+                </div>
+                <div class="field-grid"><div><label>Chosen delivery method</label><strong>{{c.deliveryMode}}</strong></div><div><label>Print job reference</label><strong>{{c.printReference||'—'}}</strong></div><div><label>Current print status</label><strong>{{c.printState}}</strong></div><div><label>Handover completion</label><strong>{{displayEventTime(c.deliveryTime||'')}}</strong></div></div>
+                <div class="card-actions">
+                  <button type="button" class="flow-primary" (click)="print()" [disabled]="!isOperations||appState!=='ISSUED'||c.printState!=='NOT_REQUESTED'">Queue print job</button>
+                  <button type="button" class="flow-secondary" (click)="printed()" [disabled]="!isOperations||c.printState!=='QUEUED'">Confirm printed</button>
+                  <button type="button" class="flow-secondary" (click)="dispatch()" [disabled]="!isOperations||c.deliveryMode!=='COURIER'||c.printState!=='PRINTED'||c.deliveryState!=='NOT_STARTED'">Mock dispatch</button>
+                  <button type="button" class="flow-secondary" (click)="complete()" [disabled]="!isOperations||c.printState!=='PRINTED'||(c.deliveryMode==='COURIER'?c.deliveryState!=='DISPATCHED':c.deliveryState!=='READY_FOR_COLLECTION')">Confirm handover</button>
+                </div>
+                <p class="small-disclaimer">No physical booklet, print spooler, dispatch carrier, receipt or legal handover is connected.</p>
+              </div>
+            </section>
+
+            <!-- 11 - audit -->
+            <section *ngIf="activeScreen==='audit'">
+              <div class="screen-title"><div><span class="screen-index">11 / 11</span><h2>Audit Trail &amp; Continuous Monitoring</h2><p>Full evidence provenance, actor, state transition and next renewal-ready monitoring.</p></div><span class="screen-state">DEMO AUDIT RECORDS</span></div>
+              <div class="flow-card">
+                <div class="card-head"><div><h3>Journey event history</h3><p>Newest events first; events are stored in browser memory only.</p></div><span class="rule-count">{{c.timeline.length}} events</span></div>
+                <div class="audit-timeline">
+                  <article *ngFor="let e of c.timeline"><div class="timeline-marker">●</div><div><div class="audit-event-head"><strong>{{e.stage.replace('_',' ')}}</strong><small>{{displayEventTime(e.time)}}</small></div><p>{{e.description}}</p><small>{{e.actor}}</small></div></article>
+                </div>
+              </div>
+              <div class="two-flow-cards">
+                <div class="flow-card compact"><h3>Decision snapshot</h3><p>Rules version: {{c.decisionRuleVersion||'Not evaluated'}}</p><p>Decision: {{c.decision}}</p><p>Evidence gates: {{c.decisionEvidence.length}}</p></div>
+                <div class="flow-card compact"><h3>Lifecycle monitoring</h3><p>Current SDB expiry: {{s.bookletExpiry||'First issue pending'}}</p><p>Fulfilment: {{c.deliveryState}}</p><p>Next event: proactive monitoring and renewal readiness (future backend service).</p></div>
+              </div>
+            </section>
+
+            <footer class="flow-actions-footer"><button type="button" class="flow-secondary" (click)="prev()" [disabled]="activeScreen==='overview'">← Previous screen</button><div><button type="button" class="flow-primary" (click)="next()" [disabled]="activeScreen==='audit'">Next screen →</button></div></footer>
+          </main>
+        </div>
+      </ng-container>
+    </div>
+    <div *ngIf="!seafarer" class="flow-not-found"><h2>Seafarer not found</h2><a routerLink="/moei/seafarers">Return to Registry</a></div>
+  </div>
+</div>
