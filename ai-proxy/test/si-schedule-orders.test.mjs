@@ -87,7 +87,18 @@ function workspace({mandatory=true}={}){
   }
  };
  const orders=new SiScheduleOrders({mode:'json',file:join(directory,'orders.json'),
-  rolling:{get:async id=>id===p.id?p:plan(id)},
+  rolling:{
+   get:async id=>id===p.id?p:plan(id),
+   attachScheduledCase:async(planId,imo,caseId)=>{
+    assert.equal(planId,p.id);
+    const item=p.approvedVessels.find(v=>v.imo===imo);
+    if(!item.caseId){item.caseId=caseId;p.revision++;}
+   },
+   setExecutionState:async(planId,status)=>{
+    assert.equal(planId,p.id);
+    if(p.status!==status){p.status=status;p.revision++;}
+   }
+  },
   targeting,preparation,checklists,lifecycle:lifecycleApi,
   cases:{listInspectionRequests:async()=>[]}});
  const approve=async(opts={})=>orders.approve({
