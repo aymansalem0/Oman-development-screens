@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {proposeMaritimeBatchSchedule,validateMaritimeSchedulingInput} from '../si-maritime-batch-scheduling.mjs';
+import {proposeMaritimeBatchSchedule,validateMaritimeSchedulingInput,projectMaritimeSchedulingBoard} from '../si-maritime-batch-scheduling.mjs';
 const now=Date.parse('2026-10-14T09:00:00+04:00');
 const plan={id:'99999999-9999-4999-8999-999999999999',number:'IP-TEST',
  revision:3,status:'APPROVED',approvedBy:'MOEI_TEST_SUPERVISOR',
@@ -128,4 +128,26 @@ test('Imported MSW-final ETD is usable without a second date approval',()=>{
  const result=invoke({requests:[input,request('9247813','SERVICE',15000)]});
  assert.equal(result.summary.proposed,2);
  assert.equal(result.rows[0].assignment.windowSource,'MSW_FINAL');
+});
+
+test('Scheduling board groups same preview once per vessel across engineer and UAE date',()=>{
+ const preview=invoke();
+ const board=preview.board;
+ assert.equal(board.status,'UNAPPROVED_PREVIEW_ONLY');
+ assert.equal(board.approvalRequired,true);
+ assert.equal(board.caseWrites,0);
+ assert.equal(board.bookingWrites,0);
+ assert.equal(board.allocatedVessels,2);
+ assert.equal(board.engineers.length,2);
+ assert.equal(board.days.length,1);
+ assert.equal(board.days[0].dateLocal,'2026-10-20');
+ assert.equal(board.days[0].vesselCount,2);
+ assert.deepEqual(board.days[0].assignments.map(x=>x.imo).sort(),
+  ['9247813','9328471']);
+ assert.ok(board.engineers.every(e=>e.vesselCount===1&&e.dates.length===1));
+ const blocked=invoke({requests:[request('9328471','FOCUSED')]});
+ assert.equal(blocked.board.allocatedVessels,1);
+ assert.deepEqual(blocked.board.unscheduled.map(x=>x.imo),['9247813']);
+ assert.equal(blocked.board.unscheduled[0].blocker,'VESSEL_SCHEDULING_DATA_REQUIRED');
+ assert.throws(()=>projectMaritimeSchedulingBoard(null),/SI_V2_BOARD_ROWS_INVALID/);
 });
