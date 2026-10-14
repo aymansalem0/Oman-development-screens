@@ -8,7 +8,7 @@ import {NmcNavigationComponent} from '../components/nmc-navigation.component';
 interface Plan{
  id:string;number:string;title:string;status:string;revision:number;
  startsOn:string;endsOn:string;approvedAt?:string|null;
- approvedVessels?:{imo:string}[];
+ vesselCount:number;
 }
 @Component({
  selector:'app-si-scheduling-plan-center',standalone:true,
@@ -49,7 +49,7 @@ interface Plan{
       <tr *ngFor="let p of approved">
        <td><strong>{{p.number||p.title}}</strong><small>{{p.title}}</small></td>
        <td>{{p.startsOn}} → {{p.endsOn}}</td>
-       <td><strong>{{p.approvedVessels?.length||0}}</strong></td>
+       <td><strong>{{p.vesselCount||0}}</strong></td>
        <td><a class="open" [routerLink]="['/moei/smart-inspection/scheduling/plan',p.id]">
         {{copy('Open schedule board →','فتح لوحة الجدولة ←')}}</a></td>
       </tr>
@@ -104,9 +104,9 @@ export class SiSchedulingPlanCenterComponent implements OnInit{
  plans:Plan[]=[];loading=false;error='';
  constructor(private readonly http:HttpClient,public readonly lang:LanguageService){}
  copy(en:string,ar:string){return this.lang.pick(en,ar);}
- get approved(){return this.plans.filter(p=>p.status==='APPROVED'&&p.approvedVessels?.length);}
+ get approved(){return this.plans.filter(p=>p.status==='APPROVED'&&p.vesselCount>0);}
  get other(){return this.plans.filter(p=>p.status!=='APPROVED');}
- get approvedVesselCount(){return this.approved.reduce((n,p)=>n+(p.approvedVessels?.length||0),0);}
+ get approvedVesselCount(){return this.approved.reduce((n,p)=>n+(p.vesselCount||0),0);}
  ngOnInit(){this.load();}
  load(){
   this.loading=true;this.error='';
