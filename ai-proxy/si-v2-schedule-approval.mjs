@@ -152,7 +152,7 @@ export class SiV2ScheduleApproval{
   });
  }
  async approve({planId,requests,expectedProposalHash,expectedPlanRevision,
-   actor,reason,confirmApproval}={}){
+   selectedOptionId=null,actor,reason,confirmApproval}={}){
   this.assertReady();
   if(!ID.test(planId||'')||!Array.isArray(requests)||
    !requests.length||requests.length>500||!Number.isInteger(expectedPlanRevision)||
@@ -196,13 +196,18 @@ export class SiV2ScheduleApproval{
      fail('SI_V2_SCHEDULE_PROPOSAL_CHANGED_REVIEW_AGAIN',409);
     if(proposal.summary.unscheduled>0||proposal.rows.length!==plan.approvedVessels.length)
      fail('SI_V2_ALL_APPROVED_VESSELS_MUST_BE_SCHEDULED',409);
+    const selected=selectedOptionId?
+     proposal.variants.find(x=>x.optionId===selectedOptionId):null;
+    if(selectedOptionId&&!selected)
+     fail('SI_V2_SCHEDULE_OPTION_CHANGED_REPREVIEW',409);
     const id=randomUUID(),at=now();
-    const items=proposal.rows.map(row=>({imo:row.imo,planRank:row.planRank,
+    const items=(selected?.rows||proposal.rows).map(row=>({imo:row.imo,planRank:row.planRank,
      assignment:row.assignment,caseId:null,orderId:randomUUID(),
      orderStatus:'AWAITING_CASE_DISPATCH',dossierStatus:'PENDING',
      dispatchStatus:'PENDING',error:null}));
     const record={id,planId,planRevision:plan.revision,
      proposalHash:proposal.proposalHash,erpSnapshotId:erp.snapshotId,
+     selectedOptionId:selected?.optionId||proposal.variants[0]?.optionId||null,
      status:'APPROVED_AWAITING_CASES',approvedBy:actor.trim(),
      approvalReason:reason.trim(),approvedAt:at,updatedAt:at,
      items,audit:[{event:'SUPERVISOR_APPROVED_WHOLE_SCHEDULE',
