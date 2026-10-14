@@ -169,7 +169,7 @@ export class SiInspectionPlan{
    agentRunId:current?.agentRunId||null,
    selectionMode:current?.agentRunId?'AI_ASSISTED':'MANUAL',
    manualSelection,availableCount,deferredCount,notSelectedCount,
-   dataReadiness:summarizeC01Readiness(source),
+   dataReadiness:historical?null:summarizeC01Readiness(source),
    candidatesAtCreation:cycle?.candidateSnapshot?.length??null,
    stale:!historical&&(changed||
      Boolean(cycle?.selectionSourceHash&&cycle.selectionSourceHash!==source.snapshotHash)),
