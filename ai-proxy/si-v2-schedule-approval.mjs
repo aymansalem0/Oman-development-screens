@@ -373,7 +373,7 @@ export class SiV2ScheduleApproval{
     status:item.orderStatus,orderId:item.orderId,imo:item.imo,
     caseId:item.caseId,assignment:item.assignment,
     dossierStatus:item.dossierStatus,
-    aiChecklistApproval:'HUMAN_REVIEW_REQUIRED'
+    aiChecklistApproval:'CHECK_REVIEWED_A04_DOSSIER'
    })));
  }
  async executeOrder({planId,imo,actor,confirmExecution}={}){
