@@ -46,6 +46,9 @@ export function maritimePlanSchedulingContext(plan,dashboard,snapshot){
    regimes:entry.regimes,regime:primaryRegime,
    vesselType:vesselClass(original?.vesselType),
    portId:port?.port_id||'',portName:port?.port_name||portEvent?.port||'',
+   // Only a verified source-provided port is immutable. An officer-selected
+   // port in the form must remain editable before schedule preview.
+   portSourceLocked:!!port?.port_id,
    etaLocal:arrivalLocal,etdLocal:departureLocal,
    etdSource:dateEvent?'SOURCE_FINAL_NO_DATE_APPROVAL':'ETD_NOT_PROVIDED',
    dateEvidenceReference:dateEvent?.sourceReference||'',
