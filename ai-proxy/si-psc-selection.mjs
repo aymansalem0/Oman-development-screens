@@ -203,7 +203,7 @@ export class SiPscSelection{
   }
   async pool({period=null,port=null}={}){
     const {state,projection}=await this._effectiveSelection();
-    const policy=state.policies.at(-1);
+    const policy=state.policies.at(-1),config=policy.config;
     const eligible=projection.eligible.map(({event:e,bucket,nmcRisk,manualDecision})=>({
       eventKey:e.eventKey,imo:e.payload.imo,
       vesselName:this.targeting.bundles.find(v=>String(v.imo)===e.payload.imo)
@@ -221,7 +221,6 @@ export class SiPscSelection{
       selectionDecision:manualDecision,arrivalTime:bucket.etaMs
     }));
     const summaries=projection.summaries;
-    const byBucket=new Map(summaries.map(x=>[x.bucket,x]));
     const ordered=[...eligible].sort((a,b)=>
       a.period.localeCompare(b.period)||a.bucket.localeCompare(b.bucket)||
       (b.nmcRisk?.score??-1)-(a.nmcRisk?.score??-1)||
@@ -230,7 +229,6 @@ export class SiPscSelection{
     for(const item of ordered){
       const rank=(rankCounter.get(item.bucket)||0)+1;
       rankCounter.set(item.bucket,rank);
-      const g=byBucket.get(item.bucket);
       item.ruleRank=rank;
       item.ruleRecommended=item.selectionStatus==='RULE_SHORTLISTED'||
         item.selectionStatus==='SELECTED';
