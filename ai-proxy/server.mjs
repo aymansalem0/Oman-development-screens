@@ -1280,6 +1280,14 @@ const server = createServer(async (req, res) => {
         }
         return respond(res,200,{status:'ok',...validated});
       }
+      if(path==='/api/si/v1/maritime-scheduling/my-work-orders'&&req.method==='GET'){
+        dashboards.assertRole(req,'EDITOR');
+        if(!siV2WorkOrdersReady)
+          return respond(res,503,{error:'SI_V2_MIGRATION_019_REQUIRED'});
+        const identity=moeiAuth.session(req);
+        const actor=identity?.email||identity?.username||'UNKNOWN_INSPECTOR';
+        return respond(res,200,{status:'ok',orders:await siV2WorkOrders.mine(actor)});
+      }
       // Supervisor approval of a revalidated whole-plan schedule issues a
       // durable work-order roster. Case/dossier dispatch is a distinct retryable
       // action; engineer execution never changes previously approved slots.
