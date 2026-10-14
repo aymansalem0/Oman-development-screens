@@ -145,12 +145,25 @@ export interface SiRollingPlan{
  approvedBatchId:string|null;vesselCount:number;
  candidateCount?:number;deferredCount?:number;
 }
+export interface SiC01DataReadiness{
+ schemaVersion:'SI_C01_READINESS_V1';
+ status:'NO_CANDIDATES'|'SCOPE_LIMIT'|'REVIEW_RECOMMENDED'|'READY_WITH_GAPS'|'READY';
+ sourceSnapshotHash:string|null;currentSourceOnly:true;externalAiCalls:0;
+ eligibleWorkflows:number;eligibleVessels:number;
+ confirmedEtdVessels:number;missingConfirmedEtdVessels:number;
+ conflictingEtdVessels:number;incidentReviewedVessels:number;
+ riskAssessedVessels:number;evidenceBackedVessels:number;
+ withoutExecutionSignalVessels:number;
+ selectionRequiresOfficerApproval:true;etDAndIncidentRankingOnly:true;
+ notes:string;
+}
 export interface SiInspectionPlanState{
  planId?:string|null;planNumber?:string|null;planStatus?:string|null;
  readOnlyHistorical?:boolean;historicalSourceChanged?:boolean;
  selectionMode?:'MANUAL'|'AI_ASSISTED';manualSelection?:boolean;
  availableCount?:number;deferredCount?:number;notSelectedCount?:number;
  candidatesAtCreation?:number|null;
+ dataReadiness?:SiC01DataReadiness|null;
  planPeriod?:{startsOn:string;endsOn:string}|null;
  status:'ok';provider:'MOCK'|'AIRIA';mock:boolean;
  sourceHash:string;revision:number;generatedAt:string|null;

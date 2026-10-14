@@ -101,6 +101,63 @@ export function buildC01Source(dashboard,pscPolicy=null){
   return {...source,snapshotHash:hash(source)};
 }
 /**
+ * No-cost/read-only preflight for the EXACT current C01 source snapshot.
+ * Count physical vessels, not duplicate regimes/source events. Missing ETD,
+ * saved risk or reviewed incidents are DATA GAPS, never fabricated values.
+ * This does not call Airia or override any candidate eligibility rule.
+ */
+export function summarizeC01Readiness(source){
+  const candidates=Array.isArray(source?.candidates)?source.candidates:[];
+  const byImo=new Map();
+  for(const c of candidates){
+    if(!c||typeof c.imo!=='string')continue;
+    const summary=byImo.get(c.imo)||{
+      hasVerifiedEtd:false,hasReviewedIncident:false,hasSavedRisk:false,
+      hasEvidence:false,hasEtdConflict:false,regimes:new Set()
+    };
+    const rule=inspectionRanking(c);
+    summary.hasVerifiedEtd ||= rule.criterion==='DEPARTURE_SOON';
+    summary.hasReviewedIncident ||= c.incidentHumanReviewed===true&&
+      Number.isFinite(c.incidentSeverity)&&c.incidentSeverity>=0&&
+      c.incidentSeverity<=100;
+    summary.hasSavedRisk ||= Number.isFinite(c.currentRisk?.score);
+    summary.hasEvidence ||= Array.isArray(c.allowedEvidence)&&
+      c.allowedEvidence.length>0;
+    summary.hasEtdConflict ||= c.departureStatus==='CONFLICT';
+    if(typeof c.regime==='string')summary.regimes.add(c.regime);
+    byImo.set(c.imo,summary);
+  }
+  const vessels=[...byImo.values()];
+  const count=fn=>vessels.filter(fn).length;
+  const vesselCount=vessels.length;
+  const confirmedEtdVessels=count(v=>v.hasVerifiedEtd);
+  const incidentReviewedVessels=count(v=>v.hasReviewedIncident);
+  const riskAssessedVessels=count(v=>v.hasSavedRisk);
+  const evidenceBackedVessels=count(v=>v.hasEvidence);
+  const conflictingEtdVessels=count(v=>v.hasEtdConflict);
+  const withoutExecutionSignalVessels=count(v=>!v.hasVerifiedEtd&&!v.hasReviewedIncident);
+  const eligibleWorkflows=candidates.length;
+  const status=eligibleWorkflows===0?'NO_CANDIDATES':
+    eligibleWorkflows>100?'SCOPE_LIMIT':
+    conflictingEtdVessels>0||evidenceBackedVessels<vesselCount?
+      'REVIEW_RECOMMENDED':
+      confirmedEtdVessels<vesselCount||riskAssessedVessels<vesselCount||
+      incidentReviewedVessels<vesselCount?'READY_WITH_GAPS':'READY';
+  return {
+    schemaVersion:'SI_C01_READINESS_V1',status,
+    sourceSnapshotHash:source?.snapshotHash||null,
+    currentSourceOnly:true,externalAiCalls:0,
+    eligibleWorkflows,eligibleVessels:vesselCount,
+    confirmedEtdVessels,missingConfirmedEtdVessels:vesselCount-confirmedEtdVessels,
+    conflictingEtdVessels,incidentReviewedVessels,
+    riskAssessedVessels,evidenceBackedVessels,
+    withoutExecutionSignalVessels,
+    selectionRequiresOfficerApproval:true,
+    etDAndIncidentRankingOnly:true,
+    notes:'Only actually saved, verified source data are counted. Missing ETD / incident severity remain explicit gaps; no inferred time or risk score is created.'
+  };
+}
+/**
  * Airia PipelineExecution returns an envelope with a result property.
  * The SDK documents result as the execution output, which can be an encoded
  * JSON STRING even while the HTTP response itself is valid JSON.

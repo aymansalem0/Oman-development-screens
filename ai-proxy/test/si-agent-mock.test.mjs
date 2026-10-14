@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {buildC01Source,validateC01,unwrapC01AiriaResult,c01RecommendationContractFailure,SiCandidateAgent} from '../si-candidate-agent.mjs';
+import {buildC01Source,validateC01,unwrapC01AiriaResult,c01RecommendationContractFailure,SiCandidateAgent,summarizeC01Readiness} from '../si-candidate-agent.mjs';
 import {mockSiC01,mockSiP01,mockSiA04} from '../si-agent-mock.mjs';
 import {validateP01} from '../si-ai-prioritization.mjs';
 import {validateA04} from '../si-inspection-preparation.mjs';
@@ -392,4 +392,50 @@ test('Saved unselected PSC operational ETD informs NMC ranking but not PSC selec
  assert.deepEqual(input.candidates[0].sourceTypes,['NMC_CASE']);
  assert.equal(input.candidates[0].requiredInPlan,true);
  assert.equal(input.candidates[0].operationalSourceEvents[0].port,'Jebel Ali');
+});
+
+test('C01 preflight shows truthful saved evidence and missing ETD without an AI call',()=>{
+ const snapshot=buildC01Source(inputs(),{version:6});
+ const coverage=summarizeC01Readiness(snapshot);
+ assert.equal(coverage.schemaVersion,'SI_C01_READINESS_V1');
+ assert.equal(coverage.sourceSnapshotHash,snapshot.snapshotHash);
+ assert.equal(coverage.externalAiCalls,0);
+ assert.equal(coverage.eligibleWorkflows,2);
+ assert.equal(coverage.eligibleVessels,2);
+ assert.equal(coverage.confirmedEtdVessels,0);
+ assert.equal(coverage.missingConfirmedEtdVessels,2);
+ assert.equal(coverage.riskAssessedVessels,1);
+ assert.equal(coverage.evidenceBackedVessels,2);
+ assert.equal(coverage.withoutExecutionSignalVessels,2);
+ assert.equal(coverage.status,'READY_WITH_GAPS');
+});
+test('C01 readiness deduplicates same IMO workflows and makes conflicting ETD visible',()=>{
+ const future=new Date(Date.now()+86400000).toISOString();
+ const source={snapshotHash:'b'.repeat(64),candidates:[
+  {imo:'9328471',regime:'UAE_SERVICE_INSPECTION',candidateKey:'service',
+   departureAt:future,departureVerified:true,incidentHumanReviewed:false,
+   currentRisk:{score:65},allowedEvidence:['MSW-1']},
+  {imo:'9328471',regime:'PORT_STATE_CONTROL',candidateKey:'psc',
+   departureAt:future,departureVerified:true,departureStatus:'VERIFIED',
+   allowedEvidence:['PSC-1']},
+  {imo:'9400409',regime:'FOCUSED_INSPECTION',candidateKey:'nmc',
+   departureAt:null,departureVerified:false,departureStatus:'CONFLICT',
+   incidentSeverity:85,incidentHumanReviewed:true,
+   allowedEvidence:[]}
+ ]};
+ const result=summarizeC01Readiness(source);
+ assert.equal(result.eligibleWorkflows,3);
+ assert.equal(result.eligibleVessels,2);
+ assert.equal(result.confirmedEtdVessels,1);
+ assert.equal(result.incidentReviewedVessels,1);
+ assert.equal(result.conflictingEtdVessels,1);
+ assert.equal(result.evidenceBackedVessels,1);
+ assert.equal(result.status,'REVIEW_RECOMMENDED');
+ const over=summarizeC01Readiness({
+  ...source,candidates:Array.from({length:101},(_,i)=>({
+   imo:String(9000000+i),allowedEvidence:['EV-'+i]
+  }))
+ });
+ assert.equal(over.status,'SCOPE_LIMIT');
+ assert.equal(summarizeC01Readiness({candidates:[]}).status,'NO_CANDIDATES');
 });
