@@ -44,7 +44,7 @@ const original=()=>({
    checklistFocus:[{existingItemId:'pollution',focus:'REVIEW'}],
    predictedDeficiencies:[{category:'pollution',evidenceIds:['E-1']}],
    suggestedAdditionalItems:[{title:'Source-based follow-up',evidenceIds:['E-2']}],
-   missingEvidence:['Original endorsed document unavailable']}},
+   missingEvidence:['Original endorsed document unavailable']},
   review:null}
 });
 const schedule={id:'SCHED-1',operationalBookingConfirmed:false};
