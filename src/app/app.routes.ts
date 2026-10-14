@@ -9,6 +9,7 @@ import { ActivityClassificationMappingComponent } from './pages/activity-classif
 const base = 'dashboard/maritime-navigation/navigation-aids-installation-approval';
 
 const rawRoutes: Routes = [
+  { path: 'moei/seafarers', loadComponent: () => import('./pages/moei-seafarer-management.component').then(m => m.MoeiSeafarerManagementComponent) },
   { path: 'moei/login', loadComponent: () => import('./pages/moei-admin-login.component').then(m => m.MoeiAdminLoginComponent) },
   { path: '', pathMatch: 'full', redirectTo: 'moei/nmc' },
   { path: base, component: ApprovalListComponent },
