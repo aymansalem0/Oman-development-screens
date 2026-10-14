@@ -183,7 +183,24 @@ import {SiBulkJob,SiBulkPlanService,SiBulkPreview,SiBulkVessel,SiCapacityPreview
         <td>{{capacityPriority(r.imo)?.sourcePoints??'—'}}</td>
         <td>{{capacityPriority(r.imo)?.riskPoints??copy('Unassessed','غير مقيم')}}</td>
         <td><b [class.capacity-gap]="r.status==='UNSCHEDULED'">{{r.status}}</b>
-         <small *ngIf="r.blocker">{{r.diagnostics?.code||r.blocker}}</small></td>
+         <small *ngIf="r.blocker">{{r.diagnostics?.code||r.blocker}}</small>
+         <details *ngIf="r.diagnostics as d" class="capacity-diagnostic">
+          <summary>{{copy('Why not schedulable?','لماذا لم تتم جدولة السفينة؟')}}</summary>
+          <p>{{copy('Action','الإجراء')}}: {{d.nextAction||d.code}}</p>
+          <p>{{copy('Reviewed slots / engineers','المواعيد / المهندسون المفحوصون')}}:
+           {{d.candidateOptions??0}} / {{d.candidateInspectors??0}}</p>
+          <p>{{copy('Conflicts / daily capacity','التعارضات / الطاقة اليومية')}}:
+           {{d.timeOrTravelConflicts??0}} / {{d.dailyCapacityConflicts??0}}</p>
+          <ul *ngIf="d.inspectorExclusions?.length">
+           <li *ngFor="let x of d.inspectorExclusions">
+            {{x.inspectorId}}: {{x.reasonCodes.join(' · ')}}
+           </li>
+          </ul>
+          <p *ngIf="d.inspectorExclusions?.length">
+           {{copy('Overtime is an option only after independent HR authorization; source-final vessel windows and forbidden travel routes cannot be overridden.',
+            'العمل خارج الدوام خيار مشروط بموافقة الموارد البشرية؛ ولا يجوز تجاوز مواعيد السفينة النهائية أو مسارات الانتقال المحظورة.')}}
+          </p>
+         </details></td>
         <td>{{r.assignment?.inspectorName||'—'}}
          <small>{{r.assignment?.portName||''}} · {{r.assignment?.startLocal||''}}</small>
          <small *ngIf="r.assignment?.crossPort">
@@ -383,6 +400,11 @@ import {SiBulkJob,SiBulkPlanService,SiBulkPreview,SiBulkVessel,SiCapacityPreview
  .capacity-options select{min-height:39px;padding:9px;margin:0 8px;border:1px solid #b5cbd0;
   border-radius:7px;background:#fff}
  .capacity-gap{color:#ae582f}
+ .capacity-diagnostic{max-width:340px;text-align:start;font-size:11px;padding:5px 0}
+ .capacity-diagnostic summary{color:#095b7b;cursor:pointer;font-weight:850;text-decoration:underline}
+ .capacity-diagnostic p{margin:7px 0}
+ .capacity-diagnostic ul{padding-inline-start:18px;max-height:150px;overflow:auto}
+
  @media(max-width:600px){.capacity-weight-row{grid-template-columns:1fr 70px}
   .capacity-weight-row input{grid-column:1 / -1;grid-row:2}
   .capacity-buttons{align-items:stretch;flex-direction:column}}
