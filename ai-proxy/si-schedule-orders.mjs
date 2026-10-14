@@ -139,18 +139,28 @@ export class SiScheduleOrders{
    !/^[a-f0-9]{64}$/i.test(expectedHash||'')||
    !label(selectedOptionId,80))
    err('SI_SCHED_APPROVAL_FIELDS_INVALID',422);
-  if(plan.status!=='APPROVED'||plan.revision!==expectedPlanRevision||
+  if(!['APPROVED','IN_EXECUTION'].includes(plan.status)||
+   plan.revision!==expectedPlanRevision||
    proposal.planId!==plan.id||proposal.planRevision!==plan.revision||
    proposal.proposalHash!==expectedHash)
    err('SI_SCHED_APPROVAL_STALE_RECALCULATE',409);
   const variant=proposal.variants?.find(v=>v.optionId===selectedOptionId);
   if(!variant||!Array.isArray(variant.assignments)||
-   variant.assignments.length!==plan.approvedVessels.length||
-   proposal.summary.total!==variant.assignments.length||
+   variant.assignments.length<1||
+   !Number.isInteger(proposal.summary?.total)||
+   !Number.isInteger(proposal.summary?.proposed)||
+   !Number.isInteger(proposal.summary?.unscheduled)||
+   variant.assignments.length!==proposal.summary.proposed||
+   proposal.summary.total!==proposal.summary.proposed+proposal.summary.unscheduled||
    variant.assignments.some(x=>!okSlot(x))||
    new Set(variant.assignments.map(x=>x.imo)).size!==variant.assignments.length||
    variant.assignments.some(x=>!plan.approvedVessels.some(v=>v.imo===x.imo)))
-   err('SI_SCHED_ALL_VESSELS_MUST_HAVE_VALID_ASSIGNMENT',409);
+   err('SI_SCHED_APPROVAL_ASSIGNMENTS_INVALID',409);
+  // A conditional HR exception is an AI suggestion, NOT an approved shift:
+  // never issue an order for a merely proposed overtime authorization.
+  if(variant.assignments.some(a=>(a.manualReasons||[])
+    .includes('OVERTIME_APPROVAL_REQUIRED')))
+   err('SI_SCHED_OVERTIME_SHIFT_APPROVAL_REQUIRED',409);
   const crossPortAssignments=variant.assignments.filter(a=>a.crossPort===true);
   if(crossPortAssignments.some(a=>!label(a.originPortId,100)||
     a.originPortId===a.portId||
@@ -171,18 +181,33 @@ export class SiScheduleOrders{
       'WHERE LOCK_ID=1 FOR UPDATE');
     const previous=await this._records(con);
     const existing=previous.find(x=>x.planId===plan.id);
-    if(existing){
-     if(existing.proposalHash===expectedHash&&
-        existing.optionId===selectedOptionId)return existing;
-     err('SI_SCHED_ALREADY_APPROVED_REVIEW_ORDERS',409);
-    }
+    const rounds=existing?.approvalRounds||[];
+    if(existing&&
+     ((existing.proposalHash===expectedHash&&existing.optionId===selectedOptionId)||
+       rounds.some(x=>x.proposalHash===expectedHash&&
+        x.optionId===selectedOptionId)))return existing;
+    if(existing&&existing.mode!==(demoMode?'POC_MOCK':'ERP_EXCEL_POC'))
+     err('SI_SCHED_APPROVAL_DATA_MODE_CONFLICT',409);
+    const issuedImos=new Set((existing?.orders||[]).map(o=>o.imo));
+    const pendingImos=new Set(plan.approvedVessels.filter(v=>
+     !issuedImos.has(v.imo)).map(v=>v.imo));
+    // Client payload is always the full approved plan. The server *only*
+    // accepts an exact fresh proposal over the currently unissued portion.
+    if(!pendingImos.size||proposal.summary.total!==pendingImos.size||
+      variant.assignments.some(a=>!pendingImos.has(a.imo))||
+      (Array.isArray(proposal.rows)&&
+       (proposal.rows.length!==pendingImos.size||
+        new Set(proposal.rows.map(x=>x.imo)).size!==pendingImos.size||
+        proposal.rows.some(x=>!pendingImos.has(x.imo)))))
+     err('SI_SCHED_APPROVAL_PENDING_ROSTER_CHANGED_REPREVIEW',409);
     for(const other of previous)for(const o of other.orders){
-     if(other.planId===plan.id)continue;
      if(variant.assignments.some(a=>overlap(a,o.assignment)))
-      err('SI_SCHED_ENGINEER_ALREADY_ASSIGNED_TO_OTHER_PLAN',409);
+      err(other.planId===plan.id?
+       'SI_SCHED_ENGINEER_ALREADY_ASSIGNED_IN_PLAN':
+       'SI_SCHED_ENGINEER_ALREADY_ASSIGNED_TO_OTHER_PLAN',409);
     }
-    const approvedAt=at(),scheduleId=id();
-    const orders=variant.assignments.map(a=>({
+    const approvedAt=at(),scheduleId=existing?.id||id();
+    const newOrders=variant.assignments.map(a=>({
      id:id(),scheduleId,planId:plan.id,imo:a.imo,
      planRank:plan.approvedVessels.find(v=>v.imo===a.imo).planRank,
      assignment:clone(a),status:'ISSUED',version:1,caseId:null,
@@ -191,31 +216,73 @@ export class SiScheduleOrders{
      issuedBy:actor.trim(),error:null,audit:[{
       at:approvedAt,actor:actor.trim(),action:'WORK_ORDER_ISSUED'}]
     }));
-    const record={id:scheduleId,planId:plan.id,planRevision:plan.revision,
-     proposalHash:expectedHash,optionId:selectedOptionId,
+    const orders=[...(existing?.orders||[]),...newOrders];
+    const remaining=new Set([...pendingImos].filter(imo=>
+     !newOrders.some(o=>o.imo===imo)));
+    const oldExceptions=new Map((existing?.exceptions||[]).map(x=>[x.imo,x]));
+    const exceptions=[...remaining].map(imo=>{
+     const row=proposal.rows?.find(r=>r.imo===imo);
+     const prior=oldExceptions.get(imo);
+     return {imo,status:'PENDING_SCHEDULING_RESOLUTION',
+      reasonCode:row?.diagnostics?.code||row?.blocker||
+       prior?.reasonCode||'GLOBAL_PLAN_CONFLICT_OR_CAPACITY',
+      diagnostics:row?.diagnostics||prior?.diagnostics||null,
+      firstDetectedAt:prior?.firstDetectedAt||approvedAt,
+      lastReviewedAt:approvedAt,
+      resolution:'PENDING_SUPERVISOR_ACTION'};
+    });
+    const addedCrossPorts=crossPortAssignments.map(a=>({
+     imo:a.imo,inspectorId:a.inspectorId,fromPortId:a.originPortId,
+     toPortId:a.portId,travelMinutes:a.travelMinutes
+    }));
+    const newRound={proposalHash:expectedHash,optionId:selectedOptionId,
+     actor:actor.trim(),reason:reason.trim(),at:approvedAt,
+     issuedImos:newOrders.map(o=>o.imo),
+     unresolvedImos:[...remaining],crossPortApproved:
+      crossPortAssignments.length>0&&confirmCrossPort===true};
+    const record={
+     ...(existing||{}),id:scheduleId,planId:plan.id,
+     // Retain original primary approval/hash for legacy consumers.
+     planRevision:existing?.planRevision??plan.revision,
+     proposalHash:existing?.proposalHash||expectedHash,
+     optionId:existing?.optionId||selectedOptionId,
      erpSnapshotId:proposal.erpSnapshotId,
      mode:demoMode?'POC_MOCK':'ERP_EXCEL_POC',
-     status:'APPROVED_WORK_ORDERS_ISSUED',approvedBy:actor.trim(),
-     approvalReason:reason.trim(),approvedAt,
-     crossPortApprovalConfirmed:crossPortAssignments.length>0&&
-       confirmCrossPort===true,
-     crossPortApprovalBy:crossPortAssignments.length?actor.trim():null,
-     crossPortOrders:crossPortAssignments.map(a=>({
-       imo:a.imo,inspectorId:a.inspectorId,fromPortId:a.originPortId,
-       toPortId:a.portId,travelMinutes:a.travelMinutes
-     })),
+     status:remaining.size?'PARTIALLY_SCHEDULED':'APPROVED_WORK_ORDERS_ISSUED',
+     approvedBy:existing?.approvedBy||actor.trim(),
+     approvalReason:existing?.approvalReason||reason.trim(),
+     approvedAt:existing?.approvedAt||approvedAt,
+     updatedAt:approvedAt,
+     approvalRounds:[...rounds,newRound],
+     exceptions,
+     crossPortApprovalConfirmed:(existing?.crossPortApprovalConfirmed===true)||
+      (crossPortAssignments.length>0&&confirmCrossPort===true),
+     crossPortApprovalBy:crossPortAssignments.length?actor.trim():
+      existing?.crossPortApprovalBy||null,
+     crossPortOrders:[...(existing?.crossPortOrders||[]),...addedCrossPorts],
      operationalBookingConfirmed:false,
      officialRegulatoryInspectionAuthorized:false,
      orders};
-    if(!con){this.write([...previous,record]);return record;}
-    await con.execute('INSERT INTO SI_SCHED_APPROVAL '+
-     '(SCHEDULE_ID,PLAN_ID,PLAN_REVISION,PROPOSAL_HASH,OPTION_ID,'+
-     'ERP_SNAPSHOT_ID,MODE_CODE,DOC_JSON,APPROVED_BY) '+
-     'VALUES(:id,:planId,:revision,:hash,:optionId,:erp,:mode,:data,:actor)',{
-      id:scheduleId,planId:plan.id,revision:plan.revision,hash:expectedHash,
-      optionId:selectedOptionId,erp:record.erpSnapshotId,mode:record.mode,
-      data:doc({...record,orders:[]}),actor:record.approvedBy});
-    for(const o of orders){
+    if(!con){
+     this.write(existing?previous.map(x=>x.planId===plan.id?record:x):
+      [...previous,record]);return record;
+    }
+    if(!existing){
+     await con.execute('INSERT INTO SI_SCHED_APPROVAL '+
+      '(SCHEDULE_ID,PLAN_ID,PLAN_REVISION,PROPOSAL_HASH,OPTION_ID,'+
+      'ERP_SNAPSHOT_ID,MODE_CODE,DOC_JSON,APPROVED_BY) '+
+      'VALUES(:id,:planId,:revision,:hash,:optionId,:erp,:mode,:data,:actor)',{
+       id:scheduleId,planId:plan.id,revision:plan.revision,hash:expectedHash,
+       optionId:selectedOptionId,erp:record.erpSnapshotId,mode:record.mode,
+       data:doc({...record,orders:[]}),actor:record.approvedBy});
+    }else{
+     const updated=await con.execute('UPDATE SI_SCHED_APPROVAL '+
+      'SET DOC_JSON=:data,UPDATED_AT=SYSTIMESTAMP '+
+      'WHERE SCHEDULE_ID=:id AND PLAN_ID=:planId',{
+       data:doc({...record,orders:[]}),id:scheduleId,planId:plan.id});
+     if(updated.rowsAffected!==1)err('SI_SCHED_APPROVAL_CONCURRENT_CONFLICT',409);
+    }
+    for(const o of newOrders){
      await con.execute('INSERT INTO SI_SCHED_WORK_ORDER '+
       '(ORDER_ID,SCHEDULE_ID,IMO,INSPECTOR_ID,START_UTC,END_UTC,PORT_ID,'+
       'STATUS_CODE,VERSION_NO,DOC_JSON) VALUES '+
@@ -227,12 +294,15 @@ export class SiScheduleOrders{
     }
     await con.execute('INSERT INTO SI_SCHED_ORDER_AUDIT '+
      '(AUDIT_ID,SCHEDULE_ID,EVENT_CODE,ACTOR,DETAILS_JSON) '+
-     "VALUES(:id,:schedule,'SUPERVISOR_APPROVED_SCHEDULE',:actor,:detail)",{
-      id:id(),schedule:scheduleId,actor:record.approvedBy,
-      detail:doc({optionId:selectedOptionId,vesselCount:orders.length,
-       erpSnapshotId:record.erpSnapshotId,mode:record.mode,
-       crossPortApprovalConfirmed:record.crossPortApprovalConfirmed,
-       crossPortOrders:record.crossPortOrders})});
+     'VALUES(:id,:schedule,:event,:actor,:detail)',{
+      id:id(),schedule:scheduleId,
+      event:remaining.size?'SUPERVISOR_APPROVED_PARTIAL_SCHEDULE':
+       'SUPERVISOR_APPROVED_SCHEDULE',
+      actor:actor.trim(),
+      detail:doc({optionId:selectedOptionId,addedImos:newOrders.map(x=>x.imo),
+       outstandingImos:[...remaining],erpSnapshotId:record.erpSnapshotId,
+       mode:record.mode,crossPortApprovalConfirmed:newRound.crossPortApproved,
+       crossPortOrders:addedCrossPorts})});
     await con.commit();return record;
    };
    if(this.mode==='json')return clone(await perform(null));
