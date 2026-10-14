@@ -40,7 +40,8 @@ export function validateMaritimeSchedulingInput(imo,row,erp,nowMs){
  if(!['BERTH','ANCHORAGE','TERMINAL'].includes(row.locationType)||
     !row.locationName||row.siteAccessConfirmed!==true)
   return {reason:'BERTH_ANCHORAGE_AND_ACCESS_CONFIRMATION_REQUIRED'};
- if(!['MSW_FINAL','OFFICER_FINAL','OFFICER_CONFIRMED'].includes(row.windowSource)||
+ if(!['MSW_FINAL','OFFICER_FINAL','OFFICER_CONFIRMED',
+     ...(row.pocDemo===true?['POC_DEMO']:[])].includes(row.windowSource)||
     !row.windowEvidenceReference)
   return {reason:'FINAL_VESSEL_ARRIVAL_DEPARTURE_WINDOW_REQUIRED'};
  let start,end;
