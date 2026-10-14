@@ -244,7 +244,7 @@ import {SiBulkJob,SiBulkPlanService,SiBulkPreview,SiBulkVessel,SiCapacityPreview
      <p class="eyebrow">{{copy('STEP 05 · ISSUED WORK ORDERS','الخطوة الخامسة · أوامر التكليف الصادرة')}}</p>
      <h2>{{copy('Plan and capacity approved; work orders issued','اعتمدت الخطة وتوزيع المهندسين وأوامر التكليف')}}</h2>
      <p class="notice">{{copy('Approved vessels','السفن المعتمدة')}}: <b>{{approval.approvedVesselCount}}</b> ·
-      {{copy('Inspection cases created','حالات معاينة منشأة')}}: <b>{{approval.createdInspectionCases}}</b></p>
+      {{copy('Inspection cases created','حالات معاينة منشأة')}}: <b>{{approval.createdInspectionCases}}</b> · {{copy('Work orders issued','أوامر التكليف الصادرة')}}: <b>{{approval.issuedWorkOrders}}</b></p>
      <p>{{copy('Vessels, engineers and inspection times are already approved together. Continue to the work-order board to prepare checklists and field visits.',
       'تم اعتماد السفن والمهندسين والمواعيد معًا. افتح أوامر التكليف لتحضير القوائم والزيارات الميدانية.')}}</p>
      <div class="step-actions">
@@ -369,6 +369,23 @@ import {SiBulkJob,SiBulkPlanService,SiBulkPreview,SiBulkVessel,SiCapacityPreview
  .step-actions span{color:#607988;font-weight:850}.job-chip{padding:8px 12px;border-radius:16px;background:#dcf5e6;color:#087450}
  .job-chip.warning{background:#fff1de;color:#935e25}
  .error-text{color:#aa503b}
+
+ .capacity-weight-panel{background:#f5fafb;border:1px solid #c6dfe4;
+  padding:20px;border-radius:12px;margin:18px 0}
+ .capacity-weight-panel h3{font-size:14px;color:#176677;margin:0 0 12px}
+ .capacity-weight-row{display:grid;grid-template-columns:minmax(140px,1fr) minmax(120px,2fr) 54px;
+  gap:14px;align-items:center;padding:9px 0;border-bottom:1px solid #dde9e9;font-size:12px;font-weight:700}
+ .capacity-weight-row input{width:100%;accent-color:#087d7b;cursor:pointer}
+ .capacity-weight-row b{text-align:end;font-size:13px;color:#0f7772}
+ .capacity-buttons,.capacity-options{display:flex;gap:13px;align-items:center;
+  flex-wrap:wrap;margin:18px 0}
+ .capacity-options label{font-weight:750;font-size:12px}
+ .capacity-options select{min-height:39px;padding:9px;margin:0 8px;border:1px solid #b5cbd0;
+  border-radius:7px;background:#fff}
+ .capacity-gap{color:#ae582f}
+ @media(max-width:600px){.capacity-weight-row{grid-template-columns:1fr 70px}
+  .capacity-weight-row input{grid-column:1 / -1;grid-row:2}
+  .capacity-buttons{align-items:stretch;flex-direction:column}}
  @media(max-width:1220px){.wizard-main{margin-inline-start:90px;padding:24px}}
  @media(max-width:960px){.wizard-main{margin-inline-start:0;padding:20px}.steps{grid-template-columns:repeat(2,1fr)}}
  @media(max-width:600px){.wizard-main{padding:13px}.wizard-hero,.panel-head{display:block}.steps{gap:4px}.step-item{font-size:10px;padding:7px}
@@ -542,7 +559,8 @@ export class SiInspectionPlanWizardComponent implements OnInit,OnDestroy{
  get totalScopes():number{return this.preview?.vessels.reduce((n,v)=>n+v.inspectionRegimes.length,0)||0;}
  get canNext():boolean{return !!this.preview&&this.step<4&&this.preview.selectedVessels>0&&
   (!!this.preview.agentRunId||!!this.preview.manualSelection)&&
-  !this.preview.stale&&!this.hasMissingReasons&&!this.loading;}
+  !this.preview.stale&&!this.hasMissingReasons&&!this.loading&&
+  (this.step!==3||!!this.capacity?.readyForApproval)&&!this.capacityBusy;}
  ngOnInit():void{
   this.planId=this.route.snapshot.paramMap.get('planId');
   const incoming=this.route.snapshot.queryParamMap.get('imo')||'';
@@ -567,6 +585,8 @@ export class SiInspectionPlanWizardComponent implements OnInit,OnDestroy{
  ngOnDestroy():void{this.timer?.unsubscribe();}
  refresh():void{
   if(this.submitting||!this.planId)return;this.loading=true;this.error='';
+  this.capacity=null;this.capacityAiAdvice=null;this.selectedOptionId='';
+  this.capacityError='';
   this.api.preview(this.planId).subscribe({
    next:p=>{
     this.preview=p;this.loading=false;
@@ -581,28 +601,41 @@ export class SiInspectionPlanWizardComponent implements OnInit,OnDestroy{
  next():void{if(this.canNext)this.step++;}
  approve():void{
   if(this.returnedFromScheduling)return;
-  const p=this.preview;if(!this.planId||!p||this.submitting||this.jobBusy||!this.auth.isAdmin||
-   (!p.agentRunId&&!p.manualSelection)||p.stale||this.hasMissingReasons||this.reason.trim().length<8||!!this.v2RosterError)return;
-  const message=this.copy(
-   'Approve the roster of '+p.selectedVessels+' vessels for comprehensive scheduling? No inspection case or dossier will be created at plan approval.',
-   'اعتماد قائمة '+p.selectedVessels+' سفن لجدولتها إلكترونيًا؟ لن يتم إنشاء أي حالة معاينة أو دوسيه الآن.'
-  );
-  if(!window.confirm(message))return;
+  const p=this.preview,c=this.capacity;
+  if(!this.planId||!p||!c?.readyForApproval||this.submitting||
+   this.capacityBusy||this.jobBusy||!this.auth.isAdmin||p.stale||
+   this.hasMissingReasons||this.reason.trim().length<8||
+   !!this.v2RosterError||!this.selectedOptionId)return;
+  const chosen=c.proposal.variants.find(v=>v.optionId===this.selectedOptionId);
+  if(!chosen||chosen.assignments.length!==p.selectedVessels)return;
+  const remote=chosen.assignments.filter(a=>a.crossPort);
+  if(remote.length&&!window.confirm(this.copy(
+   'Approve '+remote.length+' qualified cross-port inspector assignment(s), with synthetic POC travel estimates?',
+   'هل تعتمد '+remote.length+' مهمة لمهندسين مؤهلين من موانئ أخرى بأزمنة انتقال تجريبية؟')))return;
+  if(!window.confirm(this.copy(
+   'Approve '+p.selectedVessels+' vessels and ALL their qualified engineer/time assignments in one transaction? No live ERP booking.',
+   'اعتماد '+p.selectedVessels+' سفينة مع مهندسيها ومواعيدها في معاملة واحدة؟ دون حجز ERP فعلي.')))return;
   this.submitting=true;this.error='';
-  this.api.approveForScheduling({
-    planId:this.planId!,reason:this.reason.trim(),expectedRevision:p.planRevision,
-    expectedSourceHash:p.sourceHash,confirmApproval:true
+  this.api.approveCapacityPlan({
+   planId:this.planId,weights:{...this.weights},
+   expectedCapacityHash:c.capacityHash,selectedOptionId:this.selectedOptionId,
+   expectedRevision:p.planRevision,expectedSourceHash:p.sourceHash,
+   reason:this.reason.trim(),confirmApproval:true,
+   confirmCrossPort:remote.length>0
   }).subscribe({
-    next:result=>{
-      this.submitting=false;this.scheduleApproval={
-        planId:result.planId,approvedVesselCount:result.approvedVesselCount,
-        createdInspectionCases:result.createdInspectionCases};
-      this.job=null;this.step=5;
-    },
-    error:e=>{
-      this.submitting=false;this.error=this.v2ApprovalError(
-        e?.error?.error||'SI_V2_PLAN_APPROVAL_UNAVAILABLE');
-    }
+   next:result=>{
+    this.submitting=false;
+    this.scheduleApproval={
+     planId:result.planId,approvedVesselCount:result.approvedVesselCount,
+     createdInspectionCases:result.createdInspectionCases,
+     issuedWorkOrders:result.schedule.orders.length};
+    this.job=null;this.step=5;
+   },
+   error:e=>{
+    this.submitting=false;
+    this.error=e?.error?.error||'SI_CAPACITY_APPROVAL_FAILED_REPREVIEW';
+    this.capacity=null;this.selectedOptionId='';this.capacityAiAdvice=null;
+   }
   });
  }
  private poll(id:string):void{
