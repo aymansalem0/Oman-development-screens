@@ -187,8 +187,8 @@ export function auditAiGovernanceGrouping(descriptors:ReadonlyArray<{key:string}
             <span>✓ {{tr('Source evidence, inspector decisions and setting revisions audited',
               'تدقيق الأدلة وقرارات المفتش وإصدارات الإعدادات')}}</span>
           </div>
-          <p class="governance-hint">{{tr('A01–A04 pipeline IDs are sourced from the 8 October 2026 Airia Partner Guide. Existing Conversational Smart Inspection may be evaluated as a Builder, but prose is not a validated checklist JSON contract.',
-            'معرفات A01–A04 مأخوذة من دليل Airia بتاريخ ٨ أكتوبر ٢٠٢٦. يمكن تقييم المساعد الحواري كمرشح لـBuilder، لكن النص الحواري ليس نموذج JSON معتمدًا للقائمة.')}}</p>
+          <p class="governance-hint">{{tr('Structured SI-C01/S01/V01/R01/X01 pipeline IDs and A01–A04 come from the Airia Partner API Guide updated 14 October 2026. Existing Conversational Smart Inspection may be evaluated as a Builder, but prose is not a validated checklist JSON contract.',
+            'معرفات A01–A04 ووكلاء SI-C01/S01/V01/R01/X01 مأخوذة من دليل Airia المحدث ١٤ أكتوبر ٢٠٢٦. يمكن تقييم المساعد الحواري كمرشح لـBuilder، لكن النص الحواري ليس نموذج JSON معتمدًا للقائمة.')}}</p>
         </section>
         <section class="publish-card">
           <h2>{{tr('Airia API Key · Encrypted Credential Governance','مفتاح Airia · إدارة الأسرار المشفرة')}}</h2>
