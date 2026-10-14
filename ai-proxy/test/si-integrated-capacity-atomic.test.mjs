@@ -34,7 +34,8 @@ function make(){
 const params=withinTransaction=>({
  expectedRevision:2,expectedSourceHash:HASH,
  actor:'supervisor@moei',reason:'Verified integrated inspector capacity',
- vessels:vessel,integratedDecision:decision,withinTransaction
+ vessels:vessel,integratedDecision:decision,
+ integratedSourceRows:plan().savedPlanRows,withinTransaction
 });
 test('integrated plan saves roster and orders under ONE Oracle commit',async()=>{
  const x=make();
