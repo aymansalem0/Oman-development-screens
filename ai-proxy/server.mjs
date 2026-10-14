@@ -1137,13 +1137,13 @@ const server = createServer(async (req, res) => {
       // Capacity-first plan: one supervisor approval for selected vessels,
       // verified staff availability/time/port and canonical 019 work orders.
       // This replaces the insecure old two-stage roster-then-schedule path.
-      const v2Approval=/^\\/api\\/si\\/v1\\/inspection-plans\\/([a-f0-9-]{36})\\/approve-for-scheduling$/.exec(path);
+      const v2Approval=/^\/api\/si\/v1\/inspection-plans\/([a-f0-9-]{36})\/approve-for-scheduling$/.exec(path);
       if(v2Approval&&req.method==='POST'){
         dashboards.assertRole(req,'PUBLISHER');
         return respond(res,409,{error:'SI_CAPACITY_FIRST_PREVIEW_AND_APPROVAL_REQUIRED',
           newRoute:'/api/si/v1/inspection-plans/'+v2Approval[1]+'/capacity-preview'});
       }
-      const capacityRoute=/^\\/api\\/si\\/v1\\/inspection-plans\\/([a-f0-9-]{36})\\/(capacity-preview|approve-capacity|capacity-ai-recommend)$/.exec(path);
+      const capacityRoute=/^\/api\/si\/v1\/inspection-plans\/([a-f0-9-]{36})\/(capacity-preview|approve-capacity|capacity-ai-recommend)$/.exec(path);
       if(capacityRoute&&req.method==='POST'){
         const operation=capacityRoute[2],planId=capacityRoute[1];
         dashboards.assertRole(req,operation==='approve-capacity'?'PUBLISHER':'EDITOR');
