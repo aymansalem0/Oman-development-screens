@@ -43,6 +43,7 @@ import {SiRollingPlanStore,SiRollingPlanError} from './si-rolling-plan-store.mjs
 import {SiBulkInspectionPlan,SiBulkApprovalError} from './si-bulk-inspection-plan.mjs';
 import {mockSiP01,mockSiA04,mockSiC01} from './si-agent-mock.mjs';
 import { SiInspectionPreparation, SiPreparationError } from './si-inspection-preparation.mjs';
+import {assembleSiVesselDossier} from './si-vessel-dossier.mjs';
 import { SiInspectionLifecycle, SiLifecycleError } from './si-inspection-lifecycle.mjs';
 import {SiScheduleOrders,SiWorkOrderError} from './si-schedule-orders.mjs';
 import {runSiPocAdvisor,siFutureAdvisorCoverage,SiPocAdvisorError} from './si-poc-workflow-advisors.mjs';
@@ -1677,6 +1678,26 @@ const server = createServer(async (req, res) => {
       if(path==='/api/si/v1/preparations'&&req.method==='GET'){
         dashboards.assertRole(req,'EDITOR');
         return respond(res,200,await siPreparation.list());
+      }
+      // Full source-grounded dossier is assembled from the same saved SI case
+      // and optional A04 overlay; GET must never call Airia or create cases.
+      const vesselDossierRoute=/^\/api\/si\/v1\/preparations\/([a-f0-9-]{36})\/dossier$/.exec(path);
+      if(vesselDossierRoute){
+        dashboards.assertRole(req,'EDITOR');
+        moeiAuth.require(req);
+        if(req.method!=='GET')return respond(res,405,{error:'METHOD_NOT_ALLOWED'});
+        const caseId=vesselDossierRoute[1];
+        const view=await siPreparation.get(caseId);
+        const schedules=siScheduleOrders.ready?await siScheduleOrders.all():[];
+        const linked=schedules.flatMap(schedule=>schedule.orders.map(order=>({
+          schedule,order
+        }))).find(x=>x.order.caseId===caseId)||null;
+        let checklist=null;
+        try{checklist=await siChecklistField.preview(caseId);}
+        catch{/* Unavailable checklist is an explicit dossier evidence gap. */}
+        return respond(res,200,assembleSiVesselDossier({
+          view,schedule:linked?.schedule,order:linked?.order,checklist
+        }));
       }
       const prepPath=/^\/api\/si\/v1\/preparations\/([a-f0-9-]{36})(?:\/(prepare|generate|review))?$/.exec(path);
       if(prepPath){
