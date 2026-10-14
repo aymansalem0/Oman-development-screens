@@ -332,10 +332,20 @@ export class SiCandidateWorkbenchComponent implements OnInit{
       confirmRun:true,confirmCost:!isMock,confirmBatchCount:calls
     }).subscribe({
       next:r=>{this.c01Busy=false;this.c01Run=r;this.c01Preview=null;
-        this.c01Message=this.copy('C01 advisory ready: verify each regime and decide manually.',
-          'توصيات C01 جاهزة: راجع كل نوع معاينة واتخذ القرار بنفسك.');},
-      error:e=>{this.c01Busy=false;this.c01Error=(e as {error?:{error?:string}})
-        ?.error?.error||'SI_C01_RUN_FAILED';}
+        const quarantine=r.manualReviewDueToAiContract||0;
+        this.c01Message=quarantine?
+          this.copy((r.verifiedAiRecommendations||0)+' verified Airia recommendations; '+
+            quarantine+' candidates require manual officer review.',
+            (r.verifiedAiRecommendations||0)+' توصية Airia موثقة، و'+
+            quarantine+' مرشح يحتاج مراجعة بشرية.'):
+          this.copy('C01 verified '+(r.verifiedAiRecommendations||0)+
+            ' recommendations. Official approval remains with the supervisor.',
+            'تحقق C01 من '+(r.verifiedAiRecommendations||0)+
+            ' توصية. يبقى الاعتماد الرسمي من صلاحية المسؤول.');},
+      error:e=>{this.c01Busy=false;
+        const issue=(e as {error?:{error?:string;reasonCode?:string}})?.error;
+        this.c01Error=(issue?.error||'SI_C01_RUN_FAILED')+
+          (issue?.reasonCode?' · '+issue.reasonCode:'');}
     });
   }
   priorityStatus:SiPriorityStatus|null=null;
