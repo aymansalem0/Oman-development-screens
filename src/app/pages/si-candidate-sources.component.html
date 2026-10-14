@@ -16,6 +16,21 @@
 
     <p *ngIf="error" class="notice error" role="alert">{{error}}</p>
     <p *ngIf="success" class="notice success" role="status">{{success}}</p>
+    <div *ngIf="lastPscQuota as quota" class="notice info">
+      <strong>{{copy('PSC quota after Excel commit','حصة PSC بعد اعتماد Excel')}}</strong>
+      <ng-container *ngIf="quota.selectedEvents!==undefined">
+        · {{quota.selectedEvents}} / {{quota.eligibleEvents}}
+        {{copy('Port Call events shortlisted','حدث وصول مرشح')}}
+        · {{quota.automaticEvents}} {{copy('from published rules','بالقواعد المنشورة')}}
+        · {{quota.ratePercent}}% {{copy('default published rate','النسبة الأساسية المنشورة')}}
+      </ng-container>
+      <span *ngIf="quota.status==='READINESS_RECALCULATION_PENDING'">
+        {{copy('Source is saved; quota projection will be available when Candidate Center reloads.',
+          'تم حفظ المصدر، وسيظهر حساب الحصة عند تحديث مركز الترشيح.')}}
+      </span>
+      <a routerLink="/moei/smart-inspection/candidates">
+        {{copy('Open Candidate Center →','افتح مركز الترشيح ←')}}</a>
+    </div>
     <p *ngIf="loading" class="notice">{{copy('Loading source imports and approved NMC referrals…','جارٍ تحميل المصادر وإحالات NMC المعتمدة…')}}</p>
     <section class="access panel">
       <div>
