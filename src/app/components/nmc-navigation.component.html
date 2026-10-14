@@ -124,6 +124,11 @@
           <span class="nav-icon">▤</span>
           <span class="nav-label">{{copy('Inspection Preparation & A04','تحضير المعاينة وملف A04')}}</span>
         </a>
+        <a class="nav-link" routerLink="/moei/smart-inspection/my-work-orders"
+           [class.active]="currentPath==='/moei/smart-inspection/my-work-orders'">
+          <span class="nav-icon">☑</span>
+          <span class="nav-label">{{copy('My Assigned Inspections','أوامر المعاينة المسندة إليّ')}}</span>
+        </a>
         <a class="nav-link" routerLink="/moei/smart-inspection/scheduling"
            [class.active]="isInspectionScheduling"
            [attr.aria-current]="isInspectionScheduling?'page':null"
