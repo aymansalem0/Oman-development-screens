@@ -51,7 +51,10 @@ interface CapacitySchedule{
 interface CapacityPreview{
  proposal:CapacitySchedule;selection:CapacityContext['selection']&{
   capacity:{mandatoryUnscheduled:string[];unscheduledImos:{
-   imo:string;blocker:string|null}[]}};
+   imo:string;blocker:string|null}[];
+   exceptionActions:{imo:string;sourceReason:string|null;mandatory:boolean;
+    actions:{code:string;status:string;inspectorIds:string[];
+     prerequisiteCodes:string[];canExecuteAutomatically:false}[]}[]}};
 }
 @Component({
  selector:'app-si-inspection-plan-wizard',
@@ -326,6 +329,23 @@ interface CapacityPreview{
         <td>{{row.imo}}</td><td>{{row.status}}</td>
         <td>{{row.blocker||copy('Feasible','قابل للجدولة')}}</td></tr></tbody>
       </table></div>
+      <section class="capacity-exceptions" *ngIf="capacityPreview?.selection?.capacity?.exceptionActions as exceptions">
+       <h3>{{copy('Exception resolution proposals (NOT approved assignments)',
+        'بدائل علاج الاستثناءات (ليست تكليفات معتمدة)')}}</h3>
+       <article *ngFor="let entry of exceptions">
+        <h4>IMO {{entry.imo}} · {{entry.sourceReason||'—'}}</h4>
+        <div *ngFor="let solution of entry.actions">
+         <strong>{{capacityActionLabel(solution.code)}}</strong>
+         <small>{{copy('Eligible inspector suggestions','مهندسون مرشحون')}}:
+          {{solution.inspectorIds.join(' · ')||'—'}}</small>
+         <small>{{copy('Requires prior authorization and revalidation','يتطلب موافقات وإعادة تحقق')}}:
+          {{solution.prerequisiteCodes.join(' · ')}}</small>
+         <small>{{solution.status}}</small>
+        </div>
+       </article>
+       <p class="hint">{{copy('Outside-hours shifts require signed HR approval; neighboring-port reassignments require eligibility, travel and supervisor signoff. Cancellation/deferment is NEVER assumed legal without source-backed permission. Re-run capacity after obtaining new authorized source facts. SI-S01 AI ranks only already verified alternatives.',
+        'التكليف خارج الدوام يحتاج موافقة الموارد البشرية؛ والنقل من ميناء مجاور يحتاج تحققًا من التأهيل والانتقال واعتماد المشرف. ولا يُفترض جواز الإلغاء أو التأجيل دون سند تنظيمي موثق. أعد حساب الطاقة بعد اعتماد أي تغيير. يرتّب AI SI-S01 البدائل المتحققة فقط.')}}</p>
+      </section>
       <p class="hint">{{copy('Unscheduled optional candidates remain in the candidate pool with their reasons; they are not silently cancelled or added to the approved work-order roster.',
        'تظل السفن الاختيارية غير المجدولة في قائمة المرشحين مع أسباب التعذر، ولا تُلغى تلقائيًا أو تصدر لها أوامر تكليف.')}}</p>
       <button type="button" class="secondary" (click)="runCapacityAi()"
@@ -472,6 +492,16 @@ interface CapacityPreview{
  .plan-focus-reason{border-top:1px solid #c6e1e8;padding:10px 0}
  .plan-focus-reason small{color:#63869a}
  tr.plan-focused-row{background:#e7f9ef;outline:2px solid #8fcfb0;outline-offset:-2px}
+ .capacity-exceptions{padding:13px;background:#fffbf2;border:1px solid #eddbb8;
+  border-radius:9px;margin:14px 0}
+ .capacity-exceptions h3{font-size:14px;color:#81501f}
+ .capacity-exceptions article{padding:12px;border-top:1px solid #e7d8c1}
+ .capacity-exceptions h4{font-size:12px;margin:2px 0 9px;color:#81501f}
+ .capacity-exceptions article>div{background:#fff;border:1px solid #ebdec9;border-radius:8px;
+  margin:7px 0;padding:9px}
+ .capacity-exceptions article>div strong,.capacity-exceptions article>div small{
+  display:block;margin:4px 0;overflow-wrap:anywhere}
+ .capacity-exceptions article>div small{font-size:10px;color:#667884}
  .capacity-mode{display:block;color:#975c1f;background:#fff4df;border:1px solid #e8d4b3;
   padding:12px;border-radius:8px;font-size:12px;font-weight:800;margin:13px 0}
  .capacity-vessel-form{border:1px solid #d7e7eb;border-radius:10px;padding:15px;margin:12px 0;background:#fcfefe}
@@ -762,6 +792,17 @@ export class SiInspectionPlanWizardComponent implements OnInit,OnDestroy{
  invalidateCapacityPreview():void{
   this.capacityPreview=null;this.capacityProposal=null;this.capacityAiOptionId='';
   this.capacityAiMessage='';
+ }
+ capacityActionLabel(code:string):string{
+  const labels:Record<string,[string,string]>={
+   CROSS_PORT_ALTERNATIVE_REVIEW:['Neighboring-port inspector review','بحث مهندس من ميناء مجاور'],
+   OUT_OF_HOURS_SHIFT_APPROVAL_REVIEW:['Request approved out-of-hours shift','طلب اعتماد تكليف خارج الدوام الرسمي'],
+   ESCALATE_MANDATORY_INSPECTION_CAPACITY:['Escalate compulsory inspection','تصعيد المعاينة الإلزامية'],
+   CHECK_REGULATORY_CANCELLATION_OR_DEFERRAL_ELIGIBILITY:[
+    'Check if legal cancellation / deferral is permitted',
+    'التحقق من السماح التنظيمي بالإلغاء أو التأجيل']
+  };
+  const entry=labels[code];return entry?this.copy(entry[0],entry[1]):code;
  }
  get preferredCapacityOptionId():string{
   return this.capacityAiOptionId||this.capacityProposal?.variants?.[0]?.optionId||'';
