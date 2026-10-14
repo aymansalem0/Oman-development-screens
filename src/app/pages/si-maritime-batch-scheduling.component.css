@@ -100,3 +100,34 @@ button:disabled{opacity:.5}.marine-notice{padding:13px;background:#eaf4f5;border
 .si-workorder-actions button:disabled{opacity:.5}
 .si-field-started{color:#097c6a;font-weight:700;font-size:11px}
 .si-order-error{color:#a92c37!important;font-weight:700}
+
+/* Plan-level per-vessel scheduling exception diagnostics (read-only). */
+.si-details-toggle{display:inline-block;background:#e7f2f5;color:#075d74;
+ border:1px solid #b5d5db;border-radius:7px;font-size:11px;
+ padding:7px 10px;margin-top:7px;cursor:pointer}
+.si-diagnostic-code{font:10px/1.5 monospace;color:#927152;overflow-wrap:anywhere}
+.si-unscheduled-details{border:1px solid #d8c39f;background:#fffcf6;
+ border-radius:12px;padding:20px;margin-top:17px;color:#274e5b}
+.si-unscheduled-details h3{font-size:16px;color:#965321;margin:0}
+.si-unscheduled-details h4{font-size:13px;color:#375d6b;margin:15px 0 8px}
+.si-diagnostic-summary{border-inline-start:4px solid #b98232;
+ padding:10px 12px;background:#fff0d6;border-radius:6px;font-weight:750;font-size:12px}
+.si-diagnostic-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));
+ gap:10px;margin:12px 0}
+.si-diagnostic-metrics>div{background:#fff;border:1px solid #ebd9bd;
+ border-radius:8px;padding:12px;min-width:0}
+.si-diagnostic-metrics small{display:block;color:#647786;font-size:11px;line-height:1.5}
+.si-diagnostic-metrics strong{display:block;color:#295c68;font-size:16px;
+ margin:5px 0 0;overflow-wrap:anywhere}
+.si-diagnostic-metrics>div:first-child strong{font-size:11px;font-family:monospace}
+.si-diagnostic-table{min-width:660px}
+.si-diagnostic-exclusions{columns:2;padding-inline-start:22px;font-size:12px}
+.si-diagnostic-exclusions li{break-inside:avoid;margin:0 0 8px;line-height:1.7}
+.si-diagnostic-warning{font-size:12px;background:#fff0e3;color:#885223;
+ padding:12px;border:1px solid #e6ca9b;border-radius:8px}
+.si-diagnostic-actions{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:16px}
+.si-diagnostic-actions a{display:inline-block;background:#117e82;color:#fff;
+ padding:10px 13px;text-decoration:none;border-radius:8px;font-weight:750;font-size:12px}
+@media(max-width:850px){.si-diagnostic-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .si-diagnostic-exclusions{columns:1}}
+@media(max-width:490px){.si-diagnostic-metrics{grid-template-columns:1fr}}

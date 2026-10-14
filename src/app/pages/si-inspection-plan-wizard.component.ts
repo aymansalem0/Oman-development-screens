@@ -39,6 +39,13 @@ import {SiBulkJob,SiBulkPlanService,SiBulkPreview,SiBulkVessel} from '../service
    <p class="notice error" role="alert" *ngIf="error">{{error}}</p>
 
    <ng-container *ngIf="preview as p">
+    <section class="plan-return-notice" *ngIf="returnedFromScheduling">
+     <strong>{{copy('Scheduling follow-up · approved inspection plan','متابعة الجدولة · خطة المعاينات المعتمدة')}}</strong>
+     <p>{{copy('Opened from the scheduling exceptions board. The source-backed vessel identity and inspection reasons below are read-only; changing an approved roster requires a new authorized plan.',
+      'تم فتح تفاصيل السفينة من استثناءات الجدولة. هوية السفينة وأسباب معاينتها من المصادر للعرض فقط؛ تعديل قائمة معتمدة يتطلب خطة جديدة وإجراء اعتماد مخول.')}}</p>
+     <a *ngIf="planId" [routerLink]="['/moei/smart-inspection/scheduling/plan',planId]">
+      {{copy('← Back to scheduling diagnostics','← العودة إلى تفاصيل أسباب تعذر الجدولة')}}</a>
+    </section>
     <p class="notice error" *ngIf="p.stale||(!p.agentRunId&&!p.manualSelection)">
      {{copy('Candidate selection is missing or source data has changed. Return to Candidate Center and review the current plan. AI is optional.',
      'لا توجد سفن مختارة أو تغير مصدر البيانات. عد إلى قائمة المرشحين وراجع الخطة الحالية. تشغيل AI اختياري.')}}
@@ -56,12 +63,30 @@ import {SiBulkJob,SiBulkPlanService,SiBulkPreview,SiBulkVessel} from '../service
       <div><strong>v{{p.planRevision}}</strong><span>{{copy('Plan revision','إصدار الخطة')}}</span></div>
       <div><strong>{{p.agentRunId?p.provider:'MANUAL'}}</strong><span>{{copy('Selection method','طريقة الاختيار')}}</span></div>
      </div>
+     <section *ngIf="returnedFromScheduling && focusedVessel as vessel" class="plan-focus-vessel">
+      <h3>{{copy('Selected vessel in this approved plan','السفينة المطلوبة من خطة المعاينات المعتمدة')}} · IMO {{vessel.imo}}</h3>
+      <p><strong>{{vessel.vesselName}}</strong> · #{{vessel.rank}} ·
+       {{copy('Inspection scopes','نطاقات المعاينة')}}:
+       {{vessel.inspectionRegimes.join(' · ')}}</p>
+      <h4>{{copy('Authoritative source referral reasons','أسباب المعاينة الأصلية من المصادر')}}</h4>
+      <article *ngFor="let source of vessel.reasons" class="plan-focus-reason">
+       <strong>{{sourceLabel(source.sourceType)}}</strong> · {{source.inspectionRegime}}
+       <p>{{source.reason||copy('No detailed description provided by source','المصدر لم يورد وصفًا تفصيليًا')}}</p>
+       <small>{{copy('Reference','المرجع')}}: {{source.sourceReference||source.sourceEventId||'—'}}</small>
+      </article>
+      <p class="hint">{{copy('These are inclusion reasons from the approved plan, not an explanation of the scheduling exception. Detailed time and engineer conflicts are shown on the scheduling board.',
+       'هذه أسباب إدراج السفينة بالخطة المعتمدة، وليست أسباب تعذر الجدولة. تفاصيل تعارض المواعيد والمهندسين موجودة في لوحة الجدولة.')}}</p>
+     </section>
+     <p *ngIf="returnedFromScheduling && focusedImo && !focusedVessel" class="notice error">
+      {{copy('The requested IMO was not found in this plan preview. Verify the plan reference.',
+       'لم يتم العثور على رقم IMO المطلوب في بيانات هذه الخطة؛ راجع رقم الخطة.')}}
+     </p>
      <div class="table-scroll"><table>
       <thead><tr><th>{{copy('Priority','الأولوية')}}</th>
        <th>{{copy('Vessel','السفينة')}}</th><th>IMO</th>
        <th>{{copy('Referral reasons','أسباب المعاينة')}}</th>
        <th>{{copy('Inspection scopes','نطاقات المعاينة')}}</th></tr></thead>
-      <tbody><tr *ngFor="let vessel of p.vessels">
+      <tbody><tr *ngFor="let vessel of p.vessels" [class.plan-focused-row]="vessel.imo===focusedImo">
        <td><span class="rank">#{{vessel.rank||'—'}}</span></td>
        <td><strong>{{vessel.vesselName}}</strong></td>
        <td class="mono">{{vessel.imo}}</td>
@@ -145,7 +170,7 @@ import {SiBulkJob,SiBulkPlanService,SiBulkPreview,SiBulkVessel} from '../service
         'سيتم اعتماد قائمة السفن فقط؛ الخطوة التالية هي الجدولة الإلكترونية واعتماد توزيع المهندسين.')}}</p>
      <p *ngIf="v2RosterError" class="notice error" role="alert">{{v2RosterError}}</p>
      <button type="button" class="approve" (click)="approve()"
-      [disabled]="submitting||jobBusy||!auth.isAdmin||reason.trim().length<8||p.stale||(!p.agentRunId&&!p.manualSelection)||hasMissingReasons||!!v2RosterError">
+      [disabled]="returnedFromScheduling||submitting||jobBusy||!auth.isAdmin||reason.trim().length<8||p.stale||(!p.agentRunId&&!p.manualSelection)||hasMissingReasons||!!v2RosterError">
       {{submitting?copy('Submitting approval…','جارٍ إرسال الاعتماد…'):
        copy('Approve '+p.selectedVessels+' Vessels for Scheduling',
         'اعتماد '+p.selectedVessels+' سفن للجدولة')}}
@@ -227,6 +252,16 @@ import {SiBulkJob,SiBulkPlanService,SiBulkPreview,SiBulkVessel} from '../service
  .step-index{display:flex;align-items:center;justify-content:center;width:28px;height:28px;min-width:28px;border-radius:50%;
   background:#e9f0f1;color:#4e7484;font-weight:900}
  .step-item.active .step-index,.step-item.done .step-index{background:#087c75;color:#fff}
+ .plan-return-notice,.plan-focus-vessel{background:#f6fbfd;border:1px solid #bfdde7;
+  border-inline-start:5px solid #078597;border-radius:12px;padding:16px 19px;margin-bottom:17px;
+  color:#20556c;font-size:12px}
+ .plan-return-notice p,.plan-focus-vessel p{line-height:1.7}
+ .plan-return-notice a{color:#087a86;font-weight:800;text-decoration:underline}
+ .plan-focus-vessel h3{margin:0 0 8px;font-size:15px}
+ .plan-focus-vessel h4{margin:15px 0 8px;font-size:13px}
+ .plan-focus-reason{border-top:1px solid #c6e1e8;padding:10px 0}
+ .plan-focus-reason small{color:#63869a}
+ tr.plan-focused-row{background:#e7f9ef;outline:2px solid #8fcfb0;outline-offset:-2px}
  .panel{background:#fff;border:1px solid #dae8eb;box-shadow:0 6px 18px #06364d0b;border-radius:14px;padding:25px;margin-bottom:17px}
  .panel-head{display:flex;justify-content:space-between;align-items:center;gap:17px;margin-bottom:16px}
  .panel-head p{margin:0}.count,.reason-count{display:inline-flex;background:#e5f6ed;color:#08735b;padding:7px 12px;border-radius:20px;font-size:11px;font-weight:800;white-space:nowrap}
@@ -283,6 +318,10 @@ export class SiInspectionPlanWizardComponent implements OnInit,OnDestroy{
   {en:'All Referral Reasons',ar:'أسباب المعاينة'},{en:'Electronic Scheduling',ar:'الجدولة الإلكترونية'},
   {en:'Review & Approval',ar:'المراجعة والاعتماد'}];
  step=1;preview:SiBulkPreview|null=null;planId:string|null=null;
+ focusedImo='';returnedFromScheduling=false;
+ get focusedVessel():SiBulkVessel|null{
+  return this.preview?.vessels.find(v=>v.imo===this.focusedImo)||null;
+ }
  job:SiBulkJob|null=null;loading=false;submitting=false;error='';
  scheduleApproval:{planId:string;approvedVesselCount:number;createdInspectionCases:number}|null=null;
  reason='';generateA04=false;private timer:Subscription|null=null;
@@ -358,6 +397,9 @@ export class SiInspectionPlanWizardComponent implements OnInit,OnDestroy{
   !this.preview.stale&&!this.hasMissingReasons&&!this.loading;}
  ngOnInit():void{
   this.planId=this.route.snapshot.paramMap.get('planId');
+  const incoming=this.route.snapshot.queryParamMap.get('imo')||'';
+  this.returnedFromScheduling=this.route.snapshot.queryParamMap.get('origin')==='scheduling';
+  this.focusedImo=this.returnedFromScheduling&&/^[0-9]{7}$/.test(incoming)?incoming:'';
   if(!this.planId){
    this.error=this.copy('Select a numbered rolling plan from Candidate & Targeting first.',
      'اختر خطة مرقمة من شاشة السفن المرشحة أولًا.');
@@ -390,6 +432,7 @@ export class SiInspectionPlanWizardComponent implements OnInit,OnDestroy{
  previous():void{if(this.step>1&&this.step<5)this.step--;}
  next():void{if(this.canNext)this.step++;}
  approve():void{
+  if(this.returnedFromScheduling)return;
   const p=this.preview;if(!this.planId||!p||this.submitting||this.jobBusy||!this.auth.isAdmin||
    (!p.agentRunId&&!p.manualSelection)||p.stale||this.hasMissingReasons||this.reason.trim().length<8||!!this.v2RosterError)return;
   const message=this.copy(
