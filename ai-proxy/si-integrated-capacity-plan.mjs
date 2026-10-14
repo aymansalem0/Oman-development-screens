@@ -95,7 +95,7 @@ export function selectIntegratedPlanVessels({
   Number(mandatory(b))-Number(mandatory(a))||
   compareInspections(a,b)||a.imo.localeCompare(b.imo));
  const roster=ordered.map((row,index)=>({
-  imo:row.imo,planRank:index+1,
+  imo:row.imo,planRank:index+1,vesselType:row.vesselType||null,
   ...sourceEvidence(row.imo,dashboard)
  }));
  const quotas={
