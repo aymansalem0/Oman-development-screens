@@ -20,6 +20,16 @@
         </div>
       </div>
 
+      <nav class="sdb-module-tabs" aria-label="Seafarer Management module navigation">
+        <button *ngFor="let section of menus" type="button"
+                [class.active]="page===section.id"
+                [attr.aria-current]="page===section.id?'page':null"
+                (click)="navigate(section.id)">
+          <span aria-hidden="true">{{section.icon}}</span>
+          <span>{{section.label}}</span>
+        </button>
+      </nav>
+
       <div class="notice" *ngIf="notice" role="status">
         <span>ⓘ</span><span>{{notice}}</span><button type="button" (click)="notice=''">Dismiss</button>
       </div>
