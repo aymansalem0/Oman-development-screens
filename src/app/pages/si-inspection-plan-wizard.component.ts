@@ -1,4 +1,5 @@
 import {CommonModule} from '@angular/common';
+import {HttpClient,HttpParams} from '@angular/common/http';
 import {Component,OnDestroy,OnInit} from '@angular/core';
 import {FormsModule} from '@angular/forms';
 import {RouterLink,ActivatedRoute} from '@angular/router';
@@ -11,6 +12,47 @@ import {SiCandidateTargetingService} from '../services/si-candidate-targeting.se
 import {calculateInspectionFactorQuotas,InspectionFactorQuotaPreview,
  InspectionQuotaCandidate} from './si-plan-factor-quotas';
 
+interface CapacityItem{
+ imo:string;name:string;portId:string;portName:string;portSourceLocked:boolean;
+ vesselType:string;regime:string;regimes:string[];
+ locationType:string;locationName:string;siteAccessConfirmed:boolean;
+ durationMinutes:number;etaLocal:string;etdLocal:string;
+ earliestLocal:string;latestFinishLocal:string;
+ windowSource:string;windowEvidenceReference:string;dateEvidenceReference:string;
+ nmcReferrals:{id:string}[];
+}
+interface CapacityContext{
+ planId:string;sourceHash:string;planRevision:number;demoMode?:boolean;
+ selection:{selectionHash:string;
+  roster:{imo:string;planRank:number;inspectionReasons:{
+   eventKey:string;sourceType:string;sourceReference:string;reason:string|null}[]}[];
+  mandatoryImos:string[];
+  quotas:{pscRisk:{targetedImos:number;eligibleImos:number};
+   uaeFlag:{targetedImos:number;eligibleImos:number};
+   overlapImos:string[];selectedImos:string[]}};
+ items:CapacityItem[];ports:{portId:string;name:string}[];
+}
+interface CapacityAssignment{
+ imo:string;inspectorId:string;inspectorName:string;portId:string;portName:string;
+ startLocal:string;endLocal:string;crossPort:boolean;
+ originPortName:string;travelMinutes:number;
+}
+interface CapacityVariant{
+ optionId:string;allocatedVessels:number;objectiveScore:number;
+ assignments:CapacityAssignment[];
+ rows:{imo:string;status:string;blocker:string|null}[];
+}
+interface CapacitySchedule{
+ proposalHash:string;planRevision:number;planId:string;
+ summary:{total:number;proposed:number;unscheduled:number};
+ variants:CapacityVariant[];
+ rows:{imo:string;status:string;blocker:string|null}[];
+}
+interface CapacityPreview{
+ proposal:CapacitySchedule;selection:CapacityContext['selection']&{
+  capacity:{mandatoryUnscheduled:string[];unscheduledImos:{
+   imo:string;blocker:string|null}[]}};
+}
 @Component({
  selector:'app-si-inspection-plan-wizard',
  standalone:true,imports:[CommonModule,FormsModule,RouterLink,NmcNavigationComponent],
@@ -388,9 +430,10 @@ import {calculateInspectionFactorQuotas,InspectionFactorQuotaPreview,
  `]
 })
 export class SiInspectionPlanWizardComponent implements OnInit,OnDestroy{
- readonly stages=[{en:'Selected Vessels',ar:'السفن المختارة'},
-  {en:'All Referral Reasons',ar:'أسباب المعاينة'},{en:'Electronic Scheduling',ar:'الجدولة الإلكترونية'},
-  {en:'Review & Approval',ar:'المراجعة والاعتماد'}];
+ readonly stages=[{en:'Candidates & Quotas',ar:'المرشحون ونسب الاختيار'},
+  {en:'Verified Source Reasons',ar:'أسباب المعاينة الموثقة'},
+  {en:'Capacity & AI Scheduling',ar:'الطاقة والجدولة بالذكاء الاصطناعي'},
+  {en:'Single Plan Approval',ar:'اعتماد الخطة مرة واحدة'}];
  readonly planningWeights=[
   {key:'PSC_RISK',en:'PSC + Risk Factor',ar:'PSC + عامل المخاطر',
    descriptionEn:'Percentage of eligible PSC vessels, ranked by saved vessel risk.',
@@ -412,7 +455,10 @@ export class SiInspectionPlanWizardComponent implements OnInit,OnDestroy{
  }
  changePlanningWeight(key:string,value:number):void{
   const w=this.planningWeights.find(x=>x.key===key);const v=Number(value);
-  if(w&&Number.isFinite(v))w.value=Math.max(0,Math.min(100,Math.round(v)));
+  if(w&&Number.isFinite(v)){
+   w.value=Math.max(0,Math.min(100,Math.round(v)));
+   this.invalidateCapacity();
+  }
  }
  private loadFactorCandidatePool():void{
   this.factorPoolLoading=true;this.factorPoolError='';
@@ -442,6 +488,10 @@ export class SiInspectionPlanWizardComponent implements OnInit,OnDestroy{
    }
   });
  }
+ capacityDemoMode=true;capacityBusy=false;capacityAiBusy=false;
+ capacityContext:CapacityContext|null=null;capacityPreview:CapacityPreview|null=null;
+ capacityProposal:CapacitySchedule|null=null;capacityAiOptionId='';
+ capacityError='';capacityAiMessage='';
  step=1;preview:SiBulkPreview|null=null;planId:string|null=null;
  focusedImo='';returnedFromScheduling=false;
  get focusedVessel():SiBulkVessel|null{
@@ -452,7 +502,8 @@ export class SiInspectionPlanWizardComponent implements OnInit,OnDestroy{
  reason='';generateA04=false;private timer:Subscription|null=null;
  constructor(private api:SiBulkPlanService,private readonly route:ActivatedRoute,
   public lang:LanguageService,public auth:MoeiAuthService,
-  private readonly candidates:SiCandidateTargetingService){}
+  private readonly candidates:SiCandidateTargetingService,
+  private readonly http:HttpClient){}
  copy(en:string,ar:string):string{return this.lang.pick(en,ar);}
  sourceLabel(source:string):string{
   const labels:Record<string,[string,string]>={
@@ -518,9 +569,19 @@ export class SiInspectionPlanWizardComponent implements OnInit,OnDestroy{
  }
  get totalReasons():number{return this.preview?.vessels.reduce((n,v)=>n+v.reasons.length,0)||0;}
  get totalScopes():number{return this.preview?.vessels.reduce((n,v)=>n+v.inspectionRegimes.length,0)||0;}
- get canNext():boolean{return !!this.preview&&this.step<4&&this.preview.selectedVessels>0&&
-  (!!this.preview.agentRunId||!!this.preview.manualSelection)&&
-  !this.preview.stale&&!this.hasMissingReasons&&!this.loading;}
+ get canNext():boolean{
+  if(!this.preview||this.loading||this.returnedFromScheduling)return false;
+  if(this.step===1||this.step===2)
+   return this.preview.selectedVessels>0&&
+    (!!this.preview.agentRunId||!!this.preview.manualSelection)&&
+    !this.preview.stale&&!this.hasMissingReasons&&
+    this.factorPool!==null&&!this.factorPoolLoading;
+  if(this.step===3)
+   return !!this.capacityProposal&&!!this.capacityProposal.variants?.length&&
+    this.capacityProposal.summary.proposed>0&&
+    (this.capacityPreview?.selection.capacity.mandatoryUnscheduled.length||0)===0;
+  return false;
+ }
  ngOnInit():void{
   this.planId=this.route.snapshot.paramMap.get('planId');
   const incoming=this.route.snapshot.queryParamMap.get('imo')||'';
@@ -557,7 +618,11 @@ export class SiInspectionPlanWizardComponent implements OnInit,OnDestroy{
   });
  }
  previous():void{if(this.step>1&&this.step<5)this.step--;}
- next():void{if(this.canNext)this.step++;}
+ next():void{
+  if(!this.canNext)return;
+  this.step++;
+  if(this.step===3&&!this.capacityContext)this.loadCapacityContext();
+ }
  approve():void{
   if(this.returnedFromScheduling)return;
   const p=this.preview;if(!this.planId||!p||this.submitting||this.jobBusy||!this.auth.isAdmin||
