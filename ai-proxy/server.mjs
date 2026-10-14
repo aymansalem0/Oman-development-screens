@@ -1291,6 +1291,7 @@ const server = createServer(async (req, res) => {
           expectedRevision:plan.revision,
           expectedSourceHash:selection.sourceHash,
           actor,reason:body.reason,vessels:decision.selected,
+          integratedSourceRows:inspectionPlan.rows,
           integratedDecision:{
             sourceHash:selection.sourceHash,
             planRevision:selection.planRevision,
