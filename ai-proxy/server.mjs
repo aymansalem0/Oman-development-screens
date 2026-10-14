@@ -37,6 +37,7 @@ import { SiAiPrioritization, SiPriorityError } from './si-ai-prioritization.mjs'
 import {SiCandidateAgent,SiCandidateAgentError} from './si-candidate-agent.mjs';
 import {SiInspectionPlan} from './si-inspection-plan.mjs';
 import {SiRollingPlanStore,SiRollingPlanError} from './si-rolling-plan-store.mjs';
+import {SiV2ScheduleApproval,SiV2ScheduleError} from './si-v2-schedule-approval.mjs';
 import {SiBulkInspectionPlan,SiBulkApprovalError} from './si-bulk-inspection-plan.mjs';
 import {mockSiP01,mockSiA04,mockSiC01} from './si-agent-mock.mjs';
 import { SiInspectionPreparation, SiPreparationError } from './si-inspection-preparation.mjs';
@@ -373,6 +374,12 @@ const siChecklistField=new (checklistStorage==='oracle'?
 const siLifecycle=new SiInspectionLifecycle({mode:dbMode,oracleRepository:repository,
   targeting:siTargeting,preparation:siPreparation,cases,checklists:siChecklistField,
   onClosed:(caseId,actor)=>siRollingPlans.completeIfAllClosed(caseId,actor,siLifecycle)});
+const siV2WorkOrders=new SiV2ScheduleApproval({
+ mode:dbMode,oracleRepository:repository,rolling:siRollingPlans,
+ targeting:siTargeting,preparation:siPreparation,erp:siErp,
+ scheduler:siScheduling,cases,lifecycle:siLifecycle,checklists:siChecklistField
+});
+let siV2WorkOrdersReady=false;
 const actionPlanRuns=new Set(); // process-local duplicate A01 invocation guard; version-lock remains authoritative
 let alertScanTimer=null;
 function rescheduleAlertScan(){
@@ -1273,6 +1280,46 @@ const server = createServer(async (req, res) => {
         }
         return respond(res,200,{status:'ok',...validated});
       }
+      // Supervisor approval of a revalidated whole-plan schedule issues a
+      // durable work-order roster. Case/dossier dispatch is a distinct retryable
+      // action; engineer execution never changes previously approved slots.
+      const workOrderRoute=/^\/api\/si\/v1\/maritime-scheduling\/plans\/([a-f0-9-]{36})\/(approval|dispatch|orders|orders\/([0-9]{7})\/execute)$/.exec(path);
+      if(workOrderRoute){
+        if(!siV2WorkOrdersReady)
+          return respond(res,503,{error:'SI_V2_MIGRATION_019_REQUIRED'});
+        const planId=workOrderRoute[1],operation=workOrderRoute[2];
+        if(req.method==='GET'&&operation==='orders'){
+          dashboards.assertRole(req,'EDITOR');
+          const record=await siV2WorkOrders.get(planId);
+          return respond(res,200,{status:'ok',schedule:record});
+        }
+        if(req.method==='POST'&&operation==='approval'){
+          dashboards.assertRole(req,'PUBLISHER');
+          const body=await requestJson(req,1024*1024);
+          if(body.demoMode===true)
+            return respond(res,409,{error:'SI_POC_SYNTHETIC_ERP_NOT_OFFICIAL_APPROVAL'});
+          const actor=moeiAuth.session(req)?.email||'MOEI_SUPERVISOR';
+          return respond(res,201,{status:'ok',schedule:await siV2WorkOrders.approve({
+            ...body,planId,actor
+          })});
+        }
+        if(req.method==='POST'&&operation==='dispatch'){
+          dashboards.assertRole(req,'PUBLISHER');
+          return respond(res,200,{status:'ok',
+            schedule:await siV2WorkOrders.dispatch(planId)});
+        }
+        if(req.method==='POST'&&operation.startsWith('orders/')){
+          dashboards.assertRole(req,'EDITOR');
+          const body=await requestJson(req,2048);
+          const identity=moeiAuth.session(req);
+          const actor=identity?.email||identity?.username||'UNKNOWN_INSPECTOR';
+          return respond(res,200,await siV2WorkOrders.executeOrder({
+            planId,imo:workOrderRoute[3],actor,
+            confirmExecution:body.confirmExecution
+          }));
+        }
+        return respond(res,405,{error:'METHOD_NOT_ALLOWED'});
+      }
       if(path==='/api/si/v1/inspection-batches/preview'&&req.method==='GET'){
         dashboards.assertRole(req,'EDITOR');
         const planId=new URL(req.url||'/', 'http://localhost').searchParams.get('planId');
@@ -1536,7 +1583,7 @@ const server = createServer(async (req, res) => {
           ...(Number.isInteger(e.returnedCount)?{returnedCount:e.returnedCount}:{}),
           ...(Number.isInteger(e.batchIndex)?{batchIndex:e.batchIndex}:{}),
           ...(Number.isInteger(e.batchCount)?{batchCount:e.batchCount}:{})});
-      if(e instanceof SiError||e instanceof SiPocAdvisorError||e instanceof SiRollingPlanError||e instanceof SiBulkApprovalError||e instanceof SiCandidateAgentError||e instanceof SiLifecycleError||e instanceof SiSelectionError||e instanceof SiPriorityError||e instanceof SiPreparationError||e instanceof SiTargetingError||e instanceof DashboardError)
+      if(e instanceof SiError||e instanceof SiPocAdvisorError||e instanceof SiRollingPlanError||e instanceof SiV2ScheduleError||e instanceof SiBulkApprovalError||e instanceof SiCandidateAgentError||e instanceof SiLifecycleError||e instanceof SiSelectionError||e instanceof SiPriorityError||e instanceof SiPreparationError||e instanceof SiTargetingError||e instanceof DashboardError)
         return respond(res,e.status,{error:e.code});
       if(Number.isInteger(e?.status)&&e.status>=400&&e.status<500)
         return respond(res,e.status,{error:'SI_REQUEST_INVALID'});
@@ -2109,6 +2156,13 @@ try{
   catch(error){console.error('[si-preparation] SI_MIGRATION_010_REQUIRED - A04 dossier disabled');}
   try{await siLifecycle.initialize();}
   catch(error){console.error('[si-lifecycle] SI_MIGRATION_013_REQUIRED - end-to-end cycle disabled');}
+  try{
+    await siV2WorkOrders.initialize();siV2WorkOrdersReady=true;
+    console.log('[si-scheduling] WORK_ORDER_STORE_READY schema=019');
+  }catch(error){
+    siV2WorkOrdersReady=false;
+    console.warn('[si-scheduling] SI_V2_MIGRATION_019_REQUIRED - schedule approval/work orders disabled');
+  }
   try{await guidance.initialize();}
   catch(error){
     // Guidance requires migration 006, but an optional UI module must never
