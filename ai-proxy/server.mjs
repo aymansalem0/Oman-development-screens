@@ -1189,7 +1189,11 @@ const server = createServer(async (req, res) => {
            ].includes(key)))
           return respond(res,422,{error:'SI_V2_SCHEDULING_REQUESTS_INVALID'});
         if(paid){
-          if(siAiProvider!=='airia'||!agentAllowed('s01'))
+          // MOCK is a separately-labelled demo-only S01 suggestion; never
+          // silently substitute a fabricated AI response for real Airia.
+          const mockDemo=body.demoMode===true&&siAiProvider==='mock'&&
+            process.env.SI_SCHEDULING_DEMO_MODE==='true';
+          if(!mockDemo&&(siAiProvider!=='airia'||!agentAllowed('s01')))
             return respond(res,409,{error:'SI_S01_AIRIA_NOT_ENABLED'});
           if(body.confirmRun!==true||body.confirmCost!==true||
              !/^[a-f0-9]{64}$/.test(body.expectedProposalHash||''))
@@ -1237,13 +1241,36 @@ const server = createServer(async (req, res) => {
           payload.demoNotice='All source scheduling additions and engineer slots are synthetic POC data. No operational booking or regulatory approval is permitted.';
           payload.businessGuardrails.mockDataCannotAuthorizeInspection=true;
         }
+        const mockDemo=demo&&siAiProvider==='mock';
         let raw;
-        try{raw=await fleetAgentCall('s01',payload);}
-        catch{
-          return respond(res,502,{error:'SI_S01_PROVIDER_UNAVAILABLE',
-            planUnchanged:true});
+        if(mockDemo){
+          // Deterministic presentation fixture, not a model judgement.
+          // Only source-generated feasible optionIds and evidence are echoed.
+          raw={bookingConfirmed:false,
+            slotSetHash:payload.currentSnapshot.slotSetHash,
+            rankedOptions:result.variants.map((v,index)=>({
+              optionId:v.optionId,rank:index+1,confidence:1,
+              rationale:'POC MOCK: deterministic ranking of ERP-synthetic, already feasible whole-plan alternatives. No live AI assessment or approved booking.',
+              evidenceRefs:[payload.currentSnapshot.slotSetHash]
+            }))};
+          // slotSetHash is a structural binding, not evidence. Give the
+          // validator source provenance IDs instead.
+          for(const row of raw.rankedOptions)
+            row.evidenceRefs=[payload.currentSnapshot.erpSnapshotId];
+        }else{
+          try{raw=await fleetAgentCall('s01',payload);}
+          catch{
+            return respond(res,502,{error:'SI_S01_PROVIDER_UNAVAILABLE',
+              planUnchanged:true});
+          }
         }
         const validated=validateS01WholePlanResponse(raw,result,payload);
+        if(mockDemo){
+          validated.provider='POC_MOCK';
+          validated.externalCalls=0;
+          validated.proposal.demoMode=true;
+          validated.proposal.demoNotice='SIMULATED_S01_RANKING_NO_LIVE_AI_CALL_OR_OFFICIAL_APPROVAL';
+        }
         return respond(res,200,{status:'ok',...validated});
       }
       if(path==='/api/si/v1/inspection-batches/preview'&&req.method==='GET'){
