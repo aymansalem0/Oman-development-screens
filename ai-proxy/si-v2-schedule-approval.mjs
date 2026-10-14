@@ -20,6 +20,23 @@ const ID=/^[0-9a-f-]{36}$/i;
 const text=(v,n=160)=>typeof v==='string'&&v.trim().length>0&&
  v.trim().length<=n?v.trim():null;
 const validIso=v=>typeof v==='string'&&Number.isFinite(Date.parse(v));
+function approvedEngineerActor(actor,assignment){
+ const signedIn=text(actor,160);
+ if(!signedIn)return null;
+ const id=assignment?.inspectorId||'';
+ // Mapping is provisioned by deployment administrator, never read from the
+ // request body; production identities must bind to ERP inspector IDs.
+ let configured={};
+ try{
+  const value=JSON.parse(process.env.SI_V2_INSPECTOR_IDENTITY_MAP_JSON||'{}');
+  if(value&&typeof value==='object'&&!Array.isArray(value))configured=value;
+ }catch{/* invalid secretless config means no mapping */}
+ const resolved=configured[signedIn.toLowerCase()]||configured[signedIn];
+ if(resolved===id)return assignment.inspectorName||id;
+ // For test/POC auth explicitly logged in as ERP id; never role-guess.
+ if(signedIn===id)return assignment.inspectorName||id;
+ return null;
+}
 export class SiV2ScheduleError extends Error{
  constructor(code,status=409){super(code);this.code=code;this.status=status;}
 }
@@ -349,8 +366,8 @@ export class SiV2ScheduleApproval{
   const schedules=this.mode==='json'?this.read():
     await this.db(con=>this._existing(con));
   return schedules.flatMap(schedule=>schedule.items.filter(item=>
-    [item.assignment.inspectorId,item.assignment.inspectorName]
-      .includes(actor.trim())&&item.orderStatus==='ISSUED')
+    !!approvedEngineerActor(actor,item.assignment)&&
+      ['ISSUED','IN_EXECUTION'].includes(item.orderStatus))
    .map(item=>({
     planId:schedule.planId,scheduleId:schedule.id,
     status:item.orderStatus,orderId:item.orderId,imo:item.imo,
@@ -374,13 +391,18 @@ export class SiV2ScheduleApproval{
      'DISPATCH_PARTIAL'].includes(record.status))
     fail('SI_V2_WORK_ORDER_NOT_ISSUED',409);
    const item=record.items.find(x=>x.imo===imo);
-   if(!item||item.orderStatus!=='ISSUED'||!item.caseId)
+   if(!item||!['ISSUED','IN_EXECUTION'].includes(item.orderStatus)||!item.caseId)
     fail('SI_V2_WORK_ORDER_NOT_READY',409);
    // Inspections must be executed by the actual assigned engineer.
    // Never treat the supervisor's session as the inspector's session.
-   if(![item.assignment.inspectorName,item.assignment.inspectorId]
-     .includes(actor.trim()))
-    fail('SI_V2_ONLY_ASSIGNED_ENGINEER_MAY_EXECUTE',403);
+   const inspectorActor=approvedEngineerActor(actor,item.assignment);
+   if(!inspectorActor)fail('SI_V2_ONLY_ASSIGNED_ENGINEER_MAY_EXECUTE',403);
+   if(item.orderStatus==='IN_EXECUTION'&&item.caseId){
+    const checkpoint=await this.checklists.preview(item.caseId);
+    return {status:'IN_EXECUTION',orderId:item.orderId,planId,imo,
+      caseId:item.caseId,checklist:checkpoint.saved,
+      alreadyStarted:true,realAiriaCalls:0};
+   }
    const prep=await this.preparation.get(item.caseId);
    if(prep.stale||!['APPROVED','PREPARED'].includes(prep.saved?.status))
     fail('SI_V2_PREPARATION_REVIEW_REQUIRED',409);
@@ -424,15 +446,17 @@ export class SiV2ScheduleApproval{
    if(lifecycle.record?.stage!=='ASSIGNED'&&lifecycle.record?.stage!=='IN_FIELD')
     fail('SI_V2_WORK_ORDER_LIFECYCLE_REVIEW_REQUIRED',409);
    // Idempotent checklist seed includes ALL mandatory statutory templates.
-   const checklist=await this.checklists.start(item.caseId,actor.trim());
-   if(lifecycle.record.stage==='ASSIGNED')await apply('START_FIELD',{},actor.trim());
+   const checklist=await this.checklists.start(item.caseId,inspectorActor);
+   if(lifecycle.record.stage==='ASSIGNED')await apply('START_FIELD',{},inspectorActor);
    item.orderStatus='IN_EXECUTION';item.startedAt=item.startedAt||now();
+   item.executedByIdentity=actor.trim();
    item.checklistVersion=checklist.version;
    item.mandatoryTemplates=checklist.templates
       .filter(t=>t.mandatory).map(t=>t.templateId);
    item.aiAdditionalItemsApproved=additions.length;
    record.audit.push({event:'ENGINEER_STARTED_WORK_ORDER',at:now(),
-     actor:actor.trim(),imo,orderId:item.orderId});
+     actor:actor.trim(),inspectorId:item.assignment.inspectorId,
+     imo,orderId:item.orderId});
    await this._save(record);
    return {status:'IN_EXECUTION',orderId:item.orderId,planId,imo,
      caseId:item.caseId,mandatoryTemplates:item.mandatoryTemplates,
