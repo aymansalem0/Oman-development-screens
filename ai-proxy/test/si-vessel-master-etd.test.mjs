@@ -7,6 +7,10 @@ import ExcelJS from 'exceljs';
 import {projectVesselMasterEtd} from '../si-vessel-master-etd.mjs';
 import {MSW_DEMO_FEEDS,VESSEL_MASTER_ETD_DEMO_FEED,
  generateMswPocFiles} from '../tools/generate-msw-demo-feeds.mjs';
+import {readFileSync} from 'node:fs';
+import {AIRIA_DEMO_99_RECORDS} from '../airia-demo-cohort.mjs';
+import {SiSourceExcelImport} from '../si-source-excel-import.mjs';
+import {SiCandidateTargeting} from '../si-candidate-targeting.mjs';
 
 const identities=[
  {sequence:1,imo:'9247813',name:'Al Noor Mariner'},
@@ -93,5 +97,37 @@ test('Three reproducible Excel exports have 99 coherent ETDs and 6 overlap IMOs'
     file.sourceType==='VESSEL_MASTER'?5:8).value),/^2026-10-\d\dT\d\d:\d\d$/);
   }
   await assert.rejects(generateMswPocFiles(dir),/MSW_POC_OUTPUT_EXISTS_/);
+ }finally{rmSync(dir,{recursive:true,force:true});}
+});
+
+test('Generated 99-cohort Service & PSC XLSX pass the REAL Candidate Source Import preview',async()=>{
+ const dir=mkdtempSync(join(tmpdir(),'si-etd-importer-regression-'));
+ try{
+  const exports=await generateMswPocFiles(dir);
+  const targeting=new SiCandidateTargeting({
+   mode:'json',file:join(dir,'targeting.json'),
+   bundles:AIRIA_DEMO_99_RECORDS.map(x=>({
+    imo:x.imo,
+    inlineContext:{vessel:{name:x.name,flag:'UAE',vesselType:'CARGO'}}
+   })),
+   cases:{listInspectionRequests:async()=>[]},
+   riskPolicy:{ready:true,projectCurrent:async()=>({policyRevision:1,projections:[]})}
+  });
+  await targeting.initialize();
+  const importer=new SiSourceExcelImport({targeting});
+  for(const sourceType of ['SERVICE_REQUEST','PSC_PORT_CALL']){
+   const file=exports.find(x=>x.sourceType===sourceType);
+   const bytes=readFileSync(file.path);
+   const preview=await importer.preview({
+    sourceType,fileName:file.path.split('/').at(-1),
+    workbookBase64:bytes.toString('base64')
+   });
+   assert.equal(preview.canCommit,true,
+    sourceType+' must be accepted by the EXACT deployed importer');
+   assert.equal(preview.newEvents,
+    sourceType==='SERVICE_REQUEST'?60:45);
+   assert.equal(preview.issues.length,0,
+    'Imported ETD rows must all have valid date/IMO/source structure');
+  }
  }finally{rmSync(dir,{recursive:true,force:true});}
 });
