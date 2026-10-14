@@ -265,7 +265,11 @@
         <td>{{item.assignment.inspectorName}}</td>
         <td>{{item.assignment.startLocal||item.assignment.startUtc}}</td>
         <td>{{item.orderStatus}}<small>{{item.orderId}}</small></td>
-        <td>{{item.dossierStatus}}</td>
+        <td>{{item.dossierStatus}}
+         <a *ngIf="item.caseId" [routerLink]="['/moei/smart-inspection/preparation',item.caseId]">
+          {{copy('Review A04 AI checklist scope','مراجعة بنود A04 المقترحة')}}
+         </a>
+        </td>
        </tr></tbody></table></div>
       <a routerLink="/moei/smart-inspection/my-work-orders">
        {{copy('Open My Assigned Inspections →','فتح أوامر المعاينة المكلف بها ←')}}</a>
