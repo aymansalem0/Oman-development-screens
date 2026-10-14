@@ -158,6 +158,15 @@
       </div>
     </section>
 
+    <section class="nav-section" aria-label="Seafarers Affairs">
+      <a class="nav-group" routerLink="/moei/seafarers"
+         [class.active]="currentPath.startsWith('/moei/seafarers')"
+         [attr.aria-current]="currentPath.startsWith('/moei/seafarers')?'page':null">
+        <span class="nav-icon">⚓</span>
+        <span class="nav-label">{{copy('Seafarer Management & SDB','إدارة البحارة ودفتر البحار')}}</span>
+      </a>
+    </section>
+
     <section class="nav-section">
       <button class="nav-group" type="button" (click)="toggleMain('settings')"
               [attr.aria-expanded]="settingsExpanded" aria-controls="moei-settings-groups">
