@@ -46,8 +46,14 @@ interface Variant{optionId:string;allocatedVessels:number;objectiveScore:number;
  rows:ScheduleRow[];board:ScheduleBoard;}
 interface Proposal{summary:{total:number;proposed:number;unscheduled:number;
  caseWrites:number;bookingWrites:number};rows:ScheduleRow[];status:string;
- proposalHash:string;variants?:Variant[];
+ proposalHash:string;planRevision:number;variants?:Variant[];
  board?:ScheduleBoard;warnings:string[];aiAdvisory?:boolean;chosenOptionId?:string;}
+interface WorkOrder{imo:string;caseId:string|null;orderId:string;orderStatus:string;
+ dossierStatus:string;assignment:{inspectorId:string;inspectorName:string;
+ portName:string;startLocal:string;startUtc:string};}
+interface ScheduleApproval{id:string;planId:string;planRevision:number;
+ status:string;approvedBy:string;approvedAt:string;items:WorkOrder[];
+ selectedOptionId?:string;lastIssue?:string;}
 interface S01Response{status:string;agentCode:'SI-S01';provider:'AIRIA'|'POC_MOCK';
  externalCalls:0|1;chosenOptionId:string;proposalHash:string;proposal:Proposal;
  rankedOptions:{optionId:string;rank:number;confidence:number;
@@ -63,6 +69,8 @@ export class SiMaritimeBatchSchedulingComponent implements OnInit{
  context:Context|null=null;proposal:Proposal|null=null;baselineProposal:Proposal|null=null;
  demoMode=true;
  aiAdvice:S01Response|null=null;loading=false;busy=false;aiBusy=false;error='';notice='';
+ schedule:ScheduleApproval|null=null;scheduleBusy=false;
+ scheduleReason='Confirmed ERP-qualified distribution, verified visit windows and whole-plan supervisory approval.';
  boardView:'VESSELS'|'ENGINEERS'|'DATES'='VESSELS';
  // A disabled AI action hides useful guidance. Keep it actionable: the
  // first click preflights the free ERP schedule; only confirmed second step
@@ -94,6 +102,67 @@ export class SiMaritimeBatchSchedulingComponent implements OnInit{
  }
 
  get assignedEngineerCount():number{return this.proposal?.board?.engineers.length||0;}
+ get canApproveSchedule():boolean{
+  return !this.demoMode&&!this.schedule&&!this.scheduleBusy&&!this.busy&&
+   !!this.context&&!!this.baselineProposal&&!!this.proposal&&
+   this.proposal.summary.unscheduled===0&&this.scheduleReason.trim().length>=8;
+ }
+ loadSchedule():void{
+  if(!this.context)return;
+  this.http.get<{status:string;schedule:ScheduleApproval|null}>(
+   this.api+encodeURIComponent(this.context.planId)+'/orders').subscribe({
+    next:r=>{this.schedule=r.schedule;},
+    error:e=>{
+     const code=e?.error?.error||'';
+     if(code==='SI_V2_MIGRATION_019_REQUIRED')this.notice=this.copy(
+      'Schedule approval requires additive Oracle Migration 019.',
+      'اعتماد الجدولة يتطلب تنفيذ Oracle Migration 019 أولًا.');
+    }
+   });
+ }
+ approveSchedule():void{
+  if(!this.canApproveSchedule||!this.context||!this.baselineProposal)return;
+  if(!window.confirm(this.copy(
+   'Approve the entire inspected ERP schedule and issue engineer work orders? This is a supervisory decision; it cannot be based on POC synthetic availability.',
+   'تأكيد اعتماد الجدولة الكاملة وإصدار أوامر التكليف للمهندسين؟ هذا قرار مسؤول ولا يجوز اعتماده بناءً على إتاحة تجريبية افتراضية.')))return;
+  this.scheduleBusy=true;this.error='';
+  this.http.post<{status:string;schedule:ScheduleApproval}>(
+   this.api+encodeURIComponent(this.context.planId)+'/approval',{
+    requests:this.requests(),demoMode:this.demoMode,
+    expectedProposalHash:this.baselineProposal.proposalHash,
+    expectedPlanRevision:this.proposal.planRevision,
+    selectedOptionId:this.proposal.chosenOptionId||
+      this.baselineProposal.variants?.[0]?.optionId||null,
+    reason:this.scheduleReason.trim(),confirmApproval:true
+   }).subscribe({
+    next:r=>{
+     this.scheduleBusy=false;this.schedule=r.schedule;
+     this.notice=this.copy('Supervisor-approved schedule saved. Dispatch work orders and prepare the inspection dossiers.',
+      'تم حفظ الجدول المعتمد. يمكنك الآن إصدار أوامر التكليف وتجهيز ملفات المعاينات.');
+    },
+    error:e=>{this.scheduleBusy=false;this.showError(e);}
+   });
+ }
+ dispatchOrders():void{
+  if(!this.context||!this.schedule||this.scheduleBusy)return;
+  if(!window.confirm(this.copy(
+   'Issue inspection work orders and prepare case dossiers? NMC referrals must already have a separately confirmed appointment.',
+   'إصدار أوامر التكليف وتجهيز دوسيهات المعاينة؟ يجب أن تكون مواعيد إحالات NMC معتمدة بشكل مستقل.')))return;
+  this.scheduleBusy=true;this.error='';
+  this.http.post<{status:string;schedule:ScheduleApproval}>(
+   this.api+encodeURIComponent(this.context.planId)+'/dispatch',{}).subscribe({
+    next:r=>{
+     this.scheduleBusy=false;this.schedule=r.schedule;
+     this.notice=this.copy(
+      'Work orders: '+r.schedule.items.filter(x=>x.orderStatus==='ISSUED').length+
+      ' issued; review pending cases and dossier status.',
+      'أوامر التكليف الصادرة: '+r.schedule.items.filter(x=>x.orderStatus==='ISSUED').length+
+      '؛ راجع الحالات المعلقة وحالة الدوسيه.');
+    },
+    error:e=>{this.scheduleBusy=false;this.showError(e);}
+   });
+ }
+
  invalidateProposal():void{
   // The inputs changed after preview; never show obsolete slots as though
   // they were still valid, and never carry them into a future approval action.
@@ -118,6 +187,7 @@ export class SiMaritimeBatchSchedulingComponent implements OnInit{
   this.http.get<Context>(this.api+encodeURIComponent(id)+
     '/context'+(this.demoMode?'?demo=1':'')).subscribe({
    next:data=>{this.context=data;this.loading=false;
+    if(!data.demoMode)this.loadSchedule();
     this.notice=data.demoMode?this.copy(
      'POC DEMO: '+(data.demoFilledVessels||0)+
       ' vessels had missing visit data supplemented; engineer availability, qualifications, shifts and access are synthetic and NOT official.',
