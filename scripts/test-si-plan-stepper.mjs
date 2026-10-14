@@ -14,9 +14,9 @@ const capacity=read('ai-proxy/si-capacity-plan.mjs');
 const atomic=read('ai-proxy/si-capacity-plan-approval.mjs');
 
 test('candidate screen opens separate capacity-first Inspection Plan wizard',()=>{
- assert.match(grid,/routerLink.*plan\\/create/);
- assert.match(routes,/path: 'moei\\/smart-inspection\\/plan\\/create\\/:planId'/);
- assert.match(routes,/path: 'moei\\/smart-inspection\\/plan\\/create'/);
+ assert.match(grid,/routerLink.*plan\/create/);
+ assert.match(routes,/path: 'moei\/smart-inspection\/plan\/create\/:planId'/);
+ assert.match(routes,/path: 'moei\/smart-inspection\/plan\/create'/);
  assert.doesNotMatch(grid,/<app-si-bulk-approval-panel/);
  assert.match(wizard,/Candidate Vessels/);
  assert.match(wizard,/Referral Evidence/);
@@ -25,14 +25,14 @@ test('candidate screen opens separate capacity-first Inspection Plan wizard',()=
 });
 
 test('stepper preserves all statutory sources without single regime selector',()=>{
- assert.doesNotMatch(wizard,/choices\\[/);
- assert.match(wizard,/vessel\\.reasons\\.length/);
- assert.match(wizard,/source\\.sourceReference/);
- assert.match(wizard,/source\\.inspectionRegime/);
- assert.match(wizard,/this\\.api\\.approveCapacityPlan\\(/);
- assert.doesNotMatch(wizard,/this\\.api\\.approveForScheduling\\(/);
+ assert.doesNotMatch(wizard,/choices\[/);
+ assert.match(wizard,/vessel\.reasons\.length/);
+ assert.match(wizard,/source\.sourceReference/);
+ assert.match(wizard,/source\.inspectionRegime/);
+ assert.match(wizard,/this\.api\.approveCapacityPlan\(/);
+ assert.doesNotMatch(wizard,/this\.api\.approveForScheduling\(/);
  assert.match(wizard,/createdInspectionCases/);
- assert.doesNotMatch(wizard,/candidateKey:this\\.choices/);
+ assert.doesNotMatch(wizard,/candidateKey:this\.choices/);
 });
 
 test('capacity preflight before approval and atomic Oracle work orders are mandatory',()=>{
@@ -43,11 +43,11 @@ test('capacity preflight before approval and atomic Oracle work orders are manda
  assert.match(server,/commitCapacityFirstPlan/);
  assert.match(capacity,/readyForApproval/);
  assert.match(capacity,/UNKNOWN_RISK_IS_NOT_ASSUMED_ZERO_RISK/);
- assert.match(atomic,/ROLLING_PLAN_VERSION/); // version row written in the same transaction
+ assert.match(atomic,/SI_PLAN_ROLLING_VERSION/); // version row written in the same transaction
  assert.match(atomic,/SI_SCHED_WORK_ORDER/);
- assert.match(atomic,/await con\\.commit\\(\\)/);
- assert.match(backend,/inspectionReasons:v\\.reasons/);
- assert.match(backend,/preview\\.vessels\\.some\\(v=>v\\.missingSource/);
+ assert.match(atomic,/await con\.commit\(\)/);
+ assert.match(backend,/inspectionReasons:v\.reasons/);
+ assert.match(backend,/preview\.vessels\.some\(v=>v\.missingSource/);
  assert.doesNotMatch(backend,/requiresRegimeChoice/);
 });
 
@@ -58,20 +58,20 @@ test('four source and risk percentage sliders restored without bypassing human a
  assert.match(wizard,/PSC_PORT_CALL/);
  assert.match(wizard,/RISK_FACTOR/);
  assert.match(wizard,/weightTotal/);
- assert.match(wizard,/capacity\\?\\.readyForApproval/);
- assert.match(wizard,/this\\.api\\.capacityPreview\\(/);
- assert.match(wizard,/this\\.api\\.capacityAiRecommend\\(/);
+ assert.match(wizard,/capacity\?\.readyForApproval/);
+ assert.match(wizard,/this\.api\.capacityPreview\(/);
+ assert.match(wizard,/this\.api\.capacityAiRecommend\(/);
  assert.match(wizard,/confirmCrossPort/);
 });
 
 test('all official source reasons and inspection objectives are retained for SI-02',()=>{
- assert.match(cases,/async decideBatch\\(/);
+ assert.match(cases,/async decideBatch\(/);
  assert.match(cases,/inspectionReasons:reasons/);
  assert.match(cases,/candidateKeys/);
- assert.match(cases,/inspectionScopes:regimes\\.map/);
+ assert.match(cases,/inspectionScopes:regimes\.map/);
  assert.match(prep,/sourceInspectionObjectives/);
  assert.match(prep,/allInspectionReasons/);
- assert.match(detail,/d\\.context\\.inspectionReasons/);
- assert.match(detail,/d\\.context\\.sourceInspectionObjectives/);
- assert.match(detail,/source\\.sourceReference/);
+ assert.match(detail,/d\.context\.inspectionReasons/);
+ assert.match(detail,/d\.context\.sourceInspectionObjectives/);
+ assert.match(detail,/source\.sourceReference/);
 });
