@@ -71,7 +71,8 @@ export function projectMaritimeSchedulingBoard(rows=[]){
  for(const row of rows){
   if(row.status!=='PROPOSED'||!row.assignment){
    unscheduled.push({imo:row.imo,planRank:row.planRank,
-    blocker:row.blocker||'NO_FEASIBLE_SLOT'});continue;
+    blocker:row.blocker||'NO_FEASIBLE_SLOT',
+    diagnostics:row.diagnostics||null});continue;
   }
   const a=row.assignment,date=String(a.startLocal||'').slice(0,10);
   const slot={imo:row.imo,planRank:row.planRank,
@@ -114,6 +115,79 @@ function collides(first,second,data,bufferMs){
  return minutes===null||Date.parse(early.endUtc)+minutes+bufferMs>Date.parse(late.startUtc);
 }
 const stateSort=(a,b)=>b.schedule.length-a.schedule.length||b.score-a.score||a.key.localeCompare(b.key);
+
+/**
+ * Explain an unscheduled vessel against the selected whole-plan allocation.
+ * This is a bounded, heuristic solver: NEVER infer global physical
+ * impossibility merely from a truncated option set or beam-search outcome.
+ */
+export function explainUnscheduledMaritimeJob(job,schedule,erpSnapshot,policy,existingBookings=[]){
+ const input=job.input||null;
+ const exclusions=(job.exclusions||[]).map(item=>({
+  inspectorId:item.inspectorId,
+  reasonCodes:(item.reasons||[]).slice(0,8)
+ })).slice(0,20);
+ const evidence={
+  code:job.reason||'GLOBAL_PLAN_CONFLICT_OR_CAPACITY',
+  category:'INPUT_OR_ELIGIBILITY',
+  source:'DETERMINISTIC_ERP_PLANNING_PREVIEW',
+  scopeCodes:job.regimes||[],
+  portId:input?.portId||null,
+  earliestLocal:input?.earliestLocal||null,
+  deadlineLocal:input?.deadlineLocal||null,
+  durationMinutes:input?.durationMinutes||null,
+  candidateOptions:job.options.length,
+  candidateInspectors:new Set(job.options.map(x=>x.inspectorId)).size,
+  timeOrTravelConflicts:0,dailyCapacityConflicts:0,
+  optionsStillInsertable:0,competingVisits:[],
+  inspectorExclusions:exclusions,
+  nextAction:job.reason?'VERIFY_INPUT_OR_ERP_ELIGIBILITY':'REVIEW_PLAN_ALTERNATIVES',
+  advisoryOnly:true
+ };
+ if(job.reason||!job.options.length)return evidence;
+ const competitors=new Map();
+ const bufferMs=Number(policy.config.travelBufferMinutes||0)*MINUTE;
+ let time=0,capacity=0,insertable=0;
+ for(const opt of job.options){
+  const collision=schedule.filter(a=>collides(a,opt,erpSnapshot.data,bufferMs));
+  const employee=erpSnapshot.data.Inspectors.find(x=>x.inspector_id===opt.inspectorId);
+  const limit=Math.min(Number(employee?.daily_capacity)||0,
+   Number(policy.config.maxDailyInspections)||0);
+  const day=localDate(Date.parse(opt.startUtc));
+  const used=schedule.filter(x=>x.inspectorId===opt.inspectorId&&
+   localDate(Date.parse(x.startUtc))===day).length+
+   existingBookings.filter(x=>x.inspectorId===opt.inspectorId&&
+    localDate(Date.parse(x.startUtc))===day).length;
+  if(collision.length){
+   time++;
+   for(const other of collision){
+    const key=other.imo+'|'+other.inspectorId+'|'+other.startUtc;
+    if(!competitors.has(key))competitors.set(key,{
+     imo:other.imo,inspectorId:other.inspectorId,
+     inspectorName:other.inspectorName,
+     portId:other.portId,startLocal:other.startLocal,
+     endLocal:other.endLocal
+    });
+   }
+  }
+  if(!limit||used>=limit)capacity++;
+  if(!collision.length&&limit>0&&used<limit)insertable++;
+ }
+ evidence.timeOrTravelConflicts=time;
+ evidence.dailyCapacityConflicts=capacity;
+ evidence.optionsStillInsertable=insertable;
+ evidence.competingVisits=[...competitors.values()].slice(0,10);
+ if(insertable){
+  evidence.category='OPTIMIZER_SEARCH_LIMIT';
+  evidence.code='HEURISTIC_SEARCH_LEFT_AVAILABLE_OPTION';
+  evidence.nextAction='REOPTIMIZE_WITH_MORE_CANDIDATES';
+ }else{
+  evidence.category='PLAN_RESOURCE_CONTENTION';
+  evidence.nextAction='REVIEW_COMPETING_ASSIGNMENTS_AND_VISIT_WINDOW';
+ }
+ return evidence;
+}
+
 /**
  * No AI invocation. This is a constraint solver to produce the factual,
  * auditable baseline before an optional AI explanation or supervisor action.
@@ -241,7 +315,9 @@ export function proposeMaritimeBatchSchedule({
    assignment:allocations.get(j.imo)||null,
    blocker:allocations.has(j.imo)?null:j.reason||'GLOBAL_PLAN_CONFLICT_OR_CAPACITY',
    alternatives:j.options.length,
-   exclusions:allocations.has(j.imo)?[]:j.exclusions
+   exclusions:allocations.has(j.imo)?[]:j.exclusions,
+   diagnostics:allocations.has(j.imo)?null:
+    explainUnscheduledMaritimeJob(j,schedule,erpSnapshot,policy,existingBookings)
   }));
  };
  const rows=rowsFor(chosen);
