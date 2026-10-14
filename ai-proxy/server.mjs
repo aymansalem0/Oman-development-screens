@@ -1341,6 +1341,7 @@ const server = createServer(async (req, res) => {
             expectedHash:body.expectedProposalHash,
             expectedPlanRevision:body.expectedPlanRevision,
             actor,reason:body.reason,confirmApproval:true,
+            confirmCrossPort:body.confirmCrossPort===true,
             demoMode:body.demoMode
           });
           return respond(res,201,{status:'WORK_ORDERS_ISSUED',schedule:saved,
