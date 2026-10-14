@@ -244,20 +244,31 @@ export class SiCandidateWorkbenchComponent implements OnInit{
       next:r=>{
         this.planAiPhase='updating';
         this.cancelPlanEdit();this.loadRollingPlans();
-        this.planNotice=this.copy(
-         'C01 '+r.provider+' completed the advisory analysis. Supervisor approval is still required.',
-         'أكمل C01 التحليل الاستشاري. لا تزال موافقة المشرف مطلوبة.');
+        const partial=r.manualReviewDueToAiContract||0;
+        this.planNotice=partial?
+          this.copy('C01 verified '+(r.verifiedAiRecommendations||0)+
+            ' recommendations. '+partial+' candidates need officer review due to invalid AI output. No automatic selection for these candidates.',
+            'تحقق C01 من '+(r.verifiedAiRecommendations||0)+
+            ' توصية. تحتاج '+partial+' حالة إلى مراجعة المسؤول بسبب استجابة AI غير مطابقة. لم تُطبق عليها توصية إدراج تلقائية.'):
+          this.copy('C01 '+r.provider+' completed '+(r.verifiedAiRecommendations||0)+
+            ' verified advisory recommendations. Supervisor approval is still required.',
+            'أكمل C01 عدد '+(r.verifiedAiRecommendations||0)+
+            ' توصية تم التحقق منها. لا يزال اعتماد المشرف مطلوبًا.');
         this.loadInspectionPlan();
       },
       error:e=>{
         this.planAiPhase='idle';this.planBusy=false;
-        const code=(e as {error?:{error?:string}})?.error?.error||'';
+        const detail=(e as {error?:{error?:string;reasonCode?:string}})?.error;
+        const code=detail?.error||'';
+        const reason=detail?.reasonCode||'';
         const changed=code.includes('CHANGED')||code.includes('STALE');
         this.planError=changed?
           this.copy('Source data changed during analysis. Reload the plan before retrying.',
             'تغيرت بيانات المصادر أثناء التحليل؛ أعد تحميل الخطة قبل إعادة المحاولة.'):
-          this.copy('The AI recommendation could not be verified against the saved vessel sources. No plan was changed. Review source data or ask the administrator to check the Airia contract before retrying.',
-            'تعذر التحقق من توصيات الذكاء الاصطناعي مقابل مصادر بيانات السفن المحفوظة. لم تتغير الخطة. راجع بيانات المصادر أو اطلب فحص تكامل Airia قبل إعادة المحاولة.');
+          this.copy('Airia C01 output failed verification: '+(reason||code)+
+            '. The plan remains unchanged. Check structured JSON recommendations, candidate keys, evidence references and pipeline configuration before another paid run.',
+            'فشل التحقق من استجابة Airia C01: '+(reason||code)+
+            '. الخطة لم تتغير. راجع إعداد Structured JSON وأكواد المرشحين ومراجع الأدلة وإعدادات Pipeline قبل إعادة محاولة مدفوعة.');
         if(changed)this.loadInspectionPlan();
       }
     });
