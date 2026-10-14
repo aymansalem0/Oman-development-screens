@@ -68,3 +68,18 @@ button:disabled{opacity:.5}.marine-notice{padding:13px;background:#eaf4f5;border
 .marine-ai-rank small{color:#68808d;overflow-wrap:anywhere}
 .marine-actions{flex-wrap:wrap;gap:10px}
 .marine-actions small{display:block;flex-basis:100%;color:#66818e;line-height:1.55}
+
+/* Explicit ERP-readiness feedback next to the previously disabled SI-S01 action. */
+.marine-ai-readiness{font-size:12px;color:#356f80;background:#e9f5f7;
+ border-inline-start:4px solid #078b91;padding:9px 12px;border-radius:7px;
+ margin:10px 0 14px;line-height:1.6}
+.marine-ai-readiness:empty{display:none}
+.marine-readiness-panel{padding:14px;margin:12px 0;background:#fffaf0;
+ border:1px solid #eddbb7;border-radius:10px;color:#654a22}
+.marine-readiness-panel h3{margin:0 0 8px;font-size:14px;color:#7f5520}
+.marine-readiness-panel p{font-size:11px;margin:5px 0 10px;line-height:1.55}
+.marine-readiness-panel ul{padding-inline-start:20px;margin:5px 0 0}
+.marine-readiness-panel li{padding:6px 0;border-bottom:1px solid #efdfc2;font-size:11px}
+.marine-readiness-panel li:last-child{border-bottom:0}
+.marine-readiness-panel li strong{display:inline-block;margin-inline-end:12px}
+.marine-readiness-panel li span{color:#865c2f}
