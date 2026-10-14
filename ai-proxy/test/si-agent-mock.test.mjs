@@ -282,7 +282,11 @@ test('C01 diagnoses the exact invalid provider field without accepting it',()=>{
   assert.equal(c01RecommendationContractFailure(item,
     item.candidateKey===first.candidateKey?candidate:undefined,seen||new Set()),expected);
   const response=structuredClone(valid);
-  response.recommendations[0]=item;
+  if(expected==='CANDIDATE_KEY_DUPLICATE'){
+   // A seen key becomes a duplicate ONLY if a PRIOR entry carried it.
+   // With a single recommendation at index 0 this condition never arises.
+   response.recommendations[1].candidateKey=first.candidateKey;
+  }else response.recommendations[0]=item;
   assert.throws(()=>validateC01({result:JSON.stringify(response)},source),
    e=>e.code==='SI_C01_UNVERIFIED_RECOMMENDATION'&&e.diagnosticCode===expected);
  }

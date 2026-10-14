@@ -74,6 +74,13 @@ button, a { font: inherit; }
 .secondary-btn:hover, .outline-btn:hover { border-color: #9fd9d2; color: #0f766e; background: #f5fffd; }
 
 .v360-main { padding: 22px 24px 30px; max-width: 1700px; margin: 0 auto; }
+.v360-operational-etd{display:flex;flex-direction:column;align-items:flex-start;gap:3px;
+  margin-top:10px;padding:9px 12px;border-radius:10px;border:1px solid #c9e9e2;
+  background:#effaf7;font-size:11px;color:#1d4c53}
+.v360-operational-etd .v360-etd-label{font-size:9px;font-weight:750;color:#496b73}
+.v360-operational-etd strong{font-size:13px;color:#0c665f}
+.v360-operational-etd strong.v360-etd-warning{color:#b45309}
+.v360-operational-etd small{font-size:9px;color:#66818a}
 
 .hero-card {
   display: flex;
