@@ -75,7 +75,7 @@ export class SiMaritimeBatchSchedulingComponent implements OnInit{
  demoMode=true;
  aiAdvice:S01Response|null=null;loading=false;busy=false;aiBusy=false;
  scheduleBusy=false;orderBusyId:string|null=null;error='';notice='';
- approvedSchedule:ApprovedSchedule|null=null;
+ workOrdersError='';approvedSchedule:ApprovedSchedule|null=null;
  boardView:'VESSELS'|'ENGINEERS'|'DATES'='VESSELS';
  // A disabled AI action hides useful guidance. Keep it actionable: the
  // first click preflights the free ERP schedule; only confirmed second step
@@ -123,7 +123,8 @@ export class SiMaritimeBatchSchedulingComponent implements OnInit{
   return !!this.context&&!!this.proposal&&
    this.proposal.summary.total>0&&this.proposal.summary.unscheduled===0&&
    !!(this.baselineProposal?.variants?.length)&&
-   !this.approvedSchedule&&!this.busy&&!this.aiBusy&&!this.scheduleBusy;
+   !this.approvedSchedule&&!this.workOrdersError&&
+   !this.busy&&!this.aiBusy&&!this.scheduleBusy;
  }
  get preferredOptionId():string{
   return this.aiAdvice?.chosenOptionId||
@@ -137,9 +138,10 @@ export class SiMaritimeBatchSchedulingComponent implements OnInit{
   if(!planId)return;
   this.http.get<{schedule:ApprovedSchedule|null}>(
    this.api+encodeURIComponent(planId)+'/work-orders').subscribe({
-   next:r=>{this.approvedSchedule=r.schedule;},
-   error:e=>{if(e?.status!==503)this.error=e?.error?.error||
-    this.copy('Could not load work orders','تعذر تحميل أوامر التكليف');}
+   next:r=>{this.approvedSchedule=r.schedule;this.workOrdersError='';},
+   error:e=>{this.workOrdersError=e?.error?.error||
+    'SI_SCHED_WORK_ORDERS_NOT_READY';
+    if(e?.status!==503)this.error=this.workOrdersError;}
   });
  }
  approveSchedule():void{
