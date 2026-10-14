@@ -1433,7 +1433,12 @@ const server = createServer(async (req, res) => {
     }catch(e){
       if(e instanceof SiCandidateAgentError)
         return respond(res,e.status,{error:e.code,
-          ...(e.diagnosticCode?{reasonCode:e.diagnosticCode}:{})});
+          ...(e.diagnosticCode?{reasonCode:e.diagnosticCode}:{}),
+          ...(e.failureCounts?{failureCounts:e.failureCounts}:{}),
+          ...(Number.isInteger(e.expectedCount)?{expectedCount:e.expectedCount}:{}),
+          ...(Number.isInteger(e.returnedCount)?{returnedCount:e.returnedCount}:{}),
+          ...(Number.isInteger(e.batchIndex)?{batchIndex:e.batchIndex}:{}),
+          ...(Number.isInteger(e.batchCount)?{batchCount:e.batchCount}:{})});
       if(e instanceof SiError||e instanceof SiPocAdvisorError||e instanceof SiRollingPlanError||e instanceof SiBulkApprovalError||e instanceof SiCandidateAgentError||e instanceof SiLifecycleError||e instanceof SiSelectionError||e instanceof SiPriorityError||e instanceof SiPreparationError||e instanceof SiTargetingError||e instanceof DashboardError)
         return respond(res,e.status,{error:e.code});
       if(Number.isInteger(e?.status)&&e.status>=400&&e.status<500)

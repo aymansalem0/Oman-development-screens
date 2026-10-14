@@ -278,6 +278,55 @@ export function validateC01(raw,source){
 }
 
 /**
+ * Normalize only unambiguous transport presentation differences.
+ * No identity inference, guessed citations, invented ranks or inferred AI
+ * answers. The strict source/evidence validator remains authoritative.
+ */
+export function normalizeC01TransportFields(row,sourceCandidate){
+ if(!row||typeof row!=='object'||Array.isArray(row))
+  return {row,normalizedFields:[]};
+ const n={...row},fields=[];
+ if(typeof n.candidateKey==='string'&&
+    n.candidateKey!==n.candidateKey.trim()&&
+    n.candidateKey.trim()===sourceCandidate?.candidateKey){
+  n.candidateKey=n.candidateKey.trim();
+  fields.push('CANDIDATE_KEY_OUTER_WHITESPACE');
+ }
+ if(typeof n.confidence==='string'&&
+    /^(?:0(?:\.\d+)?|1(?:\.0+)?)$/.test(n.confidence.trim())){
+  n.confidence=Number(n.confidence.trim());
+  fields.push('CONFIDENCE_DECIMAL_STRING');
+ }
+ if(n.recommendation==='SELECT_RECOMMENDED'&&
+   typeof n.suggestedRank==='string'&&
+   /^(?:[1-9]|[1-9][0-9]|100)$/.test(n.suggestedRank.trim())){
+  n.suggestedRank=Number(n.suggestedRank.trim());
+  fields.push('RANK_INTEGER_STRING');
+ }
+ if(n.recommendation!=='SELECT_RECOMMENDED'&&n.suggestedRank===undefined){
+  n.suggestedRank=null;
+  fields.push('NONSELECT_RANK_OMITTED');
+ }
+ if(Array.isArray(n.evidenceRefs)&&sourceCandidate){
+  let changed=false;
+  n.evidenceRefs=n.evidenceRefs.map(v=>{
+   if(typeof v==='string'&&v!==v.trim()&&
+     sourceCandidate.allowedEvidence.includes(v.trim())){
+    changed=true;return v.trim();
+   }
+   return v;
+  });
+  if(changed)fields.push('EVIDENCE_REF_OUTER_WHITESPACE');
+ }
+ // The server owns missing source gaps, even if the provider omitted the
+ // optional output array; this never fabricates an evidence reference.
+ if(n.dataGaps===undefined){
+  n.dataGaps=[];
+  fields.push('MODEL_DATA_GAPS_OMITTED');
+ }
+ return {row:n,normalizedFields:fields};
+}
+/**
  * Quarantine a model's unusable advisory without claiming that it selected
  * the vessel. Authoritative C01 inputs and statutory ranking remain intact.
  * A partly valid response can be reviewed without discarding all valid model
@@ -292,36 +341,63 @@ export function reconcileC01(raw,source){
  }
  const known=new Map(source.candidates.map(c=>[c.candidateKey,c]));
  const received=new Map(),rejected=new Map();
+ // Safe enum-only telemetry. The model's IDs, free text and evidence are
+ // NEVER copied to HTTP errors or operator logs.
+ const unknownReasons=new Map();
  let unexpected=0;
  for(const row of body.recommendations){
-  const key=typeof row?.candidateKey==='string'?row.candidateKey:null;
-  if(!key||!known.has(key)){unexpected++;continue;}
+  const key=typeof row?.candidateKey==='string'?(
+   known.has(row.candidateKey)?row.candidateKey:
+   known.has(row.candidateKey.trim())?row.candidateKey.trim():
+   row.candidateKey):null;
+  if(!key||!known.has(key)){
+   unexpected++;
+   const code=key?'CANDIDATE_KEY_NOT_IN_REQUEST':'CANDIDATE_KEY_MISSING';
+   unknownReasons.set(code,(unknownReasons.get(code)||0)+1);
+   continue;
+  }
   if(received.has(key)||rejected.has(key)){
    received.delete(key);rejected.set(key,'DUPLICATE_CANDIDATE_KEY');continue;
   }
   const original=known.get(key);
-  const problem=c01RecommendationContractFailure(row,original);
+  const normalized=normalizeC01TransportFields(row,original);
+  const value=normalized.row;
+  const problem=c01RecommendationContractFailure(value,original);
   if(problem){
    rejected.set(key,problem);continue;
   }
-  if(row.recommendation==='SELECT_RECOMMENDED'&&
-    (!row.evidenceRefs.length||!original.sourceTypes.length)){
+  if(value.recommendation==='SELECT_RECOMMENDED'&&
+    (!value.evidenceRefs.length||!original.sourceTypes.length)){
    rejected.set(key,'UNSUPPORTED_SELECTION_EVIDENCE');continue;
   }
-  // Only STRICTLY validated items reach the plan as actual AI advice.
+  // Only STRICTLY verified items reach the plan as actual AI advice. A
+  // transport-normalized number still has to satisfy the original ranges.
   try{
-   const verified=validateC01({recommendations:[row]},
+   const verified=validateC01({recommendations:[value]},
      {...source,candidates:[original]});
-   received.set(key,verified[0]);
+   received.set(key,{...verified[0],
+     outputNormalizedFields:normalized.normalizedFields});
   }catch{
    rejected.set(key,'PROVIDER_ITEM_VERIFICATION_FAILED');
   }
  }
  const verifiedCount=received.size;
+ const counts=new Map(unknownReasons);
+ for(const code of rejected.values())counts.set(code,(counts.get(code)||0)+1);
+ const missing=source.candidates.filter(c=>
+  !received.has(c.candidateKey)&&!rejected.has(c.candidateKey)).length;
+ if(missing)counts.set('CANDIDATES_WITHOUT_OUTPUT',missing);
+ const failureCounts=Object.fromEntries([...counts].sort(([a],[b])=>a.localeCompare(b)));
  if(!verifiedCount){
   const e=new SiCandidateAgentError('SI_C01_NO_VERIFIED_RECOMMENDATIONS',502);
-  e.diagnosticCode=body.recommendations.length?'ALL_ITEMS_FAILED_VERIFICATION':
-   'RECOMMENDATIONS_EMPTY';
+  const primary=[...counts].sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0]))[0];
+  e.diagnosticCode=primary?.[0]||
+   (body.recommendations.length?'ALL_ITEMS_FAILED_VERIFICATION':'RECOMMENDATIONS_EMPTY');
+  e.failureCounts=failureCounts;
+  e.expectedCount=source.candidates.length;
+  e.returnedCount=body.recommendations.length;
+  console.warn('[si-c01] ZERO_VERIFIED_OUTPUT expected='+e.expectedCount+
+   ' returned='+e.returnedCount+' failureCounts='+JSON.stringify(failureCounts));
   throw e;
  }
  const recommendations=source.candidates.map(c=>{
@@ -345,8 +421,7 @@ export function reconcileC01(raw,source){
   console.warn('[si-c01] PARTIAL_ADVICE_VERIFICATION valid='+verifiedCount+
    ' manualReview='+quarantinedCount+' unknown='+unexpected);
  return {recommendations,verifiedCount,quarantinedCount,unexpectedCount:unexpected,
-  failuresByCode:Object.fromEntries([...rejected.values()].reduce((map,code)=>{
-   map.set(code,(map.get(code)||0)+1);return map;},new Map()))};
+  failuresByCode:failureCounts};
 }
 export class SiCandidateAgent{
  constructor({targeting,pscPolicy=null,executeAgent=null,provider='mock'}={}){
@@ -474,7 +549,15 @@ export class SiCandidateAgent{
      let raw;
      try{raw=await this.executeAgent(batch);}
      catch{throw new SiCandidateAgentError('SI_C01_PROVIDER_UNAVAILABLE',502);}
-     const checked=reconcileC01(raw,scope);
+     let checked;
+     try{checked=reconcileC01(raw,scope);}
+     catch(e){
+      if(e instanceof SiCandidateAgentError){
+       e.batchIndex=i+1;
+       e.batchCount=batchCount;
+      }
+      throw e;
+     }
      recommendations.push(...checked.recommendations);
      verifiedCount+=checked.verifiedCount;
      quarantinedCount+=checked.quarantinedCount;

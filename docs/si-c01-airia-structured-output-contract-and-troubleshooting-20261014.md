@@ -45,6 +45,40 @@ Rules for the Airia pipeline:
 - If **no** recommendation is verifiable, the run returns an actionable `SI_C01_NO_VERIFIED_RECOMMENDATIONS` or `SI_C01_STRUCTURED_JSON_REQUIRED` error and does not change the plan.
 - Human statutory approval remains separate. Mandatory source-eligible NMC and service workflows retain their statutory business eligibility, independent of model suggestions.
 
+
+## ALL_ITEMS_FAILED_VERIFICATION: exact safe diagnostic added
+
+When Airia returns a parseable `recommendations` list but none passes verification,
+the C01 API now sends an **enum-only** `failureCounts` summary, a dominant
+`reasonCode`, `expectedCount`, `returnedCount`, and `batchIndex` /
+`batchCount`. It logs the same safe aggregate without any IMO,
+candidateKey, original evidence IDs, tokens or model prose.
+
+| Returned reason code | What to correct inside the actual C01 Airia step |
+|---|---|
+| `CANDIDATE_KEY_NOT_IN_REQUEST` or `CANDIDATE_KEY_MISSING` | Echo the exact `candidateKey` for each current supplied workflow; IMO alone is not enough when one ship has multiple regimes |
+| `EVIDENCE_REF_NOT_IN_SOURCE` | Emit only exact IDs from *that candidate's* `allowedEvidence`; never fabricate citations or cite another candidate |
+| `EVIDENCE_REFS_MISSING_OR_TOO_MANY` | Emit an array of 0–20 evidence IDs, with actual source references for selection |
+| `UNSUPPORTED_SELECTION_EVIDENCE` | Do not recommend selection if no verified evidence; choose `MANUAL_REVIEW` |
+| `RECOMMENDATION_ENUM_INVALID` | Use only the three documented enum strings |
+| `CONFIDENCE_INVALID_NUMBER_OR_RANGE_0_TO_1` | Emit numeric confidence 0..1, not arbitrary text |
+| `SELECTED_SUGGESTED_RANK_INVALID` | For selection return integer 1..100, otherwise `null` |
+| `REASON_MISSING_OR_INVALID_LENGTH` | Provide source-grounded explanation of at least ten characters |
+| `CANDIDATES_WITHOUT_OUTPUT` | Return an entry for every supplied candidate; it does not mean those missing candidates have been AI-recommended |
+| `PROVIDER_ITEM_VERIFICATION_FAILED` | Inspect the item-level strict validator and provider contract for the recorded batch |
+
+Simple unambiguous transport differences are normalized *only after exact source
+identity is established*: decimal numeric string for confidence, integer-string
+rank, spaces surrounding **exact known** IDs, and omitted optional `dataGaps`.
+The final strict validator still rejects unsupported vessel identities, nonexistent
+citations and invalid statutory recommendations. Repaired fields are labelled
+`outputNormalizedFields` for inspection.
+
+**Important:** If the partner's C01 pipeline is conversational/prose instead
+of structured output, this change cannot convert it into a verified JSON agent.
+Configure structured JSON on the actual C01 pipeline first. Do not test by
+sending repeated paid calls with unchanged pipeline configuration.
+
 ## Safe local checks / no secrets
 
 ```powershell
