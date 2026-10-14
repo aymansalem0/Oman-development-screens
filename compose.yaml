@@ -32,6 +32,9 @@ services:
       # Google OIDC SSO (default): fail closed until OAuth credentials are configured.
       # Explicit local password mode is for controlled POC troubleshooting ONLY.
       MOEI_AUTH_MODE: ${MOEI_AUTH_MODE:-google}
+      # Authenticated user-email -> ERP inspector ID bindings for work orders.
+      # Set in local .env or secrets; NEVER take engineer identity from request.
+      SI_V2_INSPECTOR_IDENTITY_MAP_JSON: ${SI_V2_INSPECTOR_IDENTITY_MAP_JSON:-"{}"}
       MOEI_GOOGLE_CLIENT_ID: ${MOEI_GOOGLE_CLIENT_ID:-}
       MOEI_GOOGLE_CLIENT_SECRET: ${MOEI_GOOGLE_CLIENT_SECRET:-}
       MOEI_GOOGLE_REDIRECT_URI: ${MOEI_GOOGLE_REDIRECT_URI:-http://localhost:4200/api/moei/auth/google/callback}
