@@ -28,6 +28,7 @@ export interface PscQuotaBucket {
   bucket:string;period:string;port:string;eligiblePortCalls:number;
   selectionRate:number;targetCount:number;selectedCount:number;
   remainingSlots:number;overQuota:boolean;
+  manuallySelectedCount?:number;automaticallyShortlistedCount?:number;
 }
 export interface PscSelectionPool {
   status:string;source:string;policy:PscQuotaPolicy;
