@@ -7,7 +7,7 @@ import {LanguageService} from '../services/language.service';
 import {NmcNavigationComponent} from '../components/nmc-navigation.component';
 interface SourceRow{
  imo:string;name:string;sourceTypes:string[];regimes:string[];
- regime:string;vesselType:string;portId:string;portName:string;
+ regime:string;vesselType:string;portId:string;portName:string;portSourceLocked:boolean;
  etaLocal:string;etdLocal:string;etdSource:string;dateEvidenceReference:string;
  nmcReferrals:{id:string;caseReference:string}[];
  locationType:string;locationName:string;siteAccessConfirmed:boolean;
@@ -61,12 +61,41 @@ export class SiMaritimeBatchSchedulingComponent implements OnInit{
  context:Context|null=null;proposal:Proposal|null=null;baselineProposal:Proposal|null=null;
  aiAdvice:S01Response|null=null;loading=false;busy=false;aiBusy=false;error='';notice='';
  boardView:'VESSELS'|'ENGINEERS'|'DATES'='VESSELS';
+ // A disabled AI action hides useful guidance. Keep it actionable: the
+ // first click preflights the free ERP schedule; only confirmed second step
+ // can make a charged Airia call.
+ get readinessIssues():{imo:string;name:string;issues:string[]}[]{
+  if(!this.context)return [];
+  return this.context.items.map(v=>{
+   const issues:string[]=[];
+   if(!v.portId)issues.push(this.copy('inspection port','ميناء المعاينة'));
+   if(!(v.etaLocal||v.earliestLocal))issues.push(this.copy('ETA / availability start','موعد الوصول أو بداية الإتاحة'));
+   if(!(v.etdLocal||v.latestFinishLocal))issues.push(this.copy('ETD / inspection deadline','موعد المغادرة أو نهاية الإتاحة'));
+   if(!v.locationName.trim())issues.push(this.copy('berth or site name','اسم الرصيف أو موقع المعاينة'));
+   if(!v.siteAccessConfirmed)issues.push(this.copy('confirmed site access','تأكيد إتاحة الموقع'));
+   if(!Number.isInteger(Number(v.durationMinutes))||Number(v.durationMinutes)<30||
+      Number(v.durationMinutes)>720)issues.push(this.copy('valid inspection duration','مدة معاينة صحيحة'));
+   return {imo:v.imo,name:v.name,issues};
+  }).filter(row=>row.issues.length>0);
+ }
+ get aiBlockedReason():string{
+  if(this.busy)return this.copy('Calculating ERP feasibility…','جارٍ حساب الإتاحة من ERP…');
+  if(this.aiBusy)return this.copy('Waiting for Airia SI-S01…','جارٍ انتظار تحليل SI-S01…');
+  if(!this.baselineProposal)return this.copy(
+   'Click AI Schedule: the system will first calculate ERP-feasible alternatives without an Airia charge.',
+   'اضغط الجدولة بالذكاء الاصطناعي: سيتم حساب البدائل الصالحة من ERP أولًا دون تكلفة Airia.');
+  if(!this.canRunAi)return this.copy(
+   'No feasible schedule available. Review the unscheduled vessels and missing visit details below; Airia will not be charged.',
+   'لا توجد بدائل جدولة صالحة. راجع السفن غير المجدولة وبيانات الزيارة الناقصة أدناه؛ لن يتم استدعاء Airia.');
+  return '';
+ }
+
  get assignedEngineerCount():number{return this.proposal?.board?.engineers.length||0;}
  invalidateProposal():void{
   // The inputs changed after preview; never show obsolete slots as though
   // they were still valid, and never carry them into a future approval action.
   this.proposal=null;this.baselineProposal=null;this.aiAdvice=null;
-  this.notice='';
+  this.notice='';this.error='';
  }
 
  private readonly api='/api/si/v1/maritime-scheduling/plans/';
@@ -95,26 +124,58 @@ export class SiMaritimeBatchSchedulingComponent implements OnInit{
     x.windowEvidenceReference||x.nmcReferrals[0]?.id||'POC_OPERATOR_FINAL_WINDOW'
   }));
  }
- preview():void{
+ preview():void{this.calculateFeasible(false);}
+ private calculateFeasible(continueToAi:boolean):void{
   if(!this.context||this.busy||this.aiBusy)return;
   this.busy=true;this.error='';this.notice='';
   this.proposal=null;this.baselineProposal=null;this.aiAdvice=null;
   this.http.post<{status:string;proposal:Proposal}>(
     this.api+encodeURIComponent(this.context.planId)+'/preview',
     {requests:this.requests()}).subscribe({
-     next:r=>{this.busy=false;this.proposal=r.proposal;
+     next:r=>{
+      this.busy=false;this.proposal=r.proposal;
       this.baselineProposal=r.proposal;
-      this.notice=this.copy('ERP-constrained schedule is ready. You can request SI-S01 AI advice for the valid alternatives.',
-       'مقترح الجدولة وفق قيود ERP جاهز. يمكنك تشغيل SI-S01 لترتيب البدائل الصالحة.');},
+      const proposed=r.proposal.summary?.proposed||0;
+      const unscheduled=r.proposal.summary?.unscheduled||0;
+      if(!proposed||!r.proposal.variants?.length){
+       this.notice=this.copy(
+        'ERP found 0 feasible inspections. Review missing port, visit window, site access, engineer availability or scheduling blockers below. No Airia call was made.',
+        'لم يجد ERP أي معاينة قابلة للجدولة. راجع الميناء والمواعيد وإتاحة الموقع وتوفر المهندسين وأسباب عدم الجدولة أدناه. لم يتم استدعاء Airia.');
+       this.boardView='VESSELS';
+       return;
+      }
+      this.notice=this.copy(
+       'ERP found '+proposed+' feasible vessel(s)'+(unscheduled?
+        ' and '+unscheduled+' unscheduled; blocked vessels remain visible.':'')+
+        ' No AI call yet.',
+       'وجد ERP عدد '+proposed+' سفينة قابلة للجدولة'+(unscheduled?
+        ' و'+unscheduled+' سفينة غير مجدولة تظهر أسباب تعذر جدولتها.':'')+
+        ' لم يتم استدعاء AI بعد.');
+      if(continueToAi)this.runAi();
+     },
      error:err=>{this.busy=false;this.showError(err);}
     });
  }
+
  get canRunAi():boolean{
   return !!this.baselineProposal?.variants?.length&&
    (this.baselineProposal?.summary?.proposed||0)>0&&!this.busy&&!this.aiBusy;
  }
  runAi():void{
-  if(!this.context||!this.baselineProposal||!this.canRunAi)return;
+  if(!this.context||this.busy||this.aiBusy)return;
+  // One-click user flow: a FREE source-validated ERP preview comes first;
+  // the charged Airia request still requires its own explicit confirmation.
+  if(!this.baselineProposal){
+   this.calculateFeasible(true);
+   return;
+  }
+  if(!this.canRunAi){
+   this.error=this.copy(
+    'No valid scheduling alternative exists yet. Complete missing visit details and review the ERP scheduling blockers. Airia has not been called.',
+    'لا يوجد بديل جدولة صالح بعد. أكمل بيانات زيارة السفن وراجع أسباب التعذر من ERP. لم يتم استدعاء Airia.');
+   this.boardView='VESSELS';
+   return;
+  }
   const confirmed=window.confirm(this.copy(
    'Run ONE potentially billable SI-S01 Airia request to compare whole-plan feasible schedules? No booking, case or approval will be created.',
    'هل تؤكد تشغيل طلب Airia SI-S01 واحد قد يكون مدفوعًا لترتيب بدائل الجدولة الصالحة للخطة كاملة؟ لن ينشأ حجز أو حالة معاينة أو اعتماد تلقائي.'));
