@@ -37,9 +37,12 @@ interface Execution{
     <small>{{copy('Dossier','الدوسيه')}}: {{o.dossierStatus}} ·
      {{copy('Assigned engineer','المهندس المكلف')}}: {{o.assignment.inspectorName}}</small>
    </div>
-   <button type="button" (click)="execute(o)" [disabled]="busy">
+   <button *ngIf="o.status==='ISSUED'" type="button" (click)="execute(o)" [disabled]="busy">
     {{copy('Execute Work Order & Create Checklists',
       'تنفيذ أمر التكليف وإنشاء قوائم المعاينة')}}</button>
+   <a *ngIf="o.status==='IN_EXECUTION'"
+    [routerLink]="['/moei/smart-inspection/checklists',o.caseId]">
+    {{copy('Continue field inspection','استكمال المعاينة الميدانية')}}</a>
   </section>
   <section class="order" *ngFor="let e of executed">
    <div>
