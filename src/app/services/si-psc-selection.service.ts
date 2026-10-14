@@ -35,6 +35,7 @@ export interface PscSelectionPool {
   scope:string;periodMode:string;
   summary:{eligiblePortCalls:number;selectedPortCalls:number;
     inPoolPortCalls:number;notSelectedPortCalls:number;
+    automaticallyShortlistedPortCalls?:number;
     distinctVessels:number;buckets:PscQuotaBucket[]};
   items:PscPoolItem[];
 }
