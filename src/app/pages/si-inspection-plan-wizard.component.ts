@@ -6,7 +6,7 @@ import {Subscription,interval,switchMap} from 'rxjs';
 import {NmcNavigationComponent} from '../components/nmc-navigation.component';
 import {LanguageService} from '../services/language.service';
 import {MoeiAuthService} from '../services/moei-auth.service';
-import {SiBulkJob,SiBulkPlanService,SiBulkPreview,SiBulkVessel} from '../services/si-bulk-plan.service';
+import {SiBulkJob,SiBulkPlanService,SiBulkPreview,SiBulkVessel,SiCapacityPreview,SiCapacityWeights,SiCapacityWeightKey} from '../services/si-bulk-plan.service';
 
 @Component({
  selector:'app-si-inspection-plan-wizard',
@@ -135,22 +135,75 @@ import {SiBulkJob,SiBulkPlanService,SiBulkPreview,SiBulkVessel} from '../service
     </section>
 
     <section class="panel" *ngIf="step===3">
-     <p class="eyebrow">{{copy('STEP 03 · AI-PROPOSED SCHEDULING','الخطوة ٣ · الجدولة المقترحة')}}</p>
-     <h2>{{copy('Approval freezes the selected vessels, not inspection cases',
-       'اعتماد قائمة السفن دون إنشاء حالات معاينة')}}</h2>
-     <div class="workflow">
-      <div><span class="flow-icon">1</span><div><b>{{copy('Freeze approved vessel roster','تثبيت السفن المعتمدة')}}</b>
-       <p>{{copy('Store all PSC, Service Request and approved NMC referral reasons. No cases or inspector dossiers are created now.',
-        'حفظ كل أسباب إحالة PSC وطلبات الخدمات وNMC. لا تنشأ حالات أو دوسيهات للمفتش في هذه المرحلة.')}}</p></div></div>
-      <div><span class="flow-icon">2</span><div><b>{{copy('Generate comprehensive maritime schedule','إنشاء جدولة بحرية شاملة')}}</b>
-       <p>{{copy('Source-final ETD needs no separate approval. Feasible inspectors are matched by vessel type, inspection regime, port and ERP availability. GT limits are not a requirement.',
-        'تاريخ المغادرة النهائي لا يتطلب اعتمادًا إضافيًا. يتم اختيار المهندس طبقًا لنوع السفينة والمعاينة والموقع والإتاحة، دون شرط نطاقات الحمولة.')}}</p></div></div>
-      <div><span class="flow-icon">3</span><div><b>{{copy('Supervisor approves the proposed schedule','المشرف يعتمد توزيع المواعيد والمهندسين')}}</b>
-       <p>{{copy('Schedule approval is independent of date finality. No auto-booking, case creation or NMC closure before the approved execution workflow.',
-        'اعتماد الجدولة مستقل عن نهائية تاريخ المغادرة. لا يتم الحجز أو إنشاء حالات أو إغلاق NMC قبل إتمام المسار المعتمد.')}}</p></div></div>
+     <p class="eyebrow">{{copy('STEP 03 · WEIGHTS AND CAPACITY','الخطوة ٣ · الأوزان والطاقة التشغيلية')}}</p>
+     <h2>{{copy('Inspection Source Weights & Available Inspector Capacity','نسب مصادر المعاينة والطاقة المتاحة للمهندسين')}}</h2>
+     <p>{{copy('Capacity and vessel selection form one draft. Source weights are advisory and cannot override mandatory inspections or protected NMC referral priorities.',
+       'اختيار السفن والطاقة التشغيلية جزء من مسودة واحدة. أوزان المصادر استشارية ولا تتجاوز المعاينات الإلزامية أو أولوية إحالات NMC.')}}</p>
+     <div class="capacity-weight-panel">
+      <h3>{{copy('Inspection Source / Risk Factor Weights','نسب مصادر المعاينة وعامل المخاطر')}} · {{weightTotal}}%</h3>
+      <label class="capacity-weight-row" *ngFor="let key of weightKeys">
+       <span>{{weightLabel(key)}}</span>
+       <input type="range" min="0" max="100" step="1" [value]="weights[key]"
+        [attr.aria-label]="weightLabel(key)"
+        (input)="updateWeight(key,$any($event.target).value)"
+        [disabled]="capacityBusy||submitting||returnedFromScheduling">
+       <b>{{weights[key]}}%</b>
+      </label>
+      <p class="hint">{{copy('Weights always total 100%. Unassessed vessel risk stays unknown, never low-risk by assumption.',
+       'مجموع الأوزان دائمًا 100%. المخاطر غير المقيمة تظل غير معروفة، ولا تُعتبر منخفضة تلقائيًا.')}}</p>
      </div>
-     <p class="notice">{{copy('The ERP workforce import is a POC simulator; missing berth access, final departure date or qualified available inspector causes UNSCHEDULED, never a fabricated booking.',
-       'بيانات ERP في الـPOC تجريبية. غياب معلومات الرصيف أو تاريخ المغادرة أو المهندس المؤهل يؤدي لعرض السفينة كغير مجدولة، وليس اختراع حجز.')}}</p>
+     <div class="capacity-buttons">
+      <button class="next" type="button" (click)="calculateCapacity()"
+       [disabled]="capacityBusy||submitting||weightTotal!==100">
+       {{capacityBusy?copy('Checking capacity…','جارٍ حساب الطاقة…'):
+        copy('Calculate Capacity & Inspection Appointments','حساب الطاقة ومواعيد المعاينات')}}</button>
+      <a class="secondary" routerLink="/moei/smart-inspection/candidates">
+       {{copy('Adjust Candidate Selection','تعديل اختيار السفن')}}</a>
+     </div>
+     <p class="notice error" *ngIf="capacityError" role="alert">{{capacityError}}</p>
+     <ng-container *ngIf="capacity as c">
+      <div class="review-stats">
+       <p><b>{{c.proposal.summary.total}}</b><span>{{copy('Selected','مختارة')}}</span></p>
+       <p><b>{{c.proposedVesselCount}}</b><span>{{copy('Feasible','قابلة للتنفيذ')}}</span></p>
+       <p><b>{{c.unmetCapacityCount}}</b><span>{{copy('Capacity gaps','عجز الطاقة')}}</span></p>
+      </div>
+      <p *ngIf="c.sourceFactsAreSynthetic" class="notice">{{copy(
+       'POC DEMO: staff qualifications, shifts and some visit details are synthetic, NOT live ERP bookings.',
+       'POC تجريبي: إتاحة المهندسين والورديات وبعض بيانات الزيارات افتراضية وليست حجوزات ERP رسمية.')}}</p>
+      <p *ngIf="!c.readyForApproval" class="notice error">{{copy(
+       'Cannot approve this selected plan until every vessel has an eligible inspector and feasible time. Reassign resources or revise candidate selection; never silently cancel mandatory inspections.',
+       'لا يمكن اعتماد الخطة حتى يتوفر مهندس مؤهل وموعد صالح لكل سفينة. عدّل الموارد أو المرشحين ولا تلغ المعاينات الإلزامية تلقائيًا.')}}</p>
+      <div class="table-scroll"><table>
+       <thead><tr><th>IMO</th><th>{{copy('Source score','نقاط المصادر')}}</th>
+        <th>{{copy('Risk points','نقاط المخاطر')}}</th>
+        <th>{{copy('Capacity','التوزيع')}}</th>
+        <th>{{copy('Engineer / Port / Time','المهندس / الميناء / الموعد')}}</th></tr></thead>
+       <tbody><tr *ngFor="let r of c.proposal.rows">
+        <td>{{r.imo}}</td>
+        <td>{{capacityPriority(r.imo)?.sourcePoints??'—'}}</td>
+        <td>{{capacityPriority(r.imo)?.riskPoints??copy('Unassessed','غير مقيم')}}</td>
+        <td><b [class.capacity-gap]="r.status==='UNSCHEDULED'">{{r.status}}</b>
+         <small *ngIf="r.blocker">{{r.diagnostics?.code||r.blocker}}</small></td>
+        <td>{{r.assignment?.inspectorName||'—'}}
+         <small>{{r.assignment?.portName||''}} · {{r.assignment?.startLocal||''}}</small>
+         <small *ngIf="r.assignment?.crossPort">
+          {{copy('From','من')}} {{r.assignment?.originPortName}} ·
+          {{r.assignment?.travelMinutes}} {{copy('min','دقيقة')}}</small></td>
+       </tr></tbody>
+      </table></div>
+      <div *ngIf="c.readyForApproval" class="capacity-options">
+       <label>{{copy('Select verified schedule variant','اختر بديل الجدولة المحقق')}}
+        <select [(ngModel)]="selectedOptionId">
+         <option *ngFor="let v of c.proposal.variants" [value]="v.optionId">
+          {{v.optionId}} · {{v.allocatedVessels}} {{copy('vessels','سفن')}}</option>
+        </select></label>
+       <button type="button" class="secondary" (click)="runCapacityAi()"
+        [disabled]="capacityAiBusy||capacityBusy">{{copy('AI: Rank Feasible Alternatives','AI: ترتيب البدائل الممكنة')}}</button>
+       <p *ngIf="capacityAiAdvice" class="notice">
+        {{copy('Advisory only:','توصية استشارية فقط:')}}
+        {{capacityAiAdvice.chosenOptionId}} · {{capacityAiAdvice.provider}}</p>
+      </div>
+     </ng-container>
     </section>
     <section class="panel" *ngIf="step===4">
      <p class="eyebrow">{{copy('STEP 04 · SUPERVISOR APPROVAL','الخطوة ٤ · اعتماد المسؤول')}}</p>
