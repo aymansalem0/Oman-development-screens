@@ -58,7 +58,7 @@
               <ng-container *ngIf="status(person)!=='READY_TO_APPLY'">
                 <div class="avatar">{{person.name.slice(0,1)}}</div>
                 <div class="grow"><b>{{person.name}}</b><span>{{label(status(person))}}</span></div>
-                <button type="button" class="view-link" (click)="open(person)">Inspect →</button>
+                <button type="button" class="view-link" (click)="openJourney(person)">Open Journey →</button>
               </ng-container>
             </div>
           </article>
@@ -69,7 +69,7 @@
         <div class="card table-card">
           <div class="section-title">
             <div>
-              <h2>{{page==='registry'?'Seafarer Registry':page==='company'?'Foreign Seafarer Portfolio':page==='holds'?'HOLD &amp; Requirement Resolution':'SDB Applications'}}</h2>
+              <h2>{{page==='registry'?'Seafarer Registry':page==='company'?'Foreign Seafarer Portfolio':page==='holds'?'HOLD & Requirement Resolution':'SDB Applications'}}</h2>
               <p>{{page==='company'?'Only the selected synthetic company cohort is listed. Production access will require company-specific RBAC.':'Select a seafarer to inspect verified requirements, AI guidance and process actions.'}}</p>
             </div>
             <span class="micro-tag">{{rows.length}} RECORDS</span>
@@ -98,7 +98,8 @@
                   <td>{{person.company||person.academy||'—'}}</td>
                   <td><span class="status-pill" [ngClass]="badgeClass(status(person))">{{label(status(person))}}</span></td>
                   <td>{{label(person.applicationState)}}</td>
-                  <td><button class="small-button" type="button" (click)="open(person)">Open 360 →</button></td>
+                  <td><button class="small-button" type="button" (click)="open(person)">Open 360</button>
+                      <button class="small-button" type="button" (click)="openJourney(person)">SDB Journey →</button></td>
                 </tr>
                 <tr *ngIf="!rows.length"><td colspan="6" class="empty">No seafarers match these filters.</td></tr>
               </tbody>
@@ -178,6 +179,7 @@
             <div class="step-status"><span>4</span><strong>Payment &amp; Rule Authorisation</strong><em>{{s.applicationState==='PAYMENT_SIMULATED'||s.applicationState==='ISSUED'?'Demo verified':'Pending'}}</em></div>
             <div class="step-status"><span>5</span><strong>SDB Issuance &amp; Printing</strong><em>{{s.applicationState==='ISSUED'?'Mock issued; no print':'Pending'}}</em></div>
             <div class="process-actions">
+              <button type="button" class="main-button" (click)="openJourney(s)">Open 11-Step Detailed Journey →</button>
               <button type="button" class="main-button" [disabled]="persona!=='OPERATIONS'||status(s)!=='READY_TO_APPLY'||s.applicationState!=='NOT_STARTED'" (click)="invite(s)">Queue Invite (Mock)</button>
               <button type="button" [disabled]="!canApply" (click)="submit(s)">Submit as Applicant (Mock)</button>
               <button type="button" [disabled]="persona!=='OPERATIONS'||s.applicationState!=='SUBMITTED'" (click)="payment(s)">Simulate Payment</button>
