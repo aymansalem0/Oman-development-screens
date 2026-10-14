@@ -313,3 +313,25 @@ button:disabled{opacity:.55;cursor:not-allowed}
   .si-analysis-spinner,.si-ai-indeterminate span{animation:none;}
   .si-ai-indeterminate span{inset-inline-start:0;width:50%;}
 }
+
+/* Source-backed C01 readiness: small, readable inline coverage prior to AI run. */
+.si-data-readiness{
+  margin:9px 0 12px;padding:12px 14px;border-radius:10px;
+  border:1px solid #cfdee8;background:#f8fcfe;color:#1a526b;
+}
+.si-readiness-review{border-color:#dfd0ac;background:#fffbf2;}
+.si-readiness-head{display:flex;gap:10px;align-items:center;
+  justify-content:space-between;flex-wrap:wrap;margin-bottom:9px;}
+.si-readiness-head>strong{font-size:12px;color:#235a71;}
+.si-readiness-state{font-size:10px;font-weight:750;border:1px solid #c8dfe8;
+  background:#eaf5fa;padding:5px 9px;border-radius:99px;color:#276177;}
+.si-readiness-review .si-readiness-state{background:#fff1d4;border-color:#e9d5a7;color:#92620d;}
+.si-readiness-metrics{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));
+  gap:8px;}
+.si-readiness-metrics>span{min-width:0;font-size:10px;color:#648095;
+  border:1px solid #e1ebef;background:#fff;padding:8px 9px;border-radius:8px;}
+.si-readiness-metrics strong{display:block;font-size:16px;font-weight:800;
+  color:#14576b;margin-bottom:2px;}
+.si-readiness-hint{font-size:10px;color:#688293;line-height:1.6;margin:9px 0 0;}
+@media(max-width:1120px){.si-readiness-metrics{grid-template-columns:repeat(3,minmax(0,1fr));}}
+@media(max-width:570px){.si-readiness-metrics{grid-template-columns:repeat(2,minmax(0,1fr));}}
