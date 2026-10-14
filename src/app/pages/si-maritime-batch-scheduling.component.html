@@ -35,24 +35,24 @@
       <td><small>{{v.sourceTypes.join(' · ')}}</small>
        <small>{{v.regimes.join(' · ')}}</small><small>{{v.vesselType}}</small>
        <small *ngIf="v.nmcReferrals.length">NMC × {{v.nmcReferrals.length}}</small></td>
-      <td><select [(ngModel)]="v.portId" [disabled]="!!v.portId">
+      <td><select [(ngModel)]="v.portId" (ngModelChange)="invalidateProposal()" [disabled]="!!v.portId">
        <option value="">—</option><option *ngFor="let p of ctx.ports" [value]="p.portId">{{p.name}}</option>
       </select></td>
       <td><b *ngIf="v.etaLocal">{{v.etaLocal}}</b>
-       <input *ngIf="!v.etaLocal" [(ngModel)]="v.earliestLocal" placeholder="YYYY-MM-DD HH:mm" maxlength="16">
+       <input *ngIf="!v.etaLocal" [(ngModel)]="v.earliestLocal" (ngModelChange)="invalidateProposal()" placeholder="YYYY-MM-DD HH:mm" maxlength="16">
       </td>
       <td><b *ngIf="v.etdLocal">{{v.etdLocal}}</b>
-       <input *ngIf="!v.etdLocal" [(ngModel)]="v.latestFinishLocal" placeholder="YYYY-MM-DD HH:mm" maxlength="16">
+       <input *ngIf="!v.etdLocal" [(ngModel)]="v.latestFinishLocal" (ngModelChange)="invalidateProposal()" placeholder="YYYY-MM-DD HH:mm" maxlength="16">
        <small>{{v.etdSource}}</small></td>
-      <td><select [(ngModel)]="v.locationType">
+      <td><select [(ngModel)]="v.locationType" (ngModelChange)="invalidateProposal()">
        <option value="BERTH">{{copy('Berth','رصيف')}}</option>
        <option value="ANCHORAGE">{{copy('Anchorage','مرسى')}}</option>
        <option value="TERMINAL">{{copy('Terminal','محطة')}}</option></select>
-       <input [(ngModel)]="v.locationName" [placeholder]="copy('Exact location','الموقع المحدد')" maxlength="120">
-       <label class="marine-check"><input type="checkbox" [(ngModel)]="v.siteAccessConfirmed">
+       <input [(ngModel)]="v.locationName" (ngModelChange)="invalidateProposal()" [placeholder]="copy('Exact location','الموقع المحدد')" maxlength="120">
+       <label class="marine-check"><input type="checkbox" [(ngModel)]="v.siteAccessConfirmed" (ngModelChange)="invalidateProposal()">
          {{copy('Site accessible','موقع المعاينة متاح')}}</label>
       </td>
-      <td><input type="number" min="30" max="720" step="30" [(ngModel)]="v.durationMinutes"></td>
+      <td><input type="number" min="30" max="720" step="30" [(ngModel)]="v.durationMinutes" (ngModelChange)="invalidateProposal()"></td>
      </tr></tbody>
     </table></div>
     <div class="marine-actions"><button type="button" [disabled]="busy" (click)="preview()">
@@ -60,11 +60,45 @@
      <small>{{copy('No paid AI call, inspection case, ERP booking or NMC action is created.',
       'لا تُنشأ اتصالات AI مدفوعة أو حالات معاينة أو حجوزات ERP أو إجراءات NMC.')}}</small></div>
    </section>
+   <section class="marine-panel" *ngIf="ctx.workforce?.length">
+    <div class="marine-title-line">
+      <h2>{{copy('Available engineer roster — ERP POC snapshot',
+        'المهندسون المتاحون — من بيانات ERP التجريبية')}}</h2>
+      <span class="marine-tag">{{ctx.workforce?.length}}
+        {{copy('active engineers','مهندسين نشطين')}}</span>
+    </div>
+    <p class="marine-note">
+      {{copy('Qualifications and daily capacity are from the saved ERP snapshot. Actual shift, leave, travel and booking constraints are checked by the scheduling engine when you generate a proposal.',
+        'التخصصات والطاقة اليومية من نسخة ERP المحفوظة. يتحقق محرك الجدولة من الورديات والإجازات والتنقل والحجوزات عند إنشاء المقترح.')}}
+    </p>
+    <div class="marine-workforce">
+      <article *ngFor="let engineer of ctx.workforce">
+        <strong>{{engineer.inspectorName}}</strong>
+        <small>{{engineer.inspectorId}} · {{copy('Daily capacity','الطاقة اليومية')}}: {{engineer.dailyCapacity}}</small>
+        <small>{{copy('Qualified scopes','النطاقات المؤهلة')}}: {{engineer.qualifications.join(' · ')||'—'}}</small>
+        <small *ngIf="engineer.homePortId">{{copy('Home port','ميناء العمل')}}: {{engineer.homePortId}}</small>
+      </article>
+    </div>
+   </section>
    <section *ngIf="proposal as p" class="marine-panel">
     <h2>{{copy('Inspector assignments and scheduling exceptions','توزيع المهندسين واستثناءات الجدولة')}}</h2>
     <p class="marine-notice">{{copy('This preview uses verified ERP constraints and a deterministic optimization heuristic. Supervisor schedule confirmation and AI explanations are the next implementation stage.',
      'هذه المعاينة تستخدم قيود ERP ومحرك تحسين حتمي. اعتماد الجدولة وشرح الذكاء الاصطناعي هما الخطوة التنفيذية التالية.')}}</p>
-    <div class="marine-scroll"><table>
+    <div class="marine-title-line">
+      <div class="marine-board-controls" role="group" [attr.aria-label]="copy('Schedule board view','طريقة عرض الجدولة')">
+        <button type="button" [class.active]="boardView==='VESSELS'"
+          [attr.aria-pressed]="boardView==='VESSELS'" (click)="boardView='VESSELS'">
+          {{copy('By vessel','حسب السفينة')}}</button>
+        <button type="button" [class.active]="boardView==='ENGINEERS'"
+          [attr.aria-pressed]="boardView==='ENGINEERS'" (click)="boardView='ENGINEERS'">
+          {{copy('By engineer','حسب المهندس')}}</button>
+        <button type="button" [class.active]="boardView==='DATES'"
+          [attr.aria-pressed]="boardView==='DATES'" (click)="boardView='DATES'">
+          {{copy('By date','حسب اليوم')}}</button>
+      </div>
+      <span class="marine-tag">{{assignedEngineerCount}} {{copy('engineers allocated','مهندسين تم توزيعهم')}}</span>
+    </div>
+    <div *ngIf="boardView==='VESSELS'" class="marine-scroll"><table>
      <thead><tr><th>IMO</th><th>{{copy('Status','الحالة')}}</th>
       <th>{{copy('Engineer','المهندس')}}</th><th>{{copy('Time','الميعاد')}}</th>
       <th>{{copy('Site','المكان')}}</th><th>{{copy('Reason / Score','السبب / التقييم')}}</th></tr></thead>
@@ -75,6 +109,50 @@
       <td>{{r.assignment?.locationName||'—'}}</td>
       <td>{{r.blocker||((r.assignment?.score??0)+'/100')}}</td>
      </tr></tbody></table></div>
+    <ng-container *ngIf="p.board as board">
+      <div *ngIf="boardView==='ENGINEERS'" class="marine-board-grid">
+        <article class="marine-board-card" *ngFor="let group of board.engineers">
+          <h3>{{group.inspectorName}} <small>{{group.inspectorId}}</small></h3>
+          <p>{{group.vesselCount}} {{copy('planned visits','زيارات مقترحة')}}
+            · {{group.dates.join(' · ')}}</p>
+          <div class="marine-board-slot" *ngFor="let slot of group.assignments">
+            <strong>IMO {{slot.imo}}</strong>
+            <span>{{slot.startLocal}} → {{slot.endLocal}}</span>
+            <small>{{slot.portName}} · {{slot.locationName}}</small>
+          </div>
+        </article>
+        <p class="marine-notice" *ngIf="!board.engineers.length">
+          {{copy('No feasible engineer allocations. Review the unscheduled vessels below.',
+            'لا توجد توزيعات مناسبة. راجع السفن غير المجدولة أدناه.')}}
+        </p>
+      </div>
+      <div *ngIf="boardView==='DATES'" class="marine-board-grid">
+        <article class="marine-board-card" *ngFor="let day of board.days">
+          <h3>{{day.dateLocal}}</h3>
+          <p>{{day.vesselCount}} {{copy('planned visits','زيارات مقترحة')}}</p>
+          <div class="marine-board-slot" *ngFor="let slot of day.assignments">
+            <strong>IMO {{slot.imo}} · {{slot.inspectorName}}</strong>
+            <span>{{slot.startLocal}} → {{slot.endLocal}}</span>
+            <small>{{slot.portName}} · {{slot.locationName}}</small>
+          </div>
+        </article>
+        <p class="marine-notice" *ngIf="!board.days.length">
+          {{copy('No proposed dates available. Review source time windows and ERP constraints.',
+            'لا توجد مواعيد مقترحة؛ راجع الفترات الزمنية وقيود ERP.')}}
+        </p>
+      </div>
+      <div *ngIf="board.unscheduled.length" class="marine-unscheduled">
+        <h3>{{copy('Unscheduled vessels requiring coordinator action',
+          'سفن غير مجدولة وتحتاج تدخل منسق المعاينات')}}</h3>
+        <div *ngFor="let missing of board.unscheduled">
+          <strong>IMO {{missing.imo}}</strong><span>{{missing.blocker}}</span>
+        </div>
+      </div>
+      <p class="marine-preview-warning">
+        {{copy('This is a read-only proposal, NOT an approved schedule. No engineer booking, inspection dossier or NMC state change has occurred.',
+          'هذه جدولة مقترحة للعرض فقط وليست معتمدة. لم يتم حجز أي مهندس أو إنشاء ملف معاينة أو تغيير حالة في NMC.')}}
+      </p>
+    </ng-container>
    </section>
   </ng-container>
  </main>
