@@ -651,3 +651,38 @@ test('C01 refuses imaginary IDs and fabricated evidence even with plausible IMO'
  assert.equal(checked.recommendations[0].recommendation,'MANUAL_REVIEW');
  assert.deepEqual(checked.recommendations[0].evidenceRefs,[]);
 });
+
+test('SI-C01 documented partner §6 response accepts missing suggestedRank and no official selection',()=>{
+ const source=buildC01Source(inputs(),{version:6});
+ const response=mockSiC01(source);
+ for(const r of response.recommendations)delete r.suggestedRank;
+ response.caseCreated=false;
+ response.humanApprovalRequired=true;
+ const assessed=validateC01({result:JSON.stringify(response)},source);
+ assert.equal(assessed.length,source.candidates.length);
+ assert.ok(assessed.every(r=>r.suggestedRank===null));
+ const verified=reconcileC01({result:JSON.stringify(response)},source);
+ assert.equal(verified.verifiedCount,source.candidates.length);
+ assert.equal(verified.quarantinedCount,0);
+ assert.ok(verified.recommendations.every(r=>r.regulatoryDecision===false));
+});
+test('SI-C01 accepts source-bound saved assessmentId evidence from published NMC risk',()=>{
+ const d=inputs();
+ const risk=d.candidates.find(c=>c.currentRisk)?.currentRisk;
+ if(risk&&typeof risk.assessmentId==='string'&&risk.assessmentId){
+  const source=buildC01Source(d,{version:6});
+  const candidate=source.candidates.find(c=>c.currentRisk?.assessmentId===risk.assessmentId);
+  assert.ok(candidate);
+  assert.ok(candidate.allowedEvidence.includes(risk.assessmentId));
+ }
+});
+test('SI-C01 optional model rank stays a validated hint, never a required selection key',()=>{
+ const source=buildC01Source(inputs(),{version:6});
+ const out=mockSiC01(source);
+ const selected=out.recommendations.find(x=>x.recommendation==='SELECT_RECOMMENDED');
+ assert.ok(selected);
+ selected.suggestedRank='High';
+ const result=reconcileC01(out,source);
+ assert.equal(result.quarantinedCount,1);
+ assert.equal(result.recommendations.find(x=>x.candidateKey===selected.candidateKey).recommendation,'MANUAL_REVIEW');
+});
