@@ -123,8 +123,8 @@ export class SiCandidateSourcesComponent implements OnInit,OnDestroy{
         this.preview=null;this.busy=false;this.success=
           this.copy('Imported ','تم استيراد ')+r.importedEvents+
           this.copy(' new events; ',' حدث جديد؛ وتم تجاهل ')+r.duplicateEvents+
-          this.copy(' repeated events. Candidates now require officer review.',
-            ' حدث مكرر. المرشحون بانتظار مراجعة الموظف.');
+          this.copy(' repeated events. Published PSC quota is applied directly to saved events; officer inspection approval remains separate.',
+            ' حدث مكرر. طُبقت الحصة المنشورة على أحداث PSC المحفوظة تلقائيًا، واعتماد المعاينة ما زال قرارًا منفصلًا للمسؤول.');
         this.refresh();
       },error:e=>this.showError(e)
     });
