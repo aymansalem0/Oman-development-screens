@@ -228,5 +228,85 @@
     </ng-container>
    </section>
   </ng-container>
+  <section class="marine-panel si-workorders-panel">
+    <div class="marine-title-line">
+      <div>
+        <h2>{{copy('03 · Approve Schedule & Issue Inspector Work Orders',
+          '٠٣ · اعتماد الجدولة وإصدار أوامر تكليف المهندسين')}}</h2>
+        <p class="marine-note">{{copy(
+         'An authorized supervisor approves the entire source-verified schedule once. Each vessel receives its own traceable assignment order. This POC does not book live ERP resources.',
+         'يعتمد المسؤول المخوّل الجدول بالكامل مرة واحدة ثم يصدر أمر تكليف مستقل لكل سفينة. لا يتم حجز موارد ERP الفعلية في هذا الـPOC.')}}</p>
+      </div>
+      <button type="button" [disabled]="!canApproveSchedule" (click)="approveSchedule()"
+       class="si-schedule-approve">
+       {{scheduleBusy?copy('Saving approval…','جارٍ حفظ الاعتماد…'):
+       copy('Approve Complete Schedule & Issue Orders',
+        'اعتماد الجدولة بالكامل وإصدار أوامر التكليف')}}
+      </button>
+    </div>
+    <p *ngIf="proposal && proposal.summary.unscheduled>0" class="marine-preview-warning">
+      {{copy('Schedule approval requires an assignment for EVERY selected vessel. Correct the unscheduled rows and recalculate.',
+        'اعتماد الجدولة يتطلب توزيع مهندس وموعد لكل سفينة معتمدة. استكمل السفن غير المجدولة ثم أعد الحساب.')}}</p>
+    <p *ngIf="!approvedSchedule && !proposal" class="marine-note">
+      {{copy('Calculate the schedule or run SI-S01 first. The supervisor approval action will appear when all selected vessels can be assigned.',
+       'احسب الجدولة أو شغّل SI-S01 أولًا. سيتاح الاعتماد بعد إمكانية توزيع جميع سفن الخطة.')}}</p>
+    <ng-container *ngIf="approvedSchedule as schedule">
+      <p class="marine-notice"><strong>{{copy('Approved assignment orders','أوامر التكليف المعتمدة')}}</strong>
+       · {{schedule.approvedAt}} · {{schedule.orders.length}}
+       · {{schedule.mode==='POC_MOCK'?'POC MOCK':'ERP EXCEL POC'}}
+       · {{copy('ERP booking not created','لا يوجد حجز فعلي في ERP')}}</p>
+      <div class="table-wrap"><table class="marine-table si-workorders-table">
+        <thead><tr>
+          <th>{{copy('IMO / Order','السفينة / الأمر')}}</th>
+          <th>{{copy('Assigned engineer','المهندس المكلف')}}</th>
+          <th>{{copy('Port / Date','الميناء / الموعد')}}</th>
+          <th>{{copy('Checklist & AI','القوائم و AI')}}</th>
+          <th>{{copy('Status & action','الحالة والإجراء')}}</th>
+        </tr></thead>
+        <tbody><tr *ngFor="let order of schedule.orders">
+          <td><strong>IMO {{order.imo}}</strong>
+            <small>{{order.id.slice(0,8)}}</small></td>
+          <td>{{order.assignment.inspectorName}}
+            <small>{{order.assignment.inspectorId}}</small></td>
+          <td>{{order.assignment.portName}}
+            <small>{{order.assignment.startLocal}}</small></td>
+          <td><strong>{{order.checklistStatus}}</strong>
+            <small>{{order.aiStatus}}</small>
+            <div *ngIf="order.caseId" class="si-order-links">
+              <a [routerLink]="['/moei/smart-inspection/checklists',order.caseId]">
+                {{copy('Mandatory checklist','قائمة المعاينة')}}</a>
+              <a [routerLink]="['/moei/smart-inspection/preparation',order.caseId]">
+                {{copy('A04 dossier & review','ملف A04 ومراجعته')}}</a>
+              <a [routerLink]="['/moei/smart-inspection/lifecycle',order.caseId]">
+                {{copy('Inspection workflow','دورة المعاينة')}}</a>
+            </div>
+          </td>
+          <td><strong>{{order.status}}</strong>
+            <small *ngIf="order.error" class="si-order-error">{{order.error}}</small>
+            <div class="si-workorder-actions">
+              <button type="button" [disabled]="!!orderBusyId"
+                *ngIf="['ISSUED','PREPARATION_NEEDS_REVIEW','PREPARING'].includes(order.status)"
+                (click)="workOrderAction(order,'activate')">
+                {{copy('Execute assignment · Prepare Checklist',
+                 'تنفيذ أمر التكليف · تجهيز القائمة')}}</button>
+              <button type="button" [disabled]="!!orderBusyId"
+                *ngIf="order.status==='READY_FOR_SCOPE_REVIEW'"
+                (click)="workOrderAction(order,'scope')">
+                {{copy('Supervisor: Approve Scope','المشرف: اعتماد النطاق')}}</button>
+              <button type="button" [disabled]="!!orderBusyId"
+                *ngIf="order.status==='READY_FOR_FIELD'"
+                (click)="workOrderAction(order,'start')">
+                {{copy('Inspector: Start Inspection','المفتش: بدء المعاينة')}}</button>
+              <span *ngIf="order.status==='FIELD_STARTED'" class="si-field-started">
+                {{copy('Field inspection started','بدأت المعاينة الميدانية')}}</span>
+            </div>
+          </td>
+        </tr></tbody>
+      </table></div>
+      <p class="marine-preview-warning">
+        {{copy('Mandatory published checklist items are prepared first. AI A04 suggestions are drafts until human review and are never automatically part of the mandatory regulatory scope.',
+         'تُجهز بنود القائمة الإلزامية المنشورة أولًا. مقترحات AI A04 تظل مسودات تحتاج مراجعة بشرية ولا تُضاف تلقائيًا للنطاق الإلزامي.')}}</p>
+    </ng-container>
+  </section>
  </main>
 </div>
