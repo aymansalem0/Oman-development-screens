@@ -229,6 +229,10 @@
    </section>
   </ng-container>
   <section class="marine-panel si-workorders-panel">
+    <p *ngIf="workOrdersError" class="marine-preview-warning" role="alert">
+      {{copy('Work-order approval is not available until Oracle Migration 019 and prerequisites are applied. Error: ',
+       'لن تعمل أوامر التكليف قبل تطبيق Migration 019 ومتطلباتها على Oracle. رمز الخطأ: ')}}
+       {{workOrdersError}}</p>
     <div class="marine-title-line">
       <div>
         <h2>{{copy('03 · Approve Schedule & Issue Inspector Work Orders',
