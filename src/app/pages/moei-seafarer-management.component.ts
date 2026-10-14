@@ -1,5 +1,6 @@
 import { CommonModule } from '@angular/common';
 import { Component } from '@angular/core';
+import { Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { NmcNavigationComponent } from '../components/nmc-navigation.component';
 import {
@@ -36,7 +37,10 @@ export class MoeiSeafarerManagementComponent {
   ];
   readonly companies=['Ocean Bridge Shipping','Harbour Marine LLC','National Sea Transport'];
 
-  constructor(public store:SdbPocService) {}
+  constructor(public store:SdbPocService, private readonly router:Router) {}
+  openJourney(row:Seafarer):void {
+    this.router.navigate(['/moei/seafarers/sdb',row.id]);
+  }
 
   get selected(): Seafarer | undefined { return this.store.getSeafarer(this.selectedId); }
   get rows(): Seafarer[] {
