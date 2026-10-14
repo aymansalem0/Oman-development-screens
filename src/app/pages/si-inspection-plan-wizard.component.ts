@@ -623,31 +623,140 @@ export class SiInspectionPlanWizardComponent implements OnInit,OnDestroy{
   this.step++;
   if(this.step===3&&!this.capacityContext)this.loadCapacityContext();
  }
- approve():void{
-  if(this.returnedFromScheduling)return;
-  const p=this.preview;if(!this.planId||!p||this.submitting||this.jobBusy||!this.auth.isAdmin||
-   (!p.agentRunId&&!p.manualSelection)||p.stale||this.hasMissingReasons||this.reason.trim().length<8||!!this.v2RosterError)return;
-  const message=this.copy(
-   'Approve the roster of '+p.selectedVessels+' vessels for comprehensive scheduling? No inspection case or dossier will be created at plan approval.',
-   'اعتماد قائمة '+p.selectedVessels+' سفن لجدولتها إلكترونيًا؟ لن يتم إنشاء أي حالة معاينة أو دوسيه الآن.'
-  );
-  if(!window.confirm(message))return;
-  this.submitting=true;this.error='';
-  this.api.approveForScheduling({
-    planId:this.planId!,reason:this.reason.trim(),expectedRevision:p.planRevision,
-    expectedSourceHash:p.sourceHash,confirmApproval:true
-  }).subscribe({
-    next:result=>{
-      this.submitting=false;this.scheduleApproval={
-        planId:result.planId,approvedVesselCount:result.approvedVesselCount,
-        createdInspectionCases:result.createdInspectionCases};
-      this.job=null;this.step=5;
-    },
-    error:e=>{
-      this.submitting=false;this.error=this.v2ApprovalError(
-        e?.error?.error||'SI_V2_PLAN_APPROVAL_UNAVAILABLE');
-    }
+ get preferredCapacityOptionId():string{
+  return this.capacityAiOptionId||this.capacityProposal?.variants?.[0]?.optionId||'';
+ }
+ get approvedCapacityVariant():CapacityVariant|null{
+  return this.capacityProposal?.variants.find(v=>
+   v.optionId===this.preferredCapacityOptionId)||null;
+ }
+ get canApproveCapacity():boolean{
+  return !!this.planId&&!this.returnedFromScheduling&&!this.submitting&&
+   !this.capacityBusy&&!this.capacityAiBusy&&this.auth.isAdmin&&
+   !!this.capacityContext&&!!this.capacityProposal&&
+   !!this.approvedCapacityVariant&&this.reason.trim().length>=8&&
+   (this.capacityPreview?.selection.capacity.mandatoryUnscheduled.length||0)===0;
+ }
+ get capacityUrl():string{
+  return '/api/si/v1/inspection-plans/'+encodeURIComponent(this.planId||'')+'/capacity-';
+ }
+ invalidateCapacity():void{
+  this.capacityContext=null;this.capacityPreview=null;this.capacityProposal=null;
+  this.capacityAiOptionId='';this.capacityAiMessage='';
+ }
+ loadCapacityContext():void{
+  if(!this.planId||this.capacityBusy||this.returnedFromScheduling)return;
+  this.capacityBusy=true;this.capacityError='';this.error='';
+  const params=new HttpParams()
+   .set('psc',String(this.planningWeights[0].value))
+   .set('uae',String(this.planningWeights[1].value))
+   .set('demo',this.capacityDemoMode?'1':'0');
+  this.http.get<CapacityContext>(this.capacityUrl+'context',{params}).subscribe({
+   next:r=>{
+    this.capacityContext=r;this.capacityBusy=false;
+    this.capacityPreview=null;this.capacityProposal=null;this.capacityAiOptionId='';
+   },
+   error:e=>{this.capacityBusy=false;
+    this.capacityError=e?.error?.error||
+     this.copy('Unable to load verified capacity context.',
+      'تعذر تحميل بيانات الطاقة التشغيلية الموثقة.');}
   });
+ }
+ private capacityRequests():object[]{
+  return (this.capacityContext?.items||[]).map(v=>({
+   imo:v.imo,portId:v.portId,vesselType:v.vesselType,regime:v.regime,
+   locationType:v.locationType,locationName:v.locationName,
+   siteAccessConfirmed:v.siteAccessConfirmed,
+   durationMinutes:Number(v.durationMinutes),
+   earliestLocal:v.etaLocal||v.earliestLocal,
+   latestFinishLocal:v.etdLocal||v.latestFinishLocal,
+   windowSource:v.etdLocal?'MSW_FINAL':v.windowSource||'OFFICER_FINAL',
+   windowEvidenceReference:v.etdLocal?v.dateEvidenceReference:
+    v.windowEvidenceReference||v.nmcReferrals?.[0]?.id||''
+  }));
+ }
+ capacityParams():object{
+  return {
+   requests:this.capacityRequests(),demoMode:this.capacityDemoMode,
+   pscRiskRatePercent:this.planningWeights[0].value,
+   uaeFlagRatePercent:this.planningWeights[1].value,
+   expectedSourceHash:this.capacityContext?.sourceHash,
+   expectedPlanRevision:this.capacityContext?.planRevision,
+   expectedSelectionHash:this.capacityContext?.selection.selectionHash
+  };
+ }
+ previewCapacity():void{
+  if(!this.capacityContext||this.capacityBusy||this.capacityAiBusy)return;
+  this.capacityBusy=true;this.capacityError='';this.capacityAiOptionId='';
+  this.http.post<CapacityPreview>(this.capacityUrl+'preview',
+   this.capacityParams()).subscribe({
+    next:r=>{this.capacityBusy=false;this.capacityPreview=r;
+     this.capacityProposal=r.proposal;},
+    error:e=>{this.capacityBusy=false;this.capacityError=
+     e?.error?.error||'SI_INTEGRATED_CAPACITY_PREVIEW_FAILED';}
+   });
+ }
+ runCapacityAi():void{
+  if(!this.capacityContext||!this.capacityProposal||
+     this.capacityBusy||this.capacityAiBusy)return;
+  if(!window.confirm(this.copy(
+    'Run SI-S01 AI to rank verified plan alternatives? Airia may charge for ONE explicit request. No approval or booking occurs.',
+    'هل تريد تشغيل SI-S01 لترتيب بدائل الخطة المعتمدة على الطاقة؟ قد تُحتسب تكلفة استدعاء Airia واحد فقط، دون اعتماد أو حجز تلقائي.')))return;
+  this.capacityAiBusy=true;this.capacityError='';
+  this.http.post<{chosenOptionId:string;provider:string;
+    proposal:CapacitySchedule;proposalHash:string}>(
+     this.capacityUrl+'ai-recommend',{
+     ...this.capacityParams(),
+     expectedProposalHash:this.capacityProposal.proposalHash,
+     confirmRun:true,confirmCost:true
+  }).subscribe({
+   next:r=>{
+    this.capacityAiBusy=false;
+    if(r.proposalHash!==this.capacityProposal?.proposalHash){
+     this.invalidateCapacity();this.capacityError=
+      'SI_INTEGRATED_AI_SOURCE_CHANGED_REPREVIEW';return;
+    }
+    this.capacityAiOptionId=r.chosenOptionId;
+    this.capacityAiMessage=this.copy(
+     r.provider==='POC_MOCK'?'POC MOCK ordering (no external AI request).':
+      'Airia ranked verified alternatives (one explicit call).',
+     r.provider==='POC_MOCK'?'ترتيب تجريبي دون استدعاء AI خارجي.':
+      'رتّب Airia بدائل الطاقة الموثقة باستدعاء صريح واحد.');
+   },
+   error:e=>{this.capacityAiBusy=false;this.capacityError=
+    e?.error?.error||'SI_INTEGRATED_AI_RECOMMENDATION_FAILED';}
+  });
+ }
+ approve():void{
+  if(!this.canApproveCapacity||!this.capacityContext||
+    !this.capacityProposal||!this.approvedCapacityVariant)return;
+  const variant=this.approvedCapacityVariant;
+  const remote=variant.assignments.filter(x=>x.crossPort);
+  if(remote.length&&!window.confirm(this.copy(
+    'Explicitly approve '+remote.length+' cross-port engineer assignments with verified travel constraints?',
+    'هل تعتمد صراحةً '+remote.length+' تكليفات لمهندسين من موانئ أخرى وفق قيود الانتقال؟')))return;
+  if(!window.confirm(this.copy(
+    'Final single approval: '+variant.assignments.length+
+     ' vessels + inspectors + visit times + work orders. No live ERP booking. Continue?',
+    'اعتماد واحد نهائي يشمل '+variant.assignments.length+
+     ' سفينة والمهندسين والمواعيد وإصدار أوامر التكليف. لا ينشأ حجز ERP رسمي. متابعة؟')))return;
+  this.submitting=true;this.error='';this.capacityError='';
+  this.http.post<{planId:string;approvedVesselCount:number;
+    createdInspectionCases:number;capacityExcludedImos:{imo:string}[]}>(
+    this.capacityUrl+'approve',{
+      ...this.capacityParams(),
+      selectedOptionId:variant.optionId,
+      expectedProposalHash:this.capacityProposal.proposalHash,
+      reason:this.reason.trim(),confirmApproval:true,
+      confirmCrossPort:remote.length>0
+    }).subscribe({
+     next:r=>{this.submitting=false;this.scheduleApproval={
+      planId:r.planId,approvedVesselCount:r.approvedVesselCount,
+      createdInspectionCases:r.createdInspectionCases};
+      this.job=null;this.step=5;},
+     error:e=>{this.submitting=false;this.capacityError=
+      e?.error?.error||'SI_INTEGRATED_APPROVAL_FAILED';}
+    });
  }
  private poll(id:string):void{
   this.timer?.unsubscribe();
