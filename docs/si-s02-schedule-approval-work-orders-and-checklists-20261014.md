@@ -61,6 +61,23 @@ docker compose @dc logs --tail=100 ai-proxy
 
 Read-only Oracle test result should report `status: "READY"`, no missing tables/indexes/mutex, owner `NMC_AI`, PDB `FREEPDB1`. When running JSON POC-only mode, Oracle check naturally requires explicit DB environment; it is not a prerequisite for JSON sandbox tests.
 
+## POC mandatory checklist seed (only after supervisor review)
+
+The existing seed utility provides five **technical POC** mandatory templates (core, PSC, services, NMC, follow-up) and does not certify a statutory checklist. First run the **read-only** plan:
+
+```powershell
+docker compose @dc exec ai-proxy node tools/seed-si-mandatory-checklists.mjs --plan --mode=oracle
+```
+
+Only when the supervisor has reviewed and accepted the POC templates, publish once:
+
+```powershell
+docker compose @dc exec ai-proxy node tools/seed-si-mandatory-checklists.mjs `
+ --apply --publish --review-confirmed=YES --ack=SEED_MANDATORY_CHECKLISTS `
+ --mode=oracle --actor=MOEI_POC_SUPERVISOR
+```
+
+The seed is additive/idempotent and does **not** modify old checklist answers. No ministry regulatory approval is implied. For a JSON sandbox use `--mode=json` instead.
 ## Regression acceptance
 - Approve one complete, current-hash plan; saved schedule includes one immutable work order per selected vessel, assignments non-overlapping, and audit. Repeat approval returns same schedule.
 - Try stale proposal, invalid option, incomplete coverage or engineer conflict: 409/422; no partial approval.
