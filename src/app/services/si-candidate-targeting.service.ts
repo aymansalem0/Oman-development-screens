@@ -163,7 +163,7 @@ export interface SiInspectionPlanState{
  selectionMode?:'MANUAL'|'AI_ASSISTED';manualSelection?:boolean;
  availableCount?:number;deferredCount?:number;notSelectedCount?:number;
  candidatesAtCreation?:number|null;
- dataReadiness?:SiC01DataReadiness;
+ dataReadiness?:SiC01DataReadiness|null;
  planPeriod?:{startsOn:string;endsOn:string}|null;
  status:'ok';provider:'MOCK'|'AIRIA';mock:boolean;
  sourceHash:string;revision:number;generatedAt:string|null;
