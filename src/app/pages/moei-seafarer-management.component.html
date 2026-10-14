@@ -1,0 +1,210 @@
+<div class="sdb-app">
+  <aside class="sdb-side">
+    <div class="brand">
+      <div class="brand-symbol">⚓</div>
+      <div><strong>MOEI</strong><span>MARITIME SERVICES</span></div>
+    </div>
+    <div class="side-caption">SERVICE OPERATIONS</div>
+    <button class="side-link" *ngFor="let item of menus" type="button"
+            [class.is-active]="page===item.id" (click)="navigate(item.id)">
+      <span class="menu-symbol">{{item.icon}}</span>{{item.label}}
+    </button>
+    <div class="side-bottom">
+      <div class="env-token">● SYNTHETIC POC</div>
+      <small>Standalone demonstration. No official issuance, real credentials or external transactions.</small>
+    </div>
+  </aside>
+
+  <div class="sdb-main">
+    <header class="sdb-top">
+      <div class="breadcrumb">Unified Maritime Digital Services <span>/</span> Seafarers Affairs <span>/</span> SDB</div>
+      <div class="top-actions">
+        <label for="persona-select">Demo persona</label>
+        <select id="persona-select" [(ngModel)]="persona">
+          <option value="OPERATIONS">MOEI Operations</option>
+          <option value="COMPANY">Company Representative</option>
+          <option value="SELF">UAE Seafarer</option>
+        </select>
+        <button class="text-btn" type="button" (click)="restart()">↻ Reset demo</button>
+      </div>
+    </header>
+
+    <main class="sdb-content">
+      <div class="page-heading">
+        <div>
+          <div class="eyebrow">DOMAIN 02 / SEAFARERS AFFAIRS &amp; MET</div>
+          <h1>Seafarer Management <em>/</em> SDB</h1>
+          <p>Proactive readiness, source-owned HOLD resolution, and zero-routine-officer approval.</p>
+        </div>
+        <span class="demo-banner">DEMO DATA · MOCK APIS · RULE-BASED DECISIONS</span>
+      </div>
+
+      <div class="notice" *ngIf="notice" role="status">
+        <span>ⓘ</span><span>{{notice}}</span><button type="button" (click)="notice=''">Dismiss</button>
+      </div>
+
+      <section *ngIf="page==='overview'">
+        <div class="metric-grid">
+          <article class="metric"><span>Seafarers Monitored</span><strong>{{total}}</strong><small>Synthetic seafarer master records</small></article>
+          <article class="metric"><span>Ready to Apply</span><strong class="green">{{ready}}</strong><small>All mandatory gates passed</small></article>
+          <article class="metric"><span>Source-Owned HOLD</span><strong class="orange">{{hold}}</strong><small>Action held at academy or company</small></article>
+          <article class="metric"><span>Other Blockers</span><strong>{{blocked-hold}}</strong><small>Endorsement, data or source issues</small></article>
+        </div>
+        <div class="two-panels">
+          <article class="card">
+            <div class="section-title"><div><h2>Intelligent Readiness Journey</h2><p>Deterministic requirements + advisory AI layer</p></div><span class="micro-tag">TO-BE</span></div>
+            <div class="journey">
+              <div><b>01</b><strong>Source Events</strong><span>ICP, MARASI, Academy, Company and registry (mock)</span></div>
+              <div><b>02</b><strong>Eligibility Rules</strong><span>Company/foreign endorsement gates, CoP, medical, clearance</span></div>
+              <div><b>03</b><strong>AI Explanation</strong><span>Fixture-only advisory summary; no live LLM invocation</span></div>
+              <div><b>04</b><strong>Invitation &amp; Application</strong><span>Simulated email, role-correct submission and payment</span></div>
+              <div><b>05</b><strong>Automated Issuance</strong><span>Demo decision and audit; no official SDB generated</span></div>
+            </div>
+          </article>
+          <article class="card">
+            <div class="section-title"><div><h2>Priority Exceptions</h2><p>Problems owned by authoritative sources</p></div></div>
+            <div class="exception-item" *ngFor="let person of store.seafarers">
+              <ng-container *ngIf="status(person)!=='READY_TO_APPLY'">
+                <div class="avatar">{{person.name.slice(0,1)}}</div>
+                <div class="grow"><b>{{person.name}}</b><span>{{label(status(person))}}</span></div>
+                <button type="button" class="view-link" (click)="open(person)">Inspect →</button>
+              </ng-container>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section *ngIf="page==='registry'||page==='company'||page==='holds'||page==='applications'">
+        <div class="card table-card">
+          <div class="section-title">
+            <div>
+              <h2>{{page==='registry'?'Seafarer Registry':page==='company'?'Foreign Seafarer Portfolio':page==='holds'?'HOLD &amp; Requirement Resolution':'SDB Applications'}}</h2>
+              <p>{{page==='company'?'Only the selected synthetic company cohort is listed. Production access will require company-specific RBAC.':'Select a seafarer to inspect verified requirements, AI guidance and process actions.'}}</p>
+            </div>
+            <span class="micro-tag">{{rows.length}} RECORDS</span>
+          </div>
+          <div class="filters">
+            <input aria-label="Search seafarers" [(ngModel)]="search" placeholder="Search name, SID, nationality, company…"/>
+            <select [(ngModel)]="statusFilter" aria-label="Readiness filter">
+              <option value="ALL">All readiness states</option>
+              <option value="READY_TO_APPLY">Ready to Apply</option>
+              <option value="EXTERNAL_HOLD">External HOLD</option>
+              <option value="MISSING_ENDORSEMENT">Endorsement Required</option>
+              <option value="PENDING_VERIFICATION">Pending Verification</option>
+              <option value="REQUIREMENT_MISSING">Requirements Missing</option>
+            </select>
+            <select *ngIf="page==='company'" [(ngModel)]="companyFilter" aria-label="Synthetic company selection">
+              <option *ngFor="let c of companies" [value]="c">{{c}}</option>
+            </select>
+          </div>
+          <div class="scroll-table">
+            <table>
+              <thead><tr><th>Seafarer</th><th>Category / Rank</th><th>Company / Academy</th><th>Readiness</th><th>SDB Case</th><th></th></tr></thead>
+              <tbody>
+                <tr *ngFor="let person of rows" [class.row-selected]="selectedId===person.id">
+                  <td><b>{{person.name}}</b><small>{{person.sid||person.id}} · {{person.nationality}}</small></td>
+                  <td>{{person.rank}}<small>{{person.category==='FOREIGN'?'Foreign':'UAE'}}</small></td>
+                  <td>{{person.company||person.academy||'—'}}</td>
+                  <td><span class="status-pill" [ngClass]="badgeClass(status(person))">{{label(status(person))}}</span></td>
+                  <td>{{label(person.applicationState)}}</td>
+                  <td><button class="small-button" type="button" (click)="open(person)">Open 360 →</button></td>
+                </tr>
+                <tr *ngIf="!rows.length"><td colspan="6" class="empty">No seafarers match these filters.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section *ngIf="page==='registry' && selected as s" class="detail-stack">
+        <article class="card">
+          <div class="detail-header">
+            <div class="identity"><span class="large-avatar">{{s.name.slice(0,1)}}</span><div>
+              <div class="eyebrow">SEAFARER 360 / {{s.id}}</div>
+              <h2>{{s.name}}</h2>
+              <p>{{s.rank}} · {{s.nationality}} · {{s.sid||'SID not yet issued'}}</p>
+            </div></div>
+            <span class="status-pill" [ngClass]="badgeClass(status(s))">{{label(status(s))}}</span>
+          </div>
+          <div class="profile-attributes">
+            <div><small>Service</small><strong>{{s.service==='FIRST_ISSUE'?'First-Time SDB Issuance':'SDB Renewal'}}</strong></div>
+            <div><small>Applicant Route</small><strong>{{displayCategory(s)}}</strong></div>
+            <div><small>Company / Academy</small><strong>{{s.company||s.academy||'—'}}</strong></div>
+            <div><small>Booklet Expiry</small><strong>{{s.bookletExpiry||'Not issued'}}</strong></div>
+            <div><small>Last Source Check</small><strong>{{s.lastVerified}}</strong></div>
+            <div><small>Endorsement</small><strong>{{s.category==='FOREIGN'?(s.endorsementValid?'Valid · '+s.endorsementReference:'Missing / Expired'):'Not applicable'}}</strong></div>
+          </div>
+          <div class="tab-buttons">
+            <button type="button" [class.current]="activeTab==='readiness'" (click)="activeTab='readiness'">Readiness &amp; AI</button>
+            <button type="button" [class.current]="activeTab==='evidence'" (click)="activeTab='evidence'">Source Evidence</button>
+            <button type="button" [class.current]="activeTab==='history'" (click)="activeTab='history'">Event History</button>
+          </div>
+          <div *ngIf="activeTab==='readiness'" class="tab-content">
+            <div class="readiness-grid">
+              <div class="check" *ngFor="let ev of store.evidence(s)">
+                <div><span class="check-name">{{ev.label}}</span><small>{{ev.source}}</small></div>
+                <span class="evidence-tag" [class.pass]="ev.result==='PASS'" [class.fail]="ev.result==='FAIL'">{{ev.result}}</span>
+              </div>
+            </div>
+            <div class="ai-card">
+              <div class="ai-heading">✧ AI Readiness Explanation <span>MOCK · NOT LIVE AIRIA</span></div>
+              <p>{{store.mockAiSummary(s)}}</p>
+              <small>Regulatory readiness is determined exclusively by the deterministic rules above. The displayed explanation is fixture text.</small>
+            </div>
+          </div>
+          <div *ngIf="activeTab==='evidence'" class="tab-content">
+            <table class="evidence-table"><thead><tr><th>Rule</th><th>Requirement</th><th>Source</th><th>Result</th><th>Evidence interpretation</th></tr></thead>
+            <tbody><tr *ngFor="let ev of store.evidence(s)"><td>{{ev.rule}}</td><td>{{ev.label}}</td><td>{{ev.source}}</td>
+              <td>{{ev.result}}</td><td>{{ev.explanation}}</td></tr></tbody></table>
+          </div>
+          <div *ngIf="activeTab==='history'" class="tab-content">
+            <div class="history-item" *ngFor="let event of store.audit">
+              <ng-container *ngIf="event.seafarerId===s.id || event.seafarerId==='SYSTEM'">
+              <b>{{event.event}}</b><span>{{event.detail}}</span><small>{{event.time}} · {{event.actor}}</small>
+              </ng-container>
+            </div>
+          </div>
+        </article>
+
+        <div class="two-panels">
+          <article class="card">
+            <div class="section-title"><div><h2>Source-Owned Exceptions</h2><p>Actions below are simulated incoming source events — never portal override approvals.</p></div></div>
+            <div class="problem" *ngFor="let ev of store.blockers(s)"><b>{{ev.label}}</b><span>{{ev.explanation}}</span></div>
+            <p class="ok-message" *ngIf="!store.blockers(s).length">✓ No outstanding blockers from available synthetic sources.</p>
+            <div class="action-grid">
+              <button type="button" [disabled]="!canSourceUpdate||s.clearanceStatus!=='HOLD'" (click)="act('HOLD',s)">Mock source lifts HOLD</button>
+              <button type="button" [disabled]="!canSourceUpdate||s.medicalValid" (click)="act('MEDICAL',s)">Mock MARASI medical update</button>
+              <button type="button" [disabled]="!canSourceUpdate||s.copCount>=s.requiredCopCount" (click)="act('COP',s)">Mock Academy CoP update</button>
+              <button type="button" [disabled]="!canSourceUpdate||s.category!=='FOREIGN'||s.endorsementValid" (click)="act('ENDORSEMENT',s)">Mock Endorsement update</button>
+              <button type="button" [disabled]="!canSourceUpdate||s.sourceAvailable" (click)="act('SOURCE',s)">Mock connection restored</button>
+            </div>
+          </article>
+          <article class="card">
+            <div class="section-title"><div><h2>SDB Service Lifecycle</h2><p>Controlled progression with no routine MOEI officer approval</p></div></div>
+            <div class="step-status"><span>1</span><strong>Pre-Application Readiness</strong><em>{{label(status(s))}}</em></div>
+            <div class="step-status"><span>2</span><strong>Ready-to-Apply Email</strong><em>{{s.applicationState==='NOT_STARTED'?'Not queued':'Mock queued / passed'}}</em></div>
+            <div class="step-status"><span>3</span><strong>Applicant Submission</strong><em>{{s.applicationState==='SUBMITTED'||s.applicationState==='PAYMENT_SIMULATED'||s.applicationState==='ISSUED'?'Demo submitted':'Pending'}}</em></div>
+            <div class="step-status"><span>4</span><strong>Payment &amp; Rule Authorisation</strong><em>{{s.applicationState==='PAYMENT_SIMULATED'||s.applicationState==='ISSUED'?'Demo verified':'Pending'}}</em></div>
+            <div class="step-status"><span>5</span><strong>SDB Issuance &amp; Printing</strong><em>{{s.applicationState==='ISSUED'?'Mock issued; no print':'Pending'}}</em></div>
+            <div class="process-actions">
+              <button type="button" class="main-button" [disabled]="persona!=='OPERATIONS'||status(s)!=='READY_TO_APPLY'||s.applicationState!=='NOT_STARTED'" (click)="invite(s)">Queue Invite (Mock)</button>
+              <button type="button" [disabled]="!canApply" (click)="submit(s)">Submit as Applicant (Mock)</button>
+              <button type="button" [disabled]="persona!=='OPERATIONS'||s.applicationState!=='SUBMITTED'" (click)="payment(s)">Simulate Payment</button>
+              <button type="button" [disabled]="persona!=='OPERATIONS'||s.applicationState!=='PAYMENT_SIMULATED'" (click)="issue(s)">Run Auto-Issuance (Mock)</button>
+            </div>
+            <small class="disclaimer">No live email, money movement, document production, legal approval, or printed booklet.</small>
+          </article>
+        </div>
+      </section>
+
+      <section *ngIf="page==='audit'" class="card audit-card">
+        <div class="section-title"><div><h2>Event Audit Trail</h2><p>Demonstration events with actor, time, evidence and processing stage.</p></div></div>
+        <div class="history-item" *ngFor="let event of store.audit">
+          <b>{{event.event}} <span>· {{event.seafarerId}}</span></b>
+          <span>{{event.detail}}</span>
+          <small>{{event.time}} · {{event.actor}}</small>
+        </div>
+      </section>
+    </main>
+  </div>
+</div>
