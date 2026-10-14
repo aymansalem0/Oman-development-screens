@@ -278,6 +278,55 @@ export function validateC01(raw,source){
 }
 
 /**
+ * Normalize only unambiguous transport presentation differences.
+ * No identity inference, guessed citations, invented ranks or inferred AI
+ * answers. The strict source/evidence validator remains authoritative.
+ */
+export function normalizeC01TransportFields(row,sourceCandidate){
+ if(!row||typeof row!=='object'||Array.isArray(row))
+  return {row,normalizedFields:[]};
+ const n={...row},fields=[];
+ if(typeof n.candidateKey==='string'&&
+    n.candidateKey!==n.candidateKey.trim()&&
+    n.candidateKey.trim()===sourceCandidate?.candidateKey){
+  n.candidateKey=n.candidateKey.trim();
+  fields.push('CANDIDATE_KEY_OUTER_WHITESPACE');
+ }
+ if(typeof n.confidence==='string'&&
+    /^(?:0(?:\.\d+)?|1(?:\.0+)?)$/.test(n.confidence.trim())){
+  n.confidence=Number(n.confidence.trim());
+  fields.push('CONFIDENCE_DECIMAL_STRING');
+ }
+ if(n.recommendation==='SELECT_RECOMMENDED'&&
+   typeof n.suggestedRank==='string'&&
+   /^(?:[1-9]|[1-9][0-9]|100)$/.test(n.suggestedRank.trim())){
+  n.suggestedRank=Number(n.suggestedRank.trim());
+  fields.push('RANK_INTEGER_STRING');
+ }
+ if(n.recommendation!=='SELECT_RECOMMENDED'&&n.suggestedRank===undefined){
+  n.suggestedRank=null;
+  fields.push('NONSELECT_RANK_OMITTED');
+ }
+ if(Array.isArray(n.evidenceRefs)&&sourceCandidate){
+  let changed=false;
+  n.evidenceRefs=n.evidenceRefs.map(v=>{
+   if(typeof v==='string'&&v!==v.trim()&&
+     sourceCandidate.allowedEvidence.includes(v.trim())){
+    changed=true;return v.trim();
+   }
+   return v;
+  });
+  if(changed)fields.push('EVIDENCE_REF_OUTER_WHITESPACE');
+ }
+ // The server owns missing source gaps, even if the provider omitted the
+ // optional output array; this never fabricates an evidence reference.
+ if(n.dataGaps===undefined){
+  n.dataGaps=[];
+  fields.push('MODEL_DATA_GAPS_OMITTED');
+ }
+ return {row:n,normalizedFields:fields};
+}
+/**
  * Quarantine a model's unusable advisory without claiming that it selected
  * the vessel. Authoritative C01 inputs and statutory ranking remain intact.
  * A partly valid response can be reviewed without discarding all valid model
@@ -297,7 +346,10 @@ export function reconcileC01(raw,source){
  const unknownReasons=new Map();
  let unexpected=0;
  for(const row of body.recommendations){
-  const key=typeof row?.candidateKey==='string'?row.candidateKey:null;
+  const key=typeof row?.candidateKey==='string'?(
+   known.has(row.candidateKey)?row.candidateKey:
+   known.has(row.candidateKey.trim())?row.candidateKey.trim():
+   row.candidateKey):null;
   if(!key||!known.has(key)){
    unexpected++;
    const code=key?'CANDIDATE_KEY_NOT_IN_REQUEST':'CANDIDATE_KEY_MISSING';
@@ -308,19 +360,23 @@ export function reconcileC01(raw,source){
    received.delete(key);rejected.set(key,'DUPLICATE_CANDIDATE_KEY');continue;
   }
   const original=known.get(key);
-  const problem=c01RecommendationContractFailure(row,original);
+  const normalized=normalizeC01TransportFields(row,original);
+  const value=normalized.row;
+  const problem=c01RecommendationContractFailure(value,original);
   if(problem){
    rejected.set(key,problem);continue;
   }
-  if(row.recommendation==='SELECT_RECOMMENDED'&&
-    (!row.evidenceRefs.length||!original.sourceTypes.length)){
+  if(value.recommendation==='SELECT_RECOMMENDED'&&
+    (!value.evidenceRefs.length||!original.sourceTypes.length)){
    rejected.set(key,'UNSUPPORTED_SELECTION_EVIDENCE');continue;
   }
-  // Only STRICTLY validated items reach the plan as actual AI advice.
+  // Only STRICTLY verified items reach the plan as actual AI advice. A
+  // transport-normalized number still has to satisfy the original ranges.
   try{
-   const verified=validateC01({recommendations:[row]},
+   const verified=validateC01({recommendations:[value]},
      {...source,candidates:[original]});
-   received.set(key,verified[0]);
+   received.set(key,{...verified[0],
+     outputNormalizedFields:normalized.normalizedFields});
   }catch{
    rejected.set(key,'PROVIDER_ITEM_VERIFICATION_FAILED');
   }
