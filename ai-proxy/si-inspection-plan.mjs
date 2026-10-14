@@ -296,6 +296,10 @@ export class SiInspectionPlan{
    }else atomicSave(this.file,next);
    return {status:'RECALCULATED',planId:cycleId,provider:ai.provider,mock:ai.mock,
     agentRunId:ai.agentRunId,externalCalls:ai.externalCalls,
+    verifiedAiRecommendations:ai.verifiedAiRecommendations,
+    manualReviewDueToAiContract:ai.manualReviewDueToAiContract,
+    ignoredUnknownRecommendations:ai.ignoredUnknownRecommendations,
+    verificationFailures:ai.verificationFailures,
     revision:next.revision,sourceHash:source.snapshotHash,
     aiRecommendedVessels:rows.filter(r=>r.aiRecommended).length,
     selectedForPlan:rows.filter(r=>r.planSelected).length,
