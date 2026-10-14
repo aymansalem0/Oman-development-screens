@@ -14,6 +14,7 @@ const regimeCode=v=>({
 const norm=v=>String(v||'').trim().toUpperCase();
 const allowedQualification=(data,inspector,vessel,when)=>{
  const date=String(when||'').slice(0,10);
+ if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!vessel?.vesselType)return false;
  const regimes=(vessel?.regimes||[]).map(regimeCode);
  return regimes.length>0&&regimes.every(regime=>
   data.Qualifications?.some(q=>
