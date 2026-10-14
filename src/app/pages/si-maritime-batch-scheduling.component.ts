@@ -127,8 +127,8 @@ export class SiMaritimeBatchSchedulingComponent implements OnInit{
   if(!window.confirm(this.copy(
    'Approve the entire inspected ERP schedule and issue engineer work orders? This is a supervisory decision; it cannot be based on POC synthetic availability.',
    'تأكيد اعتماد الجدولة الكاملة وإصدار أوامر التكليف للمهندسين؟ هذا قرار مسؤول ولا يجوز اعتماده بناءً على إتاحة تجريبية افتراضية.')))return;
-  const proposal=this.proposal,baseline=this.baselineProposal;
-  if(!proposal||!baseline)return;
+  const baseline=this.baselineProposal;
+  if(!baseline)return;
   this.scheduleBusy=true;this.error='';
   this.http.post<{status:string;schedule:ScheduleApproval}>(
    this.api+encodeURIComponent(this.context.planId)+'/approval',{
