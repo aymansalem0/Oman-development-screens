@@ -227,6 +227,54 @@
       </p>
     </ng-container>
    </section>
+   <section class="marine-panel marine-orders" *ngIf="proposal||schedule">
+    <h2>{{copy('03 · Supervisor approval & engineer work orders',
+      '٠٣ · اعتماد الجدولة وأوامر تكليف المهندسين')}}</h2>
+    <p class="marine-notice" *ngIf="demoMode">
+      {{copy('POC synthetic workforce is for demonstrations only. Official work-order approval is disabled; switch to verified ERP data.',
+        'بيانات مهندسي POC افتراضية للعرض فقط. اعتماد أوامر التكليف الرسمية غير متاح حتى استخدام بيانات ERP المعتمدة.')}}
+    </p>
+    <ng-container *ngIf="!schedule; else issuedSchedule">
+      <p>{{copy('The complete plan must be schedulable and all allocations revalidated by the server before approval.',
+        'يجب جدولة جميع سفن الخطة وإعادة التحقق من توزيعها على الخادم قبل الاعتماد.')}}</p>
+      <label>{{copy('Supervisor approval rationale','مبرر اعتماد الجدولة')}}
+       <textarea rows="2" [(ngModel)]="scheduleReason" maxlength="500"
+        [disabled]="scheduleBusy"></textarea>
+      </label>
+      <button type="button" [disabled]="!canApproveSchedule" (click)="approveSchedule()">
+       {{copy('Approve complete schedule','اعتماد الجدولة بالكامل')}}</button>
+      <small *ngIf="proposal?.summary?.unscheduled">
+       {{copy('Approval blocked: unscheduled vessels remain. Resolve all constraints first.',
+        'لا يمكن الاعتماد لوجود سفن لم تُجدول؛ عالج جميع المعوقات أولًا.')}}</small>
+    </ng-container>
+    <ng-template #issuedSchedule>
+      <p><strong>{{copy('Approved schedule','الجدولة المعتمدة')}}:</strong>
+       {{schedule?.id}} · {{schedule?.status}}</p>
+      <p *ngIf="schedule?.lastIssue" class="marine-preview-warning" role="alert">
+       {{schedule?.lastIssue}}</p>
+      <button type="button" [disabled]="scheduleBusy"
+       (click)="dispatchOrders()">
+       {{copy('Issue engineer work orders & prepare dossiers',
+        'إصدار أوامر تكليف المهندسين وتجهيز الدوسيهات')}}</button>
+      <div class="marine-scroll"><table>
+       <thead><tr><th>IMO</th><th>{{copy('Engineer','المهندس')}}</th>
+        <th>{{copy('Date','الموعد')}}</th><th>{{copy('Work order','أمر التكليف')}}</th>
+        <th>{{copy('Dossier','الدوسيه')}}</th></tr></thead>
+       <tbody><tr *ngFor="let item of schedule?.items">
+        <td>{{item.imo}}</td>
+        <td>{{item.assignment.inspectorName}}</td>
+        <td>{{item.assignment.startLocal||item.assignment.startUtc}}</td>
+        <td>{{item.orderStatus}}<small>{{item.orderId}}</small></td>
+        <td>{{item.dossierStatus}}
+         <a *ngIf="item.caseId" [routerLink]="['/moei/smart-inspection/preparation',item.caseId]">
+          {{copy('Review A04 AI checklist scope','مراجعة بنود A04 المقترحة')}}
+         </a>
+        </td>
+       </tr></tbody></table></div>
+      <a routerLink="/moei/smart-inspection/my-work-orders">
+       {{copy('Open My Assigned Inspections →','فتح أوامر المعاينة المكلف بها ←')}}</a>
+    </ng-template>
+   </section>
   </ng-container>
  </main>
 </div>
