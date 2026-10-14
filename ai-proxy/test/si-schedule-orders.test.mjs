@@ -217,3 +217,41 @@ test('non-MOCK schedule cannot use supervisor POC delegation for field start',as
    e=>e.code==='SI_POC_DELEGATION_ONLY_FOR_MOCK_SCHEDULE');
  }finally{x.done();}
 });
+
+test('cross-port work orders require a separate positive supervisor confirmation, then are audited',async()=>{
+ const x=workspace();
+ try{
+  const p=proposal(x.p);
+  p.variants[0].assignments[0]={
+   ...p.variants[0].assignments[0],
+   crossPort:true,originPortId:'FUJ',originPortName:'Fujairah',
+   travelMinutes:30,manualReasons:['CROSS_PORT_REQUIRES_APPROVAL']
+  };
+  await assert.rejects(()=>x.approve({proposal:p}),e=>
+   e.code==='SI_SCHED_CROSS_PORT_SUPERVISOR_CONFIRMATION_REQUIRED');
+  assert.equal((await x.orders.all()).length,0);
+  const saved=await x.approve({proposal:p,confirmCrossPort:true});
+  assert.equal(saved.crossPortApprovalConfirmed,true);
+  assert.equal(saved.crossPortApprovalBy,'supervisor@moei');
+  assert.deepEqual(saved.crossPortOrders,[{
+   imo:'9400643',inspectorId:'ENG-1',fromPortId:'FUJ',
+   toPortId:'JEA',travelMinutes:30
+  }]);
+  assert.equal(saved.orders[0].assignment.crossPort,true);
+  assert.equal(saved.orders[0].assignment.originPortId,'FUJ');
+  assert.equal(saved.operationalBookingConfirmed,false);
+ }finally{x.done();}
+});
+test('cross-port approval refuses missing travel or supervisor-approval evidence',async()=>{
+ const x=workspace();
+ try{
+  const p=proposal(x.p);
+  p.variants[0].assignments[0]={
+   ...p.variants[0].assignments[0],
+   crossPort:true,originPortId:'FUJ',travelMinutes:-1,manualReasons:[]
+  };
+  await assert.rejects(()=>x.approve({proposal:p,confirmCrossPort:true}),
+   e=>e.code==='SI_SCHED_CROSS_PORT_TRAVEL_OR_APPROVAL_EVIDENCE_INVALID');
+  assert.equal((await x.orders.all()).length,0);
+ }finally{x.done();}
+});
