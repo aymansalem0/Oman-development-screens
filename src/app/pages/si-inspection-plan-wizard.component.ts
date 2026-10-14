@@ -305,8 +305,8 @@ export class SiInspectionPlanWizardComponent implements OnInit,OnDestroy{
   if(p.selectedVessels>500)return this.copy(
     'A roster can contain up to 500 vessels. Divide the draft into independently approved plans.',
     'يمكن اعتماد 500 سفينة بحد أقصى في القائمة الواحدة. قسّم المسودة إلى خطط مستقلة.');
-  if(p.vessels.some(v=>!Number.isInteger(v.rank)||v.rank<1||
-      v.rank>p.selectedVessels))
+  if(p.vessels.some(v=>!Number.isInteger(v.rank)||(v.rank??0)<1||
+      (v.rank??0)>p.selectedVessels))
    return this.copy('A selected vessel has no valid plan rank. Reopen Candidate & Targeting and refresh.',
     'توجد سفينة دون ترتيب صحيح في الخطة. ارجع إلى شاشة المرشحين وحدّث بيانات الخطة.');
   if(p.vessels.some(v=>!v.inspectionRegimes?.length))
