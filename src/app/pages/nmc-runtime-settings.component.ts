@@ -380,7 +380,30 @@ export class NmcRuntimeSettingsComponent implements OnInit{
     return section?this.tr(section.en,section.ar):g;
   }
   groupDescription(g:string):string{
-    return AI_GOVERNANCE_SECTIONS.find(x=>x.id===g)?.desc||'';
+    const section=AI_GOVERNANCE_SECTIONS.find(x=>x.id===g);
+    const arabic:Record<string,string>={
+      'agent-a01':'تحليل الوضع البحري بمصادر موثقة دون اتخاذ قرار تنظيمي',
+      'agent-a02':'إشارات الامتثال مع بقاء التقييم الرسمي وفق القواعد المحددة',
+      'agent-a03':'استخراج البيانات من الوثائق وخيارات الرفع والتشغيل التلقائي',
+      'agent-a04':'تجهيز ملف المعاينة واقتراح بنود إضافية بعد المراجعة',
+      'agent-dq01':'مؤشرات جودة البيانات دون تغيير الدرجة الإجمالية الرسمية',
+      'agent-c01':'توصيات ترشيح السفن قبل الاعتماد والقرار النهائي للمشرف',
+      'agent-p01':'سجل تاريخي فقط؛ الوكيل متوقف في النسخة التجريبية الحالية',
+      'agent-s01':'ترتيب مواعيد ERP المتاحة فقط دون تأكيد الحجز',
+      'agent-v01':'تحليل الأدلة بالصور دون إنشاء ملاحظات رسمية آليًا',
+      'agent-r01':'صياغة التقرير والإجراءات من الملاحظات المؤكدة فقط',
+      'agent-x01':'كشف التكرار وتعارض الأدلة مع مراجعة بشرية',
+      'agent-checklist-builder':'إنشاء القوائم عند الطلب وحدود استدعاءات الذكاء لكل حالة',
+      'agent-checklist-vision':'يشارك تفعيل مساعد القوائم ويخصص إعدادات نقل الصور',
+      'agent-conversational-si':'مساعد حواري نصي؛ ليس بديلًا لعقد JSON المنظم',
+      'agent-nmc-desk':'مساعد حواري لموظفي المركز البحري',
+      'agent-sdb':'مساعد حواري لدورة خدمة دفتر البحار',
+      'platform-orchestration':'إعدادات المزود والتنسيق المشتركة بين الوكلاء',
+      'platform-fleet':'حدود التشغيل التلقائي وتكلفة تقييم الأسطول',
+      'platform-alerts':'تنبيهات المخاطر المحفوظة والتصعيد',
+      'platform-connectivity':'عنوان Airia والمهلة المشتركة؛ المفتاح محفوظ بصورة آمنة'
+    };
+    return section?this.tr(section.desc,arabic[g]||section.desc):'';
   }
   loadCredentialStatus():void{
     this.http.get<AiriaCredentialStatus>('/api/ai/admin/governance/credentials')
