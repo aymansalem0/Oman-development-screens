@@ -143,8 +143,9 @@ import {SiBulkJob,SiBulkPlanService,SiBulkPreview,SiBulkVessel} from '../service
      </label>
      <p class="notice">{{copy('Only the selected vessel roster is approved now. Electronic scheduling is the next independent step.',
         'سيتم اعتماد قائمة السفن فقط؛ الخطوة التالية هي الجدولة الإلكترونية واعتماد توزيع المهندسين.')}}</p>
+     <p *ngIf="v2RosterError" class="notice error" role="alert">{{v2RosterError}}</p>
      <button type="button" class="approve" (click)="approve()"
-      [disabled]="submitting||jobBusy||!auth.isAdmin||reason.trim().length<8||p.stale||(!p.agentRunId&&!p.manualSelection)||hasMissingReasons">
+      [disabled]="submitting||jobBusy||!auth.isAdmin||reason.trim().length<8||p.stale||(!p.agentRunId&&!p.manualSelection)||hasMissingReasons||!!v2RosterError">
       {{submitting?copy('Submitting approval…','جارٍ إرسال الاعتماد…'):
        copy('Approve '+p.selectedVessels+' Vessels for Scheduling',
         'اعتماد '+p.selectedVessels+' سفن للجدولة')}}
@@ -298,6 +299,58 @@ export class SiInspectionPlanWizardComponent implements OnInit,OnDestroy{
  }
  get jobBusy():boolean{return this.job?.status==='QUEUED'||this.job?.status==='RUNNING';}
  get hasMissingReasons():boolean{return this.preview?.vessels.some(x=>x.missingSource)||false;}
+ get v2RosterError():string{
+  const p=this.preview;
+  if(!p)return '';
+  if(p.selectedVessels>500)return this.copy(
+    'A roster can contain up to 500 vessels. Divide the draft into independently approved plans.',
+    'يمكن اعتماد 500 سفينة بحد أقصى في القائمة الواحدة. قسّم المسودة إلى خطط مستقلة.');
+  if(p.vessels.some(v=>!Number.isInteger(v.rank)||(v.rank??0)<1||
+      (v.rank??0)>p.selectedVessels))
+   return this.copy('A selected vessel has no valid plan rank. Reopen Candidate & Targeting and refresh.',
+    'توجد سفينة دون ترتيب صحيح في الخطة. ارجع إلى شاشة المرشحين وحدّث بيانات الخطة.');
+  if(p.vessels.some(v=>!v.inspectionRegimes?.length))
+   return this.copy('Inspection scope is missing for one or more vessels. Refresh sources.',
+    'نطاق المعاينة غير متاح لسفينة أو أكثر. حدّث مصادر البيانات.');
+  if(p.vessels.some(v=>!v.reasons?.length||
+      v.reasons.some(r=>!r.eventKey?.trim())))
+   return this.copy('A selected vessel has no verified source reason/event key.',
+    'توجد سفينة لا تحتوي على سبب إحالة موثق أو رمز الحدث الأصلي.');
+  return '';
+ }
+ private v2ApprovalError(code:string):string{
+  const items:Record<string,[string,string]>={
+    SI_V2_PLAN_APPROVAL_INFORMATION_INVALID:[
+      'Supervisor approval requires a valid plan version and an explanation of at least 8 characters.',
+      'يتطلب اعتماد المشرف نسخة خطة صحيحة وسبب اعتماد لا يقل عن 8 أحرف.'],
+    SI_V2_PLAN_APPROVAL_NO_VESSELS:[
+      'No vessels were selected for this approval.',
+      'لا توجد سفن محددة للاعتماد.'],
+    SI_V2_PLAN_APPROVAL_ROSTER_LIMIT_500:[
+      'Maximum 500 vessels per approval. Create another rolling plan for the remaining vessels.',
+      'الحد الأقصى 500 سفينة في كل اعتماد. أنشئ خطة أخرى لباقي السفن.'],
+    SI_V2_PLAN_APPROVAL_IMO_INVALID:[
+      'A selected vessel has an invalid IMO.',
+      'توجد سفينة محددة برقم IMO غير صالح.'],
+    SI_V2_PLAN_APPROVAL_DUPLICATE_IMO:[
+      'The same IMO was submitted more than once.',
+      'تم إدراج نفس رقم IMO أكثر من مرة.'],
+    SI_V2_PLAN_APPROVAL_RANK_INVALID:[
+      'The proposed plan contains a missing, invalid or repeated priority rank. Refresh the plan.',
+      'ترتيب الأولوية مفقود أو غير صالح أو مكرر. حدّث الخطة.'],
+    SI_V2_PLAN_APPROVAL_REGIMES_MISSING:[
+      'One or more selected vessels have no inspection regime. Verify source records.',
+      'سفينة أو أكثر لا تحتوي على نوع المعاينة. تحقق من بيانات المصدر.'],
+    SI_V2_PLAN_APPROVAL_SOURCE_REASONS_MISSING:[
+      'One or more vessels are missing source event keys or inspection reasons.',
+      'سفينة أو أكثر ينقصها رمز حدث المصدر أو أسباب المعاينة.'],
+    SI_V2_PLAN_SOURCE_CHANGED_OR_MISSING:[
+      'Saved source data changed or approval is not ready. Reload the plan before retrying.',
+      'تغيرت البيانات المحفوظة أو الخطة غير جاهزة. أعد تحميلها قبل المحاولة.']
+  };
+  const row=items[code];
+  return row?this.copy(row[0],row[1]):code;
+ }
  get totalReasons():number{return this.preview?.vessels.reduce((n,v)=>n+v.reasons.length,0)||0;}
  get totalScopes():number{return this.preview?.vessels.reduce((n,v)=>n+v.inspectionRegimes.length,0)||0;}
  get canNext():boolean{return !!this.preview&&this.step<4&&this.preview.selectedVessels>0&&
@@ -338,7 +391,7 @@ export class SiInspectionPlanWizardComponent implements OnInit,OnDestroy{
  next():void{if(this.canNext)this.step++;}
  approve():void{
   const p=this.preview;if(!this.planId||!p||this.submitting||this.jobBusy||!this.auth.isAdmin||
-   (!p.agentRunId&&!p.manualSelection)||p.stale||this.hasMissingReasons||this.reason.trim().length<8)return;
+   (!p.agentRunId&&!p.manualSelection)||p.stale||this.hasMissingReasons||this.reason.trim().length<8||!!this.v2RosterError)return;
   const message=this.copy(
    'Approve the roster of '+p.selectedVessels+' vessels for comprehensive scheduling? No inspection case or dossier will be created at plan approval.',
    'اعتماد قائمة '+p.selectedVessels+' سفن لجدولتها إلكترونيًا؟ لن يتم إنشاء أي حالة معاينة أو دوسيه الآن.'
@@ -356,9 +409,8 @@ export class SiInspectionPlanWizardComponent implements OnInit,OnDestroy{
       this.job=null;this.step=5;
     },
     error:e=>{
-      this.submitting=false;this.error=e?.error?.error||
-       this.copy('Approval rejected — refresh the source plan and retry.',
-         'تعذر اعتماد الخطة. راجع بيانات المصدر مرة أخرى.');
+      this.submitting=false;this.error=this.v2ApprovalError(
+        e?.error?.error||'SI_V2_PLAN_APPROVAL_UNAVAILABLE');
     }
   });
  }

@@ -24,6 +24,37 @@ interface RuntimeSnapshot {
   updatedAt:string|null;updatedBy:string|null;
   secretsExposed:false;note:string;
 }
+/** Each backend runtime descriptor appears under exactly one governed section.
+ * UI ownership only: no changes to stored setting keys, values, secrets or APIs.
+ */
+export const AI_GOVERNANCE_SECTIONS=[
+ {id:'agent-a01',en:'NMC A01 · Maritime Intelligence',ar:'NMC A01 · الاستخبارات البحرية',keys:['NMC_A01_ENABLED','AIRIA_A01_PIPELINE_ID'],desc:'Situation intelligence · evidence and risk advice only'},
+ {id:'agent-a02',en:'NMC A02 · Vessel Compliance',ar:'NMC A02 · امتثال السفن',keys:['NMC_A02_ENABLED','AIRIA_A02_PIPELINE_ID'],desc:'Compliance factors · deterministic official risk'},
+ {id:'agent-a03',en:'NMC A03 · Document Intelligence',ar:'NMC A03 · ذكاء الوثائق',keys:['NMC_A03_ENABLED','AIRIA_A03_PIPELINE_ID','AIRIA_A03_TRANSPORT','NMC_A03_AUTO_ENABLED'],desc:'Document extraction · media transport and auto-run'},
+ {id:'agent-a04',en:'SI-A04 · Dossier & Checklist Preparation',ar:'SI-A04 · تجهيز الدوسيه وقوائم المعاينة',keys:['SI_A04_ENABLED','AIRIA_A04_PIPELINE_ID'],desc:'Advisory scope · optional checklist items only'},
+ {id:'agent-dq01',en:'NMC DQ-01 · Data Quality',ar:'NMC DQ-01 · جودة البيانات',keys:['NMC_DQ01_ENABLED','AIRIA_NMC_DQ01_PIPELINE_ID'],desc:'Factor signals · never calculates final quality score'},
+ {id:'agent-c01',en:'SI-C01 · Candidate Selection & Priority',ar:'SI-C01 · اختيار السفن والأولوية',keys:['SI_C01_ENABLED','AIRIA_SI_C01_PIPELINE_ID'],desc:'Pre-approval source-grounded selection · supervisor confirmation'},
+ {id:'agent-p01',en:'SI-P01 · Approved Case Priority (Retired)',ar:'SI-P01 · أولوية الحالات المعتمدة (متوقف)',keys:['SI_P01_ENABLED','AIRIA_SI_P01_PIPELINE_ID'],desc:'Historical only · no current POC activation'},
+ {id:'agent-s01',en:'SI-S01 · Inspection Scheduling',ar:'SI-S01 · جدولة المعاينات',keys:['SI_S01_ENABLED','AIRIA_SI_S01_PIPELINE_ID'],desc:'Ranks only feasible ERP slots · never books'},
+ {id:'agent-v01',en:'SI-V01 · Field Evidence Vision',ar:'SI-V01 · تحليل الصور والأدلة الميدانية',keys:['SI_V01_ENABLED','AIRIA_SI_V01_PIPELINE_ID'],desc:'Candidate findings only · inspector confirmation'},
+ {id:'agent-r01',en:'SI-R01 · Report & CAPA Draft',ar:'SI-R01 · مسودة التقرير والإجراءات التصحيحية',keys:['SI_R01_ENABLED','AIRIA_SI_R01_PIPELINE_ID'],desc:'Confirmed findings only · supervisor signs report'},
+ {id:'agent-x01',en:'SI-X01 · Repeat Deficiency & Conflicts',ar:'SI-X01 · تكرار العيوب وتعارض الأدلة',keys:['SI_X01_ENABLED','AIRIA_SI_X01_PIPELINE_ID'],desc:'Repeat and conflict advisory · human verification'},
+ {id:'agent-checklist-builder',en:'Checklist Builder · AI Assistant',ar:'مساعد الذكاء لإنشاء قوائم المعاينة',keys:['SI_CHECKLIST_AIRIA_ENABLED','AIRIA_SI_CHECKLIST_BUILDER_PIPELINE_ID','SI_CHECKLIST_AI_MAX_CALLS_PER_CASE'],desc:'Controlled opt-in checklist design and per-case budget'},
+ {id:'agent-checklist-vision',en:'Checklist Vision · Inspector Review',ar:'مساعد تحليل صور بنود المعاينة',keys:['AIRIA_SI_CHECKLIST_VISION_PIPELINE_ID','SI_CHECKLIST_VISION_TRANSPORT'],desc:'Shares Checklist AI enable switch above · evidence review'},
+ {id:'agent-conversational-si',en:'Conversational Smart Inspection',ar:'المساعد الحواري للمعاينة الذكية',keys:['AIRIA_CONVERSATIONAL_SI_PIPELINE_ID'],desc:'Prose-only catalogue · not a structured SI agent'},
+ {id:'agent-nmc-desk',en:'NMC Situational Desk',ar:'مساعد المركز البحري الوطني',keys:['AIRIA_NMC_DESK_PIPELINE_ID'],desc:'Conversational operator assistant'},
+ {id:'agent-sdb',en:'SDB Journey · Seafarer',ar:'مساعد رحلة دفتر البحار',keys:['AIRIA_SDB_JOURNEY_PIPELINE_ID'],desc:'Conversational service journey'},
+ {id:'platform-orchestration',en:'Platform · Orchestration & Providers',ar:'المنصة · التنسيق ومزود الذكاء',keys:['SI_AI_PROVIDER','NMC_DASHBOARD_AI_FOCUS_ENABLED'],desc:'Shared settings · not a separate agent'},
+ {id:'platform-fleet',en:'Platform · Fleet Assessment Schedule',ar:'المنصة · جدولة تقييم الأسطول',keys:['NMC_FLEET_AUTO_ENABLED','NMC_FLEET_AUTO_MAX_VESSELS','NMC_FLEET_AUTO_RETRY_FAILED','NMC_FLEET_REFRESH_SECONDS'],desc:'Background cost and vessel limits'},
+ {id:'platform-alerts',en:'Platform · Alerts & Escalation',ar:'المنصة · التنبيهات والتصعيد',keys:['NMC_ALERT_SCAN_ENABLED','NMC_ALERT_SCAN_SECONDS','NMC_ALERT_ESCALATE_MINUTES'],desc:'Saved risk alerts and incident escalation'},
+ {id:'platform-connectivity',en:'Platform · Airia Connection',ar:'المنصة · اتصال Airia',keys:['AIRIA_BASE_URL','AIRIA_TIMEOUT_MS'],desc:'Shared endpoint / timeout; credentials are below'}
+] as const;
+export function auditAiGovernanceGrouping(descriptors:ReadonlyArray<{key:string}>):string[]{
+ const names=AI_GOVERNANCE_SECTIONS.flatMap(s=>[...s.keys]);
+ return descriptors.map(d=>d.key).filter(k=>names.filter(n=>n===k).length!==1)
+  .concat([...new Set(names)].filter(k=>!descriptors.some(d=>d.key===k)));
+}
+
 @Component({
   selector:'app-nmc-runtime-settings',
   standalone:true,
@@ -73,12 +104,20 @@ interface RuntimeSnapshot {
                  'تدار هنا إعدادات وكلاء NMC وSmart Inspection ومعرفات Pipelines وطرق الصور وحدود الاستهلاك، مع سجل للإصدارات. يمكن تغيير مفتاح Airia فقط عبر مخزن الأسرار المشفر أدناه. نموذج الذكاء المستخدم يُحدد داخل Airia نفسه. التشغيل المدفوع والقرارات المؤثرة يحتاجان ضوابط وموافقة بشرية.')}}</p>
       </div>
       <ng-container *ngIf="snapshot">
-        <section *ngFor="let group of groups" class="group-card">
-          <div class="group-title">
-            <span class="group-icon">{{icon(group)}}</span>
+        <div class="agent-directory">
+          <strong>{{tr('Agentic AI configuration','إعدادات وكلاء الذكاء الاصطناعي')}}</strong>
+          <p>{{tr('Each agent has its own section and its own currently saved settings. Open a heading to edit; publish remains one audited operation.',
+            'كل وكيل له قسم مستقل يحتوي على إعداداته المحفوظة. افتح اسم الوكيل للتعديل ثم انشر جميع التغييرات في عملية موثقة واحدة.')}}</p>
+        </div>
+        <details *ngFor="let group of groups" class="group-card agent-accordion"
+          [open]="group==='agent-c01'">
+          <summary class="group-title">
+            <span class="group-icon">{{group.startsWith('agent-')?'✦':'⚙'}}</span>
             <div><h2>{{groupLabel(group)}}</h2>
-              <p>{{groupDescription(group)}}</p></div>
-          </div>
+              <p>{{groupDescription(group)}}</p>
+              <small class="group-count">{{byGroup(group).length}} {{tr('settings','إعدادات')}}</small></div>
+            <span class="agent-chevron" aria-hidden="true">⌄</span>
+          </summary>
           <div class="settings-grid">
             <article class="setting-row" *ngFor="let item of byGroup(group)">
               <div class="setting-heading">
@@ -134,7 +173,7 @@ interface RuntimeSnapshot {
               </div>
             </article>
           </div>
-        </section>
+        </details>
         <section class="publish-card">
           <h2>{{tr('AI Governance Controls · Always Enforced',
             'ضوابط حوكمة الذكاء الاصطناعي · إلزامية دائمًا')}}</h2>
@@ -148,8 +187,8 @@ interface RuntimeSnapshot {
             <span>✓ {{tr('Source evidence, inspector decisions and setting revisions audited',
               'تدقيق الأدلة وقرارات المفتش وإصدارات الإعدادات')}}</span>
           </div>
-          <p class="governance-hint">{{tr('A01–A04 pipeline IDs are sourced from the 8 October 2026 Airia Partner Guide. Existing Conversational Smart Inspection may be evaluated as a Builder, but prose is not a validated checklist JSON contract.',
-            'معرفات A01–A04 مأخوذة من دليل Airia بتاريخ ٨ أكتوبر ٢٠٢٦. يمكن تقييم المساعد الحواري كمرشح لـBuilder، لكن النص الحواري ليس نموذج JSON معتمدًا للقائمة.')}}</p>
+          <p class="governance-hint">{{tr('Structured SI-C01/S01/V01/R01/X01 pipeline IDs and A01–A04 come from the Airia Partner API Guide updated 14 October 2026. Existing Conversational Smart Inspection may be evaluated as a Builder, but prose is not a validated checklist JSON contract.',
+            'معرفات A01–A04 ووكلاء SI-C01/S01/V01/R01/X01 مأخوذة من دليل Airia المحدث ١٤ أكتوبر ٢٠٢٦. يمكن تقييم المساعد الحواري كمرشح لـBuilder، لكن النص الحواري ليس نموذج JSON معتمدًا للقائمة.')}}</p>
         </section>
         <section class="publish-card">
           <h2>{{tr('Airia API Key · Encrypted Credential Governance','مفتاح Airia · إدارة الأسرار المشفرة')}}</h2>
@@ -237,6 +276,17 @@ interface RuntimeSnapshot {
     .runtime-info{background:#eaf6f4;border-inline-start:4px solid #0e9a90;padding:18px;border-radius:11px;margin:19px 0}
     .runtime-info strong{font-size:12px}.runtime-info p{line-height:1.8;font-size:11px;margin:7px 0 0;color:#4b7078}
     .group-card,.publish-card{background:white;border:1px solid #dee9ed;border-radius:15px;margin-top:20px;padding:23px}
+    .agent-directory{margin-top:18px;border:1px solid #c7dfe5;border-radius:14px;background:#f0f9fa;padding:16px}
+    .agent-directory strong{color:#0b6471;font-size:15px}
+    .agent-directory p{font-size:11px;color:#668391;line-height:1.65;margin:7px 0 0}
+    .agent-accordion{padding:0;overflow:hidden}
+    .agent-accordion summary{cursor:pointer;list-style:none;padding:18px 22px;margin:0}
+    .agent-accordion summary::-webkit-details-marker{display:none}
+    .agent-accordion[open] summary{border-bottom:1px solid #e8eff2}
+    .agent-accordion .settings-grid{padding:0 22px 18px}
+    .group-count{display:inline-block;color:#098483;background:#e7f6f3;border-radius:9px;padding:3px 9px;font-size:10px;font-weight:800;margin-top:4px}
+    .agent-chevron{margin-inline-start:auto;font-size:21px;color:#078682;transition:transform .15s}
+    .agent-accordion[open] .agent-chevron{transform:rotate(180deg)}
     .group-title{display:flex;gap:12px;align-items:center;padding-bottom:17px;border-bottom:1px solid #e8eff2}
     .group-icon{width:46px;height:46px;color:#057d80;background:#e9f7f5;font-size:24px}
     .group-title h2,.publish-card h2{font-size:17px;margin:0;color:#173d54}
@@ -301,7 +351,7 @@ interface RuntimeSnapshot {
 export class NmcRuntimeSettingsComponent implements OnInit{
   snapshot:RuntimeSnapshot|null=null;
   draft:Record<string,boolean|number|string>={};
-  groups=['agents','pipelines','checklist','scheduler','alerts','connectivity'];
+  readonly groups=AI_GOVERNANCE_SECTIONS.map(s=>s.id);
   credentialStatus:AiriaCredentialStatus|null=null;
   newApiKey='';credentialReason='';credentialSaving=false;
   actor='admin';reason='';error='';success='';loading=false;saving=false;
@@ -319,29 +369,41 @@ export class NmcRuntimeSettingsComponent implements OnInit{
     if(!this.snapshot)return false;
     return this.snapshot.descriptors.some(d=>this.draft[d.key]!==this.snapshot?.values[d.key]);
   }
-  byGroup(g:string){return this.snapshot?.descriptors.filter(d=>d.group===g)||[];}
-  icon(g:string){return ({agents:'✦',pipelines:'⛓',checklist:'☑',scheduler:'◷',alerts:'♢',connectivity:'⛓'} as Record<string,string>)[g]||'⚙';}
-  groupLabel(g:string){
-    const s:Record<string,[string,string]>={
-      agents:['AI Agents & Orchestration','وكلاء الذكاء الاصطناعي وتنسيق التشغيل'],
-      pipelines:['Airia Pipeline Registry','سجل مسارات Airia'],
-      checklist:['Smart Inspection Checklist AI','الذكاء الاصطناعي لقوائم المعاينة'],
-      scheduler:['Fleet Assessment Scheduler','جدولة تقييم مخاطر السفن'],
-      alerts:['Alerts & Escalation','التنبيهات والتصعيد'],
-      connectivity:['Airia Connectivity','الاتصال بخدمة Airia']
-    };
-    return this.tr(s[g][0],s[g][1]);
+  byGroup(g:string):SettingDescriptor[]{
+    const section=AI_GOVERNANCE_SECTIONS.find(x=>x.id===g);
+    return section?section.keys.map(key=>
+      this.snapshot?.descriptors.find(d=>d.key===key))
+      .filter((d):d is SettingDescriptor=>!!d):[];
   }
-  groupDescription(g:string){
-    const s:Record<string,[string,string]>={
-      agents:['Configure supported agents; P01 retired for current POC.','إعداد الوكلاء المعتمدين؛ P01 خارج نطاق النموذج الحالي.'],
-      pipelines:['Map verified Airia IDs; P01 is future-only.','ربط معرفات Airia المؤكدة؛ P01 للاستخدام المستقبلي فقط.'],
-      checklist:['Configure Checklist Builder, Vision/Review, image transport, cost and per-case AI usage.','تهيئة مساعد إنشاء القوائم وتحليل الصور وطريقة الرفع وحدود الاستخدام.'],
-      scheduler:['Pilot vessel limit, retry and periodic execution.','حدود السفن التجريبية وإعادة المحاولة والتشغيل الدوري.'],
-      alerts:['Detection interval and unacknowledged-event escalation.','دورية فحص التنبيهات والتصعيد عند عدم الاستجابة.'],
-      connectivity:['Allowlisted secure Airia endpoint; API key remains a server secret.','عنوان Airia آمن ومحدد مسبقًا؛ مفتاح API محفوظ كسر على الخادم.']
+  groupLabel(g:string):string{
+    const section=AI_GOVERNANCE_SECTIONS.find(x=>x.id===g);
+    return section?this.tr(section.en,section.ar):g;
+  }
+  groupDescription(g:string):string{
+    const section=AI_GOVERNANCE_SECTIONS.find(x=>x.id===g);
+    const arabic:Record<string,string>={
+      'agent-a01':'تحليل الوضع البحري بمصادر موثقة دون اتخاذ قرار تنظيمي',
+      'agent-a02':'إشارات الامتثال مع بقاء التقييم الرسمي وفق القواعد المحددة',
+      'agent-a03':'استخراج البيانات من الوثائق وخيارات الرفع والتشغيل التلقائي',
+      'agent-a04':'تجهيز ملف المعاينة واقتراح بنود إضافية بعد المراجعة',
+      'agent-dq01':'مؤشرات جودة البيانات دون تغيير الدرجة الإجمالية الرسمية',
+      'agent-c01':'توصيات ترشيح السفن قبل الاعتماد والقرار النهائي للمشرف',
+      'agent-p01':'سجل تاريخي فقط؛ الوكيل متوقف في النسخة التجريبية الحالية',
+      'agent-s01':'ترتيب مواعيد ERP المتاحة فقط دون تأكيد الحجز',
+      'agent-v01':'تحليل الأدلة بالصور دون إنشاء ملاحظات رسمية آليًا',
+      'agent-r01':'صياغة التقرير والإجراءات من الملاحظات المؤكدة فقط',
+      'agent-x01':'كشف التكرار وتعارض الأدلة مع مراجعة بشرية',
+      'agent-checklist-builder':'إنشاء القوائم عند الطلب وحدود استدعاءات الذكاء لكل حالة',
+      'agent-checklist-vision':'يشارك تفعيل مساعد القوائم ويخصص إعدادات نقل الصور',
+      'agent-conversational-si':'مساعد حواري نصي؛ ليس بديلًا لعقد JSON المنظم',
+      'agent-nmc-desk':'مساعد حواري لموظفي المركز البحري',
+      'agent-sdb':'مساعد حواري لدورة خدمة دفتر البحار',
+      'platform-orchestration':'إعدادات المزود والتنسيق المشتركة بين الوكلاء',
+      'platform-fleet':'حدود التشغيل التلقائي وتكلفة تقييم الأسطول',
+      'platform-alerts':'تنبيهات المخاطر المحفوظة والتصعيد',
+      'platform-connectivity':'عنوان Airia والمهلة المشتركة؛ المفتاح محفوظ بصورة آمنة'
     };
-    return this.tr(s[g][0],s[g][1]);
+    return section?this.tr(section.desc,arabic[g]||section.desc):'';
   }
   loadCredentialStatus():void{
     this.http.get<AiriaCredentialStatus>('/api/ai/admin/governance/credentials')

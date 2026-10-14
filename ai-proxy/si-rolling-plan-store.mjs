@@ -199,7 +199,14 @@ export class SiRollingPlanStore{
    if(p.revision!==expectedRevision)fail('SI_ROLLING_VERSION_CONFLICT',409);
    const next=operation(clone(p));
    next.revision=p.revision+1;next.updatedAt=now();next.updatedBy=actor;
-   next.audit=[...(p.audit||[]),{event,at:next.updatedAt,actor}].slice(-300);
+   // Keep the one audited officer disposition breakdown that the trusted
+   // bulk mutation added. Prior event history cannot be rewritten by it.
+   const earlier=p.audit||[],proposed=next.audit||[];
+   const sameHistory=proposed.length===earlier.length+1&&
+     earlier.every((item,i)=>JSON.stringify(item)===JSON.stringify(proposed[i]));
+   const detail=sameHistory&&proposed.at(-1)?.event==='BULK_DISPOSITION_DETAILS'&&
+     event.startsWith('OFFICER_BULK_')?[proposed.at(-1)]:[];
+   next.audit=[...earlier,...detail,{event,at:next.updatedAt,actor}].slice(-300);
    return next;
   };
   if(this.mode==='json'){
@@ -242,14 +249,30 @@ export class SiRollingPlanStore{
  async approveForScheduling(id,{expectedRevision,expectedSourceHash,actor,reason,vessels}={}){
   if(!ID.test(id||'')||!Number.isInteger(expectedRevision)||
     !text(actor,160)||!text(reason,500)||reason.trim().length<8||
-    !text(expectedSourceHash,200)||!Array.isArray(vessels)||
-    !vessels.length||vessels.length>40||
-    new Set(vessels.map(v=>v.imo)).size!==vessels.length||
-    vessels.some(v=>!/^[0-9]{7}$/.test(v.imo)||
-      !Number.isInteger(v.planRank)||!Array.isArray(v.regimes)||
-      !v.regimes.length||!Array.isArray(v.inspectionReasons)||
-      !v.inspectionReasons.length||v.inspectionReasons.some(r=>!r.eventKey)))
-   fail('SI_V2_PLAN_APPROVAL_INVALID',422);
+    !text(expectedSourceHash,200))
+   fail('SI_V2_PLAN_APPROVAL_INFORMATION_INVALID',422);
+  if(!Array.isArray(vessels)||vessels.length===0)
+   fail('SI_V2_PLAN_APPROVAL_NO_VESSELS',422);
+  // V2 freezes a *roster only*. The legacy 40-vessel limit applies to
+  // immediate case-creation batches, not this approval-only transaction.
+  // C01 allows up to 500 workflows per controlled execution cycle.
+  if(vessels.length>500)fail('SI_V2_PLAN_APPROVAL_ROSTER_LIMIT_500',422);
+  if(vessels.some(v=>!v||typeof v!=='object'||
+    !/^[0-9]{7}$/.test(v.imo||'')))
+   fail('SI_V2_PLAN_APPROVAL_IMO_INVALID',422);
+  if(new Set(vessels.map(v=>v.imo)).size!==vessels.length)
+   fail('SI_V2_PLAN_APPROVAL_DUPLICATE_IMO',422);
+  if(vessels.some(v=>!Number.isInteger(v.planRank)||v.planRank<1||
+     v.planRank>vessels.length)||
+     new Set(vessels.map(v=>v.planRank)).size!==vessels.length)
+   fail('SI_V2_PLAN_APPROVAL_RANK_INVALID',422);
+  if(vessels.some(v=>!Array.isArray(v.regimes)||!v.regimes.length||
+     v.regimes.some(regime=>typeof regime!=='string'||!regime.trim())))
+   fail('SI_V2_PLAN_APPROVAL_REGIMES_MISSING',422);
+  if(vessels.some(v=>!Array.isArray(v.inspectionReasons)||
+     !v.inspectionReasons.length||
+     v.inspectionReasons.some(r=>!r||typeof r.eventKey!=='string'||!r.eventKey.trim())))
+   fail('SI_V2_PLAN_APPROVAL_SOURCE_REASONS_MISSING',422);
   const change=before=>{
    if(before.status!=='READY_FOR_APPROVAL'||before.revision!==expectedRevision||
       before.selectionSourceHash!==expectedSourceHash)

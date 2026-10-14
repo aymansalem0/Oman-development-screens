@@ -347,3 +347,67 @@ test('multi-vessel request rejects stale, duplicate, invalid or approved input w
    /SI_ROLLING_APPROVED_PLAN_IMMUTABLE/);
  }finally{x.done();}
 });
+
+test('V2 approval freezes 64 selected vessel roster in one revision without creating cases',async()=>{
+ const x=setup();try{
+  const candidates=Array.from({length:64},(_,i)=>({
+    candidateKey:'valid-'+i,imo:String(9400000+i),
+    regime:'PSC',sourceTypes:['PSC_PORT_CALL'],
+    sourceEvents:[{eventKey:'PSC-'+i}]
+  }));
+  const p=await x.rolling.create({
+   title:'Approved national 64-vessel roster',
+   startsOn:'2026-10-14',endsOn:'2026-10-16'
+  },'planner@moei',{candidates,sourceHash:'f'.repeat(64)});
+  const rows=candidates.map((c,i)=>({
+   imo:c.imo,planSelected:true,effectiveRank:i+1,
+   regimes:[c.regime],sourceEvents:c.sourceEvents
+  }));
+  await x.rolling.mutate(p.id,0,'planner@moei',state=>{
+   state.status='READY_FOR_APPROVAL';
+   state.selectionSourceHash='f'.repeat(64);
+   state.savedPlanRows=rows;
+   return state;
+  },'TEST_SELECT_64');
+  const vessels=candidates.map((c,i)=>({
+   imo:c.imo,planRank:i+1,regimes:[c.regime],
+   inspectionReasons:[{eventKey:'PSC-'+i,sourceType:'PSC_PORT_CALL'}]
+  }));
+  const approved=await x.rolling.approveForScheduling(p.id,{
+   expectedRevision:1,expectedSourceHash:'f'.repeat(64),
+   actor:'supervisor@moei',reason:'Approved legitimate review roster for electronic scheduling',
+   vessels
+  });
+  assert.equal(approved.status,'APPROVED');
+  assert.equal(approved.approvedVessels.length,64);
+  assert.equal(approved.approvedVessels[0].caseId,null);
+  assert.equal(approved.revision,2);
+  assert.equal(approved.audit.at(-1).casesCreated,0);
+  assert.equal((await x.rolling.get(p.id)).approvedVessels.length,64);
+ }finally{x.done();}
+});
+test('V2 approval explains missing source reasons, invalid ranks, duplicates and oversized rosters',async()=>{
+ const x=setup();try{
+  const plan=await x.create('Validation safety');
+  const base={expectedRevision:0,expectedSourceHash:'f'.repeat(64),
+   actor:'supervisor@moei',
+   reason:'Supervisor source-based confirmation for scheduling',
+   vessels:[{imo:'9328471',planRank:1,regimes:['FOCUSED_INSPECTION'],
+    inspectionReasons:[{eventKey:'NMC-123'}]}]};
+  const cases=[
+   [{vessels:[{...base.vessels[0],inspectionReasons:[]}]},'SI_V2_PLAN_APPROVAL_SOURCE_REASONS_MISSING'],
+   [{vessels:[{...base.vessels[0],regimes:[]}]},'SI_V2_PLAN_APPROVAL_REGIMES_MISSING'],
+   [{vessels:[{...base.vessels[0],planRank:null}]},'SI_V2_PLAN_APPROVAL_RANK_INVALID'],
+   [{vessels:[base.vessels[0],base.vessels[0]]},'SI_V2_PLAN_APPROVAL_DUPLICATE_IMO'],
+   [{vessels:Array.from({length:501},(_,i)=>({
+    imo:String(9400000+i),planRank:i+1,regimes:['PSC'],
+    inspectionReasons:[{eventKey:'EV-'+i}]
+   }))},'SI_V2_PLAN_APPROVAL_ROSTER_LIMIT_500']
+  ];
+  for(const [change,code] of cases){
+   await assert.rejects(x.rolling.approveForScheduling(plan.id,{...base,...change}),
+     e=>e.code===code);
+   assert.equal((await x.rolling.get(plan.id)).status,'DRAFT');
+  }
+ }finally{x.done();}
+});
