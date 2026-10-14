@@ -56,12 +56,28 @@ export function maritimePlanSchedulingContext(plan,dashboard,snapshot){
    windowSource:dateEvent?'MSW_FINAL':'',
    windowEvidenceReference:dateEvent?.sourceReference||''};
  });
+ // Only work-relevant, active POC scheduling fields are returned; do not
+ // expose personal HR leave descriptions, phone numbers or raw ERP rows.
+ const inspectors=(snapshot.data.Inspectors||[])
+  .filter(p=>p.active==='Y'||p.active===true)
+  .map(p=>({
+   inspectorId:p.inspector_id,inspectorName:p.display_name||p.inspector_id,
+   homePortId:p.home_port_id||null,
+   dailyCapacity:Number(p.daily_capacity)||0,
+   qualifications:[...new Set((snapshot.data.Qualifications||[])
+     .filter(q=>q.inspector_id===p.inspector_id&&
+       (q.active==='Y'||q.active===true)&&
+       q.valid_until>=new Date().toISOString().slice(0,10))
+     .map(q=>q.inspection_regime))].sort()
+  })).sort((a,b)=>a.inspectorName.localeCompare(b.inspectorName)||
+   a.inspectorId.localeCompare(b.inspectorId));
  return {status:'SCHEDULE_INPUT_REQUIRED',planId:plan.id,
   approvedVessels:context.length,ports:ports.filter(p=>p.active==='Y').map(p=>({
    portId:p.port_id,name:p.port_name,
    windowStart:p.window_start,windowEnd:p.window_end
   })),
-  items:context,
+  erpSnapshotId:snapshot.snapshotId,
+  workforce:inspectors,items:context,
   instruction:'ETD from MSW is final on import. Supervisor approves only the resulting schedule, not the date.',
   warning:'Unknown berth, missing NMC/Service ETD or vessel access => UNSCHEDULED until supplied, not fabricated.'};
 }
