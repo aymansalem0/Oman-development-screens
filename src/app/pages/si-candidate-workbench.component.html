@@ -131,6 +131,38 @@
           copy('AIRIA: explicit confirmed analysis','Airia: تحليل يبدأ بتأكيد المستخدم'):
           copy('MOCK: 0 Airia calls','MOCK: بدون اتصال Airia')}}</span>
       </div>
+      <section class="si-data-readiness" *ngIf="plan?.dataReadiness as ready"
+        [class.si-readiness-review]="ready.status==='REVIEW_RECOMMENDED'"
+        aria-label="AI candidate data readiness">
+        <div class="si-readiness-head">
+          <strong>{{copy('Data readiness before AI analysis','جاهزية البيانات قبل تحليل AI')}}</strong>
+          <span class="si-readiness-state">
+            {{ready.status==='NO_CANDIDATES'?copy('No eligible candidates','لا توجد سفن مؤهلة'):
+              ready.status==='SCOPE_LIMIT'?copy('Scope exceeds 100 workflows','عدد المسارات يتجاوز 100'):
+              ready.status==='REVIEW_RECOMMENDED'?copy('Source review recommended','يُنصح بمراجعة المصادر'):
+              ready.status==='READY_WITH_GAPS'?copy('Available with data gaps','البيانات متاحة مع بعض النواقص'):
+              copy('Source evidence available','الأدلة متاحة')}}
+          </span>
+        </div>
+        <div class="si-readiness-metrics">
+          <span><strong>{{ready.eligibleVessels}}</strong>
+            {{copy('Eligible vessels','سفينة مؤهلة')}}</span>
+          <span><strong>{{ready.confirmedEtdVessels}} / {{ready.eligibleVessels}}</strong>
+            {{copy('Verified ETD','موعد مغادرة مؤكد')}}</span>
+          <span><strong>{{ready.incidentReviewedVessels}} / {{ready.eligibleVessels}}</strong>
+            {{copy('Reviewed incident severity','خطورة حادث تمت مراجعتها')}}</span>
+          <span><strong>{{ready.riskAssessedVessels}} / {{ready.eligibleVessels}}</strong>
+            {{copy('Saved vessel risk','تقييم مخاطر سفينة محفوظ')}}</span>
+          <span><strong>{{ready.evidenceBackedVessels}} / {{ready.eligibleVessels}}</strong>
+            {{copy('Source evidence','أدلة مصدر محفوظة')}}</span>
+          <span><strong>{{ready.conflictingEtdVessels}}</strong>
+            {{copy('Conflicting ETD','تعارض في المغادرة')}}</span>
+        </div>
+        <p class="si-readiness-hint">
+          {{copy('Coverage reflects saved records for this candidate snapshot, not automatically generated facts. Missing ETD or reviewed incident severity does not block AI advice, but execution priority stays pending additional rules where neither is available. No AI call is made to show this panel.',
+            'الأرقام مستمدة من المصادر المحفوظة لنفس قائمة المرشحين، وليست بيانات منشأة تلقائيًا. غياب تاريخ المغادرة أو خطورة حادث معتمدة لا يمنع توصية AI، لكن ترتيب التنفيذ يظل بانتظار قواعد إضافية إذا غاب الاثنان. عرض هذه البيانات لا يستدعي AI.')}}
+        </p>
+      </section>
       <div *ngIf="planAiPhase!=='idle'" class="si-ai-analysis-panel" role="status" aria-live="polite">
         <span class="si-analysis-spinner" aria-hidden="true"></span>
         <div class="si-ai-analysis-text">
