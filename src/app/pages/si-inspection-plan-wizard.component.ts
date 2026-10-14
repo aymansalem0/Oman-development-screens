@@ -20,8 +20,8 @@ import {SiBulkJob,SiBulkPlanService,SiBulkPreview,SiBulkVessel,SiCapacityPreview
      <p class="eyebrow">MOEI · SMART INSPECTION · SI-01 → SI-02</p>
      <h1>{{copy('Review & Approve Rolling Plan','مراجعة واعتماد خطة المعاينات')}}</h1>
      <p *ngIf="preview?.planNumber"><strong>{{preview?.planNumber}}</strong></p>
-     <p>{{copy('One approval for all selected vessels. Every source reason is automatically captured.',
-       'اعتماد واحد للسفن المختارة، مع إدراج جميع أسباب إحالة كل سفينة تلقائيًا.')}}</p>
+     <p>{{copy('One approval verifies selected vessels, qualified inspector capacity, appointments and work orders.',
+       'اعتماد واحد للسفن المختارة والطاقة التشغيلية والمهندسين والمواعيد وأوامر التكليف.')}}</p>
     </div>
     <a class="back-link" routerLink="/moei/smart-inspection/candidates">
      {{copy('← Candidate & Targeting','← العودة إلى السفن المرشحة')}}
@@ -506,9 +506,9 @@ export class SiInspectionPlanWizardComponent implements OnInit,OnDestroy{
  get v2RosterError():string{
   const p=this.preview;
   if(!p)return '';
-  if(p.selectedVessels>500)return this.copy(
-    'A roster can contain up to 500 vessels. Divide the draft into independently approved plans.',
-    'يمكن اعتماد 500 سفينة بحد أقصى في القائمة الواحدة. قسّم المسودة إلى خطط مستقلة.');
+  if(p.selectedVessels>40)return this.copy(
+    'A capacity-verified plan supports up to 40 vessels per calculation. Create separate drafts for additional candidates.',
+    'تدعم الخطة 40 سفينة بحد أقصى لحساب الطاقة. أنشئ مسودات مستقلة للسفن الإضافية.');
   if(p.vessels.some(v=>!Number.isInteger(v.rank)||(v.rank??0)<1||
       (v.rank??0)>p.selectedVessels))
    return this.copy('A selected vessel has no valid plan rank. Reopen Candidate & Targeting and refresh.',
@@ -598,7 +598,7 @@ export class SiInspectionPlanWizardComponent implements OnInit,OnDestroy{
   });
  }
  previous():void{if(this.step>1&&this.step<5)this.step--;}
- next():void{if(this.canNext)this.step++;}
+ next():void{if(this.canNext){this.step++;if(this.step===3&&!this.capacity)this.calculateCapacity();}}
  approve():void{
   if(this.returnedFromScheduling)return;
   const p=this.preview,c=this.capacity;
