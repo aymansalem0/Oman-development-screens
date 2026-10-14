@@ -196,7 +196,7 @@ export function proposeMaritimeBatchSchedule({
  plan,erpSnapshot,policy,requests=[],nmcReferrals=[],existingBookings=[],
  scheduler,clock=()=>Date.now()
 }){
- if(plan?.status!=='APPROVED'||!Array.isArray(plan.approvedVessels))
+ if(!['APPROVED','IN_EXECUTION'].includes(plan?.status)||!Array.isArray(plan.approvedVessels))
   throw new SiError('SI_V2_APPROVED_PLAN_REQUIRED',409);
  const vessels=plan.approvedVessels;
  if(!vessels.length||vessels.length>MAX_BATCH||
