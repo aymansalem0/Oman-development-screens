@@ -126,7 +126,16 @@ export class SiMaritimeBatchSchedulingComponent implements OnInit{
     confirmRun:true,confirmCost:true
    }).subscribe({
     next:r=>{
-     this.aiBusy=false;this.aiAdvice=r;this.proposal=r.proposal;
+     this.aiBusy=false;
+     if(!this.baselineProposal||
+        r.proposalHash!==this.baselineProposal.proposalHash){
+       this.aiAdvice=null;
+       this.error=this.copy(
+        'The scheduling inputs changed while Airia was running. The old AI result was discarded; recalculate the feasible schedule.',
+        'تغيرت بيانات الجدولة أثناء عمل Airia. تم تجاهل النتيجة القديمة؛ أعد حساب بدائل الجدولة أولًا.');
+       return;
+     }
+     this.aiAdvice=r;this.proposal=r.proposal;
      this.notice=this.copy(
       'Airia SI-S01 ranked the valid schedule alternatives. This remains a draft for supervisor approval.',
       'رتّب Airia SI-S01 بدائل الجدولة الصالحة. النتيجة مقترح للمراجعة وليست جدولًا معتمدًا.');
