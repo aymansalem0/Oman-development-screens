@@ -174,7 +174,6 @@ export async function commitCapacityFirstPlan({rolling,plan,selection,capacity,
      inspector:order.assignment.inspectorId,
      startUtc:order.assignment.startUtc,endUtc:order.assignment.endUtc,
      port:order.assignment.portId,status:order.status,data:doc(order)});
-   }
    await con.execute(
     'INSERT INTO SI_SCHED_ORDER_AUDIT '+
     '(AUDIT_ID,SCHEDULE_ID,EVENT_CODE,ACTOR,DETAILS_JSON) '+
