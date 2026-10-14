@@ -82,8 +82,11 @@ test('Smart Inspection entry and ranking rules are separated; ETD precedes incid
   const si=read('src/app/pages/si-targeting-settings.component.ts');
   assert.match(centralRisk,/type="range"/);
   assert.match(centralRisk,/normalizeWeights\(\)/);
-  assert.match(si,/Inspection Entry Rules/);
-  assert.match(si,/Vessel Ranking Rules/);
+  assert.match(si,/AI Selection & Priority Rules/);
+  assert.match(si,/Protected Entry Rules/);
+  assert.match(si,/Official Execution Order/);
+  assert.match(si,/aiRules\.minimumSelectionConfidence/);
+  assert.match(si,/aiRules\.priorityInstructions/);
   assert.match(si,/Vessels approaching departure/);
   assert.match(si,/Vessels with maritime incidents/);
   assert.match(si,/criteria:\['DEPARTURE_SOON','INCIDENT_SEVERITY'\]/);

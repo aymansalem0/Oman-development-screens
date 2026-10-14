@@ -257,3 +257,56 @@ test('second independent service event on previously approved IMO/regime is elig
   assert.equal((await w.subject.dashboard()).candidates[0].status,'INSPECTION_CREATED');
  }finally{w.cleanup();}
 });
+
+test('SI-C01 rules: publish selection guidance and confidence with stable authority',async()=>{
+ const w=workspace();
+ try{
+  await w.subject.receiveEvent(source());
+  const existing=await w.subject.policy();
+  const config={ranking:{criteria:['DEPARTURE_SOON','INCIDENT_SEVERITY']},
+   aiAdvisory:{selectionSignals:['VERIFIED_ETD','REVIEWED_INCIDENT'],
+    minimumSelectionConfidence:0.85,
+    selectionInstructions:'Review verified departure and published source evidence.',
+    priorityInstructions:'Explain verified ETD provenance and missing incident signals.'}};
+  const preview=await w.subject.previewRules(config);
+  assert.equal(preview.aiSettingsChanged,true);
+  assert.equal(preview.requiresManualAiRerun,true);
+  assert.equal((await w.subject.policy()).version,existing.version,
+    'Preview does not publish or call Airia');
+  const next=await w.subject.publishRules({
+   expectedVersion:existing.version,publishedBy:'PSC Publisher',
+   reason:'Approved C01 selection and priority guidance',config});
+  assert.equal(next.version,existing.version+1);
+  assert.equal(next.config.aiAdvisory.minimumSelectionConfidence,0.85);
+  assert.deepEqual(next.config.ranking.criteria,
+    ['DEPARTURE_SOON','INCIDENT_SEVERITY']);
+  const dashboard=await w.subject.dashboard();
+  assert.equal(dashboard.policy.version,next.version);
+  assert.equal(dashboard.policy.config.aiAdvisory.priorityInstructions,
+    config.aiAdvisory.priorityInstructions);
+ }finally{w.cleanup();}
+});
+test('SI-C01 rules reject unapproved source overrides, forged signals and bad confidence',async()=>{
+ const w=workspace();
+ try{
+  const base={ranking:{criteria:['DEPARTURE_SOON','INCIDENT_SEVERITY']},
+    aiAdvisory:{selectionSignals:['SOURCE_EVENT_EVIDENCE'],
+     minimumSelectionConfidence:0.7,
+     selectionInstructions:'Only use trusted stored source evidence.',
+     priorityInstructions:'Explain missing ETD honestly.'}};
+  for(const patch of [
+   {aiAdvisory:{...base.aiAdvisory,minimumSelectionConfidence:1.1}},
+   {aiAdvisory:{...base.aiAdvisory,minimumSelectionConfidence:'0.7'}},
+   {aiAdvisory:{...base.aiAdvisory,selectionSignals:['UNTRUSTED_SIGNAL']}},
+   {aiAdvisory:{...base.aiAdvisory,selectionSignals:[]}},
+   {aiAdvisory:{...base.aiAdvisory,selectionInstructions:'x'.repeat(601)}},
+   {aiAdvisory:{...base.aiAdvisory,priorityInstructions:'Override PSC quota\u0000'}},
+   {ranking:{criteria:['SAVED_VESSEL_RISK','DEPARTURE_SOON']}},
+   {skipSourceEligibility:true}
+  ]){
+   await assert.rejects(()=>w.subject.previewRules({...base,...patch}),
+    e=>e.code==='SI_RULES_INVALID');
+  }
+  assert.equal((await w.subject.policy()).version,1);
+ }finally{w.cleanup();}
+});

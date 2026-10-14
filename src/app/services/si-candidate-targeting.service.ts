@@ -40,9 +40,17 @@ export interface SiPriorityPolicy{
   weights:SiPriorityWeights;approvedNmcFirst:true;missingRiskAction:'REVIEW_REQUIRED';
   sourceTriggerScores?:{NMC_CASE:number;SERVICE_REQUEST:number;PSC_PORT_CALL:number};
 }
+export type SiC01Signal='SOURCE_EVENT_EVIDENCE'|'VERIFIED_ETD'|'REVIEWED_INCIDENT'|'SAVED_VESSEL_RISK';
+export interface SiC01AdvisoryRules{
+ selectionSignals:SiC01Signal[];
+ minimumSelectionConfidence:number;
+ selectionInstructions:string;
+ priorityInstructions:string;
+}
 export interface SiTargetingPolicyConfig{
   /** Active execution priority (separate from source workflow eligibility). */
   ranking?:{criteria:('DEPARTURE_SOON'|'INCIDENT_SEVERITY')[]};
+  aiAdvisory?:SiC01AdvisoryRules;
   /** Legacy historical scoring only; no longer drives C01 selection/ranking. */
   sourceTriggerScores?:{NMC_CASE:number;SERVICE_REQUEST:number;PSC_PORT_CALL:number};
   /** Legacy archived policy shape (historical P01 views only). */
@@ -101,12 +109,15 @@ export interface SiC01Recommendation{
   confidence:number;reason:string;priorityRationale:string;suggestedRank:number|null;
   priorityRationaleSource?:'AGENT_OUTPUT'|'DETERMINISTIC_BUSINESS_RULE';
   evidenceRefs:string[];dataGaps:string[];
+  modelRecommendation?:'SELECT_RECOMMENDED'|'DEFER_RECOMMENDED'|'MANUAL_REVIEW';
+  selectionReviewGate?:'BELOW_PUBLISHED_CONFIDENCE'|null;
   requiresHumanReview:true;regulatoryDecision:false;
 }
 export interface SiC01Preview {
  status:'PREVIEW_ONLY_NO_AI';provider:'MOCK'|'AIRIA';
  snapshotHash:string;policyRevision:number;pscQuotaPolicyRevision:number|null;
  riskPolicyRevision:number;eligibleCount:number;externalCalls:0;
+ aiAdvisory?:SiC01AdvisoryRules;
  expectedBatches?:number;estimatedAiriaCalls?:number;
  candidates:{candidateKey:string;imo:string;regime:string;
     vesselName:string;sourceTypes:string[];allowedEvidence:string[];

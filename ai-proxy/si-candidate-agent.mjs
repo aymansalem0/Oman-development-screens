@@ -6,6 +6,7 @@
 import {createHash,randomUUID} from 'node:crypto';
 import {mockSiC01,SI_MOCK_MARKER} from './si-agent-mock.mjs';
 import {getSiRankingPolicy,inspectionRanking} from './si-inspection-ranking.mjs';
+import {getSiC01AdvisoryRules} from './si-candidate-targeting.mjs';
 
 const hash=x=>createHash('sha256').update(JSON.stringify(x)).digest('hex');
 const unique=a=>[...new Set(a.filter(x=>typeof x==='string'&&x.trim()))];
@@ -17,6 +18,7 @@ export function buildC01Source(dashboard,pscPolicy=null){
   if(!dashboard?.policy||!Array.isArray(dashboard.candidates))
     throw new SiCandidateAgentError('SI_C01_SOURCE_UNAVAILABLE',503);
   const ranking=getSiRankingPolicy(dashboard.policy.config);
+  const aiAdvisory=getSiC01AdvisoryRules(dashboard.policy.config);
   const vesselSignals=new Map((dashboard.vesselCandidates||[]).map(v=>[v.imo,v]));
   const candidates=dashboard.candidates
     .filter(c=>!c.inspectionCase&&(
@@ -92,7 +94,7 @@ export function buildC01Source(dashboard,pscPolicy=null){
           (e.sourceType==='NMC_CASE'&&e.approval==='APPROVED'))};
     }).sort((a,b)=>a.candidateKey.localeCompare(b.candidateKey));
   const source={schemaVersion:'SI-C01-v1',
-    ranking,
+    ranking,aiAdvisory,
     policyRevision:dashboard.policy.version,
     riskPolicyRevision:dashboard.riskPolicyRevision,
     pscQuotaPolicyRevision:pscPolicy?.version??null,
@@ -257,9 +259,17 @@ export function validateC01(raw,source){
       'Platform business-rule explanation ('+signal.criterion+'): '+
       signal.reason+'. The AI did not provide usable priority wording; '+
       'official execution order remains deterministic and officer-reviewed.';
+    // Configurable confidence rule only gates optional AI selection.
+    // It cannot delete source candidates or demote statutory NMC/service
+    // requirements. Preserve the original model suggestion for audit.
+    const threshold=source.aiAdvisory?.minimumSelectionConfidence??0;
+    const needsOfficerReview=r.recommendation==='SELECT_RECOMMENDED'&&
+      r.confidence<threshold;
     return {candidateKey:c.candidateKey,imo:c.imo,regime:c.regime,
-      recommendation:r.recommendation,confidence:r.confidence,
-      suggestedRank:r.suggestedRank,priorityRationale,
+      recommendation:needsOfficerReview?'MANUAL_REVIEW':r.recommendation,
+      modelRecommendation:r.recommendation,confidence:r.confidence,
+      selectionReviewGate:needsOfficerReview?'BELOW_PUBLISHED_CONFIDENCE':null,
+      suggestedRank:needsOfficerReview?null:r.suggestedRank,priorityRationale,
       priorityRationaleSource:hasAiRationale?'AGENT_OUTPUT':'DETERMINISTIC_BUSINESS_RULE',
       reason:r.reason.trim(),evidenceRefs:unique(r.evidenceRefs),
       dataGaps:unique([...r.dataGaps,...(c.missingData||[])]),requiresHumanReview:true,
@@ -285,7 +295,7 @@ export class SiCandidateAgent{
    snapshotHash:s.snapshotHash,policyRevision:s.policyRevision,
    pscQuotaPolicyRevision:s.pscQuotaPolicyRevision,
    riskPolicyRevision:s.riskPolicyRevision,eligibleCount:s.candidates.length,
-   expectedBatches:Math.ceil(s.candidates.length/100),
+   aiAdvisory:s.aiAdvisory,expectedBatches:Math.ceil(s.candidates.length/100),
    estimatedAiriaCalls:this.provider==='airia'?Math.ceil(s.candidates.length/100):0,
    candidates:s.candidates,externalCalls:0,
    latest:this.latest?{
@@ -328,6 +338,9 @@ export class SiCandidateAgent{
        language:'en',mode:'ADVISORY_ONLY'},
      snapshotHash:s.snapshotHash,policyRevision:s.policyRevision,
      ranking:s.ranking,
+     // Configurable source-backed guidance is only advisory; always
+     // subordinate to these immutable process/evidence/approval constraints.
+     aiAdvisory:s.aiAdvisory,
      analysisInstructions:{
        selectionIsAdvisory:true,
        officialExecutionOrder:'Verified future ETD ascending; then human-reviewed active incident severity descending; otherwise pending additional rules.',
@@ -335,7 +348,11 @@ export class SiCandidateAgent{
        citeOnlyAllowedEvidence:true,
        includeReasonAndPriorityRationale:true,
        doNotInventMissingSignals:true,
-       approvalAndSchedulingRequireOfficer:true
+       approvalAndSchedulingRequireOfficer:true,
+       doNotOverrideEligibilityOrPSCQuota:true,
+       configuredGuidanceIsNonRegulatory:true,
+       considerSelectedSignalsOnlyForAdvisoryInterpretation:true,
+       minimumConfidenceForAutomaticAdvice:s.aiAdvisory.minimumSelectionConfidence
      },
      officerPlanChanges,
      riskPolicyRevision:s.riskPolicyRevision,

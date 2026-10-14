@@ -500,3 +500,49 @@ test('C01 discards all batch output when one Airia batch violates evidence contr
  assert.equal(seen,2);
  assert.equal(a.latest,null,'No partial recommendation set may be persisted');
 });
+
+test('Published C01 rules reach Airia and low-confidence choices require manual review',async()=>{
+ const config={ranking:{criteria:['DEPARTURE_SOON','INCIDENT_SEVERITY']},
+  aiAdvisory:{selectionSignals:['SOURCE_EVENT_EVIDENCE','REVIEWED_INCIDENT'],
+   minimumSelectionConfidence:0.9,
+   selectionInstructions:'Explain verified inspection trigger evidence for officer review.',
+   priorityInstructions:'Cite current reviewed incident severity; disclose missing ETD.'}};
+ const dashboard={...inputs(),policy:{version:8,config}};
+ let received=null;
+ const agent=new SiCandidateAgent({targeting:{dashboard:async()=>dashboard},
+  pscPolicy:async()=>({version:3}),
+  provider:'airia',executeAgent:async body=>{
+   received=body;
+   return mockSiC01(body);
+  }});
+ const preview=await agent.preview();
+ assert.equal(preview.aiAdvisory.minimumSelectionConfidence,0.9);
+ assert.equal(preview.aiAdvisory.selectionInstructions,
+   config.aiAdvisory.selectionInstructions);
+ const result=await agent.run({actor:'MOEI Supervisor',confirmRun:true,confirmCost:true,
+  expectedSnapshotHash:preview.snapshotHash});
+ assert.deepEqual(received.aiAdvisory.selectionSignals,
+  ['SOURCE_EVENT_EVIDENCE','REVIEWED_INCIDENT']);
+ assert.equal(received.aiAdvisory.priorityInstructions,
+  config.aiAdvisory.priorityInstructions);
+ assert.equal(received.analysisInstructions.doNotOverrideEligibilityOrPSCQuota,true);
+ assert.equal(result.recommendations[0].modelRecommendation,'SELECT_RECOMMENDED');
+ assert.equal(result.recommendations[0].recommendation,'MANUAL_REVIEW');
+ assert.equal(result.recommendations[0].selectionReviewGate,'BELOW_PUBLISHED_CONFIDENCE');
+ assert.equal(result.recommendations[0].suggestedRank,null);
+ assert.equal(result.recommendations[0].confidence,0.8);
+ assert.equal(result.humanDecisionRequired,true);
+ assert.equal(result.mutations,false);
+});
+test('C01 guidance publication changes snapshot identity but never vessel eligibility',()=>{
+ const dashboard=inputs();
+ const base=buildC01Source(dashboard,{version:1});
+ const candidates=base.candidates.map(x=>x.candidateKey);
+ dashboard.policy.config={ranking:{criteria:['DEPARTURE_SOON','INCIDENT_SEVERITY']},
+  aiAdvisory:{selectionSignals:['VERIFIED_ETD'],minimumSelectionConfidence:0.95,
+   selectionInstructions:'Document evidence',priorityInstructions:'Cite ETD'}};
+ const changed=buildC01Source(dashboard,{version:1});
+ assert.notEqual(changed.snapshotHash,base.snapshotHash);
+ assert.deepEqual(changed.candidates.map(x=>x.candidateKey),candidates);
+ assert.deepEqual(changed.ranking,base.ranking);
+});

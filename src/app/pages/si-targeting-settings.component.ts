@@ -4,7 +4,7 @@ import {FormsModule} from '@angular/forms';
 import {RouterLink} from '@angular/router';
 import {NmcNavigationComponent} from '../components/nmc-navigation.component';
 import {LanguageService} from '../services/language.service';
-import {SiCandidateTargetingService,SiDashboard,SiImpact,SiTargetingPolicyConfig} from '../services/si-candidate-targeting.service';
+import {SiCandidateTargetingService,SiDashboard,SiImpact,SiTargetingPolicyConfig,SiC01AdvisoryRules,SiC01Signal} from '../services/si-candidate-targeting.service';
 
 /** Entry rules ≠ execution ranking. Operational rules, not NMC vessel risk. */
 @Component({
@@ -17,9 +17,9 @@ import {SiCandidateTargetingService,SiDashboard,SiImpact,SiTargetingPolicyConfig
    <header class="heading">
     <div>
      <small>{{copy('SETTINGS / SMART INSPECTION','الإعدادات / المعاينة الذكية')}}</small>
-     <h1>{{copy('Inspection Entry & Vessel Ranking','قواعد دخول المعاينة وترتيب السفن')}}</h1>
-     <p>{{copy('Two separate business decisions. Entry determines which requests are eligible; ranking orders eligible vessels by verified operational signals.',
-      'قراران مستقلان: قواعد الدخول تحدد السفن المؤهلة؛ وقواعد الترتيب ترتب السفن المؤهلة وفق بيانات تشغيلية موثقة.')}}</p>
+     <h1>{{copy('AI Selection & Priority Rules','إدارة قواعد اختيار السفن وأولويات AI')}}</h1>
+     <p>{{copy('Manage published SI-C01 selection signals and advisory instructions. Source eligibility and official execution priority remain protected business decisions.',
+      'إدارة إشارات الاختيار والتعليمات الاستشارية لوكيل SI-C01. تظل أهلية السفن وترتيب التنفيذ الرسمي محكومة بقواعد الأعمال المعتمدة.')}}</p>
     </div>
     <div class="actions">
      <a routerLink="/moei/smart-inspection/candidates">{{copy('Candidate Center','قائمة المرشحين')}}</a>
@@ -35,10 +35,12 @@ import {SiCandidateTargetingService,SiDashboard,SiImpact,SiTargetingPolicyConfig
     <article><small>{{copy('AVAILABLE VESSEL SOURCES','مصادر السفن')}}</small><strong>3</strong></article>
    </section>
    <nav class="policy-tabs" aria-label="Inspection rules">
+    <button type="button" [class.active]="tab==='AI_RULES'" (click)="tab='AI_RULES'">
+     {{copy('01 · AI Selection & Priority','٠١ · قواعد الاختيار والأولوية للذكاء الاصطناعي')}}</button>
     <button type="button" [class.active]="tab==='ENTRY'" (click)="tab='ENTRY'">
-     {{copy('01 · Inspection Entry Rules','٠١ · قواعد دخول المعاينة')}}</button>
+     {{copy('02 · Protected Entry Rules','٠٢ · قواعد الأهلية المحمية')}}</button>
     <button type="button" [class.active]="tab==='RANKING'" (click)="tab='RANKING'">
-     {{copy('02 · Vessel Ranking Rules','٠٢ · قواعد ترتيب السفن')}}</button>
+     {{copy('03 · Official Execution Order','٠٣ · ترتيب التنفيذ الرسمي')}}</button>
    </nav>
    <section class="panel" *ngIf="tab==='ENTRY'">
     <h2>{{copy('Inspection Eligibility & Candidate Entry','شروط دخول السفن إلى قائمة المعاينة')}}</h2>
@@ -61,8 +63,8 @@ import {SiCandidateTargetingService,SiDashboard,SiImpact,SiTargetingPolicyConfig
     <div class="rule">
      <div class="position">3</div><div>
       <strong>{{copy('PSC Port Call','سفينة PSC')}}</strong>
-      <small>{{copy('Only port calls selected under the separate PSC quota/targeting policy become candidates.',
-       'يُدرج فقط ما تم اختياره وفق سياسة PSC والحصص المستقلة.')}}</small></div>
+      <small>{{copy('Published PSC quotas are applied to saved Excel Port Calls automatically; each result is an advisory candidate, not an approved inspection.',
+       'تُطبّق حصص PSC المنشورة على أحداث Excel المحفوظة تلقائيًا، ويظل الترشيح للمراجعة وليس اعتمادًا للمعاينة.')}}</small></div>
      <a routerLink="/moei/smart-inspection/settings/psc-quotas" class="policy-link">{{copy('PSC settings','إعدادات PSC')}}</a>
     </div>
     <p class="helper">{{copy('Entry rules do not decide execution order. Final inspection plan approval remains with the authorised supervisor.',
@@ -87,11 +89,51 @@ import {SiCandidateTargetingService,SiDashboard,SiImpact,SiTargetingPolicyConfig
      <small>{{copy('Until defined, vessels with no verified ETD or incident data stay visible in stable IMO order with missing-data explanation. Never fabricate a date or severity.',
       'حتى اعتماد باقي المعايير، تظهر السفن بلا موعد مغادرة أو حادث معتمد بترتيب IMO ثابت مع توضيح البيانات الناقصة.')}}</small>
     </div></div>
-    <p class="helper">{{copy('This policy is versioned. Preview and publish do not run Airia; run C01 explicitly on a draft plan to apply new source data. Approved plans remain frozen.',
-     'السياسة مؤرشفة بالإصدارات. المعاينة والنشر لا يشغلان Airia؛ يتطلب التحديث إعادة تشغيل C01 على مسودة فقط، وتظل الخطط المعتمدة محفوظة.')}}</p>
-    <button class="primary" type="button" (click)="preview()" [disabled]="busy||loading||!dashboard">{{copy('Preview Priority Policy','معاينة سياسة الترتيب')}}</button>
+    <p class="helper">{{copy('The official execution order is currently fixed by approved business rules, independent of vessel risk or AI prompt changes. AI advisory guidance can be managed in the first tab.',
+     'ترتيب التنفيذ الرسمي ثابت حاليًا وفق قواعد الأعمال المعتمدة، ولا يتغير بدرجة مخاطر السفينة أو تعليمات AI. يمكن إدارة التوجيهات الاستشارية من التبويب الأول.')}}</p>
+
+   </section>
+   <section class="panel" *ngIf="tab==='AI_RULES'">
+    <h2>{{copy('SI-C01 · Selection & Priority Configuration','SI-C01 · إعدادات اختيار السفن وتفسير الأولوية')}}</h2>
+    <p>{{copy('These are versioned instructions actually sent to Airia. They govern AI advice; they cannot change legal eligibility, published PSC quotas, verified departure ordering or inspection approval.',
+      'هذه تعليمات مُؤرشفة تُرسل فعليًا إلى Airia. تتحكم في توصيات AI ولا تستطيع تعديل الأهلية التنظيمية أو حصص PSC أو ترتيب المغادرة المؤكد أو صلاحيات اعتماد المعاينات.')}}</p>
+    <div class="policy-rule-editor">
+     <h3>{{copy('A. Selection signals considered by AI','أ. إشارات الاختيار التي يراعيها AI')}}</h3>
+     <p>{{copy('Choose which trusted facts should guide AI recommendations. All available source evidence continues to be transmitted and validated.',
+       'حدد البيانات الموثقة التي توجه توصيات AI. سيظل النظام يرسل الأدلة المتاحة ويتحقق منها جميعًا.')}}</p>
+     <div class="signal-grid">
+      <label *ngFor="let item of signals" class="signal-switch">
+       <input type="checkbox" [checked]="aiRules.selectionSignals.includes(item.code)"
+          (change)="toggleSignal(item.code,$any($event.target).checked)"/>
+       <span><strong>{{copy(item.en,item.ar)}}</strong><small>{{copy(item.detailEn,item.detailAr)}}</small></span>
+      </label>
+     </div>
+     <label>{{copy('Minimum AI confidence for an inclusion recommendation (0–1)','الحد الأدنى لثقة AI لترشيح الإدراج (من صفر إلى ١)')}}
+      <input type="number" min="0" max="1" step="0.05"
+        [(ngModel)]="aiRules.minimumSelectionConfidence" (ngModelChange)="rulesChanged()"/>
+     </label>
+     <p class="rule-info">{{copy('Recommendations below the configured threshold become Manual Review. Mandatory NMC referrals and eligible service requests remain protected.',
+       'التوصيات الأقل من الحد تتحول إلى مراجعة بشرية. لا تُستبعد إحالات NMC الإلزامية أو طلبات الخدمات المؤهلة.')}}</p>
+     <label>{{copy('Additional selection instructions for AI · up to 600 characters','تعليمات إضافية لاختيار السفن · حتى ٦٠٠ حرف')}}
+      <textarea rows="4" maxlength="600" [(ngModel)]="aiRules.selectionInstructions"
+       (ngModelChange)="rulesChanged()" placeholder="e.g. Explain why source evidence supports inspection review"></textarea>
+     </label>
+     <h3>{{copy('B. Priority explanation instructions','ب. تعليمات شرح الأولوية')}}</h3>
+     <div class="rule-info">
+      <strong>{{copy('Official order (not editable here)','الترتيب الرسمي (لا يُعدل من هنا)')}}</strong>
+      <p>{{copy('1. Earliest verified future ETD. 2. Highest human-reviewed active incident severity. 3. Additional criteria pending ministry definition. Vessel risk does not assign execution priority.',
+       '١. أقرب موعد مغادرة مؤكد ETD. ٢. أعلى خطورة لحادث نشط تمت مراجعته بشريًا. ٣. باقي المعايير بانتظار تعريف الوزارة. مخاطر السفينة لا تحدد ترتيب التنفيذ.')}}</p>
+     </div>
+     <label>{{copy('Additional AI priority explanation instructions · up to 600 characters','تعليمات إضافية لشرح الأولوية عبر AI · حتى ٦٠٠ حرف')}}
+      <textarea rows="4" maxlength="600" [(ngModel)]="aiRules.priorityInstructions" (ngModelChange)="rulesChanged()"
+       placeholder="e.g. Reference ETD provenance and explicitly list missing data"></textarea>
+     </label>
+     <p class="rule-info">{{copy('Changes are saved only after authorised publication, increment the policy version, and are applied to future explicit SI-C01 runs. Draft previews do not call Airia or rewrite approved plans.',
+       'لا تُحفظ التعديلات إلا بعد النشر بصلاحية معتمدة، مع زيادة رقم الإصدار. وتطبق على تشغيل SI-C01 اللاحق صراحةً. المعاينة لا تشغل Airia ولا تعدل الخطط المعتمدة.')}}</p>
+    </div>
+        <button class="primary" type="button" (click)="preview()" [disabled]="busy||loading||!dashboard">{{copy('Preview AI Rule Changes','معاينة تعديل قواعد AI')}}</button>
     <section class="impact" *ngIf="impact as p">
-     <strong>{{copy('Policy preview — no AI calls','معاينة السياسة — بدون استدعاءات AI')}}</strong>
+     <strong>{{copy('Rule impact preview — no AI calls','معاينة تأثير القواعد — بدون استدعاءات AI')}}</strong>
      <p>{{p.evaluatedPopulation}} {{copy('tracked vessels','سفينة مسجلة')}} ·
         {{p.potentialRankingCandidates||0}} {{copy('candidates may require reranking','قد تحتاج إعادة ترتيب')}}</p>
      <small>{{copy('Unverified ETD and incident severity are not scored. Preview is not approval.',
@@ -101,9 +143,10 @@ import {SiCandidateTargetingService,SiDashboard,SiImpact,SiTargetingPolicyConfig
      <h3>{{copy('Controlled Publication','النشر المعتمد')}}</h3>
      <label>{{copy('Business justification (min. 8 characters)','مبرر إداري (٨ أحرف على الأقل)')}}
        <textarea [(ngModel)]="reason" rows="2" maxlength="500"></textarea></label>
-     <button class="primary" type="button" [disabled]="busy||!impact" (click)="publish()">
-       {{copy('Publish Ranking Policy Version','نشر إصدار سياسة الترتيب')}}</button>
+     <button class="primary" type="button" [disabled]="busy||!impact||!impact.aiSettingsChanged" (click)="publish()">
+       {{copy('Publish SI-C01 AI Rules Version','نشر إصدار قواعد SI-C01')}}</button>
     </div>
+
    </section>
   </main>
  </div>
@@ -122,7 +165,7 @@ import {SiCandidateTargetingService,SiDashboard,SiImpact,SiTargetingPolicyConfig
  .stats article,.panel{background:white;border:1px solid #d7e7ee;border-radius:13px;padding:22px;box-shadow:0 4px 15px #173b500b}
  .stats small{display:block;font-size:10px;color:#628092;font-weight:800}
  .stats strong{display:block;font-size:27px;margin-top:8px;color:#09697b}
- .policy-tabs{display:flex;gap:10px;margin:16px 0}
+ .policy-tabs{display:flex;gap:10px;margin:16px 0;flex-wrap:wrap}
  .policy-tabs button.active{background:#087c76;color:white;border-color:#087c76}
  .panel h2{font-size:18px;color:#14516c;margin:0 0 12px}
  .panel h3{font-size:15px;color:#16516b}
@@ -134,6 +177,15 @@ import {SiCandidateTargetingService,SiDashboard,SiImpact,SiTargetingPolicyConfig
  .policy-link{font-size:11px;color:#08777f;text-decoration:underline}
  .pending{background:#fafbfc}.pending .position{background:#f2f4f5;color:#8a969a}
  .helper{padding:13px 15px;background:#f2f8fa;border-radius:9px;margin:18px 0}
+ .policy-rule-editor{padding:12px 2px;border-top:1px solid #e2edf0}
+ .signal-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:15px 0}
+ .signal-switch{display:flex;align-items:flex-start;gap:10px;border:1px solid #d6e8eb;border-radius:9px;padding:12px;background:#f8fcfc;margin:0}
+ .signal-switch input{width:17px;height:17px;flex:none;margin-top:3px}
+ .signal-switch strong{font-size:12px;color:#14536a}
+ .signal-switch small{display:block;color:#698493;font-size:11px;font-weight:400;margin-top:5px}
+ .policy-rule-editor input[type=number]{display:block;width:110px;padding:10px;border:1px solid #cfdfe6;border-radius:8px;margin-top:7px}
+ .rule-info{border-radius:8px;border:1px solid #d8e8ed;background:#f2f9fa;padding:11px 13px}
+ @media(max-width:760px){.signal-grid{grid-template-columns:1fr}}
  .primary{background:#087d84;color:#fff;border:0;border-radius:8px;padding:12px 15px;font-weight:800;cursor:pointer;margin-top:12px}
  button:disabled{opacity:.5;cursor:not-allowed}
  .publication{border-top:1px solid #dfebee;margin-top:20px;padding-top:15px}
@@ -146,7 +198,28 @@ import {SiCandidateTargetingService,SiDashboard,SiImpact,SiTargetingPolicyConfig
  `]
 })
 export class SiTargetingSettingsComponent implements OnInit{
- tab:'ENTRY'|'RANKING'='ENTRY';
+ tab:'ENTRY'|'RANKING'|'AI_RULES'='AI_RULES';
+ readonly signals:{code:SiC01Signal;en:string;ar:string;detailEn:string;detailAr:string}[]=[
+  {code:'SOURCE_EVENT_EVIDENCE',en:'Verified source events & evidence',ar:'أحداث المصادر والأدلة الموثقة',
+   detailEn:'Source documents, referral IDs, stored PSC/service events',detailAr:'مستندات المصدر والإحالات وأحداث PSC والخدمات المحفوظة'},
+  {code:'VERIFIED_ETD',en:'Verified vessel departure (ETD)',ar:'موعد مغادرة السفينة المؤكد ETD',
+   detailEn:'Departure evidence; never substitute ETA',detailAr:'أدلة المغادرة دون الاستعاضة عنها بموعد الوصول'},
+  {code:'REVIEWED_INCIDENT',en:'Human-reviewed incident severity',ar:'خطورة الحادث المعتمدة بشريًا',
+   detailEn:'Active NMC incident-specific assessment',detailAr:'تقييم خاص بحادث نشط من NMC'},
+  {code:'SAVED_VESSEL_RISK',en:'Saved vessel risk (advisory only)',ar:'مخاطر السفينة المحفوظة (استرشادي)',
+   detailEn:'Use for selection context, never official execution order',detailAr:'سياق اختيار فقط، وليس ترتيب التنفيذ الرسمي'}
+ ];
+ aiRules:SiC01AdvisoryRules={
+  selectionSignals:['SOURCE_EVENT_EVIDENCE','VERIFIED_ETD','REVIEWED_INCIDENT','SAVED_VESSEL_RISK'],
+  minimumSelectionConfidence:0,selectionInstructions:'',priorityInstructions:''
+ };
+ toggleSignal(code:SiC01Signal,checked:boolean):void{
+  const next=new Set(this.aiRules.selectionSignals);
+  if(checked)next.add(code);else next.delete(code);
+  this.aiRules.selectionSignals=[...next];this.rulesChanged();
+ }
+ rulesChanged():void{this.impact=null;this.success='';}
+
  dashboard:SiDashboard|null=null;impact:SiImpact|null=null;
  loading=false;busy=false;error='';success='';
  reviewer='admin';reason='';editorKey='MOEI_SESSION';publisherKey='MOEI_SESSION';
@@ -156,7 +229,19 @@ export class SiTargetingSettingsComponent implements OnInit{
  refresh():void{
   this.loading=true;this.error='';this.impact=null;
   this.api.dashboard().subscribe({
-    next:d=>{this.dashboard=d;this.loading=false;},
+    next:d=>{
+      this.dashboard=d;this.loading=false;
+      const saved=d.policy.config.aiAdvisory;
+      this.aiRules=saved?{
+        selectionSignals:[...saved.selectionSignals],
+        minimumSelectionConfidence:saved.minimumSelectionConfidence,
+        selectionInstructions:saved.selectionInstructions,
+        priorityInstructions:saved.priorityInstructions
+      }:{
+        selectionSignals:['SOURCE_EVENT_EVIDENCE','VERIFIED_ETD','REVIEWED_INCIDENT','SAVED_VESSEL_RISK'],
+        minimumSelectionConfidence:0,selectionInstructions:'',priorityInstructions:''
+      };
+    },
     error:e=>{this.showError(e);this.loading=false;}
   });
  }
@@ -165,28 +250,47 @@ export class SiTargetingSettingsComponent implements OnInit{
   this.error=value?.error?.error||this.copy('Unable to load/save policy','تعذر تحميل أو حفظ السياسة');
   this.busy=false;this.success='';
  }
+ private validAiRules():boolean{
+  const confidence=this.aiRules.minimumSelectionConfidence;
+  if(!this.aiRules.selectionSignals.length||typeof confidence!=='number'||
+    !Number.isFinite(confidence)||confidence<0||confidence>1||
+    this.aiRules.selectionInstructions.length>600||
+    this.aiRules.priorityInstructions.length>600){
+    this.error=this.copy('Choose at least one signal, set confidence from 0 to 1, and keep each instruction within 600 characters.',
+      'اختر إشارة واحدة على الأقل، واضبط الثقة بين صفر و١، ولا تتجاوز ٦٠٠ حرف في كل تعليمات.');return false;
+  }
+  return true;
+ }
  private rankingConfig():SiTargetingPolicyConfig{
-  return {ranking:{criteria:['DEPARTURE_SOON','INCIDENT_SEVERITY']}};
+  return {ranking:{criteria:['DEPARTURE_SOON','INCIDENT_SEVERITY']},
+    aiAdvisory:{
+      selectionSignals:[...this.aiRules.selectionSignals],
+      minimumSelectionConfidence:this.aiRules.minimumSelectionConfidence,
+      selectionInstructions:this.aiRules.selectionInstructions,
+      priorityInstructions:this.aiRules.priorityInstructions
+    }};
  }
  preview():void{
   if(!this.dashboard||this.busy)return;
+  if(!this.validAiRules())return;
   this.busy=true;this.error='';this.success='';this.impact=null;
   this.api.preview(this.rankingConfig(),this.editorKey).subscribe({
    next:p=>{this.impact=p;this.busy=false;},error:e=>this.showError(e)
   });
  }
  publish():void{
-  if(!this.dashboard||!this.impact||this.busy)return;
+  if(!this.dashboard||!this.impact||!this.impact.aiSettingsChanged||this.busy)return;
+  if(!this.validAiRules())return;
   if(this.reason.trim().length<8){
    this.error=this.copy('Provide an 8-character business justification','أدخل مبررًا إداريًا لا يقل عن ٨ أحرف');return;
   }
-  if(!window.confirm(this.copy('Publish this separate ranking policy? Existing approved plans will not change.',
-   'نشر سياسة الترتيب المستقلة؟ لن تتغير الخطط المعتمدة السابقة.')))return;
+  if(!window.confirm(this.copy('Publish SI-C01 advisory rules? This changes future AI prompts, but cannot change completed or approved plans.',
+   'نشر قواعد SI-C01 الاستشارية؟ ستؤثر على تعليمات AI المستقبلية ولن تغير الخطط المكتملة أو المعتمدة.')))return;
   this.busy=true;this.error='';
   this.api.publish({config:this.rankingConfig(),expectedVersion:this.dashboard.policy.version,
     publishedBy:this.reviewer,reason:this.reason.trim()},this.publisherKey).subscribe({
    next:()=>{this.busy=false;this.reason='';this.refresh();this.success=
-     this.copy('Ranking policy version published','تم نشر إصدار سياسة الترتيب');},
+     this.copy('Published new SI-C01 advisory rules version','تم نشر إصدار جديد لقواعد SI-C01 الاستشارية');},
    error:e=>this.showError(e)
   });
  }
