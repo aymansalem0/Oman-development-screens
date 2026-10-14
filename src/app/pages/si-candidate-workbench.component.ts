@@ -235,8 +235,10 @@ export class SiCandidateWorkbenchComponent implements OnInit{
       },
       error:e=>{
         this.planBusy=false;
-        this.planError=(e as {error?:{error?:string}})?.error?.error||
-          'SI_PLAN_RECALCULATION_FAILED';
+        const failure=(e as {error?:{error?:string;reasonCode?:string}})?.error;
+        const code=failure?.error||'SI_PLAN_RECALCULATION_FAILED';
+        const reason=failure?.reasonCode;
+        this.planError=code+(reason&&/^[A-Z0-9_]+$/.test(reason)?' — '+reason:'');
         if(this.planError.includes('CHANGED'))this.loadInspectionPlan();
       }
     });
