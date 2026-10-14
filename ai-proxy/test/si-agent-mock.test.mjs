@@ -284,7 +284,7 @@ test('C01 diagnoses the exact invalid provider field without accepting it',()=>{
   const response=structuredClone(valid);
   response.recommendations[0]=item;
   assert.throws(()=>validateC01({result:JSON.stringify(response)},source),
-   e=>e.code==='SI_C01_UNVERIFIED_RECOMMENDATION');
+   e=>e.code==='SI_C01_UNVERIFIED_RECOMMENDATION'&&e.diagnosticCode===expected);
  }
  assert.equal(c01RecommendationContractFailure(first,candidate),null);
 });
