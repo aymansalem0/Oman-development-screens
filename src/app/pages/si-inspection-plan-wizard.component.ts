@@ -50,6 +50,27 @@ import {SiBulkJob,SiBulkPlanService,SiBulkPreview,SiBulkVessel} from '../service
      {{copy('Candidate selection is missing or source data has changed. Return to Candidate Center and review the current plan. AI is optional.',
      'لا توجد سفن مختارة أو تغير مصدر البيانات. عد إلى قائمة المرشحين وراجع الخطة الحالية. تشغيل AI اختياري.')}}
     </p>
+    <section class="panel si-plan-weights" *ngIf="step===1&&!returnedFromScheduling">
+     <div class="panel-head"><div>
+      <p class="eyebrow">{{copy('DRAFT PLANNING WEIGHTS','أوزان التخطيط المبدئية')}}</p>
+      <h2>{{copy('Candidate Source & Risk Factor Weights','أوزان مصادر الترشيح وعامل المخاطر')}}</h2>
+     </div></div>
+     <div class="si-weight-grid">
+      <label *ngFor="let w of planningWeights" class="si-weight-control">
+       <span><strong>{{copy(w.en,w.ar)}}</strong><output>{{w.value}}%</output></span>
+       <input type="range" min="0" max="100" step="5"
+        [ngModel]="w.value" (ngModelChange)="changePlanningWeight(w.key,$event)"
+        [attr.aria-label]="copy(w.en,w.ar)"/>
+      </label>
+     </div>
+     <p class="si-weight-total" [class.invalid]="planningWeightTotal!==100">
+      {{copy('Total','الإجمالي')}}: <strong>{{planningWeightTotal}}%</strong>
+      · {{planningWeightTotal===100?copy('Valid draft','مسودة متوازنة'):
+       copy('Must equal 100%','يجب أن يساوي 100%')}}
+     </p>
+     <p class="hint">{{copy('Draft UI only: these weights do not yet drive the AI optimizer, persist to the plan or alter NMC risk scores. Mandatory referrals remain protected.',
+      'واجهة تفضيلات مبدئية فقط: لم تُربط الأوزان بعد بمحرك AI أو بحفظ الخطة، ولا تغير تقييم مخاطر NMC. المعاينات الإلزامية محفوظة.')}}</p>
+    </section>
     <section class="panel" *ngIf="step===1">
      <div class="panel-head">
       <div><p class="eyebrow">{{copy('STEP 01 · INSPECTION PLAN','الخطوة ١ · خطة المعاينات')}}</p>
@@ -262,6 +283,15 @@ import {SiBulkJob,SiBulkPlanService,SiBulkPreview,SiBulkVessel} from '../service
  .plan-focus-reason{border-top:1px solid #c6e1e8;padding:10px 0}
  .plan-focus-reason small{color:#63869a}
  tr.plan-focused-row{background:#e7f9ef;outline:2px solid #8fcfb0;outline-offset:-2px}
+ .si-plan-weights{border-color:#b6d8e0}
+ .si-weight-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+ .si-weight-control{display:block;background:#f7fbfd;border:1px solid #d8e7ed;border-radius:9px;padding:12px}
+ .si-weight-control span{display:flex;justify-content:space-between;gap:8px;font-size:12px;color:#245269}
+ .si-weight-control output{font-weight:850;color:#087d8b}
+ .si-weight-control input{display:block;width:100%;accent-color:#078597;margin-top:12px}
+ .si-weight-total{font-weight:800;font-size:12px;color:#14785b;margin:12px 0}
+ .si-weight-total.invalid{color:#a55429}
+ @media(max-width:650px){.si-weight-grid{grid-template-columns:1fr}}
  .panel{background:#fff;border:1px solid #dae8eb;box-shadow:0 6px 18px #06364d0b;border-radius:14px;padding:25px;margin-bottom:17px}
  .panel-head{display:flex;justify-content:space-between;align-items:center;gap:17px;margin-bottom:16px}
  .panel-head p{margin:0}.count,.reason-count{display:inline-flex;background:#e5f6ed;color:#08735b;padding:7px 12px;border-radius:20px;font-size:11px;font-weight:800;white-space:nowrap}
@@ -317,6 +347,17 @@ export class SiInspectionPlanWizardComponent implements OnInit,OnDestroy{
  readonly stages=[{en:'Selected Vessels',ar:'السفن المختارة'},
   {en:'All Referral Reasons',ar:'أسباب المعاينة'},{en:'Electronic Scheduling',ar:'الجدولة الإلكترونية'},
   {en:'Review & Approval',ar:'المراجعة والاعتماد'}];
+ readonly planningWeights=[
+  {key:'nmc',en:'NMC referrals',ar:'إحالات المركز البحري',value:30},
+  {key:'psc',en:'PSC port calls',ar:'نداءات الموانئ PSC',value:25},
+  {key:'service',en:'Maritime service requests',ar:'طلبات الخدمات البحرية',value:20},
+  {key:'risk',en:'Saved NMC risk factor',ar:'عامل مخاطر NMC المحفوظ',value:25}
+ ];
+ get planningWeightTotal():number{return this.planningWeights.reduce((n,w)=>n+w.value,0);}
+ changePlanningWeight(key:string,value:number):void{
+  const w=this.planningWeights.find(x=>x.key===key);const v=Number(value);
+  if(w&&Number.isFinite(v))w.value=Math.max(0,Math.min(100,Math.round(v)));
+ }
  step=1;preview:SiBulkPreview|null=null;planId:string|null=null;
  focusedImo='';returnedFromScheduling=false;
  get focusedVessel():SiBulkVessel|null{
