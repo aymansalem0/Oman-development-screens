@@ -20,7 +20,7 @@ const regime=x=>({
  UAE_SERVICE_INSPECTION:'SERVICE',FOLLOW_UP_INSPECTION:'FOLLOW_UP'
 }[x]||'FOCUSED');
 export function maritimePlanSchedulingContext(plan,dashboard,snapshot){
- if(plan.status!=='APPROVED'||!Array.isArray(plan.approvedVessels))
+ if(!['APPROVED','IN_EXECUTION'].includes(plan.status)||!Array.isArray(plan.approvedVessels))
   throw new SiError('SI_V2_APPROVED_PLAN_REQUIRED',409);
  const ports=snapshot.data.Ports;
  const findPort=x=>ports.find(p=>p.port_id===x||p.port_name?.toUpperCase()===String(x||'').toUpperCase());
