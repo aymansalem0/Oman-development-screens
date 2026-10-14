@@ -26,12 +26,16 @@ interface Context{
 interface ScheduleRow{
  imo:string;status:'PROPOSED'|'UNSCHEDULED';blocker:string|null;
  assignment:{inspectorName:string;inspectorId:string;startLocal:string;
- endLocal:string;portName:string;locationName:string;score:number}|null;
+ endLocal:string;portName:string;locationName:string;score:number;
+ crossPort?:boolean;originPortId?:string;originPortName?:string;
+ travelMinutes?:number;manualReasons?:string[]}|null;
 }
 interface BoardAssignment{
  imo:string;planRank:number;inspectorId:string;inspectorName:string;
  dateLocal:string;startLocal:string;endLocal:string;
  portId:string;portName:string;locationType:string;locationName:string;score:number;
+ crossPort?:boolean;originPortId?:string;originPortName?:string;
+ travelMinutes?:number;manualReasons?:string[];
 }
 interface ScheduleBoard{
  status:'UNAPPROVED_PREVIEW_ONLY';approvalRequired:true;
@@ -42,7 +46,9 @@ interface ScheduleBoard{
  unscheduled:{imo:string;planRank:number;blocker:string}[];
 }
 interface Variant{optionId:string;allocatedVessels:number;objectiveScore:number;
- assignments:{imo:string;inspectorId:string;portId:string;startUtc:string;endUtc:string}[];
+ assignments:{imo:string;inspectorId:string;portId:string;startUtc:string;endUtc:string;
+ crossPort?:boolean;originPortId?:string;originPortName?:string;
+ travelMinutes?:number;manualReasons?:string[]}[];
  rows:ScheduleRow[];board:ScheduleBoard;}
 interface Proposal{planRevision:number;summary:{total:number;proposed:number;unscheduled:number;
  caseWrites:number;bookingWrites:number};rows:ScheduleRow[];status:string;
@@ -57,7 +63,9 @@ interface WorkOrder{
  id:string;imo:string;status:string;caseId:string|null;checklistStatus:string;
  aiStatus:string;scopeStatus:string;error:string|null;pocDelegated?:boolean;
  assignment:{inspectorId:string;inspectorName:string;portName:string;portId:string;
- startLocal:string;startUtc:string;endUtc:string};
+ startLocal:string;startUtc:string;endUtc:string;crossPort?:boolean;
+ originPortId?:string;originPortName?:string;travelMinutes?:number;
+ manualReasons?:string[]};
 }
 interface ApprovedSchedule{
  id:string;planId:string;mode:'POC_MOCK'|'ERP_EXCEL_POC';status:string;
@@ -153,6 +161,18 @@ export class SiMaritimeBatchSchedulingComponent implements OnInit{
    this.copy('Reviewed feasible vessel visits and POC engineer assignments.',
     'تمت مراجعة الجدولة الممكنة وتوزيع المهندسين لأوامر التكليف التجريبية.'));
   if(!reason||reason.trim().length<8)return;
+  const selected=this.baselineProposal.variants?.find(v=>
+   v.optionId===this.preferredOptionId);
+  if(!selected)return;
+  const crossPort=selected.assignments.filter(a=>a.crossPort===true);
+  // Extra explicit sign-off for all cross-port assignments. Never imply
+  // synthetic travel or mock inspector availability is an ERP booking.
+  if(crossPort.length&&!window.confirm(this.copy(
+   crossPort.length+' cross-port inspector assignment(s) are proposed. '+
+    'These qualified engineers travel from another port with POC travel times. '+
+    'Do you explicitly approve the cross-port reassignments?',
+   'توجد '+crossPort.length+' معاينة مقترحة لمهندسين من موانئ أخرى، '+
+    'مع زمن انتقال تجريبي. هل تعتمد الإسناد بين الموانئ صراحةً؟')))return;
   const confirmed=window.confirm(this.copy(
    'Approve '+this.proposal.summary.total+
     ' assignments and issue work orders? No live ERP booking or regulatory decision is created.',
@@ -166,7 +186,8 @@ export class SiMaritimeBatchSchedulingComponent implements OnInit{
     selectedOptionId:this.preferredOptionId,
     expectedProposalHash:this.baselineProposal.proposalHash,
     expectedPlanRevision:this.baselineProposal.planRevision,
-    reason:reason.trim(),confirmApproval:true
+    reason:reason.trim(),confirmApproval:true,
+    confirmCrossPort:crossPort.length>0
    }).subscribe({
     next:r=>{this.scheduleBusy=false;this.approvedSchedule=r.schedule;
      this.notice=this.copy('Schedule and inspector work orders saved. No live ERP booking. Activate orders to prepare checklists.',
