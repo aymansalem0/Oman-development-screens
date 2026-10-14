@@ -177,7 +177,13 @@
        </small></td>
       <td>{{r.assignment?.startLocal||'—'}}<br>{{r.assignment?.endLocal||''}}</td>
       <td>{{r.assignment?.locationName||'—'}}</td>
-      <td>{{r.blocker||((r.assignment?.score??0)+'/100')}}</td>
+      <td><ng-container *ngIf="r.status==='UNSCHEDULED';else score">
+       <strong class="unscheduled">{{diagnosticsLabel(r.diagnostics)}}</strong>
+       <small class="si-diagnostic-code">{{r.diagnostics?.code||r.blocker}}</small>
+       <button type="button" class="si-details-toggle" (click)="inspectUnscheduled(r.imo)">
+        {{copy('View reasons in plan','عرض أسباب التعذر في الخطة')}}
+       </button>
+      </ng-container><ng-template #score>{{(r.assignment?.score??0)+'/100'}}</ng-template></td>
      </tr></tbody></table></div>
     <ng-container *ngIf="p.board as board">
       <div *ngIf="boardView==='ENGINEERS'" class="marine-board-grid">
@@ -223,9 +229,82 @@
         <h3>{{copy('Unscheduled vessels requiring coordinator action',
           'سفن غير مجدولة وتحتاج تدخل منسق المعاينات')}}</h3>
         <div *ngFor="let missing of board.unscheduled">
-          <strong>IMO {{missing.imo}}</strong><span>{{missing.blocker}}</span>
+          <strong>IMO {{missing.imo}}</strong><span>{{diagnosticsLabel(missing.diagnostics)}}</span>
+          <button type="button" class="si-details-toggle" (click)="inspectUnscheduled(missing.imo)">
+           {{copy('Details','التفاصيل')}}
+          </button>
         </div>
       </div>
+      <section class="si-unscheduled-details" id="si-unscheduled-details"
+               *ngIf="selectedUnscheduled as failure" aria-live="polite">
+       <div class="marine-title-line">
+        <h3>{{copy('Unscheduled inspection · plan details','معاينة غير مجدولة · تفاصيل الخطة')}} · IMO {{failure.imo}}</h3>
+        <button type="button" class="si-details-toggle" (click)="inspectUnscheduled(failure.imo)">
+         {{copy('Close','إغلاق')}}
+        </button>
+       </div>
+       <p class="si-diagnostic-summary">{{diagnosticsLabel(failure.diagnostics)}}</p>
+       <p *ngIf="visitDetails(failure.imo) as vessel">
+        <strong>{{vessel.name}}</strong> · {{vessel.portName||vessel.portId||'—'}} ·
+        {{copy('Inspection scope','نطاق المعاينة')}}: {{vessel.regimes.join(' · ')}}
+       </p>
+       <ng-container *ngIf="failure.diagnostics as d">
+        <div class="si-diagnostic-metrics">
+         <div><small>{{copy('Plan reason code','رمز سبب عدم الجدولة')}}</small><strong>{{d.code}}</strong></div>
+         <div><small>{{copy('Eligible candidate slots reviewed','المواعيد المرشحة التي فحصها المحرك')}}</small><strong>{{d.candidateOptions}}</strong></div>
+         <div><small>{{copy('Candidate inspectors','المهندسون المرشحون')}}</small><strong>{{d.candidateInspectors}}</strong></div>
+         <div><small>{{copy('Conflicts with selected inspections','تعارضات مع معاينات أخرى')}}</small><strong>{{d.timeOrTravelConflicts}}</strong></div>
+         <div><small>{{copy('Daily capacity conflicts','تعارضات الطاقة اليومية')}}</small><strong>{{d.dailyCapacityConflicts}}</strong></div>
+         <div><small>{{copy('Unused insertable slots','مواعيد ما زالت قابلة للإضافة')}}</small><strong>{{d.optionsStillInsertable}}</strong></div>
+        </div>
+        <p class="marine-note">{{copy('Requested visit window','الفترة المطلوبة للمعاينة')}}:
+         {{d.earliestLocal||'—'}} → {{d.deadlineLocal||'—'}} ·
+         {{copy('Duration','المدة')}}: {{d.durationMinutes||'—'}} {{copy('minutes','دقيقة')}}
+        </p>
+        <div *ngIf="d.competingVisits.length">
+         <h4>{{copy('Assignments competing for the same engineer / time / travel','معاينات تتعارض مع المهندس أو الموعد أو وقت الانتقال')}}</h4>
+         <div class="marine-scroll"><table class="si-diagnostic-table">
+          <thead><tr><th>IMO</th><th>{{copy('Engineer','المهندس')}}</th>
+           <th>{{copy('Port','الميناء')}}</th><th>{{copy('Time','الميعاد')}}</th></tr></thead>
+          <tbody><tr *ngFor="let visit of d.competingVisits">
+           <td>{{visit.imo}}</td><td>{{visit.inspectorName||visit.inspectorId}}</td>
+           <td>{{visit.portId}}</td><td>{{visit.startLocal}} → {{visit.endLocal}}</td>
+          </tr></tbody>
+         </table></div>
+        </div>
+        <div *ngIf="d.inspectorExclusions.length">
+         <h4>{{copy('Excluded ERP engineers (first 20)','المهندسون المستبعدون من ERP (أول 20)')}}</h4>
+         <ul class="si-diagnostic-exclusions">
+          <li *ngFor="let excluded of d.inspectorExclusions">
+           <b>{{excluded.inspectorId}}</b>:
+           <span *ngFor="let code of excluded.reasonCodes;let last=last">
+            {{exclusionLabel(code)}}<span *ngIf="!last"> · </span>
+           </span>
+          </li>
+         </ul>
+        </div>
+        <p *ngIf="d.category==='OPTIMIZER_SEARCH_LIMIT'" class="si-diagnostic-warning">
+         {{copy('The bounded solver left an insertable slot in the selected plan. This does not demonstrate a real capacity shortage. Recalculate or review alternatives.',
+          'ترك محرك البحث المحدود موعدًا قابلًا للإضافة بالخطة المختارة. هذا لا يثبت وجود عجز فعلي؛ أعد الحساب أو راجع البدائل.')}}
+        </p>
+        <p *ngIf="d.category==='PLAN_RESOURCE_CONTENTION'" class="si-diagnostic-warning">
+         {{copy('Review alternative visit times within the source-final vessel window, qualified inspectors and cross-port travel. Not all possible schedules have been exhaustively checked.',
+          'راجع مواعيد المعاينة البديلة ضمن فترة السفينة النهائية وأهلية المهندسين والانتقال بين الموانئ. لم يتم فحص جميع توزيعات الجدولة الممكنة بصورة شاملة.')}}
+        </p>
+       </ng-container>
+       <div class="si-diagnostic-actions">
+        <a [routerLink]="['/moei/smart-inspection/plan/create',ctx.planId]"
+          [queryParams]="{imo:failure.imo,origin:'scheduling'}">
+         {{copy('Open this vessel in the approved inspection plan','فتح تفاصيل السفينة في خطة المعاينات المعتمدة')}}
+        </a>
+        <button type="button" (click)="preview()" [disabled]="busy||aiBusy">
+         {{copy('Recalculate schedule','إعادة حساب الجدولة')}}
+        </button>
+       </div>
+       <p class="marine-note">{{copy(
+        'Read-only scheduling diagnostic; neither the approved roster, source records nor ERP bookings were changed.',
+        'تفاصيل تشخيصية للجدولة فقط؛ لم تتغير قائمة السفن المعتمدة أو بيانات المصادر أو حجوزات ERP.')}}</p>
+      </section>
       <p class="marine-preview-warning">
         {{copy('This is a read-only proposal, NOT an approved schedule. No engineer booking, inspection dossier or NMC state change has occurred.',
           'هذه جدولة مقترحة للعرض فقط وليست معتمدة. لم يتم حجز أي مهندس أو إنشاء ملف معاينة أو تغيير حالة في NMC.')}}
