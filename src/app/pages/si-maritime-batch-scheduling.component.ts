@@ -122,7 +122,8 @@ export class SiMaritimeBatchSchedulingComponent implements OnInit{
    });
  }
  approveSchedule():void{
-  if(!this.canApproveSchedule||!this.context||!this.baselineProposal)return;
+  const proposal=this.proposal;
+  if(!this.canApproveSchedule||!this.context||!this.baselineProposal||!proposal)return;
   if(!window.confirm(this.copy(
    'Approve the entire inspected ERP schedule and issue engineer work orders? This is a supervisory decision; it cannot be based on POC synthetic availability.',
    'تأكيد اعتماد الجدولة الكاملة وإصدار أوامر التكليف للمهندسين؟ هذا قرار مسؤول ولا يجوز اعتماده بناءً على إتاحة تجريبية افتراضية.')))return;
@@ -131,8 +132,8 @@ export class SiMaritimeBatchSchedulingComponent implements OnInit{
    this.api+encodeURIComponent(this.context.planId)+'/approval',{
     requests:this.requests(),demoMode:this.demoMode,
     expectedProposalHash:this.baselineProposal.proposalHash,
-    expectedPlanRevision:this.proposal.planRevision,
-    selectedOptionId:this.proposal.chosenOptionId||
+    expectedPlanRevision:proposal.planRevision,
+    selectedOptionId:proposal.chosenOptionId||
       this.baselineProposal.variants?.[0]?.optionId||null,
     reason:this.scheduleReason.trim(),confirmApproval:true
    }).subscribe({
