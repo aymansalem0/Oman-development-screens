@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {buildC01Source,validateC01,unwrapC01AiriaResult,c01RecommendationContractFailure,SiCandidateAgent,summarizeC01Readiness,reconcileC01} from '../si-candidate-agent.mjs';
+import {buildC01Source,validateC01,unwrapC01AiriaResult,c01RecommendationContractFailure,SiCandidateAgent,summarizeC01Readiness,reconcileC01,normalizeC01TransportFields} from '../si-candidate-agent.mjs';
 import {mockSiC01,mockSiP01,mockSiA04} from '../si-agent-mock.mjs';
 import {validateP01} from '../si-ai-prioritization.mjs';
 import {validateA04} from '../si-inspection-preparation.mjs';
@@ -579,4 +579,74 @@ test('C01 guidance publication changes snapshot identity but never vessel eligib
  assert.notEqual(changed.snapshotHash,base.snapshotHash);
  assert.deepEqual(changed.candidates.map(x=>x.candidateKey),candidates);
  assert.deepEqual(changed.ranking,base.ranking);
+});
+
+test('C01 reports exact safe rejection summary when all candidates fail',()=>{
+ const source=buildC01Source(inputs(),{version:6});
+ const response=mockSiC01(source);
+ response.recommendations[0].evidenceRefs=['UNTRUSTED-AIRIA-REF'];
+ response.recommendations[1].evidenceRefs=['UNTRUSTED-AIRIA-REF-2'];
+ const msgs=[],old=console.warn;
+ console.warn=(...args)=>msgs.push(args.join(' '));
+ try{
+  assert.throws(()=>reconcileC01(response,source),err=>{
+   assert.equal(err.code,'SI_C01_NO_VERIFIED_RECOMMENDATIONS');
+   assert.equal(err.diagnosticCode,'EVIDENCE_REF_NOT_IN_SOURCE');
+   assert.deepEqual(err.failureCounts,{EVIDENCE_REF_NOT_IN_SOURCE:2});
+   assert.equal(err.expectedCount,2);
+   assert.equal(err.returnedCount,2);
+   return true;
+  });
+ }finally{console.warn=old;}
+ assert.equal(msgs.length,1);
+ assert.match(msgs[0],/failureCounts=\{"EVIDENCE_REF_NOT_IN_SOURCE":2\}/);
+ assert.doesNotMatch(msgs[0],/UNTRUSTED-AIRIA-REF|9328471|9400409/);
+});
+test('C01 distinguishes unknown IDs and candidates missing from returned array',()=>{
+ const source=buildC01Source(inputs(),{version:6});
+ const r=mockSiC01(source).recommendations[0];
+ r.candidateKey='NOT-AN-INPUT-KEY';
+ const warning=console.warn;console.warn=()=>{};
+ try{
+  assert.throws(()=>reconcileC01({recommendations:[r]},source),e=>{
+   assert.equal(e.code,'SI_C01_NO_VERIFIED_RECOMMENDATIONS');
+   assert.equal(e.failureCounts.CANDIDATE_KEY_NOT_IN_REQUEST,1);
+   assert.equal(e.failureCounts.CANDIDATES_WITHOUT_OUTPUT,2);
+   return true;
+  });
+ }finally{console.warn=warning;}
+});
+test('C01 adapts only exact decimal strings, rank strings and outer evidence whitespace',()=>{
+ const source=buildC01Source(inputs(),{version:6});
+ const response=mockSiC01(source);
+ const r=response.recommendations[0];
+ r.candidateKey=' '+r.candidateKey+' ';
+ r.confidence='0.8';
+ r.suggestedRank=String(r.suggestedRank);
+ r.evidenceRefs=r.evidenceRefs.map(x=>' '+x+' ');
+ delete r.dataGaps;
+ const assessed=reconcileC01(response,source);
+ assert.equal(assessed.verifiedCount,2);
+ const fixed=assessed.recommendations[0];
+ assert.equal(fixed.confidence,0.8);
+ assert.equal(typeof fixed.suggestedRank,'number');
+ assert.deepEqual(fixed.evidenceRefs,mockSiC01(source).recommendations[0].evidenceRefs);
+ assert.ok(fixed.outputNormalizedFields.includes('CONFIDENCE_DECIMAL_STRING'));
+ assert.ok(fixed.outputNormalizedFields.includes('EVIDENCE_REF_OUTER_WHITESPACE'));
+ assert.ok(fixed.outputNormalizedFields.includes('MODEL_DATA_GAPS_OMITTED'));
+});
+test('C01 refuses imaginary IDs and fabricated evidence even with plausible IMO',()=>{
+ const source=buildC01Source(inputs(),{version:6});
+ const valid=mockSiC01(source);
+ const r={...valid.recommendations[0],
+  candidateKey:'OTHER-CANDIDATE',imo:source.candidates[0].imo};
+ const norm=normalizeC01TransportFields(r,source.candidates[0]);
+ assert.equal(norm.row.candidateKey,'OTHER-CANDIDATE');
+ const resp=mockSiC01(source);
+ resp.recommendations[0]={...r,evidenceRefs:['FAKE']};
+ const checked=reconcileC01(resp,source);
+ assert.equal(checked.verifiedCount,1);
+ assert.equal(checked.quarantinedCount,1);
+ assert.equal(checked.recommendations[0].recommendation,'MANUAL_REVIEW');
+ assert.deepEqual(checked.recommendations[0].evidenceRefs,[]);
 });
