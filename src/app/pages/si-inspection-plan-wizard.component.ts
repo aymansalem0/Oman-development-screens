@@ -153,9 +153,10 @@ interface CapacityPreview{
     <section class="panel" *ngIf="step===1">
      <div class="panel-head">
       <div><p class="eyebrow">{{copy('STEP 01 · INSPECTION PLAN','الخطوة ١ · خطة المعاينات')}}</p>
-       <h2>{{copy('Vessels included in the plan','السفن التي ستدخل خطة المعاينات')}}</h2>
-       <p>{{copy('The current officer-reviewed plan is the source. Selection may be manual or C01-assisted; each decision has human accountability.',
-         'مصدر الاعتماد هو الخطة بعد مراجعة الموظف. يمكن الاختيار يدويًا أو بمساعدة C01، والمسؤولية البشرية محفوظة.')}}</p></div>
+       <h2>{{copy('Existing manual selections in this draft',
+        'السفن المختارة يدويًا في المسودة الحالية')}}</h2>
+       <p>{{copy('The independent percentages above also screen eligible source-backed candidates directly. You do not need a previous C01 call or manual inclusion before checking capacity.',
+        'تسمح النسبتان أعلاه باختيار مرشحين مؤهلين من المصادر مباشرة، دون اشتراط تشغيل C01 أو الاختيار اليدوي قبل حساب الطاقة.')}}</p></div>
        <span class="count">{{p.selectedVessels}} {{copy('vessels','سفن')}}</span>
      </div>
      <div class="summary">
@@ -205,6 +206,25 @@ interface CapacityPreview{
       <p>{{copy('No inspection-type dropdown. All source-backed reasons and their distinct statutory scopes flow into the inspection case and dossier.',
         'لا توجد قائمة لاختيار نوع واحد. جميع أسباب الإحالة الموثقة ونطاقاتها النظامية تدخل حالة المعاينة وملف التحضير.')}}</p>
      </div></div>
+     <p *ngIf="!p.vessels.length&&capacityBusy" class="notice">
+      {{copy('Verifying source reasons for percentage-based candidates…',
+       'جارٍ التحقق من أسباب إحالة السفن المرشحة بالنسب…')}}</p>
+     <p *ngIf="!p.vessels.length&&capacityError" class="notice error" role="alert">
+      {{capacityError}}</p>
+     <ng-container *ngIf="!p.vessels.length&&capacityContext as ctx">
+      <div class="vessel-card" *ngFor="let selected of ctx.selection.roster">
+       <header><div><strong>#{{selected.planRank}} · IMO {{selected.imo}}</strong>
+        <span>{{copy('Capacity-first candidate, not yet approved',
+         'مرشح وفق الطاقة التشغيلية، لم يُعتمد بعد')}}</span></div>
+        <span class="reason-count">{{selected.inspectionReasons.length}}
+         {{copy('reasons','أسباب')}}</span></header>
+       <div class="reason-card" *ngFor="let reason of selected.inspectionReasons">
+        <strong>{{sourceLabel(reason.sourceType)}}</strong>
+        <p class="source-ref">{{reason.sourceReference||reason.eventKey}}</p>
+        <p *ngIf="reason.reason">{{reason.reason}}</p>
+       </div>
+      </div>
+     </ng-container>
      <div class="vessel-card" *ngFor="let vessel of p.vessels">
       <header><div><strong>#{{vessel.rank}} · {{vessel.vesselName}}</strong>
        <span>IMO {{vessel.imo}}</span></div>
@@ -737,11 +757,16 @@ export class SiInspectionPlanWizardComponent implements OnInit,OnDestroy{
  get totalScopes():number{return this.preview?.vessels.reduce((n,v)=>n+v.inspectionRegimes.length,0)||0;}
  get canNext():boolean{
   if(!this.preview||this.loading||this.returnedFromScheduling)return false;
-  if(this.step===1||this.step===2)
-   return this.preview.selectedVessels>0&&
-    (!!this.preview.agentRunId||!!this.preview.manualSelection)&&
-    !this.preview.stale&&!this.hasMissingReasons&&
-    this.factorPool!==null&&!this.factorPoolLoading;
+  if(this.step===1||this.step===2){
+   const quota=this.quotaPreview;
+   const maybeRequired=Boolean(this.factorPool?.some(v=>
+    v.sourceTypes.includes('NMC_CASE')||
+    v.sourceTypes.includes('SERVICE_REQUEST')));
+   return !this.preview.stale&&!this.hasMissingReasons&&
+    this.factorPool!==null&&!this.factorPoolLoading&&
+    (this.preview.selectedVessels>0||
+     (quota?.uniqueSelectedCount||0)>0||maybeRequired);
+  }
   if(this.step===3)
    return !!this.capacityProposal&&!!this.capacityProposal.variants?.length&&
     this.capacityProposal.summary.proposed>0&&
@@ -787,7 +812,7 @@ export class SiInspectionPlanWizardComponent implements OnInit,OnDestroy{
  next():void{
   if(!this.canNext)return;
   this.step++;
-  if(this.step===3&&!this.capacityContext)this.loadCapacityContext();
+  if(this.step>=2&&!this.capacityContext)this.loadCapacityContext();
  }
  invalidateCapacityPreview():void{
   this.capacityPreview=null;this.capacityProposal=null;this.capacityAiOptionId='';
