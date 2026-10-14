@@ -532,7 +532,8 @@ test('C01 does not accept all-unverifiable or unstructured Airia output',()=>{
  for(const r of valid.recommendations)r.evidenceRefs=['FAKE'];
  assert.throws(()=>reconcileC01(valid,source),
   e=>e.code==='SI_C01_NO_VERIFIED_RECOMMENDATIONS'&&
-     e.diagnosticCode==='ALL_ITEMS_FAILED_VERIFICATION');
+     e.diagnosticCode==='EVIDENCE_REF_NOT_IN_SOURCE'&&
+     e.failureCounts.EVIDENCE_REF_NOT_IN_SOURCE===source.candidates.length);
 });
 
 test('Published C01 rules reach Airia and low-confidence choices require manual review',async()=>{
