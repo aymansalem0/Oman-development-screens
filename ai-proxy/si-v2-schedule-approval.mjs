@@ -403,6 +403,10 @@ export class SiV2ScheduleApproval{
       caseId:item.caseId,checklist:checkpoint.saved,
       alreadyStarted:true,realAiriaCalls:0};
    }
+   // The mandatory published library must not be empty when engineer starts.
+   const mandatoryPreview=await this.checklists.preview(item.caseId);
+   if(!mandatoryPreview.selectedTemplates.some(t=>t.mandatory&&t.itemCount>0))
+    fail('SI_V2_MANDATORY_CHECKLISTS_NOT_PUBLISHED',409);
    const prep=await this.preparation.get(item.caseId);
    if(prep.stale||!['APPROVED','PREPARED'].includes(prep.saved?.status))
     fail('SI_V2_PREPARATION_REVIEW_REQUIRED',409);
@@ -454,6 +458,7 @@ export class SiV2ScheduleApproval{
    item.mandatoryTemplates=checklist.templates
       .filter(t=>t.mandatory).map(t=>t.templateId);
    item.aiAdditionalItemsApproved=additions.length;
+   item.aiAdditionalTitles=additions;
    record.audit.push({event:'ENGINEER_STARTED_WORK_ORDER',at:now(),
      actor:actor.trim(),inspectorId:item.assignment.inspectorId,
      imo,orderId:item.orderId});
