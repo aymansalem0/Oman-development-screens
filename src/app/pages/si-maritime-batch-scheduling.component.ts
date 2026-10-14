@@ -48,8 +48,8 @@ interface Proposal{summary:{total:number;proposed:number;unscheduled:number;
  caseWrites:number;bookingWrites:number};rows:ScheduleRow[];status:string;
  proposalHash:string;variants?:Variant[];
  board?:ScheduleBoard;warnings:string[];aiAdvisory?:boolean;chosenOptionId?:string;}
-interface S01Response{status:string;agentCode:'SI-S01';provider:'AIRIA';
- externalCalls:1;chosenOptionId:string;proposalHash:string;proposal:Proposal;
+interface S01Response{status:string;agentCode:'SI-S01';provider:'AIRIA'|'POC_MOCK';
+ externalCalls:0|1;chosenOptionId:string;proposalHash:string;proposal:Proposal;
  rankedOptions:{optionId:string;rank:number;confidence:number;
  rationale:string;evidenceRefs:string[]}[];
  humanApprovalRequired:true;bookingWrites:0;caseWrites:0;}
@@ -192,11 +192,12 @@ export class SiMaritimeBatchSchedulingComponent implements OnInit{
    return;
   }
   const confirmed=window.confirm(this.copy(
-   'Run ONE potentially billable SI-S01 Airia request on '+(this.demoMode?'SYNTHETIC POC':'ERP-verified')+
-     ' schedule inputs? No booking, case or approval will be created.',
-   'هل تؤكد تشغيل طلب Airia SI-S01 واحد قد يكون مدفوعًا على '+(this.demoMode?
-    'بيانات تجريبية افتراضية':'بيانات ERP المعتمدة')+
-    '؟ لن ينشأ حجز أو حالة معاينة أو اعتماد تلقائي.'));
+   this.demoMode?
+    'Continue SI-S01 scheduling? MOCK provider generates a labelled zero-cost simulated ranking; AIRIA provider makes ONE potentially billable real AI call on synthetic data. Neither creates a booking.':
+    'Run ONE potentially billable SI-S01 Airia request on verified ERP scheduling alternatives? No booking, case or approval will be created.',
+   this.demoMode?
+    'هل تؤكد جدولة SI-S01؟ عند استخدام MOCK ستكون النتيجة محاكاة واضحة دون تكلفة، أما Airia فيشغّل استدعاء AI حقيقيًا قد يكون مدفوعًا على بيانات تجريبية. لن ينشأ أي حجز.':
+    'هل تؤكد تشغيل طلب Airia SI-S01 واحد قد يكون مدفوعًا على بدائل ERP المتحقَّق منها؟ لن ينشأ حجز أو حالة أو اعتماد تلقائي.'));
   if(!confirmed)return;
   this.aiBusy=true;this.error='';this.notice='';
   this.http.post<{status:string}&S01Response>(
@@ -216,9 +217,11 @@ export class SiMaritimeBatchSchedulingComponent implements OnInit{
        return;
      }
      this.aiAdvice=r;this.proposal=r.proposal;
-     this.notice=this.copy(
-      'Airia SI-S01 ranked the valid schedule alternatives. This remains a draft for supervisor approval.',
-      'رتّب Airia SI-S01 بدائل الجدولة الصالحة. النتيجة مقترح للمراجعة وليست جدولًا معتمدًا.');
+     this.notice=r.provider==='POC_MOCK'?
+      this.copy('POC MOCK: Simulated SI-S01 ranking, zero Airia calls. The proposed schedule is not approved or booked.',
+       'محاكاة POC: ترتيب تجريبي لبدائل SI-S01 دون استدعاء Airia. الجدول ليس معتمدًا أو محجوزًا.'):
+      this.copy('Airia SI-S01 ranked verified alternatives. Supervisor approval remains required.',
+       'رتب Airia SI-S01 البدائل الصالحة، ولا يزال اعتماد المشرف مطلوبًا.');
     },
     error:err=>{this.aiBusy=false;this.showError(err);}
    });
