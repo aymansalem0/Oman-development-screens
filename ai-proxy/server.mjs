@@ -27,6 +27,7 @@ import {proposeMaritimeBatchSchedule} from './si-maritime-batch-scheduling.mjs';
 import {maritimePlanSchedulingContext,validateOperatorScheduleAgainstSource} from './si-maritime-plan-source.mjs';
 import { SiCandidateTargeting, SiTargetingError } from './si-candidate-targeting.mjs';
 import { SiSourceExcelImport } from './si-source-excel-import.mjs';
+import {projectVesselMasterEtd} from './si-vessel-master-etd.mjs';
 import { SiPscSelection, SiSelectionError } from './si-psc-selection.mjs';
 import { SiAiPrioritization, SiPriorityError } from './si-ai-prioritization.mjs';
 import {SiCandidateAgent,SiCandidateAgentError} from './si-candidate-agent.mjs';
@@ -1026,6 +1027,18 @@ const server = createServer(async (req, res) => {
       if((path==='/api/si/v1/inspection-plans'||
            path.startsWith('/api/si/v1/inspection-plans/'))&&!siRollingPlansReady)
         return respond(res,503,{error:'SI_ROLLING_MIGRATION_018_REQUIRED'});
+      // Dynamic operational Vessel Master: IMO/name from master, current ETD
+      // joined from saved MSW source events. No AI calls or DB writes.
+      if(path==='/api/si/v1/vessel-master'&&req.method==='GET'){
+        dashboards.assertRole(req,'EDITOR');
+        const query=new URL(req.url||'/', 'http://localhost').searchParams;
+        const imo=query.get('imo');
+        if(imo!==null&&!/^[0-9]{7}$/.test(imo))
+          return respond(res,422,{error:'SI_VESSEL_MASTER_IMO_INVALID'});
+        const source=await siTargeting._state();
+        const master=projectVesselMasterEtd({sourceEvents:source.events});
+        return respond(res,200,imo?{...master,rows:master.rows.filter(x=>x.imo===imo)}:master);
+      }
       // Rolling plans are independent, numbered and versioned. Creating a plan
       // never calls C01, approves inspections, or touches legacy JSON.
       if(path==='/api/si/v1/inspection-plans'&&req.method==='GET'){
