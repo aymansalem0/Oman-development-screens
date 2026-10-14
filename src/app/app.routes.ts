@@ -1,4 +1,5 @@
 import { Routes } from '@angular/router';
+import { MoeiSeafarerManagementComponent } from './pages/moei-seafarer-management.component';
 import { ApprovalListComponent } from './pages/approval-list.component';
 import { ApprovalDetailComponent } from './pages/approval-detail.component';
 import { YearlyAvailabilityComponent } from './pages/yearly-availability.component';
@@ -19,6 +20,7 @@ export const routes: Routes = [
   { path: base + '/:id', component: ApprovalDetailComponent },
   { path: 'dashboard/appointment-availability', component: YearlyAvailabilityComponent },
   { path: 'dashboard/master-data/activity-classification-mapping', component: ActivityClassificationMappingComponent },
+  { path: 'moei/seafarers', component: MoeiSeafarerManagementComponent },
   { path: 'moei/nmc', component: NmcCommandCenterComponent },
   { path: 'moei/nmc/admin/risk-configuration', component: NmcRiskConfigurationAdminComponent },
   { path: 'moei/nmc/vessel/:imo/smart-inspection', component: NmcSmartInspectionComponent },
