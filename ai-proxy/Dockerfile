@@ -30,8 +30,8 @@ RUN npm install --omit=dev --no-audit --no-fund --prefer-offline --loglevel=erro
 # Four non-mutating Smart Inspection POC scheduling contract tests.
 # Keep them in the image so documented "docker compose exec ai-proxy node --test
 # test/..." commands work even without mounting the repository.
-COPY ai-proxy/test/si-scheduling-poc-fixtures.test.mjs ai-proxy/test/si-maritime-batch-scheduling.test.mjs ai-proxy/test/si-maritime-plan-source.test.mjs ai-proxy/test/si-plan-s01-advisor.test.mjs ./test/
-RUN node --test test/si-scheduling-poc-fixtures.test.mjs test/si-maritime-batch-scheduling.test.mjs test/si-maritime-plan-source.test.mjs test/si-plan-s01-advisor.test.mjs
+COPY ai-proxy/test/si-scheduling-poc-fixtures.test.mjs ai-proxy/test/si-maritime-batch-scheduling.test.mjs ai-proxy/test/si-maritime-plan-source.test.mjs ai-proxy/test/si-plan-s01-advisor.test.mjs ai-proxy/test/si-v2-schedule-work-orders.test.mjs ./test/
+RUN node --test test/si-scheduling-poc-fixtures.test.mjs test/si-maritime-batch-scheduling.test.mjs test/si-maritime-plan-source.test.mjs test/si-plan-s01-advisor.test.mjs test/si-v2-schedule-work-orders.test.mjs
 # Fail image build early when a case-workspace ESM import is missing.
 RUN node -e "import('./si-vessel-master-etd.mjs').catch(e=>{console.error(e);process.exit(1)})" 
 RUN node --check si-checklist-library.mjs && node --check si-checklist-field.mjs && node --check si-checklist-airia.mjs && node --check si-bulk-inspection-plan.mjs && node --check moei-google-users.mjs && node --check moei-google-sso.mjs && node --check nmc-incident-feed.mjs && node --check nmc-incident-airia.mjs && node --check server.mjs && node --check case-workspace.mjs && node --check case-source-provenance.mjs && node --check nmc-dashboard-focus.mjs && node --check nmc-decision-policy.mjs && node -e "import('./case-workspace.mjs').catch(e=>{console.error(e);process.exit(1)})"
