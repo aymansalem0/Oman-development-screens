@@ -382,12 +382,96 @@ export class SiInspectionPlanWizardComponent implements OnInit,OnDestroy{
  {en:'Weights & Capacity',ar:'الأوزان والطاقة'},
  {en:'Unified Plan Approval',ar:'اعتماد الخطة والتوزيع'}];
  step=1;preview:SiBulkPreview|null=null;planId:string|null=null;
+ readonly weightKeys:SiCapacityWeightKey[]=[
+  'NMC_CASE','SERVICE_REQUEST','PSC_PORT_CALL','RISK_FACTOR'];
+ weights:SiCapacityWeights={NMC_CASE:30,SERVICE_REQUEST:25,
+  PSC_PORT_CALL:20,RISK_FACTOR:25};
+ capacity:SiCapacityPreview|null=null;capacityBusy=false;
+ capacityAiBusy=false;capacityError='';selectedOptionId='';
+ capacityAiAdvice:{chosenOptionId:string;provider:string}|null=null;
+ get weightTotal():number{
+  return this.weightKeys.reduce((sum,key)=>sum+this.weights[key],0);
+ }
+ weightLabel(key:SiCapacityWeightKey):string{
+  const names:Record<SiCapacityWeightKey,[string,string]>={
+   NMC_CASE:['National Maritime Centre referrals','إحالات المركز البحري الوطني'],
+   SERVICE_REQUEST:['Maritime service requests','طلبات الخدمات البحرية'],
+   PSC_PORT_CALL:['PSC port calls','الرقابة على دولة الميناء PSC'],
+   RISK_FACTOR:['Vessel Risk Factor','عامل مخاطر السفينة']
+  };
+  return this.copy(names[key][0],names[key][1]);
+ }
+ updateWeight(key:SiCapacityWeightKey,value:string):void{
+  const desired=Math.max(0,Math.min(100,Math.round(Number(value)||0)));
+  const other=this.weightKeys.filter(k=>k!==key);
+  const remaining=100-desired;
+  const sum=other.reduce((n,k)=>n+this.weights[k],0);
+  const shares=other.map(k=>sum?remaining*this.weights[k]/sum:
+   remaining/other.length);
+  const next=shares.map(Math.floor);
+  let rest=remaining-next.reduce((a,b)=>a+b,0);
+  for(const row of shares.map((share,i)=>({i,rem:share-next[i]}))
+   .sort((a,b)=>b.rem-a.rem||a.i-b.i)){
+    if(!rest)break;next[row.i]++;rest--;
+  }
+  this.weights[key]=desired;
+  other.forEach((k,i)=>{this.weights[k]=next[i];});
+  this.capacity=null;this.capacityAiAdvice=null;this.selectedOptionId='';
+  this.capacityError='';
+ }
+ capacityPriority(imo:string){
+  return this.capacity?.priorityAdvisory.find(p=>p.imo===imo)||null;
+ }
+ get selectedCapacityAssignments(){
+  return this.capacity?.proposal.variants.find(v=>
+   v.optionId===this.selectedOptionId)?.assignments||[];
+ }
+ calculateCapacity():void{
+  if(!this.planId||this.capacityBusy||this.weightTotal!==100)return;
+  this.capacityBusy=true;this.capacityError='';this.capacity=null;
+  this.capacityAiAdvice=null;this.selectedOptionId='';
+  this.api.capacityPreview(this.planId,{...this.weights}).subscribe({
+   next:r=>{
+    this.capacityBusy=false;
+    if(!this.preview||r.capacity.planRevision!==this.preview.planRevision||
+     r.capacity.sourceHash!==this.preview.sourceHash){
+     this.capacityError=this.copy('Plan/source changed. Reload candidates.',
+      'تغيرت الخطة أو المصادر، أعد تحميل المرشحين.');return;
+    }
+    this.capacity=r.capacity;
+    this.selectedOptionId=r.capacity.proposal.variants[0]?.optionId||'';
+   },
+   error:e=>{this.capacityBusy=false;
+    this.capacityError=e?.error?.error||'SI_CAPACITY_PREVIEW_FAILED';}
+  });
+ }
+ runCapacityAi():void{
+  if(!this.capacity?.readyForApproval||!this.planId||this.capacityAiBusy)return;
+  if(!window.confirm(this.copy(
+   'Run SI-S01 on verified options? MOCK is zero-cost, but Airia may be billable. AI cannot approve an inspection.',
+   'تشغيل SI-S01 على البدائل المحققة؟ MOCK مجاني وAiria قد يكون مدفوعًا. AI لا يعتمد المعاينات.')))return;
+  this.capacityAiBusy=true;this.capacityError='';
+  const expectedHash=this.capacity.capacityHash;
+  this.api.capacityAiRecommend(this.planId,{...this.weights},expectedHash)
+   .subscribe({
+    next:r=>{
+     this.capacityAiBusy=false;
+     if(!this.capacity||this.capacity.capacityHash!==r.capacityHash)return;
+     this.capacityAiAdvice={chosenOptionId:r.chosenOptionId,provider:r.provider};
+     this.selectedOptionId=r.chosenOptionId;
+    },
+    error:e=>{this.capacityAiBusy=false;
+     this.capacityError=e?.error?.error||'SI_S01_CAPACITY_AI_FAILED';}
+   });
+ }
+
  focusedImo='';returnedFromScheduling=false;
  get focusedVessel():SiBulkVessel|null{
   return this.preview?.vessels.find(v=>v.imo===this.focusedImo)||null;
  }
  job:SiBulkJob|null=null;loading=false;submitting=false;error='';
- scheduleApproval:{planId:string;approvedVesselCount:number;createdInspectionCases:number}|null=null;
+ scheduleApproval:{planId:string;approvedVesselCount:number;
+ createdInspectionCases:number;issuedWorkOrders:number}|null=null;
  reason='';generateA04=false;private timer:Subscription|null=null;
  constructor(private api:SiBulkPlanService,private readonly route:ActivatedRoute,
   public lang:LanguageService,public auth:MoeiAuthService){}
