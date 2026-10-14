@@ -40,9 +40,7 @@ export class MoeiSdbWorkflowComponent implements OnDestroy {
     {id:'audit',title:'Audit & Monitoring',caption:'Evidence & history',number:'11'}
   ];
 
-  readonly sourceActions:[
-    {id:'COP'|'MEDICAL'|'HOLD'|'ENDORSEMENT'|'SOURCE';name:string;owner:string}
-  ]=[
+  readonly sourceActions:{id:'COP'|'MEDICAL'|'HOLD'|'ENDORSEMENT'|'SOURCE';name:string;owner:string}[]=[
     {id:'COP',name:'Receive missing CoP',owner:'Maritime Academy'},
     {id:'MEDICAL',name:'Receive medical clearance',owner:'MARASI'},
     {id:'HOLD',name:'Receive HOLD release',owner:'Academy / Employer'},
