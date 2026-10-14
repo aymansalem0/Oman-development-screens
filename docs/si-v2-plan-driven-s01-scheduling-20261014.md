@@ -64,6 +64,12 @@ All calculations still run through the same ERP constraint solver and keep no au
 
 **Acceptance test:** `node --test ai-proxy/test/si-scheduling-poc-fixtures.test.mjs`. Covers the three Golden demo vessels, complete visit fields, stable future windows, imported-source immutability, no modifications to original ERP and actual feasible scheduling results using synthetic personnel.
 
+## Presentation without live Airia (explicit MOCK simulation)
+
+If `SI_SCHEDULING_DEMO_MODE=true`, `demoMode:true`, and the saved runtime provider is `SI_AI_PROVIDER=mock`, the same S01 action returns a **deterministic POC MOCK comparison** of server-generated feasible alternatives. The output is tagged `provider:POC_MOCK`, `externalCalls:0`, `bookingWrites:0`, `caseWrites:0`; it is NOT a real model assessment. Do not claim this proves Airia integration. The payload still passes the source-locked SI-S01 response validator. If provider is `airia`, the action uses one explicitly confirmed, potentially billable real Airia call. Outside demo mode, mock responses cannot impersonate a real SI-S01 decision. The UI distinguishes MOCK from AIRIA in the response heading and notice.
+
+For a reliable presentation use an *approved plan* and existing saved ERP Excel snapshot. Toggle **Use complete POC mock data** ON, inspect the per-vessel completed values, click **Calculate feasible schedules** (0 AI calls), then **AI Schedule with SI-S01**. With the MOCK provider it is a no-cost simulated ranking; to demonstrate Airia itself, explicitly configure/enable the real SI-S01 pipeline and verify its response schema before consenting to its cost.
+
 ## Local activation and safe test
 
 ```powershell
@@ -75,7 +81,7 @@ $dc=@("-f","compose.yaml","-f","compose.oracle.yaml",
 docker compose @dc config --quiet
 docker compose @dc build ai-proxy nmc
 docker compose @dc up -d --no-deps --no-build ai-proxy nmc
-docker compose @dc exec ai-proxy node --test test/si-maritime-batch-scheduling.test.mjs test/si-maritime-plan-source.test.mjs test/si-plan-s01-advisor.test.mjs
+docker compose @dc exec ai-proxy node --test test/si-maritime-batch-scheduling.test.mjs test/si-maritime-plan-source.test.mjs test/si-plan-s01-advisor.test.mjs test/si-scheduling-poc-fixtures.test.mjs
 docker compose @dc ps
 ```
 
