@@ -134,14 +134,17 @@
    <section *ngIf="proposal as p" class="marine-panel">
     <h2>{{copy('Inspector assignments and scheduling exceptions','توزيع المهندسين واستثناءات الجدولة')}}</h2>
     <p class="marine-notice">{{aiAdvice?
-       copy('AIRIA SI-S01 ranked verified whole-plan alternatives. A human supervisor must review and separately approve the final schedule.',
-        'رتب SI-S01 عبر Airia بدائل الجدولة المتحقَّق من صلاحيتها وفق ERP. يجب مراجعة الجدول واعتماده بشكل منفصل بواسطة المشرف.'):
+       (aiAdvice.provider==='POC_MOCK'?
+       copy('POC MOCK simulated a ranking of synthetic feasible schedules; it is not live AI or approved ERP scheduling.',
+        'محاكاة POC رتّبت بدائل جدول تجريبية؛ ليست نتيجة AI حقيقي أو جدولة ERP معتمدة.'):
+       copy('AIRIA SI-S01 ranked verified whole-plan alternatives. A human supervisor must separately approve the final schedule.',
+        'رتب SI-S01 عبر Airia بدائل الجدولة الصالحة، ولا يزال اعتماد الجدول من صلاحية المشرف.')):
        copy('ERP hard constraints verified by a deterministic scheduler. Click AI Schedule to compare up to three complete, feasible alternatives; no Airia call has occurred.',
         'تحقّق محرك الجدولة من قيود ERP. اضغط الجدولة بالذكاء الاصطناعي لمقارنة حتى ثلاثة بدائل متكاملة صالحة؛ لم يتم استدعاء Airia بعد.')}}</p>
     <section class="marine-ai-advice" *ngIf="aiAdvice as ai">
      <div class="marine-title-line">
       <h3>{{copy('SI-S01 AI schedule recommendation','توصية AI SI-S01 للجدولة')}}</h3>
-      <span class="marine-tag">AIRIA · {{copy('Advisory','استشاري')}}</span>
+      <span class="marine-tag">{{ai.provider==='POC_MOCK'?'POC MOCK':'AIRIA'}} · {{copy('Advisory only','استشاري فقط')}}</span>
      </div>
      <div *ngFor="let ranked of ai.rankedOptions" class="marine-ai-rank">
       <strong>{{copy('Option','البديل')}} #{{ranked.rank}}
