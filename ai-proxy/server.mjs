@@ -24,6 +24,8 @@ import { CentralRiskPolicy, RiskPolicyError } from './risk-policy.mjs';
 import { ErpWorkforceStore, SiError } from './si-erp-workforce.mjs';
 import { SiElectronicScheduler } from './si-electronic-scheduling.mjs';
 import {proposeMaritimeBatchSchedule} from './si-maritime-batch-scheduling.mjs';
+import {prepareS01WholePlanRequest,validateS01WholePlanResponse}
+ from './si-plan-s01-advisor.mjs';
 import {maritimePlanSchedulingContext,validateOperatorScheduleAgainstSource} from './si-maritime-plan-source.mjs';
 import { SiCandidateTargeting, SiTargetingError } from './si-candidate-targeting.mjs';
 import { SiSourceExcelImport } from './si-source-excel-import.mjs';
@@ -1163,14 +1165,28 @@ const server = createServer(async (req, res) => {
         const dashboard=await siTargeting.dashboard();
         return respond(res,200,maritimePlanSchedulingContext(plan,dashboard,erp));
       }
-      const v2Preview=/^\/api\/si\/v1\/maritime-scheduling\/plans\/([a-f0-9-]{36})\/preview$/.exec(path);
-      if(v2Preview&&req.method==='POST'){
+      // A plan's approved vessel roster is the scheduling source for both
+      // the free ERP-constrained preview and a separately confirmed paid S01
+      // analysis. Do not permit the browser to supply feasible AI slot IDs.
+      const v2Schedule=/^\/api\/si\/v1\/maritime-scheduling\/plans\/([a-f0-9-]{36})\/(preview|ai-recommend)$/.exec(path);
+      if(v2Schedule&&req.method==='POST'){
         dashboards.assertRole(req,'EDITOR');
-        const body=await requestJson(req,65536);
-        if(!Array.isArray(body.requests)||body.requests.length>40||
-           Object.keys(body).some(key=>!['requests'].includes(key)))
+        const paid=v2Schedule[2]==='ai-recommend';
+        const body=await requestJson(req,1024*1024);
+        if(!Array.isArray(body.requests)||!body.requests.length||
+           body.requests.length>500||
+           Object.keys(body).some(key=>![
+             'requests',...(paid?['confirmRun','confirmCost','expectedProposalHash']:[])
+           ].includes(key)))
           return respond(res,422,{error:'SI_V2_SCHEDULING_REQUESTS_INVALID'});
-        const plan=await siRollingPlans.get(v2Preview[1]);
+        if(paid){
+          if(siAiProvider!=='airia'||!agentAllowed('s01'))
+            return respond(res,409,{error:'SI_S01_AIRIA_NOT_ENABLED'});
+          if(body.confirmRun!==true||body.confirmCost!==true||
+             !/^[a-f0-9]{64}$/.test(body.expectedProposalHash||''))
+            return respond(res,422,{error:'SI_S01_EXPLICIT_COST_CONFIRMATION_REQUIRED'});
+        }
+        const plan=await siRollingPlans.get(v2Schedule[1]);
         const snapshot=siErp.requireSnapshot();
         const dashboard=await siTargeting.dashboard();
         const context=maritimePlanSchedulingContext(plan,dashboard,snapshot);
@@ -1183,7 +1199,21 @@ const server = createServer(async (req, res) => {
           existingBookings:[...siScheduling.state.confirmed,...confirmed],
           scheduler:siScheduling
         });
-        return respond(res,200,{status:'ok',proposal:result});
+        if(!paid)return respond(res,200,{status:'ok',proposal:result,
+          airiaCalls:0});
+        if(result.proposalHash!==body.expectedProposalHash)
+          return respond(res,409,{error:'SI_S01_SOURCE_OR_ERP_CHANGED_REPREVIEW'});
+        if(!result.variants?.length||!result.summary.proposed)
+          return respond(res,409,{error:'SI_S01_NO_FEASIBLE_ALTERNATIVES'});
+        const payload=prepareS01WholePlanRequest(result);
+        let raw;
+        try{raw=await fleetAgentCall('s01',payload);}
+        catch{
+          return respond(res,502,{error:'SI_S01_PROVIDER_UNAVAILABLE',
+            planUnchanged:true});
+        }
+        const validated=validateS01WholePlanResponse(raw,result,payload);
+        return respond(res,200,{status:'ok',...validated});
       }
       if(path==='/api/si/v1/inspection-batches/preview'&&req.method==='GET'){
         dashboards.assertRole(req,'EDITOR');
