@@ -44,6 +44,7 @@ import {SiBulkInspectionPlan,SiBulkApprovalError} from './si-bulk-inspection-pla
 import {mockSiP01,mockSiA04,mockSiC01} from './si-agent-mock.mjs';
 import { SiInspectionPreparation, SiPreparationError } from './si-inspection-preparation.mjs';
 import {assembleSiVesselDossier} from './si-vessel-dossier.mjs';
+import {suggestCapacityExceptionActions} from './si-capacity-exception-alternatives.mjs';
 import { SiInspectionLifecycle, SiLifecycleError } from './si-inspection-lifecycle.mjs';
 import {SiScheduleOrders,SiWorkOrderError} from './si-schedule-orders.mjs';
 import {runSiPocAdvisor,siFutureAdvisorCoverage,SiPocAdvisorError} from './si-poc-workflow-advisors.mjs';
@@ -1219,6 +1220,10 @@ const server = createServer(async (req, res) => {
         });
         const review={...selection,
           capacity:{
+            exceptionActions:suggestCapacityExceptionActions({
+              proposal,selection,erpSnapshot:workforce,
+              policy:siScheduling.getPolicy()
+            }),
             inspectedImos:selection.roster.length,
             feasibleImos:proposal.summary.proposed,
             unscheduledImos:proposal.rows.filter(x=>x.status==='UNSCHEDULED')
