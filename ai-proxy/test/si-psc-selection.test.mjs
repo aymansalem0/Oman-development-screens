@@ -48,24 +48,28 @@ const request=(eventKey,policyVersion,action='SELECT')=>({
   eventKey,expectedPolicyVersion:policyVersion,action,
   actor:'Maritime PSC Supervisor',reason:'Reviewed maritime targeting evidence'
 });
-test('PSC Excel creates targeting pool records, NOT pending inspection candidates or AI inputs',async()=>{
+test('Saved PSC Excel events immediately receive the published quota shortlist, without inspection approval or AI invocation',async()=>{
   const w=setup({nmc:true});
   try{
     await imports(w.targeting,20);
     await w.targeting.receiveEvent(service(1));
     const d=await w.targeting.dashboard();
-    assert.equal(d.summary.bySource.PSC_PORT_CALL,0);
+    assert.equal(d.summary.bySource.PSC_PORT_CALL,3);
     assert.equal(d.summary.bySource.NMC_CASE,1);
     assert.equal(d.summary.bySource.SERVICE_REQUEST,1);
-    assert.equal(d.summary.candidates,2);
+    assert.equal(d.summary.candidates,5);
     assert.equal(buildSiPrioritySnapshot(d).items.some(x=>
-      x.inspectionRegime==='PORT_STATE_CONTROL'),false);
+      x.inspectionRegime==='PORT_STATE_CONTROL'),true);
     const pool=await w.selection.pool();
     assert.equal(pool.summary.eligiblePortCalls,20);
-    assert.equal(pool.summary.inPoolPortCalls,20);
+    assert.equal(pool.summary.inPoolPortCalls,17);
+    assert.equal(pool.summary.automaticallyShortlistedPortCalls,3);
+    assert.equal(pool.summary.selectedPortCalls,3);
+    assert.equal((await w.selection._state()).decisions.length,0,
+      'Derived rule shortlist must not write official PSC decision records');
     assert.equal(pool.summary.buckets.length,1);
     assert.equal(pool.summary.buckets[0].targetCount,3); // 15% POC, floor
-    assert.equal(pool.summary.buckets[0].selectedCount,0);
+    assert.equal(pool.summary.buckets[0].selectedCount,3);
     assert.equal(pool.items.length,20);
   }finally{w.cleanup();}
 });
@@ -137,8 +141,8 @@ test('monthly quotas respect per-port scope, version checks and clear impact pre
     await assert.rejects(()=>w.selection.decide(request(pool.items[0].eventKey,1)),
       e=>e.code==='SI_SELECTION_POLICY_VERSION_CONFLICT');
     await w.selection.decide(request(pool.items[0].eventKey,2));
-    assert.equal((await w.selection.pool()).summary.selectedPortCalls,1);
-    assert.equal((await w.targeting.dashboard()).summary.bySource.PSC_PORT_CALL,1);
+    assert.equal((await w.selection.pool()).summary.selectedPortCalls,6);
+    assert.equal((await w.targeting.dashboard()).summary.bySource.PSC_PORT_CALL,6);
   }finally{w.cleanup();}
 });
 test('NOT_SELECT requires audit, remains in pool, can be changed by publisher with quota',async()=>{
@@ -151,13 +155,15 @@ test('NOT_SELECT requires audit, remains in pool, can be changed by publisher wi
     await w.selection.decide(request(key,1,'NOT_SELECT'));
     let pool=await w.selection.pool();
     assert.equal(pool.summary.notSelectedPortCalls,1);
-    assert.equal(pool.summary.selectedPortCalls,0);
-    assert.equal((await w.targeting.dashboard()).summary.candidates,0);
+    assert.equal(pool.summary.selectedPortCalls,3);
+    assert.equal(pool.summary.notSelectedPortCalls,1);
+    assert.ok(!((await w.selection.selectedEventKeys()).has(key)),
+      'An explicit NOT_SELECT always excludes the event');
     await w.selection.decide(request(key,1,'SELECT'));
     pool=await w.selection.pool();
-    assert.equal(pool.summary.selectedPortCalls,1);
+    assert.equal(pool.summary.selectedPortCalls,3);
     assert.equal(pool.summary.notSelectedPortCalls,0);
-    assert.equal((await w.targeting.dashboard()).summary.candidates,1);
+    assert.equal((await w.targeting.dashboard()).summary.candidates,3);
   }finally{w.cleanup();}
 });
 test('quota policy cannot contain invalid scope, rate or duplicate port overrides',async()=>{
@@ -192,12 +198,70 @@ test('two distinct selected Port Calls for the same IMO consume two slots but cr
     assert.equal(matching.length,2);
     for(const item of matching)await w.selection.decide(request(item.eventKey,2));
     const after=await w.selection.pool();
-    assert.equal(after.summary.selectedPortCalls,2);
+    assert.equal(after.summary.selectedPortCalls,3);
     const d=await w.targeting.dashboard();
-    assert.equal(d.summary.bySource.PSC_PORT_CALL,1);
-    assert.equal(d.summary.candidates,1);
-    assert.equal(d.summary.candidateVessels,1);
-    assert.equal(d.vesselCandidates[0].sourceEvents.length,2);
-    assert.equal(d.vesselCandidates[0].sourceTypes.length,1);
+    assert.equal(d.summary.bySource.PSC_PORT_CALL,2);
+    assert.equal(d.summary.candidates,2);
+    assert.equal(d.summary.candidateVessels,2);
+    const repeated=d.vesselCandidates.find(x=>x.imo===vessels[0].imo);
+    assert.equal(repeated.sourceEvents.length,2);
+    assert.equal(repeated.sourceTypes.length,1);
   }finally{w.cleanup();}
+});
+
+test('Published 100% PSC policy shortlists all saved imported events immediately',async()=>{
+ const w=setup();
+ try{
+  await imports(w.targeting,20);
+  const policy=await w.selection.publish({expectedVersion:1,
+   config:{period:'MONTHLY',scope:'NATIONAL',ratePercent:100,
+     portOverrides:[],mandatoryOutsideQuota:true},
+   publishedBy:'PSC Chief Officer',reason:'Explicit POC quota rate policy'});
+  assert.equal(policy.config.ratePercent,100);
+  const pool=await w.selection.pool();
+  assert.equal(pool.summary.eligiblePortCalls,20);
+  assert.equal(pool.summary.selectedPortCalls,20);
+  assert.equal(pool.summary.automaticallyShortlistedPortCalls,20);
+  assert.equal(pool.summary.buckets[0].remainingSlots,0);
+  assert.equal((await w.targeting.dashboard()).summary.bySource.PSC_PORT_CALL,20);
+  assert.equal((await w.selection._state()).decisions.length,0);
+ }finally{w.cleanup();}
+});
+test('New Excel PSC arrivals automatically recalculate quota without duplicating manual selection',async()=>{
+ const w=setup();
+ try{
+  await imports(w.targeting,10);
+  let pool=await w.selection.pool();
+  assert.equal(pool.summary.buckets[0].targetCount,1);
+  const explicit=pool.items[0].eventKey;
+  await w.selection.decide(request(explicit,1,'SELECT'));
+  assert.equal((await w.selection.pool()).summary.selectedPortCalls,1);
+  for(let i=10;i<20;i++)await w.targeting.receiveEvent(psc(i));
+  pool=await w.selection.pool();
+  assert.equal(pool.summary.buckets[0].targetCount,3);
+  assert.equal(pool.summary.selectedPortCalls,3);
+  assert.equal(pool.summary.automaticallyShortlistedPortCalls,2);
+  assert.ok((await w.selection.selectedEventKeys()).has(explicit));
+  assert.equal((await w.selection._state()).decisions.length,1,
+    'Recalculation must remain read-only, retaining old human audit');
+ }finally{w.cleanup();}
+});
+test('Manual quota selections are preserved after a stricter policy, without auto-overfilling',async()=>{
+ const w=setup();
+ try{
+  await imports(w.targeting,20);
+  const p=await w.selection.pool();
+  for(const item of p.items.slice(0,3))
+   await w.selection.decide(request(item.eventKey,1));
+  const updated=await w.selection.publish({expectedVersion:1,
+   config:{period:'MONTHLY',scope:'NATIONAL',ratePercent:5,
+    portOverrides:[],mandatoryOutsideQuota:true},
+   publishedBy:'Chief PSC Officer',reason:'Revised POC quota after assessment'});
+  assert.equal(updated.version,2);
+  const pool=await w.selection.pool();
+  assert.equal(pool.summary.selectedPortCalls,3);
+  assert.equal(pool.summary.automaticallyShortlistedPortCalls,0);
+  assert.equal(pool.summary.buckets[0].targetCount,1);
+  assert.equal(pool.summary.buckets[0].overQuota,true);
+ }finally{w.cleanup();}
 });
