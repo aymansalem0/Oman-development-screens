@@ -64,3 +64,28 @@ test('Client cannot change imported final MSW date, port, regime or claimed sour
    /SI_V2_/);
  }
 });
+
+test('Workforce display exposes active ERP scheduling skills but no private leave records',()=>{
+ const snapshot={snapshotId:'POC-ERP-2026',data:{...erp.data,
+  Inspectors:[
+   {inspector_id:'ENG-01',display_name:'Marine Engineer One',active:'Y',
+    daily_capacity:'2',home_port_id:'FUJ',private_phone:'DO-NOT-DISPLAY'},
+   {inspector_id:'ENG-OFF',display_name:'Inactive Employee',active:'N',
+    daily_capacity:'3'}
+  ],
+  Qualifications:[
+   {inspector_id:'ENG-01',inspection_regime:'PSC',vessel_type:'TANKER',
+    active:'Y',valid_until:'2027-12-31'},
+   {inspector_id:'ENG-01',inspection_regime:'FOCUSED',active:'N',
+    valid_until:'2027-12-31'}
+  ],
+  Leaves:[{inspector_id:'ENG-01',reason:'CONFIDENTIAL'}]
+ }};
+ const c=maritimePlanSchedulingContext(plan,dashboard,snapshot);
+ assert.equal(c.erpSnapshotId,'POC-ERP-2026');
+ assert.equal(c.workforce.length,1);
+ assert.equal(c.workforce[0].inspectorId,'ENG-01');
+ assert.equal(c.workforce[0].dailyCapacity,2);
+ assert.deepEqual(c.workforce[0].qualifications,['PSC']);
+ assert.doesNotMatch(JSON.stringify(c),/DO-NOT-DISPLAY|CONFIDENTIAL|Inactive Employee/);
+});
