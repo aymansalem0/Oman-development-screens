@@ -10,11 +10,22 @@ after the integrated implementation is verified.
 
 ## Planning wizard
 1. Candidate vessel source snapshot and statutory/mandatory flags.
-2. Candidate source contribution preferences: NMC referrals, PSC port calls,
-   maritime service requests, and a saved NMC vessel-risk factor.
-   Provide accessible percentage sliders and a total that must equal 100.
-   The sliders are *planning prioritization* inputs, **not** official NMC
-   risk-engine configuration or automatic legal exclusion criteria.
+2. Two **independent percentage selection factors**, not percentage weights:
+   (a) PSC + Risk Factor: percentage of the DISTINCT eligible PSC-vessel IMO
+       candidate pool; saved NMC vessel-risk score only ranks PSC choices,
+       with unassessed risk preserved as missing. This planning factor never
+       changes the published PSC Excel monthly quota measured in port-call
+       EVENTS.
+   (b) UAE-flagged vessels: a separate percentage of the DISTINCT eligible
+       UAE-flagged IMO candidate pool, regardless of PSC membership. Flag must
+       be source-supported, never inferred from a UAE port call.
+   There is no combined 100% total. Each target uses
+   floor(eligible_own_pool * own_rate_percent / 100).
+   The resulting sets are combined by unique IMO, and overlap is shown.
+   NMC mandatory referrals and legally required service inspections remain
+   outside optional percentage selection and cannot be erased by a quota.
+   Both controls are *planning selection* inputs and must never mutate the
+   official NMC risk-engine factor weights or statutory inspection obligations.
 3. Read real ERP inspector rosters, qualifications, shifts, leave, port
    affiliations, approved travel matrix, capacity and available vessel
    visit windows. Missing evidence is a named exception.
@@ -48,9 +59,11 @@ after the integrated implementation is verified.
   historical approvals as integrated ones.
 
 ## Implementation status in this branch
-The candidate source/risk weight sliders are **UI draft controls only**,
-with visible 100% validation feedback. They are not persisted or used to
-score candidates, and do not yet change approval behavior. The integrated
+Both independent PSC+risk and UAE-flag percentage sliders are **draft UI
+controls only**. They calculate live source-backed, IMO-deduplicated eligible
+pool sizes and selected count previews using the existing candidate dashboard
+and a side-effect-free quota projection. They are not persisted or used to
+commit candidate decisions, and do not yet change approval behavior. The integrated
 capacity-first optimizer, Oracle transaction, AI adapter, and final
 five-stage wizard remain pending implementation and tests. Do not deploy
 this branch as if it has the complete integrated workflow.
