@@ -46,7 +46,7 @@ interface Variant{optionId:string;allocatedVessels:number;objectiveScore:number;
  rows:ScheduleRow[];board:ScheduleBoard;}
 interface Proposal{summary:{total:number;proposed:number;unscheduled:number;
  caseWrites:number;bookingWrites:number};rows:ScheduleRow[];status:string;
- proposalHash:string;planRevision:number;variants?:Variant[];
+ planRevision:number;proposalHash:string;planRevision:number;variants?:Variant[];
  board?:ScheduleBoard;warnings:string[];aiAdvisory?:boolean;chosenOptionId?:string;}
 interface WorkOrder{imo:string;caseId:string|null;orderId:string;orderStatus:string;
  dossierStatus:string;assignment:{inspectorId:string;inspectorName:string;
@@ -54,6 +54,13 @@ interface WorkOrder{imo:string;caseId:string|null;orderId:string;orderStatus:str
 interface ScheduleApproval{id:string;planId:string;planRevision:number;
  status:string;approvedBy:string;approvedAt:string;items:WorkOrder[];
  selectedOptionId?:string;lastIssue?:string;}
+interface ScheduleApproval{
+ id:string;planId:string;status:string;proposalHash:string;
+ selectedOptionId:string|null;items:{imo:string;orderId:string;
+ orderStatus:string;caseId:string|null;dispatchStatus:string;
+ dossierStatus:string;assignment:{inspectorId:string;inspectorName:string;
+ startLocal:string;portName:string}}[];
+}
 interface S01Response{status:string;agentCode:'SI-S01';provider:'AIRIA'|'POC_MOCK';
  externalCalls:0|1;chosenOptionId:string;proposalHash:string;proposal:Proposal;
  rankedOptions:{optionId:string;rank:number;confidence:number;
@@ -68,7 +75,10 @@ interface S01Response{status:string;agentCode:'SI-S01';provider:'AIRIA'|'POC_MOC
 export class SiMaritimeBatchSchedulingComponent implements OnInit{
  context:Context|null=null;proposal:Proposal|null=null;baselineProposal:Proposal|null=null;
  demoMode=true;
- aiAdvice:S01Response|null=null;loading=false;busy=false;aiBusy=false;error='';notice='';
+ aiAdvice:S01Response|null=null;loading=false;busy=false;aiBusy=false;
+ approvalBusy=false;approvalReason='Approved verified ERP schedule and qualified engineer allocation';
+ approvedSchedule:ScheduleApproval|null=null;
+ error='';notice='';
  schedule:ScheduleApproval|null=null;scheduleBusy=false;
  scheduleReason='Confirmed ERP-qualified distribution, verified visit windows and whole-plan supervisory approval.';
  boardView:'VESSELS'|'ENGINEERS'|'DATES'='VESSELS';
@@ -101,6 +111,66 @@ export class SiMaritimeBatchSchedulingComponent implements OnInit{
   return '';
  }
 
+ get canApproveSchedule():boolean{
+  return !!this.context&&!this.demoMode&&!!this.proposal&&
+   this.proposal.summary.total>0&&
+   this.proposal.summary.unscheduled===0&&!this.approvalBusy&&
+   !this.busy&&!this.aiBusy&&!this.approvedSchedule;
+ }
+ get scheduleWorkOrderCount():number{
+  return this.approvedSchedule?.items.filter(i=>i.orderStatus==='ISSUED').length||0;
+ }
+ loadApprovedSchedule():void{
+  if(!this.context)return;
+  this.http.get<{status:string;schedule:ScheduleApproval|null}>(
+   this.api+encodeURIComponent(this.context.planId)+'/orders').subscribe({
+    next:r=>{this.approvedSchedule=r.schedule;},
+    error:()=>{}
+   });
+ }
+ approveCompleteSchedule():void{
+  if(!this.canApproveSchedule||!this.context||!this.proposal)return;
+  const reason=this.approvalReason.trim();
+  if(reason.length<8||reason.length>500){
+   this.error=this.copy('Provide an approval reason (8–500 characters).',
+    'أدخل سبب الاعتماد من 8 إلى 500 حرف.');return;
+  }
+  if(!window.confirm(this.copy(
+   'Approve the complete '+this.proposal.summary.total+
+    '-vessel schedule and reserve the validated local assignments? This is an official supervisor action.',
+   'تأكيد اعتماد الجدول الكامل لعدد '+this.proposal.summary.total+
+    ' سفينة وحفظ تكليفات المهندسين؟ هذا إجراء رسمي من المشرف.')))return;
+  this.approvalBusy=true;this.error='';
+  this.http.post<{status:string;schedule:ScheduleApproval}>(
+   this.api+encodeURIComponent(this.context.planId)+'/approval',{
+    requests:this.requests(),expectedProposalHash:this.proposal.proposalHash,
+    expectedPlanRevision:this.proposal.planRevision,
+    selectedOptionId:this.aiAdvice?.chosenOptionId||null,
+    confirmApproval:true,reason
+   }).subscribe({
+    next:r=>{
+     this.approvalBusy=false;this.approvedSchedule=r.schedule;
+     this.notice=this.copy('Schedule approved. Dispatch work orders and prepare case dossiers.',
+      'تم اعتماد الجدولة. أصدر أوامر التكليف وجهّز ملفات المعاينات.');
+    },
+    error:e=>{this.approvalBusy=false;this.showError(e);}
+   });
+ }
+ dispatchWorkOrders():void{
+  if(!this.context||!this.approvedSchedule||this.approvalBusy)return;
+  this.approvalBusy=true;this.error='';
+  this.http.post<{status:string;schedule:ScheduleApproval}>(
+   this.api+encodeURIComponent(this.context.planId)+'/dispatch',{}).subscribe({
+    next:r=>{
+     this.approvalBusy=false;this.approvedSchedule=r.schedule;
+     this.notice=this.copy(
+      'Work orders processed: '+this.scheduleWorkOrderCount+
+      '. Inspectors can open My Assigned Inspections.',
+      'تمت معالجة أوامر التكليف: '+this.scheduleWorkOrderCount+
+      '. يستطيع المهندسون فتح المعاينات المسندة.');
+    },error:e=>{this.approvalBusy=false;this.showError(e);}
+   });
+ }
  get assignedEngineerCount():number{return this.proposal?.board?.engineers.length||0;}
  get canApproveSchedule():boolean{
   return !this.demoMode&&!this.schedule&&!this.scheduleBusy&&!this.busy&&
@@ -186,7 +256,7 @@ export class SiMaritimeBatchSchedulingComponent implements OnInit{
   this.proposal=null;this.baselineProposal=null;this.aiAdvice=null;
   this.http.get<Context>(this.api+encodeURIComponent(id)+
     '/context'+(this.demoMode?'?demo=1':'')).subscribe({
-   next:data=>{this.context=data;this.loading=false;
+   next:data=>{this.context=data;this.loading=false;this.loadApprovedSchedule();
     if(!data.demoMode)this.loadSchedule();
     this.notice=data.demoMode?this.copy(
      'POC DEMO: '+(data.demoFilledVessels||0)+
