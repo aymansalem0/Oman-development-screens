@@ -82,7 +82,7 @@ export function maritimePlanSchedulingContext(plan,dashboard,snapshot){
   warning:'Unknown berth, missing NMC/Service ETD or vessel access => UNSCHEDULED until supplied, not fabricated.'};
 }
 export function validateOperatorScheduleAgainstSource(context,requests){
- if(!Array.isArray(requests)||requests.length>40)
+ if(!Array.isArray(requests)||requests.length>500)
   throw new SiError('SI_V2_INVALID_SCHEDULE_REQUEST_COUNT',422);
  const indexed=new Map(context.items.map(x=>[x.imo,x]));
  for(const row of requests){
