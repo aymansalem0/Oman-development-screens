@@ -47,7 +47,7 @@ interface Proposal{summary:{total:number;proposed:number;unscheduled:number;
  proposalHash:string;variants?:Variant[];
  board?:ScheduleBoard;warnings:string[];aiAdvisory?:boolean;chosenOptionId?:string;}
 interface S01Response{status:string;agentCode:'SI-S01';provider:'AIRIA';
- externalCalls:1;chosenOptionId:string;proposal:Proposal;
+ externalCalls:1;chosenOptionId:string;proposalHash:string;proposal:Proposal;
  rankedOptions:{optionId:string;rank:number;confidence:number;
  rationale:string;evidenceRefs:string[]}[];
  humanApprovalRequired:true;bookingWrites:0;caseWrites:0;}
