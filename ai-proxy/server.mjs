@@ -24,6 +24,8 @@ import { CentralRiskPolicy, RiskPolicyError } from './risk-policy.mjs';
 import { ErpWorkforceStore, SiError } from './si-erp-workforce.mjs';
 import { SiElectronicScheduler } from './si-electronic-scheduling.mjs';
 import {proposeMaritimeBatchSchedule} from './si-maritime-batch-scheduling.mjs';
+import {previewCapacityPlan} from './si-capacity-plan.mjs';
+import {commitCapacityFirstPlan} from './si-capacity-plan-approval.mjs';
 import {prepareS01WholePlanRequest,validateS01WholePlanResponse}
  from './si-plan-s01-advisor.mjs';
 import {maritimePlanSchedulingContext,validateOperatorScheduleAgainstSource} from './si-maritime-plan-source.mjs';
@@ -1132,35 +1134,107 @@ const server = createServer(async (req, res) => {
       // POST asynchronously creates per-regime cases and deterministic dossiers,
       // with explicitly authorized optional A04/P01 paid calls.
 
-      // Smart Inspection V2: approve roster only; NO SI_INSPECTION_CASE rows,
-      // dossiers, Airia/AI calls, ERP bookings or NMC case mutations.
+      // Capacity-first plan: one supervisor approval for selected vessels,
+      // verified staff availability/time/port and canonical 019 work orders.
+      // This replaces the insecure old two-stage roster-then-schedule path.
       const v2Approval=/^\/api\/si\/v1\/inspection-plans\/([a-f0-9-]{36})\/approve-for-scheduling$/.exec(path);
       if(v2Approval&&req.method==='POST'){
         dashboards.assertRole(req,'PUBLISHER');
-        if(!siRollingPlansReady)return respond(res,503,{error:'SI_ROLLING_MIGRATION_018_REQUIRED'});
-        const input=await requestJson(req,4096);
-        const approved=await siBulkPlan.preview(v2Approval[1]);
-        if(approved.stale||(!approved.manualSelection&&!approved.agentRunId)||
-           approved.sourceHash!==input.expectedSourceHash||
-           approved.planRevision!==input.expectedRevision||
-           approved.vessels.length===0||approved.vessels.some(x=>x.missingSource)||
-           input.confirmApproval!==true)
-          return respond(res,409,{error:'SI_V2_PLAN_SOURCE_CHANGED_OR_MISSING'});
-        const actor=moeiAuth.session(req)?.email||'MOEI_SUPERVISOR';
-        const roster=approved.vessels.map(v=>({
-          imo:v.imo,planRank:v.rank,regimes:v.inspectionRegimes,
-          inspectionReasons:v.reasons
-        }));
-        const result=await siRollingPlans.approveForScheduling(v2Approval[1],{
-          expectedRevision:input.expectedRevision,
-          expectedSourceHash:input.expectedSourceHash,
-          reason:input.reason,actor,vessels:roster
+        return respond(res,409,{error:'SI_CAPACITY_FIRST_PREVIEW_AND_APPROVAL_REQUIRED',
+          newRoute:'/api/si/v1/inspection-plans/'+v2Approval[1]+'/capacity-preview'});
+      }
+      const capacityRoute=/^\/api\/si\/v1\/inspection-plans\/([a-f0-9-]{36})\/(capacity-preview|approve-capacity|capacity-ai-recommend)$/.exec(path);
+      if(capacityRoute&&req.method==='POST'){
+        const operation=capacityRoute[2],planId=capacityRoute[1];
+        dashboards.assertRole(req,operation==='approve-capacity'?'PUBLISHER':'EDITOR');
+        if(!siRollingPlansReady||!siScheduleOrders.ready)
+          return respond(res,503,{error:'SI_CAPACITY_FIRST_REQUIRES_ORACLE_018_AND_019'});
+        const identity=moeiAuth.require(req,{mutate:operation==='approve-capacity'});
+        const actor=identity.email||identity.username;
+        if(!actor)return respond(res,403,{error:'SI_CAPACITY_SUPERVISOR_AUTHENTICATION_REQUIRED'});
+        const body=await requestJson(req,16384);
+        if(body.demoMode!==true&&body.demoMode!==false)
+          return respond(res,422,{error:'SI_CAPACITY_DEMO_FLAG_REQUIRED'});
+        if(body.demoMode&&process.env.SI_SCHEDULING_DEMO_MODE!=='true')
+          return respond(res,403,{error:'SI_POC_DEMO_MODE_NOT_ENABLED'});
+        const plan=await siRollingPlans.get(planId);
+        if(!['DRAFT','READY_FOR_APPROVAL'].includes(plan.status))
+          return respond(res,409,{error:'SI_CAPACITY_PLAN_ALREADY_FROZEN_OR_NOT_EDITABLE'});
+        const selection=await siBulkPlan.preview(planId);
+        if(selection.stale||(!selection.manualSelection&&!selection.agentRunId)||
+          selection.vessels.some(x=>x.missingSource))
+          return respond(res,409,{error:'SI_CAPACITY_SOURCE_SELECTION_STALE'});
+        const original=siErp.requireSnapshot();
+        const dashboard=await siTargeting.dashboard();
+        const referrals=await cases.listInspectionRequests();
+        // Approved SI work orders reserve resources even in synthetic POC.
+        const issued=(await siScheduleOrders.all()).flatMap(x=>
+          x.orders.map(o=>({...o.assignment,imo:o.imo})));
+        const confirmed=body.demoMode?[]:
+          [...siScheduling.state.confirmed,
+            ...(await siScheduling.centralBookings(original))];
+        const capacity=previewCapacityPlan({
+          plan,selection,dashboard,erpSnapshot:original,
+          policy:siScheduling.getPolicy(),scheduler:siScheduling,
+          nmcReferrals:referrals,existingBookings:[...issued,...confirmed],
+          weights:body.weights,demoMode:body.demoMode
         });
-        return respond(res,201,{status:'APPROVED_AWAITING_SCHEDULING',
-          planId:result.id,revision:result.revision,
-          approvedVesselCount:result.approvedVessels.length,
+        if(operation==='capacity-preview')
+          return respond(res,200,{status:'ok',capacity});
+        if(body.expectedCapacityHash!==capacity.capacityHash)
+          return respond(res,409,{error:'SI_CAPACITY_SOURCE_OR_ERP_CHANGED_REPREVIEW'});
+        if(operation==='capacity-ai-recommend'){
+          if(!capacity.readyForApproval)return respond(res,409,{
+            error:'SI_CAPACITY_AI_REQUIRES_FEASIBLE_SELECTED_ROSTER'});
+          if(body.confirmRun!==true||body.confirmCost!==true)
+            return respond(res,422,{error:'SI_S01_EXPLICIT_COST_CONFIRMATION_REQUIRED'});
+          const mockDemo=body.demoMode&&siAiProvider==='mock';
+          if(!mockDemo&&(siAiProvider!=='airia'||!agentAllowed('s01')))
+            return respond(res,409,{error:'SI_S01_AIRIA_NOT_ENABLED'});
+          const payload=prepareS01WholePlanRequest(capacity.proposal);
+          if(body.demoMode){
+            payload.demoMode=true;
+            payload.demoNotice='POC synthetic engineers and visit windows, no official booking or authorization.';
+            payload.businessGuardrails.mockDataCannotAuthorizeInspection=true;
+          }
+          let raw;
+          if(mockDemo){
+            raw={bookingConfirmed:false,slotSetHash:payload.currentSnapshot.slotSetHash,
+              rankedOptions:capacity.proposal.variants.map((v,i)=>({
+                optionId:v.optionId,rank:i+1,confidence:1,
+                rationale:'POC MOCK: deterministic ranking of verified synthetic whole-plan alternatives, not an AI or regulatory decision.',
+                evidenceRefs:[payload.currentSnapshot.erpSnapshotId]
+              }))};
+          }else{
+            try{raw=await fleetAgentCall('s01',payload);}
+            catch{return respond(res,502,{error:'SI_S01_PROVIDER_UNAVAILABLE',planUnchanged:true});}
+          }
+          const advisor=validateS01WholePlanResponse(raw,capacity.proposal,payload);
+          if(mockDemo){advisor.provider='POC_MOCK';advisor.externalCalls=0;}
+          return respond(res,200,{status:'ok',capacityHash:capacity.capacityHash,...advisor});
+        }
+        if(body.confirmApproval!==true||!capacity.readyForApproval||
+          !body.selectedOptionId||!body.expectedSourceHash||
+          !Number.isInteger(body.expectedRevision)||
+          body.expectedRevision!==plan.revision||
+          body.expectedSourceHash!==selection.sourceHash)
+          return respond(res,409,{error:'SI_CAPACITY_FIRST_PLAN_NOT_FULLY_FEASIBLE_OR_STALE'});
+        const result=await commitCapacityFirstPlan({
+          rolling:siRollingPlans,plan,selection,capacity,
+          selectedOptionId:body.selectedOptionId,actor,reason:body.reason,
+          expectedRevision:body.expectedRevision,
+          expectedSourceHash:body.expectedSourceHash,
+          confirmCrossPort:body.confirmCrossPort===true
+        });
+        return respond(res,201,{
+          status:'CAPACITY_FIRST_APPROVED_WORK_ORDERS_ISSUED',
+          planId:result.plan.id,revision:result.plan.revision,
+          approvedVesselCount:result.plan.approvedVessels.length,
           createdInspectionCases:0,createdDossiers:0,
-          schedulingRoute:'/api/si/v1/maritime-scheduling/plans/'+result.id+'/preview'});
+          schedulingRoute:'/api/si/v1/maritime-scheduling/plans/'+planId+'/work-orders',
+          schedule:result.schedule,capacityHash:capacity.capacityHash,
+          officialErpBookingCreated:false
+        });
       }
       // Whole-plan scheduling read-only preview. The user may provide berth,
       // availability and duration input as operator scheduling facts.
@@ -1637,6 +1711,9 @@ const server = createServer(async (req, res) => {
           ...(Number.isInteger(e.batchIndex)?{batchIndex:e.batchIndex}:{}),
           ...(Number.isInteger(e.batchCount)?{batchCount:e.batchCount}:{})});
       if(e instanceof SiError||e instanceof SiPocAdvisorError||e instanceof SiRollingPlanError||e instanceof SiBulkApprovalError||e instanceof SiCandidateAgentError||e instanceof SiLifecycleError||e instanceof SiSelectionError||e instanceof SiPriorityError||e instanceof SiPreparationError||e instanceof SiWorkOrderError||e instanceof SiTargetingError||e instanceof MoeiAuthError||e instanceof DashboardError)
+        return respond(res,e.status,{error:e.code});
+      if(typeof e?.code==='string'&&e.code.startsWith('SI_CAPACITY_')&&
+         Number.isInteger(e.status)&&e.status>=400&&e.status<600)
         return respond(res,e.status,{error:e.code});
       if(Number.isInteger(e?.status)&&e.status>=400&&e.status<500)
         return respond(res,e.status,{error:'SI_REQUEST_INVALID'});

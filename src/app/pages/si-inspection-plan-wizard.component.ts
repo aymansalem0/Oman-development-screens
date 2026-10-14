@@ -6,7 +6,7 @@ import {Subscription,interval,switchMap} from 'rxjs';
 import {NmcNavigationComponent} from '../components/nmc-navigation.component';
 import {LanguageService} from '../services/language.service';
 import {MoeiAuthService} from '../services/moei-auth.service';
-import {SiBulkJob,SiBulkPlanService,SiBulkPreview,SiBulkVessel} from '../services/si-bulk-plan.service';
+import {SiBulkJob,SiBulkPlanService,SiBulkPreview,SiBulkVessel,SiCapacityPreview,SiCapacityWeights,SiCapacityWeightKey} from '../services/si-bulk-plan.service';
 
 @Component({
  selector:'app-si-inspection-plan-wizard',
@@ -20,8 +20,8 @@ import {SiBulkJob,SiBulkPlanService,SiBulkPreview,SiBulkVessel} from '../service
      <p class="eyebrow">MOEI · SMART INSPECTION · SI-01 → SI-02</p>
      <h1>{{copy('Review & Approve Rolling Plan','مراجعة واعتماد خطة المعاينات')}}</h1>
      <p *ngIf="preview?.planNumber"><strong>{{preview?.planNumber}}</strong></p>
-     <p>{{copy('One approval for all selected vessels. Every source reason is automatically captured.',
-       'اعتماد واحد للسفن المختارة، مع إدراج جميع أسباب إحالة كل سفينة تلقائيًا.')}}</p>
+     <p>{{copy('One approval verifies selected vessels, qualified inspector capacity, appointments and work orders.',
+       'اعتماد واحد للسفن المختارة والطاقة التشغيلية والمهندسين والمواعيد وأوامر التكليف.')}}</p>
     </div>
     <a class="back-link" routerLink="/moei/smart-inspection/candidates">
      {{copy('← Candidate & Targeting','← العودة إلى السفن المرشحة')}}
@@ -135,59 +135,138 @@ import {SiBulkJob,SiBulkPlanService,SiBulkPreview,SiBulkVessel} from '../service
     </section>
 
     <section class="panel" *ngIf="step===3">
-     <p class="eyebrow">{{copy('STEP 03 · AI-PROPOSED SCHEDULING','الخطوة ٣ · الجدولة المقترحة')}}</p>
-     <h2>{{copy('Approval freezes the selected vessels, not inspection cases',
-       'اعتماد قائمة السفن دون إنشاء حالات معاينة')}}</h2>
-     <div class="workflow">
-      <div><span class="flow-icon">1</span><div><b>{{copy('Freeze approved vessel roster','تثبيت السفن المعتمدة')}}</b>
-       <p>{{copy('Store all PSC, Service Request and approved NMC referral reasons. No cases or inspector dossiers are created now.',
-        'حفظ كل أسباب إحالة PSC وطلبات الخدمات وNMC. لا تنشأ حالات أو دوسيهات للمفتش في هذه المرحلة.')}}</p></div></div>
-      <div><span class="flow-icon">2</span><div><b>{{copy('Generate comprehensive maritime schedule','إنشاء جدولة بحرية شاملة')}}</b>
-       <p>{{copy('Source-final ETD needs no separate approval. Feasible inspectors are matched by vessel type, inspection regime, port and ERP availability. GT limits are not a requirement.',
-        'تاريخ المغادرة النهائي لا يتطلب اعتمادًا إضافيًا. يتم اختيار المهندس طبقًا لنوع السفينة والمعاينة والموقع والإتاحة، دون شرط نطاقات الحمولة.')}}</p></div></div>
-      <div><span class="flow-icon">3</span><div><b>{{copy('Supervisor approves the proposed schedule','المشرف يعتمد توزيع المواعيد والمهندسين')}}</b>
-       <p>{{copy('Schedule approval is independent of date finality. No auto-booking, case creation or NMC closure before the approved execution workflow.',
-        'اعتماد الجدولة مستقل عن نهائية تاريخ المغادرة. لا يتم الحجز أو إنشاء حالات أو إغلاق NMC قبل إتمام المسار المعتمد.')}}</p></div></div>
+     <p class="eyebrow">{{copy('STEP 03 · WEIGHTS AND CAPACITY','الخطوة ٣ · الأوزان والطاقة التشغيلية')}}</p>
+     <h2>{{copy('Inspection Source Weights & Available Inspector Capacity','نسب مصادر المعاينة والطاقة المتاحة للمهندسين')}}</h2>
+     <p>{{copy('Capacity and vessel selection form one draft. Source weights are advisory and cannot override mandatory inspections or protected NMC referral priorities.',
+       'اختيار السفن والطاقة التشغيلية جزء من مسودة واحدة. أوزان المصادر استشارية ولا تتجاوز المعاينات الإلزامية أو أولوية إحالات NMC.')}}</p>
+     <div class="capacity-weight-panel">
+      <h3>{{copy('Inspection Source / Risk Factor Weights','نسب مصادر المعاينة وعامل المخاطر')}} · {{weightTotal}}%</h3>
+      <label class="capacity-weight-row" *ngFor="let key of weightKeys">
+       <span>{{weightLabel(key)}}</span>
+       <input type="range" min="0" max="100" step="1" [value]="weights[key]"
+        [attr.aria-label]="weightLabel(key)"
+        (input)="updateWeight(key,$any($event.target).value)"
+        [disabled]="capacityBusy||submitting||returnedFromScheduling">
+       <b>{{weights[key]}}%</b>
+      </label>
+      <p class="hint">{{copy('Weights always total 100%. Unassessed vessel risk stays unknown, never low-risk by assumption.',
+       'مجموع الأوزان دائمًا 100%. المخاطر غير المقيمة تظل غير معروفة، ولا تُعتبر منخفضة تلقائيًا.')}}</p>
      </div>
-     <p class="notice">{{copy('The ERP workforce import is a POC simulator; missing berth access, final departure date or qualified available inspector causes UNSCHEDULED, never a fabricated booking.',
-       'بيانات ERP في الـPOC تجريبية. غياب معلومات الرصيف أو تاريخ المغادرة أو المهندس المؤهل يؤدي لعرض السفينة كغير مجدولة، وليس اختراع حجز.')}}</p>
+     <div class="capacity-buttons">
+      <button class="next" type="button" (click)="calculateCapacity()"
+       [disabled]="capacityBusy||submitting||weightTotal!==100">
+       {{capacityBusy?copy('Checking capacity…','جارٍ حساب الطاقة…'):
+        copy('Calculate Capacity & Inspection Appointments','حساب الطاقة ومواعيد المعاينات')}}</button>
+      <a class="secondary" routerLink="/moei/smart-inspection/candidates">
+       {{copy('Adjust Candidate Selection','تعديل اختيار السفن')}}</a>
+     </div>
+     <p class="notice error" *ngIf="capacityError" role="alert">{{capacityError}}</p>
+     <ng-container *ngIf="capacity as c">
+      <div class="review-stats">
+       <p><b>{{c.proposal.summary.total}}</b><span>{{copy('Selected','مختارة')}}</span></p>
+       <p><b>{{c.proposedVesselCount}}</b><span>{{copy('Feasible','قابلة للتنفيذ')}}</span></p>
+       <p><b>{{c.unmetCapacityCount}}</b><span>{{copy('Capacity gaps','عجز الطاقة')}}</span></p>
+      </div>
+      <p *ngIf="c.sourceFactsAreSynthetic" class="notice">{{copy(
+       'POC DEMO: staff qualifications, shifts and some visit details are synthetic, NOT live ERP bookings.',
+       'POC تجريبي: إتاحة المهندسين والورديات وبعض بيانات الزيارات افتراضية وليست حجوزات ERP رسمية.')}}</p>
+      <p *ngIf="!c.readyForApproval" class="notice error">{{copy(
+       'Cannot approve this selected plan until every vessel has an eligible inspector and feasible time. Reassign resources or revise candidate selection; never silently cancel mandatory inspections.',
+       'لا يمكن اعتماد الخطة حتى يتوفر مهندس مؤهل وموعد صالح لكل سفينة. عدّل الموارد أو المرشحين ولا تلغ المعاينات الإلزامية تلقائيًا.')}}</p>
+      <div class="table-scroll"><table>
+       <thead><tr><th>IMO</th><th>{{copy('Source score','نقاط المصادر')}}</th>
+        <th>{{copy('Risk points','نقاط المخاطر')}}</th>
+        <th>{{copy('Capacity','التوزيع')}}</th>
+        <th>{{copy('Engineer / Port / Time','المهندس / الميناء / الموعد')}}</th></tr></thead>
+       <tbody><tr *ngFor="let r of c.proposal.rows">
+        <td>{{r.imo}}</td>
+        <td>{{capacityPriority(r.imo)?.sourcePoints??'—'}}</td>
+        <td>{{capacityPriority(r.imo)?.riskPoints??copy('Unassessed','غير مقيم')}}</td>
+        <td><b [class.capacity-gap]="r.status==='UNSCHEDULED'">{{r.status}}</b>
+         <small *ngIf="r.blocker">{{r.diagnostics?.code||r.blocker}}</small>
+         <details *ngIf="r.diagnostics as d" class="capacity-diagnostic">
+          <summary>{{copy('Why not schedulable?','لماذا لم تتم جدولة السفينة؟')}}</summary>
+          <p>{{copy('Action','الإجراء')}}: {{d.nextAction||d.code}}</p>
+          <p>{{copy('Reviewed slots / engineers','المواعيد / المهندسون المفحوصون')}}:
+           {{d.candidateOptions??0}} / {{d.candidateInspectors??0}}</p>
+          <p>{{copy('Conflicts / daily capacity','التعارضات / الطاقة اليومية')}}:
+           {{d.timeOrTravelConflicts??0}} / {{d.dailyCapacityConflicts??0}}</p>
+          <ul *ngIf="d.inspectorExclusions?.length">
+           <li *ngFor="let x of d.inspectorExclusions">
+            {{x.inspectorId}}: {{x.reasonCodes.join(' · ')}}
+           </li>
+          </ul>
+          <p *ngIf="d.inspectorExclusions?.length">
+           {{copy('Overtime is an option only after independent HR authorization; source-final vessel windows and forbidden travel routes cannot be overridden.',
+            'العمل خارج الدوام خيار مشروط بموافقة الموارد البشرية؛ ولا يجوز تجاوز مواعيد السفينة النهائية أو مسارات الانتقال المحظورة.')}}
+          </p>
+         </details></td>
+        <td>{{r.assignment?.inspectorName||'—'}}
+         <small>{{r.assignment?.portName||''}} · {{r.assignment?.startLocal||''}}</small>
+         <small *ngIf="r.assignment?.crossPort">
+          {{copy('From','من')}} {{r.assignment?.originPortName}} ·
+          {{r.assignment?.travelMinutes}} {{copy('min','دقيقة')}}</small></td>
+       </tr></tbody>
+      </table></div>
+      <div *ngIf="c.readyForApproval" class="capacity-options">
+       <label>{{copy('Select verified schedule variant','اختر بديل الجدولة المحقق')}}
+        <select [(ngModel)]="selectedOptionId">
+         <option *ngFor="let v of c.proposal.variants" [value]="v.optionId">
+          {{v.optionId}} · {{v.allocatedVessels}} {{copy('vessels','سفن')}}</option>
+        </select></label>
+       <button type="button" class="secondary" (click)="runCapacityAi()"
+        [disabled]="capacityAiBusy||capacityBusy">{{copy('AI: Rank Feasible Alternatives','AI: ترتيب البدائل الممكنة')}}</button>
+       <p *ngIf="capacityAiAdvice" class="notice">
+        {{copy('Advisory only:','توصية استشارية فقط:')}}
+        {{capacityAiAdvice.chosenOptionId}} · {{capacityAiAdvice.provider}}</p>
+      </div>
+     </ng-container>
     </section>
     <section class="panel" *ngIf="step===4">
-     <p class="eyebrow">{{copy('STEP 04 · SUPERVISOR APPROVAL','الخطوة ٤ · اعتماد المسؤول')}}</p>
-     <h2>{{copy('Review and approve the whole plan','مراجعة واعتماد الخطة بالكامل')}}</h2>
+     <p class="eyebrow">{{copy('STEP 04 · CAPACITY-VERIFIED SUPERVISOR APPROVAL','الخطوة ٤ · اعتماد الخطة بعد التحقق من الطاقة')}}</p>
+     <h2>{{copy('Approve Vessels, Inspectors & Dates Together','اعتماد السفن والمهندسين والمواعيد معًا')}}</h2>
      <div class="review-stats">
-      <p><b>{{p.selectedVessels}}</b><span>{{copy('Selected vessels','السفن المختارة')}}</span></p>
-      <p><b>{{totalReasons}}</b><span>{{copy('Source reasons preserved','أسباب إحالة محفوظة')}}</span></p>
-      <p><b>{{totalScopes}}</b><span>{{copy('Regulatory inspection scopes','نطاقات معاينة نظامية')}}</span></p>
+      <p><b>{{p.selectedVessels}}</b><span>{{copy('Selected','السفن المختارة')}}</span></p>
+      <p><b>{{totalReasons}}</b><span>{{copy('Source reasons','أسباب المعاينة')}}</span></p>
+      <p><b>{{capacity?.proposedVesselCount||0}}</b><span>{{copy('Feasible','تكليفات قابلة للتنفيذ')}}</span></p>
      </div>
-     <p class="notice">{{copy('All collected reasons and scopes were shown in Step 2. Approval covers the entire currently selected plan, not a single referral per vessel.',
-       'تم عرض جميع الأسباب والنطاقات في الخطوة الثانية. الاعتماد يشمل الخطة الحالية بالكامل وليس إحالة واحدة لكل سفينة.')}}</p>
-     <label class="approval-notes">{{copy('Supervisor approval notes','ملاحظات اعتماد المشرف')}}
+     <p class="notice">{{copy('A single Oracle transaction approves the verified vessels and their inspector/time assignments and issues work orders. This POC is NOT a live ERP booking.',
+      'معاملة Oracle واحدة تعتمد السفن والمهندسين والمواعيد وتصدر أوامر التكليف. هذه المحاكاة ليست حجز ERP فعليًا.')}}</p>
+     <div class="table-scroll"><table>
+      <thead><tr><th>IMO</th><th>{{copy('Inspector','المهندس')}}</th>
+       <th>{{copy('Port','الميناء')}}</th><th>{{copy('Time','الموعد')}}</th>
+       <th>{{copy('Origin Port','ميناء المهندس')}}</th></tr></thead>
+      <tbody><tr *ngFor="let x of selectedCapacityAssignments">
+       <td>{{x.imo}}</td><td>{{x.inspectorName}}</td>
+       <td>{{x.portName}}</td><td>{{x.startLocal}} → {{x.endLocal}}</td>
+       <td>{{x.crossPort?x.originPortName:'—'}}</td>
+      </tr></tbody>
+     </table></div>
+     <label class="approval-notes">{{copy('Supervisor approval notes','مبررات اعتماد المشرف')}}
       <textarea rows="3" maxlength="500" [(ngModel)]="reason"
-        [placeholder]="copy('Document why the selected plan is approved','سجل سبب اعتماد الخطة المختارة')"></textarea>
+       [placeholder]="copy('Reason for approving selected vessels and capacity',
+       'سبب اعتماد السفن المختارة وتوزيع الموارد')"></textarea>
      </label>
-     <p class="notice">{{copy('Only the selected vessel roster is approved now. Electronic scheduling is the next independent step.',
-        'سيتم اعتماد قائمة السفن فقط؛ الخطوة التالية هي الجدولة الإلكترونية واعتماد توزيع المهندسين.')}}</p>
      <p *ngIf="v2RosterError" class="notice error" role="alert">{{v2RosterError}}</p>
      <button type="button" class="approve" (click)="approve()"
-      [disabled]="returnedFromScheduling||submitting||jobBusy||!auth.isAdmin||reason.trim().length<8||p.stale||(!p.agentRunId&&!p.manualSelection)||hasMissingReasons||!!v2RosterError">
-      {{submitting?copy('Submitting approval…','جارٍ إرسال الاعتماد…'):
-       copy('Approve '+p.selectedVessels+' Vessels for Scheduling',
-        'اعتماد '+p.selectedVessels+' سفن للجدولة')}}
+      [disabled]="returnedFromScheduling||submitting||jobBusy||!auth.isAdmin||reason.trim().length<8||p.stale||hasMissingReasons||!!v2RosterError||!capacity?.readyForApproval||!selectedOptionId">
+      {{submitting?copy('Saving approval…','جارٍ الاعتماد…'):
+       copy('Approve Plan and Issue '+p.selectedVessels+' Work Orders',
+        'اعتماد الخطة وإصدار '+p.selectedVessels+' أمر تكليف')}}
      </button>
-     <p class="hint">{{copy('Approval is one human-authorized decision. The AI never approves inspections.',
-       'الاعتماد قرار واحد يصدر من مستخدم مخول، وليس من الذكاء الاصطناعي.')}}</p>
+     <p class="hint">{{copy('AI advises; a human supervisor approves. Statutory inspections cannot be cancelled by AI.',
+      'الذكاء الاصطناعي يقترح والمشرف يعتمد. لا يُلغي AI أي معاينة إلزامية.')}}</p>
     </section>
     <section class="panel" *ngIf="step===5&&scheduleApproval as approval">
-     <p class="eyebrow">{{copy('STEP 05 · AWAITING MARITIME SCHEDULING','الخطوة الخامسة · في انتظار الجدولة البحرية')}}</p>
-     <h2>{{copy('Plan approved — No inspection cases were created','اعتمدت الخطة دون إنشاء حالات معاينة')}}</h2>
+     <p class="eyebrow">{{copy('STEP 05 · ISSUED WORK ORDERS','الخطوة الخامسة · أوامر التكليف الصادرة')}}</p>
+     <h2>{{copy('Plan and capacity approved; work orders issued','اعتمدت الخطة وتوزيع المهندسين وأوامر التكليف')}}</h2>
      <p class="notice">{{copy('Approved vessels','السفن المعتمدة')}}: <b>{{approval.approvedVesselCount}}</b> ·
-      {{copy('Inspection cases created','حالات معاينة منشأة')}}: <b>{{approval.createdInspectionCases}}</b></p>
-     <p>{{copy('All referral reasons are retained. Continue to the comprehensive scheduling board to assign time, location and an available qualified engineer.',
-      'تم الاحتفاظ بجميع أسباب المعاينة. انتقل للجدولة الشاملة لتحديد الموعد والمكان والمهندس المؤهل والمتاح.')}}</p>
+      {{copy('Inspection cases created','حالات معاينة منشأة')}}: <b>{{approval.createdInspectionCases}}</b> · {{copy('Work orders issued','أوامر التكليف الصادرة')}}: <b>{{approval.issuedWorkOrders}}</b></p>
+     <p>{{copy('Vessels, engineers and inspection times are already approved together. Continue to the work-order board to prepare checklists and field visits.',
+      'تم اعتماد السفن والمهندسين والمواعيد معًا. افتح أوامر التكليف لتحضير القوائم والزيارات الميدانية.')}}</p>
      <div class="step-actions">
       <a class="next" [routerLink]="['/moei/smart-inspection/scheduling/plan',approval.planId]">
-       {{copy('Open Maritime Scheduling Board →','فتح لوحة الجدولة البحرية ←')}}</a>
+       {{copy('Open Issued Work Orders →','فتح أوامر التكليف الصادرة ←')}}</a>
      </div>
     </section>
     <section class="panel" *ngIf="step===5&&job as j">
@@ -307,6 +386,28 @@ import {SiBulkJob,SiBulkPlanService,SiBulkPreview,SiBulkVessel} from '../service
  .step-actions span{color:#607988;font-weight:850}.job-chip{padding:8px 12px;border-radius:16px;background:#dcf5e6;color:#087450}
  .job-chip.warning{background:#fff1de;color:#935e25}
  .error-text{color:#aa503b}
+
+ .capacity-weight-panel{background:#f5fafb;border:1px solid #c6dfe4;
+  padding:20px;border-radius:12px;margin:18px 0}
+ .capacity-weight-panel h3{font-size:14px;color:#176677;margin:0 0 12px}
+ .capacity-weight-row{display:grid;grid-template-columns:minmax(140px,1fr) minmax(120px,2fr) 54px;
+  gap:14px;align-items:center;padding:9px 0;border-bottom:1px solid #dde9e9;font-size:12px;font-weight:700}
+ .capacity-weight-row input{width:100%;accent-color:#087d7b;cursor:pointer}
+ .capacity-weight-row b{text-align:end;font-size:13px;color:#0f7772}
+ .capacity-buttons,.capacity-options{display:flex;gap:13px;align-items:center;
+  flex-wrap:wrap;margin:18px 0}
+ .capacity-options label{font-weight:750;font-size:12px}
+ .capacity-options select{min-height:39px;padding:9px;margin:0 8px;border:1px solid #b5cbd0;
+  border-radius:7px;background:#fff}
+ .capacity-gap{color:#ae582f}
+ .capacity-diagnostic{max-width:340px;text-align:start;font-size:11px;padding:5px 0}
+ .capacity-diagnostic summary{color:#095b7b;cursor:pointer;font-weight:850;text-decoration:underline}
+ .capacity-diagnostic p{margin:7px 0}
+ .capacity-diagnostic ul{padding-inline-start:18px;max-height:150px;overflow:auto}
+
+ @media(max-width:600px){.capacity-weight-row{grid-template-columns:1fr 70px}
+  .capacity-weight-row input{grid-column:1 / -1;grid-row:2}
+  .capacity-buttons{align-items:stretch;flex-direction:column}}
  @media(max-width:1220px){.wizard-main{margin-inline-start:90px;padding:24px}}
  @media(max-width:960px){.wizard-main{margin-inline-start:0;padding:20px}.steps{grid-template-columns:repeat(2,1fr)}}
  @media(max-width:600px){.wizard-main{padding:13px}.wizard-hero,.panel-head{display:block}.steps{gap:4px}.step-item{font-size:10px;padding:7px}
@@ -314,16 +415,102 @@ import {SiBulkJob,SiBulkPlanService,SiBulkPreview,SiBulkVessel} from '../service
  `]
 })
 export class SiInspectionPlanWizardComponent implements OnInit,OnDestroy{
- readonly stages=[{en:'Selected Vessels',ar:'السفن المختارة'},
-  {en:'All Referral Reasons',ar:'أسباب المعاينة'},{en:'Electronic Scheduling',ar:'الجدولة الإلكترونية'},
-  {en:'Review & Approval',ar:'المراجعة والاعتماد'}];
+ readonly stages=[
+ {en:'Candidate Vessels',ar:'السفن المرشحة'},
+ {en:'Referral Evidence',ar:'أسباب الإحالة'},
+ {en:'Weights & Capacity',ar:'الأوزان والطاقة'},
+ {en:'Unified Plan Approval',ar:'اعتماد الخطة والتوزيع'}];
  step=1;preview:SiBulkPreview|null=null;planId:string|null=null;
+ readonly weightKeys:SiCapacityWeightKey[]=[
+  'NMC_CASE','SERVICE_REQUEST','PSC_PORT_CALL','RISK_FACTOR'];
+ weights:SiCapacityWeights={NMC_CASE:30,SERVICE_REQUEST:25,
+  PSC_PORT_CALL:20,RISK_FACTOR:25};
+ capacity:SiCapacityPreview|null=null;capacityBusy=false;
+ capacityAiBusy=false;capacityError='';selectedOptionId='';
+ capacityAiAdvice:{chosenOptionId:string;provider:string}|null=null;
+ get weightTotal():number{
+  return this.weightKeys.reduce((sum,key)=>sum+this.weights[key],0);
+ }
+ weightLabel(key:SiCapacityWeightKey):string{
+  const names:Record<SiCapacityWeightKey,[string,string]>={
+   NMC_CASE:['National Maritime Centre referrals','إحالات المركز البحري الوطني'],
+   SERVICE_REQUEST:['Maritime service requests','طلبات الخدمات البحرية'],
+   PSC_PORT_CALL:['PSC port calls','الرقابة على دولة الميناء PSC'],
+   RISK_FACTOR:['Vessel Risk Factor','عامل مخاطر السفينة']
+  };
+  return this.copy(names[key][0],names[key][1]);
+ }
+ updateWeight(key:SiCapacityWeightKey,value:string):void{
+  const desired=Math.max(0,Math.min(100,Math.round(Number(value)||0)));
+  const other=this.weightKeys.filter(k=>k!==key);
+  const remaining=100-desired;
+  const sum=other.reduce((n,k)=>n+this.weights[k],0);
+  const shares=other.map(k=>sum?remaining*this.weights[k]/sum:
+   remaining/other.length);
+  const next=shares.map(Math.floor);
+  let rest=remaining-next.reduce((a,b)=>a+b,0);
+  for(const row of shares.map((share,i)=>({i,rem:share-next[i]}))
+   .sort((a,b)=>b.rem-a.rem||a.i-b.i)){
+    if(!rest)break;next[row.i]++;rest--;
+  }
+  this.weights[key]=desired;
+  other.forEach((k,i)=>{this.weights[k]=next[i];});
+  this.capacity=null;this.capacityAiAdvice=null;this.selectedOptionId='';
+  this.capacityError='';
+ }
+ capacityPriority(imo:string){
+  return this.capacity?.priorityAdvisory.find(p=>p.imo===imo)||null;
+ }
+ get selectedCapacityAssignments(){
+  return this.capacity?.proposal.variants.find(v=>
+   v.optionId===this.selectedOptionId)?.assignments||[];
+ }
+ calculateCapacity():void{
+  if(!this.planId||this.capacityBusy||this.weightTotal!==100)return;
+  this.capacityBusy=true;this.capacityError='';this.capacity=null;
+  this.capacityAiAdvice=null;this.selectedOptionId='';
+  this.api.capacityPreview(this.planId,{...this.weights}).subscribe({
+   next:r=>{
+    this.capacityBusy=false;
+    if(!this.preview||r.capacity.planRevision!==this.preview.planRevision||
+     r.capacity.sourceHash!==this.preview.sourceHash){
+     this.capacityError=this.copy('Plan/source changed. Reload candidates.',
+      'تغيرت الخطة أو المصادر، أعد تحميل المرشحين.');return;
+    }
+    this.capacity=r.capacity;
+    this.selectedOptionId=r.capacity.proposal.variants[0]?.optionId||'';
+   },
+   error:e=>{this.capacityBusy=false;
+    this.capacityError=e?.error?.error||'SI_CAPACITY_PREVIEW_FAILED';}
+  });
+ }
+ runCapacityAi():void{
+  if(!this.capacity?.readyForApproval||!this.planId||this.capacityAiBusy)return;
+  if(!window.confirm(this.copy(
+   'Run SI-S01 on verified options? MOCK is zero-cost, but Airia may be billable. AI cannot approve an inspection.',
+   'تشغيل SI-S01 على البدائل المحققة؟ MOCK مجاني وAiria قد يكون مدفوعًا. AI لا يعتمد المعاينات.')))return;
+  this.capacityAiBusy=true;this.capacityError='';
+  const expectedHash=this.capacity.capacityHash;
+  this.api.capacityAiRecommend(this.planId,{...this.weights},expectedHash)
+   .subscribe({
+    next:r=>{
+     this.capacityAiBusy=false;
+     if(!this.capacity||this.capacity.capacityHash!==r.capacityHash)return;
+     this.capacityAiAdvice={chosenOptionId:r.chosenOptionId,provider:r.provider};
+     this.selectedOptionId=r.chosenOptionId;
+    },
+    error:e=>{this.capacityAiBusy=false;
+     this.capacityError=e?.error?.error||'SI_S01_CAPACITY_AI_FAILED';}
+   });
+ }
+
  focusedImo='';returnedFromScheduling=false;
  get focusedVessel():SiBulkVessel|null{
   return this.preview?.vessels.find(v=>v.imo===this.focusedImo)||null;
  }
  job:SiBulkJob|null=null;loading=false;submitting=false;error='';
- scheduleApproval:{planId:string;approvedVesselCount:number;createdInspectionCases:number}|null=null;
+ scheduleApproval:{planId:string;approvedVesselCount:number;
+ createdInspectionCases:number;issuedWorkOrders:number}|null=null;
  reason='';generateA04=false;private timer:Subscription|null=null;
  constructor(private api:SiBulkPlanService,private readonly route:ActivatedRoute,
   public lang:LanguageService,public auth:MoeiAuthService){}
@@ -341,9 +528,9 @@ export class SiInspectionPlanWizardComponent implements OnInit,OnDestroy{
  get v2RosterError():string{
   const p=this.preview;
   if(!p)return '';
-  if(p.selectedVessels>500)return this.copy(
-    'A roster can contain up to 500 vessels. Divide the draft into independently approved plans.',
-    'يمكن اعتماد 500 سفينة بحد أقصى في القائمة الواحدة. قسّم المسودة إلى خطط مستقلة.');
+  if(p.selectedVessels>40)return this.copy(
+    'A capacity-verified plan supports up to 40 vessels per calculation. Create separate drafts for additional candidates.',
+    'تدعم الخطة 40 سفينة بحد أقصى لحساب الطاقة. أنشئ مسودات مستقلة للسفن الإضافية.');
   if(p.vessels.some(v=>!Number.isInteger(v.rank)||(v.rank??0)<1||
       (v.rank??0)>p.selectedVessels))
    return this.copy('A selected vessel has no valid plan rank. Reopen Candidate & Targeting and refresh.',
@@ -394,7 +581,8 @@ export class SiInspectionPlanWizardComponent implements OnInit,OnDestroy{
  get totalScopes():number{return this.preview?.vessels.reduce((n,v)=>n+v.inspectionRegimes.length,0)||0;}
  get canNext():boolean{return !!this.preview&&this.step<4&&this.preview.selectedVessels>0&&
   (!!this.preview.agentRunId||!!this.preview.manualSelection)&&
-  !this.preview.stale&&!this.hasMissingReasons&&!this.loading;}
+  !this.preview.stale&&!this.hasMissingReasons&&!this.loading&&
+  (this.step!==3||!!this.capacity?.readyForApproval)&&!this.capacityBusy;}
  ngOnInit():void{
   this.planId=this.route.snapshot.paramMap.get('planId');
   const incoming=this.route.snapshot.queryParamMap.get('imo')||'';
@@ -419,6 +607,8 @@ export class SiInspectionPlanWizardComponent implements OnInit,OnDestroy{
  ngOnDestroy():void{this.timer?.unsubscribe();}
  refresh():void{
   if(this.submitting||!this.planId)return;this.loading=true;this.error='';
+  this.capacity=null;this.capacityAiAdvice=null;this.selectedOptionId='';
+  this.capacityError='';
   this.api.preview(this.planId).subscribe({
    next:p=>{
     this.preview=p;this.loading=false;
@@ -430,31 +620,44 @@ export class SiInspectionPlanWizardComponent implements OnInit,OnDestroy{
   });
  }
  previous():void{if(this.step>1&&this.step<5)this.step--;}
- next():void{if(this.canNext)this.step++;}
+ next():void{if(this.canNext){this.step++;if(this.step===3&&!this.capacity)this.calculateCapacity();}}
  approve():void{
   if(this.returnedFromScheduling)return;
-  const p=this.preview;if(!this.planId||!p||this.submitting||this.jobBusy||!this.auth.isAdmin||
-   (!p.agentRunId&&!p.manualSelection)||p.stale||this.hasMissingReasons||this.reason.trim().length<8||!!this.v2RosterError)return;
-  const message=this.copy(
-   'Approve the roster of '+p.selectedVessels+' vessels for comprehensive scheduling? No inspection case or dossier will be created at plan approval.',
-   'اعتماد قائمة '+p.selectedVessels+' سفن لجدولتها إلكترونيًا؟ لن يتم إنشاء أي حالة معاينة أو دوسيه الآن.'
-  );
-  if(!window.confirm(message))return;
+  const p=this.preview,c=this.capacity;
+  if(!this.planId||!p||!c?.readyForApproval||this.submitting||
+   this.capacityBusy||this.jobBusy||!this.auth.isAdmin||p.stale||
+   this.hasMissingReasons||this.reason.trim().length<8||
+   !!this.v2RosterError||!this.selectedOptionId)return;
+  const chosen=c.proposal.variants.find(v=>v.optionId===this.selectedOptionId);
+  if(!chosen||chosen.assignments.length!==p.selectedVessels)return;
+  const remote=chosen.assignments.filter(a=>a.crossPort);
+  if(remote.length&&!window.confirm(this.copy(
+   'Approve '+remote.length+' qualified cross-port inspector assignment(s), with synthetic POC travel estimates?',
+   'هل تعتمد '+remote.length+' مهمة لمهندسين مؤهلين من موانئ أخرى بأزمنة انتقال تجريبية؟')))return;
+  if(!window.confirm(this.copy(
+   'Approve '+p.selectedVessels+' vessels and ALL their qualified engineer/time assignments in one transaction? No live ERP booking.',
+   'اعتماد '+p.selectedVessels+' سفينة مع مهندسيها ومواعيدها في معاملة واحدة؟ دون حجز ERP فعلي.')))return;
   this.submitting=true;this.error='';
-  this.api.approveForScheduling({
-    planId:this.planId!,reason:this.reason.trim(),expectedRevision:p.planRevision,
-    expectedSourceHash:p.sourceHash,confirmApproval:true
+  this.api.approveCapacityPlan({
+   planId:this.planId,weights:{...this.weights},
+   expectedCapacityHash:c.capacityHash,selectedOptionId:this.selectedOptionId,
+   expectedRevision:p.planRevision,expectedSourceHash:p.sourceHash,
+   reason:this.reason.trim(),confirmApproval:true,
+   confirmCrossPort:remote.length>0
   }).subscribe({
-    next:result=>{
-      this.submitting=false;this.scheduleApproval={
-        planId:result.planId,approvedVesselCount:result.approvedVesselCount,
-        createdInspectionCases:result.createdInspectionCases};
-      this.job=null;this.step=5;
-    },
-    error:e=>{
-      this.submitting=false;this.error=this.v2ApprovalError(
-        e?.error?.error||'SI_V2_PLAN_APPROVAL_UNAVAILABLE');
-    }
+   next:result=>{
+    this.submitting=false;
+    this.scheduleApproval={
+     planId:result.planId,approvedVesselCount:result.approvedVesselCount,
+     createdInspectionCases:result.createdInspectionCases,
+     issuedWorkOrders:result.schedule.orders.length};
+    this.job=null;this.step=5;
+   },
+   error:e=>{
+    this.submitting=false;
+    this.error=e?.error?.error||'SI_CAPACITY_APPROVAL_FAILED_REPREVIEW';
+    this.capacity=null;this.selectedOptionId='';this.capacityAiAdvice=null;
+   }
   });
  }
  private poll(id:string):void{
