@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {buildC01Source,validateC01,unwrapC01AiriaResult,SiCandidateAgent} from '../si-candidate-agent.mjs';
+import {buildC01Source,validateC01,unwrapC01AiriaResult,c01RecommendationContractFailure,SiCandidateAgent} from '../si-candidate-agent.mjs';
 import {mockSiC01,mockSiP01,mockSiA04} from '../si-agent-mock.mjs';
 import {validateP01} from '../si-ai-prioritization.mjs';
 import {validateA04} from '../si-inspection-preparation.mjs';
@@ -257,4 +257,47 @@ test('C01 AIRIA explicit run consumes JSON-string result and remains advisory',a
   assert.equal(result.humanDecisionRequired,true);
   assert.equal(result.mutations,false);
   assert.equal(result.recommendations.length,preview.eligibleCount);
+});
+
+test('C01 diagnoses the exact invalid provider field without accepting it',()=>{
+ const source=buildC01Source(inputs(),{version:6});
+ const valid=mockSiC01(source);
+ const first=valid.recommendations[0];
+ const candidate=source.candidates.find(c=>c.candidateKey===first.candidateKey);
+ const bad=[
+  [{...first,candidateKey:'UNKNOWN'},'CANDIDATE_KEY_UNKNOWN_OR_MISSING',null],
+  [{...first},'CANDIDATE_KEY_DUPLICATE',new Set([first.candidateKey])],
+  [{...first,recommendation:'SCHEDULE_DIRECTLY'},'RECOMMENDATION_ENUM_INVALID',null],
+  [{...first,confidence:'0.8'},'CONFIDENCE_INVALID_NUMBER_OR_RANGE_0_TO_1',null],
+  [{...first,reason:''},'REASON_MISSING_OR_INVALID_LENGTH',null],
+  [{...first,priorityRationale:'short'},'PRIORITY_RATIONALE_MISSING_OR_INVALID_LENGTH',null],
+  [{...first,suggestedRank:'1'},'SELECTED_SUGGESTED_RANK_INVALID',null],
+  [{...first,recommendation:'MANUAL_REVIEW',suggestedRank:1},'NON_SELECTED_RANK_MUST_BE_NULL',null],
+  [{...first,evidenceRefs:null},'EVIDENCE_REFS_MISSING_OR_TOO_MANY',null],
+  [{...first,evidenceRefs:['FAKE_AI_EVIDENCE']},'EVIDENCE_REF_NOT_IN_SOURCE',null],
+  [{...first,dataGaps:null},'DATA_GAPS_MISSING_OR_TOO_MANY',null],
+  [{...first,dataGaps:[42]},'DATA_GAP_ENTRY_INVALID',null]
+ ];
+ for(const [item,expected,seen] of bad){
+  assert.equal(c01RecommendationContractFailure(item,
+    item.candidateKey===first.candidateKey?candidate:undefined,seen||new Set()),expected);
+  const response=structuredClone(valid);
+  response.recommendations[0]=item;
+  assert.throws(()=>validateC01({result:JSON.stringify(response)},source),
+   e=>e.code==='SI_C01_UNVERIFIED_RECOMMENDATION'&&e.diagnosticCode===expected);
+ }
+ assert.equal(c01RecommendationContractFailure(first,candidate),null);
+});
+test('C01 safe warning logs only static reason + index; never ship/source identifiers',()=>{
+ const source=buildC01Source(inputs(),{version:6});
+ const response=mockSiC01(source);
+ response.recommendations[0].evidenceRefs=['secret-source-ref-should-not-appear'];
+ const messages=[],oldWarn=console.warn;
+ console.warn=(...args)=>messages.push(args.join(' '));
+ try{
+  assert.throws(()=>validateC01(response,source),e=>e.code==='SI_C01_UNVERIFIED_RECOMMENDATION');
+ }finally{console.warn=oldWarn;}
+ assert.equal(messages.length,1);
+ assert.match(messages[0],/RECOMMENDATION_CONTRACT_REJECTED field=EVIDENCE_REF_NOT_IN_SOURCE itemIndex=0/);
+ assert.doesNotMatch(messages[0],/secret-source-ref|9328471|9400409|evt-nmc/);
 });

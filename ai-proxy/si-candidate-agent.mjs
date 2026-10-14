@@ -77,6 +77,40 @@ export function unwrapC01AiriaResult(raw){
  return body&&typeof body==='object'&&
    !Array.isArray(body)&&Array.isArray(body.recommendations)?body:null;
 }
+/**
+ * Diagnose the FIRST mismatched contract field in a provider recommendation.
+ * Only hardcoded reason names escape this function. Never pass upstream text
+ * or source identifiers into production logs or HTTP error details.
+ *
+ * A C01 response must cite existing candidate evidence for every suggestion;
+ * diagnosis does NOT coerce types, invent missing fields, or downgrade checks.
+ */
+export function c01RecommendationContractFailure(r,c,seen=new Set()){
+ if(!r||typeof r!=='object'||Array.isArray(r))return 'RECOMMENDATION_ITEM_SHAPE';
+ if(!c)return 'CANDIDATE_KEY_UNKNOWN_OR_MISSING';
+ if(seen.has(r.candidateKey))return 'CANDIDATE_KEY_DUPLICATE';
+ if(!ADVICE.has(r.recommendation))return 'RECOMMENDATION_ENUM_INVALID';
+ if(!Number.isFinite(r.confidence)||r.confidence<0||r.confidence>1)
+  return 'CONFIDENCE_INVALID_NUMBER_OR_RANGE_0_TO_1';
+ if(typeof r.reason!=='string'||r.reason.trim().length<10||r.reason.length>1500)
+  return 'REASON_MISSING_OR_INVALID_LENGTH';
+ if(typeof r.priorityRationale!=='string'||r.priorityRationale.length<12||
+   r.priorityRationale.length>1500)
+  return 'PRIORITY_RATIONALE_MISSING_OR_INVALID_LENGTH';
+ if(r.recommendation==='SELECT_RECOMMENDED'){
+  if(!Number.isInteger(r.suggestedRank)||r.suggestedRank<1||r.suggestedRank>100)
+   return 'SELECTED_SUGGESTED_RANK_INVALID';
+ }else if(r.suggestedRank!==null)return 'NON_SELECTED_RANK_MUST_BE_NULL';
+ if(!Array.isArray(r.evidenceRefs)||r.evidenceRefs.length>20)
+  return 'EVIDENCE_REFS_MISSING_OR_TOO_MANY';
+ if(r.evidenceRefs.some(e=>!c.allowedEvidence.includes(e)))
+  return 'EVIDENCE_REF_NOT_IN_SOURCE';
+ if(!Array.isArray(r.dataGaps)||r.dataGaps.length>20)
+  return 'DATA_GAPS_MISSING_OR_TOO_MANY';
+ if(r.dataGaps.some(g=>typeof g!=='string'||g.length>120))
+  return 'DATA_GAP_ENTRY_INVALID';
+ return null;
+}
 export function validateC01(raw,source){
   const body=unwrapC01AiriaResult(raw);
   if(!body||body.recommendations.length!==source.candidates.length){
@@ -94,21 +128,18 @@ export function validateC01(raw,source){
     throw new SiCandidateAgentError('SI_C01_RESPONSE_INVALID',502);
   }
   const known=new Map(source.candidates.map(x=>[x.candidateKey,x])),seen=new Set();
-  return body.recommendations.map(r=>{
+  return body.recommendations.map((r,index)=>{
     const c=known.get(r?.candidateKey);
-    if(!c||seen.has(r.candidateKey)||!ADVICE.has(r.recommendation)||
-       !Number.isFinite(r.confidence)||r.confidence<0||r.confidence>1||
-       typeof r.reason!=='string'||r.reason.trim().length<10||r.reason.length>1500||
-       typeof r.priorityRationale!=='string'||r.priorityRationale.length<12||
-       r.priorityRationale.length>1500||
-       (r.recommendation==='SELECT_RECOMMENDED'?
-         (!Number.isInteger(r.suggestedRank)||r.suggestedRank<1||r.suggestedRank>100):
-         r.suggestedRank!==null)||
-       !Array.isArray(r.evidenceRefs)||r.evidenceRefs.length>20||
-       r.evidenceRefs.some(e=>!c.allowedEvidence.includes(e))||
-       !Array.isArray(r.dataGaps)||r.dataGaps.length>20||
-       r.dataGaps.some(g=>typeof g!=='string'||g.length>120))
-       throw new SiCandidateAgentError('SI_C01_UNVERIFIED_RECOMMENDATION',502);
+    const failure=c01RecommendationContractFailure(r,c,seen);
+    if(failure){
+      // This is a STATIC enum, never content supplied by Airia. Do not log
+      // candidateKey, IMO, evidence references, raw provider payload or keys.
+      console.warn('[si-c01] RECOMMENDATION_CONTRACT_REJECTED field='+failure+
+        ' itemIndex='+index+' total='+body.recommendations.length);
+      const error=new SiCandidateAgentError('SI_C01_UNVERIFIED_RECOMMENDATION',502);
+      error.diagnosticCode=failure;
+      throw error;
+    }
     // Business-gated recommendation: a model cannot silently select unapproved
     // PSC/service candidates or candidates with missing verified risk.
     if(r.recommendation==='SELECT_RECOMMENDED'&&
