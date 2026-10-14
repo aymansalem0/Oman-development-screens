@@ -38,8 +38,22 @@ export function buildC01Source(dashboard,pscPolicy=null){
         ...(!Number.isFinite(incidentSeverity)?['HUMAN_REVIEWED_INCIDENT_SEVERITY_UNAVAILABLE']:[]),
         ...(!c.currentRisk?['SAVED_NMC_VESSEL_RISK_UNAVAILABLE_INFORMATIONAL_ONLY']:[])
       ];
-      const allowedEvidence=unique(c.events.flatMap(e=>[
-        e.eventKey,e.sourceEventId,e.sourceReference,...(e.evidenceIds||[])]));
+      const operationalSourceEvents=(vessel.operationalSourceEvents||[])
+        .map(e=>({
+          sourceType:e.sourceType,eventKey:e.eventKey,
+          sourceEventId:e.sourceEventId,sourceReference:e.sourceReference,
+          provenance:e.provenance,approval:e.approval,
+          port:e.port||null,eta:e.eta||null,
+          departureAt:e.departureAt||null,
+          departureVerified:e.departureVerified===true,
+          departureAuthority:e.departureAuthority||null,
+          evidenceIds:e.evidenceIds||[],
+          importFile:e.importFile||null,importBatchId:e.importBatchId||null,
+          importExcelRow:e.importExcelRow||null
+        }));
+      const allowedEvidence=unique([...c.events,...operationalSourceEvents]
+        .flatMap(e=>[e.eventKey,e.sourceEventId,
+          e.sourceReference,...(e.evidenceIds||[])]));
       return {candidateKey:c.key,imo:c.imo,regime:c.regime,
         vesselName:c.vesselName,eligibility:c.eligibility,
         currentRisk:c.currentRisk||null,
@@ -58,6 +72,9 @@ export function buildC01Source(dashboard,pscPolicy=null){
           importFile:e.importFile||null,importBatchId:e.importBatchId||null,
           importExcelRow:e.importExcelRow||null
         })),
+        // Operational MSW records may explain an ETD without separately
+        // making a PSC port call an approved inspection candidate.
+        operationalSourceEvents,
         allowedEvidence,reasons:c.reasons||[],rulePriority:c.priority,
         departureAt,departureVerified:vessel.departureVerified===true,
         departureStatus:vessel.departureStatus||(!departureAt?'MISSING':'VERIFIED'),
@@ -65,7 +82,11 @@ export function buildC01Source(dashboard,pscPolicy=null){
         incidentEvidenceRef:vessel.incidentEvidenceRef||null,
         rankingContext:{criterion:rankingDecision.criterion,
           reason:rankingDecision.reason,
-          source:'DETERMINISTIC_BUSINESS_RULE',policyOrder:ranking.criteria},
+          source:'DETERMINISTIC_BUSINESS_RULE',policyOrder:ranking.criteria,
+          departureEvidenceRefs:departureAt?unique(operationalSourceEvents
+            .filter(e=>e.departureAt&&
+              Date.parse(e.departureAt)===Date.parse(departureAt))
+            .flatMap(e=>[e.eventKey,e.sourceReference,...e.evidenceIds])):[]},
         missingData,
         requiredInPlan:c.events.some(e=>e.sourceType==='SERVICE_REQUEST'||
           (e.sourceType==='NMC_CASE'&&e.approval==='APPROVED'))};
