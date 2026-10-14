@@ -17,15 +17,31 @@ interface SourceRow{
 interface Context{
  planId:string;approvedVessels:number;items:SourceRow[];
  ports:{portId:string;name:string}[];
+ erpSnapshotId?:string;
+ workforce?:{inspectorId:string;inspectorName:string;homePortId:string|null;
+   dailyCapacity:number;qualifications:string[]}[];
 }
 interface ScheduleRow{
  imo:string;status:'PROPOSED'|'UNSCHEDULED';blocker:string|null;
  assignment:{inspectorName:string;inspectorId:string;startLocal:string;
  endLocal:string;portName:string;locationName:string;score:number}|null;
 }
+interface BoardAssignment{
+ imo:string;planRank:number;inspectorId:string;inspectorName:string;
+ dateLocal:string;startLocal:string;endLocal:string;
+ portId:string;portName:string;locationType:string;locationName:string;score:number;
+}
+interface ScheduleBoard{
+ status:'UNAPPROVED_PREVIEW_ONLY';approvalRequired:true;
+ allocatedVessels:number;caseWrites:0;bookingWrites:0;
+ engineers:{inspectorId:string;inspectorName:string;vesselCount:number;
+ dates:string[];assignments:BoardAssignment[]}[];
+ days:{dateLocal:string;vesselCount:number;assignments:BoardAssignment[]}[];
+ unscheduled:{imo:string;planRank:number;blocker:string}[];
+}
 interface Proposal{summary:{total:number;proposed:number;unscheduled:number;
  caseWrites:number;bookingWrites:number};rows:ScheduleRow[];status:string;
- warnings:string[];}
+ board?:ScheduleBoard;warnings:string[];}
 @Component({
  selector:'app-si-maritime-batch-scheduling',standalone:true,
  imports:[CommonModule,FormsModule,RouterLink,NmcNavigationComponent],
@@ -34,6 +50,14 @@ interface Proposal{summary:{total:number;proposed:number;unscheduled:number;
 })
 export class SiMaritimeBatchSchedulingComponent implements OnInit{
  context:Context|null=null;proposal:Proposal|null=null;loading=false;busy=false;error='';
+ boardView:'VESSELS'|'ENGINEERS'|'DATES'='VESSELS';
+ get assignedEngineerCount():number{return this.proposal?.board?.engineers.length||0;}
+ invalidateProposal():void{
+  // The inputs changed after preview; never show obsolete slots as though
+  // they were still valid, and never carry them into a future approval action.
+  this.proposal=null;
+ }
+
  private readonly api='/api/si/v1/maritime-scheduling/plans/';
  constructor(private readonly http:HttpClient,private readonly route:ActivatedRoute,
   public readonly lang:LanguageService){}
