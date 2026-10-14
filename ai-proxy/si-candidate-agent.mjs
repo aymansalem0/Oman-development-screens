@@ -53,9 +53,14 @@ export function buildC01Source(dashboard,pscPolicy=null){
           importFile:e.importFile||null,importBatchId:e.importBatchId||null,
           importExcelRow:e.importExcelRow||null
         }));
-      const allowedEvidence=unique([...c.events,...operationalSourceEvents]
-        .flatMap(e=>[e.eventKey,e.sourceEventId,
-          e.sourceReference,...(e.evidenceIds||[])]));
+      // The stored NMC assessment ID is a valid reference when provided as
+      // savedRisk.assessmentId to C01 (SI contract §6). Preserve source proof;
+      // no model-inferred risk, certificate or operational rank is added.
+      const allowedEvidence=unique([
+        ...[...c.events,...operationalSourceEvents].flatMap(e=>
+          [e.eventKey,e.sourceEventId,e.sourceReference,...(e.evidenceIds||[])]),
+        c.currentRisk?.assessmentId
+      ]);
       return {candidateKey:c.key,imo:c.imo,regime:c.regime,
         vesselName:c.vesselName,eligibility:c.eligibility,
         currentRisk:c.currentRisk||null,
@@ -203,10 +208,16 @@ export function c01RecommendationContractFailure(r,c,seen=new Set()){
  // Priority wording is presentation, not a risk score, selection authority or
  // evidence check. The platform can explain its own deterministic ranking if
  // the provider omits prose; all other model/evidence checks remain strict.
+ // SI-C01 §6 response does NOT contain suggestedRank; ordering belongs to
+ // deterministic execution rules. Accept optional legacy advisory rank only
+ // if valid. Never invent a model rank when the agent does not provide one.
  if(r.recommendation==='SELECT_RECOMMENDED'){
-  if(!Number.isInteger(r.suggestedRank)||r.suggestedRank<1||r.suggestedRank>100)
+  if(r.suggestedRank!==undefined&&r.suggestedRank!==null&&
+     (!Number.isInteger(r.suggestedRank)||r.suggestedRank<1||
+      r.suggestedRank>100))
    return 'SELECTED_SUGGESTED_RANK_INVALID';
- }else if(r.suggestedRank!==null)return 'NON_SELECTED_RANK_MUST_BE_NULL';
+ }else if(r.suggestedRank!==undefined&&r.suggestedRank!==null)
+  return 'NON_SELECTED_RANK_MUST_BE_NULL';
  if(!Array.isArray(r.evidenceRefs)||r.evidenceRefs.length>20)
   return 'EVIDENCE_REFS_MISSING_OR_TOO_MANY';
  if(r.evidenceRefs.some(e=>!c.allowedEvidence.includes(e)))
@@ -269,7 +280,7 @@ export function validateC01(raw,source){
       recommendation:needsOfficerReview?'MANUAL_REVIEW':r.recommendation,
       modelRecommendation:r.recommendation,confidence:r.confidence,
       selectionReviewGate:needsOfficerReview?'BELOW_PUBLISHED_CONFIDENCE':null,
-      suggestedRank:needsOfficerReview?null:r.suggestedRank,priorityRationale,
+      suggestedRank:needsOfficerReview?null:(r.suggestedRank??null),priorityRationale,
       priorityRationaleSource:hasAiRationale?'AGENT_OUTPUT':'DETERMINISTIC_BUSINESS_RULE',
       reason:r.reason.trim(),evidenceRefs:unique(r.evidenceRefs),
       dataGaps:unique([...r.dataGaps,...(c.missingData||[])]),requiresHumanReview:true,
@@ -499,7 +510,7 @@ export class SiCandidateAgent{
          candidateKey:'exact input candidateKey string',
          recommendation:'SELECT_RECOMMENDED | DEFER_RECOMMENDED | MANUAL_REVIEW',
          confidence:'JSON number between 0 and 1',
-         suggestedRank:'integer 1..100 only when SELECT_RECOMMENDED; otherwise null',
+         suggestedRank:'OPTIONAL legacy advisory rank; integer 1..100 if SELECT_RECOMMENDED, otherwise omit or null; never required for SI-C01',
          reason:'source-grounded string at least 10 characters',
          priorityRationale:'explain the applicable deterministic ranking (string)',
          evidenceRefs:'array drawn ONLY from that candidate.allowedEvidence; never invent IDs',
