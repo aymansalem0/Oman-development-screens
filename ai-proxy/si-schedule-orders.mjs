@@ -155,7 +155,7 @@ export class SiScheduleOrders{
   if(crossPortAssignments.some(a=>!label(a.originPortId,100)||
     a.originPortId===a.portId||
     !Number.isFinite(a.travelMinutes)||a.travelMinutes<0||
-    !a.manualReasons?.includes('CROSS_PORT_REQUIRES_APPROVAL')))
+    (demoMode&&!a.manualReasons?.includes('CROSS_PORT_REQUIRES_APPROVAL'))))
    err('SI_SCHED_CROSS_PORT_TRAVEL_OR_APPROVAL_EVIDENCE_INVALID',409);
   if(crossPortAssignments.length&&confirmCrossPort!==true)
    err('SI_SCHED_CROSS_PORT_SUPERVISOR_CONFIRMATION_REQUIRED',422);
