@@ -38,6 +38,22 @@
             <span>{{ vessel.type }} <button type="button" class="inline-source" (click)="openProvenance('type')" title="View source">i</button></span>
             <span>{{ vessel.lengthM }} m <button type="button" class="inline-source" (click)="openProvenance('length')" title="View source">i</button></span>
           </div>
+          <div class="v360-operational-etd" role="status">
+            <span class="v360-etd-label">{{copy('Vessel Master · Current ETD (UAE local)',
+              'سجل السفن · تاريخ المغادرة الحالي بالتوقيت المحلي')}}</span>
+            <strong *ngIf="operationalEtd?.etdStatus==='FINAL_POC'">
+              {{operationalEtd?.etdLocal}} · {{copy('Final POC','نهائي للتجربة')}}
+            </strong>
+            <strong *ngIf="!operationalEtdLoading && operationalEtd?.etdStatus==='CONFLICT'"
+              class="v360-etd-warning">{{copy('Conflicting MSW departure data',
+                'تعارض في بيانات المغادرة من MSW')}}</strong>
+            <strong *ngIf="!operationalEtdLoading &&
+              operationalEtd?.etdStatus!=='FINAL_POC' && operationalEtd?.etdStatus!=='CONFLICT'">
+              {{copy('Not available from imported MSW sources',
+                'غير متاح من مصادر MSW المستوردة')}}</strong>
+            <small>{{copy('Source-backed synthetic POC · not live AIS. No extra date approval.',
+              'بيانات POC تجريبية من المصدر وليست AIS مباشرًا؛ دون اعتماد إضافي للتاريخ.')}}</small>
+          </div>
         </div>
       </div>
 
