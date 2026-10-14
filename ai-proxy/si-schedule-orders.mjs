@@ -285,7 +285,8 @@ export class SiScheduleOrders{
      .includes(order.status))return order;
    const plan=await this.rolling.get(planId);
    if(!['APPROVED','IN_EXECUTION'].includes(plan.status)||
-      plan.revision!==schedule.planRevision)
+      plan.revision<schedule.planRevision||
+      !plan.approvedVessels?.some(v=>v.imo===order.imo))
     err('SI_WORK_ORDER_PLAN_CHANGED',409);
    // On the NMC origin, an official referral booking is a different
    // officer-controlled action, not implied by SI-S01 or this POC ledger.
@@ -331,6 +332,10 @@ export class SiScheduleOrders{
      order.caseId=caseId;
      await set('PREPARING','INSPECTION_CASE_LINKED');
     }
+    // Recoverable linkage to the approved rolling plan is required for
+    // close-if-all-closed and preserves the frozen source evidence.
+    await this.rolling.attachScheduledCase(planId,order.imo,caseId,
+     actor,schedule.id);
     let prepared=await this.preparation.get(caseId);
     if(!prepared.saved){
      await this.preparation.prepare(caseId,{actor,expectedVersion:0});
@@ -459,6 +464,7 @@ export class SiScheduleOrders{
     expectedVersion:state.record.version,actor:signature,data:{}});
   else if(state.record?.stage!=='IN_FIELD')
    err('SI_WORK_ORDER_INSPECTION_STAGE_CONFLICT',409);
+  await this.rolling.setExecutionState(planId,'IN_EXECUTION',actor);
   order.status='FIELD_STARTED';order.startedAt=at();
   order.pocDelegated=delegated;
   order.startedBySession=actor;
