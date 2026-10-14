@@ -45,6 +45,126 @@
       </div>
     </section>
 
+    <section class="panel full-dossier" *ngIf="fullDossier as file">
+     <header>
+      <h2>{{copy('Complete AI-Ready Vessel Inspection Dossier',
+       'الدوسيه المتكامل للسفينة — جاهز للتحليل بالذكاء الاصطناعي')}}</h2>
+      <p>{{copy('Source-backed file combining vessel identity, all referrals, saved risk, inspection history, certificates, assignment, mandatory checklist and optional A04 assessment. Read-only: no AI call occurs when opening this file.',
+       'ملف موحد من هوية السفينة وإحالات المعاينة والمخاطر المحفوظة والتفتيشات السابقة والشهادات وتكليف المهندس وقائمة المعاينة ونتيجة A04 الاختيارية. فتح الملف للقراءة فقط ولا يشغّل AI.')}}</p>
+     </header>
+     <div class="dossier-grid">
+      <article><small>IMO</small><strong>{{file.imo}}</strong>
+       <span>{{file.sections.identity.vesselName||'—'}} · {{file.sections.identity.flag||'—'}}</span></article>
+      <article><small>{{copy('Preparation','التحضير')}}</small>
+       <strong>{{file.readiness.preparationSaved?copy('Prepared','تم التحضير'):
+        copy('Pending','لم يبدأ')}}</strong>
+       <span>{{copy('Revision','الإصدار')}}: {{file.revision}}</span></article>
+      <article><small>{{copy('AI A04','الذكاء الاصطناعي A04')}}</small>
+       <strong>{{file.sections.aiAnalysis.status}}</strong>
+       <span>{{file.readiness.aiReviewed?copy('Reviewed by supervisor','راجعها المشرف'):
+        copy('Supervisor review pending','مراجعة المشرف مطلوبة')}}</span></article>
+      <article><small>{{copy('Evidence gaps','النواقص')}}</small>
+       <strong>{{file.missingEvidence.length}}</strong>
+       <span>{{copy('Explicitly disclosed','معلنة وليست بيانات مختلقة')}}</span></article>
+     </div>
+     <div class="dossier-group" *ngIf="file.sections.assignments as order">
+      <h3>{{copy('Assigned inspector and visit','المهندس المكلف وموعد المعاينة')}}</h3>
+      <div class="dossier-grid">
+       <article><small>{{copy('Inspector','المهندس')}}</small>
+        <strong>{{order.inspectorName||'—'}}</strong></article>
+       <article><small>{{copy('Port','الميناء')}}</small>
+        <strong>{{order.portName||'—'}}</strong></article>
+       <article><small>{{copy('Start / End','بداية ونهاية المعاينة')}}</small>
+        <strong>{{order.startLocal||'—'}}</strong>
+        <span>{{order.endLocal||'—'}}</span></article>
+       <article><small>{{copy('Work order','أمر التكليف')}}</small>
+        <strong>{{order.status}}</strong><span>{{order.orderId}}</span></article>
+      </div>
+     </div>
+     <div class="dossier-group">
+      <h3>{{copy('Source evidence and regulatory inspection reasons',
+       'الأدلة وأسباب المعاينة النظامية')}}</h3>
+      <div class="dossier-evidence" *ngFor="let ref of file.sections.referrals.allSourceReasons">
+       <strong>{{ref.sourceType}} · {{ref.inspectionRegime}}</strong>
+       <span>{{ref.sourceReference||ref.eventKey}}</span>
+       <p>{{ref.narrative||copy('No source narrative supplied','لا يوجد وصف من المصدر')}}</p>
+       <small>{{copy('Evidence IDs','معرفات الأدلة')}}: {{ref.evidenceIds.join(' · ')||'—'}}</small>
+      </div>
+     </div>
+     <div class="dossier-group">
+      <h3>{{copy('Saved NMC risk, certificates and inspection history',
+       'مخاطر NMC المحفوظة والشهادات وسجل المعاينات')}}</h3>
+      <p *ngIf="file.sections.risk as risk"><b>{{risk.level}} · {{risk.score}}/100</b>
+       · {{copy('Assessment reference','مرجع التقييم')}}: {{risk.evaluationId}}</p>
+      <p *ngIf="!file.sections.risk" class="notice error">
+       {{copy('No saved current risk. A04 cannot invent a score.',
+        'لا يوجد تقييم مخاطر حالي محفوظ، ولا يستطيع A04 اختلاق درجة للمخاطر.')}}</p>
+      <div class="dossier-grid">
+       <article><small>{{copy('Certificates from source','الشهادات من المصدر')}}</small>
+        <strong>{{file.sections.sourceEvidence.certificates.length}}</strong>
+        <details *ngIf="file.sections.sourceEvidence.certificates.length">
+         <summary>{{copy('Show details','عرض التفاصيل')}}</summary>
+         <pre *ngFor="let cert of file.sections.sourceEvidence.certificates">{{cert|json}}</pre>
+        </details></article>
+       <article><small>{{copy('Historical inspections','سجل المعاينات السابقة')}}</small>
+        <strong>{{file.sections.sourceEvidence.inspectionHistory.length}}</strong>
+        <details *ngIf="file.sections.sourceEvidence.inspectionHistory.length">
+         <summary>{{copy('Show details','عرض التفاصيل')}}</summary>
+         <pre *ngFor="let item of file.sections.sourceEvidence.inspectionHistory">{{item|json}}</pre>
+        </details></article>
+       <article><small>{{copy('Open findings','الملاحظات المفتوحة')}}</small>
+        <strong>{{file.sections.sourceEvidence.openDeficiencies.length}}</strong>
+        <details *ngIf="file.sections.sourceEvidence.openDeficiencies.length">
+         <summary>{{copy('Show details','عرض التفاصيل')}}</summary>
+         <div *ngFor="let item of file.sections.sourceEvidence.openDeficiencies">
+          {{item.id}} · {{item.description||'—'}} · {{item.status}}</div>
+        </details></article>
+       <article><small>{{copy('Reviewed external documents','المستندات الخارجية المراجعة')}}</small>
+        <strong>{{file.sections.sourceEvidence.documents.length}}</strong>
+        <span>{{file.sections.sourceEvidence.externalDocumentsVerified?
+          copy('Authenticity verified','تم التحقق من الأصالة'):
+          copy('Authenticity not verified','لم يتم التحقق من الأصالة')}}</span>
+       </article>
+      </div>
+     </div>
+     <div class="dossier-group">
+      <h3>{{copy('Mandatory inspection checklist','قائمة المعاينة الإلزامية')}}</h3>
+      <p>{{file.sections.inspectionChecklist.mandatoryBaseItemIds.length}}
+       {{copy('base item categories','مجموعات بنود أساسية')}} ·
+       {{file.sections.inspectionChecklist.checklistStatus||
+        copy('Pending order activation','في انتظار تفعيل الأمر')}}</p>
+      <div class="dossier-chips"><span *ngFor="let check of file.sections.inspectionChecklist.mandatoryBaseItemIds">
+       {{itemLabel(check)}}</span></div>
+      <p class="hint">{{copy('A04 proposals cannot delete the mandatory checklist or become confirmed deficiencies without inspection and human review.',
+       'مقترحات A04 لا تحذف البنود الإلزامية ولا تتحول إلى مخالفات مؤكدة دون المعاينة والمراجعة البشرية.')}}</p>
+     </div>
+     <div class="dossier-group">
+      <h3>{{copy('AI A04 dossier and supervisor approval','تحليل A04 واعتماد المشرف')}}</h3>
+      <p><strong>{{file.sections.aiAnalysis.status}}</strong> ·
+       {{file.sections.aiAnalysis.provider||'—'}}</p>
+      <p *ngIf="file.sections.aiAnalysis.mock" class="notice">
+       {{copy('POC MOCK output, not a real Airia model assessment.',
+        'نتيجة POC تجريبية وليست تحليلًا صادرًا من نموذج Airia فعلي.')}}</p>
+      <p *ngIf="file.sections.aiAnalysis.modelDraft as draft">
+       {{copy('Focus areas','مجالات التركيز')}}: {{draft.focusAreas.length}} ·
+       {{copy('Suggested extra items','البنود المقترحة')}}: {{draft.suggestedAdditionalItems.length}} ·
+       {{copy('Evidence gaps','نواقص الأدلة')}}: {{draft.missingEvidence.length}}
+      </p>
+      <p *ngIf="!file.readiness.aiGenerated" class="notice">
+       {{copy('Use the explicit A04 action below after the deterministic case preparation is saved. AI is not executed on dossier loading.',
+        'استخدم زر A04 أدناه بعد حفظ التحضير. لا يتم تشغيل الذكاء الاصطناعي بمجرد فتح الملف.')}}</p>
+     </div>
+     <div class="dossier-group" *ngIf="file.missingEvidence.length">
+      <h3>{{copy('Missing evidence / action required','الأدلة الناقصة والإجراءات المطلوبة')}}</h3>
+      <div *ngFor="let gap of file.missingEvidence" class="dossier-gap">{{gap}}</div>
+     </div>
+     <p class="hint">{{copy('This read model never authorizes a regulatory inspection, confirms a live ERP booking or implies that unverified documents are authentic.',
+      'هذا الملف لا يصدر اعتمادًا تنظيميًا، ولا يثبت حجز ERP رسميًا، ولا يؤكد أصالة مستندات لم يتم التحقق منها.')}}</p>
+    </section>
+    <p class="notice" *ngIf="dossierLoading">{{copy('Assembling vessel dossier…',
+      'جارٍ تجميع الدوسيه…')}}</p>
+    <p class="notice error" *ngIf="fullDossierError" role="alert">{{fullDossierError}}</p>
+
     <ng-container *ngIf="data as d">
       <div class="stats">
         <article><small>{{copy("INSPECTION / IMO","المعاينة / IMO")}}</small><strong>{{d.context.imo}}</strong><span>{{d.context.vessel.name}} · {{d.context.vessel.flag}}</span></article>
