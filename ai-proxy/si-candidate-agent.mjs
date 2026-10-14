@@ -136,7 +136,9 @@ export function validateC01(raw,source){
       // candidateKey, IMO, evidence references, raw provider payload or keys.
       console.warn('[si-c01] RECOMMENDATION_CONTRACT_REJECTED field='+failure+
         ' itemIndex='+index+' total='+body.recommendations.length);
-      throw new SiCandidateAgentError('SI_C01_UNVERIFIED_RECOMMENDATION',502);
+      const error=new SiCandidateAgentError('SI_C01_UNVERIFIED_RECOMMENDATION',502);
+      error.diagnosticCode=failure;
+      throw error;
     }
     // Business-gated recommendation: a model cannot silently select unapproved
     // PSC/service candidates or candidates with missing verified risk.
