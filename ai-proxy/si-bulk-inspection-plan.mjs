@@ -78,7 +78,7 @@ export class SiBulkInspectionPlan{
  latest(){return this.read().jobs.slice(-5).reverse().map(x=>this.get(x.id));}
  async preview(planId=null){
   const plan=await this.plan.snapshot(planId);
-  if(planId&&plan.planStatus!=='READY_FOR_APPROVAL')
+  if(planId&&!['DRAFT','READY_FOR_APPROVAL'].includes(plan.planStatus))
    throw new SiBulkApprovalError('SI_ROLLING_PLAN_NOT_READY_FOR_APPROVAL',409);
   const dashboard=await this.targeting.dashboard();
   const eligible=c=>c.status==='PENDING_REVIEW'||
