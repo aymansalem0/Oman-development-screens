@@ -8,6 +8,7 @@ import {NmcNavigationComponent} from '../components/nmc-navigation.component';
 import {SiCandidate,SiCandidateStatus,SiCandidateTargetingService,
   SiDashboard,SiVesselCandidate,SiInspectionPlanState,SiInspectionPlanRow,SiRollingPlan,SiC01Run,SiC01Preview,SiC01Recommendation,SiPriorityStatus,SiPriorityPreview,SiPriorityRun,SiPriorityRecommendation,SiPriorityPreviewItem}
   from '../services/si-candidate-targeting.service';
+import {SiPscSelectionService,PscSelectionPool} from '../services/si-psc-selection.service';
 
 type SourceFilter='ALL'|'NMC_CASE'|'SERVICE_REQUEST'|'PSC_PORT_CALL';
 type StatusFilter='ALL'|SiCandidateStatus;
@@ -20,6 +21,7 @@ type StatusFilter='ALL'|SiCandidateStatus;
 export class SiCandidateWorkbenchComponent implements OnInit{
   loading=false;busy=false;error='';success='';
   dashboard:SiDashboard|null=null;
+  pscQuota:PscSelectionPool|null=null;
   sourceFilter:SourceFilter='ALL';statusFilter:StatusFilter='ALL';search='';
   selectedKey='';selectedImo='';
   reviewer='admin';decisionNote='';editorKey='MOEI_SESSION';publisherKey='MOEI_SESSION';
@@ -423,7 +425,7 @@ export class SiCandidateWorkbenchComponent implements OnInit{
   }
 
   constructor(private readonly api:SiCandidateTargetingService,public readonly lang:LanguageService,
-  public readonly auth:MoeiAuthService){}
+  public readonly auth:MoeiAuthService,private readonly pscSelection:SiPscSelectionService){}
   copy(en:string,ar:string):string{return this.lang.pick(en,ar);}
   ngOnInit():void{this.refresh();}
   refresh():void{
@@ -432,6 +434,12 @@ export class SiCandidateWorkbenchComponent implements OnInit{
     // retried candidate targeting, leaving a recovered planning API stuck
     // on SI_TARGETING_UNAVAILABLE until a full browser reload.
     this.loadRollingPlans();
+    // One published-rule quota projection from the SAME persisted Excel events
+    // used by the server's candidate list. No separate PSC approval screen.
+    this.pscSelection.pool(this.editorKey).subscribe({
+      next:data=>{this.pscQuota=data;},
+      error:()=>{this.pscQuota=null;}
+    });
     this.loading=true;this.error='';
     this.api.dashboard().subscribe({
       next:data=>{
