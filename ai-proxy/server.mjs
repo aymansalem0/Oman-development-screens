@@ -1223,11 +1223,23 @@ const server = createServer(async (req, res) => {
         if(demo)validatePocSchedulingDemoRequest(context,body.requests);
         const referrals=await cases.listInspectionRequests();
         const confirmed=demo?[]:await siScheduling.centralBookings(snapshot);
+        // The public API request still contains the full approved roster.
+        // Schedule only the IMOs that lack an issued work order in Oracle 019.
+        const ledger=siScheduleOrders.ready?
+          await siScheduleOrders.byPlan(plan.id):null;
+        const issuedImos=new Set((ledger?.orders||[]).map(o=>o.imo));
+        const pending=plan.approvedVessels.filter(v=>!issuedImos.has(v.imo));
+        if(!pending.length)
+          return respond(res,409,{error:'SI_SCHED_ALL_VESSELS_ALREADY_HAVE_ORDERS'});
+        const subsetPlan={...plan,approvedVessels:pending};
+        const subsetRequests=body.requests.filter(x=>!issuedImos.has(x.imo));
+        const held=(ledger?.orders||[]).map(o=>({...o.assignment,imo:o.imo}));
         const result=proposeMaritimeBatchSchedule({
-          plan,erpSnapshot:snapshot,policy:siScheduling.getPolicy(),
-          requests:demo?body.requests.map(x=>({...x,pocDemo:true})):body.requests,
+          plan:subsetPlan,erpSnapshot:snapshot,policy:siScheduling.getPolicy(),
+          requests:demo?subsetRequests.map(x=>({...x,pocDemo:true})):subsetRequests,
           nmcReferrals:referrals,
-          existingBookings:demo?[]:[...siScheduling.state.confirmed,...confirmed],
+          existingBookings:[...(demo?[]:
+            [...siScheduling.state.confirmed,...confirmed]),...held],
           scheduler:siScheduling
         });
         if(demo){
@@ -1328,12 +1340,21 @@ const server = createServer(async (req, res) => {
           const refs=await cases.listInspectionRequests();
           const bookings=body.demoMode?[]:
             await siScheduling.centralBookings(snapshot);
+          const ledger=await siScheduleOrders.byPlan(plan.id);
+          const issuedImos=new Set((ledger?.orders||[]).map(o=>o.imo));
+          const pending=plan.approvedVessels.filter(v=>!issuedImos.has(v.imo));
+          if(!pending.length)
+            return respond(res,409,{error:'SI_SCHED_ALL_VESSELS_ALREADY_HAVE_ORDERS'});
+          const subsetPlan={...plan,approvedVessels:pending};
+          const subsetRequests=body.requests.filter(x=>!issuedImos.has(x.imo));
+          const held=(ledger?.orders||[]).map(o=>({...o.assignment,imo:o.imo}));
           const proposal=proposeMaritimeBatchSchedule({
-            plan,erpSnapshot:snapshot,policy:siScheduling.getPolicy(),
-            requests:body.demoMode?body.requests.map(x=>({...x,pocDemo:true})):
-             body.requests,nmcReferrals:refs,
-            existingBookings:body.demoMode?[]:
-             [...siScheduling.state.confirmed,...bookings],
+            plan:subsetPlan,erpSnapshot:snapshot,policy:siScheduling.getPolicy(),
+            requests:body.demoMode?
+              subsetRequests.map(x=>({...x,pocDemo:true})):subsetRequests,
+            nmcReferrals:refs,
+            existingBookings:[...(body.demoMode?[]:
+              [...siScheduling.state.confirmed,...bookings]),...held],
             scheduler:siScheduling
           });
           const saved=await siScheduleOrders.approve({
