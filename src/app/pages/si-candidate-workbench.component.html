@@ -260,9 +260,68 @@
         </select>
       </div>
 
+      <section class="si-bulk-toolbar" *ngIf="activePlanEditable&&plan&&!plan.readOnlyHistorical"
+        [attr.aria-label]="copy('Bulk vessel planning actions','إجراءات التخطيط الجماعية للسفن')">
+        <div class="si-bulk-tools">
+          <div class="si-bulk-description">
+            <strong>{{copy('Bulk actions on candidates','إجراءات جماعية على السفن المرشحة')}}</strong>
+            <span>{{bulkSelectedCount}} {{copy('vessels selected','سفن محددة')}}</span>
+            <small>{{copy('Select individual vessels or all eligible vessels in the current search/filter. Selection is by IMO and does not change underlying source records.',
+              'اختر سفنًا منفردة أو كل السفن المؤهلة في نتائج البحث والفلاتر الحالية. الاختيار حسب IMO ولا يغير بيانات المصادر الأصلية.')}}</small>
+          </div>
+          <div class="si-bulk-buttons">
+            <button type="button" [disabled]="!bulkSelectedCount||planBusy||plan.stale"
+              (click)="startBulkAction('NOT_SELECTED')">
+              {{copy('Exclude selected','استبعاد المحدد')}}
+            </button>
+            <button type="button" [disabled]="!bulkSelectedCount||planBusy||plan.stale"
+              (click)="startBulkAction('DEFER')">
+              {{copy('Defer selected','تأجيل المحدد')}}
+            </button>
+            <button type="button" [disabled]="!bulkSelectedCount||planBusy"
+              (click)="clearBulkSelection()">
+              {{copy('Clear selection','إلغاء التحديد')}}
+            </button>
+          </div>
+        </div>
+        <form *ngIf="bulkAction" class="si-bulk-form" (ngSubmit)="saveBulkAction()">
+          <strong>{{bulkAction==='DEFER'?
+            copy('Defer selected vessels','تأجيل السفن المحددة'):
+            copy('Exclude selected vessels from this plan','استبعاد السفن المحددة من هذه الخطة')}}
+            · {{bulkSelectedCount}} {{copy('vessels','سفن')}}</strong>
+          <label>{{copy('Shared operational reason (required)','سبب الإجراء الموحد (إلزامي)')}}
+            <textarea name="bulkReason" [(ngModel)]="bulkReason"
+              rows="2" minlength="8" maxlength="500" required
+              [placeholder]="copy('Explain the decision applied to all selected vessels',
+                'اكتب سببًا واضحًا ينطبق على جميع السفن المحددة')"></textarea>
+          </label>
+          <label *ngIf="bulkAction==='DEFER'">
+            {{copy('Review again on','تاريخ إعادة المراجعة')}}
+            <input type="date" name="bulkReviewAfter"
+              [(ngModel)]="bulkReviewAfter" required/>
+          </label>
+          <div class="si-bulk-buttons">
+            <button type="submit" class="primary"
+              [disabled]="planBusy||!bulkSelectedCount||bulkReason.trim().length<8||
+                (bulkAction==='DEFER'&&!bulkReviewAfter)">
+              {{copy('Confirm & save for all selected','تأكيد وحفظ لكل السفن المحددة')}}
+            </button>
+            <button type="button" (click)="bulkAction=null">
+              {{copy('Cancel','إلغاء')}}</button>
+          </div>
+          <small>{{copy('One audited draft-plan revision; no Airia request, regulatory rejection or inspection case deletion.',
+            'تحديث واحد مؤرشف لمسودة الخطة، دون استدعاء Airia أو رفض تنظيمي أو حذف حالات المعاينة.')}}</small>
+        </form>
+      </section>
       <div class="table-scroll" [attr.aria-busy]="planAiPhase!=='idle'">
         <table class="si-unified-table">
           <thead><tr>
+            <th class="si-bulk-check-cell">
+              <input type="checkbox" [checked]="bulkAllVisibleSelected"
+                [disabled]="!bulkVisibleEligible.length||planBusy||!auth.isAdmin"
+                [attr.aria-label]="copy('Select all eligible vessels in current results','تحديد كل السفن المؤهلة في النتائج الحالية')"
+                (change)="toggleBulkVisible($any($event.target).checked)"/>
+            </th>
             <th>{{copy('AI Priority','أولوية AI')}}</th>
             <th>{{copy('Vessel / IMO','السفينة / IMO')}}</th>
             <th>{{copy('Candidate Sources','مصادر الترشيح')}}</th>
@@ -276,6 +335,12 @@
             <ng-container *ngFor="let v of vessels;trackBy:trackVessel">
               <tr [class.si-plan-selected]="planRow(v)?.planSelected"
                   [class.si-plan-locked]="v.createdWorkflows>0">
+                <td class="si-bulk-check-cell">
+                  <input type="checkbox" [checked]="bulkSelectedImos.has(v.imo)"
+                    [disabled]="!bulkEligible(v)"
+                    [attr.aria-label]="copy('Select vessel','تحديد السفينة')+' '+v.vesselName+' IMO '+v.imo"
+                    (change)="toggleBulkVessel(v,$any($event.target).checked)"/>
+                </td>
                 <td class="si-priority-cell">
                   <strong *ngIf="planRow(v)?.effectiveRank as rank">#{{rank}}</strong>
                   <span *ngIf="!planRow(v)?.effectiveRank" class="pending">—</span>
@@ -344,7 +409,7 @@
                 </td>
               </tr>
               <tr class="si-plan-edit-row" *ngIf="manualEditingImo===v.imo">
-                <td colspan="8">
+                <td colspan="9">
                   <form (ngSubmit)="saveManualDecision()" class="si-inline-change">
                     <strong>{{copy('Officer decision','قرار الموظف')}}:
                       {{manualAction}} · {{v.vesselName}} (IMO {{v.imo}})</strong>
@@ -372,7 +437,7 @@
                 </td>
               </tr>
               <tr class="si-plan-edit-row" *ngIf="planEditingImo===v.imo">
-                <td colspan="8">
+                <td colspan="9">
                   <form (ngSubmit)="savePlanEdit()" class="si-inline-change">
                     <strong>{{planSelection?copy('Include / Change Rank','إدراج أو تغيير ترتيب'):
                       copy('Remove from Inspection Plan','استبعاد من الخطة')}} · {{v.vesselName}}</strong>
@@ -396,7 +461,7 @@
                 </td>
               </tr>
               <tr *ngIf="expandedImo===v.imo" class="si-ai-detail-row">
-                <td colspan="8">
+                <td colspan="9">
                   <div class="si-detail-compact">
                     <div>
                       <h3>{{copy('AI Selection Rationale','سبب اختيار السفينة من AI')}}</h3>
@@ -470,7 +535,7 @@
                 </td>
               </tr>
             </ng-container>
-            <tr *ngIf="!vessels.length"><td colspan="8" class="empty">
+            <tr *ngIf="!vessels.length"><td colspan="9" class="empty">
               {{copy('No matching candidate vessels. Check the NMC referral, service and selected PSC sources.',
                 'لا توجد سفن مطابقة؛ راجع إحالات NMC والخدمات والسفن المختارة من PSC.')}}</td></tr>
           </tbody>
