@@ -199,7 +199,14 @@ export class SiRollingPlanStore{
    if(p.revision!==expectedRevision)fail('SI_ROLLING_VERSION_CONFLICT',409);
    const next=operation(clone(p));
    next.revision=p.revision+1;next.updatedAt=now();next.updatedBy=actor;
-   next.audit=[...(p.audit||[]),{event,at:next.updatedAt,actor}].slice(-300);
+   // Keep the one audited officer disposition breakdown that the trusted
+   // bulk mutation added. Prior event history cannot be rewritten by it.
+   const earlier=p.audit||[],proposed=next.audit||[];
+   const sameHistory=proposed.length===earlier.length+1&&
+     earlier.every((item,i)=>JSON.stringify(item)===JSON.stringify(proposed[i]));
+   const detail=sameHistory&&proposed.at(-1)?.event==='BULK_DISPOSITION_DETAILS'&&
+     event.startsWith('OFFICER_BULK_')?[proposed.at(-1)]:[];
+   next.audit=[...earlier,...detail,{event,at:next.updatedAt,actor}].slice(-300);
    return next;
   };
   if(this.mode==='json'){
