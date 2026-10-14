@@ -367,3 +367,29 @@ test('C01 treats contradictory saved future ETDs as conflict and never prioritis
  assert.ok(c.missingData.includes('CONFLICTING_VERIFIED_ETD'));
  assert.equal(c.rankingContext.criterion,'PENDING_ADDITIONAL_RULES');
 });
+
+test('Saved unselected PSC operational ETD informs NMC ranking but not PSC selection',()=>{
+ const future=new Date(Date.now()+24*3600000).toISOString();
+ const nmc=candidate('nmc-ref','NMC_CASE','9328471',72);
+ const sourceEvents=[{eventKey:'msw-psc-saved',payload:{
+  sourceType:'PSC_PORT_CALL',imo:'9328471',
+  sourceApprovalStatus:'SOURCE_FINAL',sourceEventId:'psc-visit-1',
+  sourceReference:'PSC-REF-1',provenance:'POC_SIMULATOR',
+  port:'Jebel Ali',departureAt:future,evidenceIds:['PSC-EVIDENCE-1']
+ }}];
+ const vessels=SiCandidateTargeting.prototype._vesselCandidates.call({},
+  [nmc],new Map(),sourceEvents);
+ assert.equal(vessels[0].departureAt,future);
+ assert.equal(vessels[0].departureVerified,true);
+ assert.deepEqual(vessels[0].sourceTypes,['NMC_CASE']);
+ assert.equal(vessels[0].operationalSourceEvents.length,1);
+ const d={policy:{version:1},riskPolicyRevision:1,fleetSnapshotId:'fleet',
+  candidates:[nmc],vesselCandidates:vessels};
+ const input=buildC01Source(d,{version:1});
+ assert.equal(input.candidates[0].rankingContext.criterion,'DEPARTURE_SOON');
+ assert.ok(input.candidates[0].allowedEvidence.includes('PSC-EVIDENCE-1'));
+ assert.ok(input.candidates[0].rankingContext.departureEvidenceRefs.includes('PSC-EVIDENCE-1'));
+ assert.deepEqual(input.candidates[0].sourceTypes,['NMC_CASE']);
+ assert.equal(input.candidates[0].requiredInPlan,true);
+ assert.equal(input.candidates[0].operationalSourceEvents[0].port,'Jebel Ali');
+});
