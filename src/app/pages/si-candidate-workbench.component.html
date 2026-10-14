@@ -90,6 +90,36 @@
       {{copy('Historical plan shown from its saved approval snapshot. Current source data may differ; this plan cannot be edited.',
         'الخطة المعروضة محفوظة من وقت اعتمادها؛ قد تختلف بيانات المصادر الحالية، ولا يمكن تعديل هذه الخطة.')}}
     </p>
+    <section class="si-psc-direct-summary" *ngIf="pscQuota as p" aria-label="PSC Excel quota">
+      <div class="si-psc-summary-title">
+        <div>
+          <strong>{{copy('PSC · Direct Excel Quota Selection','PSC · تطبيق الحصة مباشرة من Excel')}}</strong>
+          <p>{{copy('Published monthly quota automatically shortlists saved PSC port calls. SI-C01 then gives optional evidence-based advice when you explicitly run AI. Neither action approves an inspection.',
+            'تُطبق الحصة الشهرية المنشورة تلقائيًا على أحداث PSC المحفوظة، ثم يقدم SI-C01 توصياته المبنية على الأدلة عند تشغيل AI صراحةً. لا يعتمد أي منهما المعاينة رسميًا.')}}</p>
+        </div>
+        <div class="si-psc-summary-links">
+          <a routerLink="/moei/smart-inspection/settings/sources/psc">
+            {{copy('Import PSC Excel','استيراد Excel PSC')}}</a>
+          <a routerLink="/moei/smart-inspection/settings/psc-quotas">
+            {{copy('Quota Rules','قواعد الحصة')}}</a>
+        </div>
+      </div>
+      <div class="si-psc-summary-numbers">
+        <span><strong>{{p.summary.eligiblePortCalls}}</strong>{{copy('Imported eligible Port Calls','أحداث وصول مؤهلة')}}</span>
+        <span><strong>{{p.summary.selectedPortCalls}}</strong>{{copy('Shortlisted for review','مرشحة للمراجعة')}}</span>
+        <span><strong>{{p.summary.automaticallyShortlistedPortCalls??0}}</strong>{{copy('By published rules','بالقواعد المنشورة')}}</span>
+        <span><strong>{{p.summary.inPoolPortCalls}}</strong>{{copy('Outside current quota','خارج الحصة الحالية')}}</span>
+      </div>
+      <div class="si-psc-summary-buckets">
+        <span *ngFor="let b of p.summary.buckets">
+          {{b.period}} · {{b.port}} · {{b.selectionRate}}%
+          · {{b.selectedCount}}/{{b.targetCount}}
+          <strong *ngIf="b.overQuota">{{copy('· Existing decisions exceed quota','· قرارات سابقة تتجاوز الحصة')}}</strong>
+        </span>
+      </div>
+      <small>{{copy('Quota counts Port Call events, not distinct IMOs. The vessel list below merges sources by IMO. Existing officer PSC decisions are preserved, and NMC / Service Requests do not consume PSC quota.',
+        'تحسب الحصة أحداث الوصول وليس عدد السفن المختلفة؛ وتجمع القائمة أدناه مصادر كل سفينة حسب IMO. تُحفظ قرارات PSC السابقة، ولا تخصم إحالات NMC أو طلبات الخدمات من الحصة.')}}</small>
+    </section>
     <section class="stats si-kpis" *ngIf="dashboard as d">
       <article><small>{{copy('ACTIVE FLEET','الأسطول النشط')}}</small><strong>{{d.summary.evaluatedPopulation}}</strong><span>{{copy('Tracked source vessels','سفن مصدر البيانات')}}</span></article>
       <article><small>{{copy('ASSESSED RISK','السفن المقيمة')}}</small><strong>{{d.summary.assessedRiskVessels}}</strong><span>{{copy('Saved NMC risk assessments','تقييمات مخاطر NMC المحفوظة')}}</span></article>
