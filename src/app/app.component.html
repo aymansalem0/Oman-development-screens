@@ -1,3 +1,5 @@
+<ng-container *ngIf="isMoeiSeafarers; else legacyOmanWorkspace"><router-outlet></router-outlet></ng-container>
+<ng-template #legacyOmanWorkspace>
 <div class="app-shell" [class.rtl]="lang.isArabic" [attr.dir]="lang.dir">
   <aside class="sidebar">
     <div class="sidebar-user">
@@ -72,3 +74,5 @@
     </main>
   </div>
 </div>
+
+</ng-template>
