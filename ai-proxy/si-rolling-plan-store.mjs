@@ -247,7 +247,7 @@ export class SiRollingPlanStore{
 
  /** Supervisor approval of V2 roster: no cases or dossiers until scheduling. */
  async approveForScheduling(id,{expectedRevision,expectedSourceHash,actor,reason,vessels,
-  integratedDecision=null,withinTransaction=null}={}){
+  integratedDecision=null,integratedSourceRows=null,withinTransaction=null}={}){
   if(!ID.test(id||'')||!Number.isInteger(expectedRevision)||
     !text(actor,160)||!text(reason,500)||reason.trim().length<8||
     !text(expectedSourceHash,200))
@@ -275,14 +275,23 @@ export class SiRollingPlanStore{
      v.inspectionReasons.some(r=>!r||typeof r.eventKey!=='string'||!r.eventKey.trim())))
    fail('SI_V2_PLAN_APPROVAL_SOURCE_REASONS_MISSING',422);
   const change=before=>{
-   if(before.status!=='READY_FOR_APPROVAL'||before.revision!==expectedRevision||
-      before.selectionSourceHash!==expectedSourceHash)
+   const allowedStatuses=integratedDecision?
+    ['DRAFT','READY_FOR_APPROVAL']:['READY_FOR_APPROVAL'];
+   const storedHash=integratedDecision?
+    (before.selectionSourceHash||before.candidateSourceHash):
+    before.selectionSourceHash;
+   if(!allowedStatuses.includes(before.status)||
+      before.revision!==expectedRevision||storedHash!==expectedSourceHash)
     fail('SI_V2_PLAN_CHANGED_REVIEW_AGAIN',409);
-   const sourceRows=before.savedPlanRows||before.latest?.rows||[];
+   const sourceRows=integratedDecision?integratedSourceRows:
+    (before.savedPlanRows||before.latest?.rows||[]);
+   if(!Array.isArray(sourceRows)||!sourceRows.length||
+      new Set(sourceRows.map(r=>r.imo)).size!==sourceRows.length)
+    fail('SI_INTEGRATED_VERIFIED_SOURCE_ROWS_REQUIRED',409);
    let selected=sourceRows.filter(r=>r.planSelected);
    if(integratedDecision){
     if(!withinTransaction||typeof withinTransaction!=='function'||
-      integratedDecision.sourceHash!==before.selectionSourceHash||
+      integratedDecision.sourceHash!==storedHash||
       integratedDecision.planRevision!==before.revision||
       !/^[a-f0-9]{64}$/.test(integratedDecision.selectionHash||'')||
       !/^[a-f0-9]{64}$/.test(integratedDecision.proposalHash||'')||
@@ -308,6 +317,7 @@ export class SiRollingPlanStore{
     'HUMAN_APPROVED_ROSTER_PENDING_AI_SCHEDULE';
    if(integratedDecision){
     const accepted=new Set(vessels.map(v=>v.imo));
+    next.selectionSourceHash=expectedSourceHash;
     next.savedPlanRows=clone(sourceRows.map(r=>({
      ...r,planSelected:accepted.has(r.imo),
      selectionOrigin:accepted.has(r.imo)?
