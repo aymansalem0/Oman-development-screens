@@ -343,6 +343,22 @@ export class SiV2ScheduleApproval{
    return record;
   }finally{this.pending.delete(planId);}
  }
+ async mine(actor){
+  this.assertReady();
+  if(!text(actor))fail('SI_V2_INSPECTOR_IDENTITY_REQUIRED',403);
+  const schedules=this.mode==='json'?this.read():
+    await this.db(con=>this._existing(con));
+  return schedules.flatMap(schedule=>schedule.items.filter(item=>
+    [item.assignment.inspectorId,item.assignment.inspectorName]
+      .includes(actor.trim())&&item.orderStatus==='ISSUED')
+   .map(item=>({
+    planId:schedule.planId,scheduleId:schedule.id,
+    status:item.orderStatus,orderId:item.orderId,imo:item.imo,
+    caseId:item.caseId,assignment:item.assignment,
+    dossierStatus:item.dossierStatus,
+    aiChecklistApproval:'HUMAN_REVIEW_REQUIRED'
+   })));
+ }
  async executeOrder({planId,imo,actor,confirmExecution}={}){
   this.assertReady();
   if(!ID.test(planId||'')||!/^[0-9]{7}$/.test(imo||'')||
