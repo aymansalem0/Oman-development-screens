@@ -138,8 +138,8 @@
             copy('AI priority analysis in progress','جاري تحليل أولويات المعاينات'):
             copy('Applying validated results to the plan','جاري تحديث الخطة بالنتائج المتحقق منها')}}</strong>
           <p>{{planAiPhase==='analyzing'?
-            copy('Sending saved candidate sources, verified ETD, incident context and evidence to Airia. Waiting for the actual AI response; no inspection will be approved automatically.',
-              'يتم إرسال مصادر الترشيح المحفوظة وتاريخ المغادرة المؤكد وسياق الحوادث والأدلة إلى Airia، ثم انتظار الاستجابة الفعلية. لن يتم اعتماد أي معاينة تلقائيًا.'):
+            copy('Sending available saved candidate sources, verified ETDs (where present), reviewed incident signals and evidence to Airia. Missing or conflicting data are identified, not invented. Waiting for the actual response; no inspection is approved automatically.',
+              'يتم إرسال مصادر الترشيح المحفوظة وتواريخ المغادرة المؤكدة إن وُجدت، وإشارات الحوادث المعتمدة والأدلة إلى Airia، مع توضيح البيانات الناقصة أو المتعارضة دون اختلاقها. لا تُعتمد أي معاينة تلقائيًا.'):
             copy('Airia returned its recommendations. Refreshing the persisted plan for officer review.',
               'وصلت توصيات Airia، ويجري تحديث بيانات الخطة المحفوظة لمراجعة المسؤول.')}}
           </p>
