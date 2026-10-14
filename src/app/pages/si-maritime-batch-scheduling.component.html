@@ -36,7 +36,7 @@
       <td><small>{{v.sourceTypes.join(' · ')}}</small>
        <small>{{v.regimes.join(' · ')}}</small><small>{{v.vesselType}}</small>
        <small *ngIf="v.nmcReferrals.length">NMC × {{v.nmcReferrals.length}}</small></td>
-      <td><select [(ngModel)]="v.portId" (ngModelChange)="invalidateProposal()" [disabled]="!!v.portId">
+      <td><select [(ngModel)]="v.portId" (ngModelChange)="invalidateProposal()" [disabled]="v.portSourceLocked">
        <option value="">—</option><option *ngFor="let p of ctx.ports" [value]="p.portId">{{p.name}}</option>
       </select></td>
       <td><b *ngIf="v.etaLocal">{{v.etaLocal}}</b>
@@ -61,14 +61,28 @@
       {{busy?copy('Calculating ERP availability…','جارٍ تحليل إتاحة ERP…'):
        copy('1 · Calculate feasible schedules','١ · حساب بدائل الجدولة الممكنة')}}</button>
      <button type="button" class="marine-ai-button"
-      [disabled]="!canRunAi" (click)="runAi()">
+      [disabled]="busy||aiBusy" (click)="runAi()">
       {{aiBusy?copy('Analyzing with Airia…','جارٍ تحليل Airia…'):
        copy('2 · AI Schedule with SI-S01','٢ · الجدولة باستخدام SI-S01 AI')}}</button>
      <button type="button" *ngIf="aiAdvice" (click)="restoreBaseline()" [disabled]="aiBusy">
        {{copy('Compare ERP baseline','مقارنة جدول ERP الأساسي')}}</button>
-     <small>{{copy('Step 1 makes no AI call. Step 2 requires explicit consent for ONE potentially billable Airia request. No inspection case or ERP booking is created.',
-      'الخطوة الأولى لا تستدعي AI؛ والثانية تتطلب موافقة صريحة لاستدعاء Airia واحد قد يكون مدفوعًا. لا تُنشأ حالات معاينة أو حجوزات ERP.')}}</small>
+     <small>{{copy('You may click AI Schedule directly: it automatically runs the free ERP feasibility check first. Airia is called only if a valid alternative exists AND you separately confirm a potentially billable call.',
+      'يمكنك الضغط مباشرة على جدولة AI: سيحسب النظام إتاحة ERP مجانًا أولًا. لن يستدعي Airia إلا بوجود بديل صالح وبعد موافقتك الصريحة على استدعاء قد يكون مدفوعًا.')}}</small>
     </div>
+    <p class="marine-ai-readiness" role="status">{{aiBlockedReason}}</p>
+    <section *ngIf="readinessIssues.length" class="marine-readiness-panel"
+      [attr.aria-label]="copy('Missing scheduling prerequisites','بيانات الجدولة الناقصة')">
+     <h3>{{copy('Scheduling data required for','بيانات الجدولة المطلوب استكمالها لـ')}}
+       {{readinessIssues.length}} {{copy('vessel(s)','سفينة')}}</h3>
+     <p>{{copy('Fill only verified scheduling facts. No dates, berth access or source evidence will be invented for AI.',
+       'استكمل بيانات الزيارة المؤكدة فقط. لن يتم اختلاق مواعيد أو إتاحة رصيف أو مراجع أدلة للذكاء الاصطناعي.')}}</p>
+     <ul>
+      <li *ngFor="let item of readinessIssues">
+       <strong>{{item.name}} · IMO {{item.imo}}</strong>
+       <span>{{item.issues.join(' · ')}}</span>
+      </li>
+     </ul>
+    </section>
    </section>
    <section class="marine-panel" *ngIf="ctx.workforce?.length">
     <div class="marine-title-line">
