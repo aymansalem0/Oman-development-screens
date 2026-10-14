@@ -22,7 +22,7 @@ const rawRoutes: Routes = [
   { path: 'moei/smart-inspection/management', loadComponent: () => import('./pages/si-management-dashboard.component').then(m => m.SiManagementDashboardComponent) },
   { path: 'moei/smart-inspection/lifecycle', loadComponent: () => import('./pages/si-full-lifecycle.component').then(m => m.SiFullLifecycleComponent) },
   { path: 'moei/smart-inspection/lifecycle/:caseId', loadComponent: () => import('./pages/si-full-lifecycle.component').then(m => m.SiFullLifecycleComponent) },
-  { path: 'moei/smart-inspection/psc-targeting', loadComponent: () => import('./pages/si-psc-targeting-pool.component').then(m => m.SiPscTargetingPoolComponent) },
+  { path: 'moei/smart-inspection/psc-targeting', redirectTo: 'moei/smart-inspection/candidates', pathMatch: 'full' },
   { path: 'moei/smart-inspection/settings/psc-quotas', loadComponent: () => import('./pages/si-psc-quota-settings.component').then(m => m.SiPscQuotaSettingsComponent) },
   { path: 'moei/smart-inspection/candidates', loadComponent: () => import('./pages/si-candidate-workbench.component').then(m => m.SiCandidateWorkbenchComponent) },
   { path: 'moei/smart-inspection/candidates/demo', loadComponent: () => import('./pages/smart-inspection-candidate-center.component').then(m => m.SmartInspectionCandidateCenterComponent) },
