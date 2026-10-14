@@ -1712,6 +1712,9 @@ const server = createServer(async (req, res) => {
           ...(Number.isInteger(e.batchCount)?{batchCount:e.batchCount}:{})});
       if(e instanceof SiError||e instanceof SiPocAdvisorError||e instanceof SiRollingPlanError||e instanceof SiBulkApprovalError||e instanceof SiCandidateAgentError||e instanceof SiLifecycleError||e instanceof SiSelectionError||e instanceof SiPriorityError||e instanceof SiPreparationError||e instanceof SiWorkOrderError||e instanceof SiTargetingError||e instanceof MoeiAuthError||e instanceof DashboardError)
         return respond(res,e.status,{error:e.code});
+      if(typeof e?.code==='string'&&e.code.startsWith('SI_CAPACITY_')&&
+         Number.isInteger(e.status)&&e.status>=400&&e.status<600)
+        return respond(res,e.status,{error:e.code});
       if(Number.isInteger(e?.status)&&e.status>=400&&e.status<500)
         return respond(res,e.status,{error:'SI_REQUEST_INVALID'});
       const rollingRoute=path==='/api/si/v1/inspection-plans'||
