@@ -78,7 +78,11 @@ export function projectMaritimeSchedulingBoard(rows=[]){
    inspectorId:a.inspectorId,inspectorName:a.inspectorName,
    dateLocal:date,startLocal:a.startLocal,endLocal:a.endLocal,
    portId:a.portId,portName:a.portName,locationName:a.locationName,
-   locationType:a.locationType,score:a.score};
+   locationType:a.locationType,score:a.score,
+   crossPort:a.crossPort===true,originPortId:a.originPortId||a.portId,
+   originPortName:a.originPortName||a.portName,
+   travelMinutes:Number(a.travelMinutes)||0,
+   manualReasons:a.manualReasons||[]};
   const engineer=byEngineer.get(a.inspectorId)||{
    inspectorId:a.inspectorId,inspectorName:a.inspectorName,
    vesselCount:0,dates:[],assignments:[]};
@@ -143,7 +147,11 @@ export function proposeMaritimeBatchSchedule({
  const nowMs=clock();
  // Max 10 timeslots per vessel; the bounded beam solver can consider
  // several alternatives while leaving room for specialist-only inspections.
- const workingPolicy={...policy,config:{...policy.config,maxOptions:10}};
+ const mockOverlay=erpSnapshot.demoMode===true&&
+  requests.every(x=>x.pocDemo===true);
+ // POC-only cross-port opt-in: never modify the published real ERP policy.
+ const workingPolicy={...policy,config:{...policy.config,maxOptions:10,
+  ...(mockOverlay?{allowCrossPort:true,crossPortRequiresApproval:true}:{})}};
  const jobs=vessels.map((v,i)=>{
   // The plan's human-approved NMC provenance is authoritative: an NMC
   // referral cannot be invented through uploaded MSW/PSC source rows.
@@ -258,6 +266,10 @@ export function proposeMaritimeBatchSchedule({
     startUtc:x.startUtc,endUtc:x.endUtc,
     startLocal:x.startLocal,endLocal:x.endLocal,
     locationName:x.locationName,
+    crossPort:x.crossPort===true,originPortId:x.originPortId||x.portId,
+    originPortName:x.originPortName||x.portName,
+    travelMinutes:Number(x.travelMinutes)||0,
+    manualReasons:x.manualReasons||[],
     optionId:x.optionId,score:x.score
    })),
    rows:alternativeRows,
@@ -283,6 +295,7 @@ export function proposeMaritimeBatchSchedule({
    'ETA_ALONE_DOES_NOT_SUPPLY_ETD',
    'ENGINEER_SELECTION_USES_VERIFIED_REGIME_TYPE_SKILLS_NOT_GT_RANGES',
    'ERP_EXCEL_IS_SIMULATED_POC_NOT_LIVE_HR',
+   ...(mockOverlay?['POC_CROSS_PORT_FALLBACK_REQUIRES_SUPERVISOR_APPROVAL']:[]),
    'SOLVER_IS_HEURISTIC_NOT_GUARANTEED_GLOBAL_OPTIMUM',
    'NO_AIRIA_AI_INVOKED'
   ]

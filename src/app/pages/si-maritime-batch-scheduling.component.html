@@ -8,18 +8,6 @@
      'خطة المعاينات المعتمدة ← إتاحة مهندسي ERP ← بدائل جدولة صالحة ← ترتيب SI-S01 بالذكاء الاصطناعي ← مراجعة واعتماد المسؤول.')}}</p>
    <a routerLink="/moei/smart-inspection/scheduling">{{copy('← Approved Plans','← الخطط المعتمدة')}}</a>
   </header>
-  <section class="marine-demo-mode" aria-label="POC Data Mode">
-   <div>
-    <strong>{{copy('Presentation data mode','وضع بيانات العرض التقديمي')}}</strong>
-    <p>{{copy('Complete synthetic inspection visits and a separate mock ERP workforce make the walkthrough executable. No official records are changed.',
-     'يتم استكمال بيانات الزيارة واستخدام موارد مهندسين تجريبية مستقلة لاستكمال سيناريو العرض، دون تعديل السجلات الرسمية أو ملفات Excel المستوردة.')}}</p>
-   </div>
-   <label class="marine-demo-switch">
-    <input type="checkbox" [checked]="demoMode" [disabled]="loading||busy||aiBusy"
-      (change)="useDemoMode($any($event.target).checked)">
-    {{copy('Use complete POC mock data','استخدام بيانات POC التجريبية المكتملة')}}
-   </label>
-  </section>
   <div class="marine-error" *ngIf="error" role="alert">{{error}}</div>
   <div class="marine-notice" *ngIf="notice" role="status">{{notice}}</div>
   <div class="marine-notice" *ngIf="loading">{{copy('Loading approved plan and workforce…','تحميل الخطة المعتمدة والمهندسين…')}}</div>
@@ -40,8 +28,8 @@
    </section>
    <section class="marine-panel">
     <h2>{{copy('Vessels from the approved inspection plan · visit inputs','السفن الناتجة عن خطة المعاينات المعتمدة · بيانات الزيارة')}}</h2>
-    <p *ngIf="ctx.demoMode" class="marine-demo-notice">{{copy('The presentation fields below were completed with explicitly synthetic data. Turn off POC mode to inspect original missing ERP and vessel fields.',
-      'تم استكمال حقول العرض أدناه ببيانات تجريبية مميزة. أوقف وضع POC لمراجعة البيانات الأصلية الناقصة من المصادر وERP.')}}</p>
+    <p *ngIf="ctx.demoMode" class="marine-demo-notice">{{copy('The presentation fields below use an explicitly synthetic POC overlay; approved vessel identities and original ERP/source records remain unchanged.',
+      'تستخدم حقول العرض بيانات POC تجريبية واضحة، مع الحفاظ على هوية السفن المعتمدة وسجلات المصادر وERP الأصلية دون تعديل.')}}</p>
     <p>{{copy('Imported ETA/ETD are final in the POC and locked in this board. For NMC or services without dates, enter final times directly; no date signoff is needed. Site access remains a safety gate.',
       'تُعامل مواعيد الوصول والمغادرة المستوردة كنهائية في الـPOC ولا تُعدّل هنا. يمكن إدخال المواعيد النهائية لإحالات NMC والخدمات عند غيابها دون اعتماد منفصل. يجب تأكيد إتاحة الموقع.')}}</p>
     <div class="marine-scroll"><table>
@@ -133,6 +121,9 @@
    </section>
    <section *ngIf="proposal as p" class="marine-panel">
     <h2>{{copy('Inspector assignments and scheduling exceptions','توزيع المهندسين واستثناءات الجدولة')}}</h2>
+     <p class="marine-note">{{copy(
+       'If an eligible inspector is unavailable at the vessel port, the scheduler also considers qualified engineers from other ports. Travel time, shifts, conflicts and explicit supervisor approval still apply; demo travel times are synthetic.',
+       'عند عدم توفر مهندس مؤهل بميناء السفينة، يبحث النظام عن مهندسين مؤهلين بموانئ أخرى، مع احتساب زمن الانتقال والورديات والتعارضات واعتماد المشرف. أزمنة الانتقال بالعرض تجريبية.')}}</p>
     <p class="marine-notice">{{aiAdvice?
        (aiAdvice.provider==='POC_MOCK'?
        copy('POC MOCK simulated a ranking of synthetic feasible schedules; it is not live AI or approved ERP scheduling.',
@@ -177,7 +168,13 @@
       <th>{{copy('Site','المكان')}}</th><th>{{copy('Reason / Score','السبب / التقييم')}}</th></tr></thead>
      <tbody><tr *ngFor="let r of p.rows">
       <td>{{r.imo}}</td><td><b [class.unscheduled]="r.status==='UNSCHEDULED'">{{r.status}}</b></td>
-      <td>{{r.assignment?.inspectorName||'—'}}</td>
+      <td>{{r.assignment?.inspectorName||'—'}}
+       <small *ngIf="r.assignment?.crossPort" class="marine-demo-chip">
+        {{copy('Cross-port · from','من ميناء آخر · من')}}
+        {{r.assignment?.originPortName||r.assignment?.originPortId}}
+        · {{r.assignment?.travelMinutes}} {{copy('min travel','دقيقة انتقال')}}
+        · {{copy('Supervisor signoff','اعتماد المشرف')}}
+       </small></td>
       <td>{{r.assignment?.startLocal||'—'}}<br>{{r.assignment?.endLocal||''}}</td>
       <td>{{r.assignment?.locationName||'—'}}</td>
       <td>{{r.blocker||((r.assignment?.score??0)+'/100')}}</td>
@@ -192,6 +189,10 @@
             <strong>IMO {{slot.imo}}</strong>
             <span>{{slot.startLocal}} → {{slot.endLocal}}</span>
             <small>{{slot.portName}} · {{slot.locationName}}</small>
+           <small *ngIf="slot.crossPort" class="marine-demo-chip">
+            {{copy('From','من')}} {{slot.originPortName||slot.originPortId}} ·
+            {{slot.travelMinutes}} {{copy('min travel','دقيقة انتقال')}}
+           </small>
           </div>
         </article>
         <p class="marine-notice" *ngIf="!board.engineers.length">
@@ -207,6 +208,10 @@
             <strong>IMO {{slot.imo}} · {{slot.inspectorName}}</strong>
             <span>{{slot.startLocal}} → {{slot.endLocal}}</span>
             <small>{{slot.portName}} · {{slot.locationName}}</small>
+           <small *ngIf="slot.crossPort" class="marine-demo-chip">
+            {{copy('From','من')}} {{slot.originPortName||slot.originPortId}} ·
+            {{slot.travelMinutes}} {{copy('min travel','دقيقة انتقال')}}
+           </small>
           </div>
         </article>
         <p class="marine-notice" *ngIf="!board.days.length">
@@ -271,7 +276,12 @@
           <td><strong>IMO {{order.imo}}</strong>
             <small>{{order.id.slice(0,8)}}</small></td>
           <td>{{order.assignment.inspectorName}}
-            <small>{{order.assignment.inspectorId}}</small></td>
+            <small>{{order.assignment.inspectorId}}</small>
+           <small *ngIf="order.assignment.crossPort" class="marine-demo-chip">
+            {{copy('Cross-port approved · from','معتمد من ميناء آخر · من')}}
+            {{order.assignment.originPortName||order.assignment.originPortId}} ·
+            {{order.assignment.travelMinutes}} {{copy('min','دقيقة')}}
+           </small></td>
           <td>{{order.assignment.portName}}
             <small>{{order.assignment.startLocal}}</small></td>
           <td><strong>{{order.checklistStatus}}</strong>

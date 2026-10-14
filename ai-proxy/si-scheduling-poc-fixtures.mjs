@@ -39,10 +39,14 @@ export function buildPocErpSchedulingOverlay(snapshot,{clock=()=>Date.now()}={})
   ...p,window_start:'06:00',window_end:'23:00'
  }));
  data.Inspectors=people;
- data.Inspector_Ports=people.flatMap(p=>originalPorts.map(port=>({
-  inspector_id:p.inspector_id,port_id:port.port_id,assignment_type:'POC_ALL_PORTS',
+ // Demo inspectors are local to their own home port. Remote inspections
+ // use the route travel-time and explicit cross-port approval, not an all-port
+ // membership that bypasses travel and authorization checks.
+ data.Inspector_Ports=people.map(p=>({
+  inspector_id:p.inspector_id,port_id:p.home_port_id,
+  assignment_type:'POC_HOME_PORT',
   active:'Y',effective_from:'2025-01-01',effective_to:until
- })));
+ }));
  data.Qualifications=people.flatMap(p=>regimes.flatMap(regime=>types.map(type=>({
   inspector_id:p.inspector_id,inspection_regime:regime,vessel_type:type,
   qualification_code:'POC_SYNTHETIC_ALL_SCOPES',valid_until:until,active:'Y'

@@ -130,7 +130,8 @@ export class SiScheduleOrders{
   return {schedule,order};
  }
  async approve({plan,proposal,selectedOptionId,expectedHash,
-  expectedPlanRevision,actor,reason,confirmApproval,demoMode=false}={}){
+  expectedPlanRevision,actor,reason,confirmApproval,demoMode=false,
+  confirmCrossPort=false}={}){
   this.assertReady();
   if(!UUID.test(plan?.id||'')||!label(actor,160)||!label(reason,500)||
    reason.trim().length<8||confirmApproval!==true||
@@ -150,6 +151,14 @@ export class SiScheduleOrders{
    new Set(variant.assignments.map(x=>x.imo)).size!==variant.assignments.length||
    variant.assignments.some(x=>!plan.approvedVessels.some(v=>v.imo===x.imo)))
    err('SI_SCHED_ALL_VESSELS_MUST_HAVE_VALID_ASSIGNMENT',409);
+  const crossPortAssignments=variant.assignments.filter(a=>a.crossPort===true);
+  if(crossPortAssignments.some(a=>!label(a.originPortId,100)||
+    a.originPortId===a.portId||
+    !Number.isFinite(a.travelMinutes)||a.travelMinutes<0||
+    (demoMode&&!a.manualReasons?.includes('CROSS_PORT_REQUIRES_APPROVAL'))))
+   err('SI_SCHED_CROSS_PORT_TRAVEL_OR_APPROVAL_EVIDENCE_INVALID',409);
+  if(crossPortAssignments.length&&confirmCrossPort!==true)
+   err('SI_SCHED_CROSS_PORT_SUPERVISOR_CONFIRMATION_REQUIRED',422);
   for(let i=0;i<variant.assignments.length;i++)
    for(let j=i+1;j<variant.assignments.length;j++)
     if(overlap(variant.assignments[i],variant.assignments[j]))
@@ -188,6 +197,13 @@ export class SiScheduleOrders{
      mode:demoMode?'POC_MOCK':'ERP_EXCEL_POC',
      status:'APPROVED_WORK_ORDERS_ISSUED',approvedBy:actor.trim(),
      approvalReason:reason.trim(),approvedAt,
+     crossPortApprovalConfirmed:crossPortAssignments.length>0&&
+       confirmCrossPort===true,
+     crossPortApprovalBy:crossPortAssignments.length?actor.trim():null,
+     crossPortOrders:crossPortAssignments.map(a=>({
+       imo:a.imo,inspectorId:a.inspectorId,fromPortId:a.originPortId,
+       toPortId:a.portId,travelMinutes:a.travelMinutes
+     })),
      operationalBookingConfirmed:false,
      officialRegulatoryInspectionAuthorized:false,
      orders};
@@ -214,7 +230,9 @@ export class SiScheduleOrders{
      "VALUES(:id,:schedule,'SUPERVISOR_APPROVED_SCHEDULE',:actor,:detail)",{
       id:id(),schedule:scheduleId,actor:record.approvedBy,
       detail:doc({optionId:selectedOptionId,vesselCount:orders.length,
-       erpSnapshotId:record.erpSnapshotId,mode:record.mode})});
+       erpSnapshotId:record.erpSnapshotId,mode:record.mode,
+       crossPortApprovalConfirmed:record.crossPortApprovalConfirmed,
+       crossPortOrders:record.crossPortOrders})});
     await con.commit();return record;
    };
    if(this.mode==='json')return clone(await perform(null));

@@ -131,14 +131,19 @@ export class SiElectronicScheduler{
       if(!qualifications.length)reasons.push('QUALIFICATION_MISSING_OR_EXPIRED');
       const effectivePorts=data.Inspector_Ports.filter(r=>r.inspector_id===engineer.inspector_id&&active(r.active)
         &&inEffective(localDate(startSlot),r.effective_from,r.effective_to));
-      let crossPort=false,travelMinutes=0;
+      let crossPort=false,travelMinutes=0,routeApprovalRequired=false;
       const assigned=effectivePorts.some(r=>r.port_id===input.portId);
       if(!assigned){
         crossPort=true;
         const route=data.Travel_Matrix.find(r=>r.from_port_id===engineer.home_port_id&&r.to_port_id===input.portId
           &&active(r.route_allowed));
         if(!cfg.allowCrossPort||!route)reasons.push('PORT_NOT_ELIGIBLE');
-        else travelMinutes=Number(route.one_way_minutes);
+        else{
+          travelMinutes=Number(route.one_way_minutes);
+          if(!Number.isFinite(travelMinutes)||travelMinutes<0)
+            reasons.push('CROSS_PORT_TRAVEL_TIME_UNAVAILABLE');
+          routeApprovalRequired=active(route.travel_approval_required);
+        }
       }
       if(reasons.length){exclusions.push({inspectorId:engineer.inspector_id,reasons});continue;}
       let sawApprovedLeave=false,sawConflict=false,sawShift=false,sawCapacity=false,sawBlackout=false;
@@ -180,7 +185,8 @@ export class SiElectronicScheduler{
           sawCapacity=true;continue;
         }
         const reasons=[];
-        if(crossPort&&cfg.crossPortRequiresApproval)reasons.push('CROSS_PORT_REQUIRES_APPROVAL');
+        if(crossPort&&(cfg.crossPortRequiresApproval||routeApprovalRequired))
+          reasons.push('CROSS_PORT_REQUIRES_APPROVAL');
         if(pending&&cfg.pendingLeaveRequiresApproval)reasons.push('PENDING_LEAVE_REQUIRES_APPROVAL');
         const dayBookings=currentBookings.filter(b=>localDate(b.start)===date).length;
         const delayRatio=Math.min(1,(slot-start)/Math.max(slotMs,end-start));
@@ -195,6 +201,10 @@ export class SiElectronicScheduler{
           startUtc:new Date(slot).toISOString(),
           endUtc:new Date(slot+duration).toISOString(),startLocal:localDateTime(slot),
           endLocal:localDateTime(slot+duration),crossPort,travelMinutes,
+          originPortId:crossPort?engineer.home_port_id:input.portId,
+          originPortName:crossPort?
+            data.Ports.find(p=>p.port_id===engineer.home_port_id)?.port_name||
+            engineer.home_port_id:port.port_name,
           score,manualReasons:reasons});
       }
       if(candidateSlots.length){
@@ -209,8 +219,36 @@ export class SiElectronicScheduler{
         exclusions.push({inspectorId:engineer.inspector_id,reasons:reasons.length?reasons:['NO_FEASIBLE_SLOT']});
       }
     }
-    options.sort((a,b)=>b.score-a.score||a.startUtc.localeCompare(b.startUtc));
-    return {options:options.slice(0,cfg.maxOptions),exclusions};
+    // Reserve qualified alternatives from other ports. Without this, the
+    // top-N list may contain only local slots and a whole-plan conflict
+    // can falsely appear unschedulable despite eligible remote engineers.
+    const byScore=(a,b)=>b.score-a.score||a.startUtc.localeCompare(b.startUtc)||
+      a.inspectorId.localeCompare(b.inspectorId);
+    const diverse=(pool,limit)=>{
+      const sorted=[...pool].sort(byScore),selected=[],seen=new Set();
+      for(const opt of sorted){
+        if(selected.length===limit)break;
+        if(!seen.has(opt.inspectorId)){
+          selected.push(opt);seen.add(opt.inspectorId);
+        }
+      }
+      if(selected.length<limit)
+        for(const opt of sorted){
+          if(selected.length===limit)break;
+          if(!selected.includes(opt))selected.push(opt);
+        }
+      return selected;
+    };
+    const local=options.filter(o=>!o.crossPort);
+    const remote=options.filter(o=>o.crossPort);
+    const max=cfg.maxOptions;
+    const homeQuota=remote.length?Math.max(1,Math.ceil(max*0.6)):max;
+    const selected=diverse(local,homeQuota);
+    selected.push(...diverse(remote,max-selected.length));
+    if(selected.length<max)
+      selected.push(...diverse(local.filter(o=>!selected.includes(o)),
+        max-selected.length));
+    return {options:selected.sort(byScore),exclusions};
   }
   async propose(body){
     const rows=await this.referrals();

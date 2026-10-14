@@ -134,3 +134,93 @@ test('POC user can calculate an actual read-only feasible schedule with complete
  assert.ok(response.board.engineers.length>=1);
  assert.ok(response.board.days.length>=1);
 });
+
+test('POC home-port roster automatically finds qualified remote engineers when the destination port has no staff',()=>{
+ const demo=buildPocErpSchedulingOverlay(sourceSnapshot,{clock:()=>now});
+ assert.equal(demo.data.Inspector_Ports.length,demo.data.Inspectors.length,
+  'POC engineers are not falsely declared to be members of every port');
+ const remote=demo.data.Inspectors.find(x=>x.home_port_id==='FUJ');
+ assert.ok(remote);
+ demo.data.Inspectors=[remote]; // only a Fujairah engineer remains
+ const filled=fillPocSchedulingVisitContext(cases(),demo,{clock:()=>now});
+ const vessel=filled.items.find(v=>v.imo==='9400643');
+ const approved={id:filled.planId,number:'IP-REMOTE-POC',status:'APPROVED',
+  revision:1,approvedVessels:[{imo:vessel.imo,planRank:1,
+   regimes:vessel.regimes,inspectionReasons:[{eventKey:'SOURCE-9400643',
+    sourceType:'SERVICE_REQUEST'}]}]};
+ const scheduler=new SiElectronicScheduler({
+  erp:{requireSnapshot:()=>demo},cases:{listInspectionRequests:async()=>[]},
+  path:'/tmp/si-cross-port-poc-readonly-test.json',clock:()=>now
+ });
+ const proposal=proposeMaritimeBatchSchedule({
+  plan:approved,erpSnapshot:demo,policy:scheduler.getPolicy(),
+  requests:[request(vessel)],scheduler,clock:()=>now
+ });
+ assert.equal(proposal.summary.proposed,1,JSON.stringify(proposal.rows));
+ assert.equal(proposal.summary.unscheduled,0);
+ const assigned=proposal.rows[0].assignment;
+ assert.equal(assigned.inspectorId,remote.inspector_id);
+ assert.equal(assigned.crossPort,true);
+ assert.equal(assigned.originPortId,'FUJ');
+ assert.equal(assigned.portId,'JEA');
+ assert.equal(assigned.travelMinutes,30);
+ assert.ok(assigned.manualReasons.includes('CROSS_PORT_REQUIRES_APPROVAL'));
+ assert.equal(proposal.variants[0].assignments[0].crossPort,true);
+ assert.equal(proposal.board.engineers[0].assignments[0].originPortId,'FUJ');
+ assert.equal(proposal.summary.bookingWrites,0);
+ assert.equal(proposal.summary.caseWrites,0);
+});
+test('POC whole-plan solver fills concurrent visits using other ports when local inspector is busy',()=>{
+ const demo=buildPocErpSchedulingOverlay(sourceSnapshot,{clock:()=>now});
+ const local=demo.data.Inspectors.find(x=>x.home_port_id==='JEA');
+ const remote=demo.data.Inspectors.find(x=>x.home_port_id==='FUJ');
+ demo.data.Inspectors=[local,remote];
+ const approved={id:'33333333-3333-4333-8333-333333333333',
+  number:'IP-CROSS-PORT-POC',revision:1,status:'APPROVED',
+  approvedVessels:[
+   {imo:'9400643',planRank:1,regimes:['UAE_SERVICE_INSPECTION'],inspectionReasons:[]},
+   {imo:'9400849',planRank:2,regimes:['UAE_SERVICE_INSPECTION'],inspectionReasons:[]}
+  ]};
+ const input=(imo)=>({imo,portId:'JEA',vesselType:'CARGO',regime:'SERVICE',
+  locationType:'BERTH',locationName:'POC Jebel Ali berth',
+  siteAccessConfirmed:true,earliestLocal:'2026-10-20 09:00',
+  latestFinishLocal:'2026-10-20 11:00',durationMinutes:120,
+  windowSource:'POC_DEMO',windowEvidenceReference:'POC-EXAMPLE',pocDemo:true});
+ const scheduler=new SiElectronicScheduler({
+  erp:{requireSnapshot:()=>demo},cases:{listInspectionRequests:async()=>[]},
+  path:'/tmp/si-cross-port-concurrent-readonly-test.json',clock:()=>now
+ });
+ const result=proposeMaritimeBatchSchedule({
+  plan:approved,erpSnapshot:demo,policy:scheduler.getPolicy(),
+  requests:[input('9400643'),input('9400849')],scheduler,clock:()=>now
+ });
+ assert.equal(result.summary.unscheduled,0,JSON.stringify(result.rows));
+ assert.equal(result.summary.proposed,2);
+ assert.equal(new Set(result.rows.map(x=>x.assignment.inspectorId)).size,2);
+ assert.ok(result.rows.some(x=>x.assignment.crossPort===true));
+ assert.ok(result.variants[0].assignments.some(x=>
+  x.crossPort===true&&x.manualReasons.includes('CROSS_PORT_REQUIRES_APPROVAL')));
+});
+test('Cross-port fallback still blocks prohibited routes: no fabricated travel eligibility',()=>{
+ const demo=buildPocErpSchedulingOverlay(sourceSnapshot,{clock:()=>now});
+ const remote=demo.data.Inspectors.find(x=>x.home_port_id==='FUJ');
+ demo.data.Inspectors=[remote];
+ demo.data.Travel_Matrix.find(x=>
+  x.from_port_id==='FUJ'&&x.to_port_id==='JEA').route_allowed='N';
+ const filled=fillPocSchedulingVisitContext(cases(),demo,{clock:()=>now});
+ const v=filled.items.find(x=>x.imo==='9400643');
+ const plan={id:filled.planId,status:'APPROVED',revision:1,approvedVessels:[
+  {imo:v.imo,regimes:v.regimes,planRank:1,inspectionReasons:[]}]};
+ const scheduler=new SiElectronicScheduler({
+  erp:{requireSnapshot:()=>demo},cases:{listInspectionRequests:async()=>[]},
+  path:'/tmp/si-cross-port-prohibited-readonly-test.json',clock:()=>now
+ });
+ const result=proposeMaritimeBatchSchedule({
+  plan,erpSnapshot:demo,policy:scheduler.getPolicy(),
+  requests:[request(v)],scheduler,clock:()=>now
+ });
+ assert.equal(result.summary.proposed,0);
+ assert.equal(result.summary.unscheduled,1);
+ assert.ok(result.rows[0].exclusions.some(x=>
+  x.inspectorId===remote.inspector_id&&x.reasons.includes('PORT_NOT_ELIGIBLE')));
+});
