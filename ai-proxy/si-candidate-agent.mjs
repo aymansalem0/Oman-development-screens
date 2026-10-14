@@ -285,6 +285,8 @@ export class SiCandidateAgent{
    snapshotHash:s.snapshotHash,policyRevision:s.policyRevision,
    pscQuotaPolicyRevision:s.pscQuotaPolicyRevision,
    riskPolicyRevision:s.riskPolicyRevision,eligibleCount:s.candidates.length,
+   expectedBatches:Math.ceil(s.candidates.length/100),
+   estimatedAiriaCalls:this.provider==='airia'?Math.ceil(s.candidates.length/100):0,
    candidates:s.candidates,externalCalls:0,
    latest:this.latest?{
      agentRunId:this.latest.agentRunId,
@@ -304,8 +306,14 @@ export class SiCandidateAgent{
     throw new SiCandidateAgentError('SI_C01_SOURCE_CHANGED_REPREVIEW',409);
    if(!s.candidates.length)
     throw new SiCandidateAgentError('SI_C01_NO_PENDING_CANDIDATES',422);
-   if(s.candidates.length>100)
-    throw new SiCandidateAgentError('SI_C01_LIMIT_100_SCOPE_REQUIRED',422);
+   // A full 99-vessel fleet can have >100 *regime* candidates after Excel
+   // rules activate. Explicitly consent to the REAL number of Airia calls.
+   // Keep bounded batches; never truncate inputs or silently run extra calls.
+   const batchSize=100,batchCount=Math.ceil(s.candidates.length/batchSize);
+   if(s.candidates.length>500)
+    throw new SiCandidateAgentError('SI_C01_BATCH_LIMIT_500_SCOPE_REQUIRED',422);
+   if(batchCount>1&&input.confirmBatchCount!==batchCount)
+    throw new SiCandidateAgentError('SI_C01_BATCH_COUNT_CONFIRMATION_REQUIRED',422);
    const officerPlanChanges=Array.isArray(input.officerPlanChanges)?
      input.officerPlanChanges.filter(x=>
        /^[0-9]{7}$/.test(x?.imo||'')&&
@@ -336,16 +344,30 @@ export class SiCandidateAgent{
      // permitted shortlist, never overrides the quota or officer approval.
      pscQuotaSnapshot:s.pscQuotaSnapshot,
      candidates:s.candidates};
-   let raw;
-   try{raw=await this.executeAgent(payload);}
-   catch{throw new SiCandidateAgentError('SI_C01_PROVIDER_UNAVAILABLE',502);}
-   const recommendations=validateC01(raw,s);
+   // Every batch is validated against its own permitted candidate/evidence
+   // subset. No partial result is returned or persisted if ANY batch fails.
+   // `suggestedRank` is local to each batch; statutory execution order is
+   // independently calculated by the deterministic inspection ranking engine.
+   const recommendations=[];
+   for(let i=0;i<batchCount;i++){
+     const subset=s.candidates.slice(i*batchSize,(i+1)*batchSize);
+     const batch={...payload,
+       requestMeta:{...payload.requestMeta,batchIndex:i+1,batchCount},
+       candidates:subset};
+     const scope={...s,candidates:subset};
+     let raw;
+     try{raw=await this.executeAgent(batch);}
+     catch{throw new SiCandidateAgentError('SI_C01_PROVIDER_UNAVAILABLE',502);}
+     recommendations.push(...validateC01(raw,scope));
+   }
    const result={status:'ADVISORY_REVIEW_REQUIRED',agentCode:'SI-C01',
      agentRunId:randomUUID(),provider:this.provider.toUpperCase(),
      mock:this.provider==='mock',simulationLabel:this.provider==='mock'?SI_MOCK_MARKER:null,
      snapshotHash:s.snapshotHash,policyRevision:s.policyRevision,
      riskPolicyRevision:s.riskPolicyRevision,actor:input.actor.trim(),
-     generatedAt:new Date().toISOString(),externalCalls:this.provider==='mock'?0:1,
+     generatedAt:new Date().toISOString(),
+     externalCalls:this.provider==='mock'?0:batchCount,
+     batchesValidated:batchCount,candidatesAnalyzed:recommendations.length,
      humanDecisionRequired:true,mutations:false,
      warning:this.provider==='mock'?
        'STATIC TEST LOGIC ONLY: NO AIRIA CALL; NO REAL MODEL ANALYSIS OR APPROVAL.':
