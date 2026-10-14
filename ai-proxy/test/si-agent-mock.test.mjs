@@ -316,7 +316,7 @@ test('C01 safely explains missing Airia priority prose using deterministic rank 
   assert.match(result[0].priorityRationale,/PENDING_ADDITIONAL_RULES/);
   assert.match(result[0].priorityRationale,/AI did not provide usable/);
   assert.equal(result[0].requiresHumanReview,true);
-  assert.equal(result[1].priorityRationaleSource,'AIRIA');
+  assert.equal(result[1].priorityRationaleSource,'AGENT_OUTPUT');
  }
 });
 test('C01 sends the actual imported MSW ETD, port, ETA and evidence; no invented data',()=>{
