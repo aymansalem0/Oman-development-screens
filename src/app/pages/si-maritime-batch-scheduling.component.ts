@@ -185,9 +185,14 @@ export class SiMaritimeBatchSchedulingComponent implements OnInit{
     'Supervisor: reason for mandatory checklist scope approval:',
     'المشرف: سبب اعتماد نطاق قوائم المعاينة الإلزامية:'));
    if(!reason||reason.trim().length<8)return;
-   const includeAiSuggestions=order.aiStatus==='A04_ADDITIONS_APPROVED_BY_REVIEWER'&&
-    window.confirm(this.copy('Include separately reviewed A04 additions?',
-     'هل تضيف بنود A04 الاختيارية المعتمدة بصورة منفصلة؟'));
+   // A04 review happens in the separate preparation page after the
+   // order is issued. The order's earlier status can still show DRAFT even
+   // when a publisher has approved the overlay in that page. The server
+   // checks the LATEST preparation revision before accepting additions.
+   const includeAiSuggestions=order.aiStatus.startsWith('A04_')&&
+    window.confirm(this.copy(
+     'Include A04 additions ONLY if a supervisor has already approved their draft in Dossier Review? Otherwise choose Cancel and approve mandatory scope alone.',
+     'هل تريد ضم إضافات A04 بعد اعتماد مسودتها من المسؤول في شاشة الدوسيه؟ اضغط إلغاء لاعتماد البنود الإلزامية فقط.'));
    request={reason:reason.trim(),includeAiSuggestions};
   }else{
    const poc=this.approvedSchedule.mode==='POC_MOCK';
