@@ -147,8 +147,8 @@ interface CapacityPreview{
        'A vessel qualifying for both factors is counted once in the combined shortlist (one IMO). The PSC quota uses already eligible PSC candidates and saved vessel-risk assessment to rank them; it does not replace the published PSC Excel port-call event quota. UAE-flag eligibility is based on recorded flag state, not arrival port. Mandatory NMC referrals and legal service obligations remain outside these optional percentages.',
        'السفينة المشتركة بين العاملين تُحسب مرة واحدة عند دمج المقترحات (IMO واحد). تختار نسبة PSC من المرشحين المؤهلين وتُرتّبهم وفق تقييم المخاطر المحفوظ؛ ولا تحل محل حصة أحداث PSC المنشورة من Excel. السفن الإماراتية تُحدد وفق علم السفينة المسجل وليس ميناء الوصول. تظل إحالات NMC الإلزامية والتزامات الخدمات النظامية مستقلة عن نسب الاختيار الاختيارية.')}}</p>
      <p class="hint">{{copy(
-       'Planning preview only: percentages are not yet saved or applied to final AI selection, capacity optimization or plan approval. No official risk score, approved source decision or work order is changed.',
-       'معاينة تخطيط فقط: لم تُحفظ النسب أو تُطبّق بعد على اختيار AI النهائي أو تحسين الطاقة أو اعتماد الخطة. لا يتم تغيير تقييم المخاطر الرسمي أو قرارات المصادر أو أوامر التكليف.')}}</p>
+       'The two independent percentages are applied to the candidate shortlist when you load the capacity plan in Step 3, then revalidated and saved with the single supervisor approval. They do not alter any official NMC risk score or published PSC quota.',
+       'تُطبّق النسبتان المستقلتان على المرشحين عند تحميل خطة الطاقة في الخطوة الثالثة، ثم يُعاد التحقق منهما وحفظهما عند الاعتماد الموحد. لا يتغير تقييم مخاطر NMC الرسمي أو حصة PSC المنشورة.')}}</p>
     </section>
     <section class="panel" *ngIf="step===1">
      <div class="panel-head">
