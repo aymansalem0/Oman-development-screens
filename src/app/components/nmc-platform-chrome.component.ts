@@ -24,7 +24,9 @@ import {NmcMinistryLogoComponent} from './nmc-ministry-logo.component';
           <h1>{{pick('MOEI Maritime Unified Platform','المنصة البحرية الموحدة لوزارة الطاقة والبنية التحتية')}}</h1>
           <p>{{area==='nmc'
             ?pick('Operational picture · Maritime situational awareness','الصورة التشغيلية · الوعي بالموقف البحري')
-            :pick('Smart Inspection · Integrated maritime services','المعاينة الذكية · الخدمات البحرية المتكاملة')}}</p>
+            :(area==='seafarers'
+              ?pick('Seafarer Management · SDB Services','إدارة البحارة · خدمات دفتر البحار')
+              :pick('Smart Inspection · Integrated maritime services','المعاينة الذكية · الخدمات البحرية المتكاملة'))}}</p>
         </div>
       </div>
       <div class="maritime-status" *ngIf="area==='nmc'; else siContext">
@@ -37,7 +39,9 @@ import {NmcMinistryLogoComponent} from './nmc-ministry-logo.component';
       </div>
       <ng-template #siContext>
         <div class="maritime-status">
-          <span class="maritime-context">{{pick('SMART INSPECTION · POC','المعاينة الذكية · نموذج تجريبي')}}</span>
+          <span class="maritime-context">{{area==='seafarers'
+                ?pick('SEAFARER MANAGEMENT · SDB POC','إدارة البحارة · تجربة دفتر البحار')
+                :pick('SMART INSPECTION · POC','المعاينة الذكية · نموذج تجريبي')}}</span>
           <small>{{pick('Same platform · Same business identity','منصة واحدة · هوية مؤسسية موحدة')}}</small>
         </div>
       </ng-template>
@@ -63,7 +67,7 @@ import {NmcMinistryLogoComponent} from './nmc-ministry-logo.component';
   styleUrl:'./nmc-platform-chrome.component.css'
 })
 export class NmcPlatformHeaderComponent{
-  @Input() area:'nmc'|'smart-inspection'='smart-inspection';
+  @Input() area:'nmc'|'smart-inspection'|'seafarers'='smart-inspection';
   @Input() feedLive=true;
   @Input() clock='';
   @Input() unreadAlerts=0;
