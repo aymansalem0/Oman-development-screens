@@ -1283,7 +1283,7 @@ const server = createServer(async (req, res) => {
       // work orders -> mandatory checklist initialization -> separately
       // reviewed A04 additions -> explicit inspector start. Oracle migration
       // 019 required; existing NMC/PSC source decisions remain independent.
-      const workRoute=/^\\/api\\/si\\/v1\\/maritime-scheduling\\/plans\\/([a-f0-9-]{36})\\/(approve|work-orders)(?:\\/([a-f0-9-]{36})\\/(activate|scope|start))?$/.exec(path);
+      const workRoute=/^\/api\/si\/v1\/maritime-scheduling\/plans\/([a-f0-9-]{36})\/(approve|work-orders)(?:\/([a-f0-9-]{36})\/(activate|scope|start))?$/.exec(path);
       if(workRoute){
         if(!siScheduleOrders.ready)
           return respond(res,503,{error:'SI_SCHED_MIGRATION_019_REQUIRED'});
