@@ -4,11 +4,12 @@
   <header class="marine-hero">
    <small>MOEI · SMART INSPECTION · V2 MARITIME SCHEDULING</small>
    <h1>{{copy('Comprehensive Electronic Inspection Scheduling','الجدولة الإلكترونية الشاملة للمعاينات')}}</h1>
-   <p>{{copy('Option B: final source ETD needs no extra approval. The supervisor approves the proposed entire schedule, not individual dates.',
-     'الخيار B: تاريخ المغادرة النهائي من المصدر لا يتطلب اعتمادًا. يعتمد المشرف الجدول الكامل وتوزيع المهندسين وليس التواريخ منفردة.')}}</p>
-   <a routerLink="/moei/smart-inspection/candidates">{{copy('← Candidate Center','← مركز الترشيحات')}}</a>
+   <p>{{copy('Approved Inspection Plan → ERP engineer availability → verified feasible scheduling alternatives → SI-S01 AI ranking → supervisor review.',
+     'خطة المعاينات المعتمدة ← إتاحة مهندسي ERP ← بدائل جدولة صالحة ← ترتيب SI-S01 بالذكاء الاصطناعي ← مراجعة واعتماد المسؤول.')}}</p>
+   <a routerLink="/moei/smart-inspection/scheduling">{{copy('← Approved Plans','← الخطط المعتمدة')}}</a>
   </header>
   <div class="marine-error" *ngIf="error" role="alert">{{error}}</div>
+  <div class="marine-notice" *ngIf="notice" role="status">{{notice}}</div>
   <div class="marine-notice" *ngIf="loading">{{copy('Loading approved plan and workforce…','تحميل الخطة المعتمدة والمهندسين…')}}</div>
   <ng-container *ngIf="context as ctx">
    <section class="marine-kpis">
@@ -18,7 +19,7 @@
     <div><span>{{copy('Cases / bookings created','الحالات والحجوزات')}}</span><strong>0 / 0</strong></div>
    </section>
    <section class="marine-panel">
-    <h2>{{copy('Vessel visit details and site access','بيانات زيارة السفن وإتاحة الموقع')}}</h2>
+    <h2>{{copy('Vessels from the approved inspection plan · visit inputs','السفن الناتجة عن خطة المعاينات المعتمدة · بيانات الزيارة')}}</h2>
     <p>{{copy('Imported ETA/ETD are final in the POC and locked in this board. For NMC or services without dates, enter final times directly; no date signoff is needed. Site access remains a safety gate.',
       'تُعامل مواعيد الوصول والمغادرة المستوردة كنهائية في الـPOC ولا تُعدّل هنا. يمكن إدخال المواعيد النهائية لإحالات NMC والخدمات عند غيابها دون اعتماد منفصل. يجب تأكيد إتاحة الموقع.')}}</p>
     <div class="marine-scroll"><table>
@@ -55,10 +56,19 @@
       <td><input type="number" min="30" max="720" step="30" [(ngModel)]="v.durationMinutes" (ngModelChange)="invalidateProposal()"></td>
      </tr></tbody>
     </table></div>
-    <div class="marine-actions"><button type="button" [disabled]="busy" (click)="preview()">
-      {{busy?copy('Calculating…','جارٍ الحساب…'):copy('Generate Complete Schedule Proposal','إنشاء مقترح الجدولة الشاملة')}}</button>
-     <small>{{copy('No paid AI call, inspection case, ERP booking or NMC action is created.',
-      'لا تُنشأ اتصالات AI مدفوعة أو حالات معاينة أو حجوزات ERP أو إجراءات NMC.')}}</small></div>
+    <div class="marine-actions">
+     <button type="button" [disabled]="busy||aiBusy" (click)="preview()">
+      {{busy?copy('Calculating ERP availability…','جارٍ تحليل إتاحة ERP…'):
+       copy('1 · Calculate feasible schedules','١ · حساب بدائل الجدولة الممكنة')}}</button>
+     <button type="button" class="marine-ai-button"
+      [disabled]="!canRunAi" (click)="runAi()">
+      {{aiBusy?copy('Analyzing with Airia…','جارٍ تحليل Airia…'):
+       copy('2 · AI Schedule with SI-S01','٢ · الجدولة باستخدام SI-S01 AI')}}</button>
+     <button type="button" *ngIf="aiAdvice" (click)="restoreBaseline()" [disabled]="aiBusy">
+       {{copy('Compare ERP baseline','مقارنة جدول ERP الأساسي')}}</button>
+     <small>{{copy('Step 1 makes no AI call. Step 2 requires explicit consent for ONE potentially billable Airia request. No inspection case or ERP booking is created.',
+      'الخطوة الأولى لا تستدعي AI؛ والثانية تتطلب موافقة صريحة لاستدعاء Airia واحد قد يكون مدفوعًا. لا تُنشأ حالات معاينة أو حجوزات ERP.')}}</small>
+    </div>
    </section>
    <section class="marine-panel" *ngIf="ctx.workforce?.length">
     <div class="marine-title-line">
@@ -82,8 +92,27 @@
    </section>
    <section *ngIf="proposal as p" class="marine-panel">
     <h2>{{copy('Inspector assignments and scheduling exceptions','توزيع المهندسين واستثناءات الجدولة')}}</h2>
-    <p class="marine-notice">{{copy('This preview uses verified ERP constraints and a deterministic optimization heuristic. Supervisor schedule confirmation and AI explanations are the next implementation stage.',
-     'هذه المعاينة تستخدم قيود ERP ومحرك تحسين حتمي. اعتماد الجدولة وشرح الذكاء الاصطناعي هما الخطوة التنفيذية التالية.')}}</p>
+    <p class="marine-notice">{{aiAdvice?
+       copy('AIRIA SI-S01 ranked verified whole-plan alternatives. A human supervisor must review and separately approve the final schedule.',
+        'رتب SI-S01 عبر Airia بدائل الجدولة المتحقَّق من صلاحيتها وفق ERP. يجب مراجعة الجدول واعتماده بشكل منفصل بواسطة المشرف.'):
+       copy('ERP hard constraints verified by a deterministic scheduler. Click AI Schedule to compare up to three complete, feasible alternatives; no Airia call has occurred.',
+        'تحقّق محرك الجدولة من قيود ERP. اضغط الجدولة بالذكاء الاصطناعي لمقارنة حتى ثلاثة بدائل متكاملة صالحة؛ لم يتم استدعاء Airia بعد.')}}</p>
+    <section class="marine-ai-advice" *ngIf="aiAdvice as ai">
+     <div class="marine-title-line">
+      <h3>{{copy('SI-S01 AI schedule recommendation','توصية AI SI-S01 للجدولة')}}</h3>
+      <span class="marine-tag">AIRIA · {{copy('Advisory','استشاري')}}</span>
+     </div>
+     <div *ngFor="let ranked of ai.rankedOptions" class="marine-ai-rank">
+      <strong>{{copy('Option','البديل')}} #{{ranked.rank}}
+       <span *ngIf="ranked.optionId===ai.chosenOptionId">{{copy('· Displayed','· المعروض')}}</span>
+      </strong>
+      <small>{{copy('Confidence','الثقة')}}: {{ranked.confidence*100 | number:'1.0-1'}}%</small>
+      <p>{{ranked.rationale}}</p>
+      <small>{{copy('Evidence','الأدلة')}}: {{ranked.evidenceRefs.join(' · ')||'—'}}</small>
+     </div>
+     <p class="marine-preview-warning">{{copy('AI never confirms bookings or authorizes inspection cases. Revalidation and supervisor schedule approval are separate steps.',
+      'لا يؤكد AI الحجز أو يعتمد حالات المعاينة؛ إعادة التحقق واعتماد المسؤول مرحلتان منفصلتان.')}}</p>
+    </section>
     <div class="marine-title-line">
       <div class="marine-board-controls" role="group" [attr.aria-label]="copy('Schedule board view','طريقة عرض الجدولة')">
         <button type="button" [class.active]="boardView==='VESSELS'"
