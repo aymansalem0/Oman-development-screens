@@ -206,41 +206,50 @@ import {SiBulkJob,SiBulkPlanService,SiBulkPreview,SiBulkVessel,SiCapacityPreview
      </ng-container>
     </section>
     <section class="panel" *ngIf="step===4">
-     <p class="eyebrow">{{copy('STEP 04 · SUPERVISOR APPROVAL','الخطوة ٤ · اعتماد المسؤول')}}</p>
-     <h2>{{copy('Review and approve the whole plan','مراجعة واعتماد الخطة بالكامل')}}</h2>
+     <p class="eyebrow">{{copy('STEP 04 · CAPACITY-VERIFIED SUPERVISOR APPROVAL','الخطوة ٤ · اعتماد الخطة بعد التحقق من الطاقة')}}</p>
+     <h2>{{copy('Approve Vessels, Inspectors & Dates Together','اعتماد السفن والمهندسين والمواعيد معًا')}}</h2>
      <div class="review-stats">
-      <p><b>{{p.selectedVessels}}</b><span>{{copy('Selected vessels','السفن المختارة')}}</span></p>
-      <p><b>{{totalReasons}}</b><span>{{copy('Source reasons preserved','أسباب إحالة محفوظة')}}</span></p>
-      <p><b>{{totalScopes}}</b><span>{{copy('Regulatory inspection scopes','نطاقات معاينة نظامية')}}</span></p>
+      <p><b>{{p.selectedVessels}}</b><span>{{copy('Selected','السفن المختارة')}}</span></p>
+      <p><b>{{totalReasons}}</b><span>{{copy('Source reasons','أسباب المعاينة')}}</span></p>
+      <p><b>{{capacity?.proposedVesselCount||0}}</b><span>{{copy('Feasible','تكليفات قابلة للتنفيذ')}}</span></p>
      </div>
-     <p class="notice">{{copy('All collected reasons and scopes were shown in Step 2. Approval covers the entire currently selected plan, not a single referral per vessel.',
-       'تم عرض جميع الأسباب والنطاقات في الخطوة الثانية. الاعتماد يشمل الخطة الحالية بالكامل وليس إحالة واحدة لكل سفينة.')}}</p>
-     <label class="approval-notes">{{copy('Supervisor approval notes','ملاحظات اعتماد المشرف')}}
+     <p class="notice">{{copy('A single Oracle transaction approves the verified vessels and their inspector/time assignments and issues work orders. This POC is NOT a live ERP booking.',
+      'معاملة Oracle واحدة تعتمد السفن والمهندسين والمواعيد وتصدر أوامر التكليف. هذه المحاكاة ليست حجز ERP فعليًا.')}}</p>
+     <div class="table-scroll"><table>
+      <thead><tr><th>IMO</th><th>{{copy('Inspector','المهندس')}}</th>
+       <th>{{copy('Port','الميناء')}}</th><th>{{copy('Time','الموعد')}}</th>
+       <th>{{copy('Origin Port','ميناء المهندس')}}</th></tr></thead>
+      <tbody><tr *ngFor="let x of selectedCapacityAssignments">
+       <td>{{x.imo}}</td><td>{{x.inspectorName}}</td>
+       <td>{{x.portName}}</td><td>{{x.startLocal}} → {{x.endLocal}}</td>
+       <td>{{x.crossPort?x.originPortName:'—'}}</td>
+      </tr></tbody>
+     </table></div>
+     <label class="approval-notes">{{copy('Supervisor approval notes','مبررات اعتماد المشرف')}}
       <textarea rows="3" maxlength="500" [(ngModel)]="reason"
-        [placeholder]="copy('Document why the selected plan is approved','سجل سبب اعتماد الخطة المختارة')"></textarea>
+       [placeholder]="copy('Reason for approving selected vessels and capacity',
+       'سبب اعتماد السفن المختارة وتوزيع الموارد')"></textarea>
      </label>
-     <p class="notice">{{copy('Only the selected vessel roster is approved now. Electronic scheduling is the next independent step.',
-        'سيتم اعتماد قائمة السفن فقط؛ الخطوة التالية هي الجدولة الإلكترونية واعتماد توزيع المهندسين.')}}</p>
      <p *ngIf="v2RosterError" class="notice error" role="alert">{{v2RosterError}}</p>
      <button type="button" class="approve" (click)="approve()"
-      [disabled]="returnedFromScheduling||submitting||jobBusy||!auth.isAdmin||reason.trim().length<8||p.stale||(!p.agentRunId&&!p.manualSelection)||hasMissingReasons||!!v2RosterError">
-      {{submitting?copy('Submitting approval…','جارٍ إرسال الاعتماد…'):
-       copy('Approve '+p.selectedVessels+' Vessels for Scheduling',
-        'اعتماد '+p.selectedVessels+' سفن للجدولة')}}
+      [disabled]="returnedFromScheduling||submitting||jobBusy||!auth.isAdmin||reason.trim().length<8||p.stale||hasMissingReasons||!!v2RosterError||!capacity?.readyForApproval||!selectedOptionId">
+      {{submitting?copy('Saving approval…','جارٍ الاعتماد…'):
+       copy('Approve Plan and Issue '+p.selectedVessels+' Work Orders',
+        'اعتماد الخطة وإصدار '+p.selectedVessels+' أمر تكليف')}}
      </button>
-     <p class="hint">{{copy('Approval is one human-authorized decision. The AI never approves inspections.',
-       'الاعتماد قرار واحد يصدر من مستخدم مخول، وليس من الذكاء الاصطناعي.')}}</p>
+     <p class="hint">{{copy('AI advises; a human supervisor approves. Statutory inspections cannot be cancelled by AI.',
+      'الذكاء الاصطناعي يقترح والمشرف يعتمد. لا يُلغي AI أي معاينة إلزامية.')}}</p>
     </section>
     <section class="panel" *ngIf="step===5&&scheduleApproval as approval">
-     <p class="eyebrow">{{copy('STEP 05 · AWAITING MARITIME SCHEDULING','الخطوة الخامسة · في انتظار الجدولة البحرية')}}</p>
-     <h2>{{copy('Plan approved — No inspection cases were created','اعتمدت الخطة دون إنشاء حالات معاينة')}}</h2>
+     <p class="eyebrow">{{copy('STEP 05 · ISSUED WORK ORDERS','الخطوة الخامسة · أوامر التكليف الصادرة')}}</p>
+     <h2>{{copy('Plan and capacity approved; work orders issued','اعتمدت الخطة وتوزيع المهندسين وأوامر التكليف')}}</h2>
      <p class="notice">{{copy('Approved vessels','السفن المعتمدة')}}: <b>{{approval.approvedVesselCount}}</b> ·
       {{copy('Inspection cases created','حالات معاينة منشأة')}}: <b>{{approval.createdInspectionCases}}</b></p>
-     <p>{{copy('All referral reasons are retained. Continue to the comprehensive scheduling board to assign time, location and an available qualified engineer.',
-      'تم الاحتفاظ بجميع أسباب المعاينة. انتقل للجدولة الشاملة لتحديد الموعد والمكان والمهندس المؤهل والمتاح.')}}</p>
+     <p>{{copy('Vessels, engineers and inspection times are already approved together. Continue to the work-order board to prepare checklists and field visits.',
+      'تم اعتماد السفن والمهندسين والمواعيد معًا. افتح أوامر التكليف لتحضير القوائم والزيارات الميدانية.')}}</p>
      <div class="step-actions">
       <a class="next" [routerLink]="['/moei/smart-inspection/scheduling/plan',approval.planId]">
-       {{copy('Open Maritime Scheduling Board →','فتح لوحة الجدولة البحرية ←')}}</a>
+       {{copy('Open Issued Work Orders →','فتح أوامر التكليف الصادرة ←')}}</a>
      </div>
     </section>
     <section class="panel" *ngIf="step===5&&job as j">
@@ -367,9 +376,11 @@ import {SiBulkJob,SiBulkPlanService,SiBulkPreview,SiBulkVessel,SiCapacityPreview
  `]
 })
 export class SiInspectionPlanWizardComponent implements OnInit,OnDestroy{
- readonly stages=[{en:'Selected Vessels',ar:'السفن المختارة'},
-  {en:'All Referral Reasons',ar:'أسباب المعاينة'},{en:'Electronic Scheduling',ar:'الجدولة الإلكترونية'},
-  {en:'Review & Approval',ar:'المراجعة والاعتماد'}];
+ readonly stages=[
+ {en:'Candidate Vessels',ar:'السفن المرشحة'},
+ {en:'Referral Evidence',ar:'أسباب الإحالة'},
+ {en:'Weights & Capacity',ar:'الأوزان والطاقة'},
+ {en:'Unified Plan Approval',ar:'اعتماد الخطة والتوزيع'}];
  step=1;preview:SiBulkPreview|null=null;planId:string|null=null;
  focusedImo='';returnedFromScheduling=false;
  get focusedVessel():SiBulkVessel|null{
