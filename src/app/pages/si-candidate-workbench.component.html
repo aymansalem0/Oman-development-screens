@@ -409,6 +409,15 @@
                           plan?.provider==='AIRIA'?copy('Airia AI response','استجابة Airia'):
                           copy('POC mock response','استجابة POC التجريبية')}}
                       </p>
+                      <ng-container *ngFor="let advice of planRow(v)?.regimeAdvisories||[]">
+                        <p *ngIf="advice.selectionReviewGate==='BELOW_PUBLISHED_CONFIDENCE'">
+                          <strong>{{copy('AI recommendation requires manual review','توصية AI تحتاج مراجعة بشرية')}}:</strong>
+                          {{copy('The model proposed inclusion with confidence','اقترح AI إدراج السفينة بدرجة ثقة')}}
+                          {{advice.confidence*100 | number:'1.0-1'}}%
+                          {{copy('below the published threshold. No automatic AI selection was applied.',
+                            'أقل من الحد المنشور. لم يتم إدراج السفينة تلقائيًا بتوصية AI.')}}
+                        </p>
+                      </ng-container>
                       <p><strong>{{copy('Evidence IDs','مراجع الأدلة')}}:</strong>
                         {{planRow(v)?.evidenceRefs?.join(' · ')||'—'}}</p>
                       <p><strong>{{copy('Missing Data','البيانات الناقصة')}}:</strong>
