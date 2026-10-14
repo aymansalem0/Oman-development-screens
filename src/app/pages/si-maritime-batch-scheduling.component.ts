@@ -8,6 +8,7 @@ import {NmcNavigationComponent} from '../components/nmc-navigation.component';
 interface SourceRow{
  imo:string;name:string;sourceTypes:string[];regimes:string[];
  regime:string;vesselType:string;portId:string;portName:string;portSourceLocked:boolean;
+ demoFilled?:boolean;demoFieldNames?:string[];demoProvenance?:string;
  etaLocal:string;etdLocal:string;etdSource:string;dateEvidenceReference:string;
  nmcReferrals:{id:string;caseReference:string}[];
  locationType:string;locationName:string;siteAccessConfirmed:boolean;
@@ -17,7 +18,8 @@ interface SourceRow{
 interface Context{
  planId:string;approvedVessels:number;items:SourceRow[];
  ports:{portId:string;name:string}[];
- erpSnapshotId?:string;
+ erpSnapshotId?:string;demoMode?:boolean;demoNotice?:string;
+ demoFilledVessels?:number;
  workforce?:{inspectorId:string;inspectorName:string;homePortId:string|null;
    dailyCapacity:number;qualifications:string[]}[];
 }
@@ -59,6 +61,7 @@ interface S01Response{status:string;agentCode:'SI-S01';provider:'AIRIA';
 })
 export class SiMaritimeBatchSchedulingComponent implements OnInit{
  context:Context|null=null;proposal:Proposal|null=null;baselineProposal:Proposal|null=null;
+ demoMode=true;
  aiAdvice:S01Response|null=null;loading=false;busy=false;aiBusy=false;error='';notice='';
  boardView:'VESSELS'|'ENGINEERS'|'DATES'='VESSELS';
  // A disabled AI action hides useful guidance. Keep it actionable: the
@@ -102,12 +105,24 @@ export class SiMaritimeBatchSchedulingComponent implements OnInit{
  constructor(private readonly http:HttpClient,private readonly route:ActivatedRoute,
   public readonly lang:LanguageService){}
  copy(en:string,ar:string):string{return this.lang.pick(en,ar);}
- ngOnInit():void{
+ ngOnInit():void{this.loadContext();}
+ useDemoMode(enabled:boolean):void{
+  if(this.busy||this.aiBusy||this.loading)return;
+  this.demoMode=enabled;this.loadContext();
+ }
+ loadContext():void{
   const id=this.route.snapshot.paramMap.get('planId');
   if(!id){this.error='Approved plan ID is required';return;}
-  this.loading=true;
-  this.http.get<Context>(this.api+encodeURIComponent(id)+'/context').subscribe({
-   next:data=>{this.context=data;this.loading=false;},
+  this.loading=true;this.error='';this.notice='';this.context=null;
+  this.proposal=null;this.baselineProposal=null;this.aiAdvice=null;
+  this.http.get<Context>(this.api+encodeURIComponent(id)+
+    '/context'+(this.demoMode?'?demo=1':'')).subscribe({
+   next:data=>{this.context=data;this.loading=false;
+    this.notice=data.demoMode?this.copy(
+     'POC DEMO: '+(data.demoFilledVessels||0)+
+      ' vessels had missing visit data supplemented; engineer availability, qualifications, shifts and access are synthetic and NOT official.',
+     'وضع العرض التجريبي: استُكملت بيانات زيارة '+(data.demoFilledVessels||0)+
+      ' سفينة، وإتاحة المهندسين والتخصصات والورديات وإتاحة المواقع افتراضية وليست بيانات رسمية.'):'';},
    error:err=>{this.loading=false;this.showError(err);}
   });
  }
@@ -131,7 +146,7 @@ export class SiMaritimeBatchSchedulingComponent implements OnInit{
   this.proposal=null;this.baselineProposal=null;this.aiAdvice=null;
   this.http.post<{status:string;proposal:Proposal}>(
     this.api+encodeURIComponent(this.context.planId)+'/preview',
-    {requests:this.requests()}).subscribe({
+    {requests:this.requests(),demoMode:this.demoMode}).subscribe({
      next:r=>{
       this.busy=false;this.proposal=r.proposal;
       this.baselineProposal=r.proposal;
@@ -177,13 +192,17 @@ export class SiMaritimeBatchSchedulingComponent implements OnInit{
    return;
   }
   const confirmed=window.confirm(this.copy(
-   'Run ONE potentially billable SI-S01 Airia request to compare whole-plan feasible schedules? No booking, case or approval will be created.',
-   'هل تؤكد تشغيل طلب Airia SI-S01 واحد قد يكون مدفوعًا لترتيب بدائل الجدولة الصالحة للخطة كاملة؟ لن ينشأ حجز أو حالة معاينة أو اعتماد تلقائي.'));
+   'Run ONE potentially billable SI-S01 Airia request on '+(this.demoMode?'SYNTHETIC POC':'ERP-verified')+
+     ' schedule inputs? No booking, case or approval will be created.',
+   'هل تؤكد تشغيل طلب Airia SI-S01 واحد قد يكون مدفوعًا على '+(this.demoMode?
+    'بيانات تجريبية افتراضية':'بيانات ERP المعتمدة')+
+    '؟ لن ينشأ حجز أو حالة معاينة أو اعتماد تلقائي.'));
   if(!confirmed)return;
   this.aiBusy=true;this.error='';this.notice='';
   this.http.post<{status:string}&S01Response>(
    this.api+encodeURIComponent(this.context.planId)+'/ai-recommend',{
-    requests:this.requests(),expectedProposalHash:this.baselineProposal.proposalHash,
+    requests:this.requests(),demoMode:this.demoMode,
+    expectedProposalHash:this.baselineProposal.proposalHash,
     confirmRun:true,confirmCost:true
    }).subscribe({
     next:r=>{
