@@ -473,6 +473,11 @@ test('C01 processes >100 quota-selected workflows in verified batches after expl
  assert.ok(calls.every(c=>c.pscQuotaSnapshot.modelMayOverrideQuota===false));
  assert.equal(calls[0].requestMeta.batchCount,2);
  assert.equal(calls[1].requestMeta.batchIndex,2);
+ assert.notEqual(calls[0].requestMeta.correlationId,
+   calls[1].requestMeta.correlationId,
+   'Airia batch requests must have distinct correlation IDs');
+ assert.equal(calls[0].requestMeta.parentCorrelationId,
+   calls[1].requestMeta.parentCorrelationId);
  assert.ok(result.recommendations.every(x=>x.requiresHumanReview===true));
 });
 test('C01 discards all batch output when one Airia batch violates evidence contract',async()=>{
