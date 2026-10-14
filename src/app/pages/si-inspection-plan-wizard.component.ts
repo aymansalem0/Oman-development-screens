@@ -598,6 +598,12 @@ export class SiInspectionPlanWizardComponent implements OnInit,OnDestroy{
     // Only backend-eligible candidate source workflows count, not every
     // vessel event present in a raw imported Excel sheet.
     for(const c of dashboard.candidates){
+     // Count only already eligible source-backed workflows. The backend
+     // recomputes the final numbers before approving any plan.
+     const eligible=c.status==='PENDING_REVIEW'||
+       (c.status==='EXTERNALLY_SCHEDULED'&&
+        c.events.some(e=>e.sourceType==='NMC_CASE'&&e.approval==='APPROVED'));
+     if(!eligible)continue;
      if(!eligibleByImo.has(c.imo))eligibleByImo.set(c.imo,new Set());
      for(const e of c.events)eligibleByImo.get(c.imo)!.add(e.sourceType);
     }
