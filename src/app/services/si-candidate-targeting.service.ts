@@ -238,6 +238,18 @@ export class SiCandidateTargetingService{
       included:number;disposition:string;externalCalls:0}>(
       this.api+'/inspection-plans/'+encodeURIComponent(id)+'/selection',input);
   }
+  bulkSelectRollingVessels(id:string,input:{
+    imos:string[];action:'NOT_SELECTED'|'DEFER';
+    reason:string;reviewAfter?:string|null;
+    expectedRevision:number;expectedSourceHash:string
+  }):Observable<{status:'SAVED';planId:string;revision:number;
+    affectedCount:number;imos:string[];disposition:'NOT_SELECTED'|'DEFER';
+    included:number;externalCalls:0;inspectionCasesChanged:0}>{
+    return this.http.post<{status:'SAVED';planId:string;revision:number;
+      affectedCount:number;imos:string[];disposition:'NOT_SELECTED'|'DEFER';
+      included:number;externalCalls:0;inspectionCasesChanged:0}>(
+      this.api+'/inspection-plans/'+encodeURIComponent(id)+'/selection-bulk',input);
+  }
   cancelRollingPlan(id:string,expectedRevision:number,reason:string):Observable<SiRollingPlan>{
     return this.http.post<SiRollingPlan>(this.api+'/inspection-plans/'+
       encodeURIComponent(id)+'/cancel',{expectedRevision,reason});

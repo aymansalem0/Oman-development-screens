@@ -232,6 +232,71 @@ export class SiInspectionPlan{
     included:next.savedPlanRows.filter(x=>x.planSelected).length,
     disposition:action,externalCalls:0};
  }
+ /**
+  * Bulk, all-or-nothing officer dispositions for an editable draft.
+  * A single Oracle revision + plan audit event contains every individual IMO,
+  * reason and review date. No AI call, case write or regulatory rejection.
+  */
+ async selectBulk({planId,imos,action,reason,reviewAfter=null,
+                   expectedRevision,expectedSourceHash,actor}={}){
+  const ids=Array.isArray(imos)?imos:null;
+  if(!planId||!ids||ids.length<1||ids.length>200||
+     ids.some(imo=>typeof imo!=='string'||!/^\d{7}$/.test(imo))||
+     new Set(ids).size!==ids.length||
+     !['NOT_SELECTED','DEFER'].includes(action)||
+     !Number.isInteger(expectedRevision)||!actor||typeof actor!=='string'||
+     !actor.trim()||actor.length>120||
+     typeof reason!=='string'||reason.trim().length<8||reason.length>500)
+   throw new SiCandidateAgentError('SI_PLAN_BULK_SELECTION_INVALID',422);
+  if(action==='DEFER'&&
+     (typeof reviewAfter!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(reviewAfter)||
+      Number.isNaN(Date.parse(reviewAfter+'T00:00:00Z'))||
+      new Date(reviewAfter+'T00:00:00Z').toISOString().slice(0,10)!==reviewAfter))
+   throw new SiCandidateAgentError('SI_PLAN_REVIEW_DATE_REQUIRED',422);
+  const state=await this.rolling.get(planId);
+  if(!['DRAFT','READY_FOR_APPROVAL'].includes(state.status))
+   throw new SiCandidateAgentError('SI_ROLLING_APPROVED_PLAN_IMMUTABLE',409);
+  const [source,dashboard]=await Promise.all([
+   this.agent.source(),this.targeting.dashboard()
+  ]);
+  if(source.snapshotHash!==expectedSourceHash||
+     state.revision!==expectedRevision)
+   throw new SiCandidateAgentError('SI_PLAN_CHANGED_REFRESH_REQUIRED',409);
+  const eligible=new Set(source.candidates.map(c=>c.imo));
+  const available=new Set((dashboard.vesselCandidates||[])
+   .filter(v=>v.pendingWorkflows>0).map(v=>v.imo));
+  // Validate the entire selection before any mutation. No partial outcome.
+  if(ids.some(imo=>!eligible.has(imo)||!available.has(imo)))
+   throw new SiCandidateAgentError('SI_PLAN_BULK_CANDIDATE_NOT_PENDING',409);
+  const timestamp=iso(),operator=actor.trim(),why=reason.trim();
+  const ordered=[...ids].sort();
+  const next=await this.rolling.mutate(planId,expectedRevision,operator,p=>{
+   p.overrides={...(p.overrides||{})};
+   for(const imo of ordered)p.overrides[imo]={
+    imo,selected:false,disposition:action,
+    reviewAfter:action==='DEFER'?reviewAfter:null,
+    requestedRank:null,reason:why,actor:operator,at:timestamp,
+    batchAction:'OFFICER_BULK_'+action
+   };
+   p.selectionSourceHash=source.snapshotHash;
+   p.latest?.rows&&(p.latest.rows=projectInspectionPlan(
+    dashboard,source,p.latest,p.overrides,p.carryForward||{}));
+   const rows=projectInspectionPlan(dashboard,source,p.latest,p.overrides,
+    p.carryForward||{});
+   p.savedPlanRows=rows;
+   p.status=rows.some(r=>r.planSelected)?'READY_FOR_APPROVAL':'DRAFT';
+   p.audit=[...(p.audit||[]),{
+    event:'BULK_DISPOSITION_DETAILS',at:timestamp,actor:operator,
+    action,imos:ordered,reason:why,
+    reviewAfter:action==='DEFER'?reviewAfter:null
+   }].slice(-300);
+   return p;
+  },'OFFICER_BULK_'+action);
+  return {status:'SAVED',planId,revision:next.revision,
+   affectedCount:ordered.length,imos:ordered,disposition:action,
+   included:next.savedPlanRows.filter(x=>x.planSelected).length,
+   externalCalls:0,inspectionCasesChanged:0};
+ }
  async rerank(input={}){
   if(this.busy)throw new SiCandidateAgentError('SI_PLAN_RECALCULATION_IN_PROGRESS',409);
   const actor=input?.actor?.trim?.();

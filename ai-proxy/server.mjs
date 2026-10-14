@@ -1072,7 +1072,7 @@ const server = createServer(async (req, res) => {
           identity?.email||identity?.username||'ADMIN',
           {candidates:source.candidates,sourceHash:source.snapshotHash}));
       }
-      const rollingPath=/^\/api\/si\/v1\/inspection-plans\/([a-f0-9-]{36})(?:\/(cancel|selection))?$/.exec(path);
+      const rollingPath=/^\/api\/si\/v1\/inspection-plans\/([a-f0-9-]{36})(?:\/(cancel|selection|selection-bulk))?$/.exec(path);
       if(rollingPath){
         if(req.method==='GET'&&!rollingPath[2]){
           dashboards.assertRole(req,'EDITOR');
@@ -1083,6 +1083,15 @@ const server = createServer(async (req, res) => {
           const input=await requestJson(req,4096);
           const identity=moeiAuth.session(req);
           return respond(res,200,await siInspectionPlan.select({
+            ...input,planId:rollingPath[1],
+            actor:identity?.email||identity?.username||'ADMIN'
+          }));
+        }
+        if(req.method==='POST'&&rollingPath[2]==='selection-bulk'){
+          dashboards.assertRole(req,'EDITOR');
+          const input=await requestJson(req,8192);
+          const identity=moeiAuth.session(req);
+          return respond(res,200,await siInspectionPlan.selectBulk({
             ...input,planId:rollingPath[1],
             actor:identity?.email||identity?.username||'ADMIN'
           }));

@@ -6,7 +6,7 @@ import {join} from 'node:path';
 import {SiRollingPlanStore} from '../si-rolling-plan-store.mjs';
 import {SiInspectionPlan} from '../si-inspection-plan.mjs';
 
-function setup(){
+function setup(multi=false){
  const dir=mkdtempSync(join(tmpdir(),'moei-rolling-plan-'));
  const rolling=new SiRollingPlanStore({mode:'json',file:join(dir,'rolling.json')});
  const vessel={imo:'9328471',vesselName:'Tanker 9328471',vesselType:'Tanker',
@@ -18,8 +18,21 @@ function setup(){
  const c={candidateKey:'first-candidate',imo:vessel.imo,
   regime:'FOCUSED_INSPECTION',sourceTypes:['NMC_CASE'],
   currentRisk:vessel.currentRisk,allowedEvidence:['NMC-123']};
+ const extra=['9400409','9702281'].map((imo,i)=>({
+  imo,vesselName:'Source Vessel '+imo,vesselType:'Cargo',flag:'AE',
+  sourceTypes:[i?'SERVICE_REQUEST':'PSC_PORT_CALL'],
+  regimes:['FOCUSED_INSPECTION'],
+  sourceEvents:[{eventKey:'EV-'+imo,sourceType:i?'SERVICE_REQUEST':'PSC_PORT_CALL',
+   approval:'SOURCE_FINAL',sourceReference:'EV-'+imo,evidenceIds:['EV-'+imo]}],
+  pendingWorkflows:1,createdWorkflows:0,scheduledWorkflows:0,currentRisk:null
+ }));
+ const vessels=multi?[vessel,...extra]:[vessel];
+ const candidates=multi?[c,...extra.map(v=>({
+  candidateKey:'candidate-'+v.imo,imo:v.imo,regime:'FOCUSED_INSPECTION',
+  sourceTypes:v.sourceTypes,currentRisk:null,allowedEvidence:['EV-'+v.imo]
+ }))]:[c];
  const agent={provider:'mock',runCount:0,
-  source:async()=>({snapshotHash:'f'.repeat(64),candidates:[c]}),
+  source:async()=>({snapshotHash:'f'.repeat(64),candidates}),
   run:async()=>({agentRunId:'C01-run-1',provider:'MOCK',mock:true,externalCalls:0,
    snapshotHash:'f'.repeat(64),recommendations:[{
     candidateKey:c.candidateKey,imo:vessel.imo,regime:'FOCUSED_INSPECTION',
@@ -27,13 +40,13 @@ function setup(){
     reason:'Human-approved maritime referral and saved maritime risk',
     priorityRationale:'Validated NMC referral receives highest allowed tier',
     evidenceRefs:['NMC-123'],dataGaps:[]} ]})};
- const targeting={dashboard:async()=>({vesselCandidates:[vessel],
+ const targeting={dashboard:async()=>({vesselCandidates:vessels,
   summary:{inspectionsCreated:0}})};
  const plan=new SiInspectionPlan({targeting,candidateAgent:agent,rollingPlans:rolling,
   file:join(dir,'legacy.json')});
  const create=(name='First plan')=>rolling.create({title:name,startsOn:'2026-10-13',
   endsOn:'2026-10-16'},'officer@moei',
-  {candidates:[c],sourceHash:'f'.repeat(64)});
+  {candidates,sourceHash:'f'.repeat(64)});
  return {dir,rolling,plan,create,
   done:()=>rmSync(dir,{recursive:true,force:true})};
 }
@@ -228,5 +241,109 @@ test('V2 supervisor approves vessel plan WITHOUT any SI case/dossier; audit froz
    vessels:[{imo:'9328471',planRank:1,regimes:['FOCUSED_INSPECTION'],
     inspectionReasons:[{eventKey:'NMC-123'}]}]
   }),/SI_V2_PLAN_CHANGED_REVIEW_AGAIN/);
+ }finally{x.done();}
+});
+
+test('multi-vessel exclusion is atomic, auditable and uses one plan revision without Airia',async()=>{
+ const x=setup(true);try{
+  const p=await x.create('Multi-IMO exclude');
+  let state=await x.plan.snapshot(p.id);
+  for(const imo of ['9328471','9400409','9702281']){
+   await x.plan.select({planId:p.id,imo,action:'INCLUDE',
+    reason:'Eligible verified source selected for inspection review',
+    expectedRevision:state.revision,expectedSourceHash:state.sourceHash,
+    actor:'officer@moei'});
+   state=await x.plan.snapshot(p.id);
+  }
+  assert.equal(state.selectedForPlan,3);
+  assert.equal(state.revision,3);
+  const r=await x.plan.selectBulk({planId:p.id,imos:['9400409','9328471'],
+   action:'NOT_SELECTED',reason:'Operational plan capacity requires further assessment',
+   expectedRevision:state.revision,expectedSourceHash:state.sourceHash,
+   actor:'officer@moei'});
+  assert.equal(r.revision,4);
+  assert.equal(r.affectedCount,2);
+  assert.equal(r.externalCalls,0);
+  assert.equal(r.inspectionCasesChanged,0);
+  const view=await x.plan.snapshot(p.id);
+  assert.equal(view.selectedForPlan,1);
+  assert.equal(view.rows.find(v=>v.imo==='9702281').planSelected,true);
+  for(const imo of r.imos){
+   const row=view.rows.find(v=>v.imo===imo);
+   assert.equal(row.planSelected,false);
+   assert.equal(row.disposition,'NOT_SELECTED');
+   assert.equal(row.officerReason,'Operational plan capacity requires further assessment');
+  }
+  const saved=await x.rolling.get(p.id);
+  assert.equal(saved.audit.at(-1).event,'OFFICER_BULK_NOT_SELECTED');
+  assert.equal(saved.audit.at(-2).event,'BULK_DISPOSITION_DETAILS');
+  assert.deepEqual(saved.audit.at(-2).imos,['9328471','9400409']);
+  assert.equal(saved.revision,4);
+  assert.equal(saved.status,'READY_FOR_APPROVAL');
+  assert.equal(x.plan.agent.runCount,0);
+ }finally{x.done();}
+});
+test('multi-vessel deferral stores same review date and reason, carried to next plan',async()=>{
+ const x=setup(true);try{
+  const p=await x.create('Defer vessels');
+  const before=await x.plan.snapshot(p.id);
+  const r=await x.plan.selectBulk({
+   planId:p.id,imos:['9400409','9702281'],action:'DEFER',
+   reason:'Port conditions require a later inspection review',
+   reviewAfter:'2099-01-16',expectedRevision:before.revision,
+   expectedSourceHash:before.sourceHash,actor:'officer@moei'});
+  assert.equal(r.revision,1);
+  assert.equal(r.affectedCount,2);
+  const state=await x.rolling.get(p.id);
+  assert.equal(state.status,'DRAFT');
+  for(const imo of ['9400409','9702281']){
+   assert.equal(state.overrides[imo].disposition,'DEFER');
+   assert.equal(state.overrides[imo].reviewAfter,'2099-01-16');
+   assert.equal(state.overrides[imo].reason,'Port conditions require a later inspection review');
+  }
+  const next=await x.create('Following day review');
+  const carried=await x.rolling.get(next.id);
+  for(const imo of ['9400409','9702281']){
+   assert.equal(carried.carryForward[imo].disposition,'DEFER');
+   assert.equal(carried.carryForward[imo].reviewAfter,'2099-01-16');
+  }
+ }finally{x.done();}
+});
+test('multi-vessel request rejects stale, duplicate, invalid or approved input without partial writes',async()=>{
+ const x=setup(true);try{
+  const p=await x.create('Validation');
+  const before=await x.plan.snapshot(p.id);
+  const request={planId:p.id,imos:['9400409','9702281'],
+   action:'NOT_SELECTED',reason:'Review the entire candidate source allocation',
+   expectedRevision:before.revision,expectedSourceHash:before.sourceHash,
+   actor:'officer@moei'};
+  for(const change of [
+   {imos:['9400409','9400409']},
+   {imos:['9400409','9999999']},
+   {imos:[]},{action:'REJECT'},
+   {expectedSourceHash:'a'.repeat(64)},
+   {expectedRevision:27},
+   {reason:'short'},
+   {action:'DEFER',reviewAfter:'2026-02-30'}
+  ]){
+   await assert.rejects(x.plan.selectBulk({...request,...change}));
+   assert.equal((await x.rolling.get(p.id)).revision,0);
+   assert.deepEqual((await x.rolling.get(p.id)).overrides,{});
+  }
+  // A valid saved version is frozen after supervisor approval.
+  await x.plan.select({planId:p.id,imo:'9328471',action:'INCLUDE',
+    reason:'Required valid referral for supervised inspection plan',
+    actor:'officer@moei',expectedRevision:0,expectedSourceHash:before.sourceHash});
+  const approvedView=await x.rolling.get(p.id);
+  await x.rolling.approveForScheduling(p.id,{
+   expectedRevision:approvedView.revision,
+   expectedSourceHash:approvedView.selectionSourceHash,
+   actor:'supervisor@moei',reason:'Schedule approved reviewed source vessels',
+   vessels:[{imo:'9328471',planRank:1,regimes:['FOCUSED_INSPECTION'],
+    inspectionReasons:[{eventKey:'NMC-123',sourceType:'NMC_CASE',
+     sourceEventId:'ref-123',sourceReference:'NMC-123'}]}]
+  });
+  await assert.rejects(x.plan.selectBulk({...request,expectedRevision:2}),
+   /SI_ROLLING_APPROVED_PLAN_IMMUTABLE/);
  }finally{x.done();}
 });
