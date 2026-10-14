@@ -7,6 +7,9 @@ import {NmcNavigationComponent} from '../components/nmc-navigation.component';
 import {LanguageService} from '../services/language.service';
 import {MoeiAuthService} from '../services/moei-auth.service';
 import {SiBulkJob,SiBulkPlanService,SiBulkPreview,SiBulkVessel} from '../services/si-bulk-plan.service';
+import {SiCandidateTargetingService} from '../services/si-candidate-targeting.service';
+import {calculateInspectionFactorQuotas,InspectionFactorQuotaPreview,
+ InspectionQuotaCandidate} from './si-plan-factor-quotas';
 
 @Component({
  selector:'app-si-inspection-plan-wizard',
@@ -51,25 +54,56 @@ import {SiBulkJob,SiBulkPlanService,SiBulkPreview,SiBulkVessel} from '../service
      'لا توجد سفن مختارة أو تغير مصدر البيانات. عد إلى قائمة المرشحين وراجع الخطة الحالية. تشغيل AI اختياري.')}}
     </p>
     <section class="panel si-plan-weights" *ngIf="step===1&&!returnedFromScheduling">
-     <div class="panel-head"><div>
-      <p class="eyebrow">{{copy('DRAFT PLANNING WEIGHTS','أوزان التخطيط المبدئية')}}</p>
-      <h2>{{copy('Candidate Source & Risk Factor Weights','أوزان مصادر الترشيح وعامل المخاطر')}}</h2>
-     </div></div>
+     <div class="panel-head">
+      <div>
+       <p class="eyebrow">{{copy('INDEPENDENT TARGETING QUOTAS · DRAFT','نسب الاختيار المستقلة · مسودة')}}</p>
+       <h2>{{copy('PSC Risk Screening & UAE-Flagged Vessels','اختيار PSC حسب المخاطر واختيار السفن الإماراتية')}}</h2>
+       <p>{{copy(
+        'Each percentage applies independently to the number of eligible candidate vessels in its own group. The two percentages do NOT have to add up to 100%.',
+        'كل نسبة تُطبّق بمفردها على عدد السفن المرشحة المؤهلة في مجموعتها. لا يشترط أن يكون مجموع النسبتين 100%.')}}</p>
+      </div>
+     </div>
+     <p class="notice" *ngIf="factorPoolLoading">{{copy(
+       'Reading eligible source-backed candidates and their saved risk assessments…',
+       'جارٍ قراءة المرشحين المؤهلين من المصادر وتقييمات المخاطر المحفوظة…')}}</p>
+     <p class="notice error" *ngIf="factorPoolError" role="alert">{{factorPoolError}}</p>
      <div class="si-weight-grid">
       <label *ngFor="let w of planningWeights" class="si-weight-control">
-       <span><strong>{{copy(w.en,w.ar)}}</strong><output>{{w.value}}%</output></span>
-       <input type="range" min="0" max="100" step="5"
+       <span class="si-weight-heading">
+        <strong>{{copy(w.en,w.ar)}}</strong>
+        <output>{{w.value}}%</output>
+       </span>
+       <small>{{copy(w.descriptionEn,w.descriptionAr)}}</small>
+       <input type="range" min="0" max="100" step="1"
         [ngModel]="w.value" (ngModelChange)="changePlanningWeight(w.key,$event)"
         [attr.aria-label]="copy(w.en,w.ar)"/>
+       <ng-container *ngIf="quotaFactor(w.key) as q">
+        <div class="si-quota-equation">
+         <span>{{copy('Eligible vessels','السفن المؤهلة')}} <b>{{q.eligibleVessels}}</b></span>
+         <span>{{copy('Proposed selection','العدد المقترح')}} <b>{{q.targetVessels}}</b></span>
+        </div>
+        <small>{{q.eligibleVessels}} × {{w.value}}% = {{q.targetVessels}}
+         {{copy('vessels (rounded down)','سفينة (تقريب لأسفل)')}}</small>
+        <small *ngIf="w.key==='PSC_RISK'">
+         {{copy('Saved risk available','تقييم مخاطر محفوظ')}}:
+         {{q.riskAvailableVessels}} /
+         {{q.eligibleVessels}} ·
+         {{copy('Missing risk','غير مقيمة')}}: {{q.riskMissingVessels}}
+        </small>
+       </ng-container>
       </label>
      </div>
-     <p class="si-weight-total" [class.invalid]="planningWeightTotal!==100">
-      {{copy('Total','الإجمالي')}}: <strong>{{planningWeightTotal}}%</strong>
-      · {{planningWeightTotal===100?copy('Valid draft','مسودة متوازنة'):
-       copy('Must equal 100%','يجب أن يساوي 100%')}}
-     </p>
-     <p class="hint">{{copy('Draft UI only: these weights do not yet drive the AI optimizer, persist to the plan or alter NMC risk scores. Mandatory referrals remain protected.',
-      'واجهة تفضيلات مبدئية فقط: لم تُربط الأوزان بعد بمحرك AI أو بحفظ الخطة، ولا تغير تقييم مخاطر NMC. المعاينات الإلزامية محفوظة.')}}</p>
+     <div *ngIf="quotaPreview as q" class="si-quota-summary">
+      <div><span>{{copy('Eligible distinct IMO candidates','إجمالي المرشحين بدون تكرار')}}</span><strong>{{q.overallEligibleCandidates}}</strong></div>
+      <div><span>{{copy('Total uniquely proposed','السفن المقترحة بدون تكرار')}}</span><strong>{{q.uniqueSelectedCount}}</strong></div>
+      <div><span>{{copy('Included in both factors','المشتركة بين المجموعتين')}}</span><strong>{{q.overlappingImos.length}}</strong></div>
+     </div>
+     <p class="hint">{{copy(
+       'A vessel qualifying for both factors is counted once in the combined shortlist (one IMO). The PSC quota uses already eligible PSC candidates and saved vessel-risk assessment to rank them; it does not replace the published PSC Excel port-call event quota. UAE-flag eligibility is based on recorded flag state, not arrival port. Mandatory NMC referrals and legal service obligations remain outside these optional percentages.',
+       'السفينة المشتركة بين العاملين تُحسب مرة واحدة عند دمج المقترحات (IMO واحد). تختار نسبة PSC من المرشحين المؤهلين وتُرتّبهم وفق تقييم المخاطر المحفوظ؛ ولا تحل محل حصة أحداث PSC المنشورة من Excel. السفن الإماراتية تُحدد وفق علم السفينة المسجل وليس ميناء الوصول. تظل إحالات NMC الإلزامية والتزامات الخدمات النظامية مستقلة عن نسب الاختيار الاختيارية.')}}</p>
+     <p class="hint">{{copy(
+       'Planning preview only: percentages are not yet saved or applied to final AI selection, capacity optimization or plan approval. No official risk score, approved source decision or work order is changed.',
+       'معاينة تخطيط فقط: لم تُحفظ النسب أو تُطبّق بعد على اختيار AI النهائي أو تحسين الطاقة أو اعتماد الخطة. لا يتم تغيير تقييم المخاطر الرسمي أو قرارات المصادر أو أوامر التكليف.')}}</p>
     </section>
     <section class="panel" *ngIf="step===1">
      <div class="panel-head">
@@ -285,13 +319,23 @@ import {SiBulkJob,SiBulkPlanService,SiBulkPreview,SiBulkVessel} from '../service
  tr.plan-focused-row{background:#e7f9ef;outline:2px solid #8fcfb0;outline-offset:-2px}
  .si-plan-weights{border-color:#b6d8e0}
  .si-weight-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
- .si-weight-control{display:block;background:#f7fbfd;border:1px solid #d8e7ed;border-radius:9px;padding:12px}
- .si-weight-control span{display:flex;justify-content:space-between;gap:8px;font-size:12px;color:#245269}
- .si-weight-control output{font-weight:850;color:#087d8b}
- .si-weight-control input{display:block;width:100%;accent-color:#078597;margin-top:12px}
- .si-weight-total{font-weight:800;font-size:12px;color:#14785b;margin:12px 0}
- .si-weight-total.invalid{color:#a55429}
- @media(max-width:650px){.si-weight-grid{grid-template-columns:1fr}}
+ .si-weight-control{display:block;background:#f7fbfd;border:1px solid #d8e7ed;
+  border-radius:9px;padding:15px;min-width:0}
+ .si-weight-heading{display:flex;justify-content:space-between;gap:8px;align-items:center;
+  font-size:13px;color:#245269}
+ .si-weight-heading output{font-size:18px;font-weight:850;color:#087d8b}
+ .si-weight-control>small{display:block;color:#56788a;margin:8px 0;font-size:11px;line-height:1.5}
+ .si-weight-control input[type=range]{display:block;width:100%;accent-color:#078597;
+  margin:14px 0;cursor:pointer}
+ .si-quota-equation{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;
+  border-top:1px solid #d8e7ed;padding-top:11px;font-size:11px;color:#355967}
+ .si-quota-equation b{color:#006f78;font-size:16px;margin-inline-start:6px}
+ .si-quota-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin:12px 0}
+ .si-quota-summary>div{border:1px solid #d4e5eb;background:#fff;border-radius:8px;padding:12px;
+  display:grid;gap:5px}
+ .si-quota-summary span{font-size:11px;color:#5a7182}
+ .si-quota-summary strong{font-size:20px;color:#067d79}
+ @media(max-width:650px){.si-weight-grid,.si-quota-summary{grid-template-columns:1fr}}
  .panel{background:#fff;border:1px solid #dae8eb;box-shadow:0 6px 18px #06364d0b;border-radius:14px;padding:25px;margin-bottom:17px}
  .panel-head{display:flex;justify-content:space-between;align-items:center;gap:17px;margin-bottom:16px}
  .panel-head p{margin:0}.count,.reason-count{display:inline-flex;background:#e5f6ed;color:#08735b;padding:7px 12px;border-radius:20px;font-size:11px;font-weight:800;white-space:nowrap}
@@ -348,15 +392,55 @@ export class SiInspectionPlanWizardComponent implements OnInit,OnDestroy{
   {en:'All Referral Reasons',ar:'أسباب المعاينة'},{en:'Electronic Scheduling',ar:'الجدولة الإلكترونية'},
   {en:'Review & Approval',ar:'المراجعة والاعتماد'}];
  readonly planningWeights=[
-  {key:'nmc',en:'NMC referrals',ar:'إحالات المركز البحري',value:30},
-  {key:'psc',en:'PSC port calls',ar:'نداءات الموانئ PSC',value:25},
-  {key:'service',en:'Maritime service requests',ar:'طلبات الخدمات البحرية',value:20},
-  {key:'risk',en:'Saved NMC risk factor',ar:'عامل مخاطر NMC المحفوظ',value:25}
+  {key:'PSC_RISK',en:'PSC + Risk Factor',ar:'PSC + عامل المخاطر',
+   descriptionEn:'Percentage of eligible PSC vessels, ranked by saved vessel risk.',
+   descriptionAr:'نسبة من سفن PSC المؤهلة، تُرتّب حسب مخاطر السفينة المحفوظة.',value:15},
+  {key:'UAE_FLAG',en:'UAE-Flagged Vessels',ar:'السفن التي تحمل علم الإمارات',
+   descriptionEn:'Independent percentage of eligible UAE-flagged candidate vessels.',
+   descriptionAr:'نسبة مستقلة من السفن المرشحة المؤهلة التي تحمل علم الإمارات.',value:0}
  ];
- get planningWeightTotal():number{return this.planningWeights.reduce((n,w)=>n+w.value,0);}
+ factorPool:InspectionQuotaCandidate[]|null=null;
+ factorPoolLoading=false;
+ factorPoolError='';
+ get quotaPreview():InspectionFactorQuotaPreview|null{
+  if(!this.factorPool)return null;
+  return calculateInspectionFactorQuotas(this.factorPool,
+   this.planningWeights[0].value,this.planningWeights[1].value);
+ }
+ quotaFactor(key:string){
+  return this.quotaPreview?.factors.find(x=>x.key===key)||null;
+ }
  changePlanningWeight(key:string,value:number):void{
   const w=this.planningWeights.find(x=>x.key===key);const v=Number(value);
   if(w&&Number.isFinite(v))w.value=Math.max(0,Math.min(100,Math.round(v)));
+ }
+ private loadFactorCandidatePool():void{
+  this.factorPoolLoading=true;this.factorPoolError='';
+  this.candidates.dashboard().subscribe({
+   next:dashboard=>{
+    const eligibleByImo=new Map<string,Set<string>>();
+    // Only backend-eligible candidate source workflows count, not every
+    // vessel event present in a raw imported Excel sheet.
+    for(const c of dashboard.candidates){
+     if(!eligibleByImo.has(c.imo))eligibleByImo.set(c.imo,new Set());
+     for(const e of c.events)eligibleByImo.get(c.imo)!.add(e.sourceType);
+    }
+    this.factorPool=dashboard.vesselCandidates
+     .filter(v=>eligibleByImo.has(v.imo))
+     .map(v=>({
+      imo:v.imo,flag:v.flag,
+      sourceTypes:[...eligibleByImo.get(v.imo)!],
+      currentRisk:v.currentRisk
+     }));
+    this.factorPoolLoading=false;
+   },
+   error:()=>{
+    this.factorPool=null;this.factorPoolLoading=false;
+    this.factorPoolError=this.copy(
+     'Cannot verify the eligible candidate pools. Quota counts are unavailable; no percentage-based selection has been applied.',
+     'تعذر التحقق من مجموعات السفن المرشحة المؤهلة. الأعداد غير متاحة ولم يتم تطبيق أي اختيار بالنسب.');
+   }
+  });
  }
  step=1;preview:SiBulkPreview|null=null;planId:string|null=null;
  focusedImo='';returnedFromScheduling=false;
@@ -367,7 +451,8 @@ export class SiInspectionPlanWizardComponent implements OnInit,OnDestroy{
  scheduleApproval:{planId:string;approvedVesselCount:number;createdInspectionCases:number}|null=null;
  reason='';generateA04=false;private timer:Subscription|null=null;
  constructor(private api:SiBulkPlanService,private readonly route:ActivatedRoute,
-  public lang:LanguageService,public auth:MoeiAuthService){}
+  public lang:LanguageService,public auth:MoeiAuthService,
+  private readonly candidates:SiCandidateTargetingService){}
  copy(en:string,ar:string):string{return this.lang.pick(en,ar);}
  sourceLabel(source:string):string{
   const labels:Record<string,[string,string]>={
@@ -447,6 +532,7 @@ export class SiInspectionPlanWizardComponent implements OnInit,OnDestroy{
    return;
   }
   this.refresh();
+  if(!this.returnedFromScheduling)this.loadFactorCandidatePool();
   this.api.latest().subscribe({next:r=>{
    const newest=r.batches?.find(b=>b.rollingPlanId===this.planId);
    if(newest){
