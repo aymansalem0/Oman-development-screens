@@ -93,6 +93,9 @@ export class SiCandidateWorkbenchComponent implements OnInit{
   }
 
   planBusy=false;planError='';planNotice='';
+  // The API is synchronous per call; never pretend that intermediate AI steps
+  // or a percentage are known. Indeterminate status remains truthful.
+  planAiPhase:'idle'|'analyzing'|'updating'='idle';
   expandedImo='';planEditingImo='';
   planSelection=true;planReason='';planRequestedRank:number|null=null;
   get planLookup():Map<string,SiInspectionPlanRow>{
@@ -170,9 +173,16 @@ export class SiCandidateWorkbenchComponent implements OnInit{
     }
     this.planBusy=true;this.planError='';
     this.api.inspectionPlan(this.editorKey.trim(),this.activePlanId).subscribe({
-      next:x=>{this.plan=x;this.planBusy=false;},
-      error:e=>{this.planBusy=false;this.planError=(e as {error?:{error?:string}})
-        ?.error?.error||'SI_INSPECTION_PLAN_UNAVAILABLE';}
+      next:x=>{this.plan=x;this.planBusy=false;
+        if(this.planAiPhase==='updating')this.planAiPhase='idle';},
+      error:e=>{this.planBusy=false;
+        if(this.planAiPhase==='updating'){
+          this.planAiPhase='idle';
+          this.planError=this.copy(
+            'AI results were received, but the saved plan could not be refreshed. Reload the plan before proceeding.',
+            'وصلت نتيجة التحليل، لكن تعذر تحديث عرض الخطة المحفوظة. أعد تحميل الخطة قبل المتابعة.');
+        }else this.planError=(e as {error?:{error?:string}})
+          ?.error?.error||'SI_INSPECTION_PLAN_UNAVAILABLE';}
     });
   }
   generateInspectionPlan():void{
@@ -221,25 +231,30 @@ export class SiCandidateWorkbenchComponent implements OnInit{
         'هذا سيشغل طلب Airia مدفوعاً محتملاً. هل تؤكد؟');
     if(!window.confirm(message))return;
     this.planBusy=true;this.planError='';this.planNotice='';
+    this.planAiPhase='analyzing';
     this.api.rerankInspectionPlan(this.editorKey.trim(),{
       actor:this.reviewer.trim(),planId:this.activePlanId,expectedSourceHash:this.plan.sourceHash,
       expectedRevision:this.plan.revision,confirmRun:true,confirmCost:!mock,
       ...(change?{change}:{})
     }).subscribe({
       next:r=>{
-        this.planBusy=false;this.cancelPlanEdit();this.loadRollingPlans();
+        this.planAiPhase='updating';
+        this.cancelPlanEdit();this.loadRollingPlans();
         this.planNotice=this.copy(
-         'C01 '+r.provider+' recomputed the inspection plan. Officer approval is still required for actual inspection cases.',
-         'أعاد C01 '+r.provider+' ترتيب خطة المعاينات، ولا يزال اعتماد حالات المعاينة رسمياً من صلاحية الموظف.');
+         'C01 '+r.provider+' completed the advisory analysis. Supervisor approval is still required.',
+         'أكمل C01 التحليل الاستشاري. لا تزال موافقة المشرف مطلوبة.');
         this.loadInspectionPlan();
       },
       error:e=>{
-        this.planBusy=false;
-        const failure=(e as {error?:{error?:string;reasonCode?:string}})?.error;
-        const code=failure?.error||'SI_PLAN_RECALCULATION_FAILED';
-        const reason=failure?.reasonCode;
-        this.planError=code+(reason&&/^[A-Z0-9_]+$/.test(reason)?' — '+reason:'');
-        if(this.planError.includes('CHANGED'))this.loadInspectionPlan();
+        this.planAiPhase='idle';this.planBusy=false;
+        const code=(e as {error?:{error?:string}})?.error?.error||'';
+        const changed=code.includes('CHANGED')||code.includes('STALE');
+        this.planError=changed?
+          this.copy('Source data changed during analysis. Reload the plan before retrying.',
+            'تغيرت بيانات المصادر أثناء التحليل؛ أعد تحميل الخطة قبل إعادة المحاولة.'):
+          this.copy('The AI recommendation could not be verified against the saved vessel sources. No plan was changed. Review source data or ask the administrator to check the Airia contract before retrying.',
+            'تعذر التحقق من توصيات الذكاء الاصطناعي مقابل مصادر بيانات السفن المحفوظة. لم تتغير الخطة. راجع بيانات المصادر أو اطلب فحص تكامل Airia قبل إعادة المحاولة.');
+        if(changed)this.loadInspectionPlan();
       }
     });
   }
