@@ -211,7 +211,7 @@ interface CapacityPreview{
        'جارٍ التحقق من أسباب إحالة السفن المرشحة بالنسب…')}}</p>
      <p *ngIf="!p.vessels.length&&capacityError" class="notice error" role="alert">
       {{capacityError}}</p>
-     <ng-container *ngIf="!p.vessels.length&&capacityContext as ctx">
+     <ng-container *ngIf="capacityContext as ctx">
       <div class="vessel-card" *ngFor="let selected of ctx.selection.roster">
        <header><div><strong>#{{selected.planRank}} · IMO {{selected.imo}}</strong>
         <span>{{copy('Capacity-first candidate, not yet approved',
@@ -225,7 +225,7 @@ interface CapacityPreview{
        </div>
       </div>
      </ng-container>
-     <div class="vessel-card" *ngFor="let vessel of p.vessels">
+     <div class="vessel-card" *ngFor="let vessel of (capacityContext ? [] : p.vessels)">
       <header><div><strong>#{{vessel.rank}} · {{vessel.vesselName}}</strong>
        <span>IMO {{vessel.imo}}</span></div>
        <span class="reason-count">{{vessel.reasons.length}} {{copy('reasons','أسباب')}}</span></header>
