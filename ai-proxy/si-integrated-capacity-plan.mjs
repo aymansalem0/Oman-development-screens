@@ -60,7 +60,8 @@ export function selectIntegratedPlanVessels({
   fail('SI_INTEGRATED_PERCENT_INVALID',422);
  if(inspectionPlan.planId!==plan.id||
   inspectionPlan.revision!==plan.revision||
-  inspectionPlan.sourceHash!==plan.selectionSourceHash||
+  inspectionPlan.sourceHash!==(plan.selectionSourceHash||
+   plan.candidateSourceHash)||
   inspectionPlan.stale)
   fail('SI_INTEGRATED_PLAN_SOURCE_STALE_REVIEW',409);
  const sourceRows=new Map((inspectionPlan.rows||[]).map(x=>[x.imo,x]));
