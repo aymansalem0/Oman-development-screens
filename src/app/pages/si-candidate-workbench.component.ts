@@ -226,17 +226,19 @@ export class SiCandidateWorkbenchComponent implements OnInit{
   }|null):void{
     if(!this.activePlanId||!this.activePlanEditable||!this.plan||!this.editorKey.trim()||!this.reviewer.trim())return;
     const mock=this.plan.provider==='MOCK';
+    const calls=Math.max(1,Math.ceil((this.plan?.dataReadiness?.eligibleWorkflows||0)/100));
     const message=mock?
       this.copy('Confirm officer planning change and re-run MOCK C01 with zero Airia calls? No official inspection case will be changed.',
         'تأكيد تعديل خطة المعاينات وإعادة ترتيب MOCK C01 دون اتصال Airia؟ لن تتغير حالات المعاينة الرسمية.'):
-      this.copy('Run ONE real Airia SI-C01 analysis of the current saved candidates? This provides advice only; continue?',
-        'تشغيل تحليل Airia الحقيقي مرة واحدة للسفن المرشحة المحفوظة؟ التوصيات استشارية فقط، هل تستمر؟');
+      this.copy('Run '+calls+' Airia SI-C01 analysis calls for all current workflows? Each call may incur cost. Advice only.',
+        'تشغيل '+calls+' طلب تحليل Airia لتغطية جميع مسارات الترشيح؟ قد ينشأ عن كل طلب تكلفة. التوصيات استشارية فقط.');
     if(!window.confirm(message))return;
     this.planBusy=true;this.planError='';this.planNotice='';
     this.planAiPhase='analyzing';
     this.api.rerankInspectionPlan(this.editorKey.trim(),{
       actor:this.reviewer.trim(),planId:this.activePlanId,expectedSourceHash:this.plan.sourceHash,
       expectedRevision:this.plan.revision,confirmRun:true,confirmCost:!mock,
+      confirmBatchCount:calls,
       ...(change?{change}:{})
     }).subscribe({
       next:r=>{
@@ -305,16 +307,18 @@ export class SiCandidateWorkbenchComponent implements OnInit{
   runCandidateAi():void{
     if(this.c01Busy||!this.c01Preview||!this.reviewer.trim()||!this.editorKey.trim())return;
     const isMock=this.c01Preview.provider==='MOCK';
+    const calls=this.c01Preview.expectedBatches||
+      Math.max(1,Math.ceil(this.c01Preview.eligibleCount/100));
     const prompt=isMock?
       this.copy('Generate a MOCK C01 advisory with zero Airia calls? It cannot approve an inspection.',
         'إنشاء توصية C01 تجريبية دون تشغيل Airia؟ لا تعتمد أي معاينة.'):
-      this.copy('Run one real SI-C01 Airia analysis? Advice only; human approval required.',
-        'تشغيل تحليل SI-C01 الحقيقي على Airia؟ يتطلب اعتماداً بشرياً.');
+      this.copy('Run '+calls+' Airia SI-C01 calls to cover every saved candidate workflow? This may incur cost. No inspection approval.',
+        'تشغيل '+calls+' طلب Airia SI-C01 لتغطية جميع مسارات الترشيح المحفوظة؟ قد ينشأ عنها تكلفة، ولن تُعتمد المعاينات تلقائيًا.');
     if(!window.confirm(prompt))return;
     this.c01Busy=true;this.c01Error='';this.c01Message='';
     this.api.candidateAiRun(this.editorKey.trim(),{
       actor:this.reviewer.trim(),expectedSnapshotHash:this.c01Preview.snapshotHash,
-      confirmRun:true,confirmCost:!isMock
+      confirmRun:true,confirmCost:!isMock,confirmBatchCount:calls
     }).subscribe({
       next:r=>{this.c01Busy=false;this.c01Run=r;this.c01Preview=null;
         this.c01Message=this.copy('C01 advisory ready: verify each regime and decide manually.',
