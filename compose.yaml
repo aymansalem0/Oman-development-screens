@@ -55,7 +55,7 @@ services:
       SI_SCHEDULING_DEMO_MODE: ${SI_SCHEDULING_DEMO_MODE:-true}
       # PR #125 inspector identity: server-side MOEI email -> ERP inspector ID.
       # Local .env only; never accept identity mapping from a request body.
-      SI_V2_INSPECTOR_IDENTITY_MAP_JSON: ${SI_V2_INSPECTOR_IDENTITY_MAP_JSON:-{}}
+      SI_V2_INSPECTOR_IDENTITY_MAP_JSON: ${SI_V2_INSPECTOR_IDENTITY_MAP_JSON:-}
       SI_SELECTION_STORE_PATH: /data/si-psc-selection.json
       # Smart Inspection AI development: MOCK returns fixture advice without
       # ANY Airia call or expense. NMC A01/A02 fleet/incident paths stay unchanged.
