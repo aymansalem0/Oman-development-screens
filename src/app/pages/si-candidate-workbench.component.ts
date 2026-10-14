@@ -259,17 +259,27 @@ export class SiCandidateWorkbenchComponent implements OnInit{
       },
       error:e=>{
         this.planAiPhase='idle';this.planBusy=false;
-        const detail=(e as {error?:{error?:string;reasonCode?:string}})?.error;
+        const detail=(e as {error?:{
+          error?:string;reasonCode?:string;failureCounts?:Record<string,number>;
+          expectedCount?:number;returnedCount?:number;batchIndex?:number;batchCount?:number
+        }})?.error;
         const code=detail?.error||'';
         const reason=detail?.reasonCode||'';
+        const failures=Object.entries(detail?.failureCounts||{})
+          .filter(([,count])=>Number.isInteger(count)&&count>0)
+          .sort((a,b)=>b[1]-a[1])
+          .slice(0,5).map(([key,count])=>key+' ('+count+')').join(', ');
+        const batch=detail?.batchIndex?
+          ' · Batch '+detail.batchIndex+'/'+(detail.batchCount||'?'):'';
+        const diagnosis=(failures||reason||code)+batch;
         const changed=code.includes('CHANGED')||code.includes('STALE');
         this.planError=changed?
           this.copy('Source data changed during analysis. Reload the plan before retrying.',
             'تغيرت بيانات المصادر أثناء التحليل؛ أعد تحميل الخطة قبل إعادة المحاولة.'):
-          this.copy('Airia C01 output failed verification: '+(reason||code)+
-            '. The plan remains unchanged. Check structured JSON recommendations, candidate keys, evidence references and pipeline configuration before another paid run.',
-            'فشل التحقق من استجابة Airia C01: '+(reason||code)+
-            '. الخطة لم تتغير. راجع إعداد Structured JSON وأكواد المرشحين ومراجع الأدلة وإعدادات Pipeline قبل إعادة محاولة مدفوعة.');
+          this.copy('Airia C01 validation failure: '+diagnosis+
+            '. The plan is unchanged. Inspect the matching field in the Airia pipeline before another paid run.',
+            'فشل فحص Airia C01: '+diagnosis+
+            '. الخطة لم تتغير. راجع الحقول المشار إليها داخل Airia قبل تشغيل مدفوع جديد.');
         if(changed)this.loadInspectionPlan();
       }
     });
