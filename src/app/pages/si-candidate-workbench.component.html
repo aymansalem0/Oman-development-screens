@@ -145,9 +145,16 @@
          'مقترح الخطة المتكامل — لم يُحفظ أو يُعتمد بعد')}}</h3>
         <div class="si-draft-stats">
          <div><strong>{{draft.candidateCount}}</strong><span>{{copy('Eligible candidate vessels','سفن مرشحة مؤهلة')}}</span></div>
-         <div><strong>{{draft.selectedCount}}</strong><span>{{copy('Selected by C01 and published rules','مختارة وفق C01 والسياسات')}}</span></div>
-         <div><strong>{{draft.feasibleCount}}</strong><span>{{copy('Capacity-feasible assignments','تكليفات قابلة للتنفيذ')}}</span></div>
-         <div><strong>{{draft.unscheduledCount}}</strong><span>{{copy('Capacity exceptions','استثناءات الطاقة')}}</span></div>
+         <div><strong>{{draft.selectedCount}}</strong><span>{{copy('AI selection + published rules','اختارها AI وفق السياسات')}}</span></div>
+         <div><strong>{{draft.prioritizedCount}}</strong><span>{{copy('Automatically prioritized','تم ترتيب أولويتها تلقائيًا')}}</span></div>
+         <div><strong>{{draft.finalPlanCount}}</strong><span>{{copy('Inside Draft · qualified engineer','داخل المسودة · مهندس مؤهل')}}</span></div>
+         <div><strong>{{draft.outsidePlanCount}}</strong><span>{{copy('Outside Draft · capacity overflow','خارج المسودة · نقص الطاقة')}}</span></div>
+        </div>
+        <div class="si-auto-planning-flow" aria-label="Automatic Smart Inspection draft stages">
+         <span>{{copy('1 · AI Selection','١ · اختيار AI')}}</span><b>→</b>
+         <span>{{copy('2 · Execution Priority','٢ · ترتيب الأولوية')}}</span><b>→</b>
+         <span>{{copy('3 · Engineer Capacity','٣ · طاقة المهندسين')}}</span><b>→</b>
+         <span>{{copy('4 · Final Draft','٤ · المسودة النهائية')}}</span>
         </div>
         <p *ngIf="draft.mandatoryUnscheduled.length" class="notice error">
          {{copy('Mandatory NMC/source inspections have no feasible assignment. Resolve before supervisor approval:',
@@ -168,7 +175,8 @@
            <th>{{copy('Source / priority','المصدر / الأولوية')}}</th>
            <th>{{copy('Qualified engineer','المهندس المؤهل')}}</th>
            <th>{{copy('Visit slot','موعد الزيارة')}}</th>
-           <th>{{copy('Capacity status','حالة الطاقة')}}</th></tr></thead>
+           <th>{{copy('Capacity status','حالة الطاقة')}}</th>
+           <th>{{copy('Final Draft decision','قرار المسودة النهائي')}}</th></tr></thead>
           <tbody><tr *ngFor="let row of draft.items">
            <td>{{row.planRank}}</td>
            <td><b>{{row.vesselName}}</b><small>{{row.imo}}</small>
@@ -189,9 +197,27 @@
             <span *ngIf="!row.visitWindow&&!row.startLocal">—</span>
            </td>
            <td>{{row.status}}<small *ngIf="row.blocker">{{row.blocker}}</small></td>
+           <td>
+            <strong *ngIf="row.inCurrentPlan" class="si-auto-in-plan">
+             {{copy('IN DRAFT','داخل المسودة')}}</strong>
+            <strong *ngIf="!row.inCurrentPlan&&row.mandatory" class="si-auto-capacity-blocker">
+             {{copy('Protected referral · capacity exception','إحالة إلزامية · استثناء طاقة')}}</strong>
+            <strong *ngIf="!row.inCurrentPlan&&!row.mandatory" class="si-auto-outside-plan">
+             {{copy('OUTSIDE CURRENT DRAFT','خارج المسودة الحالية')}}</strong>
+           </td>
           </tr></tbody>
          </table>
         </div>
+        <section *ngIf="draft.outsidePlanCount>0" class="si-auto-capacity-overflow">
+         <h4>{{copy('Not included in this Draft — inspector capacity',
+          'سفن لم تدخل هذه المسودة بسبب الطاقة التشغيلية')}}</h4>
+         <p>{{copy('These optional vessels remain in the Candidate Pool and can be considered in future plans. No source record is withdrawn or rejected.',
+          'هذه السفن تظل بقائمة المرشحين ويمكن إدراجها بخطط لاحقة. لم تُلغَ أو تُرفض أي معاملة من المصدر.')}}</p>
+         <div *ngFor="let missing of draft.outsidePlan">
+          <strong>IMO {{missing.imo}}</strong> ·
+          {{copy('Priority','الأولوية')}} #{{missing.originalPriority}}
+          · {{missing.reasonCode}}</div>
+        </section>
         <section class="si-draft-inputs">
          <h4>{{copy('Capacity inputs — correct missing visit data, then recalculate before Save',
           'مدخلات الطاقة — استكمل بيانات الزيارة ثم أعد الحساب قبل الحفظ')}}</h4>
