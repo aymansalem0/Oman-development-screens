@@ -54,8 +54,9 @@ test('model deferral and manual review do not trigger deterministic quota backfi
  rec[0].recommendation='DEFER_RECOMMENDED';
  rec[1].recommendation='MANUAL_REVIEW';
  const result=projectC01ConfiguredSelection(source,rec);
- assert.equal(result.pscRisk.aiSelectedImos.length,2);
- assert.deepEqual(result.pscRisk.aiSelectedImos,['9400104','9400103']);
+ assert.equal(result.pscRisk.aiSelectedImos.length,1);
+ assert.deepEqual(result.pscRisk.aiSelectedImos,['9400104']);
+ assert.equal(result.manualReviewImos.includes('9400103'),true);
  assert.equal(result.uaeFlag.aiSelectedImos.length,0);
  assert.equal(result.manualReviewImos.includes('9400102'),true);
  assert.equal(result.selectedImos.includes('9400105'),true);
