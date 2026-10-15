@@ -271,6 +271,23 @@ export function scopeIntegratedSelectionToSavedDraft(selection,plan){
  };
 }
 
+/** Compare refreshed plan alternatives to the exact saved Draft vessel set.
+ * Changing staff/times is permitted; changing vessel scope is NOT.
+ */
+export function savedDraftCapacityCoverage(selection,variant){
+ if(!selection?.draftScope?.locked)return {
+  locked:false,matches:true,missingImos:[],unexpectedImos:[]};
+ const required=new Set(selection.draftScope.selectedImos);
+ const offered=(variant?.assignments||[]).map(x=>x.imo);
+ const assigned=new Set(offered);
+ const missingImos=[...required].filter(imo=>!assigned.has(imo));
+ const unexpectedImos=[...assigned].filter(imo=>!required.has(imo));
+ return {locked:true,matches:missingImos.length===0&&
+   unexpectedImos.length===0&&offered.length===required.size,
+  missingImos,unexpectedImos,savedCount:required.size,
+  feasibleNow:assigned.size};
+}
+
 export function makeCapacityDraftPlan(plan,selection){
  if(plan.id!==selection.planId||plan.revision!==selection.planRevision)
   fail('SI_INTEGRATED_PLAN_CHANGED_REPREVIEW',409);
