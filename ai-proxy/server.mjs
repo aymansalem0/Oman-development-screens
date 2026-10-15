@@ -2229,7 +2229,7 @@ const server = createServer(async (req, res) => {
       // misreporting every unknown approval failure as a dead rolling store.
       // Typed policy/validation errors have already returned above.
       if(req.method==='POST'&&
-         /^\\/api\\/si\\/v1\\/inspection-plans\\/[a-f0-9-]{36}\\/capacity-approve$/.test(path)){
+         /^\/api\/si\/v1\/inspection-plans\/[a-f0-9-]{36}\/capacity-approve$/.test(path)){
         const diagnostic=classifySiApprovalFailure(e);
         console.error('[si-approval] FAILED '+JSON.stringify({
           stage:diagnostic.stage,
