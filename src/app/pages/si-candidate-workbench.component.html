@@ -124,9 +124,33 @@
       <article><small>{{copy('ACTIVE FLEET','الأسطول النشط')}}</small><strong>{{d.summary.evaluatedPopulation}}</strong><span>{{copy('Tracked source vessels','سفن مصدر البيانات')}}</span></article>
       <article><small>{{copy('ASSESSED RISK','السفن المقيمة')}}</small><strong>{{d.summary.assessedRiskVessels}}</strong><span>{{copy('Saved NMC risk assessments','تقييمات مخاطر NMC المحفوظة')}}</span></article>
       <article><small>{{copy('EXPECTED INSPECTION VESSELS','السفن المتوقع فحصها')}}</small><strong>{{d.summary.candidateVessels}}</strong><span>{{d.summary.candidates}} {{copy('candidate workflows','مسار ترشيح')}}</span></article>
-      <article><small>{{copy('AI RECOMMENDED FOR INSPECTION','السفن التي اختارها AI للخطة')}}</small><strong class="si-ai-number">{{aiSelectedCount===null?'—':aiSelectedCount}}</strong><span>{{copy('AI advisory only · not approved','توصية فقط وليست اعتماداً')}}</span></article>
+      <article><small>{{copy('AI RECOMMENDED FOR INSPECTION','السفن التي اختارها AI للخطة')}}</small><strong class="si-ai-number">{{aiSelectedCount===null?'—':aiSelectedCount}}</strong><span>{{copy('AI advice before configured quota enforcement','توصيات AI قبل تطبيق سقف النسب')}}</span></article>
       <article><small>{{copy('CURRENT INSPECTION PLAN','السفن المدرجة في الخطة')}}</small><strong>{{planSelectedCount===null?'—':planSelectedCount}}</strong><span>{{copy('After officer amendments','بعد تعديلات الموظف')}}</span></article>
       <article><small>{{copy('APPROVED INSPECTION CASES','المعاينات المعتمدة')}}</small><strong>{{d.summary.inspectionsCreated}}</strong><span>{{copy('Approved by authorised officers','معتمدة من الموظفين المخولين')}}</span></article>
+    </section>
+
+    <section *ngIf="plan?.selectionProposal as a" class="si-panel" aria-label="AI configured vessel selection result">
+      <h2>{{copy('SI-C01 · Configured AI Vessel Selection Proposal','SI-C01 · نتيجة اختيار السفن بالقواعد المنشورة')}}</h2>
+      <p>{{copy('AI recommendations were validated against source eligibility and the published independent quotas. This is a proposed selection ONLY; no plan has been authorised and no inspection case has been created.',
+        'تم التحقق من توصيات AI مقابل أهلية المصادر والنسب المستقلة المنشورة. هذه قائمة اختيار مقترحة فقط ولم تُعتمد المعاينة أو تنشأ حالات تنفيذ.')}}</p>
+      <div class="si-ai-selection-stats">
+        <span><b>{{a.pscRisk.eligibleImos}}</b> {{copy('PSC eligible IMOs','سفن PSC المؤهلة')}}</span>
+        <span><b>{{a.pscRisk.aiSelectedImos.length}} / {{a.pscRisk.cap}}</b> {{copy('PSC selected / cap','PSC مختارة / السقف')}}</span>
+        <span><b>{{a.uaeFlag.eligibleImos}}</b> {{copy('UAE candidate IMOs B','سفن الإمارات المرشحة B')}}</span>
+        <span><b>{{a.uaeFlag.aiSelectedImos.length}} / {{a.uaeFlag.cap}}</b> {{copy('UAE selected / cap','إماراتية مختارة / السقف')}}</span>
+        <span><b>{{a.mandatoryImos.length}}</b> {{copy('Protected source obligations','التزامات المصادر المحمية')}}</span>
+        <span><b>{{a.overlappingImos.length}}</b> {{copy('Overlap deduplicated','التداخل بلا تكرار')}}</span>
+        <span><b>{{a.selectedImos.length}}</b> {{copy('AI-proposed unique vessels','سفن مقترحة دون تكرار')}}</span>
+        <span><b>{{a.manualReviewImos.length}}</b> {{copy('Manual review · optional','مراجعة يدوية · اختيارية')}}</span>
+      </div>
+      <p class="notice" *ngIf="plan?.mock">{{copy('MOCK ONLY — deterministic fixture, no Airia analysis. Do not treat these as actual AI judgements.','محاكاة MOCK فقط دون تحليل Airia حقيقي؛ لا تعتبر النتائج أحكامًا من AI.')}}</p>
+      <div class="si-ai-selection-review" *ngFor="let r of a.selectedRows">
+        <strong>IMO {{r.imo}}</strong>
+        <span>{{r.selectionBasis.join(' + ')}}</span>
+        <span>{{copy('Confidence','الثقة')}}: {{r.aiRecommendationConfidence===null?'—':r.aiRecommendationConfidence}}</span>
+        <small>{{copy('Evidence IDs','مراجع الأدلة')}}: {{r.evidenceRefs.join(' · ')||'—'}}</small>
+      </div>
+      <p *ngIf="a.aiRecommendedButQuotaExcluded.length">{{copy('AI recommendations beyond published quotas (not selected):','توصيات AI خارج السقف المنشور (غير مختارة):')}} {{a.aiRecommendedButQuotaExcluded.join(', ')}}</p>
     </section>
 
     <section class="si-panel si-unified-queue">
