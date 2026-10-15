@@ -531,8 +531,9 @@ export class SiCandidateAgent{
        duplicateImosAllowed:false,
        neverOverridePscPortCallQuota:true,
        missingVesselRisk:'MANUAL_REVIEW_NOT_INVENTED',
-       finalHumanApprovalRequired:true
-     ,neverAllowSilentPolicyActivation:true}:null,
+       finalHumanApprovalRequired:true,
+       neverAllowSilentPolicyActivation:true
+     }:null,
      outputContract:{
        format:'STRICT_JSON_OBJECT_NO_MARKDOWN',
        topLevel:{recommendations:'array: exactly one per supplied candidateKey'},
