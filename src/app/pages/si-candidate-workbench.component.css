@@ -468,3 +468,14 @@ button:disabled{opacity:.55;cursor:not-allowed}
  border-radius:5px;color:#872b22;font-size:11px;line-height:1.65;
  max-width:420px}
 .si-row-actions button:disabled{cursor:not-allowed;opacity:.57}
+
+
+/* Saved maritime port-call timing next to IMO, with source provenance. */
+.si-vessel-movement-date{min-width:155px;max-width:210px;white-space:normal}
+.si-vessel-movement-date strong{display:block;color:#144e65;
+ font-size:11px;font-variant-numeric:tabular-nums}
+.si-vessel-movement-date small{display:block;margin-top:5px;
+ font-size:10px;line-height:1.45;color:#56798b;
+ overflow-wrap:anywhere}
+.si-vessel-movement-date>span{color:#708391;font-size:11px}
+.si-vessel-movement-date>.si-vessel-date-conflict{font-weight:700;color:#ad493a}
