@@ -110,7 +110,7 @@ export function buildC01Source(dashboard,pscPolicy=null){
         actionableServiceRequest:verifiedEvents.some(e=>
           e.sourceType==='SERVICE_REQUEST'&&isSiVerifiedEvent(e)),
         requiredInPlan:isSiProtectedReferral(c)||
-          (!Number.isInteger(selection.serviceRequestPlanCap)&&
+          ((!selectionPolicyActive||!Number.isInteger(selection.serviceRequestPlanCap))&&
             verifiedEvents.some(e=>e.sourceType==='SERVICE_REQUEST'&&isSiVerifiedEvent(e)))};
     }).sort((a,b)=>a.candidateKey.localeCompare(b.candidateKey));
   const source={schemaVersion:'SI-C01-v1',
