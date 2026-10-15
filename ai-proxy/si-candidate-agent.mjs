@@ -21,6 +21,9 @@ export function buildC01Source(dashboard,pscPolicy=null){
   const ranking=getSiRankingPolicy(dashboard.policy.config);
   const aiAdvisory=getSiC01AdvisoryRules(dashboard.policy.config);
   const selection=getSiSelectionPolicy(dashboard.policy.config);
+  // Backward compatibility for saved legacy policy snapshots with no
+  // explicitly published candidate-vessel sampling rules.
+  const selectionPolicyActive=Boolean(dashboard.policy.config?.selection);
   const vesselSignals=new Map((dashboard.vesselCandidates||[]).map(v=>[v.imo,v]));
   const candidates=dashboard.candidates
     .filter(c=>!c.inspectionCase&&(
@@ -102,7 +105,7 @@ export function buildC01Source(dashboard,pscPolicy=null){
           (e.sourceType==='NMC_CASE'&&e.approval==='APPROVED'))};
     }).sort((a,b)=>a.candidateKey.localeCompare(b.candidateKey));
   const source={schemaVersion:'SI-C01-v1',
-    ranking,aiAdvisory,selection,
+    ranking,aiAdvisory,selection,selectionPolicyActive,
     policyRevision:dashboard.policy.version,
     riskPolicyRevision:dashboard.riskPolicyRevision,
     pscQuotaPolicyRevision:pscPolicy?.version??null,
@@ -596,7 +599,8 @@ export class SiCandidateAgent{
    }
    // Verified AI output only: the backend applies the configured caps and
    // protects statutory source obligations. Never materialize cases here.
-   const selectionProposal=projectC01ConfiguredSelection(s,recommendations);
+   const selectionProposal=s.selectionPolicyActive?
+     projectC01ConfiguredSelection(s,recommendations):null;
    const result={status:'ADVISORY_REVIEW_REQUIRED',agentCode:'SI-C01',
      agentRunId:randomUUID(),provider:this.provider.toUpperCase(),
      mock:this.provider==='mock',simulationLabel:this.provider==='mock'?SI_MOCK_MARKER:null,
