@@ -145,12 +145,27 @@ export interface SiC01Recommendation{
   selectionReviewGate?:'BELOW_PUBLISHED_CONFIDENCE'|'AIRIA_OUTPUT_NOT_VERIFIED'|null;
   requiresHumanReview:true;regulatoryDecision:false;
 }
+export interface SiDraftScope {
+ status:'READY'|'SELECTION_POLICY_REPUBLICATION_REQUIRED'|
+  'PROTECTED_NMC_REFERRALS_EXCEED_PUBLISHED_PLAN_CAP'|
+  'PROTECTED_NMC_REFERRALS_EXCEED_SOLVER_MAX';
+ eligibleVessels:number;candidateWorkflows:number;
+ protectedNmcVessels:number;serviceRequestVessels:number;
+ legacyServiceRequestsForcedIntoOnePlan:number;
+ hasPublishedCappedPolicy:boolean;
+ publishedServiceRequestPlanCap:number|null;
+ publishedMaxPlannedVessels:number|null;
+ solverMaxVessels:number;sourcePolicyRevision:number;
+ requiresOfficerAction:boolean;noAiCalls:true;noSourceMutation:true;
+}
 export interface SiC01Preview {
+
  status:'PREVIEW_ONLY_NO_AI';provider:'MOCK'|'AIRIA';
  snapshotHash:string;policyRevision:number;pscQuotaPolicyRevision:number|null;
  riskPolicyRevision:number;eligibleCount:number;externalCalls:0;
  aiAdvisory?:SiC01AdvisoryRules;
  selectionPolicy?:SiSelectionRules;
+ draftScope?:SiDraftScope;
   expectedBatches?:number;estimatedAiriaCalls?:number;
  candidates:{candidateKey:string;imo:string;regime:string;
     vesselName:string;sourceTypes:string[];allowedEvidence:string[];
