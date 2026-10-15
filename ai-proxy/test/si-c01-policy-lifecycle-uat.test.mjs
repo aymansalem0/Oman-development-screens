@@ -99,8 +99,11 @@ test('MOEI Pool B UAT: published selection policy drives SI-C01 selection and pl
        assert.equal(payload.configuredSelectionPolicy.pscRiskRatePercent,50);
        assert.equal(payload.configuredSelectionPolicy.uaeFlagRatePercent,100);
        assert.equal(payload.configuredSelectionPolicy.eligibleSelectionPool.pscEligibleImos,4);
-       assert.equal(payload.configuredSelectionPolicy.eligibleSelectionPool.uaeEligibleImos,1);
-       assert.equal(payload.configuredSelectionPolicy.eligibleSelectionPool.mandatoryOutsideCaps,2);
+       assert.equal(payload.configuredSelectionPolicy.eligibleSelectionPool.uaeEligibleImos,2);
+       assert.equal(payload.configuredSelectionPolicy.eligibleSelectionPool.serviceRequestEligibleImos,1);
+       assert.equal(payload.configuredSelectionPolicy.eligibleSelectionPool.serviceRequestPlanCap,1);
+       assert.equal(payload.configuredSelectionPolicy.eligibleSelectionPool.maxPlannedVessels,12);
+       assert.equal(payload.configuredSelectionPolicy.eligibleSelectionPool.mandatoryOutsideCaps,1);
        assert.ok(payload.candidates.every(c=>c.allowedEvidence.length>0));
        return mockSiC01(payload);
      }
@@ -111,9 +114,12 @@ test('MOEI Pool B UAT: published selection policy drives SI-C01 selection and pl
    assert.equal(impact.selectionImpact.candidatePoolImos,6);
    assert.equal(impact.selectionImpact.pscEligibleImos,4);
    assert.equal(impact.selectionImpact.pscTargetImos,2);
-   assert.equal(impact.selectionImpact.uaeEligibleImos,1);
-   assert.equal(impact.selectionImpact.uaeTargetImos,1);
-   assert.equal(impact.selectionImpact.mandatoryImos,2);
+   assert.equal(impact.selectionImpact.uaeEligibleImos,2);
+   assert.equal(impact.selectionImpact.serviceEligibleImos,1);
+   assert.equal(impact.selectionImpact.serviceTargetImos,1);
+   assert.equal(impact.selectionImpact.maxPlannedVessels,12);
+   assert.equal(impact.selectionImpact.uaeTargetImos,2);
+   assert.equal(impact.selectionImpact.mandatoryImos,1);
    assert.equal((await targeting.policy()).version,1,
      'impact preview must not publish');
    const next=await targeting.publishRules({
@@ -142,10 +148,11 @@ test('MOEI Pool B UAT: published selection policy drives SI-C01 selection and pl
    assert.equal(output.selectionProposal.policyRevision,2);
    assert.deepEqual(output.selectionProposal.pscRisk.aiSelectedImos,
      ['9400101','9400102']);
-   assert.deepEqual(output.selectionProposal.uaeFlag.aiSelectedImos,['9400102']);
-   assert.deepEqual(output.selectionProposal.overlappingImos,['9400102']);
+   assert.deepEqual(output.selectionProposal.uaeFlag.aiSelectedImos,['9400102','9400105']);
+   assert.deepEqual([...output.selectionProposal.overlappingImos].sort(),['9400102','9400105']);
+   assert.deepEqual(output.selectionProposal.serviceRequests.aiSelectedImos,['9400105']);
    assert.deepEqual([...output.selectionProposal.mandatoryImos].sort(),
-     ['9400105','9400106']);
+     ['9400106']);
    assert.deepEqual([...output.selectionProposal.selectedImos].sort(),
      ['9400101','9400102','9400105','9400106']);
    const inspected=projectInspectionPlan(
