@@ -333,9 +333,10 @@
         copy('ERP source-backed workforce snapshot','طاقة تشغيلية وفق لقطة ERP')}}
       </p>
       <div class="si-draft-stats">
-       <div><strong>{{cap.selectedImos.length}}</strong><span>{{copy('Planned vessels','سفن الخطة')}}</span></div>
-       <div><strong>{{cap.proposedAssignments.length}}</strong><span>{{copy('Feasible inspector assignments','تكليفات مهندسين متاحة')}}</span></div>
-       <div><strong>{{cap.unscheduled.length}}</strong><span>{{copy('Capacity exceptions','استثناءات الطاقة')}}</span></div>
+       <div><strong>{{cap.c01SelectedImos?.length??cap.selectedImos.length}}</strong><span>{{copy('AI selected','السفن التي اختارها AI')}}</span></div>
+       <div><strong>{{cap.selectedImos.length}}</strong><span>{{copy('Inside final Draft','داخل المسودة النهائية')}}</span></div>
+       <div><strong>{{cap.proposedAssignments.length}}</strong><span>{{copy('Assigned engineers','تكليفات مهندسين متاحة')}}</span></div>
+       <div><strong>{{cap.capacityExcluded?.length??0}}</strong><span>{{copy('Outside Draft · capacity','خارج الخطة بسبب الطاقة')}}</span></div>
       </div>
       <div class="si-draft-saved-assignments">
        <article *ngFor="let row of cap.proposedAssignments">
@@ -344,6 +345,16 @@
         <small *ngIf="row.crossPort">{{copy('Cross-port approval required','يتطلب اعتماد الانتقال بين الموانئ')}}</small>
        </article>
       </div>
+      <section *ngIf="cap.capacityExcluded?.length" class="si-auto-capacity-overflow">
+       <h4>{{copy('Capacity overflow · not included in this Draft','السفن الزائدة عن الطاقة · خارج هذه المسودة')}}</h4>
+       <p>{{copy('These vessels remain eligible in the central candidate pool for other plans.',
+        'هذه السفن تظل متاحة ضمن قائمة المرشحين للخطط القادمة.')}}</p>
+       <div *ngFor="let item of cap.capacityExcluded">
+        <strong>IMO {{item.imo}}</strong> ·
+        {{copy('Priority','الأولوية')}} #{{item.originalPriority}}
+        · {{item.reasonCode}}
+       </div>
+      </section>
       <p *ngIf="cap.mandatoryUnscheduled.length" class="notice error">
        {{copy('Mandatory inspections require capacity exception resolution before approval:',
         'توجد معاينات إلزامية تتطلب معالجة تعارض الطاقة قبل الاعتماد:')}}
