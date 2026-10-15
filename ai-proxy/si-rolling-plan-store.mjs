@@ -26,8 +26,11 @@ const sanitize=x=>({
  createdBy:x.createdBy,createdAt:x.createdAt,updatedBy:x.updatedBy,
  updatedAt:x.updatedAt,approvedAt:x.approvedAt||null,
  approvedBy:x.approvedBy||null,approvedBatchId:x.approvedBatchId||null,
- vesselCount:x.approvedVessels?.length||x.savedPlanRows?.filter(r=>r.planSelected).length||
-    x.latest?.rows?.filter(r=>r.planSelected).length||0,
+ vesselCount:x.approvedVessels?.length?
+    x.approvedVessels.length:
+    (x.capacityDraft?.selectedImos?.length??
+    x.savedPlanRows?.filter(r=>r.planSelected).length??
+    x.latest?.rows?.filter(r=>r.planSelected).length??0),
  candidateCount:new Set((x.candidateSnapshot||[]).map(c=>c.imo)).size,
  deferredCount:Object.values(x.overrides||{}).filter(d=>d.disposition==='DEFER').length
 });
@@ -170,7 +173,18 @@ export class SiRollingPlanStore{
    latest:integratedDraft?{...integratedDraft.ai,
     rows:integratedDraft.rows,generatedAt:integratedDraft.generatedAt}:null,
    selectionSourceHash:integratedDraft?sourceHash:null,
-   savedPlanRows:integratedDraft?.rows||null,
+   savedPlanRows:integratedDraft?integratedDraft.rows.map(row=>{
+    const inCurrentPlan=integratedDraft.pipeline.plannedImos.includes(row.imo);
+    return {...row,
+     planSelected:inCurrentPlan,
+     selectionOrigin:inCurrentPlan?'CAPACITY_VERIFIED_DRAFT':
+      integratedDraft.pipeline.outsidePlan.some(x=>x.imo===row.imo)?
+       'C01_SELECTED_BUT_OUTSIDE_DRAFT_CAPACITY':row.selectionOrigin,
+     capacityDisposition:inCurrentPlan?'IN_CURRENT_DRAFT':
+      integratedDraft.pipeline.outsidePlan.some(x=>x.imo===row.imo)?
+       'OUTSIDE_CURRENT_DRAFT_CAPACITY':null
+    };
+   }):null,
    capacityDraft:integratedDraft?{
     status:integratedDraft.ready?'CAPACITY_VERIFIED_DRAFT':'CAPACITY_EXCEPTION_DRAFT',
     generatedAt:integratedDraft.generatedAt,
@@ -180,7 +194,11 @@ export class SiRollingPlanStore{
     effectiveErpSnapshotId:integratedDraft.effectiveErpSnapshotId,
     demoMode:integratedDraft.metadata.demoMode,
     selectionHash:integratedDraft.selection.selectionHash,
-    selectedImos:integratedDraft.selection.roster.map(x=>x.imo),
+    selectedImos:integratedDraft.pipeline.plannedImos,
+    c01SelectedImos:integratedDraft.selection.roster.map(x=>x.imo),
+    pipelineStages:integratedDraft.pipeline.stages,
+    capacityExcluded:integratedDraft.pipeline.outsidePlan,
+    inPlanCount:integratedDraft.pipeline.inPlanCount,
     mandatoryUnscheduled:integratedDraft.mandatoryUnscheduled,
     outsidePlanPeriod:integratedDraft.outsidePeriod,
     requests:integratedDraft.requests,
@@ -200,7 +218,9 @@ export class SiRollingPlanStore{
     ...(integratedDraft?[{event:'INTEGRATED_DRAFT_CAPACITY_CALCULATED',
      at:createdAt,actor,sourceHash,erpSnapshotId:integratedDraft.erpSnapshotId,
      proposalHash:integratedDraft.proposal.proposalHash,
-     selectedImos:integratedDraft.selection.roster.map(x=>x.imo),
+     c01SelectedImos:integratedDraft.selection.roster.map(x=>x.imo),
+     selectedImos:integratedDraft.pipeline.plannedImos,
+     capacityExcluded:integratedDraft.pipeline.outsidePlan,
      feasible:integratedDraft.proposal.summary.proposed,
      blocked:integratedDraft.proposal.summary.unscheduled}]:[])],
    approvedBatchId:null,approvedVessels:[],approvedBy:null,approvedAt:null};

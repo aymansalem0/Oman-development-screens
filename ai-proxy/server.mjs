@@ -317,7 +317,8 @@ const siRollingPlans=new SiRollingPlanStore({mode:dbMode,oracleRepository:reposi
 // side effects until Save Draft; restart/expiry requires an explicit new preview.
 const siDraftPreviews=new Map(),DRAFT_TTL_MS=30*60*1000;
 const siDraftJobs=new SiIntegratedDraftJobs();
-async function calculateNewDraft({id,metadata,source,ai,identity,requests=null}){
+async function calculateNewDraft({id,metadata,source,ai,identity,
+ requests=null,officerAdds=[]}){
  const dashboard=await siTargeting.dashboard();
  const erpSnapshot=siErp.requireSnapshot();
  const [nmcReferrals,bookings]=await Promise.all([
@@ -329,7 +330,7 @@ async function calculateNewDraft({id,metadata,source,ai,identity,requests=null})
   policy:siScheduling.getPolicy(),scheduler:siScheduling,
   nmcReferrals,existingBookings:metadata.demoMode?[]:
    [...siScheduling.state.confirmed,...bookings],
-  requests
+  requests,officerAdds
  });
 }
 function getNewDraftPreview(id,actor){
@@ -1187,10 +1188,11 @@ const server = createServer(async (req, res) => {
               confirmBatchCount:batches,expectedSnapshotHash:source.snapshotHash,
               onProgress
             });
-            setPhase('MATCHING_QUALIFIED_INSPECTORS_AND_CAPACITY');
+            setPhase('APPLYING_VERIFIED_SELECTION_AND_EXECUTION_PRIORITY');
             const fresh=await siCandidateAgent.source();
             if(fresh.snapshotHash!==source.snapshotHash)
               throw new SiDraftCreationError('SI_DRAFT_SOURCE_CHANGED_REGENERATE',409);
+            setPhase('MATCHING_QUALIFIED_INSPECTORS_AND_CAPACITY');
             const id=uuidDraft(),previewId=uuidDraft();
             const result=await calculateNewDraft({id,metadata,source:fresh,ai,identity});
             return saveNewDraftPreview(previewId,actor,metadata,fresh,ai,result);
@@ -1213,7 +1215,13 @@ const server = createServer(async (req, res) => {
         const result=await calculateNewDraft({
           id:cached.result.id,metadata:cached.metadata,source:fresh,
           ai:cached.ai,identity,
-          requests:draftAction[1]==='recalculate'?input.requests:cached.result.requests
+          officerAdds:draftAction[1]==='recalculate'?
+           (Array.isArray(input.officerAdds)?input.officerAdds:cached.result.officerAdds):
+           cached.result.officerAdds,
+          requests:draftAction[1]==='recalculate'&&
+           Array.isArray(input.officerAdds)?null:
+           draftAction[1]==='recalculate'?input.requests:
+           cached.result.requests
         });
         if(draftAction[1]==='recalculate'){
           return respond(res,200,{status:'INTEGRATED_DRAFT_RECALCULATED',
@@ -1470,6 +1478,17 @@ const server = createServer(async (req, res) => {
         const decision=validateIntegratedCapacityProposal(
           selection,proposal,body.selectedOptionId);
         const optimized=decision.variant;
+        // Capacity may change between Draft save and supervisor approval.
+        // Revalidate resources, but never silently re-add a vessel excluded
+        // from the saved Draft scope. An officer must recalculate/agree to
+        // any changed vessel list before issuing canonical work orders.
+        if(plan.capacityDraft?.status==='CAPACITY_VERIFIED_DRAFT'&&
+         Array.isArray(plan.capacityDraft.selectedImos)){
+          const saved=new Set(plan.capacityDraft.selectedImos);
+          if(optimized.assignments.some(a=>!saved.has(a.imo)))
+           return respond(res,409,{
+            error:'SI_DRAFT_APPROVAL_SCOPE_CHANGED_REVIEW_NEW_PLAN'});
+        }
         // For integrated pre-save drafts, the requested plan execution period
         // is an additional hard approval gate (including chosen alternatives).
         if(plan.capacityDraft&&optimized.assignments.some(a=>

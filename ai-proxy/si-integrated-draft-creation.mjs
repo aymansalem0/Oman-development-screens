@@ -14,6 +14,8 @@ import {buildPocErpSchedulingOverlay,fillPocSchedulingVisitContext,
  validatePocSchedulingDemoRequest} from './si-scheduling-poc-fixtures.mjs';
 import {proposeMaritimeBatchSchedule} from './si-maritime-batch-scheduling.mjs';
 import {suggestCapacityExceptionActions} from './si-capacity-exception-alternatives.mjs';
+import {finalizeSiAutoDraftPipeline} from './si-auto-draft-pipeline.mjs';
+import {checkVesselPlanPeriod} from './si-plan-period-eligibility.mjs';
 import {inspectSiDraftScope,SI_DRAFT_SOLVER_MAX_VESSELS} from './si-draft-selection-preflight.mjs';
 
 export class SiDraftCreationError extends Error{
@@ -62,7 +64,7 @@ export function reportDraftPeriodExceptions(proposal,metadata){
  */
 export function buildIntegratedDraft({
  id,metadata,source,dashboard,ai,erpSnapshot,actor,policy,
- nmcReferrals=[],existingBookings=[],scheduler,requests=null,
+ nmcReferrals=[],existingBookings=[],scheduler,requests=null,officerAdds=[],
  clock=()=>Date.now()
 }={}){
  if(!id||!source?.snapshotHash||!dashboard?.policy||!erpSnapshot?.snapshotId)
@@ -99,9 +101,10 @@ export function buildIntegratedDraft({
  const selection=selectIntegratedPlanVessels({
   plan,inspectionPlan:{planId:id,revision:0,sourceHash:source.snapshotHash,
    rows,stale:false,selectionProposal:ai?.selectionProposal||null,
+   aiRecommendations:ai?.recommendations||[],aiCandidates:source.candidates,
    agentRunId:ai?.agentRunId||null},dashboard,
   pscRiskRatePercent:rates.pscRiskRatePercent,
-  uaeFlagRatePercent:rates.uaeFlagRatePercent
+  uaeFlagRatePercent:rates.uaeFlagRatePercent,officerAdds
  });
  if(!selection.roster.length)fail('SI_DRAFT_NO_VERIFIED_SELECTED_VESSELS',409);
  if(selection.roster.length>SI_DRAFT_SOLVER_MAX_VESSELS)
@@ -126,11 +129,18 @@ export function buildIntegratedDraft({
   nmcReferrals,existingBookings:metadata.demoMode?[]:existingBookings,
   scheduler,clock
  });
+ // Automatic STAGES: verified AI vessel selection is already the input;
+ // priority is the deterministic, source-backed roster order; qualified
+ // capacity produces the actual Draft plan roster, with optional overflow
+ // explicitly outside this Draft but still in the national candidate pool.
+ const pipeline=finalizeSiAutoDraftPipeline(selection,proposal,{
+  candidateCount:new Set(source.candidates.map(c=>c.imo)).size,
+  aiRunId:ai.agentRunId
+ });
  const exceptions=suggestCapacityExceptionActions({
   proposal,selection,erpSnapshot:workforce,policy
  });
- const mandatoryUnscheduled=selection.mandatoryImos.filter(imo=>
-  proposal.rows.some(r=>r.imo===imo&&r.status==='UNSCHEDULED'));
+ const mandatoryUnscheduled=pipeline.mandatoryUnscheduled.map(x=>x.imo);
  const outsidePeriod=[...new Set([
    ...reportDraftPeriodExceptions(proposal,metadata),
    ...proposal.rows.filter(r=>r.blocker==='SI_VISIT_OUTSIDE_EXECUTION_PLAN_PERIOD')
@@ -139,13 +149,42 @@ export function buildIntegratedDraft({
  const periodChecked=outsidePeriod.length===0;
  // Do not persist a READY draft if the chosen solver option violates the
  // requested plan execution window. No fabricated ETA/ETD to make it fit.
- const ready=proposal.summary.proposed>0&&
-  mandatoryUnscheduled.length===0&&periodChecked&&proposal.variants.length>0;
+ const ready=pipeline.readyForSupervisorReview&&periodChecked&&
+  proposal.variants.length>0;
  return {id,metadata,sourceHash:source.snapshotHash,
   policyRevision:dashboard.policy.version,riskPolicyRevision:source.riskPolicyRevision,
   erpSnapshotId:erpSnapshot.snapshotId,
   effectiveErpSnapshotId:workforce.snapshotId,ai,
-  rows,selection,context,requests:requested,proposal,
+  rows,selection,context,requests:requested,proposal,pipeline,officerAdds,
+  alternatives:(()=>{
+    const advice=new Map((ai?.recommendations||[]).map(r=>[r.candidateKey,r]));
+    const chosen=new Set(selection.roster.map(r=>r.imo)),keys=new Map();
+    for(const candidate of source.candidates){
+      const one=keys.get(candidate.imo)||[];one.push(candidate.candidateKey);
+      keys.set(candidate.imo,one);
+    }
+    return rows.filter(r=>r.editable&&!chosen.has(r.imo))
+      .flatMap(row=>{
+        const adviceKeys=keys.get(row.imo)||[];
+        if(!adviceKeys.some(k=>advice.get(k)?.recommendation==='MANUAL_REVIEW')||
+           adviceKeys.some(k=>advice.get(k)?.recommendation==='DEFER_RECOMMENDED'))
+          return [];
+        const vessel=dashboard.vesselCandidates.find(v=>v.imo===row.imo);
+        if(!vessel)return [];
+        const period=checkVesselPlanPeriod(vessel,metadata);
+        const bases=[
+         ...(row.sources?.includes('SERVICE_REQUEST')?['SERVICE_REQUEST']:[]),
+         ...(row.sources?.includes('PSC_PORT_CALL')&&
+           Number.isFinite(Number(vessel.currentRisk?.score))?['PSC_RISK']:[]),
+         ...(['AE','ARE','UAE','UNITED ARAB EMIRATES'].includes(
+           String(vessel.flag||'').trim().toUpperCase())?['UAE_FLAG']:[])
+        ];
+        return bases.length?[{imo:row.imo,vesselName:vessel.vesselName,
+         sourceTypes:row.sources||[],priorityCriterion:row.rankingCriterion||
+           'PENDING_ADDITIONAL_RULES',periodStatus:period.status,
+         eligibleBases:bases,requiredOfficerReason:true,aiAdvice:'MANUAL_REVIEW'}]:[];
+      });
+  })(),
   mandatoryUnscheduled,outsidePeriod,ready,
   exceptionActions:exceptions,generatedAt:new Date(clock()).toISOString(),
   candidateCount:new Set(source.candidates.map(c=>c.imo)).size};
@@ -161,18 +200,41 @@ export function publicDraftPreview(p,previewId){
   provider:p.ai?.provider||'NONE',aiRunId:p.ai?.agentRunId||null,
   aiVerifiedCount:p.ai?.verifiedAiRecommendations??0,
   candidateCount:p.candidateCount,
-  selectedCount:p.selection.roster.length,
-  feasibleCount:p.proposal.summary.proposed,
-  unscheduledCount:p.proposal.summary.unscheduled,
+  selectedCount:p.pipeline.aiSelectedCount,
+  notSelectedByAiCount:Math.max(0,
+   p.pipeline.sourceCandidateCount-p.pipeline.aiSelectedCount),
+  prioritizedCount:p.pipeline.prioritizedCount,
+  finalPlanCount:p.pipeline.inPlanCount,
+  feasibleCount:p.pipeline.inPlanCount,
+  unscheduledCount:p.pipeline.excludedByCapacityCount+
+   p.pipeline.mandatoryExceptionCount,
+  outsidePlanCount:p.pipeline.excludedByCapacityCount,
+  outsidePlan:p.pipeline.outsidePlan,
+  protectedCapacityExceptions:p.pipeline.mandatoryUnscheduled,
+  pipelineStages:p.pipeline.stages,
+  finalizedPlanImos:p.pipeline.plannedImos,
   mandatoryUnscheduled:p.mandatoryUnscheduled,
   outsidePlanPeriod:p.outsidePeriod,
   readyForSupervisorReview:p.ready,
   quotas:p.selection.quotas,
   demoOnly:p.metadata.demoMode,
+  manualAlternatives:p.alternatives,
+  officerSelectedAlternatives:p.officerAdds||[],
+  availablePlanSlots:Math.max(0,(p.selection.quotas.maxPlannedVessels||
+    p.selection.roster.length)-p.selection.roster.length),
   items:p.selection.roster.map(v=>{
    const advice=rank.get(v.imo),a=assigned.get(v.imo);
    const issue=p.proposal.rows.find(r=>r.imo===v.imo);
+   const inCurrentPlan=p.pipeline.plannedImos.includes(v.imo);
+   const overflow=p.pipeline.outsidePlan.find(x=>x.imo===v.imo);
+   const protectedException=p.pipeline.mandatoryUnscheduled.find(x=>x.imo===v.imo);
    return {imo:v.imo,planRank:v.planRank,vesselName:advice?.vesselName||v.imo,
+    inCurrentPlan,
+    disposition:inCurrentPlan?'IN_CURRENT_DRAFT':
+      protectedException?'PROTECTED_REFERRAL_CAPACITY_EXCEPTION':
+      'OUTSIDE_CURRENT_DRAFT_CAPACITY',
+    remainsCandidate:!inCurrentPlan,
+    outsideReasonCode:overflow?.reasonCode||protectedException?.reasonCode||null,
     priorityReason:advice?.priorityReason||null,
     priorityCriterion:advice?.rankingCriterion||'PENDING_ADDITIONAL_RULES',
     sourceTypes:advice?.sources||[],sourceReasons:v.inspectionReasons,

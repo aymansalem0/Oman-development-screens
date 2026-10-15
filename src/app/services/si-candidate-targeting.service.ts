@@ -24,6 +24,9 @@ export interface SiVesselCandidate{
   currentRisk:SiCandidate['currentRisk'];
   arrivalAt?:string|null;arrivalStatus?:'MISSING'|'VERIFIED'|'CONFLICT';
   arrivalSourceReference?:string|null;
+  /** Display-only when POC demo is enabled; NEVER an authoritative ETA. */
+  demoArrivalAt?:string|null;
+  demoArrivalStatus?:'POC_ESTIMATE_ONLY'|null;
   departureAt?:string|null;departureVerified?:boolean;
   departureStatus?:'MISSING'|'VERIFIED'|'CONFLICT';
   departureSourceReference?:string|null;
@@ -242,6 +245,10 @@ export interface SiInspectionPlanState{
  capacityDraft?:{
   status:string;generatedAt:string;demoMode:boolean;
   erpSnapshotId:string;selectedImos:string[];
+  c01SelectedImos?:string[];inPlanCount?:number;
+  capacityExcluded?:{imo:string;originalPriority:number;
+   reasonCode:string;disposition:string;remainsInCandidatePool:boolean}[];
+  pipelineStages?:{stage:string;status:string;count:number;description:string}[];
   mandatoryUnscheduled:string[];outsidePlanPeriod:string[];
   proposedAssignments:{imo:string;inspectorName:string;startLocal:string;
    endLocal:string;portName:string;crossPort:boolean}[];

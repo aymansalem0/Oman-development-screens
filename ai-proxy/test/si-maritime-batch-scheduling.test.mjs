@@ -92,6 +92,22 @@ test('Never double-book a single engineer or exceed batch daily limits',()=>{
  assert.equal(result.summary.unscheduled,1);
  assert.equal(result.rows.filter(x=>x.status==='UNSCHEDULED').length,1);
 });
+test('When one engineer can handle only one of two competing vessels, higher published priority wins',()=>{
+ const oneEngineer=erp();
+ oneEngineer.data.Inspectors=oneEngineer.data.Inspectors.filter(x=>
+   x.inspector_id==='ENG1');
+ oneEngineer.data.Qualifications=oneEngineer.data.Qualifications.filter(x=>
+   x.inspector_id==='ENG1');
+ const singleSlot={buildOptions(input){
+  return {options:[slots[input.imo][0]],exclusions:[]};
+ }};
+ const result=invoke({erpSnapshot:oneEngineer,scheduler:singleSlot});
+ assert.equal(result.summary.proposed,1);
+ assert.equal(result.rows[0].imo,'9328471');
+ assert.equal(result.rows[0].status,'PROPOSED',
+  'rank #1 takes the only verified inspector capacity');
+ assert.equal(result.rows[1].status,'UNSCHEDULED');
+});
 test('Tonnage limits are NOT required; eligibility uses professional regime/type ERP checks',()=>{
  const withoutGt=invoke({gtAuthorizations:[]});
  assert.equal(withoutGt.summary.proposed,2,'No tonnage range required for scheduling');

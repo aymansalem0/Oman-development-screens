@@ -169,6 +169,28 @@ export class SiInspectionPlan{
     structuredClone(state.latest.rows):
     projectInspectionPlan(dashboard,source,current,state.overrides,
       state.carryForward||{});
+  // The saved, source-bound initial Draft MUST show the final
+  // capacity-feasible roster, not all C01 recommendations as 'in plan'.
+  // Source/advisory recommendation remains visible separately. If officer
+  // edits invalidate the draft capacity snapshot, do NOT claim a valid
+  // inspector assignment until capacity is recalculated.
+  const cap=cycle?.capacityDraft;
+  if(!historical&&cap&&!String(cap.status||'').startsWith('STALE_')&&
+     Array.isArray(cap.selectedImos)){
+    const included=new Set(cap.selectedImos),excluded=new Map(
+      (cap.capacityExcluded||[]).map(x=>[x.imo,x]));
+    for(const row of rows){
+      row.planSelected=included.has(row.imo);
+      if(excluded.has(row.imo)){
+        row.capacityDisposition='OUTSIDE_CURRENT_DRAFT_CAPACITY';
+        row.capacityBlocker=excluded.get(row.imo).reasonCode;
+        row.selectionOrigin='C01_SELECTED_BUT_OUTSIDE_DRAFT_CAPACITY';
+        row.effectiveRank=null;
+      }else if(included.has(row.imo)){
+        row.capacityDisposition='IN_CURRENT_DRAFT';
+      }
+    }
+  }
   const manualSelection=rows.some(r=>r.planSelected)&&
     Object.values(state.overrides||{}).some(x=>x?.selected===true);
   const availableCount=rows.filter(r=>r.editable).length;
