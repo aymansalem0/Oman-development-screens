@@ -10,7 +10,7 @@ import {randomUUID} from 'node:crypto';
 import {readFileSync,writeFileSync,renameSync,existsSync,mkdirSync} from 'node:fs';
 import {dirname} from 'node:path';
 import oracledb from 'oracledb';
-import {resolveAssignedInspector} from './si-inspector-identity.mjs';
+import {resolveAssignedInspector,matchesAssignedInspector,pocInspectorIdForActor} from './si-inspector-identity.mjs';
 
 const id=()=>randomUUID(),at=()=>new Date().toISOString();
 const clone=v=>structuredClone(v);
@@ -113,14 +113,33 @@ export class SiScheduleOrders{
   if(!label(actor,160))err('SI_WORK_ORDER_AUTHENTICATED_INSPECTOR_REQUIRED',403);
   const schedules=await this.all();
   return schedules.flatMap(schedule=>schedule.orders
-   .filter(order=>Boolean(resolveAssignedInspector(actor,order.assignment)))
+   .filter(order=>Boolean(matchesAssignedInspector(actor,order.assignment,schedule.mode)))
    .map(order=>({
     planId:schedule.planId,scheduleId:schedule.id,orderId:order.id,
-    imo:order.imo,status:order.status,caseId:order.caseId,
+    imo:order.imo,
+    vesselName:this.targeting.bundles.find(x=>x.imo===order.imo)
+      ?.inlineContext?.vessel?.name||('IMO '+order.imo),
+    status:order.status,caseId:order.caseId,
     assignment:order.assignment,mode:schedule.mode,
+    isMyPocEngineer:schedule.mode==='POC_MOCK'&&
+      order.assignment?.inspectorId===pocInspectorIdForActor(actor),
     checklistStatus:order.checklistStatus,aiStatus:order.aiStatus,
     scopeStatus:order.scopeStatus
    })));
+ }
+ /** Case-scoped access without trusting a browser-supplied employee ID. */
+ async mineOrder(actor,orderId){
+   this.assertReady();
+   if(!UUID.test(orderId||''))err('SI_WORK_ORDER_ID_INVALID',422);
+   const schedules=await this.all();
+   for(const schedule of schedules){
+     const order=schedule.orders.find(x=>x.id===orderId);
+     if(!order)continue;
+     if(!matchesAssignedInspector(actor,order.assignment,schedule.mode))
+       err('SI_WORK_ORDER_NOT_ASSIGNED_TO_SESSION',403);
+     return {schedule,order};
+   }
+   err('SI_WORK_ORDER_NOT_FOUND',404);
  }
  async order(planId,orderId){
   const schedule=await this.byPlan(planId);
@@ -495,7 +514,7 @@ export class SiScheduleOrders{
   const delegated=confirmPocDelegation===true&&schedule.mode==='POC_MOCK';
   if(confirmPocDelegation&&!delegated)
    err('SI_POC_DELEGATION_ONLY_FOR_MOCK_SCHEDULE',403);
-  const engineer=resolveAssignedInspector(actor,order.assignment);
+  const engineer=matchesAssignedInspector(actor,order.assignment,schedule.mode);
   if(!delegated&&!engineer)
    err('SI_WORK_ORDER_ONLY_ASSIGNED_INSPECTOR_CAN_START',403);
   if(order.status==='FIELD_STARTED')return order;
