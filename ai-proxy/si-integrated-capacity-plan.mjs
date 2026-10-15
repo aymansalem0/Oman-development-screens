@@ -88,8 +88,21 @@ export function selectIntegratedPlanVessels({
  const uae=rows.filter(x=>goodFlag(x.flag))
   .sort((a,b)=>compareInspections(a,b)||a.imo.localeCompare(b.imo));
  const count=(n,p)=>Math.floor(n*p/100);
- const pscSelected=psc.slice(0,count(psc.length,pscRiskRatePercent));
- const uaeSelected=uae.slice(0,count(uae.length,uaeFlagRatePercent));
+ // A saved, source-hash-bound C01 result controls WHICH vessels fill the
+ // quotas. Never backfill an AI rejection with deterministic risk ranking.
+ // Existing legacy drafts without a published configured AI selection policy
+ // keep their original source-backed deterministic behavior.
+ const ai=inspectionPlan.selectionProposal?.aiSelectionValidated===true&&
+   inspectionPlan.selectionProposal.snapshotHash===inspectionPlan.sourceHash?
+   inspectionPlan.selectionProposal:null;
+ const pscAi=ai?new Set(ai.pscRisk.aiSelectedImos):null;
+ const uaeAi=ai?new Set(ai.uaeFlag.aiSelectedImos):null;
+ const pscSelected=ai?
+   psc.filter(v=>pscAi.has(v.imo)).slice(0,count(psc.length,pscRiskRatePercent)):
+   psc.slice(0,count(psc.length,pscRiskRatePercent));
+ const uaeSelected=ai?
+   uae.filter(v=>uaeAi.has(v.imo)).slice(0,count(uae.length,uaeFlagRatePercent)):
+   uae.slice(0,count(uae.length,uaeFlagRatePercent));
  const forced=rows.filter(x=>mandatory(x)||isManualInclude(x));
  const selectedImos=new Set([...forced,...pscSelected,...uaeSelected].map(x=>x.imo));
  const ordered=rows.filter(x=>selectedImos.has(x.imo)).sort((a,b)=>
@@ -110,7 +123,11 @@ export function selectIntegratedPlanVessels({
   selectedImos:roster.map(x=>x.imo),
   overlapImos:pscSelected.filter(x=>uaeSelected.some(y=>y.imo===x.imo))
    .map(x=>x.imo),
-  availableCandidates:rows.length,advisoryOnly:true
+  availableCandidates:rows.length,advisoryOnly:true,
+   selectionMethod:ai?'VERIFIED_C01_AI_WITH_PUBLISHED_QUOTAS':
+     'LEGACY_RULE_BASED_FALLBACK_NO_AI_SELECTION',
+   aiAgentRunId:ai?inspectionPlan.agentRunId:null,
+   selectionPolicyRevision:ai?.policyRevision??null
  };
  return {planId:plan.id,sourceHash:inspectionPlan.sourceHash,
   planRevision:plan.revision,roster,quotas,
