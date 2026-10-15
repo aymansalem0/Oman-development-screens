@@ -300,7 +300,12 @@ export function proposeMaritimeBatchSchedule({
       localDate(Date.parse(x.startUtc))===day).length;
     if(!limit||booked+current>=limit)continue;
     branches.push({schedule:[...state.schedule,opt],
-      score:state.score+opt.score,key:state.key+':'+job.imo+'-'+opt.optionId});
+      score:state.score+opt.score+
+        // Demo preference NEVER creates an infeasible slot or substitutes
+        // a real ERP credential. It nudges feasible proposals toward the
+        // operator's signed-in synthetic engineer (when available).
+        (mockOverlay&&erpSnapshot.pocSelfInspectorId===opt.inspectorId?35:0),
+      key:state.key+':'+job.imo+'-'+opt.optionId});
    }
   }
   branches.sort(stateSort);states=branches.slice(0,BEAM_WIDTH);
@@ -362,6 +367,7 @@ export function proposeMaritimeBatchSchedule({
    policyRevision:policy.revision,requests,nmcReferrals,existingBookings}),
   planId:plan.id,planNumber:plan.number,planRevision:plan.revision,
   erpSnapshotId:erpSnapshot.snapshotId,policyRevision:policy.revision,
+  pocSelfInspectorId:mockOverlay?erpSnapshot.pocSelfInspectorId||null:null,
   solver:'HARD_CONSTRAINTS_PLUS_BOUNDED_BEAM_SEARCH_NO_GENERATIVE_AI',
   summary:{total:rows.length,proposed:chosen.length,
    unscheduled:rows.length-chosen.length,caseWrites:0,bookingWrites:0},

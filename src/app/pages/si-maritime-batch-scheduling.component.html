@@ -100,6 +100,8 @@
       <h2>{{copy('Available engineer roster — ERP POC snapshot',
         'المهندسون المتاحون — من بيانات ERP التجريبية')}}</h2>
       <span *ngIf="ctx.demoMode" class="marine-demo-chip">POC MOCK ENGINEERS</span>
+      <a *ngIf="ctx.pocSelfInspectorId" routerLink="/moei/smart-inspection/my-work-orders" class="marine-demo-chip">
+        {{copy('My Work Orders →','أوامر التكليف الخاصة بي ←')}}</a>
       <span class="marine-tag">{{ctx.workforce?.length}}
         {{copy('active engineers','مهندسين نشطين')}}</span>
     </div>
@@ -111,8 +113,12 @@
           'التخصصات والطاقة اليومية من ملف ERP المستورد، وتخضع لفحص الورديات والإجازات والحجوزات.')}}
     </p>
     <div class="marine-workforce">
-      <article *ngFor="let engineer of ctx.workforce">
+      <article *ngFor="let engineer of ctx.workforce"
+        [class.marine-my-poc-engineer]="ctx.pocSelfInspectorId===engineer.inspectorId">
         <strong>{{engineer.inspectorName}}</strong>
+        <span *ngIf="ctx.pocSelfInspectorId===engineer.inspectorId" class="marine-demo-chip">
+          {{copy('MY POC ACCOUNT · ASSIGNABLE ENGINEER','حسابي في POC · ضمن المهندسين المتاحين للإسناد')}}
+        </span>
         <small>{{engineer.inspectorId}} · {{copy('Daily capacity','الطاقة اليومية')}}: {{engineer.dailyCapacity}}</small>
         <small>{{copy('Qualified scopes','النطاقات المؤهلة')}}: {{engineer.qualifications.join(' · ')||'—'}}</small>
         <small *ngIf="engineer.homePortId">{{copy('Home port','ميناء العمل')}}: {{engineer.homePortId}}</small>

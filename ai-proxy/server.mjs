@@ -42,8 +42,12 @@ import {SiInspectionPlan} from './si-inspection-plan.mjs';
 import {SiRollingPlanStore,SiRollingPlanError} from './si-rolling-plan-store.mjs';
 import {SiBulkInspectionPlan,SiBulkApprovalError} from './si-bulk-inspection-plan.mjs';
 import {mockSiP01,mockSiA04,mockSiC01} from './si-agent-mock.mjs';
-import { SiInspectionPreparation, SiPreparationError } from './si-inspection-preparation.mjs';
-import {assembleSiVesselDossier} from './si-vessel-dossier.mjs';
+import { SiInspectionPreparation, SiPreparationError, validateA04 } from './si-inspection-preparation.mjs';
+import {assembleSiVesselDossier,assemblePendingWorkOrderDossier} from './si-vessel-dossier.mjs';
+import {projectGuidedInspection,findGuidedStep,
+ buildA04FocusedFieldRequest,projectA04FocusedFieldAdvice
+} from './si-guided-inspection.mjs';
+import {pocInspectorIdForActor} from './si-inspector-identity.mjs';
 import {suggestCapacityExceptionActions} from './si-capacity-exception-alternatives.mjs';
 import { SiInspectionLifecycle, SiLifecycleError } from './si-inspection-lifecycle.mjs';
 import {SiScheduleOrders,SiWorkOrderError} from './si-schedule-orders.mjs';
@@ -384,6 +388,18 @@ const siScheduleOrders=new SiScheduleOrders({
  targeting:siTargeting,preparation:siPreparation,
  checklists:siChecklistField,lifecycle:siLifecycle,cases
 });
+/** Server-only assignment guard reused by every inspector-facing route. */
+async function assignedGuidedView(sessionActor,orderId){
+ const {schedule,order}=await siScheduleOrders.mineOrder(sessionActor,orderId);
+ if(!order.caseId)
+   throw new SiWorkOrderError('SI_WORK_ORDER_ACTIVATE_FIRST',409);
+ const [preparation,checklist,lifecycle]=await Promise.all([
+   siPreparation.get(order.caseId),siChecklistField.preview(order.caseId),
+   siLifecycle.snapshot(order.caseId)
+ ]);
+ return {schedule,order,preparation,checklist,lifecycle,
+   guide:projectGuidedInspection({order,preparation,checklist,lifecycle})};
+}
 const actionPlanRuns=new Set(); // process-local duplicate A01 invocation guard; version-lock remains authoritative
 let alertScanTimer=null;
 function rescheduleAlertScan(){
@@ -1195,7 +1211,7 @@ const server = createServer(async (req, res) => {
           return respond(res,409,{error:'SI_INTEGRATED_SCHEDULING_BATCH_LIMIT_40'});
         const original=siErp.requireSnapshot();
         const workforce=body.demoMode?
-          buildPocErpSchedulingOverlay(original):original;
+          buildPocErpSchedulingOverlay(original,{operator:moeiAuth.require(req)}):original;
         const planDraft=makeCapacityDraftPlan(plan,selection);
         const source=maritimePlanSchedulingContext(planDraft,dashboard,original);
         const context=body.demoMode?
@@ -1387,7 +1403,7 @@ const server = createServer(async (req, res) => {
         const demo=query.get('demo')==='1';
         if(demo&&process.env.SI_SCHEDULING_DEMO_MODE!=='true')
           return respond(res,403,{error:'SI_POC_DEMO_MODE_NOT_ENABLED'});
-        const erp=demo?buildPocErpSchedulingOverlay(originalErp):originalErp;
+        const erp=demo?buildPocErpSchedulingOverlay(originalErp,{operator:moeiAuth.require(req)}):originalErp;
         const source=maritimePlanSchedulingContext(plan,dashboard,originalErp);
         return respond(res,200,demo?
           fillPocSchedulingVisitContext(source,erp):source);
@@ -1426,7 +1442,7 @@ const server = createServer(async (req, res) => {
           return respond(res,422,{error:'SI_POC_DEMO_SOURCE_REQUIRES_DEMO_MODE'});
         const plan=await siRollingPlans.get(v2Schedule[1]);
         const originalSnapshot=siErp.requireSnapshot();
-        const snapshot=demo?buildPocErpSchedulingOverlay(originalSnapshot):originalSnapshot;
+        const snapshot=demo?buildPocErpSchedulingOverlay(originalSnapshot,{operator:moeiAuth.require(req)}):originalSnapshot;
         const dashboard=await siTargeting.dashboard();
         const sourceContext=maritimePlanSchedulingContext(plan,dashboard,originalSnapshot);
         const context=demo?
@@ -1498,7 +1514,147 @@ const server = createServer(async (req, res) => {
         dashboards.assertRole(req,'EDITOR');
         const identity=moeiAuth.require(req);
         const actor=identity.email||identity.username;
-        return respond(res,200,{status:'ok',orders:await siScheduleOrders.mine(actor)});
+        return respond(res,200,{status:'ok',orders:await siScheduleOrders.mine(actor),
+          me:{session:actor,inspectorPocId:pocInspectorIdForActor(actor),
+            demoOnly:true,
+            officialErpIdentityRequiresServerMapping:true}});
+      }
+      // Inspector workspace: all reads and writes are bound to the
+      // authenticated session's assigned order, never a client-supplied IMO
+      // or inspector ID. No unrelated vessel dossiers are exposed.
+      const myOrder=/^\/api\/si\/v1\/maritime-scheduling\/my-work-orders\/([a-f0-9-]{36})(?:\/(dossier|guide)(?:\/(answers|ai))?)?$/.exec(path);
+      if(myOrder){
+        dashboards.assertRole(req,'EDITOR');
+        const session=moeiAuth.require(req,{mutate:req.method==='POST'});
+        const actor=session.email||session.username;
+        const orderId=myOrder[1],area=myOrder[2],task=myOrder[3];
+        if(!siScheduleOrders.ready)
+          return respond(res,503,{error:'SI_SCHED_MIGRATION_019_REQUIRED'});
+        if(area==='dossier'&&!task&&req.method==='GET'){
+          const {schedule,order}=await siScheduleOrders.mineOrder(actor,orderId);
+          if(order.caseId){
+            const [view,checklist]=await Promise.all([
+              siPreparation.get(order.caseId),siChecklistField.preview(order.caseId)
+            ]);
+            return respond(res,200,assembleSiVesselDossier({
+              view,schedule,order,checklist
+            }));
+          }
+          const [plan,risk]=await Promise.all([
+            siRollingPlans.get(order.planId),
+            riskPolicy.ready?riskPolicy.vessel(order.imo):Promise.resolve(null)
+          ]);
+          return respond(res,200,assemblePendingWorkOrderDossier({
+            order,schedule,plan,risk,
+            bundle:siTargeting.bundles.find(x=>x.imo===order.imo)
+          }));
+        }
+        if(area==='guide'){
+          const current=await assignedGuidedView(actor,orderId);
+          if(!task&&req.method==='GET')
+            return respond(res,200,current.guide);
+          if(task==='answers'&&req.method==='POST'){
+            if(current.order.status!=='FIELD_STARTED'||
+               current.guide.lifecycleStage!=='IN_FIELD')
+              return respond(res,409,{error:'SI_FIELD_INSPECTION_NOT_STARTED'});
+            const body=await requestJson(req,8192);
+            const step=findGuidedStep(current.guide,body.stepId);
+            if(!step)return respond(res,404,{error:'SI_GUIDED_STEP_NOT_FOUND'});
+            if(!Number.isInteger(body.expectedLifecycleVersion)||
+               body.expectedLifecycleVersion!==current.guide.lifecycleVersion||
+               (current.checklist.saved&&body.expectedChecklistVersion!==
+                 current.guide.publishedSnapshotVersion))
+              return respond(res,409,{error:'SI_GUIDED_SOURCE_CHANGED_RELOAD'});
+            const values=body.values&&typeof body.values==='object'&&
+              !Array.isArray(body.values)?body.values:{};
+            const response=values.BOOLEAN;
+            const note=typeof values.NOTE==='string'?values.NOTE.trim():'';
+            const naReason=typeof body.naReason==='string'?body.naReason.trim():'';
+            const severity=body.severity;
+            const evidenceRefs=Array.isArray(body.evidenceRefs)?body.evidenceRefs:[];
+            if(Object.keys(values).some(k=>!step.fields.includes(k))||
+               !['YES','NO','NA',undefined].includes(response)||
+               note.length>1600||naReason.length>500||
+               evidenceRefs.length>12||evidenceRefs.some(x=>
+                 typeof x!=='string'||!current.preparation.context.evidenceManifestRefs.includes(x)))
+              return respond(res,422,{error:'SI_GUIDED_ANSWER_FIELDS_INVALID'});
+            const life=step.members.filter(x=>x.kind==='LIFECYCLE');
+            const published=step.members.filter(x=>x.kind==='PUBLISHED');
+            if(life.length&&(!response||
+              (response==='NA'&&!naReason)||
+              (response==='NO'&&!['MINOR','MAJOR','CRITICAL'].includes(severity))))
+              return respond(res,422,{error:'SI_GUIDED_LEGACY_STATUS_REQUIRED'});
+            if(published.length&&Object.keys(values).length===0)
+              return respond(res,422,{error:'SI_GUIDED_PUBLISHED_ANSWER_REQUIRED'});
+            // The field actor must equal the immutable assigned lifecycle
+            // name; the verified session mapping authorizes this signature.
+            const sign=current.order.assignment.inspectorName;
+            if(published.length){
+              const answers=published.map(m=>({
+                itemId:m.id,
+                values:Object.fromEntries(Object.entries(values)
+                  .filter(([key])=>m.fields.includes(key)))
+              }));
+              await siChecklistField.saveAnswers(current.order.caseId,{
+                expectedVersion:current.guide.publishedSnapshotVersion,
+                actor:sign,answers
+              });
+            }
+            if(life.length){
+              const status=response==='YES'?'PASS':
+                response==='NO'?'DEFICIENCY':'NOT_APPLICABLE';
+              await siLifecycle.apply(current.order.caseId,{
+                action:'SAVE_CHECKS',
+                expectedVersion:body.expectedLifecycleVersion,
+                actor:sign,data:{checks:life.map(m=>({
+                  id:m.id,status,severity:status==='DEFICIENCY'?severity:null,
+                  note,naReason:status==='NOT_APPLICABLE'?naReason:'',
+                  evidenceRefs
+                }))}
+              });
+            }
+            const next=await assignedGuidedView(actor,orderId);
+            return respond(res,200,{status:'INSPECTOR_ANSWER_SAVED',
+              version:next.guide.lifecycleVersion,
+              checklistVersion:next.guide.publishedSnapshotVersion,
+              guide:next.guide,statutoryApproval:false});
+          }
+          if(task==='ai'&&req.method==='POST'){
+            if(!['READY_FOR_FIELD','FIELD_STARTED'].includes(current.order.status))
+              return respond(res,409,{error:'SI_WORK_ORDER_FIELD_SCOPE_NOT_APPROVED'});
+            const body=await requestJson(req,4096);
+            if(body.confirmRun!==true||
+              !['en','ar'].includes(body.language||'en')||
+              body.expectedLifecycleVersion!==current.guide.lifecycleVersion)
+              return respond(res,409,{error:'SI_GUIDED_AI_CONFIRMATION_OR_SOURCE_CHANGED'});
+            const step=findGuidedStep(current.guide,body.stepId);
+            if(!step)return respond(res,404,{error:'SI_GUIDED_STEP_NOT_FOUND'});
+            if(!siPreparation.enabled)
+              return respond(res,503,{error:'SI_A04_NOT_ENABLED'});
+            const prep=current.preparation;
+            if(!prep.context.risk?.evaluationId||
+              !prep.context.evidenceManifestRefs?.length)
+              return respond(res,409,{error:'SI_FIELD_AI_SAVED_RISK_AND_SOURCE_EVIDENCE_REQUIRED'});
+            const request=buildA04FocusedFieldRequest({
+              preparation:prep,step,language:body.language||'en'
+            });
+            let raw;
+            try{raw=siAiProvider==='mock'?mockSiA04(request):
+              await fleetAgentCall('a04',request);}
+            catch{return respond(res,502,{error:'SI_FIELD_AI_PROVIDER_UNAVAILABLE'});}
+            const validated=validateA04(raw,{
+              checkIds:prep.context.baseChecklistItemIds,
+              evidenceIds:prep.context.evidenceManifestRefs
+            });
+            return respond(res,200,{
+              ...projectA04FocusedFieldAdvice(validated,step),
+              provider:siAiProvider.toUpperCase(),
+              mock:siAiProvider==='mock',
+              note:'AI suggests field actions only. No answers or official findings are saved.'
+            });
+          }
+        }
+        return respond(res,405,{error:'METHOD_NOT_ALLOWED'});
       }
       // SI-S02: supervisor schedule approval -> traceable per-vessel engineer
       // work orders -> mandatory checklist initialization -> separately
@@ -1530,7 +1686,7 @@ const server = createServer(async (req, res) => {
             return respond(res,403,{error:'SI_POC_DEMO_MODE_NOT_ENABLED'});
           const plan=await siRollingPlans.get(planId);
           const original=siErp.requireSnapshot(),dashboard=await siTargeting.dashboard();
-          const snapshot=body.demoMode?buildPocErpSchedulingOverlay(original):original;
+          const snapshot=body.demoMode?buildPocErpSchedulingOverlay(original,{operator:moeiAuth.require(req)}):original;
           const sourceContext=maritimePlanSchedulingContext(plan,dashboard,original);
           const context=body.demoMode?
             fillPocSchedulingVisitContext(sourceContext,snapshot):sourceContext;

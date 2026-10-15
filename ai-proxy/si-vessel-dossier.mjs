@@ -135,3 +135,75 @@ export function assembleSiVesselDossier({view,schedule=null,
   readOnly:true,aiCallsOnGet:0,caseWrites:0,bookingWrites:0
  };
 }
+
+/**
+ * BEFORE activation there is no SI_INSPECTION_CASE, so present a SOURCE
+ * dossier rather than pretending that an A04 dossier/checklist already exists.
+ * This is a pure projection of the stored fleet bundle and approved roster.
+ */
+export function assemblePendingWorkOrderDossier({
+ order,schedule,bundle,plan,risk=null
+}={}){
+ if(!order?.imo||!order?.id)throw Error('SI_PENDING_ORDER_REQUIRED');
+ const v=bundle?.inlineContext?.vessel||{};
+ const context=bundle?.inlineContext||{};
+ const planVessel=plan?.approvedVessels?.find(x=>x.imo===order.imo)||null;
+ const reasons=list(planVessel?.inspectionReasons).map(r=>({
+  sourceType:r.sourceType,sourceReference:r.sourceReference,
+  inspectionRegime:r.inspectionRegime,
+  narrative:r.reason||null,evidenceIds:unique(r.evidenceIds),
+  sourceApproval:r.sourceApproval||null
+ }));
+ return {status:'SOURCE_ONLY_PENDING_WORK_ORDER_ACTIVATION',
+  schema:'MOEI-SI-VESSEL-DOSSIER-V1',caseId:null,imo:order.imo,
+  revision:0,preparedAt:null,preparedBy:null,
+  sections:{
+   identity:{imo:order.imo,vesselName:v.name||v.vesselName||null,
+    flag:v.flag||null,vesselType:v.vesselType||null,caseId:null,
+    planId:order.planId,regimes:unique(list(planVessel?.regimes)),
+    approvedBy:plan?.approvedBy||null},
+   assignments:{
+    orderId:order.id,status:order.status,scheduleId:schedule?.id||null,
+    inspectorId:order.assignment?.inspectorId||null,
+    inspectorName:order.assignment?.inspectorName||null,
+    portName:order.assignment?.portName||null,
+    startLocal:order.assignment?.startLocal||null,
+    crossPort:order.assignment?.crossPort===true,
+    liveErpBookingConfirmed:false
+   },
+   referrals:{allSourceReasons:reasons,objectives:[],inspectionScopes:[],
+    distinctSourceCount:new Set(reasons.map(x=>x.sourceType)).size},
+   risk:risk?{score:risk.riskScore,level:risk.riskLevel,
+    evaluationId:risk.sourceAssessmentId,policyRevision:risk.policyRevision,
+    status:'SAVED_NMC_SOURCE_ASSESSMENT_NOT_AI_RECALCULATED'}:null,
+   sourceEvidence:{
+    bundleRef:bundle?'VBL-'+order.imo:null,
+    evidenceManifestRefs:unique(list(bundle?.evidenceIds)),
+    tracking:context.tracking||null,
+    certificates:list(context.certificates),
+    inspectionHistory:list(context.inspections),
+    openDeficiencies:list(context.deficiencies).filter(x=>
+      String(x.status||'').toUpperCase()==='OPEN'),
+    documents:[],
+    externalDocumentsVerified:false,
+    evidenceProvenance:'SAVED_VESSEL_BUNDLE_READ_ONLY'
+   },
+   inspectionChecklist:{
+    mandatoryBaseItemIds:[],
+    publishedTemplateSnapshotPresent:false,checklistStatus:'NOT_PREPARED',
+    itemsPrepared:false,aiCannotDeleteMandatoryItems:true,
+    manualScopeApprovalRequired:true
+   },
+   aiAnalysis:{
+    status:'NOT_PREPARED',enabled:false,generated:false,mock:false,
+    modelDraft:null,supervisorReview:null,aiNotStatutoryFinding:true
+   }
+  },
+  missingEvidence:['INSPECTION_CASE_NOT_ACTIVATED',
+   'PREPARATION_AND_PINNED_CHECKLIST_NOT_CREATED',
+   'A04_ADVISORY_NOT_YET_PREPARED'],
+  readiness:{preparationSaved:false,aiGenerated:false,aiReviewed:false,
+   mandatoryChecklistPreserved:true,regulatoryApprovalImplied:false,
+   liveBookingConfirmed:false},
+  readOnly:true,aiCallsOnGet:0,caseWrites:0,bookingWrites:0};
+}

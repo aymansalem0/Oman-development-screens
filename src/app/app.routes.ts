@@ -28,6 +28,7 @@ const rawRoutes: Routes = [
   { path: 'moei/smart-inspection/candidates/demo', loadComponent: () => import('./pages/smart-inspection-candidate-center.component').then(m => m.SmartInspectionCandidateCenterComponent) },
   { path: 'moei/smart-inspection/preparation', loadComponent: () => import('./pages/si-preparation-queue.component').then(m => m.SiPreparationQueueComponent) },
   { path: 'moei/smart-inspection/scheduling/plan/:planId', loadComponent: () => import('./pages/si-maritime-batch-scheduling.component').then(m => m.SiMaritimeBatchSchedulingComponent) },
+  { path: 'moei/smart-inspection/my-work-orders/:orderId/execute', loadComponent: () => import('./pages/si-guided-inspection.component').then(m => m.SiGuidedInspectionComponent) },
   { path: 'moei/smart-inspection/my-work-orders', loadComponent: () => import('./pages/si-my-work-orders.component').then(m => m.SiMyWorkOrdersComponent) },
   { path: 'moei/smart-inspection/scheduling/referrals', loadComponent: () => import('./pages/si-electronic-scheduling.component').then(m => m.SiElectronicSchedulingComponent) },
   { path: 'moei/smart-inspection/scheduling', loadComponent: () => import('./pages/si-scheduling-plan-center.component').then(m => m.SiSchedulingPlanCenterComponent) },

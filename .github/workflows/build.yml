@@ -98,6 +98,8 @@ jobs:
         run: node --test ai-proxy/test/si-c01-policy-lifecycle-uat.test.mjs
       - name: SI-C01 bounded 112-path POC data and small plan
         run: node --test ai-proxy/test/si-poc-small-plan-policy.test.mjs
+      - name: Assigned inspector POC identity, source dossier and guided A04 step regression
+        run: node --test ai-proxy/test/si-inspector-guided-work-orders.test.mjs
 
       - name: SI-01 rolling to SI-02 approval and day-two cycle end-to-end
         run: node --test ai-proxy/test/si-rolling-endtoend.test.mjs
