@@ -1,6 +1,7 @@
 import {LanguageService} from '../services/language.service';
 import {MoeiAuthService} from '../services/moei-auth.service';
 import {CommonModule} from '@angular/common';
+import {HttpClient} from '@angular/common/http';
 import {Component,OnInit,ViewChild,ElementRef} from '@angular/core';
 import {FormsModule} from '@angular/forms';
 import {RouterLink} from '@angular/router';
@@ -10,6 +11,28 @@ import {SiCandidate,SiCandidateStatus,SiCandidateTargetingService,
   from '../services/si-candidate-targeting.service';
 import {SiPscSelectionService,PscSelectionPool} from '../services/si-psc-selection.service';
 
+interface DraftVisitRequest {
+ imo:string;portId:string;vesselType:string;regime:string;locationType:string;
+ locationName:string;siteAccessConfirmed:boolean;durationMinutes:number;
+ earliestLocal:string;latestFinishLocal:string;windowSource:string;
+ windowEvidenceReference:string;
+}
+interface DraftIntegratedPreview {
+ previewId:string;proposalHash:string;selectionHash:string;
+ metadata:{title:string;startsOn:string;endsOn:string;notes:string;demoMode:boolean};
+ provider:string;candidateCount:number;selectedCount:number;
+ feasibleCount:number;unscheduledCount:number;demoOnly:boolean;
+ mandatoryUnscheduled:string[];outsidePlanPeriod:string[];
+ readyForSupervisorReview:boolean;expiresInMinutes:number;
+ visitRequests:DraftVisitRequest[];
+ visitInputs:{imo:string;portSourceLocked:boolean;sourceArrivalLocked:boolean;
+  sourceDepartureLocked:boolean}[];
+ ports:{portId:string;name:string}[];
+ items:{imo:string;planRank:number;vesselName:string;priorityReason:string|null;
+  priorityCriterion:string;mandatory:boolean;status:string;blocker:string|null;
+  inspectorName:string|null;portName:string|null;startLocal:string|null;
+  endLocal:string|null;sourceTypes:string[]}[];
+}
 type SourceFilter='ALL'|'NMC_CASE'|'SERVICE_REQUEST'|'PSC_PORT_CALL';
 type StatusFilter='ALL'|SiCandidateStatus;
 @Component({
@@ -29,6 +52,11 @@ export class SiCandidateWorkbenchComponent implements OnInit{
   rollingPlans:SiRollingPlan[]=[];activePlanId:string|null=null;
   planningError='';planningBusy=false;newPlanVisible=false;
   newPlan={title:'',startsOn:'',endsOn:'',notes:''};
+  newDraftDemoMode=true;newDraftAiConsent=false;newDraftCostConsent=false;
+  newDraftProvider:'AIRIA'|'MOCK'|'UNKNOWN'='UNKNOWN';
+  newDraftExpectedBatches=0;newDraftPreview:DraftIntegratedPreview|null=null;
+  newDraftRequests:DraftVisitRequest[]=[];newDraftChanged=false;
+  newDraftBusy=false;newDraftNotice='';
   get activePlan():SiRollingPlan|undefined{
     return this.rollingPlans.find(p=>p.id===this.activePlanId);
   }
@@ -39,39 +67,120 @@ export class SiCandidateWorkbenchComponent implements OnInit{
     const date=new Date(),two=(n:number)=>String(n).padStart(2,'0');
     return [date.getFullYear(),two(date.getMonth()+1),two(date.getDate())].join('-');
   }
-  openCreatePlan():void{
-    this.newPlanVisible=true;this.planningError='';
-    const day=this.localDate();
-    this.newPlan={title:'Inspection Plan '+day,startsOn:day,endsOn:day,
-      notes:''};
+  private localDayOffset(days:number):string{
+    const date=new Date();date.setDate(date.getDate()+days);
+    const two=(n:number)=>String(n).padStart(2,'0');
+    return [date.getFullYear(),two(date.getMonth()+1),two(date.getDate())].join('-');
   }
-  loadRollingPlans():void{
-    this.api.rollingPlans().subscribe({
-      next:r=>{
-        this.rollingPlans=r.plans;
-        // An earlier transient API failure must not keep a misleading red
-        // error banner visible after the rolling-plan catalog has recovered.
-        this.planningError='';
-      },
-      error:e=>{this.planningError=e?.error?.error||'SI_ROLLING_PLANS_UNAVAILABLE';}
+  openCreatePlan():void{
+    this.newPlanVisible=true;this.planningError='';this.newDraftNotice='';
+    this.newDraftPreview=null;this.newDraftRequests=[];
+    this.newDraftChanged=false;this.newDraftAiConsent=false;this.newDraftCostConsent=false;
+    const start=this.localDayOffset(1);
+    this.newPlan={title:'Inspection Plan '+start,startsOn:start,
+      endsOn:this.localDayOffset(7),notes:''};
+    this.newDraftExpectedBatches=0;this.newDraftProvider='UNKNOWN';
+    // Read-only preflight: no Airia charges, no plan records.
+    this.api.candidateAiPreview(this.editorKey.trim()).subscribe({
+      next:info=>{this.newDraftExpectedBatches=info.expectedBatches||1;
+        this.newDraftProvider=info.provider;},
+      error:()=>{this.newDraftProvider='UNKNOWN';}
     });
   }
-  createRollingPlan():void{
-    if(this.planningBusy)return;
-    if(!this.newPlan.title.trim()||!this.newPlan.startsOn||!this.newPlan.endsOn||
-       this.newPlan.endsOn<this.newPlan.startsOn){
-      this.planningError=this.copy('Enter a title and valid execution period.',
-       'أدخل اسم الخطة وفترة تنفيذ صحيحة.');return;
+  draftParametersChanged():void{
+    this.newDraftPreview=null;this.newDraftRequests=[];
+    this.newDraftChanged=false;this.newDraftNotice='';
+  }
+  draftVisitsChanged():void{
+    this.newDraftChanged=true;this.newDraftNotice='';
+  }
+  private draftIssue(e:any):string{
+    const code=e?.error?.error||'SI_INTEGRATED_DRAFT_REQUEST_FAILED';
+    const count=e?.error?.requiredBatches;
+    if(code==='SI_C01_BATCH_COUNT_CONFIRMATION_REQUIRED'&&
+      Number.isInteger(count)&&count>0)this.newDraftExpectedBatches=count;
+    const reasons=Object.entries(e?.error?.failureCounts||{})
+      .filter(([,n])=>typeof n==='number'&&n>0)
+      .map(([key,n])=>key+' ('+n+')').slice(0,3).join(', ');
+    return code+(reasons?' · '+reasons:'')+
+      (e?.error?.reasonCode?' · '+e.error.reasonCode:'');
+  }
+  generateIntegratedDraft():void{
+    if(this.newDraftBusy||!this.newDraftAiConsent||!this.newPlan.title.trim()||
+      !this.newPlan.startsOn||!this.newPlan.endsOn||
+      this.newPlan.endsOn<this.newPlan.startsOn)return;
+    if(this.newDraftProvider==='UNKNOWN'){
+      this.planningError=this.copy(
+        'Cannot verify C01 provider. Reload the preflight before running AI.',
+        'تعذر معرفة مزود C01. أعد تحميل بيانات المرشحين قبل تشغيل AI.');return;
     }
-    this.planningBusy=true;this.planningError='';
-    this.api.createRollingPlan(this.newPlan).subscribe({
-      next:p=>{
-       this.planningBusy=false;this.newPlanVisible=false;
-       this.activePlanId=p.id;this.plan=null;this.clearBulkSelection();this.loadRollingPlans();
-       this.loadInspectionPlan();
+    if(this.newDraftProvider==='AIRIA'&&!this.newDraftCostConsent){
+      this.planningError=this.copy('Confirm Airia cost before generating.',
+        'يجب تأكيد تكلفة تشغيل Airia قبل إنشاء المقترح.');return;
+    }
+    if(!window.confirm(this.copy(
+      'Generate a single integrated draft proposal: C01 candidate selection, deterministic priority and capacity-verified inspector slots? '+this.newDraftExpectedBatches+
+      ' C01 batch(es). No approval, booking or work orders.',
+      'هل تريد توليد مقترح متكامل للسفن والأولوية والمهندسين والمواعيد؟ عدد دفعات C01: '+
+      this.newDraftExpectedBatches+' دون اعتماد أو حجز أو أوامر تكليف؟')))return;
+    this.newDraftBusy=true;this.planningError='';this.newDraftNotice='';
+    this.newDraftPreview=null;this.newDraftRequests=[];this.newDraftChanged=false;
+    this.http.post<DraftIntegratedPreview>('/api/si/v1/inspection-plans/draft-preview',{
+      ...this.newPlan,demoMode:this.newDraftDemoMode,
+      confirmAi:true,confirmCost:this.newDraftCostConsent,
+      confirmBatchCount:this.newDraftExpectedBatches||1
+    }).subscribe({
+      next:x=>{this.newDraftBusy=false;this.newDraftPreview=x;
+        this.newDraftRequests=x.visitRequests.map(v=>({...v}));
+        this.newDraftNotice=this.copy(
+          'Candidate, priority and workforce-capacity proposal generated. Review exceptions before saving.',
+          'تم إعداد مقترح متكامل للسفن والأولويات وطاقة المهندسين؛ راجع الاستثناءات قبل الحفظ.');},
+      error:e=>{this.newDraftBusy=false;this.planningError=this.draftIssue(e);}
+    });
+  }
+  recalculateIntegratedDraft():void{
+    if(this.newDraftBusy||!this.newDraftPreview)return;
+    this.newDraftBusy=true;this.planningError='';this.newDraftNotice='';
+    this.http.post<DraftIntegratedPreview>('/api/si/v1/inspection-plans/draft-recalculate',{
+      previewId:this.newDraftPreview.previewId,
+      requests:this.newDraftRequests
+    }).subscribe({
+      next:x=>{this.newDraftBusy=false;this.newDraftPreview=x;
+        this.newDraftRequests=x.visitRequests.map(v=>({...v}));
+        this.newDraftChanged=false;
+        this.newDraftNotice=this.copy(
+          'Capacity recalculated under the source rules without another AI call.',
+          'أُعيد حساب الطاقة وفق المصادر دون استدعاء AI جديد.');},
+      error:e=>{this.newDraftBusy=false;this.planningError=this.draftIssue(e);}
+    });
+  }
+  saveIntegratedDraft():void{
+    if(this.newDraftBusy||!this.newDraftPreview||this.newDraftChanged)return;
+    if(!window.confirm(this.copy(
+      'Save this exact candidate, priority and capacity proposal as an UNAPPROVED draft? Inspector allocations are NOT ERP bookings.',
+      'هل تريد حفظ السفن والأولويات وتكليفات المهندسين المقترحة كمسودة غير معتمدة؟ التخصيصات ليست حجوزات ERP رسمية.')))return;
+    this.newDraftBusy=true;this.planningError='';
+    this.http.post<{planId:string;planStatus:string;planNumber:string;
+      selectedVessels:number;feasibleAssignments:number;capacityExceptions:number}>(
+      '/api/si/v1/inspection-plans/draft-save',{
+       previewId:this.newDraftPreview.previewId,
+       proposalHash:this.newDraftPreview.proposalHash,
+       selectionHash:this.newDraftPreview.selectionHash
+      }).subscribe({
+      next:r=>{
+        this.newDraftBusy=false;this.newPlanVisible=false;
+        this.newDraftPreview=null;this.activePlanId=r.planId;
+        this.clearBulkSelection();this.plan=null;
+        this.loadRollingPlans();this.loadInspectionPlan();
+        this.success=this.copy(
+          'Saved '+r.planNumber+' as '+r.planStatus+': '+r.feasibleAssignments+
+          '/'+r.selectedVessels+' capacity-feasible vessels; '+r.capacityExceptions+
+          ' exception(s). Supervisor approval remains separate.',
+          'حُفظت الخطة '+r.planNumber+': '+r.feasibleAssignments+
+          ' من '+r.selectedVessels+' سفينة قابلة للتنفيذ؛ '+r.capacityExceptions+
+          ' استثناء. الاعتماد خطوة منفصلة.');
       },
-      error:e=>{this.planningBusy=false;
-        this.planningError=e?.error?.error||'SI_ROLLING_PLAN_CREATE_FAILED';}
+      error:e=>{this.newDraftBusy=false;this.planningError=this.draftIssue(e);}
     });
   }
   openRollingPlan(p:SiRollingPlan):void{
@@ -562,7 +671,8 @@ export class SiCandidateWorkbenchComponent implements OnInit{
   }
 
   constructor(private readonly api:SiCandidateTargetingService,public readonly lang:LanguageService,
-  public readonly auth:MoeiAuthService,private readonly pscSelection:SiPscSelectionService){}
+  public readonly auth:MoeiAuthService,private readonly pscSelection:SiPscSelectionService,
+  private readonly http:HttpClient){}
   copy(en:string,ar:string):string{return this.lang.pick(en,ar);}
   ngOnInit():void{this.refresh();}
   refresh():void{
