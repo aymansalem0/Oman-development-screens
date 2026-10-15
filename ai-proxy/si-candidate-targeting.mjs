@@ -90,16 +90,46 @@ export function getSiC01AdvisoryRules(config){
     priorityInstructions:value.priorityInstructions.trim()
   };
 }
+/**
+ * Business-owned SI-C01 SELECTION policy. Pool B: UAE-flagged vessels are
+ * drawn ONLY from source-eligible Candidate Center vessels (not the fleet).
+ * These are second-stage candidate-vessel sampling rates AFTER the separately
+ * published PSC event quota.  Never silently apply them to raw Port Calls.
+ * Defaults reflect the pre-existing plan wizard 15% / 0% and are NOT statutory.
+ */
+export const SI_SELECTION_POLICY_DEFAULT=Object.freeze({
+  pscRiskRatePercent:15,uaeFlagRatePercent:0,
+  uaePoolMode:'ELIGIBLE_CANDIDATES_ONLY',
+  pscPoolMode:'PUBLISHED_PSC_SHORTLIST_ONLY',
+  aiSelectionMode:'RECOMMEND_WITHIN_ELIGIBLE_QUOTAS'
+});
+export function getSiSelectionPolicy(config){
+  const raw=config?.selection??SI_SELECTION_POLICY_DEFAULT;
+  const keys=Object.keys(SI_SELECTION_POLICY_DEFAULT);
+  if(!raw||typeof raw!=='object'||Array.isArray(raw)||
+     Object.keys(raw).sort().join('|')!==[...keys].sort().join('|')||
+     !Number.isInteger(raw.pscRiskRatePercent)||
+     raw.pscRiskRatePercent<0||raw.pscRiskRatePercent>100||
+     !Number.isInteger(raw.uaeFlagRatePercent)||
+     raw.uaeFlagRatePercent<0||raw.uaeFlagRatePercent>100||
+     raw.uaePoolMode!=='ELIGIBLE_CANDIDATES_ONLY'||
+     raw.pscPoolMode!=='PUBLISHED_PSC_SHORTLIST_ONLY'||
+     raw.aiSelectionMode!=='RECOMMEND_WITHIN_ELIGIBLE_QUOTAS')
+    throw new SiTargetingError('SI_SELECTION_POLICY_INVALID',422);
+  return Object.fromEntries(keys.map(k=>[k,raw[k]]));
+}
 const defaultRules=Object.freeze({
   ranking:{criteria:['DEPARTURE_SOON','INCIDENT_SEVERITY']},
-  aiAdvisory:SI_C01_ADVISORY_DEFAULT
+  aiAdvisory:SI_C01_ADVISORY_DEFAULT,
+  selection:SI_SELECTION_POLICY_DEFAULT
 });
 function validateRules(value){
   if(!value||typeof value!=='object'||Array.isArray(value)||
-     Object.keys(value).some(x=>!['ranking','aiAdvisory'].includes(x))||
+     Object.keys(value).some(x=>!['ranking','aiAdvisory','selection'].includes(x))||
      !Object.hasOwn(value,'ranking'))return null;
   try{return {ranking:getSiRankingPolicy(value),
-    aiAdvisory:getSiC01AdvisoryRules(value)};}catch{return null;}
+    aiAdvisory:getSiC01AdvisoryRules(value),
+    selection:getSiSelectionPolicy(value)};}catch{return null;}
 }
 export class SiTargetingError extends Error{
   constructor(code,status=400){super(code);this.code=code;this.status=status;}
@@ -511,9 +541,32 @@ export class SiCandidateTargeting{
     if(!parsed)throw new SiTargetingError('SI_RULES_INVALID',422);
     const data=await this.dashboard();
     const before={ranking:getSiRankingPolicy(data.policy.config),
-      aiAdvisory:getSiC01AdvisoryRules(data.policy.config)};
+      aiAdvisory:getSiC01AdvisoryRules(data.policy.config),
+      selection:getSiSelectionPolicy(data.policy.config)};
     const changed=JSON.stringify(before)!==JSON.stringify(parsed);
+    // Candidate-eligible denominators, never 420 raw registered vessels.
+    // A multi-regime vessel counts ONCE per IMO for each independent factor.
+    const activeKeys=new Set(data.candidates.filter(c=>
+      c.status==='PENDING_REVIEW'||(c.status==='EXTERNALLY_SCHEDULED'&&
+        c.events.some(e=>e.sourceType==='NMC_CASE'&&e.approval==='APPROVED')))
+      .map(c=>c.imo));
+    const pool=(data.vesselCandidates||[]).filter(v=>activeKeys.has(v.imo));
+    const psc=pool.filter(v=>v.sourceTypes.includes('PSC_PORT_CALL'));
+    const uae=pool.filter(v=>['UAE','AE','ARE','UNITED ARAB EMIRATES',
+      'الإمارات','الإمارات العربية المتحدة'].includes(
+      String(v.flag||'').trim().toUpperCase().replace(/[\\s._-]+/g,' ')));
     return {status:'PREVIEW',fleetSnapshotId:data.fleetSnapshotId,
+      selectionImpact:{
+        candidatePoolImos:pool.length,pscEligibleImos:psc.length,
+        uaeEligibleImos:uae.length,
+        pscTargetImos:Math.floor(psc.length*parsed.selection.pscRiskRatePercent/100),
+        uaeTargetImos:Math.floor(uae.length*parsed.selection.uaeFlagRatePercent/100),
+        mandatoryImos:new Set(data.candidates.filter(c=>c.status==='PENDING_REVIEW'&&
+          c.events.some(e=>e.sourceType==='NMC_CASE'&&e.approval==='APPROVED'||
+            e.sourceType==='SERVICE_REQUEST')).map(c=>c.imo)).size,
+        independentFactors:true,aiRunRequiredToChooseOptionalImos:true,
+        pscQuotaFirst:true,uaePopulation:'ELIGIBLE_CANDIDATES_ONLY'
+      },
       evaluatedPopulation:data.summary.evaluatedPopulation,rulesetVersion:data.policy.version,
       affectedImos:[],affectedCandidateCount:0,
       potentialRankingCandidates:changed?
