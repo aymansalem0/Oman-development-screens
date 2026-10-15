@@ -12,7 +12,12 @@ test('one compact stats-first, one source-backed candidate grid; no stage panels
    html.indexOf('class="si-panel si-unified-queue"'));
  assert.ok(html.indexOf('class="si-panel si-unified-queue"')<
    html.indexOf('class="si-unified-table"'));
- assert.equal((html.match(/<table/g)||[]).length,1);
+ // The main candidate queue is still ONE grid. A second table is now
+ // permitted ONLY inside the conditional pre-save capacity preview.
+ assert.equal((html.match(/<table/g)||[]).length,2);
+ assert.match(html,/\*ngIf="newDraftPreview as draft"/);
+ assert.match(html,/\*ngFor="let row of draft.items"/);
+ assert.match(html,/\*ngFor="let v of vessels;trackBy:trackVessel"/);
  assert.doesNotMatch(html,/Stage 1 ·|Stage 2 ·|Stage 3 ·|class="si-panel ai-ranking-panel"/);
  assert.doesNotMatch(html,/class="si-panel si-c01-panel"/);
  assert.match(html,/\*ngFor="let v of vessels;trackBy:trackVessel"/);
@@ -65,7 +70,10 @@ test('rolling inspection plan contains no port selector or port payload',()=>{
 test('one official supervisor approval covers the plan, not each vessel row',()=>{
  assert.match(html,/\[routerLink\]="\['\/moei\/smart-inspection\/plan\/create',activePlanId\]"/);
  assert.match(html,/si-rolling-management/);
- assert.match(html,/\(click\)="createRollingPlan\(\)"/);
+ assert.match(html,/\(click\)="generateIntegratedDraft\(\)"/);
+ assert.match(html,/\(click\)="saveIntegratedDraft\(\)"/);
+ assert.match(ts,/this\.http\.post<DraftIntegratedPreview>\('\/api\/si\/v1\/inspection-plans\/draft-preview'/);
+ assert.match(backend,/inspection-plans\/draft-save/);
  assert.doesNotMatch(html,/\(click\)="decide\('APPROVE'\)"/);
  assert.doesNotMatch(html,/\[\(ngModel\)\]="publisherKey"/);
  assert.match(backend,/const siInspectionPlan=new SiInspectionPlan/);
