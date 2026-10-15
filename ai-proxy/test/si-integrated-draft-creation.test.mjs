@@ -28,6 +28,7 @@ const source={snapshotHash:'a'.repeat(64),selectionPolicyActive:true,
   requiredInPlan:true,sourceTypes:['NMC_CASE'],sourceEvents:[event],
   currentRisk:null}]};
 const ai={agentRunId:'AI-RUN',provider:'MOCK',mock:true,
+ snapshotHash:source.snapshotHash,
  recommendations:[{candidateKey:'K-'+imo,imo,
   recommendation:'SELECT_RECOMMENDED',confidence:0.9,
   reason:'Approved maritime NMC inspection referral with evidence.',
