@@ -28,6 +28,7 @@ interface DraftIntegratedPreview {
  previewId:string;proposalHash:string;selectionHash:string;
  metadata:{title:string;startsOn:string;endsOn:string;notes:string;demoMode:boolean};
  provider:string;candidateCount:number;selectedCount:number;
+ notSelectedByAiCount:number;
  prioritizedCount:number;finalPlanCount:number;
  feasibleCount:number;unscheduledCount:number;demoOnly:boolean;
  outsidePlanCount:number;finalizedPlanImos:string[];
