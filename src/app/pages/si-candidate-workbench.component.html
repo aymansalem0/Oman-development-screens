@@ -32,20 +32,135 @@
          + {{copy('Create New Plan','إنشاء خطة جديدة')}}</button>
      </div>
      <p *ngIf="planningError" class="notice error" role="alert">{{planningError}}</p>
-     <div class="si-rolling-form" *ngIf="newPlanVisible">
-       <label>{{copy('Plan Name','اسم الخطة')}}<input [(ngModel)]="newPlan.title" maxlength="180"/></label>
-       <label>{{copy('Execution From','التنفيذ من')}}
-         <input type="date" [(ngModel)]="newPlan.startsOn"/></label>
-       <label>{{copy('Execution To','التنفيذ إلى')}}
-         <input type="date" [(ngModel)]="newPlan.endsOn"/></label>
-       <label class="si-rolling-notes">{{copy('Notes','ملاحظات')}}
-         <input [(ngModel)]="newPlan.notes" maxlength="1200"/></label>
-       <div class="si-rolling-actions">
-         <button type="button" (click)="createRollingPlan()" [disabled]="planningBusy">
-           {{copy('Save Draft — Review Capacity Next','حفظ المسودة ثم مراجعة الطاقة')}}</button>
-         <button type="button" (click)="newPlanVisible=false">
-           {{copy('Back','رجوع')}}</button>
+     <div class="si-rolling-form si-integrated-create" *ngIf="newPlanVisible">
+       <h3>{{copy('Integrated Draft Creation · Candidates + Priority + Capacity',
+         'إنشاء المسودة المتكاملة · السفن + الأولويات + الطاقة التشغيلية')}}</h3>
+       <p class="si-rolling-note">{{copy('Candidate eligibility, source-backed priorities, qualified inspectors, visit windows and capacity exceptions are calculated BEFORE the first draft is saved.',
+         'تُحسب أهلية السفن والأولويات وفق المصادر والمهندسون المؤهلون والمواعيد واستثناءات الطاقة قبل حفظ أول نسخة من المسودة.')}}</p>
+       <div class="si-draft-form-grid">
+        <label>{{copy('Plan Name','اسم الخطة')}}
+         <input [(ngModel)]="newPlan.title" (ngModelChange)="draftParametersChanged()" maxlength="180"/></label>
+        <label>{{copy('Execution From','التنفيذ من')}}
+         <input type="date" [(ngModel)]="newPlan.startsOn" (ngModelChange)="draftParametersChanged()"/></label>
+        <label>{{copy('Execution To','التنفيذ إلى')}}
+         <input type="date" [(ngModel)]="newPlan.endsOn" (ngModelChange)="draftParametersChanged()"/></label>
+        <label>{{copy('Notes','ملاحظات')}}
+         <input [(ngModel)]="newPlan.notes" (ngModelChange)="draftParametersChanged()" maxlength="1200"/></label>
        </div>
+       <div class="si-draft-consent">
+        <label><input type="checkbox" [(ngModel)]="newDraftDemoMode" (ngModelChange)="draftParametersChanged()"/>
+         {{copy('POC demo capacity: synthetic engineers, shifts and visit supplements; NOT official ERP',
+          'طاقة POC التجريبية: مهندسون وورديات وبيانات زيارة افتراضية، وليست ERP رسمية')}}</label>
+        <p>{{copy('C01 Provider','مزود C01')}}: <b>{{newDraftProvider}}</b>
+         · {{copy('Estimated C01 batches','دفعات C01 المتوقعة')}}: <b>{{newDraftExpectedBatches||'—'}}</b></p>
+        <label><input type="checkbox" [(ngModel)]="newDraftAiConsent"/>
+         {{copy('I explicitly request C01 source-verified candidate selection for this NEW draft.',
+           'أوافق صراحةً على تشغيل C01 لاختيار سفن هذه المسودة وفق المصادر المعتمدة.')}}</label>
+        <label *ngIf="newDraftProvider==='AIRIA'"><input type="checkbox" [(ngModel)]="newDraftCostConsent"/>
+         {{copy('I explicitly approve the possible cost of all Airia C01 batches.',
+           'أوافق صراحةً على التكلفة المحتملة لجميع دفعات Airia C01.')}}</label>
+        <p class="si-rolling-note">{{copy('Priority is determined by verified ETD, then reviewed incident severity; risk scores do not set execution order. Approval and work orders remain supervisor-only.',
+         'الأولوية حسب ETD المؤكد، ثم خطورة الحوادث المعتمدة؛ درجات مخاطر السفن لا تحدد ترتيب التنفيذ. الاعتماد وأوامر التكليف للمشرف فقط.')}}</p>
+       </div>
+       <p class="notice error" *ngIf="planningError" role="alert">{{planningError}}</p>
+       <div class="si-rolling-actions">
+        <button type="button" class="si-plan-wizard-button" (click)="generateIntegratedDraft()"
+         [disabled]="newDraftBusy||!newDraftAiConsent||newDraftProvider==='UNKNOWN'||(newDraftProvider==='AIRIA'&&!newDraftCostConsent)">
+         {{newDraftBusy?copy('Calculating integrated plan…','جاري حساب الخطة المتكاملة…'):
+           copy('01 · Generate Candidates + Priority + Capacity','١ · حساب السفن والأولويات وطاقة المهندسين')}}</button>
+        <button type="button" (click)="newPlanVisible=false" [disabled]="newDraftBusy">
+         {{copy('Cancel (nothing saved)','إلغاء دون حفظ')}}</button>
+       </div>
+       <p *ngIf="newDraftNotice" class="notice success">{{newDraftNotice}}</p>
+       <section *ngIf="newDraftPreview as draft" class="si-integrated-preview">
+        <h3>{{copy('Unified Plan Proposal — Not Yet Saved or Approved',
+         'مقترح الخطة المتكامل — لم يُحفظ أو يُعتمد بعد')}}</h3>
+        <div class="si-draft-stats">
+         <div><strong>{{draft.candidateCount}}</strong><span>{{copy('Eligible candidate vessels','سفن مرشحة مؤهلة')}}</span></div>
+         <div><strong>{{draft.selectedCount}}</strong><span>{{copy('Selected by C01 and published rules','مختارة وفق C01 والسياسات')}}</span></div>
+         <div><strong>{{draft.feasibleCount}}</strong><span>{{copy('Capacity-feasible assignments','تكليفات قابلة للتنفيذ')}}</span></div>
+         <div><strong>{{draft.unscheduledCount}}</strong><span>{{copy('Capacity exceptions','استثناءات الطاقة')}}</span></div>
+        </div>
+        <p *ngIf="draft.mandatoryUnscheduled.length" class="notice error">
+         {{copy('Mandatory NMC/source inspections have no feasible assignment. Resolve before supervisor approval:',
+          'معاينات إلزامية لا تتوفر لها تكليفات صالحة، ويجب معالجتها قبل الاعتماد:')}}
+         {{draft.mandatoryUnscheduled.join(', ')}}</p>
+        <p *ngIf="draft.outsidePlanPeriod.length" class="notice error">
+         {{copy('Proposed visits outside the selected plan period:',
+          'مواعيد مقترحة خارج فترة الخطة:')}} {{draft.outsidePlanPeriod.join(', ')}}</p>
+        <p class="si-rolling-note">
+         {{draft.demoOnly?copy('POC SYNTHETIC STAFF / VISITS — not real ERP',
+          'مهندسون ومواعيد افتراضية للـPOC وليست ERP فعليًا'):
+          copy('ERP snapshot and source-verified scheduling constraints',
+           'حساب الطاقة وفق لقطة ERP وقيود المصادر المعتمدة')}}
+         · {{copy('Preview expires in','صلاحية المعاينة')}} {{draft.expiresInMinutes}} {{copy('minutes','دقيقة')}}</p>
+        <div class="si-draft-table">
+         <table>
+          <thead><tr><th>#</th><th>{{copy('Vessel / IMO','السفينة')}}</th>
+           <th>{{copy('Source / priority','المصدر / الأولوية')}}</th>
+           <th>{{copy('Qualified engineer','المهندس المؤهل')}}</th>
+           <th>{{copy('Visit slot','موعد الزيارة')}}</th>
+           <th>{{copy('Capacity status','حالة الطاقة')}}</th></tr></thead>
+          <tbody><tr *ngFor="let row of draft.items">
+           <td>{{row.planRank}}</td>
+           <td><b>{{row.vesselName}}</b><small>{{row.imo}}</small>
+            <span *ngIf="row.mandatory">{{copy('Mandatory','إلزامية')}}</span></td>
+           <td>{{row.sourceTypes.join(' + ')}}<small>{{row.priorityCriterion}}</small>
+            <small *ngIf="row.priorityReason">{{row.priorityReason}}</small></td>
+           <td>{{row.inspectorName||'—'}}</td>
+           <td>{{row.startLocal||'—'}} <small *ngIf="row.endLocal">→ {{row.endLocal}}</small></td>
+           <td>{{row.status}}<small *ngIf="row.blocker">{{row.blocker}}</small></td>
+          </tr></tbody>
+         </table>
+        </div>
+        <section class="si-draft-inputs">
+         <h4>{{copy('Capacity inputs — correct missing visit data, then recalculate before Save',
+          'مدخلات الطاقة — استكمل بيانات الزيارة ثم أعد الحساب قبل الحفظ')}}</h4>
+         <p class="si-rolling-note">{{copy('Source-final ETA, ETD and port are locked. In DEMO mode the generated synthetic fields are read-only and are not official evidence.',
+          'الميناء ومواعيد ETA/ETD المعتمدة من المصدر غير قابلة للتعديل. في وضع Demo تكون البيانات الافتراضية للقراءة فقط.')}}</p>
+         <div class="si-draft-visit" *ngFor="let req of newDraftRequests;let i=index">
+          <h5>IMO {{req.imo}}</h5>
+          <div class="si-draft-form-grid">
+           <label>{{copy('Port','الميناء')}}
+            <select [(ngModel)]="req.portId" (ngModelChange)="draftVisitsChanged()"
+             [disabled]="newDraftDemoMode||draft.visitInputs[i].portSourceLocked">
+             <option value="">—</option><option *ngFor="let p of draft.ports" [value]="p.portId">{{p.name}}</option>
+            </select></label>
+           <label>{{copy('Berth / location','الرصيف / الموقع')}}
+            <input [(ngModel)]="req.locationName" (ngModelChange)="draftVisitsChanged()"
+             [disabled]="newDraftDemoMode"/></label>
+           <label>{{copy('Duration (minutes)','المدة بالدقائق')}}
+            <input type="number" min="30" max="720" [(ngModel)]="req.durationMinutes"
+             (ngModelChange)="draftVisitsChanged()" [disabled]="newDraftDemoMode"/></label>
+           <label>{{copy('Visit from (UAE local)','بداية الزيارة بتوقيت الإمارات')}}
+            <input [(ngModel)]="req.earliestLocal" (ngModelChange)="draftVisitsChanged()"
+             [disabled]="newDraftDemoMode||draft.visitInputs[i].sourceArrivalLocked"
+             placeholder="YYYY-MM-DD HH:mm"/></label>
+           <label>{{copy('Visit until (UAE local)','نهاية الزيارة بتوقيت الإمارات')}}
+            <input [(ngModel)]="req.latestFinishLocal" (ngModelChange)="draftVisitsChanged()"
+             [disabled]="newDraftDemoMode||draft.visitInputs[i].sourceDepartureLocked"
+             placeholder="YYYY-MM-DD HH:mm"/></label>
+           <label>{{copy('Visit evidence reference','مرجع نافذة الزيارة')}}
+            <input [(ngModel)]="req.windowEvidenceReference" (ngModelChange)="draftVisitsChanged()"
+             [disabled]="newDraftDemoMode||draft.visitInputs[i].sourceDepartureLocked"/></label>
+           <label>{{copy('Site access confirmed','تم تأكيد إتاحة الموقع')}}
+            <input type="checkbox" [(ngModel)]="req.siteAccessConfirmed"
+             (ngModelChange)="draftVisitsChanged()" [disabled]="newDraftDemoMode"/></label>
+          </div>
+         </div>
+        </section>
+        <p *ngIf="newDraftChanged" class="notice">
+         {{copy('Visit inputs changed. Recalculate verified capacity before saving.',
+          'تم تعديل بيانات الزيارة؛ يجب إعادة حساب الطاقة قبل الحفظ.')}}</p>
+        <div class="si-rolling-actions">
+         <button type="button" (click)="recalculateIntegratedDraft()" [disabled]="newDraftBusy||newDraftDemoMode">
+          {{copy('02 · Recalculate Capacity (no AI charge)','٢ · إعادة حساب الطاقة دون تكلفة AI')}}</button>
+         <button type="button" class="si-plan-wizard-button" (click)="saveIntegratedDraft()"
+          [disabled]="newDraftBusy||newDraftChanged">
+          {{copy('03 · Save Complete Integrated DRAFT (no approval)',
+           '٣ · حفظ المسودة المتكاملة دون اعتماد')}}</button>
+        </div>
+       </section>
      </div>
      <p class="si-rolling-note" *ngIf="!rollingPlans.length">
       {{copy('No plans yet. Create one to select and rank vessels.',
