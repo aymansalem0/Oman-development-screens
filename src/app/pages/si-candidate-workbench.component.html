@@ -575,6 +575,8 @@
             </th>
             <th>{{copy('AI Priority','أولوية AI')}}</th>
             <th>{{copy('Vessel / IMO','السفينة / IMO')}}</th>
+            <th>{{copy('ETA · Arrival (UAE)','ETA · وصول السفينة (الإمارات)')}}</th>
+            <th>{{copy('ETD · Departure (UAE)','ETD · مغادرة السفينة (الإمارات)')}}</th>
             <th>{{copy('Candidate Sources','مصادر الترشيح')}}</th>
             <th>{{copy('NMC Risk','مخاطر NMC')}}</th>
             <th>{{copy('AI Selection','اختيار AI')}}</th>
@@ -600,6 +602,32 @@
                   <small>IMO {{v.imo}} · {{v.flag}} · {{v.vesselType}}</small>
                   <small *ngIf="v.createdWorkflows">{{v.createdWorkflows}}
                     {{copy('approved inspection case(s)','حالة معاينة معتمدة')}}</small></td>
+                <td class="si-vessel-movement-date">
+                  <ng-container *ngIf="v.arrivalStatus==='VERIFIED'; else etaMissing">
+                   <strong>{{candidateMovementTime(v.arrivalAt)}}</strong>
+                   <small>{{copy('Verified source','مصدر موثق')}}</small>
+                   <small *ngIf="v.arrivalSourceReference" [title]="v.arrivalSourceReference">
+                    {{v.arrivalSourceReference}}</small>
+                  </ng-container>
+                  <ng-template #etaMissing>
+                   <span [class.si-vessel-date-conflict]="v.arrivalStatus==='CONFLICT'">
+                    {{v.arrivalStatus==='CONFLICT'?copy('Conflicting ETA','تعارض في ETA'):
+                      copy('ETA unavailable','موعد الوصول غير متاح')}}</span>
+                  </ng-template>
+                </td>
+                <td class="si-vessel-movement-date">
+                  <ng-container *ngIf="v.departureStatus==='VERIFIED'; else etdMissing">
+                   <strong>{{candidateMovementTime(v.departureAt)}}</strong>
+                   <small>{{copy('Verified source','مصدر موثق')}}</small>
+                   <small *ngIf="v.departureSourceReference" [title]="v.departureSourceReference">
+                    {{v.departureSourceReference}}</small>
+                  </ng-container>
+                  <ng-template #etdMissing>
+                   <span [class.si-vessel-date-conflict]="v.departureStatus==='CONFLICT'">
+                    {{v.departureStatus==='CONFLICT'?copy('Conflicting ETD','تعارض في ETD'):
+                      copy('ETD unavailable','موعد المغادرة غير متاح')}}</span>
+                  </ng-template>
+                </td>
                 <td><span *ngFor="let s of v.sourceTypes" class="source-pill">{{statusText(s)}}</span>
                   <small>{{v.sourceEvents.length}} {{copy('source events','أحداث مصدر')}}</small></td>
                 <td>
@@ -665,7 +693,7 @@
                 </td>
               </tr>
               <tr class="si-plan-edit-row" *ngIf="manualEditingImo===v.imo">
-                <td colspan="9">
+                <td colspan="11">
                   <form (ngSubmit)="saveManualDecision()" class="si-inline-change">
                     <strong>{{copy('Officer decision','قرار الموظف')}}:
                       {{manualAction}} · {{v.vesselName}} (IMO {{v.imo}})</strong>
@@ -693,7 +721,7 @@
                 </td>
               </tr>
               <tr class="si-plan-edit-row" *ngIf="planEditingImo===v.imo">
-                <td colspan="9">
+                <td colspan="11">
                   <form (ngSubmit)="savePlanEdit()" class="si-inline-change">
                     <strong>{{planSelection?copy('Include / Change Rank','إدراج أو تغيير ترتيب'):
                       copy('Remove from Inspection Plan','استبعاد من الخطة')}} · {{v.vesselName}}</strong>
@@ -717,7 +745,7 @@
                 </td>
               </tr>
               <tr *ngIf="expandedImo===v.imo" class="si-ai-detail-row">
-                <td colspan="9">
+                <td colspan="11">
                   <div class="si-detail-compact">
                     <div>
                       <h3>{{copy('AI Selection Rationale','سبب اختيار السفينة من AI')}}</h3>
@@ -791,7 +819,7 @@
                 </td>
               </tr>
             </ng-container>
-            <tr *ngIf="!vessels.length"><td colspan="9" class="empty">
+            <tr *ngIf="!vessels.length"><td colspan="11" class="empty">
               {{copy('No matching candidate vessels. Check the NMC referral, service and selected PSC sources.',
                 'لا توجد سفن مطابقة؛ راجع إحالات NMC والخدمات والسفن المختارة من PSC.')}}</td></tr>
           </tbody>
