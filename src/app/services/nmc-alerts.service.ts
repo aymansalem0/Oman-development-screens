@@ -1,7 +1,7 @@
 import {Injectable} from '@angular/core';
 import {HttpClient,HttpHeaders} from '@angular/common/http';
-import {Observable,throwError} from 'rxjs';
-import {catchError} from 'rxjs/operators';
+import {BehaviorSubject,Observable,throwError} from 'rxjs';
+import {catchError,tap} from 'rxjs/operators';
 
 export type AlertStatus='OPEN'|'ACKNOWLEDGED'|'IN_PROGRESS'|'ESCALATED'|'RESOLVED'|'SUPERSEDED';
 export type AlertSeverity='HIGH'|'CRITICAL';
@@ -56,10 +56,21 @@ export class NmcAlertsService {
   private readonly root='/api/ai/alerts';
   private operatorKey='MOEI_SESSION';
   private supervisorKey='MOEI_SESSION';
+  /** One authoritative summary for every mounted NMC screen, avoiding
+   *  independently refreshed sidebar/KPI counts within the same browser. */
+  private readonly latestSummary=new BehaviorSubject<NmcAlertSummary|null>(null);
+  readonly summary$=this.latestSummary.asObservable();
   constructor(private readonly http:HttpClient){}
 
   overview():Observable<NmcAlertsOverview>{
-    return this.http.get<NmcAlertsOverview>(this.root);
+    return this.http.get<NmcAlertsOverview>(this.root).pipe(
+      tap(data=>this.latestSummary.next(data.summary)),
+      catchError(error=>{
+        // Never keep presenting a stale notification count as authoritative.
+        this.latestSummary.next(null);
+        return throwError(()=>error);
+      })
+    );
   }
   /**
    * Notification counts MUST follow centrally PUBLISHED risk rules.
