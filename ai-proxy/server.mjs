@@ -1126,7 +1126,7 @@ const server = createServer(async (req, res) => {
       // command; preview/recalculate never writes cases, plans or ERP bookings.
       // The initial plan row is inserted atomically with the verified roster,
       // priorities and workforce proposal when the operator presses Save Draft.
-      const draftJobPath=/^\\/api\\/si\\/v1\\/inspection-plans\\/draft-jobs\\/([a-f0-9-]{36})$/.exec(path);
+      const draftJobPath=/^\/api\/si\/v1\/inspection-plans\/draft-jobs\/([a-f0-9-]{36})$/.exec(path);
       if(draftJobPath&&req.method==='GET'){
         dashboards.assertRole(req,'EDITOR');
         const identity=moeiAuth.require(req,{mutate:false});
