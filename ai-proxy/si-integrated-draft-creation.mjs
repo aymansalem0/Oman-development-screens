@@ -179,6 +179,7 @@ export function publicDraftPreview(p,previewId){
     mandatory:p.selection.mandatoryImos.includes(v.imo),
     status:issue?.status||'UNSCHEDULED',
     blocker:issue?.blocker||null,
+    visitWindow:issue?.visitWindow||null,
     inspectorId:a?.inspectorId||null,inspectorName:a?.inspectorName||null,
     portName:a?.portName||null,startLocal:a?.startLocal||null,
     endLocal:a?.endLocal||null,
