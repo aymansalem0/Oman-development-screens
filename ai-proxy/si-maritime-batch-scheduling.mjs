@@ -389,6 +389,7 @@ export function proposeMaritimeBatchSchedule({
   const allocations=new Map(schedule.map(o=>[o.imo,o]));
   return sortedJobs.map(j=>({
    imo:j.imo,planRank:j.rank,regimes:j.regimes,
+   visitWindow:j.bounds||null,
    status:allocations.has(j.imo)?'PROPOSED':'UNSCHEDULED',
    assignment:allocations.get(j.imo)||null,
    blocker:allocations.has(j.imo)?null:j.reason||'GLOBAL_PLAN_CONFLICT_OR_CAPACITY',
