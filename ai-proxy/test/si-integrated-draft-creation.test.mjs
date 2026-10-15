@@ -47,7 +47,7 @@ const erpSnapshot={snapshotId:'ERP-POC-SAVED',
   Bookings:[],Travel_Matrix:[]}};
 const scheduler={buildOptions(input,{snapshot}){
  const p=snapshot.data.Inspectors[0];
- const at=Date.parse(input.windowStartLocal.replace(' ','T')+':00+04:00');
+ const at=Date.parse(input.earliestLocal.replace(' ','T')+':00+04:00');
  const end=at+input.durationMinutes*60000;
  const local=x=>new Date(x+4*3600000).toISOString().slice(0,16).replace('T',' ');
  return {options:[{optionId:'OPT-1',inspectorId:p.inspector_id,
@@ -80,6 +80,9 @@ test('pre-draft integrated engine preserves source decisions without an official
  assert.equal(x.metadata.demoMode,true);
  assert.equal(publicView.candidateCount,1);
  assert.equal(publicView.selectedCount,1);
+ assert.equal(publicView.feasibleCount,1,
+  'qualified POC engineer must be matched before first draft is saved');
+ assert.equal(x.ready,true,'capacity verified plan must be ready for a separate human approval');
  assert.equal(publicView.noWrites,true);
  assert.equal(publicView.noCaseCreation,true);
  assert.equal(publicView.noOfficialBooking,true);
