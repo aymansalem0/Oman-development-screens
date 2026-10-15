@@ -95,6 +95,12 @@ export function selectIntegratedPlanVessels({
  const ai=inspectionPlan.selectionProposal?.aiSelectionValidated===true&&
    inspectionPlan.selectionProposal.snapshotHash===inspectionPlan.sourceHash?
    inspectionPlan.selectionProposal:null;
+ // Source-mandatory referrals and requests are always added outside
+ // the OPTIONAL percentage denominators when published C01 selection exists.
+ if(ai){
+   psc.splice(0,psc.length,...psc.filter(v=>!mandatory(v)));
+   uae.splice(0,uae.length,...uae.filter(v=>!mandatory(v)));
+ }
  const pscAi=ai?new Set(ai.pscRisk.aiSelectedImos):null;
  const uaeAi=ai?new Set(ai.uaeFlag.aiSelectedImos):null;
  const pscSelected=ai?
