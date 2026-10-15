@@ -52,6 +52,9 @@ export class NmcNavigationComponent implements OnInit, OnDestroy {
   currentPath = '';
   selectedImo: string | null = null;
   publishedDashboards: PublishedDashboardMenuItem[] = [];
+  /** Same "active" count used by the Maritime Operations Overview KPI. */
+  activeAlerts: number | null = null;
+  /** Separate inbox statistic: OPEN + ESCALATED, excludes acknowledged. */
   unreadAlerts = 0;
   private readonly subscriptions = new Subscription();
   private refreshTimer?: ReturnType<typeof setInterval>;
@@ -76,6 +79,10 @@ export class NmcNavigationComponent implements OnInit, OnDestroy {
       this.publishedDashboards = items;
     }));
     this.updateRoute(this.router.url);
+    this.subscriptions.add(this.alertsService.summary$.subscribe(summary=>{
+      this.activeAlerts=summary?.active??null;
+      this.unreadAlerts=summary?.unread??0;
+    }));
     this.subscriptions.add(this.router.events.pipe(
       filter((event): event is NavigationEnd => event instanceof NavigationEnd)
     ).subscribe(event => {
@@ -99,9 +106,11 @@ export class NmcNavigationComponent implements OnInit, OnDestroy {
 
   get isAlertCenter():boolean{return this.currentPath==='/moei/nmc/alerts';}
   private refreshAlertCount():void{
+    // The service broadcasts the same server-side summary to all NMC screens.
+    // In particular, do not display "unread" as an "active alerts" badge.
     const req=this.alertsService.overviewForBrowserPolicy().subscribe({
-      next:result=>{this.unreadAlerts=result.summary.unread;},
-      error:()=>{this.unreadAlerts=0;}
+      next:()=>{},
+      error:()=>{}
     });
     this.subscriptions.add(req);
   }
