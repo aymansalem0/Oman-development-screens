@@ -32,7 +32,8 @@ import {buildPocErpSchedulingOverlay,fillPocSchedulingVisitContext,
  validatePocSchedulingDemoRequest} from './si-scheduling-poc-fixtures.mjs';
 import { SiCandidateTargeting, SiTargetingError ,getSiSelectionPolicy} from './si-candidate-targeting.mjs';
 import {selectIntegratedPlanVessels,scopeIntegratedSelectionToSavedDraft,
- makeCapacityDraftPlan,validateIntegratedCapacityProposal,SiIntegratedPlanError}
+ savedDraftCapacityCoverage,makeCapacityDraftPlan,
+ validateIntegratedCapacityProposal,SiIntegratedPlanError}
  from './si-integrated-capacity-plan.mjs';
 import { SiSourceExcelImport } from './si-source-excel-import.mjs';
 import {projectVesselMasterEtd} from './si-vessel-master-etd.mjs';
@@ -1487,19 +1488,14 @@ const server = createServer(async (req, res) => {
         // An initially verified Draft has a committed-to-review vessel
         // scope. A freshly constrained ERP search can replace the engineer
         // or time, but cannot silently drop any saved vessel either.
-        if(selection.draftScope?.locked){
-          const required=new Set(selection.draftScope.selectedImos);
-          const assigned=new Set(optimized.assignments.map(a=>a.imo));
-          if(required.size!==assigned.size||
-             [...required].some(imo=>!assigned.has(imo))){
-            return respond(res,409,{
-             error:'SI_DRAFT_SAVED_CAPACITY_CHANGED_REVIEW_REQUIRED',
-             savedCount:required.size,feasibleNow:assigned.size,
-             missingImos:[...required].filter(imo=>!assigned.has(imo)),
-             planUnchanged:true
-            });
-          }
-        }
+        const coverage=savedDraftCapacityCoverage(selection,optimized);
+        if(!coverage.matches)
+          return respond(res,409,{
+            error:'SI_DRAFT_SAVED_CAPACITY_CHANGED_REVIEW_REQUIRED',
+            savedCount:coverage.savedCount,feasibleNow:coverage.feasibleNow,
+            missingImos:coverage.missingImos,
+            unexpectedImos:coverage.unexpectedImos,planUnchanged:true
+          });
         // For integrated pre-save drafts, the requested plan execution period
         // is an additional hard approval gate (including chosen alternatives).
         if(plan.capacityDraft&&optimized.assignments.some(a=>
