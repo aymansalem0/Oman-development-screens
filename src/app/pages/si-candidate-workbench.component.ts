@@ -298,6 +298,31 @@ export class SiCandidateWorkbenchComponent implements OnInit,OnDestroy{
       }
     });
   }
+  capacityBlockerText(code:string|null|undefined):string{
+    if(!code)return this.copy('No feasible available slot','لا يوجد موعد متاح');
+    const explanations:Record<string,[string,string]>={
+      'GLOBAL_PLAN_CONFLICT_OR_CAPACITY':[
+        'Inspector capacity conflict with higher-priority visits',
+        'تعارض طاقة المهندسين مع المعاينات الأعلى أولوية'],
+      'NO_FEASIBLE_ERP_SHIFT_QUALIFICATION_PORT_OR_WINDOW':[
+        'No qualified inspector, shift, port or visit window',
+        'لا يوجد مهندس مؤهل متاح أو وردية أو منفذ زيارة مناسب'],
+      'SI_VISIT_OUTSIDE_EXECUTION_PLAN_PERIOD':[
+        'Vessel visit cannot fit in the plan execution dates',
+        'لا يوجد موعد معاينة صالح داخل فترة تنفيذ الخطة'],
+      'VESSEL_SCHEDULING_DATA_REQUIRED':[
+        'Required vessel visit details are missing',
+        'بيانات معاينة السفينة المطلوبة غير مكتملة'],
+      'NMC_APPROVED_REFERRAL_MISSING_OR_CLOSED':[
+        'Mandatory NMC referral requires officer review',
+        'إحالة NMC الإلزامية تحتاج مراجعة الموظف'],
+      'NMC_REFERRAL_ALREADY_SCHEDULED_RECONCILE':[
+        'NMC referral is already scheduled elsewhere',
+        'إحالة NMC مجدولة بالفعل وتحتاج مطابقة']
+    };
+    const v=explanations[code];
+    return v?this.copy(v[0],v[1]):code;
+  }
   get filteredDraftAlternatives():DraftManualAlternative[]{
     const all=this.newDraftPreview?.manualAlternatives||[];
     const q=this.newDraftAlternativeSearch.trim().toLowerCase();
