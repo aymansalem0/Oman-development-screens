@@ -138,3 +138,31 @@ test('published verified C01 IMO selection overrides deterministic PSC fallback 
  assert.equal(result.quotas.uaeFlag.eligibleImos,2);
  assert.equal(result.quotas.mandatoryOrManual.count,1);
 });
+
+test('current published small-plan C01 uses the AI service queue sample rather than all 60 requests',()=>{
+ const ai={aiSelectionValidated:true,snapshotHash:inspectionPlan.sourceHash,
+  policyRevision:9,
+  pscRisk:{eligibleImos:4,cap:2,aiSelectedImos:['9400104'],missingRisk:1},
+  uaeFlag:{eligibleImos:2,cap:2,aiSelectedImos:['9400105']},
+  serviceRequests:{eligibleImos:60,cap:4,
+   aiSelectedImos:['9400105'],waitingInBacklogImos:Array.from({length:59},
+    (_,n)=>String(9500000+n))},
+  maxPlannedVessels:12,overlappingImos:['9400105']};
+ const result=selectIntegratedPlanVessels({plan,
+  inspectionPlan:{...inspectionPlan,agentRunId:'C01-PROPOSAL',
+   selectionProposal:ai},dashboard,
+  pscRiskRatePercent:50,uaeFlagRatePercent:100});
+ assert.deepEqual(result.quotas.serviceRequests.selectedImos,['9400105']);
+ assert.equal(result.quotas.serviceRequests.planCap,4);
+ assert.equal(result.quotas.serviceRequests.eligibleImos,60);
+ assert.equal(result.quotas.serviceRequests.pendingInCandidateBacklog,59);
+ assert.equal(result.quotas.maxPlannedVessels,12);
+ assert.deepEqual(new Set(result.roster.map(v=>v.imo)),
+   new Set(['9400104','9400105','9400106']));
+ assert.equal(plan.status,'READY_FOR_APPROVAL');
+ assert.throws(()=>selectIntegratedPlanVessels({plan,
+  inspectionPlan:{...inspectionPlan,agentRunId:'C01-PROPOSAL',
+   selectionProposal:{...ai,maxPlannedVessels:2}},dashboard,
+  pscRiskRatePercent:50,uaeFlagRatePercent:100}),
+  /SI_POC_PLAN_MAX_VESSELS_EXCEEDED_OFFICER_REVIEW/);
+});
