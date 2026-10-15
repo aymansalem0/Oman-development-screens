@@ -273,10 +273,10 @@ export class SiMyWorkOrdersComponent implements OnInit{
    this.api+'plans/'+o.planId+'/work-orders/'+o.orderId+'/activate',
    {generateAi:true,confirmAiCost:true}
   ).subscribe({
-   next:r=>{this.busy=false;this.replaceOrder(r.order);
+   next:r=>{this.busy=false;const updated=this.replaceOrder(r.order);
     this.message=this.t('Dossier and mandatory checklist prepared. Supervisor must review A04 and approve scope before field start.',
       'تم تجهيز الدوسيه والقائمة الإلزامية؛ يلزم مراجعة A04 واعتماد النطاق من المشرف قبل بدء التنفيذ.');
-    this.loadDossierFresh(r.order);},
+    if(updated)this.loadDossierFresh(updated);},
    error:e=>{this.busy=false;this.error=e?.error?.error||'SI_ORDER_PREPARATION_FAILED';}
   });
  }
@@ -299,15 +299,19 @@ export class SiMyWorkOrdersComponent implements OnInit{
   void this.router.navigate(['/moei/smart-inspection/my-work-orders',
    o.orderId,'execute']);
  }
- private replaceOrder(updated:AssignedOrder):void{
-  const at=this.orders.findIndex(x=>x.orderId===updated.orderId);
-  if(at>=0)this.orders[at]={...this.orders[at],...updated};
-  if(this.selected?.orderId===updated.orderId)
-   this.selected={...this.selected,...updated};
-  delete this.cache[updated.orderId];
+ private replaceOrder(server:AssignedOrder&{id?:string}):AssignedOrder|null{
+  // Work-order write APIs return the canonical Oracle object with "id";
+  // the inspector read roster exposes the same reference as "orderId".
+  const key=server.orderId||server.id;
+  const at=this.orders.findIndex(x=>x.orderId===key);
+  if(at<0)return null;
+  const updated={...this.orders[at],...server,orderId:key!};
+  this.orders[at]=updated;
+  if(this.selected?.orderId===key)this.selected=updated;
+  delete this.cache[key!];return updated;
  }
  private loadDossierFresh(o:AssignedOrder):void{
-  this.dossier=null;
-  this.select({...o,orderId:o.orderId});
+  this.selected=null;this.dossier=null;delete this.cache[o.orderId];
+  this.select(o);
  }
 }
