@@ -501,6 +501,10 @@ export class SiCandidateAgent{
        (x.requestedRank===null||
         (Number.isInteger(x.requestedRank)&&x.requestedRank>=1&&x.requestedRank<=100)))
        .slice(0,100):[];
+   // Every paid Airia batch receives the global denominators and caps.
+   // A 25-candidate chunk must never re-apply a 15% rate as its own cap.
+   const publishedBounds=s.selectionPolicyActive?
+     projectC01ConfiguredSelection(s,[]):null;
    const payload={schemaVersion:'SI-C01-v1',
      requestMeta:{correlationId:'SI-C01-'+randomUUID(),actor:input.actor.trim(),
        language:'en',mode:'ADVISORY_ONLY'},
@@ -512,6 +516,14 @@ export class SiCandidateAgent{
      // Published policy is sent to C01 without changing its response schema.
      configuredSelectionPolicy:{
        ...s.selection,
+       eligibleSelectionPool:publishedBounds?{
+         distinctCandidateImos:publishedBounds.sourceCandidateImos,
+         pscEligibleImos:publishedBounds.pscRisk.eligibleImos,
+         pscCap:publishedBounds.pscRisk.cap,
+         uaeEligibleImos:publishedBounds.uaeFlag.eligibleImos,
+         uaeCap:publishedBounds.uaeFlag.cap,
+         mandatoryOutsideCaps:publishedBounds.mandatoryImos.length
+       }:null,
        aiConfidenceThreshold:s.aiAdvisory.minimumSelectionConfidence,
        approvedNmcReferralsAlwaysIncluded:true,
        actionableServiceRequestsAlwaysIncluded:true,
