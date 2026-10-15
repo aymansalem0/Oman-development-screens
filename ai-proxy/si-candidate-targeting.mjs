@@ -600,7 +600,7 @@ export class SiCandidateTargeting{
     const services=optionalPool.filter(v=>serviceIds.has(v.imo));
     const uae=optionalPool.filter(v=>['UAE','AE','ARE','UNITED ARAB EMIRATES',
       'الإمارات','الإمارات العربية المتحدة'].includes(
-      String(v.flag||'').trim().toUpperCase().replace(/[\\s._-]+/g,' ')));
+      String(v.flag||'').trim().toUpperCase().replace(/[\s._-]+/g,' ')));
     const pscCap=Math.floor(psc.length*parsed.selection.pscRiskRatePercent/100);
     const uaeCap=Math.floor(uae.length*parsed.selection.uaeFlagRatePercent/100);
     const serviceCap=parsed.selection.serviceRequestPlanCap;
