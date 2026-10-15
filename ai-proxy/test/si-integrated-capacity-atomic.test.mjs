@@ -33,6 +33,7 @@ function make(){
 }
 const params=withinTransaction=>({
  expectedRevision:2,expectedSourceHash:HASH,
+ integratedSourceRows:plan().savedPlanRows,
  actor:'supervisor@moei',reason:'Verified integrated inspector capacity',
  vessels:vessel,integratedDecision:decision,
  integratedSourceRows:plan().savedPlanRows,withinTransaction
