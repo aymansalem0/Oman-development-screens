@@ -101,22 +101,49 @@ export const SI_SELECTION_POLICY_DEFAULT=Object.freeze({
   pscRiskRatePercent:15,uaeFlagRatePercent:0,
   uaePoolMode:'ELIGIBLE_CANDIDATES_ONLY',
   pscPoolMode:'PUBLISHED_PSC_SHORTLIST_ONLY',
-  aiSelectionMode:'RECOMMEND_WITHIN_ELIGIBLE_QUOTAS'
+  aiSelectionMode:'RECOMMEND_WITHIN_ELIGIBLE_QUOTAS',
+  // POC demonstration: a source-final service request stays in the queue,
+  // but only a small number enters any ONE inspection plan. Never delete it.
+  serviceRequestPlanCap:4,
+  maxPlannedVessels:12
 });
+export const isSiVerifiedEvent=e=>Boolean(e&&(
+  e.sourceType==='NMC_CASE'?e.approval==='APPROVED':
+  ['PSC_PORT_CALL','SERVICE_REQUEST'].includes(e.sourceType)&&
+  ['SOURCE_FINAL','SOURCE_REVIEWED'].includes(e.approval)
+));
+export const isSiProtectedReferral=c=>Boolean(c?.events?.some(e=>
+  e.sourceType==='NMC_CASE'&&e.approval==='APPROVED'));
 export function getSiSelectionPolicy(config){
   const raw=config?.selection??SI_SELECTION_POLICY_DEFAULT;
-  const keys=Object.keys(SI_SELECTION_POLICY_DEFAULT);
+  // Older published selection revisions have only five fields. Do not
+  // silently turn their 60+ pending service requests into a small-cap plan:
+  // the newly configurable cap is activated by an EXPLICIT republish.
+  const legacyKeys=['pscRiskRatePercent','uaeFlagRatePercent',
+    'uaePoolMode','pscPoolMode','aiSelectionMode'];
+  const allKeys=Object.keys(SI_SELECTION_POLICY_DEFAULT);
+  const keys=Object.keys(raw||{}).sort().join('|');
+  const legacy=keys===[...legacyKeys].sort().join('|');
+  const current=keys===[...allKeys].sort().join('|');
   if(!raw||typeof raw!=='object'||Array.isArray(raw)||
-     Object.keys(raw).sort().join('|')!==[...keys].sort().join('|')||
+     (!legacy&&!current)||
      !Number.isInteger(raw.pscRiskRatePercent)||
      raw.pscRiskRatePercent<0||raw.pscRiskRatePercent>100||
      !Number.isInteger(raw.uaeFlagRatePercent)||
      raw.uaeFlagRatePercent<0||raw.uaeFlagRatePercent>100||
      raw.uaePoolMode!=='ELIGIBLE_CANDIDATES_ONLY'||
      raw.pscPoolMode!=='PUBLISHED_PSC_SHORTLIST_ONLY'||
-     raw.aiSelectionMode!=='RECOMMEND_WITHIN_ELIGIBLE_QUOTAS')
+     raw.aiSelectionMode!=='RECOMMEND_WITHIN_ELIGIBLE_QUOTAS'||
+     (current&&(!Number.isInteger(raw.serviceRequestPlanCap)||
+       raw.serviceRequestPlanCap<0||raw.serviceRequestPlanCap>30||
+       !Number.isInteger(raw.maxPlannedVessels)||
+       raw.maxPlannedVessels<1||raw.maxPlannedVessels>50||
+       raw.serviceRequestPlanCap>raw.maxPlannedVessels)))
     throw new SiTargetingError('SI_SELECTION_POLICY_INVALID',422);
-  return Object.fromEntries(keys.map(k=>[k,raw[k]]));
+  // null explicitly indicates the legacy version has no active cap.
+  return {...raw,
+    serviceRequestPlanCap:current?raw.serviceRequestPlanCap:null,
+    maxPlannedVessels:current?raw.maxPlannedVessels:null};
 }
 // Existing unconfigured installations retain their legacy C01 behaviour
 // until a PUBLISHER explicitly publishes the optional vessel-selection
