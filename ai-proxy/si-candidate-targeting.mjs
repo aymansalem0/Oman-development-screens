@@ -551,8 +551,13 @@ export class SiCandidateTargeting{
         c.events.some(e=>e.sourceType==='NMC_CASE'&&e.approval==='APPROVED')))
       .map(c=>c.imo));
     const pool=(data.vesselCandidates||[]).filter(v=>activeKeys.has(v.imo));
-    const psc=pool.filter(v=>v.sourceTypes.includes('PSC_PORT_CALL'));
-    const uae=pool.filter(v=>['UAE','AE','ARE','UNITED ARAB EMIRATES',
+    const mandatoryIds=new Set(data.candidates.filter(c=>
+      c.status==='PENDING_REVIEW'&&c.events.some(e=>
+        e.sourceType==='NMC_CASE'&&e.approval==='APPROVED'||
+        e.sourceType==='SERVICE_REQUEST')).map(c=>c.imo));
+    const optionalPool=pool.filter(v=>!mandatoryIds.has(v.imo));
+    const psc=optionalPool.filter(v=>v.sourceTypes.includes('PSC_PORT_CALL'));
+    const uae=optionalPool.filter(v=>['UAE','AE','ARE','UNITED ARAB EMIRATES',
       'الإمارات','الإمارات العربية المتحدة'].includes(
       String(v.flag||'').trim().toUpperCase().replace(/[\\s._-]+/g,' ')));
     return {status:'PREVIEW',fleetSnapshotId:data.fleetSnapshotId,
@@ -561,9 +566,7 @@ export class SiCandidateTargeting{
         uaeEligibleImos:uae.length,
         pscTargetImos:Math.floor(psc.length*parsed.selection.pscRiskRatePercent/100),
         uaeTargetImos:Math.floor(uae.length*parsed.selection.uaeFlagRatePercent/100),
-        mandatoryImos:new Set(data.candidates.filter(c=>c.status==='PENDING_REVIEW'&&
-          c.events.some(e=>e.sourceType==='NMC_CASE'&&e.approval==='APPROVED'||
-            e.sourceType==='SERVICE_REQUEST')).map(c=>c.imo)).size,
+        mandatoryImos:mandatoryIds.size,
         independentFactors:true,aiRunRequiredToChooseOptionalImos:true,
         pscQuotaFirst:true,uaePopulation:'ELIGIBLE_CANDIDATES_ONLY'
       },
