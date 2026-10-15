@@ -114,5 +114,5 @@ test('visit outside the requested draft period cannot mark plan capacity ready',
 test('capacity rejects a C01 result that is not bound to the source snapshot',()=>{
  assert.throws(()=>buildIntegratedDraft({id:'P',metadata,source,dashboard,
   ai:{...ai,selectionProposal:{...ai.selectionProposal,snapshotHash:'stale'}},
-  erpSnapshot,policy,scheduler}),/SI_C01_CONFIGURED_SELECTION_REQUIRED_RUN_AI/);
+  erpSnapshot,policy,scheduler}),/SI_DRAFT_C01_SNAPSHOT_MISMATCH/);
 });
