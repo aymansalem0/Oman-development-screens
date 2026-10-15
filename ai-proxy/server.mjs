@@ -1478,6 +1478,17 @@ const server = createServer(async (req, res) => {
         const decision=validateIntegratedCapacityProposal(
           selection,proposal,body.selectedOptionId);
         const optimized=decision.variant;
+        // Capacity may change between Draft save and supervisor approval.
+        // Revalidate resources, but never silently re-add a vessel excluded
+        // from the saved Draft scope. An officer must recalculate/agree to
+        // any changed vessel list before issuing canonical work orders.
+        if(plan.capacityDraft?.status==='CAPACITY_VERIFIED_DRAFT'&&
+         Array.isArray(plan.capacityDraft.selectedImos)){
+          const saved=new Set(plan.capacityDraft.selectedImos);
+          if(optimized.assignments.some(a=>!saved.has(a.imo)))
+           return respond(res,409,{
+            error:'SI_DRAFT_APPROVAL_SCOPE_CHANGED_REVIEW_NEW_PLAN'});
+        }
         // For integrated pre-save drafts, the requested plan execution period
         // is an additional hard approval gate (including chosen alternatives).
         if(plan.capacityDraft&&optimized.assignments.some(a=>
