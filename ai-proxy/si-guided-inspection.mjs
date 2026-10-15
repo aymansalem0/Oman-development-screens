@@ -164,6 +164,22 @@ export function projectGuidedInspection({order,preparation,checklist,lifecycle}=
   step.members=step.members.filter((m,i,a)=>a.findIndex(n=>
     n.kind===m.kind&&n.id===m.id)===i);
  }
+ // A merged question is complete ONLY when all of its authoritative
+ // underlying records are complete. A prior answer to one duplicate cannot
+ // conceal another still-pending published or legal case check.
+ const lifeState=new Map(list(record.checks).map(x=>[x.id,x]));
+ const publishedState=new Map(list(saved?.templates).flatMap(t=>
+  list(t.groups).flatMap(g=>list(g.items).map(it=>[it.instanceId,it]))));
+ for(const step of grouped.values()){
+  const sourceComplete=step.members.filter(m=>m.required!==false).every(m=>{
+   if(m.kind==='LIFECYCLE')
+    return lifeState.get(m.id)?.status!=='PENDING'&&
+     Boolean(lifeState.get(m.id)?.status);
+   return publishedState.get(m.id)?.answerStatus==='RECORDED';
+  });
+  step.answered=sourceComplete;
+  if(!sourceComplete)step.currentStatus='PENDING';
+ }
  const steps=[...grouped.values()];
  const done=steps.filter(x=>x.answered).length;
  return {
