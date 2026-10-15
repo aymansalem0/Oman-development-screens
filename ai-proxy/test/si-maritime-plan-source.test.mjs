@@ -38,6 +38,9 @@ test('Source-final ETD becomes locked batch-scheduling deadline without date-rev
  assert.equal(v.portId,'FUJ');
  assert.equal(v.regime,'PSC');
  assert.equal(v.etaLocal,'2026-10-20 08:00');
+ assert.equal(v.etaSourceReference,'MSW-POC-PC-1');
+ assert.equal(v.berthAtLocal,'');
+ assert.equal(v.berthConfirmed,false);
  assert.equal(v.etdLocal,'2026-10-23 18:00');
  assert.equal(v.windowSource,'MSW_FINAL');
  assert.equal(v.etdSource,'SOURCE_FINAL_NO_DATE_APPROVAL');
@@ -88,4 +91,28 @@ test('Workforce display exposes active ERP scheduling skills but no private leav
  assert.equal(c.workforce[0].dailyCapacity,2);
  assert.deepEqual(c.workforce[0].qualifications,['PSC']);
  assert.doesNotMatch(JSON.stringify(c),/DO-NOT-DISPLAY|CONFIDENTIAL|Inactive Employee/);
+});
+
+test('Officer-confirmed berth arrival tightens, never changes, imported ETA/ETD',()=>{
+ const context=maritimePlanSchedulingContext(plan,dashboard,erp);
+ const v=context.items[0];
+ const req={imo:v.imo,portId:v.portId,
+  locationType:'BERTH',siteAccessConfirmed:true,
+  vesselType:v.vesselType,regime:v.regime,
+  earliestLocal:v.etaLocal,latestFinishLocal:v.etdLocal,
+  windowSource:'MSW_FINAL',windowEvidenceReference:v.dateEvidenceReference,
+  berthAtLocal:'2026-10-21 12:00',berthConfirmed:true,
+  berthEvidenceReference:'MSW-BERTH-CHECK-003'};
+ assert.doesNotThrow(()=>validateOperatorScheduleAgainstSource(context,[req]));
+ assert.throws(()=>validateOperatorScheduleAgainstSource(context,[
+  {...req,berthAtLocal:'2026-10-19 12:00'}]),
+  /SI_V2_BERTHING_OUTSIDE_SOURCE_WINDOW/);
+ assert.throws(()=>validateOperatorScheduleAgainstSource(context,[
+  {...req,berthAtLocal:'2026-10-24 12:00'}]),
+  /SI_V2_BERTHING_OUTSIDE_SOURCE_WINDOW/);
+ assert.throws(()=>validateOperatorScheduleAgainstSource(context,[
+  {...req,berthEvidenceReference:'MISSING',berthConfirmed:false}]),
+  /SI_V2_BERTHING_CONFIRMATION_EVIDENCE_REQUIRED/);
+ assert.equal(context.items[0].etaLocal,'2026-10-20 08:00');
+ assert.equal(context.items[0].etdLocal,'2026-10-23 18:00');
 });
