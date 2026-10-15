@@ -480,7 +480,7 @@ export class SiCandidateAgent{
  }
  async run(input={}){
   if(this.inProgress)throw new SiCandidateAgentError('SI_C01_IN_PROGRESS',409);
-  if(input.confirmRun!==true||(this.provider==='airia'&&input.confirmCost!==true)||typeof input.actor!=='string'||
+  if(input.confirmRun!==true||typeof input.actor!=='string'||
      !input.actor.trim()||input.actor.length>120||
      !/^[a-f0-9]{64}$/i.test(input.expectedSnapshotHash||''))
     throw new SiCandidateAgentError('SI_C01_CONFIRMATION_REQUIRED',422);
@@ -491,11 +491,11 @@ export class SiCandidateAgent{
     throw new SiCandidateAgentError('SI_C01_SOURCE_CHANGED_REPREVIEW',409);
    if(!s.candidates.length)
     throw new SiCandidateAgentError('SI_C01_NO_PENDING_CANDIDATES',422);
-   // A full 99-vessel fleet can have >100 *regime* candidates after Excel
-   // rules activate. Explicitly consent to the REAL number of Airia calls.
+   // A full 99-vessel source pool can have >100 *regime* candidate paths.
+   // Verify the batch count to avoid skipping any source candidates.
    // Keep bounded batches; never truncate inputs or silently run extra calls.
-   // Smaller real-provider chunks reduce response truncation and let the
-   // partner schema return every recommendation. Calls are pre-confirmed.
+   // Smaller provider chunks reduce response truncation and let Airia
+   // return every recommendation. Batch count is explicit and auditable.
    const batchSize=this.provider==='airia'?25:100;
    const batchCount=Math.ceil(s.candidates.length/batchSize);
    if(s.candidates.length>500)
