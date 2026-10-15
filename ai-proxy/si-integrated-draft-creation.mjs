@@ -63,6 +63,13 @@ export function buildIntegratedDraft({
 }={}){
  if(!id||!source?.snapshotHash||!dashboard?.policy||!erpSnapshot?.snapshotId)
   fail('SI_DRAFT_SOURCE_CONTEXT_REQUIRED',409);
+ // The saved initial DRAFT contains the source-bound C01 audit result even
+ // when both optional percentage rates are zero. Reject mismatched AI output
+ // instead of keeping a seemingly verified, unrelated recommendation.
+ if(!ai?.agentRunId||ai.snapshotHash!==source.snapshotHash||
+    (ai.selectionProposal&&
+     ai.selectionProposal.snapshotHash!==source.snapshotHash))
+  fail('SI_DRAFT_C01_SNAPSHOT_MISMATCH',409);
  const rates=source.selection;
  const requireAi=source.selectionPolicyActive&&
   (rates.pscRiskRatePercent>0||rates.uaeFlagRatePercent>0);
