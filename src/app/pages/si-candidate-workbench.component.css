@@ -435,3 +435,11 @@ button:disabled{opacity:.55;cursor:not-allowed}
 .si-draft-saved-assignments strong{font-size:11px;color:#145870}
 .si-draft-saved-assignments small{font-size:10px;color:#4b6975}
 @media(max-width:800px){.si-draft-saved-assignments{grid-template-columns:1fr}}
+
+
+.si-draft-job-progress{display:grid;gap:8px;margin:14px 0;padding:16px;
+ background:#eef8fa;border:2px solid #90ccd3;border-radius:10px;
+ color:#124c63;font-size:12px}
+.si-draft-job-progress strong{font-size:14px}
+.si-draft-job-progress b{font-size:18px;color:#00736e}
+.si-draft-job-progress p{margin:0;color:#405b68}
