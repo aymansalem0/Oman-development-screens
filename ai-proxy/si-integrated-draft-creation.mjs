@@ -14,6 +14,7 @@ import {buildPocErpSchedulingOverlay,fillPocSchedulingVisitContext,
  validatePocSchedulingDemoRequest} from './si-scheduling-poc-fixtures.mjs';
 import {proposeMaritimeBatchSchedule} from './si-maritime-batch-scheduling.mjs';
 import {suggestCapacityExceptionActions} from './si-capacity-exception-alternatives.mjs';
+import {checkVesselPlanPeriod} from './si-plan-period-eligibility.mjs';
 import {inspectSiDraftScope,SI_DRAFT_SOLVER_MAX_VESSELS} from './si-draft-selection-preflight.mjs';
 
 export class SiDraftCreationError extends Error{
@@ -62,7 +63,7 @@ export function reportDraftPeriodExceptions(proposal,metadata){
  */
 export function buildIntegratedDraft({
  id,metadata,source,dashboard,ai,erpSnapshot,actor,policy,
- nmcReferrals=[],existingBookings=[],scheduler,requests=null,
+ nmcReferrals=[],existingBookings=[],scheduler,requests=null,officerAdds=[],
  clock=()=>Date.now()
 }={}){
  if(!id||!source?.snapshotHash||!dashboard?.policy||!erpSnapshot?.snapshotId)
@@ -99,9 +100,10 @@ export function buildIntegratedDraft({
  const selection=selectIntegratedPlanVessels({
   plan,inspectionPlan:{planId:id,revision:0,sourceHash:source.snapshotHash,
    rows,stale:false,selectionProposal:ai?.selectionProposal||null,
+   aiRecommendations:ai?.recommendations||[],aiCandidates:source.candidates,
    agentRunId:ai?.agentRunId||null},dashboard,
   pscRiskRatePercent:rates.pscRiskRatePercent,
-  uaeFlagRatePercent:rates.uaeFlagRatePercent
+  uaeFlagRatePercent:rates.uaeFlagRatePercent,officerAdds
  });
  if(!selection.roster.length)fail('SI_DRAFT_NO_VERIFIED_SELECTED_VESSELS',409);
  if(selection.roster.length>SI_DRAFT_SOLVER_MAX_VESSELS)
@@ -145,7 +147,36 @@ export function buildIntegratedDraft({
   policyRevision:dashboard.policy.version,riskPolicyRevision:source.riskPolicyRevision,
   erpSnapshotId:erpSnapshot.snapshotId,
   effectiveErpSnapshotId:workforce.snapshotId,ai,
-  rows,selection,context,requests:requested,proposal,
+  rows,selection,context,requests:requested,proposal,officerAdds,
+  alternatives:(()=>{
+    const advice=new Map((ai?.recommendations||[]).map(r=>[r.candidateKey,r]));
+    const chosen=new Set(selection.roster.map(r=>r.imo)),keys=new Map();
+    for(const candidate of source.candidates){
+      const one=keys.get(candidate.imo)||[];one.push(candidate.candidateKey);
+      keys.set(candidate.imo,one);
+    }
+    return rows.filter(r=>r.editable&&!chosen.has(r.imo))
+      .flatMap(row=>{
+        const adviceKeys=keys.get(row.imo)||[];
+        if(!adviceKeys.some(k=>advice.get(k)?.recommendation==='MANUAL_REVIEW')||
+           adviceKeys.some(k=>advice.get(k)?.recommendation==='DEFER_RECOMMENDED'))
+          return [];
+        const vessel=dashboard.vesselCandidates.find(v=>v.imo===row.imo);
+        if(!vessel)return [];
+        const period=checkVesselPlanPeriod(vessel,metadata);
+        const bases=[
+         ...(row.sources?.includes('SERVICE_REQUEST')?['SERVICE_REQUEST']:[]),
+         ...(row.sources?.includes('PSC_PORT_CALL')&&
+           Number.isFinite(Number(vessel.currentRisk?.score))?['PSC_RISK']:[]),
+         ...(['AE','ARE','UAE','UNITED ARAB EMIRATES'].includes(
+           String(vessel.flag||'').trim().toUpperCase())?['UAE_FLAG']:[])
+        ];
+        return bases.length?[{imo:row.imo,vesselName:vessel.vesselName,
+         sourceTypes:row.sources||[],priorityCriterion:row.rankingCriterion||
+           'PENDING_ADDITIONAL_RULES',periodStatus:period.status,
+         eligibleBases:bases,requiredOfficerReason:true,aiAdvice:'MANUAL_REVIEW'}]:[];
+      });
+  })(),
   mandatoryUnscheduled,outsidePeriod,ready,
   exceptionActions:exceptions,generatedAt:new Date(clock()).toISOString(),
   candidateCount:new Set(source.candidates.map(c=>c.imo)).size};
@@ -169,6 +200,10 @@ export function publicDraftPreview(p,previewId){
   readyForSupervisorReview:p.ready,
   quotas:p.selection.quotas,
   demoOnly:p.metadata.demoMode,
+  manualAlternatives:p.alternatives,
+  officerSelectedAlternatives:p.officerAdds||[],
+  availablePlanSlots:Math.max(0,(p.selection.quotas.maxPlannedVessels||
+    p.selection.roster.length)-p.selection.roster.length),
   items:p.selection.roster.map(v=>{
    const advice=rank.get(v.imo),a=assigned.get(v.imo);
    const issue=p.proposal.rows.find(r=>r.imo===v.imo);
