@@ -31,6 +31,9 @@ export class SiIntegratedDraftJobs{
    createdAt:job.createdAt,
    expectedBatches:job.expectedBatches,
    completedBatches:job.completedBatches,
+   totalWorkflows:job.totalWorkflows,
+   processedWorkflows:job.processedWorkflows,
+   totalVessels:job.totalVessels,
    ...(job.status==='COMPLETED'?{preview:job.preview}:{ }),
    ...(job.status==='FAILED'?{error:job.failure.error,
      ...(job.failure.reasonCode?{reasonCode:job.failure.reasonCode}:{}),
@@ -38,7 +41,8 @@ export class SiIntegratedDraftJobs{
      ...(job.failure.batchIndex?{batchIndex:job.failure.batchIndex}:{}),
      ...(job.failure.batchCount?{batchCount:job.failure.batchCount}:{})}:{})};
  }
- start({actor,metadata,sourceHash,expectedBatches,execute}){
+ start({actor,metadata,sourceHash,expectedBatches,
+   totalWorkflows=0,totalVessels=0,execute}){
   if(typeof actor!=='string'||!actor||typeof sourceHash!=='string'||
    !Number.isInteger(expectedBatches)||expectedBatches<1||
    typeof execute!=='function')
@@ -58,7 +62,10 @@ export class SiIntegratedDraftJobs{
   const id=randomUUID(),started=this.clock();
   const job={id,actor,signature,status:'QUEUED',phase:'WAITING_TO_START',
    createdAt:new Date(started).toISOString(),startedAt:started,
-   expectedBatches,completedBatches:0,finishedAt:null,
+   expectedBatches,completedBatches:0,
+   totalWorkflows:Number.isInteger(totalWorkflows)?totalWorkflows:0,
+   totalVessels:Number.isInteger(totalVessels)?totalVessels:0,
+   processedWorkflows:0,finishedAt:null,
    preview:null,failure:null};
   this.jobs.set(id,job);
   queueMicrotask(()=>{
@@ -68,7 +75,11 @@ export class SiIntegratedDraftJobs{
     job.phase='VALIDATING_C01_BATCHES';
     const done=Number(info?.completedBatches);
     if(Number.isInteger(done)&&done>=0&&done<=job.expectedBatches)
-     job.completedBatches=done;
+     job.completedBatches=Math.max(job.completedBatches,done);
+    const workflows=Number(info?.processedWorkflows);
+    if(Number.isInteger(workflows)&&workflows>=0&&
+      workflows<=job.totalWorkflows)
+     job.processedWorkflows=Math.max(job.processedWorkflows,workflows);
    };
    Promise.resolve().then(()=>execute(progress,phase=>{
     if(job.status==='RUNNING')job.phase=phase;
@@ -76,6 +87,7 @@ export class SiIntegratedDraftJobs{
     if(!preview||typeof preview!=='object'||!preview.previewId)
      throw new SiDraftJobError('SI_DRAFT_JOB_PREVIEW_INVALID',500);
     job.preview=preview;job.completedBatches=job.expectedBatches;
+    job.processedWorkflows=job.totalWorkflows;
     job.status='COMPLETED';job.phase='READY_FOR_OPERATOR_REVIEW';
     job.finishedAt=this.clock();
    }).catch(e=>{
