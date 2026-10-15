@@ -182,6 +182,7 @@ export class SiInspectionPlan{
    agentRunId:current?.agentRunId||null,
    selectionMode:current?.agentRunId?'AI_ASSISTED':'MANUAL',
    selectionProposal:current?.selectionProposal||null,
+   capacityDraft:cycle?.capacityDraft||null,
    manualSelection,availableCount,deferredCount,notSelectedCount,
    dataReadiness:historical?null:summarizeC01Readiness(source),
    candidatesAtCreation:cycle?.candidateSnapshot?.length??null,
