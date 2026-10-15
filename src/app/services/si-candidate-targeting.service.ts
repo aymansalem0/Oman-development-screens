@@ -52,12 +52,17 @@ export interface SiSelectionRules{
   uaePoolMode:'ELIGIBLE_CANDIDATES_ONLY';
   pscPoolMode:'PUBLISHED_PSC_SHORTLIST_ONLY';
   aiSelectionMode:'RECOMMEND_WITHIN_ELIGIBLE_QUOTAS';
+  serviceRequestPlanCap:number|null;maxPlannedVessels:number|null;
 }
 export interface SiSelectionProposal{
   mode:'AI_RECOMMENDATION_UNDER_PUBLISHED_POLICY_NOT_APPROVAL';
   policyRevision:number;snapshotHash:string;approved:false;
   pscRisk:{eligibleImos:number;cap:number;aiSelectedImos:string[];missingRisk:number};
   uaeFlag:{eligibleImos:number;cap:number;aiSelectedImos:string[]};
+  serviceRequests?:{eligibleImos:number;cap:number|null;aiSelectedImos:string[];
+     waitingInBacklogImos:string[]};
+  maxPlannedVessels?:number|null;
+  maxPlanExceededByProtectedSources?:boolean;
   mandatoryImos:string[];selectedImos:string[];
   overlappingImos:string[];aiRecommendedButQuotaExcluded:string[];
   manualReviewImos:string[];sourceCandidateImos:number;
@@ -123,6 +128,9 @@ export interface SiImpact{
   selectionImpact?:{
     candidatePoolImos:number;pscEligibleImos:number;uaeEligibleImos:number;
     pscTargetImos:number;uaeTargetImos:number;mandatoryImos:number;
+    serviceEligibleImos:number;serviceTargetImos:number|null;
+    maxPlannedVessels:number|null;theoreticalSelectedCeiling:number;
+    unverifiedCandidates:number;pendingServiceRequestsRemainInBacklog:true;
     independentFactors:true;aiRunRequiredToChooseOptionalImos:true;
     pscQuotaFirst:true;uaePopulation:'ELIGIBLE_CANDIDATES_ONLY'
   };
