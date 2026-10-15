@@ -624,6 +624,11 @@ export class SiCandidateAgent{
      unexpectedCount+=checked.unexpectedCount;
      for(const [key,count] of Object.entries(checked.failuresByCode))
       verificationFailures[key]=(verificationFailures[key]||0)+count;
+     // Explicit async job runs may receive safe, aggregate batch progress.
+     // Never report source IDs, raw provider outputs or model text.
+     if(typeof input.onBatch==='function')
+      input.onBatch({batchIndex:i+1,batchCount,
+       verified:verifiedCount,quarantined:quarantinedCount});
    }
    // Verified AI output only: the backend applies the configured caps and
    // protects statutory source obligations. Never materialize cases here.
