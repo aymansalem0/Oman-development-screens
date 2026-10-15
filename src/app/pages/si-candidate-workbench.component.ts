@@ -312,7 +312,7 @@ export class SiCandidateWorkbenchComponent implements OnInit,OnDestroy{
   }
   recalculateIntegratedDraft():void{
     if(this.newDraftBusy||!this.newDraftPreview)return;
-    this.newDraftBusy=true;this.planningError='';this.newDraftNotice='';
+    this.planningError='';this.newDraftNotice='';
     if(this.newDraftOfficerAdds.some(x=>!x.reason.trim()||
       x.reason.trim().length<10)){
       this.planningError=this.copy(
@@ -320,6 +320,7 @@ export class SiCandidateWorkbenchComponent implements OnInit,OnDestroy{
         'اكتب سببًا تشغيليًا واضحًا لكل سفينة إضافية، لا يقل عن 10 أحرف.');
       return;
     }
+    this.newDraftBusy=true;
     this.http.post<DraftIntegratedPreview>('/api/si/v1/inspection-plans/draft-recalculate',{
       previewId:this.newDraftPreview.previewId,
       officerAdds:this.newDraftOfficerAdds,
@@ -331,7 +332,6 @@ export class SiCandidateWorkbenchComponent implements OnInit,OnDestroy{
     }).subscribe({
       next:x=>{this.newDraftBusy=false;this.newDraftPreview=x;
         this.newDraftRequests=x.visitRequests.map(v=>({...v}));
-        this.newDraftOfficerAdds=(x.officerSelectedAlternatives||[]).map(v=>({...v}));
         this.newDraftOfficerAdds=(x.officerSelectedAlternatives||[]).map(v=>({...v}));
         this.newDraftChanged=false;
         this.newDraftNotice=this.copy(
