@@ -112,7 +112,13 @@ interface CapacityPreview{
        'Reading eligible source-backed candidates and their saved risk assessments…',
        'جارٍ قراءة المرشحين المؤهلين من المصادر وتقييمات المخاطر المحفوظة…')}}</p>
      <p class="notice error" *ngIf="factorPoolError" role="alert">{{factorPoolError}}</p>
-     <div class="si-weight-grid">
+     <p *ngIf="selectionPolicyPublished" class="notice">
+       {{copy('Published selection rates are read-only here. Run SI-C01 in Candidate Center for an evidence-backed vessel selection; edit rates in Inspection Settings.',
+         'نسب اختيار السفن المنشورة للقراءة فقط. شغّل SI-C01 من قائمة المرشحين للحصول على السفن المختارة بالأدلة، أو عدّل النسب من الإعدادات.')}} 
+       <a routerLink="/moei/smart-inspection/settings/targeting">{{copy('Policy Settings','إعدادات الاختيار')}}</a> ·
+       <a routerLink="/moei/smart-inspection/candidates">{{copy('Run AI Selection','تشغيل اختيار AI')}}</a>
+      </p>
+      <div class="si-weight-grid">
       <label *ngFor="let w of planningWeights" class="si-weight-control">
        <span class="si-weight-heading">
         <strong>{{copy(w.en,w.ar)}}</strong>
@@ -120,7 +126,7 @@ interface CapacityPreview{
        </span>
        <small>{{copy(w.descriptionEn,w.descriptionAr)}}</small>
        <input type="range" min="0" max="100" step="1"
-        [ngModel]="w.value" (ngModelChange)="changePlanningWeight(w.key,$event)"
+        [ngModel]="w.value" (ngModelChange)="changePlanningWeight(w.key,$event)" [disabled]="selectionPolicyPublished"
         [attr.aria-label]="copy(w.en,w.ar)"/>
        <ng-container *ngIf="quotaFactor(w.key) as q">
         <div class="si-quota-equation">
@@ -623,6 +629,7 @@ export class SiInspectionPlanWizardComponent implements OnInit,OnDestroy{
    descriptionAr:'نسبة مستقلة من السفن المرشحة المؤهلة التي تحمل علم الإمارات.',value:0}
  ];
  factorPool:InspectionQuotaCandidate[]|null=null;
+ selectionPolicyPublished=false;
  factorPoolLoading=false;
  factorPoolError='';
  get quotaPreview():InspectionFactorQuotaPreview|null{
@@ -634,7 +641,8 @@ export class SiInspectionPlanWizardComponent implements OnInit,OnDestroy{
   return this.quotaPreview?.factors.find(x=>x.key===key)||null;
  }
  changePlanningWeight(key:string,value:number):void{
-  const w=this.planningWeights.find(x=>x.key===key);const v=Number(value);
+   if(this.selectionPolicyPublished)return;
+   const w=this.planningWeights.find(x=>x.key===key);const v=Number(value);
   if(w&&Number.isFinite(v)){
    w.value=Math.max(0,Math.min(100,Math.round(v)));
    this.invalidateCapacity();
@@ -644,7 +652,13 @@ export class SiInspectionPlanWizardComponent implements OnInit,OnDestroy{
   this.factorPoolLoading=true;this.factorPoolError='';
   this.candidates.dashboard().subscribe({
    next:dashboard=>{
-    const eligibleByImo=new Map<string,Set<string>>();
+     if(dashboard.policy.config.selection){
+       this.selectionPolicyPublished=true;
+       this.planningWeights[0].value=dashboard.policy.config.selection.pscRiskRatePercent;
+       this.planningWeights[1].value=dashboard.policy.config.selection.uaeFlagRatePercent;
+       this.invalidateCapacity();
+     }else this.selectionPolicyPublished=false;
+     const eligibleByImo=new Map<string,Set<string>>();
     // Only backend-eligible candidate source workflows count, not every
     // vessel event present in a raw imported Excel sheet.
     for(const c of dashboard.candidates){
