@@ -115,3 +115,25 @@ test('invalid rates and stale source data fail closed',()=>{
   pscRiskRatePercent:50,uaeFlagRatePercent:100
  }),/SI_INTEGRATED_PLAN_SOURCE_STALE_REVIEW/);
 });
+
+test('published verified C01 IMO selection overrides deterministic PSC fallback and excludes mandatory from optional caps',()=>{
+ const ai={aiSelectionValidated:true,snapshotHash:inspectionPlan.sourceHash,
+  policyRevision:8,
+  pscRisk:{aiSelectedImos:['9400104'],cap:2},
+  uaeFlag:{aiSelectedImos:['9400105'],cap:1}};
+ const result=selectIntegratedPlanVessels({
+  plan,inspectionPlan:{...inspectionPlan,agentRunId:'C01-verified',
+   selectionProposal:ai},dashboard,
+  pscRiskRatePercent:50,uaeFlagRatePercent:100});
+ assert.equal(result.quotas.selectionMethod,'VERIFIED_C01_AI_WITH_PUBLISHED_QUOTAS');
+ assert.equal(result.quotas.aiAgentRunId,'C01-verified');
+ assert.deepEqual(result.quotas.pscRisk.selectedImos,['9400104']);
+ assert.deepEqual(result.quotas.uaeFlag.selectedImos,['9400105']);
+ assert.equal(result.roster.some(v=>v.imo==='9400101'),false,
+  'high risk without C01 model recommendation is NOT silently filled in');
+ assert.deepEqual(new Set(result.roster.map(v=>v.imo)),
+  new Set(['9400104','9400105','9400106']));
+ assert.equal(result.quotas.pscRisk.eligibleImos,4);
+ assert.equal(result.quotas.uaeFlag.eligibleImos,2);
+ assert.equal(result.quotas.mandatoryOrManual.count,1);
+});
