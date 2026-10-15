@@ -550,13 +550,14 @@ export class SiCandidateTargeting{
           const eta=arrivalLocal(e);
           if(!eta)return false;
           const raw=eta.replace(' ','T');
-          const ms=/(?:Z|[+-]\\d\\d:\\d\\d)$/.test(raw)?
-           Date.parse(raw):Date.parse(raw+(/:\\d\\d$/.test(raw)?'':':00')+'+04:00');
+          const ms=/(?:Z|[+-]\d\d:\d\d)$/.test(raw)?
+           Date.parse(raw):Date.parse(raw+(/:\d\d$/.test(raw)?'':':00')+'+04:00');
           const samePort=!refPort||
             String(e.port||'').trim().toUpperCase()===refPort;
           return Number.isFinite(ms)&&samePort&&
-            (!Number.isFinite(currentEtd)||
-              (ms<=currentEtd&&currentEtd-ms<=30*86400000));
+            (Number.isFinite(currentEtd)?
+              (ms<=currentEtd&&currentEtd-ms<=30*86400000):
+              ms>=clock()-24*3600000);
         });
         // Distinct historical times cannot be silently reconciled.
         etaRecords=eligible;
