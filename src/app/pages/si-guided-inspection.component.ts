@@ -175,6 +175,9 @@ interface FieldAiAdvice{
       </div>
       <p *ngIf="step.references.length"><strong>{{t('Published evidence references','مراجع الأدلة المنشورة')}}:</strong>
        {{step.references.join(' · ')}}</p>
+      <p><a [routerLink]="['/moei/smart-inspection/checklists',g.caseId]"
+       class="evidence-link">{{t('Open full evidence capture (photos & supporting documents)',
+         'فتح تسجيل الأدلة التفصيلية (الصور والمستندات المؤيدة)')}}</a></p>
       <div class="form-actions">
        <button type="submit" [disabled]="busy||!canSave">{{t('Save Verified Inspection Step','حفظ نتيجة الخطوة')}}</button>
        <span>{{t('Inspector answers remain separate from AI suggestions','إجابات المفتش منفصلة عن توصيات AI')}}</span>
@@ -231,6 +234,7 @@ interface FieldAiAdvice{
  button.secondary,.steps button:not(.step){background:#e8f4f6;color:#116d7c}
  button:disabled{opacity:.5;cursor:not-allowed}.form-actions{margin-top:18px}
  .form-actions span{font-size:11px;color:#849ba5}
+ .evidence-link{display:inline-block;font-size:12px;color:#087b7e;text-decoration:underline;font-weight:800}
  .next{margin-top:20px;justify-content:flex-end}
  .status,.warning{background:#edf8fa;border:1px solid #acd4db;color:#125970;
   padding:12px;border-radius:9px;margin:13px 0;font-size:12px}
