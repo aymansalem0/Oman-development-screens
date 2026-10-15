@@ -276,6 +276,11 @@ interface CapacityPreview{
       {{capacityBusy?copy('Loading verified data…','تحميل البيانات…'):
        copy('01 · Load Candidates & Workforce','١ · تحميل السفن والطاقة التشغيلية')}}</button>
      <p class="notice error" *ngIf="capacityError" role="alert">{{capacityError}}</p>
+     <p class="notice" *ngIf="capacityRequiresC01">
+      {{copy('Published C01 selection policy requires verified recommendations before capacity matching. Run C01 in Candidate Center, then return here.',
+        'سياسة C01 المنشورة تشترط توصيات موثقة قبل حساب الطاقة. شغّل C01 في مركز المرشحين ثم عُد هنا.')}}
+      <a routerLink="/moei/smart-inspection/candidates">{{copy('Open Candidate Center →','فتح مركز المرشحين ←')}}</a>
+     </p>
      <ng-container *ngIf="capacityContext as ctx">
       <div class="review-stats">
        <p><b>{{ctx.selection.roster.length}}</b>
@@ -355,6 +360,19 @@ interface CapacityPreview{
         <td>{{row.imo}}</td><td>{{row.status}}</td>
         <td>{{row.blocker||copy('Feasible','قابل للجدولة')}}</td></tr></tbody>
       </table></div>
+      <ng-container *ngIf="approvedCapacityVariant as alt">
+       <h3>{{copy('Qualified Inspectors & Feasible Slots — Preview',
+         'المهندسون المؤهلون والمواعيد الممكنة — معاينة')}}</h3>
+       <p class="hint">{{copy('Capacity has been checked, but no supervisor approval or real ERP booking has occurred.',
+         'تم فحص الطاقة، لكن لم يحدث اعتماد من المشرف أو حجز ERP فعلي.')}}</p>
+       <div class="table-scroll"><table>
+        <thead><tr><th>IMO</th><th>{{copy('Qualified inspector','المهندس المؤهل')}}</th>
+         <th>{{copy('Port','الميناء')}}</th><th>{{copy('Proposed visit','الموعد المقترح')}}</th></tr></thead>
+        <tbody><tr *ngFor="let a of alt.assignments">
+         <td>{{a.imo}}</td><td>{{a.inspectorName}}</td>
+         <td>{{a.portName}}</td><td>{{a.startLocal}} → {{a.endLocal}}</td></tr></tbody>
+       </table></div>
+      </ng-container>
       <section class="capacity-exceptions" *ngIf="capacityPreview?.selection?.capacity?.exceptionActions as exceptions">
        <h3>{{copy('Exception resolution proposals (NOT approved assignments)',
         'بدائل علاج الاستثناءات (ليست تكليفات معتمدة)')}}</h3>
@@ -679,6 +697,8 @@ export class SiInspectionPlanWizardComponent implements OnInit,OnDestroy{
       currentRisk:v.currentRisk
      }));
     this.factorPoolLoading=false;
+    // Apply the published rates before the automatic capacity request.
+    if(this.capacityEntryFromCandidates)this.loadCapacityContext();
    },
    error:()=>{
     this.factorPool=null;this.factorPoolLoading=false;
@@ -690,6 +710,7 @@ export class SiInspectionPlanWizardComponent implements OnInit,OnDestroy{
  }
  capacityDemoMode=true;capacityBusy=false;capacityAiBusy=false;
  capacityContext:CapacityContext|null=null;capacityPreview:CapacityPreview|null=null;
+ capacityRequiresC01=false;private capacityEntryFromCandidates=false;
  capacityProposal:CapacitySchedule|null=null;capacityAiOptionId='';
  capacityError='';capacityAiMessage='';
  step=1;preview:SiBulkPreview|null=null;planId:string|null=null;
@@ -789,8 +810,11 @@ export class SiInspectionPlanWizardComponent implements OnInit,OnDestroy{
  }
  ngOnInit():void{
   this.planId=this.route.snapshot.paramMap.get('planId');
+  this.capacityEntryFromCandidates=this.route.snapshot.queryParamMap.get('stage')==='capacity';
+  if(this.capacityEntryFromCandidates)this.step=3;
   const incoming=this.route.snapshot.queryParamMap.get('imo')||'';
   this.returnedFromScheduling=this.route.snapshot.queryParamMap.get('origin')==='scheduling';
+  if(this.returnedFromScheduling){this.capacityEntryFromCandidates=false;this.step=1;}
   this.focusedImo=this.returnedFromScheduling&&/^[0-9]{7}$/.test(incoming)?incoming:'';
   if(!this.planId){
    this.error=this.copy('Select a numbered rolling plan from Candidate & Targeting first.',
@@ -866,7 +890,7 @@ export class SiInspectionPlanWizardComponent implements OnInit,OnDestroy{
  }
  loadCapacityContext():void{
   if(!this.planId||this.capacityBusy||this.returnedFromScheduling)return;
-  this.capacityBusy=true;this.capacityError='';this.error='';
+  this.capacityBusy=true;this.capacityError='';this.capacityRequiresC01=false;this.error='';
   const params=new HttpParams()
    .set('psc',String(this.planningWeights[0].value))
    .set('uae',String(this.planningWeights[1].value))
@@ -875,8 +899,14 @@ export class SiInspectionPlanWizardComponent implements OnInit,OnDestroy{
    next:r=>{
     this.capacityContext=r;this.capacityBusy=false;
     this.capacityPreview=null;this.capacityProposal=null;this.capacityAiOptionId='';
+    // Read-only capacity calculation; AI and supervisor approval remain manual.
+    if(this.capacityEntryFromCandidates){
+     this.capacityEntryFromCandidates=false;this.previewCapacity();
+    }
    },
    error:e=>{this.capacityBusy=false;
+    this.capacityEntryFromCandidates=false;
+    this.capacityRequiresC01=e?.error?.error==='SI_C01_CONFIGURED_SELECTION_REQUIRED_RUN_AI';
     this.capacityError=e?.error?.error||
      this.copy('Unable to load verified capacity context.',
       'تعذر تحميل بيانات الطاقة التشغيلية الموثقة.');}
