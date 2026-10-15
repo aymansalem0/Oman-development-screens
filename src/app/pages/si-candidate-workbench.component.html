@@ -632,9 +632,16 @@
                     {{v.arrivalSourceReference}}</small>
                   </ng-container>
                   <ng-template #etaMissing>
-                   <span [class.si-vessel-date-conflict]="v.arrivalStatus==='CONFLICT'">
-                    {{v.arrivalStatus==='CONFLICT'?copy('Conflicting ETA','تعارض في ETA'):
-                      copy('ETA unavailable','موعد الوصول غير متاح')}}</span>
+                   <ng-container *ngIf="v.arrivalStatus==='MISSING'&&v.demoArrivalAt; else etaUnavailable">
+                    <strong class="si-vessel-eta-demo">{{candidateMovementTime(v.demoArrivalAt)}}</strong>
+                    <small class="si-vessel-eta-demo-label">
+                     {{copy('POC example ETA · not verified','وصول افتراضي للـPOC · غير مؤكد')}}</small>
+                   </ng-container>
+                   <ng-template #etaUnavailable>
+                    <span [class.si-vessel-date-conflict]="v.arrivalStatus==='CONFLICT'">
+                     {{v.arrivalStatus==='CONFLICT'?copy('Conflicting source ETA','تعارض في مواعيد الوصول'):
+                       copy('No verified ETA','لا يوجد وصول مؤكد')}}</span>
+                   </ng-template>
                   </ng-template>
                 </td>
                 <td class="si-vessel-movement-date">
