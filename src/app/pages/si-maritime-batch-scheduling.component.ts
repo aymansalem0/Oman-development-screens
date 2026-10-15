@@ -19,6 +19,7 @@ interface Context{
  planId:string;approvedVessels:number;items:SourceRow[];
  ports:{portId:string;name:string}[];
  erpSnapshotId?:string;demoMode?:boolean;demoNotice?:string;
+ pocSelfInspectorId?:string|null;
  demoFilledVessels?:number;
  workforce?:{inspectorId:string;inspectorName:string;homePortId:string|null;
    dailyCapacity:number;qualifications:string[]}[];
