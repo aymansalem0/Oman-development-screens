@@ -198,7 +198,9 @@ export function selectIntegratedPlanVessels({
   overlapImos:ai?.overlappingImos||pscSelected.filter(x=>
     uaeSelected.some(y=>y.imo===x.imo)).map(x=>x.imo),
   availableCandidates:rows.length,advisoryOnly:true,
-   selectionMethod:ai?'VERIFIED_C01_WITH_EXPLICIT_OFFICER_ALTERNATIVES':
+   selectionMethod:ai?
+     (manualSelected.length?'VERIFIED_C01_WITH_EXPLICIT_OFFICER_ALTERNATIVES':
+      'VERIFIED_C01_AI_WITH_PUBLISHED_QUOTAS'):
      'LEGACY_RULE_BASED_FALLBACK_NO_AI_SELECTION',
    aiAgentRunId:ai?inspectionPlan.agentRunId:null,
    selectionPolicyRevision:ai?.policyRevision??null
