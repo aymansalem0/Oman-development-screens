@@ -38,6 +38,8 @@ import {projectVesselMasterEtd} from './si-vessel-master-etd.mjs';
 import { SiPscSelection, SiSelectionError } from './si-psc-selection.mjs';
 import { SiAiPrioritization, SiPriorityError } from './si-ai-prioritization.mjs';
 import {SiCandidateAgent,SiCandidateAgentError} from './si-candidate-agent.mjs';
+import {SiC01AsyncJobs,SiC01JobError,c01JobOwner}
+ from './si-c01-async-jobs.mjs';
 import {SiInspectionPlan} from './si-inspection-plan.mjs';
 import {SiRollingPlanStore,SiRollingPlanError} from './si-rolling-plan-store.mjs';
 import {SiBulkInspectionPlan,SiBulkApprovalError} from './si-bulk-inspection-plan.mjs';
@@ -284,6 +286,7 @@ const siPriority=new SiAiPrioritization({
   // P01 retired, including MOCK mode and legacy settings.
   enabled:false
 });
+const siC01Jobs=new SiC01AsyncJobs();
 const siCandidateAgent=new SiCandidateAgent({
   targeting:siTargeting,pscPolicy:async()=>{
     const pool=await siPscSelection.pool();
@@ -1126,6 +1129,37 @@ const server = createServer(async (req, res) => {
         if(planId&&!siRollingPlansReady)return respond(res,503,{error:'SI_ROLLING_MIGRATION_018_REQUIRED'});
         return respond(res,200,await siInspectionPlan.snapshot(planId));
       }
+      // Long-running multi-batch SI-C01 may exceed a single HTTP proxy
+      // timeout. Explicit POST returns jobId immediately; status GET never
+      // triggers Airia, Oracle writes or a silent retry.
+      const c01PlanJob=/^\/api\/si\/v1\/inspection-plan\/rerank\/jobs\/(active|[a-f0-9-]{36})$/.exec(path);
+      if(c01PlanJob&&req.method==='GET'){
+        dashboards.assertRole(req,'EDITOR');
+        const owner=c01JobOwner(req,moeiAuth.session(req));
+        const job=c01PlanJob[1]==='active'?
+          siC01Jobs.active(owner,'PLAN_RERANK'):
+          siC01Jobs.status(owner,c01PlanJob[1]);
+        return respond(res,200,job||{status:'NONE',jobId:null});
+      }
+      if(path==='/api/si/v1/inspection-plan/rerank/jobs'&&req.method==='POST'){
+        dashboards.assertRole(req,'EDITOR');
+        const input=await requestJson(req,4096);
+        if(input.planId&&!siRollingPlansReady)
+          return respond(res,503,{error:'SI_ROLLING_MIGRATION_018_REQUIRED'});
+        if(input.confirmRun!==true||
+           typeof input.actor!=='string'||!input.actor.trim()||
+           !/^[a-f0-9]{64}$/i.test(input.expectedSourceHash||'')||
+           !Number.isInteger(input.expectedRevision))
+          return respond(res,422,{error:'SI_C01_JOB_CONFIRMATION_REQUIRED'});
+        const owner=c01JobOwner(req,moeiAuth.session(req));
+        const status=siC01Jobs.submit({
+          owner,kind:'PLAN_RERANK',request:input,
+          expectedBatches:Number.isInteger(input.confirmBatchCount)?
+            input.confirmBatchCount:null,
+          run:({onBatch})=>siInspectionPlan.rerank({...input,onBatch})
+        });
+        return respond(res,202,status);
+      }
       if(path==='/api/si/v1/inspection-plan/rerank'&&req.method==='POST'){
         dashboards.assertRole(req,'EDITOR');
         const input=await requestJson(req,4096);
@@ -1868,7 +1902,7 @@ const server = createServer(async (req, res) => {
           ...(Number.isInteger(e.returnedCount)?{returnedCount:e.returnedCount}:{}),
           ...(Number.isInteger(e.batchIndex)?{batchIndex:e.batchIndex}:{}),
           ...(Number.isInteger(e.batchCount)?{batchCount:e.batchCount}:{})});
-      if(e instanceof SiError||e instanceof SiPocAdvisorError||e instanceof SiRollingPlanError||e instanceof SiIntegratedPlanError||
+      if(e instanceof SiC01JobError||e instanceof SiError||e instanceof SiPocAdvisorError||e instanceof SiRollingPlanError||e instanceof SiIntegratedPlanError||
        e instanceof SiBulkApprovalError||e instanceof SiCandidateAgentError||e instanceof SiLifecycleError||e instanceof SiSelectionError||e instanceof SiPriorityError||e instanceof SiPreparationError||e instanceof SiWorkOrderError||e instanceof SiTargetingError||e instanceof MoeiAuthError||e instanceof DashboardError)
         return respond(res,e.status,{error:e.code});
       if(Number.isInteger(e?.status)&&e.status>=400&&e.status<500)
