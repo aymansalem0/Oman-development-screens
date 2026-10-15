@@ -243,6 +243,15 @@ export class SiRollingPlanStore{
    if(!allowed(p))fail('SI_ROLLING_APPROVED_PLAN_IMMUTABLE',409);
    if(p.revision!==expectedRevision)fail('SI_ROLLING_VERSION_CONFLICT',409);
    const next=operation(clone(p));
+   // Changes to a draft's selected vessels/C01 ranking invalidate its saved
+   // inspector capacity proposal. The former proposal remains in version
+   // history for audit but is NOT advertised as currently feasible.
+   if(p.capacityDraft){
+    next.capacityDraft={...p.capacityDraft,
+     status:'STALE_AFTER_DRAFT_EDIT_RECALCULATE_CAPACITY',
+     proposedAssignments:[],selectedOptionId:null,
+     proposalHash:null,updatedBy:actor,staleAt:now()};
+   }
    next.revision=p.revision+1;next.updatedAt=now();next.updatedBy=actor;
    // Keep the one audited officer disposition breakdown that the trusted
    // bulk mutation added. Prior event history cannot be rewritten by it.
