@@ -171,7 +171,7 @@ export function projectGuidedInspection({order,preparation,checklist,lifecycle}=
  const publishedState=new Map(list(saved?.templates).flatMap(t=>
   list(t.groups).flatMap(g=>list(g.items).map(it=>[it.instanceId,it]))));
  for(const step of grouped.values()){
-  const sourceComplete=step.members.filter(m=>m.required!==false).every(m=>{
+  const sourceComplete=step.members.every(m=>{
    if(m.kind==='LIFECYCLE')
     return lifeState.get(m.id)?.status!=='PENDING'&&
      Boolean(lifeState.get(m.id)?.status);
