@@ -39,6 +39,9 @@ export function contextToRequests(context){
   imo:v.imo,portId:v.portId,vesselType:v.vesselType,regime:v.regime,
   locationType:v.locationType,locationName:v.locationName,
   siteAccessConfirmed:v.siteAccessConfirmed,
+  berthAtLocal:v.berthAtLocal||'',
+  berthConfirmed:v.berthConfirmed===true,
+  berthEvidenceReference:v.berthEvidenceReference||'',
   durationMinutes:Number(v.durationMinutes),
   earliestLocal:v.etaLocal||v.earliestLocal,
   latestFinishLocal:v.etdLocal||v.latestFinishLocal,
@@ -186,6 +189,8 @@ export function publicDraftPreview(p,previewId){
   visitInputs:p.context.items.map(v=>({
    imo:v.imo,portId:v.portId,portName:v.portName,portSourceLocked:v.portSourceLocked,
    locationName:v.locationName,siteAccessConfirmed:v.siteAccessConfirmed,
+   berthAtLocal:v.berthAtLocal||'',berthConfirmed:v.berthConfirmed===true,
+   berthEvidenceReference:v.berthEvidenceReference||'',
    durationMinutes:v.durationMinutes,
    earliestLocal:v.etaLocal||v.earliestLocal,
    latestFinishLocal:v.etdLocal||v.latestFinishLocal,
