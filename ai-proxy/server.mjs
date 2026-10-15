@@ -29,7 +29,7 @@ import {prepareS01WholePlanRequest,validateS01WholePlanResponse}
 import {maritimePlanSchedulingContext,validateOperatorScheduleAgainstSource} from './si-maritime-plan-source.mjs';
 import {buildPocErpSchedulingOverlay,fillPocSchedulingVisitContext,
  validatePocSchedulingDemoRequest} from './si-scheduling-poc-fixtures.mjs';
-import { SiCandidateTargeting, SiTargetingError } from './si-candidate-targeting.mjs';
+import { SiCandidateTargeting, SiTargetingError ,getSiSelectionPolicy} from './si-candidate-targeting.mjs';
 import {selectIntegratedPlanVessels,makeCapacityDraftPlan,
  validateIntegratedCapacityProposal,SiIntegratedPlanError}
  from './si-integrated-capacity-plan.mjs';
@@ -1170,6 +1170,20 @@ const server = createServer(async (req, res) => {
         const [inspectionPlan,dashboard]=await Promise.all([
           siInspectionPlan.snapshot(planId),siTargeting.dashboard()
         ]);
+        // A published selection policy, not browser sliders, sets both rates.
+        // Stage-1 PSC event quotas have already been applied by Candidate Center.
+        const configured=dashboard.policy.config?.selection?
+          getSiSelectionPolicy(dashboard.policy.config):null;
+        if(configured&&(
+          body.pscRiskRatePercent!==configured.pscRiskRatePercent||
+          body.uaeFlagRatePercent!==configured.uaeFlagRatePercent))
+          return respond(res,409,{error:'SI_SELECTION_PUBLISHED_QUOTAS_REQUIRED'});
+        if(configured&&(configured.pscRiskRatePercent>0||
+           configured.uaeFlagRatePercent>0)&&
+           (!inspectionPlan.selectionProposal?.aiSelectionValidated||
+            inspectionPlan.selectionProposal.policyRevision!==dashboard.policy.version||
+            inspectionPlan.selectionProposal.snapshotHash!==inspectionPlan.sourceHash))
+          return respond(res,409,{error:'SI_C01_CONFIGURED_SELECTION_REQUIRED_RUN_AI'});
         const selection=selectIntegratedPlanVessels({
           plan,inspectionPlan,dashboard,
           pscRiskRatePercent:body.pscRiskRatePercent,
@@ -1301,6 +1315,9 @@ const server = createServer(async (req, res) => {
             pscRiskRatePercent:body.pscRiskRatePercent,
             uaeFlagRatePercent:body.uaeFlagRatePercent,
             quotas:selection.quotas,rejected:decision.rejected,
+            c01AgentRunId:selection.quotas.aiAgentRunId,
+            publishedSelectionPolicyVersion:dashboard.policy.version,
+            c01SelectionMethod:selection.quotas.selectionMethod,
             selectionSummary:decision.disposition,
             demoMode:body.demoMode
           },
