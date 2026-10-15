@@ -55,7 +55,8 @@ function sourceEvidence(imo,dashboard){
  * Selection is a new DRAFT proposal, never a new regulatory decision.
  */
 export function selectIntegratedPlanVessels({
- plan,inspectionPlan,dashboard,pscRiskRatePercent,uaeFlagRatePercent
+ plan,inspectionPlan,dashboard,pscRiskRatePercent,uaeFlagRatePercent,
+ officerAdds=[]
 }={}){
  if(!plan||!['DRAFT','READY_FOR_APPROVAL'].includes(plan.status)||
   !inspectionPlan||!dashboard)
@@ -119,8 +120,54 @@ export function selectIntegratedPlanVessels({
  const serviceSelected=ai&&serviceAi?
    service.filter(v=>serviceAi.has(v.imo)):[];
  const forced=rows.filter(x=>mandatory(x)||isManualInclude(x));
+ // Human-selected alternative additions to the CURRENT DRAFT are distinct
+ // from verified Airia advice. Validate every choice against original C01
+ // MANUAL_REVIEW, saved vessel evidence and independent published quotas.
+ const manualSelected=[];
+ if(!Array.isArray(officerAdds)||officerAdds.length>50)
+  fail('SI_DRAFT_OFFICER_ALTERNATIVES_INVALID',422);
+ const verifiedReasons=new Map((dashboard.candidates||[]).map(c=>[c.imo,c]));
+ const recommendedMap=new Map((inspectionPlan.aiRecommendations||[])
+  .map(r=>[r.candidateKey,r]));
+ const aiCandidateKeys=new Map();
+ for(const c of inspectionPlan.aiCandidates||[]){
+  const list=aiCandidateKeys.get(c.imo)||[];
+  list.push(c.candidateKey);aiCandidateKeys.set(c.imo,list);
+ }
+ const choices=new Set();
+ for(const change of officerAdds){
+  if(!change||typeof change.imo!=='string'||choices.has(change.imo)||
+   typeof change.reason!=='string'||change.reason.trim().length<10||
+   change.reason.length>500||
+   !['SERVICE_REQUEST','PSC_RISK','UAE_FLAG'].includes(change.basis))
+   fail('SI_DRAFT_OFFICER_ALTERNATIVE_REASON_OR_BASIS_INVALID',422);
+  choices.add(change.imo);
+  const row=verified.get(change.imo),keys=aiCandidateKeys.get(change.imo)||[];
+  if(!ai||!row||mandatory(row)||!keys.length||
+   !keys.some(k=>recommendedMap.get(k)?.recommendation==='MANUAL_REVIEW')||
+   keys.some(k=>recommendedMap.get(k)?.recommendation==='DEFER_RECOMMENDED'))
+   fail('SI_DRAFT_ALTERNATIVE_C01_OR_SOURCE_NOT_ELIGIBLE',409);
+  if(change.basis==='SERVICE_REQUEST'){
+   if(!row.sources?.includes('SERVICE_REQUEST')||
+     ai?.serviceRequests?.cap===null||
+     serviceSelected.length+manualSelected.filter(x=>x.basis==='SERVICE_REQUEST').length
+      >=ai.serviceRequests.cap)
+    fail('SI_DRAFT_SERVICE_QUOTA_EXCEEDED',409);
+  }else if(change.basis==='PSC_RISK'){
+   if(!row.sources?.includes('PSC_PORT_CALL')||
+     !Number.isFinite(Number(row.risk?.score))||
+     pscSelected.length+manualSelected.filter(x=>x.basis==='PSC_RISK').length>=ai.pscRisk.cap)
+    fail('SI_DRAFT_PSC_QUOTA_EXCEEDED',409);
+  }else{
+   if(!goodFlag(row.flag)||
+     uaeSelected.length+manualSelected.filter(x=>x.basis==='UAE_FLAG').length>=ai.uaeFlag.cap)
+    fail('SI_DRAFT_UAE_QUOTA_EXCEEDED',409);
+  }
+  manualSelected.push({imo:change.imo,basis:change.basis,
+   reason:change.reason.trim()});
+ }
  const selectedImos=new Set([...forced,...serviceSelected,
-   ...pscSelected,...uaeSelected].map(x=>x.imo));
+   ...pscSelected,...uaeSelected,...manualSelected.map(x=>verified.get(x.imo))].map(x=>x.imo));
  const maxPlan=ai?.maxPlannedVessels??null;
  if(maxPlan!==null&&selectedImos.size>maxPlan)
    fail('SI_POC_PLAN_MAX_VESSELS_EXCEEDED_OFFICER_REVIEW',409);
@@ -146,11 +193,12 @@ export function selectIntegratedPlanVessels({
    pendingInCandidateBacklog:ai?.serviceRequests?.waitingInBacklogImos.length??null},
   maxPlannedVessels:maxPlan,
   mandatoryOrManual:{count:forced.length,imos:forced.map(x=>x.imo)},
+  officerSelectedAlternatives:manualSelected,
   selectedImos:roster.map(x=>x.imo),
   overlapImos:ai?.overlappingImos||pscSelected.filter(x=>
     uaeSelected.some(y=>y.imo===x.imo)).map(x=>x.imo),
   availableCandidates:rows.length,advisoryOnly:true,
-   selectionMethod:ai?'VERIFIED_C01_AI_WITH_PUBLISHED_QUOTAS':
+   selectionMethod:ai?'VERIFIED_C01_WITH_EXPLICIT_OFFICER_ALTERNATIVES':
      'LEGACY_RULE_BASED_FALLBACK_NO_AI_SELECTION',
    aiAgentRunId:ai?inspectionPlan.agentRunId:null,
    selectionPolicyRevision:ai?.policyRevision??null
