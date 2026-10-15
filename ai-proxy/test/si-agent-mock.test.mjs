@@ -356,7 +356,8 @@ test('C01 treats contradictory saved future ETDs as conflict and never prioritis
  const rows=[0,1].map(i=>({
   ...candidate('duplicate-'+i,i?'PSC_PORT_CALL':'SERVICE_REQUEST','9328471',null),
   events:[{eventKey:'evt-conflict-'+i,sourceType:i?'PSC_PORT_CALL':'SERVICE_REQUEST',
-    sourceReference:'source-'+i,port:'Jebel Ali',departureVerified:true,
+    sourceReference:'source-'+i,port:'Jebel Ali',
+     approval:'SOURCE_FINAL',departureVerified:true,
     departureAt:dates[i],evidenceIds:['evidence-'+i]}]
  }));
  const vessels=SiCandidateTargeting.prototype._vesselCandidates.call({},rows);
