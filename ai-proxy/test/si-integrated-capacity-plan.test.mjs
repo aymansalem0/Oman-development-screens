@@ -44,7 +44,8 @@ const dashboard={
    sourceType,eventKey:'EVENT-'+v.imo+'-'+i,
    sourceEventId:'ID-'+v.imo,
    sourceReference:'REF-'+v.imo,
-   approval:'SOURCE_FINAL',evidenceIds:['EVD-'+v.imo],
+   approval:sourceType==='NMC_CASE'?'APPROVED':'SOURCE_FINAL',
+   evidenceIds:['EVD-'+v.imo],
    contextNote:'Saved source fact '+v.imo
   }))
  }))
