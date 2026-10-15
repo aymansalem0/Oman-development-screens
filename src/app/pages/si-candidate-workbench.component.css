@@ -443,3 +443,20 @@ button:disabled{opacity:.55;cursor:not-allowed}
 .si-draft-job-progress strong{font-size:14px}
 .si-draft-job-progress b{font-size:18px;color:#00736e}
 .si-draft-job-progress p{margin:0;color:#405b68}
+
+
+.si-draft-scope-preview{border:1px solid #b9d9df;border-radius:10px;padding:15px;
+ background:#fff;margin:14px 0}
+.si-draft-scope-head{display:flex;align-items:center;justify-content:space-between;
+ flex-wrap:wrap;gap:10px}
+.si-draft-scope-head h4{font-size:14px;margin:0;color:#164a62}
+.si-draft-scope-head button{font-size:11px;padding:9px 12px}
+.si-draft-policy-blocker{padding:13px 15px;margin:12px 0;border:1px solid #ddad90;
+ border-inline-start:4px solid #bd6b33;border-radius:7px;
+ background:#fff9f3;color:#5c473a}
+.si-draft-policy-blocker strong{font-size:13px}
+.si-draft-policy-blocker p{font-size:12px;line-height:1.7;margin:8px 0}
+.si-draft-policy-blocker a{display:inline-block;color:#14647b;
+ text-decoration:underline;font-size:12px;font-weight:700}
+.si-draft-scope-ready{font-size:12px;color:#156654;margin:12px 0 0;
+ font-weight:700}
