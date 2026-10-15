@@ -385,3 +385,45 @@ button:disabled{opacity:.55;cursor:not-allowed}
 }
 .si-unified-table .si-bulk-check-cell input:disabled{cursor:not-allowed}
 @media(max-width:700px){.si-bulk-tools{align-items:stretch}.si-bulk-buttons button{flex:1}}
+
+
+/* Integrated capacity-first plan creation: source/priority/resources BEFORE save. */
+.si-integrated-create{display:block;margin:18px 0;padding:21px;background:#f7fbfc;
+  border:1px solid #bedde1;border-radius:13px}
+.si-integrated-create>h3{margin:0 0 9px;color:#0e465b;font-size:19px}
+.si-draft-form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:11px;margin:13px 0}
+.si-draft-form-grid label{display:flex;flex-direction:column;gap:5px;
+  font-weight:700;font-size:12px;color:#245568}
+.si-draft-form-grid input:not([type=checkbox]),.si-draft-form-grid select{
+  min-width:0;max-width:100%;padding:9px;border:1px solid #b9d4de;
+  border-radius:7px;background:#fff;font:inherit}
+.si-draft-consent{background:#fff;padding:14px;border:1px solid #d1e5e8;
+  border-radius:10px;margin:13px 0}
+.si-draft-consent label{display:block;margin:9px 0;font-size:12px;
+  font-weight:700;color:#204e62}
+.si-draft-consent p{font-size:12px;color:#466475}
+.si-integrated-preview{margin:18px 0;padding:17px;background:#fff;
+  border:2px solid #9ed2ca;border-radius:12px}
+.si-integrated-preview h3{margin:0 0 13px;font-size:17px;color:#07594f}
+.si-draft-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:9px;margin:15px 0}
+.si-draft-stats>div{display:grid;gap:5px;background:#f2faf8;
+  border:1px solid #c8e6df;border-radius:8px;padding:12px}
+.si-draft-stats strong{font-size:23px;color:#006c69}
+.si-draft-stats span{font-size:11px;color:#3d6272}
+.si-draft-table{max-width:100%;overflow-x:auto}
+.si-draft-table table{border-collapse:collapse;width:100%;min-width:850px}
+.si-draft-table th,.si-draft-table td{padding:9px;border-bottom:1px solid #d9e8ec;
+  text-align:start;vertical-align:top;font-size:11px}
+.si-draft-table th{color:#205466;background:#e7f3f5;white-space:nowrap}
+.si-draft-table td small{display:block;margin-top:5px;color:#5d7583}
+.si-draft-table td span{color:#916218;font-weight:800}
+.si-draft-inputs{margin:18px 0;padding:14px;background:#f9fcfe;
+  border:1px solid #d9e8ed;border-radius:10px}
+.si-draft-inputs h4{font-size:14px;color:#164d62}
+.si-draft-visit{margin:13px 0;padding:13px;border:1px solid #dbe9eb;
+  border-radius:8px;background:#fff}
+.si-draft-visit h5{font-size:12px;color:#12646c;margin:0 0 9px}
+@media(max-width:750px){.si-draft-form-grid{grid-template-columns:1fr}
+  .si-draft-stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
