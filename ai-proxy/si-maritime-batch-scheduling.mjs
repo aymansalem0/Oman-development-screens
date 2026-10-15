@@ -373,7 +373,12 @@ export function proposeMaritimeBatchSchedule({
       localDate(Date.parse(x.startUtc))===day).length;
     if(!limit||booked+current>=limit)continue;
     branches.push({schedule:[...state.schedule,opt],
+      // When equal numbers of inspections fit, maximize published execution
+      // priority before optimizing convenience. Rank is already derived from
+      // verified ETD and human-reviewed incident severity, NOT vessel risk.
+      // Constraint coverage stays the primary objective (stateSort).
       score:state.score+opt.score+
+        (100000/Math.max(1,Number(job.rank)||1))+
         // Demo preference NEVER creates an infeasible slot or substitutes
         // a real ERP credential. It nudges feasible proposals toward the
         // operator's signed-in synthetic engineer (when available).
