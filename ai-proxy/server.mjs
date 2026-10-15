@@ -1188,10 +1188,11 @@ const server = createServer(async (req, res) => {
               confirmBatchCount:batches,expectedSnapshotHash:source.snapshotHash,
               onProgress
             });
-            setPhase('MATCHING_QUALIFIED_INSPECTORS_AND_CAPACITY');
+            setPhase('APPLYING_VERIFIED_SELECTION_AND_EXECUTION_PRIORITY');
             const fresh=await siCandidateAgent.source();
             if(fresh.snapshotHash!==source.snapshotHash)
               throw new SiDraftCreationError('SI_DRAFT_SOURCE_CHANGED_REGENERATE',409);
+            setPhase('MATCHING_QUALIFIED_INSPECTORS_AND_CAPACITY');
             const id=uuidDraft(),previewId=uuidDraft();
             const result=await calculateNewDraft({id,metadata,source:fresh,ai,identity});
             return saveNewDraftPreview(previewId,actor,metadata,fresh,ai,result);
