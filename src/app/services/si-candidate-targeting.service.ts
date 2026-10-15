@@ -24,6 +24,9 @@ export interface SiVesselCandidate{
   currentRisk:SiCandidate['currentRisk'];
   arrivalAt?:string|null;arrivalStatus?:'MISSING'|'VERIFIED'|'CONFLICT';
   arrivalSourceReference?:string|null;
+  /** Display-only when POC demo is enabled; NEVER an authoritative ETA. */
+  demoArrivalAt?:string|null;
+  demoArrivalStatus?:'POC_ESTIMATE_ONLY'|null;
   departureAt?:string|null;departureVerified?:boolean;
   departureStatus?:'MISSING'|'VERIFIED'|'CONFLICT';
   departureSourceReference?:string|null;
