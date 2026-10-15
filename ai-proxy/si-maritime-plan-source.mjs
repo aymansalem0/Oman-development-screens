@@ -28,15 +28,25 @@ export function maritimePlanSchedulingContext(plan,dashboard,snapshot){
   const original=dashboard.vesselCandidates.find(x=>x.imo===entry.imo);
   const eventKeys=new Set(entry.inspectionReasons.flatMap(x=>[x.eventKey]));
   const events=(original?.sourceEvents||[]).filter(x=>eventKeys.has(x.eventKey));
-  // The source's exact dates are used. No ETA-derived fake ETD.
-  const dateEvent=events.find(x=>x.departureAt&&
-   ['SOURCE_FINAL','SOURCE_REVIEWED'].includes(x.approval));
+  // Independently recorded MSW Port Call movements may verify a vessel's
+  // physical presence even if its legal inspection trigger was an NMC case.
+  // Operational evidence adds dates ONLY; it never creates inspection reasons,
+  // quota eligibility or regulatory referral approval.
+  const movements=[...events,...(original?.operationalSourceEvents||[])]
+   .filter(x=>['SOURCE_FINAL','SOURCE_REVIEWED'].includes(x.approval));
+  const verifiedEtd=original?.departureStatus==='VERIFIED'?
+   Date.parse(original.departureAt):null;
+  const dateEvent=original?.departureStatus==='CONFLICT'?null:
+   Number.isFinite(verifiedEtd)?
+    movements.find(x=>x.departureAt&&
+     Date.parse(x.departureAt)===verifiedEtd):
+    movements.find(x=>x.departureAt&&Number.isFinite(Date.parse(x.departureAt)));
   const portEvent=dateEvent||events.find(e=>e.port)||null;
   const port=findPort(portEvent?.port);
-  // Pair ETA with the same verified port call as the source-final ETD.
-  // Never combine an unrelated historical arrival with another departure.
-  const candidates=events.filter(e=>e.eta&&
-   ['SOURCE_FINAL','SOURCE_REVIEWED'].includes(e.approval)&&
+  // Pair ETA to the final/current port call; never combine unrelated
+  // historical arrival and departure timestamps across ports.
+  const candidates=movements.filter(e=>e.eta&&
+   /^20\d\d-\d\d-\d\d[T ]\d\d:\d\d$/.test(e.eta)&&
    Number.isFinite(Date.parse(e.eta.replace(' ','T')+':00+04:00'))&&
    (!dateEvent||!dateEvent.port||e.port===dateEvent.port));
   const etaValues=new Set(candidates.map(e=>e.eta.replace('T',' ')));
