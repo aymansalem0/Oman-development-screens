@@ -116,3 +116,24 @@ test('Officer-confirmed berth arrival tightens, never changes, imported ETA/ETD'
  assert.equal(context.items[0].etaLocal,'2026-10-20 08:00');
  assert.equal(context.items[0].etdLocal,'2026-10-23 18:00');
 });
+
+test('An NMC legal inspection may use independently verified MSW ETA/ETD without inventing PSC eligibility',()=>{
+ const src=structuredClone(dashboard);
+ const nmc=src.vesselCandidates[1];
+ nmc.departureStatus='VERIFIED';
+ nmc.departureAt='2026-10-22T20:00:00+04:00';
+ nmc.operationalSourceEvents=[{
+  eventKey:'MSW-OP-1',sourceType:'PSC_PORT_CALL',
+  approval:'SOURCE_FINAL',sourceReference:'MSW-MOVEMENT-22',
+  port:'Jebel Ali',eta:'2026-10-21T07:00',
+  departureAt:'2026-10-22T20:00:00+04:00',departureVerified:true
+ }];
+ const out=maritimePlanSchedulingContext(plan,src,erp);
+ const v=out.items.find(x=>x.imo===nmc.imo);
+ assert.equal(v.etaLocal,'2026-10-21 07:00');
+ assert.equal(v.etdLocal,'2026-10-22 20:00');
+ assert.equal(v.portName,'Jebel Ali');
+ assert.deepEqual(v.sourceTypes,['NMC_CASE'],
+  'An operational MSW movement cannot create a PSC inspection trigger');
+ assert.equal(v.dateEvidenceReference,'MSW-MOVEMENT-22');
+});
