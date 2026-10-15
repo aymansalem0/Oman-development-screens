@@ -183,6 +183,11 @@ export interface SiC01Run{
  verifiedAiRecommendations?:number;manualReviewDueToAiContract?:number;
  ignoredUnknownRecommendations?:number;verificationFailures?:Record<string,number>;
 }
+export interface SiVesselPeriodEligibility{
+ status:'WITHIN_SOURCE_WINDOW'|'NEEDS_CAPACITY_CHECK'|'OUTSIDE_EXECUTION_PLAN';
+ reasonCode:string|null;firstSourceRef:string|null;
+ planStartsOn:string;planEndsOn:string;
+}
 export interface SiInspectionPlanRow{
  imo:string;vesselName:string;flag:string;vesselType:string;
  sources:string[];regimes:string[];sourceEvents:SiCandidateEvent[];
@@ -200,6 +205,7 @@ export interface SiInspectionPlanRow{
  priorityReason:string|null;selectionReason:string|null;
  evidenceRefs:string[];dataGaps:string[];confidence:number|null;
  editable:boolean;locked:boolean;mandatoryReferral:boolean;
+ periodEligibility?:SiVesselPeriodEligibility;
  regimeAdvisories:SiC01Recommendation[];
 }
 export interface SiRollingPlan{
