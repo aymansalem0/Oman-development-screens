@@ -317,7 +317,8 @@ const siRollingPlans=new SiRollingPlanStore({mode:dbMode,oracleRepository:reposi
 // side effects until Save Draft; restart/expiry requires an explicit new preview.
 const siDraftPreviews=new Map(),DRAFT_TTL_MS=30*60*1000;
 const siDraftJobs=new SiIntegratedDraftJobs();
-async function calculateNewDraft({id,metadata,source,ai,identity,requests=null}){
+async function calculateNewDraft({id,metadata,source,ai,identity,
+ requests=null,officerAdds=[]}){
  const dashboard=await siTargeting.dashboard();
  const erpSnapshot=siErp.requireSnapshot();
  const [nmcReferrals,bookings]=await Promise.all([
@@ -329,7 +330,7 @@ async function calculateNewDraft({id,metadata,source,ai,identity,requests=null})
   policy:siScheduling.getPolicy(),scheduler:siScheduling,
   nmcReferrals,existingBookings:metadata.demoMode?[]:
    [...siScheduling.state.confirmed,...bookings],
-  requests
+  requests,officerAdds
  });
 }
 function getNewDraftPreview(id,actor){
@@ -1213,7 +1214,13 @@ const server = createServer(async (req, res) => {
         const result=await calculateNewDraft({
           id:cached.result.id,metadata:cached.metadata,source:fresh,
           ai:cached.ai,identity,
-          requests:draftAction[1]==='recalculate'?input.requests:cached.result.requests
+          officerAdds:draftAction[1]==='recalculate'?
+           (Array.isArray(input.officerAdds)?input.officerAdds:cached.result.officerAdds):
+           cached.result.officerAdds,
+          requests:draftAction[1]==='recalculate'&&
+           Array.isArray(input.officerAdds)?null:
+           draftAction[1]==='recalculate'?input.requests:
+           cached.result.requests
         });
         if(draftAction[1]==='recalculate'){
           return respond(res,200,{status:'INTEGRATED_DRAFT_RECALCULATED',
