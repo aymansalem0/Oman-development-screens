@@ -10,24 +10,30 @@ const cases=read('ai-proxy/si-candidate-targeting.mjs');
 const prep=read('ai-proxy/si-inspection-preparation.mjs');
 const detail=read('src/app/pages/si-inspection-preparation.component.html');
 const server=read('ai-proxy/server.mjs');
-test('candidate screen only proposes plan and navigates to distinct Create Inspection Plan stepper',()=>{
+test('candidate screen navigates to the capacity-first integrated plan stepper',()=>{
  assert.match(grid,/\[routerLink\]="\['\/moei\/smart-inspection\/plan\/create',activePlanId\]"/);
  assert.match(routes,/path: 'moei\/smart-inspection\/plan\/create\/:planId'/);
  assert.match(routes,/path: 'moei\/smart-inspection\/plan\/create'/);
  assert.doesNotMatch(grid,/<app-si-bulk-approval-panel/);
- assert.match(wizard,/Selected Vessels/);
- assert.match(wizard,/All Referral Reasons/);
- assert.match(wizard,/Electronic Scheduling/);
- assert.match(wizard,/Review & Approval/);
+ assert.match(wizard,/Candidates & Quotas/);
+ assert.match(wizard,/Verified Source Reasons/);
+ assert.match(wizard,/Capacity & AI Scheduling/);
+ assert.match(wizard,/Single Plan Approval/);
+ assert.match(wizard,/PSC \+ Risk Factor/);
+ assert.match(wizard,/UAE-Flagged Vessels/);
 });
-test('stepper contains no single-regime selector and shows all reasons automatically',()=>{
- assert.doesNotMatch(wizard,/<select/);
+test('capacity-first approval preserves ALL reasons and commits one selected verified plan',()=>{
  assert.doesNotMatch(wizard,/choices\[/);
  assert.match(wizard,/vessel\.reasons\.length/);
  assert.match(wizard,/source\.sourceReference/);
  assert.match(wizard,/source\.inspectionRegime/);
- assert.match(wizard,/this\.api\.approveForScheduling\(/);
- assert.doesNotMatch(wizard,/this\.api\.approve\(/);
+ assert.match(wizard,/capacityUrl\+'context'/);
+ assert.match(wizard,/capacityUrl\+'preview'/);
+ assert.match(wizard,/capacityUrl\+'ai-recommend'/);
+ assert.match(wizard,/capacityUrl\+'approve'/);
+ assert.match(wizard,/expectedProposalHash:this\.capacityProposal\.proposalHash/);
+ assert.match(wizard,/confirmCrossPort:remote\.length>0/);
+ assert.doesNotMatch(wizard,/this\.api\.approveForScheduling\(/);
  assert.match(wizard,/createdInspectionCases/);
  assert.doesNotMatch(wizard,/candidateKey:this\.choices/);
 });

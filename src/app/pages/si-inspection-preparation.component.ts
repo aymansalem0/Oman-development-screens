@@ -4,7 +4,8 @@ import {Component,OnInit} from '@angular/core';
 import {FormsModule} from '@angular/forms';
 import {ActivatedRoute,RouterLink} from '@angular/router';
 import {NmcNavigationComponent} from '../components/nmc-navigation.component';
-import {SiPreparationService,SiPreparationView,SiPrepStatus} from '../services/si-preparation.service';
+import {SiPreparationService,SiPreparationView,SiPrepStatus,
+ SiCompleteVesselDossier} from '../services/si-preparation.service';
 
 @Component({
   selector:'app-si-inspection-preparation',
@@ -18,6 +19,8 @@ export class SiInspectionPreparationComponent implements OnInit{
   reviewDecision:'APPROVE'|'REJECT'='APPROVE';
   language:'en'|'ar'='en';
   data:SiPreparationView|null=null;
+  fullDossier:SiCompleteVesselDossier|null=null;
+  fullDossierError='';dossierLoading=false;
   readonly names:Record<string,string>={
     'fire-safety':'Fire Safety & Historical Deficiencies',
     'certificates':'Statutory Certificates',
@@ -35,7 +38,8 @@ export class SiInspectionPreparationComponent implements OnInit{
     // Handle navigation between approved cases without displaying stale evidence.
     this.route.paramMap.subscribe(params=>{
       this.id=params.get('caseId')||'';
-      this.data=null;this.error='';this.success='';
+      this.data=null;this.fullDossier=null;
+      this.fullDossierError='';this.error='';this.success='';
       if(this.id)this.load();
       else this.error=this.copy('No inspection case selected. Open an approved case from the preparation register.',
         'لم يتم اختيار حالة معاينة. افتح حالة معتمدة من قائمة التحضير.');
@@ -56,8 +60,21 @@ export class SiInspectionPreparationComponent implements OnInit{
     if(!this.editorKey.trim()){this.error='Editor access key required to open vessel evidence.';return;}
     this.loading=true;this.error='';this.success='';
     this.api.get(this.id,this.editorKey.trim()).subscribe({
-      next:r=>{this.data=r;this.loading=false;},
+      next:r=>{this.data=r;this.loading=false;this.loadFullDossier();},
       error:e=>this.fail(e)
+    });
+  }
+  loadFullDossier():void{
+    if(!this.id||!this.editorKey.trim())return;
+    this.dossierLoading=true;this.fullDossierError='';
+    this.api.getDossier(this.id,this.editorKey.trim()).subscribe({
+      next:r=>{this.fullDossier=r;this.dossierLoading=false;},
+      error:e=>{
+        this.fullDossier=null;this.dossierLoading=false;
+        this.fullDossierError=e?.error?.error||
+         this.copy('Unable to load full vessel dossier.',
+          'تعذر تحميل الدوسيه الكامل للسفينة.');
+      }
     });
   }
   private fail(e:unknown):void{
@@ -80,7 +97,8 @@ export class SiInspectionPreparationComponent implements OnInit{
   private completed(message:string):void{
     this.busy=false;
     this.api.get(this.id,this.editorKey.trim()).subscribe({
-      next:r=>{this.data=r;this.error='';this.success=message;},
+      next:r=>{this.data=r;this.error='';this.success=message;
+        this.loadFullDossier();},
       error:e=>this.fail(e)
     });
   }
@@ -115,7 +133,7 @@ export class SiInspectionPreparationComponent implements OnInit{
   private loadAfterFailedCall():void{
     if(!this.editorKey.trim())return;
     this.api.get(this.id,this.editorKey.trim()).subscribe({
-      next:r=>{this.data=r;},error:()=>{}
+      next:r=>{this.data=r;this.loadFullDossier();},error:()=>{}
     });
   }
   review():void{

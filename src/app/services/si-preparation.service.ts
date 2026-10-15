@@ -59,6 +59,46 @@ export interface SiPreparationRegister{
   status:'ok';count:number;cases:SiPreparationCaseSummary[];
   preparationAvailable:boolean;warning:string|null;
 }
+export interface SiCompleteVesselDossier{
+ status:'SOURCE_GROUNDED_VESSEL_DOSSIER';schema:string;caseId:string;imo:string;
+ revision:number;preparedAt:string|null;preparedBy:string|null;
+ readOnly:true;aiCallsOnGet:0;caseWrites:0;bookingWrites:0;
+ missingEvidence:string[];
+ readiness:{preparationSaved:boolean;aiGenerated:boolean;aiReviewed:boolean;
+  mandatoryChecklistPreserved:true;regulatoryApprovalImplied:false;
+  liveBookingConfirmed:boolean};
+ sections:{
+  identity:{imo:string;vesselName:string|null;flag:string|null;
+   vesselType:string|null;caseId:string;planId:string|null;
+   regime:string;regimes:string[];approvedBy:string|null};
+  assignments:{orderId:string;status:string;scheduleId:string|null;
+   inspectorName:string|null;portName:string|null;startLocal:string|null;
+   endLocal:string|null;crossPort:boolean;
+   liveErpBookingConfirmed:boolean}|null;
+  referrals:{allSourceReasons:{eventKey:string;sourceType:string;
+   sourceReference:string;inspectionRegime:string;narrative:string|null;
+   evidenceIds:string[]}[];objectives:unknown[];inspectionScopes:unknown[];
+   distinctSourceCount:number};
+  risk:{score:number;level:string;evaluationId:string;
+   policyRevision:number}|null;
+  sourceEvidence:{bundleRef:string;currentSourceHash:string;
+   evidenceManifestRefs:string[];certificates:unknown[];
+   inspectionHistory:unknown[];
+   openDeficiencies:{id:string|null;description:string|null;status:string}[];
+   documents:{evidenceId:string|null;documentType:string|null;
+    reviewStatus:string|null;authenticityVerified:false}[];
+   tracking:unknown;externalDocumentsVerified:boolean;
+   evidenceProvenance:string};
+  inspectionChecklist:{mandatoryBaseItemIds:string[];
+   publishedTemplateSnapshotPresent:boolean;itemsPrepared:boolean;
+   checklistStatus:string|null;manualScopeApprovalRequired:boolean};
+  aiAnalysis:{status:string;provider:string|null;enabled:boolean;generated:boolean;
+   mock:boolean;modelDraft:{focusAreas:unknown[];checklistFocus:unknown[];
+    predictedDeficiencies:unknown[];suggestedAdditionalItems:unknown[];
+    missingEvidence:string[]} |null;
+   supervisorReview:{decision:string;actor:string;reason:string;at:string}|null};
+ };
+}
 @Injectable({providedIn:'root'})
 export class SiPreparationService{
   private base='/api/si/v1/preparations/';
@@ -67,6 +107,11 @@ export class SiPreparationService{
   list(key:string):Observable<SiPreparationRegister>{
     return this.http.get<SiPreparationRegister>('/api/si/v1/preparations',
       {headers:this.headers(key)});
+  }
+  getDossier(id:string,key:string):Observable<SiCompleteVesselDossier>{
+   return this.http.get<SiCompleteVesselDossier>(
+    this.base+encodeURIComponent(id)+'/dossier',
+    {headers:this.headers(key)});
   }
   get(id:string,key:string):Observable<SiPreparationView>{
     return this.http.get<SiPreparationView>(this.base+encodeURIComponent(id),{

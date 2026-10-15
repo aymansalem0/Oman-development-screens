@@ -79,6 +79,9 @@ jobs:
       - name: Unified SI inspection-plan persistence and priority regressions
         run: node --test ai-proxy/test/si-inspection-plan.test.mjs
 
+      - name: SI capacity-first source quotas and complete vessel dossier regressions
+        run: node --test ai-proxy/test/si-integrated-capacity-plan.test.mjs ai-proxy/test/si-capacity-exception-alternatives.test.mjs ai-proxy/test/si-integrated-capacity-atomic.test.mjs ai-proxy/test/si-vessel-dossier.test.mjs
+
       - name: Unified MOEI Admin session security regression
         run: node --test ai-proxy/test/moei-poc-auth.test.mjs
       - name: Google SSO allowlist, PKCE and verified-token security tests
