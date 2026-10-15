@@ -81,7 +81,8 @@ test('C01 request actually receives configured publisher rules, returns evidence
   key:c.candidateKey,imo:c.imo,regime:c.regime,vesselName:'Vessel '+c.imo,
   events:[{eventKey:'evt-'+c.imo,sourceEventId:'ev-'+c.imo,
    sourceReference:'ref-'+c.imo,sourceType:c.sourceTypes[0],
-   approval:'APPROVED',evidenceIds:['ev-'+c.imo]}],
+   approval:c.sourceTypes[0]==='NMC_CASE'?'APPROVED':'SOURCE_FINAL',
+   evidenceIds:['ev-'+c.imo]}],
   eligibility:c.mandatory?'MANDATORY':'MANUAL_REVIEW',priority:'SOURCE_ELIGIBLE',
   currentRisk:c.currentRisk,status:'PENDING_REVIEW',inspectionCase:null
  }));
@@ -118,12 +119,14 @@ test('C01 request actually receives configured publisher rules, returns evidence
  assert.equal(seenPolicy.eligibleSelectionPool.distinctCandidateImos,6);
  assert.equal(seenPolicy.eligibleSelectionPool.pscEligibleImos,4);
  assert.equal(seenPolicy.eligibleSelectionPool.pscCap,2);
- assert.equal(seenPolicy.eligibleSelectionPool.uaeEligibleImos,1);
- assert.equal(seenPolicy.eligibleSelectionPool.uaeCap,1);
- assert.equal(seenPolicy.eligibleSelectionPool.mandatoryOutsideCaps,2);
+ assert.equal(seenPolicy.eligibleSelectionPool.uaeEligibleImos,2);
+ assert.equal(seenPolicy.eligibleSelectionPool.uaeCap,2);
+ assert.equal(seenPolicy.eligibleSelectionPool.mandatoryOutsideCaps,1);
  assert.equal(run.selectionProposal.pscRisk.cap,2);
- assert.equal(run.selectionProposal.uaeFlag.cap,1);
+ assert.equal(run.selectionProposal.uaeFlag.cap,2);
  assert.equal(run.selectionProposal.selectedImos.length,4);
+ assert.deepEqual(run.selectionProposal.mandatoryImos,['9400106']);
+ assert.deepEqual(run.selectionProposal.serviceRequests.aiSelectedImos,['9400105']);
  assert.equal(run.humanDecisionRequired,true);
  assert.equal(run.mutations,false);
  // A selected AI recommendation without quota is not automatically a plan row.
