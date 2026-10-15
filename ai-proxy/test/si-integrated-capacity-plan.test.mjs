@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {selectIntegratedPlanVessels,makeCapacityDraftPlan,
+ scopeIntegratedSelectionToSavedDraft,savedDraftCapacityCoverage,
  validateIntegratedCapacityProposal} from '../si-integrated-capacity-plan.mjs';
 
 const plan={id:'00000001-0000-4000-8000-000000000000',
@@ -165,4 +166,81 @@ test('current published small-plan C01 uses the AI service queue sample rather t
    selectionProposal:{...ai,maxPlannedVessels:2}},dashboard,
   pscRiskRatePercent:50,uaeFlagRatePercent:100}),
   /SI_POC_PLAN_MAX_VESSELS_EXCEEDED_OFFICER_REVIEW/);
+});
+
+test('saved capacity Draft approves its 2 selected vessels, not all 4 original C01/PSC nominees',()=>{
+ const full=select();
+ assert.equal(full.roster.length,4);
+ const selectedImos=['9400101','9400106'];
+ const saved={...plan,capacityDraft:{
+  status:'CAPACITY_VERIFIED_DRAFT',
+  sourceHash:inspectionPlan.sourceHash,
+  c01SelectedImos:full.roster.map(v=>v.imo),
+  selectedImos,
+  capacityExcluded:[{imo:'9400102',reasonCode:'ENGINEER_UNAVAILABLE'}]
+ }};
+ const scoped=scopeIntegratedSelectionToSavedDraft(full,saved);
+ assert.equal(scoped.draftScope.locked,true);
+ assert.equal(scoped.draftScope.c01OriginallySelectedCount,4);
+ assert.equal(scoped.roster.length,2);
+ assert.deepEqual(new Set(scoped.roster.map(v=>v.imo)),new Set(selectedImos));
+ assert.deepEqual(scoped.roster.map(v=>v.planRank),[1,2]);
+ assert.equal(scoped.quotas.pscRisk.targetedImos,full.quotas.pscRisk.targetedImos,
+  'retain source C01 quota/audit, even though Draft has fewer vessels');
+ assert.notEqual(scoped.selectionHash,full.selectionHash);
+ const proposal={proposalHash:'c'.repeat(64),erpSnapshotId:'ERP-V',
+  variants:[{optionId:'EXACT',allocatedVessels:2,
+   assignments:scoped.roster.map(v=>({imo:v.imo})),
+   rows:scoped.roster.map(v=>({imo:v.imo,status:'PROPOSED',blocker:null}))}]};
+ const decision=validateIntegratedCapacityProposal(scoped,proposal,'EXACT');
+ assert.deepEqual(new Set(decision.selected.map(v=>v.imo)),new Set(selectedImos));
+ assert.equal(saved.capacityDraft.selectedImos.length,2,
+  'source Oracle draft was not changed by the pure validation');
+ assert.equal(saved.status,'READY_FOR_APPROVAL');
+});
+test('scope verifier blocks newly feasible overflow vessels without modifying the saved Draft',()=>{
+ const full=select();
+ const saved={...plan,capacityDraft:{
+  status:'CAPACITY_VERIFIED_DRAFT',sourceHash:full.sourceHash,
+  selectedImos:['9400101','9400106'],
+  c01SelectedImos:full.roster.map(v=>v.imo)
+ }};
+ const scoped=scopeIntegratedSelectionToSavedDraft(full,saved);
+ const extra=savedDraftCapacityCoverage(scoped,{
+  assignments:[{imo:'9400101'},{imo:'9400106'},{imo:'9400102'}]});
+ assert.equal(extra.matches,false);
+ assert.deepEqual(extra.unexpectedImos,['9400102']);
+ assert.equal(extra.missingImos.length,0);
+ const changed=savedDraftCapacityCoverage(scoped,{
+  assignments:[{imo:'9400106'}]});
+ assert.equal(changed.matches,false);
+ assert.deepEqual(changed.missingImos,['9400101']);
+ const okay=savedDraftCapacityCoverage(scoped,{
+  assignments:[{imo:'9400106'},{imo:'9400101'}]});
+ assert.equal(okay.matches,true,'inspector/time alternative may change, roster may not');
+});
+test('source-selected shortlist changes, missing mandatory NMC, or stale capacity fail closed',()=>{
+ const full=select();
+ const good={...plan,capacityDraft:{
+  status:'CAPACITY_VERIFIED_DRAFT',sourceHash:full.sourceHash,
+  selectedImos:['9400106'],
+  c01SelectedImos:full.roster.map(v=>v.imo)
+ }};
+ assert.equal(scopeIntegratedSelectionToSavedDraft(full,good).roster.length,1);
+ assert.throws(()=>scopeIntegratedSelectionToSavedDraft(full,{
+  ...good,capacityDraft:{...good.capacityDraft,selectedImos:['9400101']}}),
+  /SI_DRAFT_SAVED_VESSELS_REQUIRE_REVIEW/);
+ assert.throws(()=>scopeIntegratedSelectionToSavedDraft(full,{
+  ...good,capacityDraft:{...good.capacityDraft,c01SelectedImos:['9400106']}}),
+  /SI_DRAFT_C01_SCOPE_CHANGED_REVIEW_REQUIRED/);
+ assert.throws(()=>scopeIntegratedSelectionToSavedDraft(full,{
+  ...good,capacityDraft:{...good.capacityDraft,status:
+   'STALE_AFTER_DRAFT_EDIT_RECALCULATE_CAPACITY'}}),
+  /SI_DRAFT_CAPACITY_STALE_RECALCULATE_REQUIRED/);
+ assert.throws(()=>scopeIntegratedSelectionToSavedDraft(full,{
+  ...good,capacityDraft:{...good.capacityDraft,
+   status:'CAPACITY_EXCEPTION_DRAFT'}}),
+  /SI_DRAFT_CAPACITY_EXCEPTIONS_RESOLVE_BEFORE_APPROVAL/);
+ const legacy=scopeIntegratedSelectionToSavedDraft(full,plan);
+ assert.equal(legacy,full,'legacy no-capacity draft stays supported');
 });
