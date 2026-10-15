@@ -153,6 +153,18 @@ test('per-step A04 request references only source-authorized evidence and cannot
  assert.equal(advisory.findingsCreated,0);
  assert.equal(advisory.answersSaved,0);
  assert.equal(advisory.actions.length,1);
+ const dynamic=g.steps.find(x=>x.title==='Radar equipment check');
+ const exact=projectA04FocusedFieldAdvice({
+  checklistFocus:[],
+  focusAreas:[{category:'Radar equipment check',priority:'VERIFY',
+   reason:'Check the radar display, record the observed functional test and compare maintenance evidence with the onboard log.',
+   evidenceIds:['E-2']}],
+  missingEvidence:[],agentConfidence:0.82
+ },dynamic);
+ assert.equal(exact.stepSpecific,true);
+ assert.equal(exact.actions.length,1);
+ assert.equal(exact.actions[0].focus,'EXACT_CHECKLIST_QUESTION');
+ assert.deepEqual(exact.actions[0].evidenceRefs,['E-2']);
 });
 test('pre-case dossier displays current saved evidence without inventing a case',()=>{
  const d=assemblePendingWorkOrderDossier({order:{...order,caseId:null},
