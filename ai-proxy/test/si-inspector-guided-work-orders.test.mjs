@@ -117,7 +117,8 @@ test('approved A04 scope + frozen published checklist + eight baseline questions
  assert.equal(fire.aiAdvice.length,2,'approved A04 question and checklist focus attached');
  assert.equal(fire.answered,false,
   'the third frozen published duplicate and approved AI check are still pending');
- assert.equal(g.numberOfMergedDuplicateQuestions,3);
+ assert.equal(g.numberOfMergedDuplicateQuestions,4,
+  'fire safety duplicates plus shared certificates question are displayed once');
  assert.ok(g.steps.some(x=>x.title==='Verify emergency fire doors'));
  assert.equal(g.steps.some(x=>x.title==='Inspect extra lifeboat battery'),false);
  assert.equal(g.pendingAiSuggestions.length,1);
