@@ -6,7 +6,7 @@
 import {createHash,randomUUID} from 'node:crypto';
 import {mockSiC01,SI_MOCK_MARKER} from './si-agent-mock.mjs';
 import {getSiRankingPolicy,inspectionRanking} from './si-inspection-ranking.mjs';
-import {getSiC01AdvisoryRules,getSiSelectionPolicy} from './si-candidate-targeting.mjs';
+import {getSiC01AdvisoryRules,getSiSelectionPolicy,isSiVerifiedEvent,isSiProtectedReferral} from './si-candidate-targeting.mjs';
 import {projectC01ConfiguredSelection} from './si-ai-selection-projection.mjs';
 
 const hash=x=>createHash('sha256').update(JSON.stringify(x)).digest('hex');
@@ -30,6 +30,8 @@ export function buildC01Source(dashboard,pscPolicy=null){
       c.status==='PENDING_REVIEW'||
       (c.status==='EXTERNALLY_SCHEDULED'&&
         c.events.some(e=>e.sourceType==='NMC_CASE'&&e.approval==='APPROVED'))))
+    // Unverified rows remain in Candidate Center for source verification.
+    .filter(c=>c.events.some(isSiVerifiedEvent))
     .map(c=>{
       const vessel=vesselSignals.get(c.imo)||{};
       // Forward the saved source fields needed for a grounded recommendation.
@@ -101,8 +103,14 @@ export function buildC01Source(dashboard,pscPolicy=null){
               Date.parse(e.departureAt)===Date.parse(departureAt))
             .flatMap(e=>[e.eventKey,e.sourceReference,...e.evidenceIds])):[]},
         missingData,
-        requiredInPlan:c.events.some(e=>e.sourceType==='SERVICE_REQUEST'||
-          (e.sourceType==='NMC_CASE'&&e.approval==='APPROVED'))};
+        // A verified service request stays in the central queue even when
+        // not scheduled in THIS rolling plan. NMC approved referrals are
+        // the only unconditional required cohort after policy publication.
+        actionableServiceRequest:c.events.some(e=>
+          e.sourceType==='SERVICE_REQUEST'&&isSiVerifiedEvent(e)),
+        requiredInPlan:isSiProtectedReferral(c)||
+          (!Number.isInteger(selection.serviceRequestPlanCap)&&
+            c.events.some(e=>e.sourceType==='SERVICE_REQUEST'&&isSiVerifiedEvent(e)))};
     }).sort((a,b)=>a.candidateKey.localeCompare(b.candidateKey));
   const source={schemaVersion:'SI-C01-v1',
     ranking,aiAdvisory,selection,selectionPolicyActive,
@@ -523,11 +531,15 @@ export class SiCandidateAgent{
          pscCap:publishedBounds.pscRisk.cap,
          uaeEligibleImos:publishedBounds.uaeFlag.eligibleImos,
          uaeCap:publishedBounds.uaeFlag.cap,
-         mandatoryOutsideCaps:publishedBounds.mandatoryImos.length
+         mandatoryOutsideCaps:publishedBounds.mandatoryImos.length,
+         serviceRequestEligibleImos:publishedBounds.serviceRequests?.eligibleImos??null,
+         serviceRequestPlanCap:publishedBounds.serviceRequests?.cap??null,
+         maxPlannedVessels:s.selection.maxPlannedVessels
        }:null,
        aiConfidenceThreshold:s.aiAdvisory.minimumSelectionConfidence,
        approvedNmcReferralsAlwaysIncluded:true,
-       actionableServiceRequestsAlwaysIncluded:true,
+       verifiedServiceRequestsRemainInBacklog:true,
+       unverifiedSourceEventsNeverSelected:true,
        duplicateImosAllowed:false,
        neverOverridePscPortCallQuota:true,
        missingVesselRisk:'MANUAL_REVIEW_NOT_INVENTED',
@@ -565,7 +577,8 @@ export class SiCandidateAgent{
        performSelectionWithinPublishedQuotas:s.selectionPolicyActive,
        uaeFlagSelectionPool:'SOURCE_ELIGIBLE_CANDIDATE_CENTER_ONLY',
        returnSelectDeferOrManualReviewForEveryCandidate:true,
-       neverGenerateUnapprovedCandidates:true
+       neverGenerateUnapprovedCandidates:true,
+       doNotForceAllServiceRequestsIntoOnePlan:true
      },
      officerPlanChanges,
      riskPolicyRevision:s.riskPolicyRevision,
