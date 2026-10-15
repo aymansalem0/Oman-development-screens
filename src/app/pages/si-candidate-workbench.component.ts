@@ -362,6 +362,23 @@ export class SiCandidateWorkbenchComponent implements OnInit,OnDestroy{
   planRow(v:SiVesselCandidate):SiInspectionPlanRow|null{
     return this.planLookup.get(v.imo)||null;
   }
+  /** ETA may be a saved UAE-local time; ETD can be a UTC/offset ISO.
+   * Never format a missing/conflicting date as a verified arrival/departure.
+   */
+  candidateMovementTime(raw:string|null|undefined):string{
+    if(!raw)return '—';
+    if(/(?:Z|[+-]\d\d:\d\d)$/.test(raw)){
+      const d=new Date(raw);
+      if(Number.isNaN(d.getTime()))return '—';
+      return new Intl.DateTimeFormat('en-GB',{
+        timeZone:'Asia/Dubai',year:'numeric',month:'2-digit',day:'2-digit',
+        hour:'2-digit',minute:'2-digit',hourCycle:'h23'
+      }).format(d);
+    }
+    const local=raw.replace('T',' ');
+    return /^\d{4}-\d\d-\d\d \d\d:\d\d/.test(local)?
+      local.slice(0,16):'—';
+  }
   vesselOutsidePlan(v:SiVesselCandidate):boolean{
     return this.planRow(v)?.periodEligibility?.status==='OUTSIDE_EXECUTION_PLAN';
   }
