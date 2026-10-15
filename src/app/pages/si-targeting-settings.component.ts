@@ -121,6 +121,17 @@ import {SiCandidateTargetingService,SiDashboard,SiImpact,SiTargetingPolicyConfig
     <p>{{copy('These are versioned instructions actually sent to Airia. They govern AI advice; they cannot change legal eligibility, published PSC quotas, verified departure ordering or inspection approval.',
       'هذه تعليمات مُؤرشفة تُرسل فعليًا إلى Airia. تتحكم في توصيات AI ولا تستطيع تعديل الأهلية التنظيمية أو حصص PSC أو ترتيب المغادرة المؤكد أو صلاحيات اعتماد المعاينات.')}}</p>
     <div class="policy-rule-editor">
+     <section class="si-multi-vessel-preset" aria-label="Optional multi-vessel selection proposal">
+      <h3>{{copy('Broader POC vessel selection proposal','مقترح اختيار عدد أكبر من السفن للـPOC')}}</h3>
+      <p>{{copy('A published maximum is only a ceiling. Prepare editable PSC/service caps and guide Airia to independently assess all verified sources. The published policy will not change until you review and explicitly publish this proposal.',
+       'الحد الأقصى المنشور ليس عددًا مضمونًا. جهّز نسبًا أوسع واختيارًا مبنيًا على الأدلة لكل مرشح. لن تتغير السياسة الحالية حتى تراجع المقترح وتنشره صراحةً.')}}</p>
+      <button type="button" class="primary" (click)="applyMultiVesselPocProposal()" [disabled]="busy||loading">
+       {{copy('Prepare multi-vessel selection settings','تجهيز إعدادات اختيار عدة سفن')}}</button>
+      <small *ngIf="multiVesselProposalPrepared" class="preset-pending">
+       {{copy('Unsaved: PSC at least 25%, service cap at least 4, plan max at least 12, AI confidence at most 0.60. UAE rate unchanged. Check Eligibility and Policy Impact, then publish with an authorised reason. Numbers are caps, not guaranteed selections.',
+        'مقترح غير منشور: PSC لا تقل عن 25%، حد الخدمات 4 على الأقل، حد الخطة 12 على الأقل، والثقة 0.60 بحد أقصى. نسبة العلم الإماراتي لم تتغير. راجع الأهلية والأثر وانشر بمبرر معتمد. هذه حدود وليست عددًا مضمونًا.')}}
+      </small>
+     </section>
      <h3>{{copy('A. Selection signals considered by AI','أ. إشارات الاختيار التي يراعيها AI')}}</h3>
      <p>{{copy('Choose which trusted facts should guide AI recommendations. All available source evidence continues to be transmitted and validated.',
        'حدد البيانات الموثقة التي توجه توصيات AI. سيظل النظام يرسل الأدلة المتاحة ويتحقق منها جميعًا.')}}</p>
@@ -222,6 +233,10 @@ import {SiCandidateTargetingService,SiDashboard,SiImpact,SiTargetingPolicyConfig
  .selection-percents,.selection-impact-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:14px 0}
  .selection-percents label{background:#f5fafb;border:1px solid #d4e6ed;border-radius:10px;padding:12px}
  .selection-percents input{width:95px;margin:8px 5px;padding:10px;border:1px solid #c6dbe3;border-radius:8px}
+ .si-multi-vessel-preset{background:#f3f9fa;border:1px solid #bfd9e1;border-radius:11px;padding:15px;margin-bottom:19px}
+ .si-multi-vessel-preset h3{font-size:15px;color:#13516a;margin:0 0 8px}
+ .si-multi-vessel-preset p,.si-multi-vessel-preset small{font-size:12px;line-height:1.65}
+ .preset-pending{display:block;margin-top:9px;color:#345a66}
  .si-selection-config{margin-top:18px;padding:15px;border:1px solid #d5e6eb;border-radius:12px}
  .selection-impact-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
  .selection-impact-grid div{background:#f2f9fb;border:1px solid #d9eaed;padding:14px;border-radius:9px}
@@ -281,6 +296,31 @@ export class SiTargetingSettingsComponent implements OnInit{
   selectionSignals:['SOURCE_EVENT_EVIDENCE','VERIFIED_ETD','REVIEWED_INCIDENT','SAVED_VESSEL_RISK'],
   minimumSelectionConfidence:0.75,selectionInstructions:'Select only source-verified, evidence-backed candidate vessels. Protect approved NMC referrals. Verified service requests remain in the central queue; put at most serviceRequestPlanCap of them in THIS rolling plan. Enforce PSC+Risk, UAE Pool B and maxPlannedVessels from configuredSelectionPolicy. Return SELECT / DEFER / MANUAL_REVIEW with references, confidence and gaps; never fabricate data or approve inspections.',priorityInstructions:'Explain execution order: nearest verified future ETD first, then active human-reviewed incident severity. Never invent an ETD, substitute ETA, use saved vessel risk for official execution ordering or imply regulatory approval. Describe missing evidence and officer review.'
  };
+ multiVesselProposalPrepared=false;
+ /**
+  * User-initiated, UNSAVED selection proposal. Only authorised publication
+  * can change the policy used for subsequent Airia C01 runs.
+  */
+ applyMultiVesselPocProposal():void{
+   if(!this.dashboard||this.busy||this.loading)return;
+   this.selectionRules={
+     ...this.selectionRules,
+     pscRiskRatePercent:Math.max(this.selectionRules.pscRiskRatePercent,25),
+     serviceRequestPlanCap:Math.max(this.selectionRules.serviceRequestPlanCap??0,4),
+     maxPlannedVessels:Math.max(this.selectionRules.maxPlannedVessels??0,12)
+   };
+   this.aiRules={
+     ...this.aiRules,
+     minimumSelectionConfidence:Math.min(
+       this.aiRules.minimumSelectionConfidence,0.60),
+     selectionSignals:[...new Set<SiC01Signal>([
+       ...this.aiRules.selectionSignals,'SOURCE_EVENT_EVIDENCE',
+       'SAVED_VESSEL_RISK'])],
+     selectionInstructions:"For this C01 batch, evaluate EVERY candidate independently against verified source evidence. Recommend SELECT_RECOMMENDED for actionable source-backed service requests and PSC candidates with required saved risk when the inspection rationale is supported. Do not select only mandatory NMC referrals. Missing incident severity or ETD alone does not invalidate a verified service or PSC trigger. Return MANUAL_REVIEW for material evidence gaps or conflicts; DEFER only with a grounded reason. Respect global published caps; the backend enforces unique-IMO quotas."
+   };
+   this.multiVesselProposalPrepared=true;
+   this.rulesChanged();
+ }
  toggleSignal(code:SiC01Signal,checked:boolean):void{
   const next=new Set(this.aiRules.selectionSignals);
   if(checked)next.add(code);else next.delete(code);
@@ -296,6 +336,7 @@ export class SiTargetingSettingsComponent implements OnInit{
  ngOnInit():void{this.refresh();}
  refresh():void{
   this.loading=true;this.error='';this.impact=null;
+  this.multiVesselProposalPrepared=false;
   this.api.dashboard().subscribe({
     next:d=>{
       this.dashboard=d;this.loading=false;
