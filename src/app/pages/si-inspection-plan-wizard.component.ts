@@ -1019,8 +1019,35 @@ export class SiInspectionPlanWizardComponent implements OnInit,OnDestroy{
       planId:r.planId,approvedVesselCount:r.approvedVesselCount,
       createdInspectionCases:r.createdInspectionCases};
       this.job=null;this.step=5;},
-     error:e=>{this.submitting=false;this.capacityError=
-      e?.error?.error||'SI_INTEGRATED_APPROVAL_FAILED';}
+     error:e=>{
+      this.submitting=false;
+      if(e?.error?.error==='SI_APPROVAL_TRANSACTION_FAILED'){
+        const diagnostic=e.error;
+        const phase:Record<string,[string,string]>={
+         'PLAN_STATE_LOCK':['loading saved plan','تحميل الخطة المحفوظة'],
+         'PLAN_SOURCE_REVALIDATION':['reviewing source evidence','مراجعة مصادر السفن'],
+         'PLAN_STATE_WRITE':['saving plan approval','حفظ اعتماد الخطة'],
+         'PLAN_VERSION_WRITE':['recording plan revision','تسجيل إصدار الخطة'],
+         'APPROVED_VESSEL_WRITE':['saving approved vessels','حفظ السفن المعتمدة'],
+         'APPROVED_SOURCE_REASON_WRITE':['saving inspection reasons','حفظ أسباب المعاينات'],
+         'PLAN_APPROVAL_AUDIT':['recording approval audit','تسجيل تدقيق الاعتماد'],
+         'SCHEDULE_WORK_ORDER_WRITE':['issuing inspector work orders','إصدار أوامر تكليف المهندسين'],
+         'ORACLE_COMMIT':['finalizing the transaction','إتمام معاملة Oracle'],
+         'PREAPPROVAL_OR_DEPENDENCY':['verifying live dependencies','التحقق من البيانات والخدمات']
+        };
+        const step=phase[diagnostic.stage]||phase['PREAPPROVAL_OR_DEPENDENCY'];
+        const ref=diagnostic.oracleCode?
+          ' ('+diagnostic.oracleCode+')':'';
+        this.capacityError=this.copy(
+         'Approval was NOT confirmed while '+step[0]+ref+
+          '. Review the server log entry [si-approval] before retrying.',
+         'لم يتأكد اعتماد الخطة أثناء '+step[1]+ref+
+          '. راجع سجل [si-approval] على الخادم قبل إعادة المحاولة.'
+        );
+      }else{
+        this.capacityError=e?.error?.error||'SI_INTEGRATED_APPROVAL_FAILED';
+      }
+     }
     });
  }
  private poll(id:string):void{

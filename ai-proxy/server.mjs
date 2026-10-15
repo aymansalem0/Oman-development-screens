@@ -11,6 +11,7 @@ import { FleetAssessmentManager } from './fleet-ai.mjs';
 import {airiaDemoVessels,AIRIA_DEMO_COHORT,AIRIA_DEMO_99_IMOS} from './airia-demo-cohort.mjs';
 import { FleetAutoScheduler } from './fleet-scheduler.mjs';
 import { DashboardWorkspace, DashboardError } from './dashboard-workspace.mjs';
+import {classifySiApprovalFailure} from './si-approval-diagnostics.mjs';
 import {DashboardAiFocus,DashboardFocusError,selectDashboardFocusVessel} from './nmc-dashboard-focus.mjs';
 import { NmcAlertWorkspace, NmcAlertError } from './alert-workspace.mjs';
 import { NmcCaseWorkspace, NmcCaseError } from './case-workspace.mjs';
@@ -2224,6 +2225,20 @@ const server = createServer(async (req, res) => {
         return respond(res,e.status,{error:e.code});
       if(Number.isInteger(e?.status)&&e.status>=400&&e.status<500)
         return respond(res,e.status,{error:'SI_REQUEST_INVALID'});
+      // Preserve the exact non-sensitive stage/Oracle number instead of
+      // misreporting every unknown approval failure as a dead rolling store.
+      // Typed policy/validation errors have already returned above.
+      if(req.method==='POST'&&
+         /^\/api\/si\/v1\/inspection-plans\/[a-f0-9-]{36}\/capacity-approve$/.test(path)){
+        const diagnostic=classifySiApprovalFailure(e);
+        console.error('[si-approval] FAILED '+JSON.stringify({
+          stage:diagnostic.stage,
+          failureType:diagnostic.failureType,
+          oracleCode:diagnostic.oracleCode||'NONE'
+        }));
+        const {status,...details}=diagnostic;
+        return respond(res,status,details);
+      }
       const rollingRoute=path==='/api/si/v1/inspection-plans'||
         path.startsWith('/api/si/v1/inspection-plans/');
       // These two modules share the SI router but have different Oracle

@@ -73,3 +73,37 @@ test('integrated plan cannot be committed using non-transactional JSON store',as
   x.approveForScheduling(ID,params(async()=>{})),
   /SI_INTEGRATED_ATOMIC_ORACLE_REQUIRED/);
 });
+
+
+test('when Oracle fails while writing approved source reasons, report stage and roll back everything',async()=>{
+ const x=make();
+ x.store.db=async fn=>fn({
+  async execute(sql){
+   x.events.push(sql);
+   if(sql.includes('INSERT INTO SI_PLAN_ROLLING_REASON')){
+    const e=new Error('private SQL bind data never for UI');
+    e.code='ORA-01400';e.errorNum=1400;
+    throw e;
+   }
+   return {rowsAffected:1,rows:[]};
+  },
+  async commit(){x.state.commits++;},
+  async rollback(){x.state.rollbacks++;}
+ });
+ await assert.rejects(x.store.approveForScheduling(ID,params(
+  async()=>{throw new Error('work orders should never be issued');}
+ )),e=>e.code==='ORA-01400'&&
+   e.approvalStage==='APPROVED_SOURCE_REASON_WRITE');
+ assert.equal(x.state.commits,0);
+ assert.equal(x.state.rollbacks,1);
+});
+test('work order SQL failures retain schedule stage and original error after single rollback',async()=>{
+ const x=make();
+ await assert.rejects(x.store.approveForScheduling(ID,params(async()=>{
+  const e=new Error('Oracle failed writing work orders');e.code='ORA-01861';
+  e.errorNum=1861;throw e;
+ })),e=>e.code==='ORA-01861'&&
+  e.approvalStage==='SCHEDULE_WORK_ORDER_WRITE');
+ assert.equal(x.state.commits,0);
+ assert.equal(x.state.rollbacks,1);
+});

@@ -423,29 +423,38 @@ export class SiRollingPlanStore{
    state.plans[index]=next;this.writeFile(state);return clone(next);
   }
   return this.db(async con=>{
+   // Stage names are non-sensitive and pinpoint the failing atomic write.
+   // Never expose the SQL, vessel details, Oracle error text or credentials.
+   let approvalStage='PLAN_STATE_LOCK';
    try{
     const found=await this.query(con,
       "SELECT STATE_JSON FROM SI_PLAN_ROLLING WHERE PLAN_ID=:p_plan FOR UPDATE",
       {p_plan:id});
     if(!found.length)fail('SI_ROLLING_PLAN_NOT_FOUND',404);
+    approvalStage='PLAN_SOURCE_REVALIDATION';
     const next=change(from(found[0].STATE_JSON));
+    approvalStage='PLAN_STATE_WRITE';
     await con.execute(
       "UPDATE SI_PLAN_ROLLING SET STATUS='APPROVED',VERSION_NO=:p_rev,STATE_JSON=:p_state,APPROVED_BATCH_ID=NULL,APPROVED_BY=:p_actor,APPROVED_AT=SYSTIMESTAMP,UPDATED_BY=:p_actor2,UPDATED_AT=SYSTIMESTAMP WHERE PLAN_ID=:p_plan",
       {p_plan:id,p_rev:next.revision,p_state:json(next),p_actor:actor,p_actor2:actor});
+    approvalStage='PLAN_VERSION_WRITE';
     await con.execute(
       "INSERT INTO SI_PLAN_ROLLING_VERSION (PLAN_ID,VERSION_NO,STATE_JSON,ACTOR,EVENT_CODE) VALUES(:p_plan,:p_rev,:p_state,:p_actor,'APPROVED_FOR_SCHEDULING')",
       {p_plan:id,p_rev:next.revision,p_state:json(next),p_actor:actor});
+    approvalStage='APPROVED_VESSEL_WRITE';
     for(const vessel of next.approvedVessels){
       await con.execute(
         "INSERT INTO SI_PLAN_ROLLING_VESSEL (PLAN_ID,IMO,PLAN_RANK,CASE_ID,APPROVED_SCOPE_JSON) VALUES(:p_plan,:p_imo,:p_rank,NULL,:p_scope)",
         {p_plan:id,p_imo:vessel.imo,p_rank:vessel.planRank,
          p_scope:json({regimes:vessel.regimes})});
+      approvalStage='APPROVED_SOURCE_REASON_WRITE';
       for(const evidence of vessel.inspectionReasons){
         await con.execute(
           "INSERT INTO SI_PLAN_ROLLING_REASON (PLAN_ID,IMO,EVENT_KEY,REASON_JSON) VALUES(:p_plan,:p_imo,:p_event,:p_doc)",
           {p_plan:id,p_imo:vessel.imo,p_event:evidence.eventKey,p_doc:json(evidence)});
       }
     }
+    approvalStage='PLAN_APPROVAL_AUDIT';
     await this.audit(con,id,integratedDecision?
      'CAPACITY_VERIFIED_SINGLE_PLAN_APPROVAL':
      'APPROVED_FOR_ELECTRONIC_SCHEDULING',actor,
@@ -454,9 +463,21 @@ export class SiRollingPlanStore{
       proposalHash:integratedDecision?.proposalHash||null});
     // One Oracle transaction: roster, work orders and both audit logs.
     // Any downstream rejection rolls ALL data back.
+    approvalStage='SCHEDULE_WORK_ORDER_WRITE';
     if(integratedDecision)await withinTransaction(con,next);
+    approvalStage='ORACLE_COMMIT';
     await con.commit();return clone(next);
-   }catch(error){await con.rollback();throw error;}
+   }catch(error){
+    // Preserve the actual failing operation even if rollback also fails.
+    if(error&&typeof error==='object')
+      error.approvalStage=error.approvalStage||approvalStage;
+    try{await con.rollback();}
+    catch(rollbackError){
+      console.error('[si-approval] ROLLBACK_FAILED '+String(
+        rollbackError?.code||'UNKNOWN').replace(/[^A-Z0-9_-]/gi,'').slice(0,32));
+    }
+    throw error;
+   }
   });
  }
  async approve(id,{expectedRevision,batchId,cases,actor}){
