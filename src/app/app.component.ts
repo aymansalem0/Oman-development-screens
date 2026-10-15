@@ -22,7 +22,8 @@ export class AppComponent {
   get isLoginPage():boolean{return this.router.url.split('?')[0]==='/moei/login';}
   get isNmcArea(): boolean {
     const path = this.router.url.split('?')[0].split('#')[0];
-    return path === '/moei/nmc' || path.startsWith('/moei/nmc/') ||
+    return path === '/moei/seafarers' || path.startsWith('/moei/seafarers/') ||
+      path === '/moei/nmc' || path.startsWith('/moei/nmc/') ||
       path === '/moei/smart-inspection' || path.startsWith('/moei/smart-inspection/');
   }
 

@@ -1,5 +1,6 @@
 import { Routes } from '@angular/router';
 import {moeiAdminGuard} from './services/moei-admin.guard';
+import {seafarerRouteGuard} from './services/seafarer-route.guard';
 
 import { ApprovalListComponent } from './pages/approval-list.component';
 import { ApprovalDetailComponent } from './pages/approval-detail.component';
@@ -9,6 +10,13 @@ import { ActivityClassificationMappingComponent } from './pages/activity-classif
 const base = 'dashboard/maritime-navigation/navigation-aids-installation-approval';
 
 const rawRoutes: Routes = [
+  { path: 'moei/seafarers', redirectTo: 'moei/seafarers/readiness', pathMatch: 'full' },
+  { path: 'moei/seafarers/readiness', data:{view:'readiness'}, loadComponent: () => import('./pages/moei-seafarer-readiness.component').then(m => m.MoeiSeafarerReadinessComponent) },
+  { path: 'moei/seafarers/services', data:{view:'services'}, loadComponent: () => import('./pages/moei-seafarer-readiness.component').then(m => m.MoeiSeafarerReadinessComponent) },
+  { path: 'moei/seafarers/company', data:{view:'company'}, loadComponent: () => import('./pages/moei-seafarer-readiness.component').then(m => m.MoeiSeafarerReadinessComponent) },
+  { path: 'moei/seafarers/notifications', data:{view:'notifications'}, loadComponent: () => import('./pages/moei-seafarer-readiness.component').then(m => m.MoeiSeafarerReadinessComponent) },
+  { path: 'moei/seafarers/fulfilment', data:{view:'fulfilment'}, loadComponent: () => import('./pages/moei-seafarer-readiness.component').then(m => m.MoeiSeafarerReadinessComponent) },
+  { path: 'moei/seafarers/sdb/:profileId', data:{view:'services'}, loadComponent: () => import('./pages/moei-seafarer-readiness.component').then(m => m.MoeiSeafarerReadinessComponent) },
   { path: 'moei/login', loadComponent: () => import('./pages/moei-admin-login.component').then(m => m.MoeiAdminLoginComponent) },
   { path: '', pathMatch: 'full', redirectTo: 'moei/nmc' },
   { path: base, component: ApprovalListComponent },
@@ -57,5 +65,6 @@ const rawRoutes: Routes = [
   { path: '**', redirectTo: 'moei/nmc' }
 ];
 export const routes:Routes=rawRoutes.map(route=>
+  route.path?.startsWith('moei/seafarers')?{...route,canActivate:[seafarerRouteGuard]}:
   route.path?.startsWith('moei/')&&route.path!=='moei/login'?
   {...route,canActivate:[moeiAdminGuard]}:route);

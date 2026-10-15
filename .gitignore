@@ -11,3 +11,6 @@ npm-debug.log*
 
 # Local read-only Google service account secret. NEVER push credentials.
 /secrets/
+
+# Local/CI screenshots and temporary seafarer workflow fixtures
+/tmp/

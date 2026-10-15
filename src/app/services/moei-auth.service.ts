@@ -16,7 +16,7 @@ export class MoeiAuthService{
   providers():Observable<{mode:string;googleConfigured:boolean;googleStart:string}>{
     return this.http.get<{mode:string;googleConfigured:boolean;googleStart:string}>('/api/moei/auth/providers');
   }
-  googleSignIn():void{window.location.assign('/api/moei/auth/google/start');}
+  googleSignIn(returnTo=''):void{window.location.assign('/api/moei/auth/google/start'+(returnTo?'?returnTo='+encodeURIComponent(returnTo):''));}
   constructor(private http:HttpClient,private router:Router){}
   check():Observable<boolean>{
     return this.http.get<MoeiSessionReply>('/api/moei/auth/session').pipe(
