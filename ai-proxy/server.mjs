@@ -38,6 +38,8 @@ import {projectVesselMasterEtd} from './si-vessel-master-etd.mjs';
 import { SiPscSelection, SiSelectionError } from './si-psc-selection.mjs';
 import { SiAiPrioritization, SiPriorityError } from './si-ai-prioritization.mjs';
 import {SiCandidateAgent,SiCandidateAgentError} from './si-candidate-agent.mjs';
+import {validateDraftMetadata,buildIntegratedDraft,publicDraftPreview,
+ SiDraftCreationError} from './si-integrated-draft-creation.mjs';
 import {SiInspectionPlan} from './si-inspection-plan.mjs';
 import {SiRollingPlanStore,SiRollingPlanError} from './si-rolling-plan-store.mjs';
 import {SiBulkInspectionPlan,SiBulkApprovalError} from './si-bulk-inspection-plan.mjs';
@@ -56,7 +58,7 @@ import {runSiAiriaAdvisor} from './si-airia-workflow-advisors.mjs';
 import {makeDq01Request,validateDq01Response,DqAgentError} from './nmc-airia-data-quality.mjs';
 import {readFileSync,existsSync} from 'node:fs';
 import {join as joinPath} from 'node:path';
-import {createHash as shaForMedia} from 'node:crypto';
+import {createHash as shaForMedia,randomUUID as uuidDraft} from 'node:crypto';
 import { DriveDocumentIntelligence, DocumentError } from './drive-document-intelligence.mjs';
 import {buildA03MultipartUserInput,summarizeA03HttpFailure} from './airia-a03-multipart.mjs';
 import { RuntimeSettings, RuntimeSettingsError } from './runtime-settings.mjs';
@@ -309,6 +311,38 @@ const siCandidateAgent=new SiCandidateAgent({
   executeAgent:async input=>siAiProvider==='mock'?mockSiC01(input):fleetAgentCall('c01',input)
 });
 const siRollingPlans=new SiRollingPlanStore({mode:dbMode,oracleRepository:repository});
+// Short-lived, session-bound cost-consented C01 draft previews. No durable
+// side effects until Save Draft; restart/expiry requires an explicit new preview.
+const siDraftPreviews=new Map(),DRAFT_TTL_MS=30*60*1000;
+async function calculateNewDraft({id,metadata,source,ai,identity,requests=null}){
+ const dashboard=await siTargeting.dashboard();
+ const erpSnapshot=siErp.requireSnapshot();
+ const [nmcReferrals,bookings]=await Promise.all([
+  cases.listInspectionRequests(),
+  metadata.demoMode?Promise.resolve([]):siScheduling.centralBookings(erpSnapshot)
+ ]);
+ return buildIntegratedDraft({
+  id,metadata,source,dashboard,ai,erpSnapshot,actor:identity,
+  policy:siScheduling.getPolicy(),scheduler:siScheduling,
+  nmcReferrals,existingBookings:metadata.demoMode?[]:
+   [...siScheduling.state.confirmed,...bookings],
+  requests
+ });
+}
+function getNewDraftPreview(id,actor){
+ const record=siDraftPreviews.get(id);
+ if(!record||record.actor!==actor||Date.now()-record.at>DRAFT_TTL_MS)
+  throw new SiDraftCreationError('SI_DRAFT_PREVIEW_EXPIRED_OR_NOT_OWNED',409);
+ return record;
+}
+function saveNewDraftPreview(id,actor,metadata,source,ai,result){
+ for(const [key,entry] of siDraftPreviews){
+  if(Date.now()-entry.at>DRAFT_TTL_MS)siDraftPreviews.delete(key);
+ }
+ if(siDraftPreviews.size>=30)siDraftPreviews.delete(siDraftPreviews.keys().next().value);
+ siDraftPreviews.set(id,{at:Date.now(),actor,metadata,source,ai,result});
+ return publicDraftPreview(result,id);
+}
 let siRollingPlansReady=false;
 const siInspectionPlan=new SiInspectionPlan({
   targeting:siTargeting,candidateAgent:siCandidateAgent,rollingPlans:siRollingPlans
@@ -1086,6 +1120,86 @@ const server = createServer(async (req, res) => {
         const master=projectVesselMasterEtd({sourceEvents:source.events});
         return respond(res,200,imo?{...master,rows:master.rows.filter(x=>x.imo===imo)}:master);
       }
+      // Capacity-first DRAFT creation. AI runs ONLY after an explicit confirmed
+      // command; preview/recalculate never writes cases, plans or ERP bookings.
+      // The initial plan row is inserted atomically with the verified roster,
+      // priorities and workforce proposal when the operator presses Save Draft.
+      if(path==='/api/si/v1/inspection-plans/draft-preview'&&req.method==='POST'){
+        dashboards.assertRole(req,'EDITOR');
+        const identity=moeiAuth.require(req,{mutate:true});
+        const actor=identity.email||identity.username;
+        const input=await requestJson(req,8192);
+        const metadata=validateDraftMetadata(input);
+        if(metadata.demoMode&&process.env.SI_SCHEDULING_DEMO_MODE!=='true')
+          return respond(res,403,{error:'SI_POC_DEMO_MODE_NOT_ENABLED'});
+        if(input.confirmAi!==true||
+           (siAiProvider==='airia'&&input.confirmCost!==true))
+          return respond(res,422,{error:'SI_DRAFT_EXPLICIT_C01_COST_CONFIRMATION_REQUIRED'});
+        const source=await siCandidateAgent.source();
+        if(source.candidates.length>500)
+          return respond(res,422,{error:'SI_C01_BATCH_LIMIT_500_SCOPE_REQUIRED'});
+        const batches=Math.ceil(source.candidates.length/(siAiProvider==='airia'?25:100));
+        if(batches>1&&input.confirmBatchCount!==batches)
+          return respond(res,422,{error:'SI_C01_BATCH_COUNT_CONFIRMATION_REQUIRED',
+            requiredBatches:batches,sourceCandidates:source.candidates.length});
+        const ai=await siCandidateAgent.run({
+          actor,confirmRun:true,confirmCost:input.confirmCost===true,
+          confirmBatchCount:batches,expectedSnapshotHash:source.snapshotHash
+        });
+        const fresh=await siCandidateAgent.source();
+        if(fresh.snapshotHash!==source.snapshotHash)
+          return respond(res,409,{error:'SI_DRAFT_SOURCE_CHANGED_REGENERATE'});
+        const id=uuidDraft(),previewId=uuidDraft();
+        const result=await calculateNewDraft({id,metadata,source:fresh,ai,identity});
+        return respond(res,200,{status:'INTEGRATED_DRAFT_PREVIEW',
+          ...saveNewDraftPreview(previewId,actor,metadata,fresh,ai,result)});
+      }
+      const draftAction=/^\/api\/si\/v1\/inspection-plans\/draft-(recalculate|save)$/.exec(path);
+      if(draftAction&&req.method==='POST'){
+        dashboards.assertRole(req,'EDITOR');
+        const identity=moeiAuth.require(req,{mutate:true});
+        const actor=identity.email||identity.username;
+        const input=await requestJson(req,1024*1024);
+        if(typeof input.previewId!=='string')
+          return respond(res,422,{error:'SI_DRAFT_PREVIEW_ID_REQUIRED'});
+        const cached=getNewDraftPreview(input.previewId,actor);
+        const fresh=await siCandidateAgent.source();
+        if(fresh.snapshotHash!==cached.source.snapshotHash)
+          return respond(res,409,{error:'SI_DRAFT_SOURCE_CHANGED_REGENERATE'});
+        const result=await calculateNewDraft({
+          id:cached.result.id,metadata:cached.metadata,source:fresh,
+          ai:cached.ai,identity,
+          requests:draftAction[1]==='recalculate'?input.requests:cached.result.requests
+        });
+        if(draftAction[1]==='recalculate'){
+          return respond(res,200,{status:'INTEGRATED_DRAFT_RECALCULATED',
+            ...saveNewDraftPreview(input.previewId,actor,cached.metadata,fresh,
+              cached.ai,result)});
+        }
+        // Recomputed against the current saved sources, ERP and bookings;
+        // stale browser previews are rejected, never silently reallocated.
+        if(input.proposalHash!==cached.result.proposal.proposalHash||
+           input.selectionHash!==cached.result.selection.selectionHash||
+           result.proposal.proposalHash!==cached.result.proposal.proposalHash||
+           result.selection.selectionHash!==cached.result.selection.selectionHash)
+          return respond(res,409,{error:'SI_DRAFT_CAPACITY_CHANGED_RECALCULATE'});
+        const created=await siRollingPlans.create(cached.metadata,actor,{
+          candidates:fresh.candidates,sourceHash:fresh.snapshotHash,
+          integratedDraft:result
+        });
+        siDraftPreviews.delete(input.previewId);
+        return respond(res,201,{
+          status:'INTEGRATED_DRAFT_SAVED_NOT_APPROVED',
+          planId:created.id,planNumber:created.number,
+          planStatus:created.status,revision:created.revision,
+          selectedVessels:result.selection.roster.length,
+          feasibleAssignments:result.proposal.summary.proposed,
+          capacityExceptions:result.proposal.summary.unscheduled,
+          mandatoryUnscheduled:result.mandatoryUnscheduled,
+          pendingSupervisorApproval:true,
+          inspectionCasesCreated:0,workOrdersIssued:0,
+          realErpBookingsCreated:0});
+      }
       // Rolling plans are independent, numbered and versioned. Creating a plan
       // never calls C01, approves inspections, or touches legacy JSON.
       if(path==='/api/si/v1/inspection-plans'&&req.method==='GET'){
@@ -1309,6 +1423,13 @@ const server = createServer(async (req, res) => {
         const decision=validateIntegratedCapacityProposal(
           selection,proposal,body.selectedOptionId);
         const optimized=decision.variant;
+        // For integrated pre-save drafts, the requested plan execution period
+        // is an additional hard approval gate (including chosen alternatives).
+        if(plan.capacityDraft&&optimized.assignments.some(a=>
+          typeof a.startLocal!=='string'||typeof a.endLocal!=='string'||
+          a.startLocal.slice(0,10)<plan.startsOn||
+          a.endLocal.slice(0,10)>plan.endsOn))
+          return respond(res,409,{error:'SI_INTEGRATED_VISIT_OUTSIDE_PLAN_PERIOD'});
         const approvedProposal={
           ...proposal,planRevision:plan.revision+1,
           summary:{...proposal.summary,total:decision.selected.length,
@@ -2024,7 +2145,7 @@ const server = createServer(async (req, res) => {
           ...(Number.isInteger(e.returnedCount)?{returnedCount:e.returnedCount}:{}),
           ...(Number.isInteger(e.batchIndex)?{batchIndex:e.batchIndex}:{}),
           ...(Number.isInteger(e.batchCount)?{batchCount:e.batchCount}:{})});
-      if(e instanceof SiError||e instanceof SiPocAdvisorError||e instanceof SiRollingPlanError||e instanceof SiIntegratedPlanError||
+      if(e instanceof SiError||e instanceof SiPocAdvisorError||e instanceof SiRollingPlanError||e instanceof SiIntegratedPlanError||e instanceof SiDraftCreationError||
        e instanceof SiBulkApprovalError||e instanceof SiCandidateAgentError||e instanceof SiLifecycleError||e instanceof SiSelectionError||e instanceof SiPriorityError||e instanceof SiPreparationError||e instanceof SiWorkOrderError||e instanceof SiTargetingError||e instanceof MoeiAuthError||e instanceof DashboardError)
         return respond(res,e.status,{error:e.code});
       if(Number.isInteger(e?.status)&&e.status>=400&&e.status<500)

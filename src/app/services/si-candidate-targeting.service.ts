@@ -213,6 +213,14 @@ export interface SiInspectionPlanState{
  readOnlyHistorical?:boolean;historicalSourceChanged?:boolean;
  selectionMode?:'MANUAL'|'AI_ASSISTED';manualSelection?:boolean;
   selectionProposal?:SiSelectionProposal|null;
+ capacityDraft?:{
+  status:string;generatedAt:string;demoMode:boolean;
+  erpSnapshotId:string;selectedImos:string[];
+  mandatoryUnscheduled:string[];outsidePlanPeriod:string[];
+  proposedAssignments:{imo:string;inspectorName:string;startLocal:string;
+   endLocal:string;portName:string;crossPort:boolean}[];
+  unscheduled:{imo:string;blocker:string|null}[];
+ }|null;
  availableCount?:number;deferredCount?:number;notSelectedCount?:number;
  candidatesAtCreation?:number|null;
  dataReadiness?:SiC01DataReadiness|null;

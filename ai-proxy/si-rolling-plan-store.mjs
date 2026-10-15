@@ -138,7 +138,7 @@ export class SiRollingPlanStore{
   }
   return results;
  }
- async create(input={},actor,{candidates=[],sourceHash=null}={}){
+ async create(input={},actor,{candidates=[],sourceHash=null,integratedDraft=null}={}){
   // No port belongs to the rolling inspection plan business model.
   // Legacy input.port is ignored; the nullable Oracle 018 PORT column is kept
   // for backwards compatibility without any destructive schema operation.
@@ -150,17 +150,59 @@ export class SiRollingPlanStore{
    fail('SI_ROLLING_PLAN_INFORMATION_INVALID',422);
   const createdAt=now();
   const carryForward=await this.previousCandidateDecisions(candidates);
-  const state={id:randomUUID(),number:uniqueNumber(),title,startsOn:input.startsOn,
-   endsOn:input.endsOn,notes,status:'DRAFT',revision:0,
+  // A trusted, server-recomputed capacity draft is saved in the SAME
+  // first Oracle transaction as the initial plan. Never accept this object
+  // from an HTTP client or mark any scheduling assignment as booked.
+  if(integratedDraft&&(
+    typeof integratedDraft.id!=='string'||!ID.test(integratedDraft.id)||
+    integratedDraft.sourceHash!==sourceHash||
+    !integratedDraft.ai?.agentRunId||
+    !Array.isArray(integratedDraft.rows)||
+    !integratedDraft.selection?.selectionHash||
+    !integratedDraft.proposal?.proposalHash))
+   fail('SI_DRAFT_INTEGRATED_PLAN_INVALID',422);
+  const state={id:integratedDraft?.id||randomUUID(),
+   number:uniqueNumber(),title,startsOn:input.startsOn,
+   endsOn:input.endsOn,notes,
+   status:integratedDraft?.ready?'READY_FOR_APPROVAL':'DRAFT',revision:0,
    createdAt,createdBy:actor,updatedAt:createdAt,updatedBy:actor,
-   overrides:{},latest:null,selectionSourceHash:null,savedPlanRows:null,
+   overrides:{},
+   latest:integratedDraft?{...integratedDraft.ai,
+    rows:integratedDraft.rows,generatedAt:integratedDraft.generatedAt}:null,
+   selectionSourceHash:integratedDraft?sourceHash:null,
+   savedPlanRows:integratedDraft?.rows||null,
+   capacityDraft:integratedDraft?{
+    status:integratedDraft.ready?'CAPACITY_VERIFIED_DRAFT':'CAPACITY_EXCEPTION_DRAFT',
+    generatedAt:integratedDraft.generatedAt,
+    sourceHash,policyRevision:integratedDraft.policyRevision,
+    riskPolicyRevision:integratedDraft.riskPolicyRevision,
+    erpSnapshotId:integratedDraft.erpSnapshotId,
+    effectiveErpSnapshotId:integratedDraft.effectiveErpSnapshotId,
+    demoMode:integratedDraft.metadata.demoMode,
+    selectionHash:integratedDraft.selection.selectionHash,
+    selectedImos:integratedDraft.selection.roster.map(x=>x.imo),
+    mandatoryUnscheduled:integratedDraft.mandatoryUnscheduled,
+    outsidePlanPeriod:integratedDraft.outsidePeriod,
+    requests:integratedDraft.requests,
+    proposalHash:integratedDraft.proposal.proposalHash,
+    selectedOptionId:integratedDraft.proposal.variants[0]?.optionId||null,
+    proposedAssignments:integratedDraft.proposal.variants[0]?.assignments||[],
+    unscheduled:integratedDraft.proposal.rows.filter(x=>x.status==='UNSCHEDULED')
+     .map(x=>({imo:x.imo,blocker:x.blocker}))
+   }:null,
    candidateSnapshot:candidates.map(c=>({
     candidateKey:c.candidateKey,imo:c.imo,regime:c.regime,
     sourceEventKeys:(c.sourceEvents||[]).map(e=>e.eventKey),
     sourceTypes:c.sourceTypes||[],risk:c.currentRisk||null
    })),
    candidateSourceHash:sourceHash,carryForward,
-   audit:[{event:'CREATED',at:createdAt,actor}],
+   audit:[{event:'CREATED',at:createdAt,actor},
+    ...(integratedDraft?[{event:'INTEGRATED_DRAFT_CAPACITY_CALCULATED',
+     at:createdAt,actor,sourceHash,erpSnapshotId:integratedDraft.erpSnapshotId,
+     proposalHash:integratedDraft.proposal.proposalHash,
+     selectedImos:integratedDraft.selection.roster.map(x=>x.imo),
+     feasible:integratedDraft.proposal.summary.proposed,
+     blocked:integratedDraft.proposal.summary.unscheduled}]:[])],
    approvedBatchId:null,approvedVessels:[],approvedBy:null,approvedAt:null};
   if(this.mode==='json'){
    const data=this.readFile();data.plans.push(state);this.writeFile(data);
@@ -172,14 +214,17 @@ export class SiRollingPlanStore{
       (PLAN_ID,PLAN_NO,TITLE,START_DATE,END_DATE,NOTES,
        STATUS,VERSION_NO,STATE_JSON,CREATED_BY,UPDATED_BY)
       VALUES(:id,:planNo,:title,:startDate,:endDate,:notes,
-       'DRAFT',0,:state,:actor,:actor)`,{
-      id:state.id,planNo:state.number,title, startDate:state.startsOn,
-      endDate:state.endsOn,notes,state:json(state),actor});
+       :status,0,:state,:actor,:actor)`,{
+      id:state.id,planNo:state.number,title,startDate:state.startsOn,
+      endDate:state.endsOn,notes,status:state.status,state:json(state),actor});
     await con.execute(`INSERT INTO SI_PLAN_ROLLING_VERSION
      (PLAN_ID,VERSION_NO,STATE_JSON,ACTOR,EVENT_CODE)
      VALUES(:id,0,:state,:actor,'CREATED')`,{
       id:state.id,state:json(state),actor});
-    await this.audit(con,state.id,'CREATED',actor,{period:[state.startsOn,state.endsOn]});
+    await this.audit(con,state.id,'CREATED',actor,{period:[state.startsOn,state.endsOn],
+     integratedCapacity:!!integratedDraft,
+     ...(integratedDraft?{proposalHash:integratedDraft.proposal.proposalHash,
+      erpSnapshotId:integratedDraft.erpSnapshotId}: {})});
     await con.commit();return clone(state);
    }catch(e){await con.rollback();throw e;}
   });
@@ -198,6 +243,15 @@ export class SiRollingPlanStore{
    if(!allowed(p))fail('SI_ROLLING_APPROVED_PLAN_IMMUTABLE',409);
    if(p.revision!==expectedRevision)fail('SI_ROLLING_VERSION_CONFLICT',409);
    const next=operation(clone(p));
+   // Changes to a draft's selected vessels/C01 ranking invalidate its saved
+   // inspector capacity proposal. The former proposal remains in version
+   // history for audit but is NOT advertised as currently feasible.
+   if(p.capacityDraft){
+    next.capacityDraft={...p.capacityDraft,
+     status:'STALE_AFTER_DRAFT_EDIT_RECALCULATE_CAPACITY',
+     proposedAssignments:[],selectedOptionId:null,
+     proposalHash:null,updatedBy:actor,staleAt:now()};
+   }
    next.revision=p.revision+1;next.updatedAt=now();next.updatedBy=actor;
    // Keep the one audited officer disposition breakdown that the trusted
    // bulk mutation added. Prior event history cannot be rewritten by it.
