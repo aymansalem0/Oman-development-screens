@@ -74,13 +74,13 @@ export function projectGuidedInspection({order,preparation,checklist,lifecycle}=
   let s=grouped.get(key);
   if(!s){
    s={stepId:stepIdentity(title,info.id),title,category:info.category||title,
-    origin:kind,mandatory:kind!=='A04_APPROVED',fields:[],
+    origin:kind,mandatory:kind==='LEGACY',fields:[],
     requiredFields:[],references:[],members:[],systemAction:'',
     aiAdvice:[],currentStatus:'PENDING',savedAnswer:{},
     note:'',naReason:'',severity:null,answered:false,aiSuggestedOnly:false};
    grouped.set(key,s);
   }
-  s.mandatory ||=kind!=='A04_APPROVED';
+  s.mandatory ||=kind==='LEGACY';
   if(priority[kind]<priority[s.origin])s.origin=kind;
   return s;
  };
