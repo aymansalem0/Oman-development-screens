@@ -6,7 +6,8 @@
 import {createHash,randomUUID} from 'node:crypto';
 import {mockSiC01,SI_MOCK_MARKER} from './si-agent-mock.mjs';
 import {getSiRankingPolicy,inspectionRanking} from './si-inspection-ranking.mjs';
-import {getSiC01AdvisoryRules} from './si-candidate-targeting.mjs';
+import {getSiC01AdvisoryRules,getSiSelectionPolicy} from './si-candidate-targeting.mjs';
+import {projectC01ConfiguredSelection} from './si-ai-selection-projection.mjs';
 
 const hash=x=>createHash('sha256').update(JSON.stringify(x)).digest('hex');
 const unique=a=>[...new Set(a.filter(x=>typeof x==='string'&&x.trim()))];
@@ -19,6 +20,7 @@ export function buildC01Source(dashboard,pscPolicy=null){
     throw new SiCandidateAgentError('SI_C01_SOURCE_UNAVAILABLE',503);
   const ranking=getSiRankingPolicy(dashboard.policy.config);
   const aiAdvisory=getSiC01AdvisoryRules(dashboard.policy.config);
+  const selection=getSiSelectionPolicy(dashboard.policy.config);
   const vesselSignals=new Map((dashboard.vesselCandidates||[]).map(v=>[v.imo,v]));
   const candidates=dashboard.candidates
     .filter(c=>!c.inspectionCase&&(
@@ -62,7 +64,8 @@ export function buildC01Source(dashboard,pscPolicy=null){
         c.currentRisk?.assessmentId
       ]);
       return {candidateKey:c.key,imo:c.imo,regime:c.regime,
-        vesselName:c.vesselName,eligibility:c.eligibility,
+        vesselName:c.vesselName,flag:vessel.flag||c.flag||'',
+        eligibility:c.eligibility,
         currentRisk:c.currentRisk||null,
         sourceTypes:unique(c.events.map(e=>e.sourceType)),
         sourceEvents:c.events.map(e=>({
@@ -99,7 +102,7 @@ export function buildC01Source(dashboard,pscPolicy=null){
           (e.sourceType==='NMC_CASE'&&e.approval==='APPROVED'))};
     }).sort((a,b)=>a.candidateKey.localeCompare(b.candidateKey));
   const source={schemaVersion:'SI-C01-v1',
-    ranking,aiAdvisory,
+    ranking,aiAdvisory,selection,
     policyRevision:dashboard.policy.version,
     riskPolicyRevision:dashboard.riskPolicyRevision,
     pscQuotaPolicyRevision:pscPolicy?.version??null,
@@ -453,7 +456,7 @@ export class SiCandidateAgent{
    snapshotHash:s.snapshotHash,policyRevision:s.policyRevision,
    pscQuotaPolicyRevision:s.pscQuotaPolicyRevision,
    riskPolicyRevision:s.riskPolicyRevision,eligibleCount:s.candidates.length,
-   aiAdvisory:s.aiAdvisory,
+   aiAdvisory:s.aiAdvisory,selectionPolicy:s.selection,
    expectedBatches:Math.ceil(s.candidates.length/(this.provider==='airia'?25:100)),
    estimatedAiriaCalls:this.provider==='airia'?Math.ceil(s.candidates.length/25):0,
    candidates:s.candidates,externalCalls:0,
@@ -503,6 +506,17 @@ export class SiCandidateAgent{
      // Configurable source-backed guidance is only advisory; always
      // subordinate to these immutable process/evidence/approval constraints.
      aiAdvisory:s.aiAdvisory,
+     // Published policy is sent to C01 without changing its response schema.
+     configuredSelectionPolicy:{
+       ...s.selection,
+       aiConfidenceThreshold:s.aiAdvisory.minimumSelectionConfidence,
+       approvedNmcReferralsAlwaysIncluded:true,
+       actionableServiceRequestsAlwaysIncluded:true,
+       duplicateImosAllowed:false,
+       neverOverridePscPortCallQuota:true,
+       missingVesselRisk:'MANUAL_REVIEW_NOT_INVENTED',
+       finalHumanApprovalRequired:true
+     },
      outputContract:{
        format:'STRICT_JSON_OBJECT_NO_MARKDOWN',
        topLevel:{recommendations:'array: exactly one per supplied candidateKey'},
@@ -530,7 +544,11 @@ export class SiCandidateAgent{
        doNotOverrideEligibilityOrPSCQuota:true,
        configuredGuidanceIsNonRegulatory:true,
        considerSelectedSignalsOnlyForAdvisoryInterpretation:true,
-       minimumConfidenceForAutomaticAdvice:s.aiAdvisory.minimumSelectionConfidence
+       minimumConfidenceForAutomaticAdvice:s.aiAdvisory.minimumSelectionConfidence,
+       performSelectionWithinPublishedQuotas:true,
+       uaeFlagSelectionPool:'SOURCE_ELIGIBLE_CANDIDATE_CENTER_ONLY',
+       returnSelectDeferOrManualReviewForEveryCandidate:true,
+       neverGenerateUnapprovedCandidates:true
      },
      officerPlanChanges,
      riskPolicyRevision:s.riskPolicyRevision,
@@ -576,6 +594,9 @@ export class SiCandidateAgent{
      for(const [key,count] of Object.entries(checked.failuresByCode))
       verificationFailures[key]=(verificationFailures[key]||0)+count;
    }
+   // Verified AI output only: the backend applies the configured caps and
+   // protects statutory source obligations. Never materialize cases here.
+   const selectionProposal=projectC01ConfiguredSelection(s,recommendations);
    const result={status:'ADVISORY_REVIEW_REQUIRED',agentCode:'SI-C01',
      agentRunId:randomUUID(),provider:this.provider.toUpperCase(),
      mock:this.provider==='mock',simulationLabel:this.provider==='mock'?SI_MOCK_MARKER:null,
@@ -589,6 +610,7 @@ export class SiCandidateAgent{
      ignoredUnknownRecommendations:unexpectedCount,
      verificationFailures,
      humanDecisionRequired:true,mutations:false,
+     configuredSelectionPolicy:s.selection,selectionProposal,
      warning:this.provider==='mock'?
        'STATIC TEST LOGIC ONLY: NO AIRIA CALL; NO REAL MODEL ANALYSIS OR APPROVAL.':
        'Advisory only. '+verifiedCount+' verified AI recommendations; '+
