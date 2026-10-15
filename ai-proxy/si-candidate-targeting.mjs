@@ -574,29 +574,46 @@ export class SiCandidateTargeting{
       aiAdvisory:getSiC01AdvisoryRules(data.policy.config),
       selection:getSiSelectionPolicy(data.policy.config)};
     const changed=JSON.stringify(before)!==JSON.stringify(parsed);
-    // Candidate-eligible denominators, never 420 raw registered vessels.
-    // A multi-regime vessel counts ONCE per IMO for each independent factor.
-    const activeKeys=new Set(data.candidates.filter(c=>
+    // POC planning is NOT source deletion. A final/reviewed MSW request
+    // remains in its backlog, but does not automatically force itself into
+    // the current 12-vessel rolling plan. UNVERIFIED inputs are review-only.
+    const activeCandidates=data.candidates.filter(c=>
       c.status==='PENDING_REVIEW'||(c.status==='EXTERNALLY_SCHEDULED'&&
-        c.events.some(e=>e.sourceType==='NMC_CASE'&&e.approval==='APPROVED')))
+        isSiProtectedReferral(c)));
+    const verifiedCandidates=activeCandidates.filter(c=>
+      c.events.some(isSiVerifiedEvent));
+    const poolIds=new Set(verifiedCandidates.map(c=>c.imo));
+    const pool=(data.vesselCandidates||[]).filter(v=>poolIds.has(v.imo));
+    const mandatoryIds=new Set(verifiedCandidates.filter(isSiProtectedReferral)
       .map(c=>c.imo));
-    const pool=(data.vesselCandidates||[]).filter(v=>activeKeys.has(v.imo));
-    const mandatoryIds=new Set(data.candidates.filter(c=>
-      c.status==='PENDING_REVIEW'&&c.events.some(e=>
-        e.sourceType==='NMC_CASE'&&e.approval==='APPROVED'||
-        e.sourceType==='SERVICE_REQUEST')).map(c=>c.imo));
+    const pscIds=new Set(verifiedCandidates.filter(c=>c.events.some(e=>
+      e.sourceType==='PSC_PORT_CALL'&&isSiVerifiedEvent(e))).map(c=>c.imo));
+    const serviceIds=new Set(verifiedCandidates.filter(c=>c.events.some(e=>
+      e.sourceType==='SERVICE_REQUEST'&&isSiVerifiedEvent(e))).map(c=>c.imo));
     const optionalPool=pool.filter(v=>!mandatoryIds.has(v.imo));
-    const psc=optionalPool.filter(v=>v.sourceTypes.includes('PSC_PORT_CALL'));
+    const psc=optionalPool.filter(v=>pscIds.has(v.imo));
+    const services=optionalPool.filter(v=>serviceIds.has(v.imo));
     const uae=optionalPool.filter(v=>['UAE','AE','ARE','UNITED ARAB EMIRATES',
       'الإمارات','الإمارات العربية المتحدة'].includes(
       String(v.flag||'').trim().toUpperCase().replace(/[\\s._-]+/g,' ')));
+    const pscCap=Math.floor(psc.length*parsed.selection.pscRiskRatePercent/100);
+    const uaeCap=Math.floor(uae.length*parsed.selection.uaeFlagRatePercent/100);
+    const serviceCap=parsed.selection.serviceRequestPlanCap;
+    const maxPlan=parsed.selection.maxPlannedVessels;
+    const rawPlanCeiling=mandatoryIds.size+pscCap+uaeCap+
+      (serviceCap===null?services.length:Math.min(services.length,serviceCap));
     return {status:'PREVIEW',fleetSnapshotId:data.fleetSnapshotId,
       selectionImpact:{
         candidatePoolImos:pool.length,pscEligibleImos:psc.length,
-        uaeEligibleImos:uae.length,
-        pscTargetImos:Math.floor(psc.length*parsed.selection.pscRiskRatePercent/100),
-        uaeTargetImos:Math.floor(uae.length*parsed.selection.uaeFlagRatePercent/100),
+        uaeEligibleImos:uae.length,serviceEligibleImos:services.length,
+        pscTargetImos:pscCap,uaeTargetImos:uaeCap,
+        serviceTargetImos:serviceCap===null?null:Math.min(services.length,serviceCap),
+        maxPlannedVessels:maxPlan,
+        theoreticalSelectedCeiling:maxPlan===null?rawPlanCeiling:
+          Math.min(maxPlan,rawPlanCeiling),
+        unverifiedCandidates:activeCandidates.length-verifiedCandidates.length,
         mandatoryImos:mandatoryIds.size,
+        pendingServiceRequestsRemainInBacklog:true,
         independentFactors:true,aiRunRequiredToChooseOptionalImos:true,
         pscQuotaFirst:true,uaePopulation:'ELIGIBLE_CANDIDATES_ONLY'
       },
