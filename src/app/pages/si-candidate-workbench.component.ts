@@ -7,7 +7,7 @@ import {FormsModule} from '@angular/forms';
 import {RouterLink} from '@angular/router';
 import {NmcNavigationComponent} from '../components/nmc-navigation.component';
 import {SiCandidate,SiCandidateStatus,SiCandidateTargetingService,
-  SiDashboard,SiVesselCandidate,SiInspectionPlanState,SiInspectionPlanRow,SiRollingPlan,SiC01Run,SiC01Preview,SiC01Recommendation,SiPriorityStatus,SiPriorityPreview,SiPriorityRun,SiPriorityRecommendation,SiPriorityPreviewItem}
+  SiDashboard,SiVesselCandidate,SiInspectionPlanState,SiInspectionPlanRow,SiRollingPlan,SiC01Run,SiC01Preview,SiDraftScope,SiC01Recommendation,SiPriorityStatus,SiPriorityPreview,SiPriorityRun,SiPriorityRecommendation,SiPriorityPreviewItem}
   from '../services/si-candidate-targeting.service';
 import {SiPscSelectionService,PscSelectionPool} from '../services/si-psc-selection.service';
 
@@ -64,6 +64,8 @@ export class SiCandidateWorkbenchComponent implements OnInit,OnDestroy{
   newDraftDemoMode=true;newDraftAiConsent=false;newDraftCostConsent=false;
   newDraftProvider:'AIRIA'|'MOCK'|'UNKNOWN'='UNKNOWN';
   newDraftExpectedBatches=0;newDraftPreview:DraftIntegratedPreview|null=null;
+  newDraftScope:SiDraftScope|null=null;newDraftScopeLoading=false;
+  newDraftScopeError='';
   newDraftRequests:DraftVisitRequest[]=[];newDraftChanged=false;
   newDraftBusy=false;newDraftNotice='';
   newDraftJobId='';newDraftJobPhase='';newDraftCompletedBatches=0;
@@ -91,11 +93,27 @@ export class SiCandidateWorkbenchComponent implements OnInit,OnDestroy{
     this.newPlan={title:'Inspection Plan '+start,startsOn:start,
       endsOn:this.localDayOffset(7),notes:''};
     this.newDraftExpectedBatches=0;this.newDraftProvider='UNKNOWN';
-    // Read-only preflight: no Airia charges, no plan records.
+    this.refreshDraftScope();
+  }
+  refreshDraftScope():void{
+    if(this.newDraftBusy||this.newDraftScopeLoading)return;
+    this.newDraftScope=null;this.newDraftScopeError='';
+    this.newDraftScopeLoading=true;this.newDraftProvider='UNKNOWN';
+    // Read-only exact source + published policy preflight; no AI or writes.
     this.api.candidateAiPreview(this.editorKey.trim()).subscribe({
-      next:info=>{this.newDraftExpectedBatches=info.expectedBatches||1;
-        this.newDraftProvider=info.provider;},
-      error:()=>{this.newDraftProvider='UNKNOWN';}
+      next:info=>{
+        this.newDraftScopeLoading=false;
+        this.newDraftExpectedBatches=info.expectedBatches||0;
+        this.newDraftProvider=info.provider;
+        this.newDraftScope=info.draftScope||null;
+        if(this.newDraftScope?.requiresOfficerAction){
+          this.newDraftAiConsent=false;this.newDraftCostConsent=false;
+        }
+      },
+      error:e=>{
+        this.newDraftScopeLoading=false;this.newDraftProvider='UNKNOWN';
+        this.newDraftScopeError=this.draftIssue(e);
+      }
     });
   }
   draftParametersChanged():void{
@@ -108,6 +126,10 @@ export class SiCandidateWorkbenchComponent implements OnInit,OnDestroy{
   private draftIssue(e:any):string{
     const code=e?.error?.error||e?.errorCode||'';
     const count=e?.error?.requiredBatches;
+    if(e?.error?.scope&&typeof e.error.scope==='object'){
+      this.newDraftScope=e.error.scope as SiDraftScope;
+      this.newDraftAiConsent=false;this.newDraftCostConsent=false;
+    }
     if(code==='SI_C01_BATCH_COUNT_CONFIRMATION_REQUIRED'&&
       Number.isInteger(count)&&count>0)this.newDraftExpectedBatches=count;
     const reasons=Object.entries(e?.error?.failureCounts||{})
@@ -207,7 +229,9 @@ export class SiCandidateWorkbenchComponent implements OnInit,OnDestroy{
     this.pollIntegratedDraftJob();
   }
   generateIntegratedDraft():void{
-    if(this.newDraftBusy||!this.newDraftAiConsent||!this.newPlan.title.trim()||
+    if(this.newDraftScopeLoading||!this.newDraftScope||
+      this.newDraftScope.requiresOfficerAction||
+      this.newDraftBusy||!this.newDraftAiConsent||!this.newPlan.title.trim()||
       !this.newPlan.startsOn||!this.newPlan.endsOn||
       this.newPlan.endsOn<this.newPlan.startsOn)return;
     if(this.newDraftProvider==='UNKNOWN'){
