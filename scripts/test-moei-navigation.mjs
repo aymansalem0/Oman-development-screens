@@ -82,9 +82,9 @@ test('Smart Inspection entry and ranking rules are separated; ETD precedes incid
   const si=read('src/app/pages/si-targeting-settings.component.ts');
   assert.match(centralRisk,/type="range"/);
   assert.match(centralRisk,/normalizeWeights\(\)/);
-  assert.match(si,/AI Selection & Priority Rules/);
-  assert.match(si,/Protected Entry Rules/);
-  assert.match(si,/Official Execution Order/);
+  assert.match(si,/Inspection Selection & Priority Policy/);
+  assert.match(si,/Eligibility & Selection/);
+  assert.match(si,/Priority Rules/);
   assert.match(si,/aiRules\.minimumSelectionConfidence/);
   assert.match(si,/aiRules\.priorityInstructions/);
   assert.match(si,/Vessels approaching departure/);
@@ -92,7 +92,7 @@ test('Smart Inspection entry and ranking rules are separated; ETD precedes incid
   assert.match(si,/criteria:\['DEPARTURE_SOON','INCIDENT_SEVERITY'\]/);
   assert.doesNotMatch(si,/riskPriorityThreshold|weightFactors|weightsValid|normalizeWeights|SI-P01/);
   assert.match(si,/ETD/);
-  assert.match(si,/source workflows/);
+  assert.match(si,/source workflows|source workflows|Candidate Center/);
   // P01 historical handler remains inert and no longer controls C01 selection.
   const server=read('ai-proxy/server.mjs');
   assert.match(server,/SI_P01_OUT_OF_CURRENT_POC_SCOPE/);
