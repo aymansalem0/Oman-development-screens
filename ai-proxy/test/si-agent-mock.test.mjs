@@ -16,7 +16,9 @@ const candidate=(key,sourceType,imo,score)=>({
  {score,level:'High',assessmentId:'assessment-'+imo,policyRevision:2},
  events:[{eventKey:'evt-'+key,sourceEventId:'id-'+key,
   sourceReference:'ref-'+key,sourceType,
-  provenance:'SYNTHETIC_POC',approval:'APPROVED',evidenceIds:['ev-'+key]}]
+  provenance:'SYNTHETIC_POC',
+   approval:sourceType==='NMC_CASE'?'APPROVED':'SOURCE_FINAL',
+   evidenceIds:['ev-'+key]}]
 });
 const inputs=()=>({
  policy:{version:3},riskPolicyRevision:2,fleetSnapshotId:'fleet-a',
@@ -86,14 +88,16 @@ test('C01 input must explicitly authorize even a free mock run',async()=>{
  await assert.rejects(a.run({actor:'rev',expectedSnapshotHash:p.snapshotHash}),
   /SI_C01_CONFIRMATION_REQUIRED/);
 });
-test('C01 Airia mode requires separate paid-cost confirmation',async()=>{
+test('C01 Airia mode requires explicit run and exact snapshot, not a cost-specific gate',async()=>{
  let calls=0;
  const a=new SiCandidateAgent({targeting:{dashboard:async()=>inputs()},provider:'airia',
   executeAgent:async p=>{calls++;return mockSiC01(p)}});
  const p=await a.preview();
- await assert.rejects(a.run({actor:'rev',confirmRun:true,
-  expectedSnapshotHash:p.snapshotHash}),/SI_C01_CONFIRMATION_REQUIRED/);
- assert.equal(calls,0);
+ const out=await a.run({actor:'rev',confirmRun:true,
+  expectedSnapshotHash:p.snapshotHash});
+ assert.equal(calls,1);
+ assert.equal(out.externalCalls,1);
+ assert.equal(out.humanDecisionRequired,true);
 });
 test('C01 fails closed on unknown evidence, duplicate candidates, and regulatory override',()=>{
  const source=buildC01Source(inputs(),{version:6});
