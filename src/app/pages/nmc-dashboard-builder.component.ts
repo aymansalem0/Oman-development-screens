@@ -16,6 +16,10 @@ import { NmcRiskEngineService } from '../services/nmc-risk-engine.service';
 import { NmcDashboardWorkspaceService, DashboardRevision } from '../services/nmc-dashboard-workspace.service';
 import { NmcDashboardNavigationService } from '../services/nmc-dashboard-navigation.service';
 import { NmcDistributionChartComponent } from '../components/nmc-distribution-chart.component';
+import {
+ SI_DEMO_DATA_NATURE,SI_DEMO_PERIOD,isSiDashboardMetric,siMetricMeta,
+ siDemoMetricNumber,siDemoChartRows,siDemoTable,SiDemoTable
+} from '../services/si-dashboard-metric-catalog';
 
 type BarRow={name:string;count:number;percent:number};
 
@@ -28,6 +32,35 @@ type BarRow={name:string;count:number;percent:number};
 })
 export class NmcDashboardBuilderComponent implements OnInit,OnDestroy {
   readonly catalog=DASHBOARD_METRICS;
+  readonly siDemoPeriod=SI_DEMO_PERIOD;
+  readonly siDemoNature=SI_DEMO_DATA_NATURE;
+  // Catalogue is already wired into the existing Dashboard Manager; no
+  // separate dashboards are created, auto-published or added to navigation.
+  metricGroupOptions(kind:DashboardWidgetKind,
+   group:'NMC'|'AI_PERFORMANCE'|'INSPECTION_OPERATIONS'):
+    Array<{value:DashboardMetric;en:string;ar:string}>{
+    return this.catalog[kind].filter(m=>{
+      const meta=siMetricMeta(m.value);
+      return group==='NMC'?!meta:meta?.group===group;
+    });
+  }
+  isSiDemoMetric(id:DashboardMetric):boolean{
+    return isSiDashboardMetric(id);
+  }
+  get dashboardHasDemoMetrics():boolean{
+    return this.dashboard?.widgets.some(w=>this.isSiDemoMetric(w.metric))||false;
+  }
+  get dashboardUsesFleet():boolean{
+    return this.dashboard?.widgets.some(w=>!this.isSiDemoMetric(w.metric))||false;
+  }
+  siMetricExplanation(id:DashboardMetric):string{
+    const meta=siMetricMeta(id);
+    return meta?this.copy(meta.descriptionEn,meta.descriptionAr):'';
+  }
+  siDemoTableFor(id:DashboardMetric):SiDemoTable|null{
+    return siDemoTable(id);
+  }
+
   readonly chartTypes=NMC_CHART_TYPES;
   readonly chartPalettes=NMC_CHART_PALETTES;
   readonly menuPlacements=DASHBOARD_MENU_PLACEMENTS;
@@ -619,6 +652,8 @@ export class NmcDashboardBuilderComponent implements OnInit,OnDestroy {
   get riskVersion():string{return this.riskEngine.config.version;}
 
   metricNumber(metric:DashboardMetric):string {
+    const example=siDemoMetricNumber(metric);
+    if(example!==null)return example;
     const rows=this.filtered,assessed=this.assessed;
     switch(metric){
       case 'vesselCount':return String(rows.length);
@@ -634,6 +669,8 @@ export class NmcDashboardBuilderComponent implements OnInit,OnDestroy {
   }
 
   barRows(metric:DashboardMetric):BarRow[]{
+    const example=siDemoChartRows(metric);
+    if(example!==null)return example;
     const rows=this.filtered;
     const counts=new Map<string,number>();
     const add=(name:string)=>counts.set(name,(counts.get(name)||0)+1);
