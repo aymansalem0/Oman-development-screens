@@ -8,7 +8,7 @@ import {mockSiC01} from '../si-agent-mock.mjs';
 import {projectInspectionPlan} from '../si-inspection-plan.mjs';
 
 const configured={...SI_SELECTION_POLICY_DEFAULT,pscRiskRatePercent:50,
- uaeFlagRatePercent:50};
+ uaeFlagRatePercent:100};
 const testCandidate=(imo,{flag='PANAMA',sources=['PSC_PORT_CALL'],risk=60,
  mandatory=false}={})=>({
   candidateKey:'c-'+imo,imo,regime:sources.includes('PSC_PORT_CALL')?
@@ -41,7 +41,7 @@ test('B pool: separately cap PSC and UAE eligible candidate IMOs, dedupe overlap
  assert.equal(result.pscRisk.eligibleImos,4);
  assert.equal(result.pscRisk.cap,2);
  assert.deepEqual(result.pscRisk.aiSelectedImos,['9400101','9400102']);
- assert.equal(result.uaeFlag.eligibleImos,2);
+ assert.equal(result.uaeFlag.eligibleImos,1);
  assert.equal(result.uaeFlag.cap,1);
  assert.deepEqual(result.uaeFlag.aiSelectedImos,['9400102']);
  assert.deepEqual(result.overlappingImos,['9400102']);
@@ -108,7 +108,7 @@ test('C01 request actually receives configured publisher rules, returns evidence
  });
  const preview=await agent.preview();
  assert.equal(preview.externalCalls,0);
- assert.equal(preview.selectionPolicy.uaeFlagRatePercent,50);
+ assert.equal(preview.selectionPolicy.uaeFlagRatePercent,100);
  const run=await agent.run({actor:'Supervisor',confirmRun:true,
   expectedSnapshotHash:preview.snapshotHash});
  assert.equal(called,1);
