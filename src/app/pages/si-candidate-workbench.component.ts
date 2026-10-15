@@ -14,6 +14,7 @@ import {SiPscSelectionService,PscSelectionPool} from '../services/si-psc-selecti
 interface DraftVisitRequest {
  imo:string;portId:string;vesselType:string;regime:string;locationType:string;
  locationName:string;siteAccessConfirmed:boolean;durationMinutes:number;
+ berthAtLocal?:string;berthConfirmed?:boolean;berthEvidenceReference?:string;
  earliestLocal:string;latestFinishLocal:string;windowSource:string;
  windowEvidenceReference:string;
 }
