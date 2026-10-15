@@ -117,7 +117,7 @@ export class SiScheduleOrders{
    .map(order=>({
     planId:schedule.planId,scheduleId:schedule.id,orderId:order.id,
     imo:order.imo,
-    vesselName:this.targeting.bundles.find(x=>x.imo===order.imo)
+    vesselName:this.targeting.bundles?.find(x=>x.imo===order.imo)
       ?.inlineContext?.vessel?.name||('IMO '+order.imo),
     status:order.status,caseId:order.caseId,
     assignment:order.assignment,mode:schedule.mode,
