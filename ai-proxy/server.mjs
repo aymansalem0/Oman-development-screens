@@ -41,6 +41,7 @@ import {SiCandidateAgent,SiCandidateAgentError} from './si-candidate-agent.mjs';
 import {validateDraftMetadata,buildIntegratedDraft,publicDraftPreview,
  SiDraftCreationError} from './si-integrated-draft-creation.mjs';
 import {SiIntegratedDraftJobs,SiDraftJobError} from './si-integrated-draft-jobs.mjs';
+import {inspectSiDraftScope,SI_DRAFT_SOLVER_MAX_VESSELS} from './si-draft-selection-preflight.mjs';
 import {SiInspectionPlan} from './si-inspection-plan.mjs';
 import {SiRollingPlanStore,SiRollingPlanError} from './si-rolling-plan-store.mjs';
 import {SiBulkInspectionPlan,SiBulkApprovalError} from './si-bulk-inspection-plan.mjs';
@@ -1152,13 +1153,20 @@ const server = createServer(async (req, res) => {
            !(savedErp.data?.Ports||[]).some(p=>p.active==='Y'||p.active===true))
           return respond(res,409,{error:'SI_DRAFT_DEMO_ACTIVE_ERP_PORTS_REQUIRED'});
         const source=await siCandidateAgent.source();
-        const protectedCount=new Set(source.candidates
-          .filter(c=>c.requiredInPlan===true).map(c=>c.imo)).size;
-        if(protectedCount>40)
+        const scope=inspectSiDraftScope(source);
+        // A legacy policy can force every verified service request into
+        // this plan, while approved NMC referrals are a different,
+        // protected obligation. Never demote either in code or charge
+        // Airia before a PUBLISHER explicitly fixes plan limits.
+        if(scope.status==='SELECTION_POLICY_REPUBLICATION_REQUIRED')
           return respond(res,409,{
-            error:'SI_DRAFT_MANDATORY_VESSELS_EXCEED_SCHEDULER_40',
-            mandatoryCount:protectedCount});
-
+            error:'SI_DRAFT_PUBLISH_SERVICE_AND_PLAN_CAP_BEFORE_AIRIA',scope});
+        if(scope.status==='PROTECTED_NMC_REFERRALS_EXCEED_PUBLISHED_PLAN_CAP')
+          return respond(res,409,{
+            error:'SI_DRAFT_NMC_PROTECTED_REFERRALS_EXCEED_PUBLISHED_PLAN_CAP',scope});
+        if(scope.status==='PROTECTED_NMC_REFERRALS_EXCEED_SOLVER_MAX')
+          return respond(res,409,{
+            error:'SI_DRAFT_NMC_PROTECTED_REFERRALS_EXCEED_SOLVER_MAX',scope});
         if(source.candidates.length>500)
           return respond(res,422,{error:'SI_C01_BATCH_LIMIT_500_SCOPE_REQUIRED'});
         const batches=Math.ceil(source.candidates.length/(siAiProvider==='airia'?25:100));
@@ -1355,8 +1363,11 @@ const server = createServer(async (req, res) => {
         });
         if(!selection.roster.length)
           return respond(res,409,{error:'SI_INTEGRATED_NO_ELIGIBLE_VESSELS'});
-        if(selection.roster.length>40)
-          return respond(res,409,{error:'SI_INTEGRATED_SCHEDULING_BATCH_LIMIT_40'});
+        if(selection.roster.length>SI_DRAFT_SOLVER_MAX_VESSELS)
+          return respond(res,409,{
+            error:'SI_INTEGRATED_SCHEDULING_SOLVER_MAX_EXCEEDED',
+            selectedCount:selection.roster.length,
+            solverMaxVessels:SI_DRAFT_SOLVER_MAX_VESSELS});
         const original=siErp.requireSnapshot();
         const workforce=body.demoMode?
           buildPocErpSchedulingOverlay(original,{operator:moeiAuth.require(req)}):original;
@@ -1371,7 +1382,7 @@ const server = createServer(async (req, res) => {
         });
         if(!Array.isArray(body.requests)||
            body.requests.length!==selection.roster.length||
-           body.requests.length>40||
+           body.requests.length>SI_DRAFT_SOLVER_MAX_VESSELS||
            typeof body.expectedSourceHash!=='string'||
            !Number.isInteger(body.expectedPlanRevision)||
            body.expectedSourceHash!==selection.sourceHash||
@@ -1932,7 +1943,11 @@ const server = createServer(async (req, res) => {
       }
       if(path==='/api/si/v1/agents/candidate-selection/preview'&&req.method==='GET'){
         dashboards.assertRole(req,'EDITOR');
-        return respond(res,200,await siCandidateAgent.preview());
+        const preview=await siCandidateAgent.preview();
+        return respond(res,200,{
+          ...preview,
+          draftScope:inspectSiDraftScope(await siCandidateAgent.source())
+        });
       }
       if(path==='/api/si/v1/agents/candidate-selection/run'&&req.method==='POST'){
         dashboards.assertRole(req,'EDITOR');
