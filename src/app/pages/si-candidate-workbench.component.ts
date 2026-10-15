@@ -28,7 +28,13 @@ interface DraftIntegratedPreview {
  previewId:string;proposalHash:string;selectionHash:string;
  metadata:{title:string;startsOn:string;endsOn:string;notes:string;demoMode:boolean};
  provider:string;candidateCount:number;selectedCount:number;
+ prioritizedCount:number;finalPlanCount:number;
  feasibleCount:number;unscheduledCount:number;demoOnly:boolean;
+ outsidePlanCount:number;finalizedPlanImos:string[];
+ pipelineStages:{stage:string;status:string;count:number;description:string}[];
+ outsidePlan:{imo:string;originalPriority:number;reasonCode:string;
+  disposition:string;remainsInCandidatePool:boolean;workOrderIssued:boolean}[];
+ protectedCapacityExceptions:{imo:string;reasonCode:string}[];
  mandatoryUnscheduled:string[];outsidePlanPeriod:string[];
  readyForSupervisorReview:boolean;expiresInMinutes:number;
  manualAlternatives:DraftManualAlternative[];
@@ -40,6 +46,8 @@ interface DraftIntegratedPreview {
  ports:{portId:string;name:string}[];
  items:{imo:string;planRank:number;vesselName:string;priorityReason:string|null;
   priorityCriterion:string;mandatory:boolean;status:string;blocker:string|null;
+  inCurrentPlan:boolean;disposition:string;remainsCandidate:boolean;
+  outsideReasonCode:string|null;
   inspectorName:string|null;portName:string|null;startLocal:string|null;
   endLocal:string|null;sourceTypes:string[];
   visitWindow?:{etaLocal:string;etdLocal:string;berthAtLocal:string|null;
