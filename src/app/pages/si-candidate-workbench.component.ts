@@ -18,6 +18,12 @@ interface DraftVisitRequest {
  earliestLocal:string;latestFinishLocal:string;windowSource:string;
  windowEvidenceReference:string;
 }
+interface DraftManualAlternative {
+ imo:string;vesselName:string;sourceTypes:string[];
+ priorityCriterion:string;periodStatus:string;
+ eligibleBases:string[];requiredOfficerReason:boolean;aiAdvice:string;
+}
+interface DraftOfficerAdd {imo:string;basis:string;reason:string}
 interface DraftIntegratedPreview {
  previewId:string;proposalHash:string;selectionHash:string;
  metadata:{title:string;startsOn:string;endsOn:string;notes:string;demoMode:boolean};
@@ -25,6 +31,9 @@ interface DraftIntegratedPreview {
  feasibleCount:number;unscheduledCount:number;demoOnly:boolean;
  mandatoryUnscheduled:string[];outsidePlanPeriod:string[];
  readyForSupervisorReview:boolean;expiresInMinutes:number;
+ manualAlternatives:DraftManualAlternative[];
+ officerSelectedAlternatives:DraftOfficerAdd[];
+ availablePlanSlots:number;
  visitRequests:DraftVisitRequest[];
  visitInputs:{imo:string;portSourceLocked:boolean;sourceArrivalLocked:boolean;
   sourceDepartureLocked:boolean}[];
@@ -71,6 +80,8 @@ export class SiCandidateWorkbenchComponent implements OnInit,OnDestroy{
   newDraftScope:SiDraftScope|null=null;newDraftScopeLoading=false;
   newDraftScopeError='';
   newDraftRequests:DraftVisitRequest[]=[];newDraftChanged=false;
+  newDraftOfficerAdds:DraftOfficerAdd[]=[];
+  newDraftAlternativeSearch='';
   newDraftBusy=false;newDraftNotice='';
   newDraftJobId='';newDraftJobPhase='';newDraftCompletedBatches=0;
   newDraftProcessedWorkflows=0;newDraftTotalWorkflows=0;newDraftTotalVessels=0;
@@ -124,6 +135,7 @@ export class SiCandidateWorkbenchComponent implements OnInit,OnDestroy{
   draftParametersChanged():void{
     this.newDraftPreview=null;this.newDraftRequests=[];
     this.newDraftChanged=false;this.newDraftNotice='';
+    this.newDraftOfficerAdds=[];
   }
   draftVisitsChanged():void{
     this.newDraftChanged=true;this.newDraftNotice='';
@@ -171,6 +183,7 @@ export class SiCandidateWorkbenchComponent implements OnInit,OnDestroy{
     this.newDraftJobId='';this.newDraftJobPhase='';
     this.newDraftCompletedBatches=this.newDraftExpectedBatches;
     this.newDraftRequests=draft.visitRequests.map(v=>({...v}));
+    this.newDraftOfficerAdds=(draft.officerSelectedAlternatives||[]).map(v=>({...v}));
     this.newPlan={title:draft.metadata.title,startsOn:draft.metadata.startsOn,
       endsOn:draft.metadata.endsOn,notes:draft.metadata.notes};
     this.newDraftDemoMode=draft.demoOnly;
@@ -277,15 +290,49 @@ export class SiCandidateWorkbenchComponent implements OnInit,OnDestroy{
       }
     });
   }
+  get filteredDraftAlternatives():DraftManualAlternative[]{
+    const all=this.newDraftPreview?.manualAlternatives||[];
+    const q=this.newDraftAlternativeSearch.trim().toLowerCase();
+    return q?all.filter(v=>(v.imo+' '+v.vesselName).toLowerCase().includes(q)):all;
+  }
+  isDraftAlternativeSelected(imo:string):boolean{
+    return this.newDraftOfficerAdds.some(v=>v.imo===imo);
+  }
+  toggleDraftAlternative(v:DraftManualAlternative,selected:boolean):void{
+    this.planningError='';
+    if(!selected){this.newDraftOfficerAdds=this.newDraftOfficerAdds.filter(x=>x.imo!==v.imo);}
+    else if(!this.isDraftAlternativeSelected(v.imo)){
+      this.newDraftOfficerAdds.push({imo:v.imo,basis:v.eligibleBases[0],reason:''});
+    }
+    this.draftVisitsChanged();
+  }
+  removeDraftAlternative(imo:string):void{
+    this.newDraftOfficerAdds=this.newDraftOfficerAdds.filter(x=>x.imo!==imo);
+    this.draftVisitsChanged();
+  }
   recalculateIntegratedDraft():void{
     if(this.newDraftBusy||!this.newDraftPreview)return;
     this.newDraftBusy=true;this.planningError='';this.newDraftNotice='';
+    if(this.newDraftOfficerAdds.some(x=>!x.reason.trim()||
+      x.reason.trim().length<10)){
+      this.planningError=this.copy(
+        'Enter a specific operational reason (at least 10 characters) for each officer-selected alternative.',
+        'اكتب سببًا تشغيليًا واضحًا لكل سفينة إضافية، لا يقل عن 10 أحرف.');
+      return;
+    }
     this.http.post<DraftIntegratedPreview>('/api/si/v1/inspection-plans/draft-recalculate',{
       previewId:this.newDraftPreview.previewId,
-      requests:this.newDraftRequests
+      officerAdds:this.newDraftOfficerAdds,
+      ...(this.newDraftOfficerAdds.length===
+        (this.newDraftPreview.officerSelectedAlternatives||[]).length&&
+        this.newDraftOfficerAdds.every((x,i)=>
+          x.imo===this.newDraftPreview!.officerSelectedAlternatives[i]?.imo)?
+        {requests:this.newDraftRequests}:{})
     }).subscribe({
       next:x=>{this.newDraftBusy=false;this.newDraftPreview=x;
         this.newDraftRequests=x.visitRequests.map(v=>({...v}));
+        this.newDraftOfficerAdds=(x.officerSelectedAlternatives||[]).map(v=>({...v}));
+        this.newDraftOfficerAdds=(x.officerSelectedAlternatives||[]).map(v=>({...v}));
         this.newDraftChanged=false;
         this.newDraftNotice=this.copy(
           'Capacity recalculated under the source rules without another AI call.',
