@@ -72,7 +72,7 @@ export function buildIntegratedDraft({
   fail('SI_C01_CONFIGURED_SELECTION_REQUIRED_RUN_AI',409);
  const plan={id,number:'NEW-DRAFT-PREVIEW',status:'DRAFT',revision:0,
   candidateSourceHash:source.snapshotHash,selectionSourceHash:source.snapshotHash};
- const rows=projectInspectionPlan(dashboard,source,ai,null??{},
+ const rows=projectInspectionPlan(dashboard,source,ai,{},
   {});
  const selection=selectIntegratedPlanVessels({
   plan,inspectionPlan:{planId:id,revision:0,sourceHash:source.snapshotHash,
@@ -158,6 +158,8 @@ export function publicDraftPreview(p,previewId){
     endLocal:a?.endLocal||null,
     crossPort:a?.crossPort===true};
   }),
+  visitRequests:p.requests.map(x=>({...x})),
+  ports:p.context.ports||[],
   visitInputs:p.context.items.map(v=>({
    imo:v.imo,portId:v.portId,portName:v.portName,portSourceLocked:v.portSourceLocked,
    locationName:v.locationName,siteAccessConfirmed:v.siteAccessConfirmed,
