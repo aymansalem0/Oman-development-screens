@@ -1145,7 +1145,20 @@ const server = createServer(async (req, res) => {
         if(input.confirmAi!==true||
            (siAiProvider==='airia'&&input.confirmCost!==true))
           return respond(res,422,{error:'SI_DRAFT_EXPLICIT_C01_COST_CONFIRMATION_REQUIRED'});
+        // FAIL BEFORE PAID C01. A missing/invalid workforce import must not
+        // be discovered only after 5 successful charged Airia batches.
+        const savedErp=siErp.requireSnapshot();
+        if(metadata.demoMode&&
+           !(savedErp.data?.Ports||[]).some(p=>p.active==='Y'||p.active===true))
+          return respond(res,409,{error:'SI_DRAFT_DEMO_ACTIVE_ERP_PORTS_REQUIRED'});
         const source=await siCandidateAgent.source();
+        const protectedCount=new Set(source.candidates
+          .filter(c=>c.requiredInPlan===true).map(c=>c.imo)).size;
+        if(protectedCount>40)
+          return respond(res,409,{
+            error:'SI_DRAFT_MANDATORY_VESSELS_EXCEED_SCHEDULER_40',
+            mandatoryCount:protectedCount});
+
         if(source.candidates.length>500)
           return respond(res,422,{error:'SI_C01_BATCH_LIMIT_500_SCOPE_REQUIRED'});
         const batches=Math.ceil(source.candidates.length/(siAiProvider==='airia'?25:100));
