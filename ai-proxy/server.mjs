@@ -31,8 +31,8 @@ import {maritimePlanSchedulingContext,validateOperatorScheduleAgainstSource} fro
 import {buildPocErpSchedulingOverlay,fillPocSchedulingVisitContext,
  validatePocSchedulingDemoRequest} from './si-scheduling-poc-fixtures.mjs';
 import { SiCandidateTargeting, SiTargetingError ,getSiSelectionPolicy} from './si-candidate-targeting.mjs';
-import {selectIntegratedPlanVessels,makeCapacityDraftPlan,
- validateIntegratedCapacityProposal,SiIntegratedPlanError}
+import {selectIntegratedPlanVessels,scopeIntegratedSelectionToSavedDraft,
+ makeCapacityDraftPlan,validateIntegratedCapacityProposal,SiIntegratedPlanError}
  from './si-integrated-capacity-plan.mjs';
 import { SiSourceExcelImport } from './si-source-excel-import.mjs';
 import {projectVesselMasterEtd} from './si-vessel-master-etd.mjs';
@@ -1367,11 +1367,16 @@ const server = createServer(async (req, res) => {
             inspectionPlan.selectionProposal.policyRevision!==dashboard.policy.version||
             inspectionPlan.selectionProposal.snapshotHash!==inspectionPlan.sourceHash))
           return respond(res,409,{error:'SI_C01_CONFIGURED_SELECTION_REQUIRED_RUN_AI'});
-        const selection=selectIntegratedPlanVessels({
+        // Recheck C01 against the current source first; then lock the
+        // scheduling set to the IMOs deliberately saved in this Draft.
+        // This removes the unscoped replan that was triggering
+        // SI_DRAFT_APPROVAL_SCOPE_CHANGED_REVIEW_NEW_PLAN.
+        const fullSelection=selectIntegratedPlanVessels({
           plan,inspectionPlan,dashboard,
           pscRiskRatePercent:body.pscRiskRatePercent,
           uaeFlagRatePercent:body.uaeFlagRatePercent
         });
+        const selection=scopeIntegratedSelectionToSavedDraft(fullSelection,plan);
         if(!selection.roster.length)
           return respond(res,409,{error:'SI_INTEGRATED_NO_ELIGIBLE_VESSELS'});
         if(selection.roster.length>SI_DRAFT_SOLVER_MAX_VESSELS)
@@ -1479,16 +1484,21 @@ const server = createServer(async (req, res) => {
         const decision=validateIntegratedCapacityProposal(
           selection,proposal,body.selectedOptionId);
         const optimized=decision.variant;
-        // Capacity may change between Draft save and supervisor approval.
-        // Revalidate resources, but never silently re-add a vessel excluded
-        // from the saved Draft scope. An officer must recalculate/agree to
-        // any changed vessel list before issuing canonical work orders.
-        if(plan.capacityDraft?.status==='CAPACITY_VERIFIED_DRAFT'&&
-         Array.isArray(plan.capacityDraft.selectedImos)){
-          const saved=new Set(plan.capacityDraft.selectedImos);
-          if(optimized.assignments.some(a=>!saved.has(a.imo)))
-           return respond(res,409,{
-            error:'SI_DRAFT_APPROVAL_SCOPE_CHANGED_REVIEW_NEW_PLAN'});
+        // An initially verified Draft has a committed-to-review vessel
+        // scope. A freshly constrained ERP search can replace the engineer
+        // or time, but cannot silently drop any saved vessel either.
+        if(selection.draftScope?.locked){
+          const required=new Set(selection.draftScope.selectedImos);
+          const assigned=new Set(optimized.assignments.map(a=>a.imo));
+          if(required.size!==assigned.size||
+             [...required].some(imo=>!assigned.has(imo))){
+            return respond(res,409,{
+             error:'SI_DRAFT_SAVED_CAPACITY_CHANGED_REVIEW_REQUIRED',
+             savedCount:required.size,feasibleNow:assigned.size,
+             missingImos:[...required].filter(imo=>!assigned.has(imo)),
+             planUnchanged:true
+            });
+          }
         }
         // For integrated pre-save drafts, the requested plan execution period
         // is an additional hard approval gate (including chosen alternatives).
