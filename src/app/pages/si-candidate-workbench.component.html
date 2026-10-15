@@ -47,6 +47,63 @@
         <label>{{copy('Notes','ملاحظات')}}
          <input [(ngModel)]="newPlan.notes" (ngModelChange)="draftParametersChanged()" maxlength="1200"/></label>
        </div>
+       <section class="si-draft-scope-preview" aria-label="Capacity-first selection policy preflight">
+        <div class="si-draft-scope-head">
+         <h4>{{copy('Preflight · Verified Source Obligations & Plan Policy',
+          'الفحص المسبق · إحالات المصادر المعتمدة وسياسة اختيار الخطة')}}</h4>
+         <button type="button" (click)="refreshDraftScope()"
+          [disabled]="newDraftBusy||newDraftScopeLoading">
+          {{copy('↻ Reload Published Policy (free)','↻ تحديث السياسة المنشورة دون تكلفة')}}</button>
+        </div>
+        <p *ngIf="newDraftScopeLoading" class="si-rolling-note">
+         {{copy('Checking authoritative source and current published policy without Airia calls…',
+          'مراجعة المصادر والسياسة المنشورة دون استدعاء Airia…')}}</p>
+        <p *ngIf="newDraftScopeError" class="notice error">{{newDraftScopeError}}</p>
+        <ng-container *ngIf="newDraftScope as scope">
+         <div class="si-draft-stats">
+          <div><strong>{{scope.eligibleVessels}}</strong>
+           <span>{{copy('Distinct eligible vessels','السفن المؤهلة دون تكرار')}}</span></div>
+          <div><strong>{{scope.protectedNmcVessels}}</strong>
+           <span>{{copy('Approved NMC referrals — protected','إحالات NMC معتمدة وإلزامية')}}</span></div>
+          <div><strong>{{scope.serviceRequestVessels}}</strong>
+           <span>{{copy('Verified service requests in pool','طلبات الخدمة الموثقة بالقائمة')}}</span></div>
+          <div><strong>{{scope.hasPublishedCappedPolicy?scope.publishedMaxPlannedVessels:'—'}}</strong>
+           <span>{{copy('Published maximum vessels per draft','الحد المنشور للسفن في المسودة')}}</span></div>
+         </div>
+         <p class="si-rolling-note">
+          {{copy('C01 candidate workflows','مسارات C01')}}: {{scope.candidateWorkflows}}
+          · {{copy('Service-request cap per draft','سقف طلبات الخدمة لكل مسودة')}}:
+            {{scope.publishedServiceRequestPlanCap===null?'—':scope.publishedServiceRequestPlanCap}}
+          · {{copy('Policy revision','إصدار السياسة')}}: {{scope.sourcePolicyRevision}}
+         </p>
+         <div class="si-draft-policy-blocker"
+          *ngIf="scope.status==='SELECTION_POLICY_REPUBLICATION_REQUIRED'">
+          <strong>{{copy('Action required: Publish capped inspection-plan selection rules',
+           'إجراء مطلوب: نشر سياسة اختيار بخطة ذات حدود محددة')}}</strong>
+          <p>{{copy('The saved selection policy is legacy/uncapped. It currently forces ',
+           'سياسة الاختيار المحفوظة قديمة أو بلا سقف، وتجعل ')}}
+           <b>{{scope.legacyServiceRequestsForcedIntoOnePlan}}</b>
+           {{copy(' verified service-request vessels into this ONE plan. These are not the same as legally approved NMC referrals. Publish the explicitly approved service-request cap and plan maximum before running charged C01. No vessel is deleted or silently deferred.',
+            ' سفينة من طلبات الخدمة الموثقة إلزامية في هذه الخطة الواحدة. وهي ليست مثل إحالات NMC المعتمدة. انشر سقف طلبات الخدمة والحد الأقصى للسفن بعد اعتمادهما قبل تشغيل C01 المدفوع، دون حذف سفن أو تأجيلها بصمت.')}}</p>
+          <a routerLink="/moei/smart-inspection/settings/targeting">
+           {{copy('Open Selection Policy Settings →','فتح إعدادات سياسة اختيار السفن ←')}}</a>
+          <p class="si-rolling-note">{{copy('POC proposed values: service cap 4, max vessels 12. They are NOT automatically activated; a PUBLISHER must explicitly approve and publish them.',
+           'القيم المقترحة للـPOC: أربع طلبات خدمة وحد أقصى 12 سفينة، ولا تُفعل تلقائيًا؛ يجب نشرها باعتماد مسؤول مخول.')}}</p>
+         </div>
+         <div class="si-draft-policy-blocker"
+          *ngIf="scope.status==='PROTECTED_NMC_REFERRALS_EXCEED_PUBLISHED_PLAN_CAP'||scope.status==='PROTECTED_NMC_REFERRALS_EXCEED_SOLVER_MAX'">
+          <strong>{{copy('Protected NMC referrals exceed this plan scope',
+           'إحالات NMC المعتمدة تتجاوز نطاق الخطة')}}</strong>
+          <p>{{copy('Approved NMC referrals cannot be removed or reclassified to fit a technical limit. The supervisor must explicitly scope separate plans while retaining every referral in the central pool.',
+           'لا يجوز حذف إحالات NMC المعتمدة أو تغيير تصنيفها لتناسب حدًا فنيًا. يلزم تحديد نطاق خطط منفصلة بمعرفة المشرف مع الحفاظ على جميع الإحالات بالقائمة المركزية.')}}</p>
+          <a routerLink="/moei/smart-inspection/settings/targeting">
+           {{copy('Review Published Plan Policy →','مراجعة سياسة الخطط المنشورة ←')}}</a>
+         </div>
+         <p *ngIf="scope.status==='READY'" class="si-draft-scope-ready">
+          {{copy('Published selection limits verified. C01, vessel priority and qualified-inspector capacity can now be computed together before draft save.',
+           'تم التحقق من حدود الاختيار المنشورة. يمكن الآن حساب C01 وأولويات السفن وطاقة المهندسين معًا قبل حفظ المسودة.')}}</p>
+        </ng-container>
+       </section>
        <div class="si-draft-consent">
         <label><input type="checkbox" [(ngModel)]="newDraftDemoMode" (ngModelChange)="draftParametersChanged()"/>
          {{copy('POC demo capacity: synthetic engineers, shifts and visit supplements; NOT official ERP',
@@ -62,10 +119,20 @@
         <p class="si-rolling-note">{{copy('Priority is determined by verified ETD, then reviewed incident severity; risk scores do not set execution order. Approval and work orders remain supervisor-only.',
          'الأولوية حسب ETD المؤكد، ثم خطورة الحوادث المعتمدة؛ درجات مخاطر السفن لا تحدد ترتيب التنفيذ. الاعتماد وأوامر التكليف للمشرف فقط.')}}</p>
        </div>
-       <p class="notice error" *ngIf="planningError" role="alert">{{planningError}}</p>
+       <div *ngIf="newDraftJobId&&newDraftBusy" class="si-draft-job-progress"
+         role="status" aria-live="polite">
+        <strong>{{copy('Airia C01 batch execution in progress — no automatic retry',
+         'جاري تشغيل دفعات Airia C01 — دون إعادة تشغيل تلقائية')}}</strong>
+        <div>{{copy('Verified batches','دفعات تم التحقق منها')}}:
+         <b>{{newDraftCompletedBatches}} / {{newDraftExpectedBatches}}</b>
+         · {{newDraftJobPhase}}</div>
+        <p>{{copy('Keep the page open or refresh to resume checking the same job. Do not click Generate again or start another paid run.',
+         'اترك الصفحة مفتوحة أو أعد تحميلها لمتابعة نفس Job. لا تبدأ تشغيلًا آخر مدفوعًا.')}}
+        </p>
+       </div>
        <div class="si-rolling-actions">
         <button type="button" class="si-plan-wizard-button" (click)="generateIntegratedDraft()"
-         [disabled]="newDraftBusy||!newDraftAiConsent||newDraftProvider==='UNKNOWN'||(newDraftProvider==='AIRIA'&&!newDraftCostConsent)">
+         [disabled]="newDraftBusy||newDraftScopeLoading||!newDraftScope||newDraftScope.requiresOfficerAction||!newDraftAiConsent||newDraftProvider==='UNKNOWN'||(newDraftProvider==='AIRIA'&&!newDraftCostConsent)">
          {{newDraftBusy?copy('Calculating integrated plan…','جاري حساب الخطة المتكاملة…'):
            copy('01 · Generate Candidates + Priority + Capacity','١ · حساب السفن والأولويات وطاقة المهندسين')}}</button>
         <button type="button" (click)="newPlanVisible=false" [disabled]="newDraftBusy">
@@ -567,8 +634,13 @@
                   <div *ngIf="activePlanEditable&&plan&&planRow(v)?.editable"
                     class="si-rolling-actions">
                     <button type="button" *ngIf="!planRow(v)?.planSelected"
-                      (click)="openManualDecision(v,'INCLUDE')" [disabled]="planBusy">
+                      (click)="openManualDecision(v,'INCLUDE')"
+                      [disabled]="planBusy||vesselOutsidePlan(v)"
+                      [title]="vesselPlanPeriodMessage(v)">
                       {{copy('Include','إدراج')}}</button>
+                    <small *ngIf="vesselOutsidePlan(v)"
+                      class="si-vessel-period-blocked" role="status">
+                      {{vesselPlanPeriodMessage(v)}}</small>
                     <button type="button" *ngIf="planRow(v)?.planSelected"
                       (click)="openManualDecision(v,'NOT_SELECTED')" [disabled]="planBusy">
                       {{copy('Remove','استبعاد')}}</button>

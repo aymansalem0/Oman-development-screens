@@ -6,6 +6,7 @@
  */
 import {createHash} from 'node:crypto';
 import {SiError} from './si-erp-workforce.mjs';
+import {proposedVisitInsideExecutionPeriod} from './si-plan-period-eligibility.mjs';
 const MINUTE=60000,HOUR=3600000,MAX_BATCH=500,BEAM_WIDTH=32;
 const IMO=/^[0-9]{7}$/;
 const TYPES=new Set(['TANKER','CARGO','PASSENGER','OTHER']);
@@ -264,11 +265,19 @@ export function proposeMaritimeBatchSchedule({
     PORT_STATE_CONTROL:'PSC',FOCUSED_INSPECTION:'FOCUSED',
     UAE_SERVICE_INSPECTION:'SERVICE',FOLLOW_UP_INSPECTION:'FOLLOW_UP'
   }[s])).filter(Boolean);
-  const filtered=out.options.filter(opt=>required.every(r=>
+  const qualified=out.options.filter(opt=>required.every(r=>
     erpSnapshot.data.Qualifications.some(q=>
       q.inspector_id===opt.inspectorId&&q.inspection_regime===r&&
       ['ANY',input.vesselType].includes(norm(q.vessel_type))&&
       active(q.active)&&q.valid_until>=localDate(Date.parse(opt.startUtc)))));
+  // The plan period is a HARD constraint inside the solver, not an error
+  // discovered only after clicking Supervisor Approval.  Keep all source
+  // obligations visible as UNSCHEDULED with an explicit reason.
+  const hasPeriod=typeof plan.startsOn==='string'&&
+   typeof plan.endsOn==='string';
+  const filtered=hasPeriod?qualified.filter(opt=>
+    proposedVisitInsideExecutionPeriod(opt,plan)):qualified;
+  const periodMismatch=hasPeriod&&qualified.length>0&&!filtered.length;
   return {...base,input,options:filtered.map(o=>({
    ...o,imo:v.imo,locationType:input.locationType,
    locationName:input.locationName,
@@ -276,7 +285,9 @@ export function proposeMaritimeBatchSchedule({
    windowSource:input.windowSource,evidenceReference:input.evidenceReference,
    requiresSupervisorApproval:true})),
    exclusions:out.exclusions,
-   reason:filtered.length?null:'NO_FEASIBLE_ERP_SHIFT_QUALIFICATION_PORT_OR_WINDOW'};
+   reason:filtered.length?null:periodMismatch?
+     'SI_VISIT_OUTSIDE_EXECUTION_PLAN_PERIOD':
+     'NO_FEASIBLE_ERP_SHIFT_QUALIFICATION_PORT_OR_WINDOW'};
  });
  const schedulable=jobs.filter(j=>j.options.length).sort((a,b)=>
    a.options.length-b.options.length||

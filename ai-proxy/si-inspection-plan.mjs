@@ -13,6 +13,7 @@ import {dirname} from 'node:path';
 import {randomUUID} from 'node:crypto';
 import {SiCandidateAgentError,summarizeC01Readiness} from './si-candidate-agent.mjs';
 import {compareInspections,inspectionRanking} from './si-inspection-ranking.mjs';
+import {checkVesselPlanPeriod} from './si-plan-period-eligibility.mjs';
 
 const iso=()=>new Date().toISOString();
 const empty=()=>({revision:0,overrides:{},latest:null,audit:[]});
@@ -196,7 +197,13 @@ export class SiInspectionPlan{
    warning:historical?
     'HISTORICAL APPROVED/CANCELLED PLAN: showing saved selection; new live source does not rewrite history.':
     'ADVISORY INSPECTION PLAN ONLY: not regulatory approval, PSC quota selection or scheduling.',
-   rows};
+   // A source-backed precheck: only confirmed impossible windows block manual
+   // Include. Missing ETA/ETD stays pending capacity verification, not guessed.
+   rows:cycle&&!historical?rows.map(row=>({
+    ...row,periodEligibility:checkVesselPlanPeriod(
+     dashboard.vesselCandidates?.find(v=>v.imo===row.imo)||row,
+     {startsOn:cycle.startsOn,endsOn:cycle.endsOn})
+   })):rows};
  }
  /**
   * Official-free planning amendment. This is a DRAFT-level selection, not an
@@ -225,6 +232,15 @@ export class SiInspectionPlan{
   const vessel=dashboard.vesselCandidates?.find(v=>v.imo===imo);
   if(!eligible.length||!vessel)
    throw new SiCandidateAgentError('SI_PLAN_CANDIDATE_NOT_PENDING',409);
+  if(action==='INCLUDE'){
+   const period=checkVesselPlanPeriod(vessel,{
+    startsOn:state.startsOn,endsOn:state.endsOn});
+   if(period.status==='OUTSIDE_EXECUTION_PLAN'){
+    const err=new SiCandidateAgentError('SI_VESSEL_OUTSIDE_EXECUTION_PLAN',409);
+    err.periodEligibility=period;
+    throw err;
+   }
+  }
   // Binding NMC referrals cannot be made Not Applicable by a planning UI.
   if(action==='NOT_APPLICABLE'&&
      eligible.some(c=>c.sourceTypes.includes('NMC_CASE')))
@@ -340,6 +356,15 @@ export class SiInspectionPlan{
      throw new SiCandidateAgentError('SI_PLAN_CHANGE_INVALID',422);
     if(!source.candidates.some(c=>c.imo===x.imo))
      throw new SiCandidateAgentError('SI_PLAN_CANDIDATE_NOT_PENDING',409);
+    if(x.selected&&cycleId){
+     const dashboard=await this.targeting.dashboard();
+     const vessel=dashboard.vesselCandidates?.find(v=>v.imo===x.imo);
+     if(!vessel)throw new SiCandidateAgentError('SI_PLAN_CANDIDATE_NOT_PENDING',409);
+     const period=checkVesselPlanPeriod(vessel,{
+      startsOn:state.startsOn,endsOn:state.endsOn});
+     if(period.status==='OUTSIDE_EXECUTION_PLAN')
+      throw new SiCandidateAgentError('SI_VESSEL_OUTSIDE_EXECUTION_PLAN',409);
+    }
     change={imo:x.imo,selected:x.selected,requestedRank:x.selected?
       (x.requestedRank??null):null,reason,actor,at:iso()};
     changes[x.imo]=change;

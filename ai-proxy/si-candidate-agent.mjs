@@ -624,6 +624,10 @@ export class SiCandidateAgent{
      unexpectedCount+=checked.unexpectedCount;
      for(const [key,count] of Object.entries(checked.failuresByCode))
       verificationFailures[key]=(verificationFailures[key]||0)+count;
+     // Callback is server-only and must not receive candidate data,
+     // source evidence, recommendations or provider credentials.
+     if(typeof input.onProgress==='function')
+      input.onProgress({completedBatches:i+1,batchCount});
    }
    // Verified AI output only: the backend applies the configured caps and
    // protects statutory source obligations. Never materialize cases here.

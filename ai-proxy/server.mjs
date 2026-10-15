@@ -40,6 +40,8 @@ import { SiAiPrioritization, SiPriorityError } from './si-ai-prioritization.mjs'
 import {SiCandidateAgent,SiCandidateAgentError} from './si-candidate-agent.mjs';
 import {validateDraftMetadata,buildIntegratedDraft,publicDraftPreview,
  SiDraftCreationError} from './si-integrated-draft-creation.mjs';
+import {SiIntegratedDraftJobs,SiDraftJobError} from './si-integrated-draft-jobs.mjs';
+import {inspectSiDraftScope,SI_DRAFT_SOLVER_MAX_VESSELS} from './si-draft-selection-preflight.mjs';
 import {SiInspectionPlan} from './si-inspection-plan.mjs';
 import {SiRollingPlanStore,SiRollingPlanError} from './si-rolling-plan-store.mjs';
 import {SiBulkInspectionPlan,SiBulkApprovalError} from './si-bulk-inspection-plan.mjs';
@@ -314,6 +316,7 @@ const siRollingPlans=new SiRollingPlanStore({mode:dbMode,oracleRepository:reposi
 // Short-lived, session-bound cost-consented C01 draft previews. No durable
 // side effects until Save Draft; restart/expiry requires an explicit new preview.
 const siDraftPreviews=new Map(),DRAFT_TTL_MS=30*60*1000;
+const siDraftJobs=new SiIntegratedDraftJobs();
 async function calculateNewDraft({id,metadata,source,ai,identity,requests=null}){
  const dashboard=await siTargeting.dashboard();
  const erpSnapshot=siErp.requireSnapshot();
@@ -1124,6 +1127,14 @@ const server = createServer(async (req, res) => {
       // command; preview/recalculate never writes cases, plans or ERP bookings.
       // The initial plan row is inserted atomically with the verified roster,
       // priorities and workforce proposal when the operator presses Save Draft.
+      const draftJobPath=/^\/api\/si\/v1\/inspection-plans\/draft-jobs\/([a-f0-9-]{36})$/.exec(path);
+      if(draftJobPath&&req.method==='GET'){
+        dashboards.assertRole(req,'EDITOR');
+        const identity=moeiAuth.require(req,{mutate:false});
+        const actor=identity.email||identity.username;
+        const job=siDraftJobs.get(draftJobPath[1],actor);
+        return respond(res,200,siDraftJobs.view(job));
+      }
       if(path==='/api/si/v1/inspection-plans/draft-preview'&&req.method==='POST'){
         dashboards.assertRole(req,'EDITOR');
         const identity=moeiAuth.require(req,{mutate:true});
@@ -1135,24 +1146,55 @@ const server = createServer(async (req, res) => {
         if(input.confirmAi!==true||
            (siAiProvider==='airia'&&input.confirmCost!==true))
           return respond(res,422,{error:'SI_DRAFT_EXPLICIT_C01_COST_CONFIRMATION_REQUIRED'});
+        // FAIL BEFORE PAID C01. A missing/invalid workforce import must not
+        // be discovered only after 5 successful charged Airia batches.
+        const savedErp=siErp.requireSnapshot();
+        if(metadata.demoMode&&
+           !(savedErp.data?.Ports||[]).some(p=>p.active==='Y'||p.active===true))
+          return respond(res,409,{error:'SI_DRAFT_DEMO_ACTIVE_ERP_PORTS_REQUIRED'});
         const source=await siCandidateAgent.source();
+        const scope=inspectSiDraftScope(source);
+        // A legacy policy can force every verified service request into
+        // this plan, while approved NMC referrals are a different,
+        // protected obligation. Never demote either in code or charge
+        // Airia before a PUBLISHER explicitly fixes plan limits.
+        if(scope.status==='SELECTION_POLICY_REPUBLICATION_REQUIRED')
+          return respond(res,409,{
+            error:'SI_DRAFT_PUBLISH_SERVICE_AND_PLAN_CAP_BEFORE_AIRIA',scope});
+        if(scope.status==='PROTECTED_NMC_REFERRALS_EXCEED_PUBLISHED_PLAN_CAP')
+          return respond(res,409,{
+            error:'SI_DRAFT_NMC_PROTECTED_REFERRALS_EXCEED_PUBLISHED_PLAN_CAP',scope});
+        if(scope.status==='PROTECTED_NMC_REFERRALS_EXCEED_SOLVER_MAX')
+          return respond(res,409,{
+            error:'SI_DRAFT_NMC_PROTECTED_REFERRALS_EXCEED_SOLVER_MAX',scope});
         if(source.candidates.length>500)
           return respond(res,422,{error:'SI_C01_BATCH_LIMIT_500_SCOPE_REQUIRED'});
         const batches=Math.ceil(source.candidates.length/(siAiProvider==='airia'?25:100));
+        if(batches<1)return respond(res,422,{error:'SI_C01_NO_PENDING_CANDIDATES'});
         if(batches>1&&input.confirmBatchCount!==batches)
           return respond(res,422,{error:'SI_C01_BATCH_COUNT_CONFIRMATION_REQUIRED',
             requiredBatches:batches,sourceCandidates:source.candidates.length});
-        const ai=await siCandidateAgent.run({
-          actor,confirmRun:true,confirmCost:input.confirmCost===true,
-          confirmBatchCount:batches,expectedSnapshotHash:source.snapshotHash
+        // A single POST returns immediately. Polling has NO AI cost and never
+        // starts another Airia request. Identical in-flight runs are reused
+        // by actor and source; even on browser reload there is one paid run.
+        const job=siDraftJobs.start({
+          actor,metadata,sourceHash:source.snapshotHash,expectedBatches:batches,
+          execute:async(onProgress,setPhase)=>{
+            const ai=await siCandidateAgent.run({
+              actor,confirmRun:true,confirmCost:input.confirmCost===true,
+              confirmBatchCount:batches,expectedSnapshotHash:source.snapshotHash,
+              onProgress
+            });
+            setPhase('MATCHING_QUALIFIED_INSPECTORS_AND_CAPACITY');
+            const fresh=await siCandidateAgent.source();
+            if(fresh.snapshotHash!==source.snapshotHash)
+              throw new SiDraftCreationError('SI_DRAFT_SOURCE_CHANGED_REGENERATE',409);
+            const id=uuidDraft(),previewId=uuidDraft();
+            const result=await calculateNewDraft({id,metadata,source:fresh,ai,identity});
+            return saveNewDraftPreview(previewId,actor,metadata,fresh,ai,result);
+          }
         });
-        const fresh=await siCandidateAgent.source();
-        if(fresh.snapshotHash!==source.snapshotHash)
-          return respond(res,409,{error:'SI_DRAFT_SOURCE_CHANGED_REGENERATE'});
-        const id=uuidDraft(),previewId=uuidDraft();
-        const result=await calculateNewDraft({id,metadata,source:fresh,ai,identity});
-        return respond(res,200,{status:'INTEGRATED_DRAFT_PREVIEW',
-          ...saveNewDraftPreview(previewId,actor,metadata,fresh,ai,result)});
+        return respond(res,job.status==='COMPLETED'?200:202,job);
       }
       const draftAction=/^\/api\/si\/v1\/inspection-plans\/draft-(recalculate|save)$/.exec(path);
       if(draftAction&&req.method==='POST'){
@@ -1321,8 +1363,11 @@ const server = createServer(async (req, res) => {
         });
         if(!selection.roster.length)
           return respond(res,409,{error:'SI_INTEGRATED_NO_ELIGIBLE_VESSELS'});
-        if(selection.roster.length>40)
-          return respond(res,409,{error:'SI_INTEGRATED_SCHEDULING_BATCH_LIMIT_40'});
+        if(selection.roster.length>SI_DRAFT_SOLVER_MAX_VESSELS)
+          return respond(res,409,{
+            error:'SI_INTEGRATED_SCHEDULING_SOLVER_MAX_EXCEEDED',
+            selectedCount:selection.roster.length,
+            solverMaxVessels:SI_DRAFT_SOLVER_MAX_VESSELS});
         const original=siErp.requireSnapshot();
         const workforce=body.demoMode?
           buildPocErpSchedulingOverlay(original,{operator:moeiAuth.require(req)}):original;
@@ -1337,7 +1382,7 @@ const server = createServer(async (req, res) => {
         });
         if(!Array.isArray(body.requests)||
            body.requests.length!==selection.roster.length||
-           body.requests.length>40||
+           body.requests.length>SI_DRAFT_SOLVER_MAX_VESSELS||
            typeof body.expectedSourceHash!=='string'||
            !Number.isInteger(body.expectedPlanRevision)||
            body.expectedSourceHash!==selection.sourceHash||
@@ -1898,7 +1943,11 @@ const server = createServer(async (req, res) => {
       }
       if(path==='/api/si/v1/agents/candidate-selection/preview'&&req.method==='GET'){
         dashboards.assertRole(req,'EDITOR');
-        return respond(res,200,await siCandidateAgent.preview());
+        const preview=await siCandidateAgent.preview();
+        return respond(res,200,{
+          ...preview,
+          draftScope:inspectSiDraftScope(await siCandidateAgent.source())
+        });
       }
       if(path==='/api/si/v1/agents/candidate-selection/run'&&req.method==='POST'){
         dashboards.assertRole(req,'EDITOR');
@@ -2145,7 +2194,11 @@ const server = createServer(async (req, res) => {
           ...(Number.isInteger(e.returnedCount)?{returnedCount:e.returnedCount}:{}),
           ...(Number.isInteger(e.batchIndex)?{batchIndex:e.batchIndex}:{}),
           ...(Number.isInteger(e.batchCount)?{batchCount:e.batchCount}:{})});
-      if(e instanceof SiError||e instanceof SiPocAdvisorError||e instanceof SiRollingPlanError||e instanceof SiIntegratedPlanError||e instanceof SiDraftCreationError||
+      if(e instanceof SiCandidateAgentError&&
+       e.code==='SI_VESSEL_OUTSIDE_EXECUTION_PLAN')
+        return respond(res,409,{error:e.code,
+         periodEligibility:e.periodEligibility||null});
+      if(e instanceof SiError||e instanceof SiPocAdvisorError||e instanceof SiRollingPlanError||e instanceof SiIntegratedPlanError||e instanceof SiDraftCreationError||e instanceof SiDraftJobError||
        e instanceof SiBulkApprovalError||e instanceof SiCandidateAgentError||e instanceof SiLifecycleError||e instanceof SiSelectionError||e instanceof SiPriorityError||e instanceof SiPreparationError||e instanceof SiWorkOrderError||e instanceof SiTargetingError||e instanceof MoeiAuthError||e instanceof DashboardError)
         return respond(res,e.status,{error:e.code});
       if(Number.isInteger(e?.status)&&e.status>=400&&e.status<500)

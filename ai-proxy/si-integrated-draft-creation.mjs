@@ -14,6 +14,7 @@ import {buildPocErpSchedulingOverlay,fillPocSchedulingVisitContext,
  validatePocSchedulingDemoRequest} from './si-scheduling-poc-fixtures.mjs';
 import {proposeMaritimeBatchSchedule} from './si-maritime-batch-scheduling.mjs';
 import {suggestCapacityExceptionActions} from './si-capacity-exception-alternatives.mjs';
+import {inspectSiDraftScope,SI_DRAFT_SOLVER_MAX_VESSELS} from './si-draft-selection-preflight.mjs';
 
 export class SiDraftCreationError extends Error{
  constructor(code,status=409){super(code);this.code=code;this.status=status;}
@@ -70,6 +71,16 @@ export function buildIntegratedDraft({
     (ai.selectionProposal&&
      ai.selectionProposal.snapshotHash!==source.snapshotHash))
   fail('SI_DRAFT_C01_SNAPSHOT_MISMATCH',409);
+ const scope=inspectSiDraftScope(source);
+ if(scope.status!=='READY')
+  fail({
+   SELECTION_POLICY_REPUBLICATION_REQUIRED:
+    'SI_DRAFT_PUBLISH_SERVICE_AND_PLAN_CAP_BEFORE_AIRIA',
+   PROTECTED_NMC_REFERRALS_EXCEED_PUBLISHED_PLAN_CAP:
+    'SI_DRAFT_NMC_PROTECTED_REFERRALS_EXCEED_PUBLISHED_PLAN_CAP',
+   PROTECTED_NMC_REFERRALS_EXCEED_SOLVER_MAX:
+    'SI_DRAFT_NMC_PROTECTED_REFERRALS_EXCEED_SOLVER_MAX'
+  }[scope.status]||'SI_DRAFT_POLICY_SCOPE_INVALID',409);
  const rates=source.selection;
  const requireAi=source.selectionPolicyActive&&
   (rates.pscRiskRatePercent>0||rates.uaeFlagRatePercent>0);
@@ -78,6 +89,7 @@ export function buildIntegratedDraft({
   ai.selectionProposal.policyRevision!==dashboard.policy.version))
   fail('SI_C01_CONFIGURED_SELECTION_REQUIRED_RUN_AI',409);
  const plan={id,number:'NEW-DRAFT-PREVIEW',status:'DRAFT',revision:0,
+  startsOn:metadata.startsOn,endsOn:metadata.endsOn,
   candidateSourceHash:source.snapshotHash,selectionSourceHash:source.snapshotHash};
  const rows=projectInspectionPlan(dashboard,source,ai,{},
   {});
@@ -89,8 +101,8 @@ export function buildIntegratedDraft({
   uaeFlagRatePercent:rates.uaeFlagRatePercent
  });
  if(!selection.roster.length)fail('SI_DRAFT_NO_VERIFIED_SELECTED_VESSELS',409);
- if(selection.roster.length>40)
-  fail('SI_DRAFT_MANDATORY_OR_SELECTED_CAPACITY_LIMIT_40_REVIEW',409);
+ if(selection.roster.length>SI_DRAFT_SOLVER_MAX_VESSELS)
+  fail('SI_DRAFT_SCHEDULING_SOLVER_MAX_EXCEEDED',409);
  const workforce=metadata.demoMode?
   buildPocErpSchedulingOverlay(erpSnapshot,{operator:actor,clock}):erpSnapshot;
  const planDraft=makeCapacityDraftPlan(plan,selection);
@@ -116,7 +128,11 @@ export function buildIntegratedDraft({
  });
  const mandatoryUnscheduled=selection.mandatoryImos.filter(imo=>
   proposal.rows.some(r=>r.imo===imo&&r.status==='UNSCHEDULED'));
- const outsidePeriod=reportDraftPeriodExceptions(proposal,metadata);
+ const outsidePeriod=[...new Set([
+   ...reportDraftPeriodExceptions(proposal,metadata),
+   ...proposal.rows.filter(r=>r.blocker==='SI_VISIT_OUTSIDE_EXECUTION_PLAN_PERIOD')
+    .map(r=>r.imo)
+ ])];
  const periodChecked=outsidePeriod.length===0;
  // Do not persist a READY draft if the chosen solver option violates the
  // requested plan execution window. No fabricated ETA/ETD to make it fit.
