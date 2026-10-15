@@ -1,0 +1,216 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {proposeMaritimeBatchSchedule,validateMaritimeSchedulingInput,projectMaritimeSchedulingBoard,explainUnscheduledMaritimeJob} from '../si-maritime-batch-scheduling.mjs';
+const now=Date.parse('2026-10-14T09:00:00+04:00');
+const plan={id:'99999999-9999-4999-8999-999999999999',number:'IP-TEST',
+ revision:3,status:'APPROVED',approvedBy:'MOEI_TEST_SUPERVISOR',
+ approvedVessels:[{imo:'9328471',planRank:1,regimes:['FOCUSED_INSPECTION']},
+  {imo:'9247813',planRank:2,regimes:['UAE_SERVICE_INSPECTION']}]};
+const erp=()=>{
+ const data={Ports:[{port_id:'FUJ',active:'Y'}],
+  Inspectors:[{inspector_id:'ENG1',daily_capacity:'2'},
+   {inspector_id:'ENG2',daily_capacity:'2'}],
+   Qualifications:['ENG1','ENG2'].flatMap(id=>['FOCUSED','SERVICE','PSC'].map(regime=>({
+    inspector_id:id,inspection_regime:regime,vessel_type:'CARGO',
+    active:'Y',valid_until:'2027-12-31'}))),Travel_Matrix:[]};
+ return {snapshotId:'snapshot123',importedAt:'2026-10-14T05:00:00.000Z',data};
+};
+const auth=(id,min=0,max=999999)=>({
+ inspector_id:id,inspection_regime:'ANY',vessel_type:'ANY',
+ min_gt:String(min),max_gt:String(max),
+ qualification_code:'MOEI-DEMO-GT-REVIEW',evidence_ref:'POC-ONLY-AUTH',
+ authority:'MOEI_APPROVED',valid_until:'2027-01-01',active:'Y'
+});
+const request=(imo,regime,gt=55000)=>({
+ imo,portId:'FUJ',vesselType:'CARGO',regime,grossTonnage:gt,
+ locationName:'Fujairah approved inspection berth',locationType:'BERTH',
+ siteAccessConfirmed:true,windowSource:'MSW_FINAL',
+ windowEvidenceReference:'DEMO-WINDOW-REVIEW-001',
+ earliestLocal:'2026-10-20 08:00',latestFinishLocal:'2026-10-20 15:00',
+ durationMinutes:90
+});
+const policy={revision:5,config:{maxOptions:3,maxDailyInspections:2,travelBufferMinutes:30}};
+const slots={
+ '9328471':[{
+  optionId:'ENG1-9',inspectorId:'ENG1',inspectorName:'Engineer 1',portId:'FUJ',
+  portName:'Fujairah',startUtc:'2026-10-20T05:00:00.000Z',
+  endUtc:'2026-10-20T06:30:00.000Z',startLocal:'2026-10-20 09:00',endLocal:'2026-10-20 10:30',
+  score:94
+ },{
+  optionId:'ENG2-12',inspectorId:'ENG2',inspectorName:'Engineer 2',portId:'FUJ',
+  portName:'Fujairah',startUtc:'2026-10-20T08:00:00.000Z',
+  endUtc:'2026-10-20T09:30:00.000Z',startLocal:'2026-10-20 12:00',endLocal:'2026-10-20 13:30',
+  score:75
+ }],
+ '9247813':[{
+  optionId:'ENG1-9-b',inspectorId:'ENG1',inspectorName:'Engineer 1',portId:'FUJ',
+  portName:'Fujairah',startUtc:'2026-10-20T05:00:00.000Z',
+  endUtc:'2026-10-20T06:30:00.000Z',startLocal:'2026-10-20 09:00',endLocal:'2026-10-20 10:30',
+  score:98
+ },{
+  optionId:'ENG2-12-b',inspectorId:'ENG2',inspectorName:'Engineer 2',portId:'FUJ',
+  portName:'Fujairah',startUtc:'2026-10-20T08:00:00.000Z',
+  endUtc:'2026-10-20T09:30:00.000Z',startLocal:'2026-10-20 12:00',endLocal:'2026-10-20 13:30',
+  score:81
+ }]
+};
+const scheduler={buildOptions(input){return {options:slots[input.imo]||[],exclusions:[]};}};
+const invoke=(params={})=>proposeMaritimeBatchSchedule({
+ plan,erpSnapshot:erp(),policy,
+ requests:[request('9328471','FOCUSED'),request('9247813','SERVICE',15000)],
+ gtAuthorizations:[auth('ENG1'),auth('ENG2')],
+ scheduler,clock:()=>now,...params
+});
+test('Preview is a read-only HUMAN-approved-plan maritime schedule for 2 vessels',()=>{
+ const result=invoke();
+ assert.equal(result.status,'DRAFT_REQUIRES_SUPERVISOR_APPROVAL');
+ assert.equal(result.summary.total,2);
+ assert.equal(result.summary.proposed,2,'two engineers allow two simultaneous vessels');
+ assert.equal(result.summary.caseWrites,0);
+ assert.equal(result.summary.bookingWrites,0);
+ assert.notEqual(result.rows[0].assignment.inspectorId,result.rows[1].assignment.inspectorId);
+ assert.match(result.solver,/NO_GENERATIVE_AI/);
+ assert.equal(result.rows[0].assignment.locationType,'BERTH');
+ assert.equal(invoke().proposalHash,result.proposalHash,'same evidence yields same hash');
+});
+test('Never double-book a single engineer or exceed batch daily limits',()=>{
+ const result=invoke({existingBookings:[{inspectorId:'ENG2',startUtc:'2026-10-20T05:00:00.000Z',endUtc:'2026-10-20T06:00:00.000Z'},{inspectorId:'ENG2',startUtc:'2026-10-20T08:00:00.000Z',endUtc:'2026-10-20T10:30:00.000Z'}]});
+ assert.equal(result.summary.proposed,1);
+ assert.equal(result.summary.unscheduled,1);
+ assert.equal(result.rows.filter(x=>x.status==='UNSCHEDULED').length,1);
+});
+test('Tonnage limits are NOT required; eligibility uses professional regime/type ERP checks',()=>{
+ const withoutGt=invoke({gtAuthorizations:[]});
+ assert.equal(withoutGt.summary.proposed,2,'No tonnage range required for scheduling');
+ const bad=request('9328471','FOCUSED');
+ delete bad.windowSource;
+ const val=validateMaritimeSchedulingInput('9328471',bad,erp().data,now);
+ assert.equal(val.reason,'FINAL_VESSEL_ARRIVAL_DEPARTURE_WINDOW_REQUIRED');
+ const missingSite={...request('9328471','FOCUSED'),siteAccessConfirmed:false};
+ assert.equal(validateMaritimeSchedulingInput('9328471',missingSite,erp().data,now).reason,
+  'BERTH_ANCHORAGE_AND_ACCESS_CONFIRMATION_REQUIRED');
+});
+test('NMC referrals are checked against authoritative live workspace, with no duplicate scheduling',()=>{
+ const nmcPlan={...plan,approvedVessels:[{
+  ...plan.approvedVessels[0],
+  inspectionReasons:[{sourceType:'NMC_CASE',sourceEventId:'ref-1'}]}]};
+ const payload={plan:nmcPlan,requests:[request('9328471','FOCUSED')]};
+ const missing=invoke(payload);
+ assert.equal(missing.rows[0].blocker,'NMC_APPROVED_REFERRAL_MISSING_OR_CLOSED');
+ const live=invoke({...payload,nmcReferrals:[{id:'ref-1',imo:'9328471',
+  status:'PENDING_SCHEDULING',caseStatus:'IN_PROGRESS'}]});
+ assert.equal(live.summary.proposed,1);
+ const double=invoke({...payload,nmcReferrals:[{id:'ref-1',imo:'9328471',
+  status:'SCHEDULED',caseStatus:'IN_PROGRESS'}]});
+ assert.equal(double.rows[0].blocker,'NMC_REFERRAL_ALREADY_SCHEDULED_RECONCILE');
+});
+
+test('Block unsourced vessel automatically; never fabricate a schedule, tonnage or departure',()=>{
+ const result=invoke({requests:[request('9328471','FOCUSED')]});
+ assert.equal(result.summary.proposed,1);
+ assert.equal(result.rows.find(x=>x.imo==='9247813').blocker,'VESSEL_SCHEDULING_DATA_REQUIRED');
+ assert.equal(result.summary.total,2);
+});
+test('Require approved plan; reject unknown IMO or duplicate requests',()=>{
+ assert.throws(()=>invoke({plan:{...plan,status:'READY_FOR_APPROVAL'}}),
+  /SI_V2_APPROVED_PLAN_REQUIRED/);
+ assert.throws(()=>invoke({requests:[request('9328471','FOCUSED'),
+  request('9328471','FOCUSED')]}),/SI_V2_DUPLICATE_REQUEST_IMO/);
+ assert.throws(()=>invoke({requests:[request('9999999','FOCUSED')]}),
+  /SI_V2_OUT_OF_PLAN_IMO/);
+});
+
+test('Imported MSW-final ETD is usable without a second date approval',()=>{
+ const input=request('9328471','FOCUSED');
+ const validated=validateMaritimeSchedulingInput('9328471',input,erp().data,now);
+ assert.equal(validated.reason,undefined);
+ assert.equal(validated.value.windowSource,'MSW_FINAL');
+ const result=invoke({requests:[input,request('9247813','SERVICE',15000)]});
+ assert.equal(result.summary.proposed,2);
+ assert.equal(result.rows[0].assignment.windowSource,'MSW_FINAL');
+});
+
+test('Scheduling board groups same preview once per vessel across engineer and UAE date',()=>{
+ const preview=invoke();
+ const board=preview.board;
+ assert.equal(board.status,'UNAPPROVED_PREVIEW_ONLY');
+ assert.equal(board.approvalRequired,true);
+ assert.equal(board.caseWrites,0);
+ assert.equal(board.bookingWrites,0);
+ assert.equal(board.allocatedVessels,2);
+ assert.equal(board.engineers.length,2);
+ assert.equal(board.days.length,1);
+ assert.equal(board.days[0].dateLocal,'2026-10-20');
+ assert.equal(board.days[0].vesselCount,2);
+ assert.deepEqual(board.days[0].assignments.map(x=>x.imo).sort(),
+  ['9247813','9328471']);
+ assert.ok(board.engineers.every(e=>e.vesselCount===1&&e.dates.length===1));
+ const blocked=invoke({requests:[request('9328471','FOCUSED')]});
+ assert.equal(blocked.board.allocatedVessels,1);
+ assert.deepEqual(blocked.board.unscheduled.map(x=>x.imo),['9247813']);
+ assert.equal(blocked.board.unscheduled[0].blocker,'VESSEL_SCHEDULING_DATA_REQUIRED');
+ assert.throws(()=>projectMaritimeSchedulingBoard(null),/SI_V2_BOARD_ROWS_INVALID/);
+});
+
+test('Plan-derived scheduler offers only fully ERP-valid equal-coverage alternative plans',()=>{
+ const p=invoke();
+ assert.ok(p.variants.length>=1);
+ assert.ok(p.variants.length<=3);
+ assert.equal(p.variants[0].allocatedVessels,p.summary.proposed);
+ assert.ok(p.variants.every(x=>x.allocatedVessels===p.summary.proposed));
+ assert.equal(new Set(p.variants.map(x=>x.optionId)).size,p.variants.length);
+ assert.ok(p.variants.every(x=>x.rows.length===p.summary.total));
+ assert.ok(p.variants.every(x=>x.board.bookingWrites===0&&x.board.caseWrites===0));
+ assert.equal(p.variants[0].assignments.length,2);
+ assert.deepEqual(p.variants[0].rows.map(x=>x.imo),p.rows.map(x=>x.imo));
+ assert.ok(p.warnings.includes('NO_AIRIA_AI_INVOKED'));
+});
+
+test('Unscheduled plan rows expose a vessel-specific diagnosis and conflict details, not only GLOBAL_PLAN_CONFLICT_OR_CAPACITY',()=>{
+ const occupied={...slots['9328471'][0],imo:'9328471'};
+ const job={imo:'9247813',rank:2,
+  regimes:['UAE_SERVICE_INSPECTION'],
+  input:{portId:'FUJ',earliestLocal:'2026-10-20 08:00',
+   deadlineLocal:'2026-10-20 15:00',durationMinutes:90},
+  options:[{...slots['9247813'][0],imo:'9247813'}],
+  exclusions:[{inspectorId:'ENG3',reasons:['NO_WORKING_SHIFT']}]};
+ const evidence=explainUnscheduledMaritimeJob(job,[occupied],erp(),policy);
+ assert.equal(evidence.category,'PLAN_RESOURCE_CONTENTION');
+ assert.equal(evidence.candidateOptions,1);
+ assert.equal(evidence.candidateInspectors,1);
+ assert.equal(evidence.timeOrTravelConflicts,1);
+ assert.equal(evidence.dailyCapacityConflicts,0);
+ assert.equal(evidence.optionsStillInsertable,0);
+ assert.equal(evidence.competingVisits[0].imo,'9328471');
+ assert.equal(evidence.competingVisits[0].inspectorId,'ENG1');
+ assert.equal(evidence.inspectorExclusions[0].reasonCodes[0],'NO_WORKING_SHIFT');
+ assert.equal(evidence.advisoryOnly,true);
+ const board=projectMaritimeSchedulingBoard([{imo:job.imo,planRank:2,
+  status:'UNSCHEDULED',assignment:null,blocker:evidence.code,diagnostics:evidence}]);
+ assert.equal(board.unscheduled[0].diagnostics.competingVisits[0].imo,'9328471');
+ assert.equal(board.caseWrites,0);
+ assert.equal(board.bookingWrites,0);
+});
+test('Potentially insertable option is identified as a solver search limit, NOT a proven real ERP capacity shortage',()=>{
+ const job={imo:'9400796',rank:13,regimes:['UAE_SERVICE_INSPECTION'],
+  input:{portId:'FUJ',earliestLocal:'2026-10-20 08:00',
+   deadlineLocal:'2026-10-20 15:00',durationMinutes:90},
+  options:[{...slots['9247813'][1],imo:'9400796'}],exclusions:[]};
+ const evidence=explainUnscheduledMaritimeJob(job,[],erp(),policy);
+ assert.equal(evidence.category,'OPTIMIZER_SEARCH_LIMIT');
+ assert.equal(evidence.code,'HEURISTIC_SEARCH_LEFT_AVAILABLE_OPTION');
+ assert.equal(evidence.optionsStillInsertable,1);
+ assert.equal(evidence.nextAction,'REOPTIMIZE_WITH_MORE_CANDIDATES');
+ assert.deepEqual(evidence.competingVisits,[]);
+});
+test('Source-blocked vessel is reported from source reason without invented engineer conflicts',()=>{
+ const blocked=invoke({requests:[request('9328471','FOCUSED')]});
+ const row=blocked.rows.find(x=>x.imo==='9247813');
+ assert.equal(row.status,'UNSCHEDULED');
+ assert.equal(row.diagnostics.code,'VESSEL_SCHEDULING_DATA_REQUIRED');
+ assert.equal(row.diagnostics.category,'INPUT_OR_ELIGIBILITY');
+ assert.equal(row.diagnostics.candidateOptions,0);
+ assert.equal(row.diagnostics.competingVisits.length,0);
+ assert.equal(blocked.board.unscheduled[0].diagnostics.code,
+  'VESSEL_SCHEDULING_DATA_REQUIRED');
+});

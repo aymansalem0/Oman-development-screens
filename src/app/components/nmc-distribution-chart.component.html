@@ -1,0 +1,84 @@
+<div class="nmc-chart" [attr.dir]="isArabic?'rtl':'ltr'">
+  <div *ngIf="!hasData" class="nmc-chart-empty">
+    {{isArabic?'لا توجد بيانات مطابقة للفلاتر الحالية':'No matching data for the selected filters'}}
+  </div>
+
+  <ng-container *ngIf="hasData">
+    <!-- Comparison by independent categories -->
+    <div class="nmc-horizontal" *ngIf="variant==='horizontalBar'">
+      <div class="nmc-hbar" *ngFor="let row of colorRows">
+        <div class="nmc-hbar-label" [title]="row.name">{{row.name}}</div>
+        <div class="nmc-hbar-track">
+          <div class="nmc-hbar-fill" [style.width.%]="height(row.count)" [style.background]="row.color"
+               [title]="row.name+' · '+row.count+' ('+percentage(row.count)+')'"></div>
+        </div>
+        <div class="nmc-hbar-value">{{row.count}}</div>
+      </div>
+    </div>
+
+    <div class="nmc-columns" *ngIf="variant==='column'">
+      <div *ngFor="let row of colorRows" class="nmc-column">
+        <div class="nmc-column-plot">
+          <span class="nmc-column-count">{{row.count}}</span>
+          <div class="nmc-column-fill" [style.height.%]="height(row.count)"
+               [style.background]="row.color"
+               [title]="row.name+' · '+row.count+' ('+percentage(row.count)+')'"></div>
+        </div>
+        <div class="nmc-column-label" [title]="row.name">{{short(row.name)}}</div>
+      </div>
+    </div>
+
+    <!-- SVG paths are calculated from categorical proportions. -->
+    <div class="nmc-pie-layout" *ngIf="pieStyle">
+      <svg class="nmc-pie-svg" viewBox="0 0 250 250" role="img"
+           [attr.aria-label]="isArabic?'توزيع الفئات حسب عدد السفن':'Vessel count by category'">
+        <path *ngFor="let item of slices" [attr.d]="item.path" [attr.fill]="item.color"
+              stroke="#fff" stroke-width="1.8" stroke-linejoin="round">
+          <title>{{item.name}}: {{item.count}} ({{percentage(item.count)}})</title>
+        </path>
+        <ng-container *ngIf="variant==='donut'">
+          <text x="125" y="121" text-anchor="middle" class="nmc-donut-total">{{total}}</text>
+          <text x="125" y="145" text-anchor="middle" class="nmc-donut-label">
+            {{isArabic?'سفينة':'Vessels'}}
+          </text>
+        </ng-container>
+      </svg>
+      <div class="nmc-legend">
+        <div *ngFor="let item of slices" class="nmc-legend-item">
+          <i [style.background]="item.color"></i>
+          <span [title]="item.name">{{item.name}}</span>
+          <strong>{{item.count}} <small>({{percentage(item.count)}})</small></strong>
+        </div>
+      </div>
+    </div>
+
+    <!-- Line and area compare an ordered set of categories, NOT historic trends. -->
+    <div class="nmc-line-area" *ngIf="lineStyle">
+      <svg class="nmc-line-svg" viewBox="0 0 535 262" role="img"
+           [attr.aria-label]="isArabic?'مقارنة بين فئات السفن':'Category comparison chart'">
+        <ng-container *ngFor="let tick of grid">
+          <line x1="48" x2="488" [attr.y1]="tick.y" [attr.y2]="tick.y"
+                stroke="#e8f0f3" stroke-width="1"></line>
+          <text x="39" [attr.y]="tick.y+4" text-anchor="end" class="nmc-axis-label">{{tick.label}}</text>
+        </ng-container>
+        <path *ngIf="variant==='area'" [attr.d]="areaPath" [attr.fill]="mainColor"
+              fill-opacity=".16"></path>
+        <path [attr.d]="linePath" fill="none" [attr.stroke]="mainColor"
+              stroke-width="3" stroke-linecap="round" stroke-linejoin="round"></path>
+        <ng-container *ngFor="let point of points">
+          <circle [attr.cx]="point.x" [attr.cy]="point.y" r="5.5"
+                  [attr.fill]="point.color" stroke="white" stroke-width="2">
+            <title>{{point.name}}: {{point.count}}</title>
+          </circle>
+          <text [attr.x]="point.x" [attr.y]="point.y-13" text-anchor="middle"
+                class="nmc-point-count">{{point.count}}</text>
+          <text [attr.x]="point.x" y="232" text-anchor="middle"
+                class="nmc-axis-label">{{short(point.name)}}</text>
+        </ng-container>
+      </svg>
+      <small class="nmc-category-note">
+        {{isArabic?'مقارنة تصنيفات، وليست سلسلة زمنية':'Category comparison — not a historical trend'}}
+      </small>
+    </div>
+  </ng-container>
+</div>

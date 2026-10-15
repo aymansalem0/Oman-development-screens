@@ -1,0 +1,165 @@
+name: moei-nmc-poc
+
+services:
+  ai-proxy:
+    build:
+      context: .
+      dockerfile: ai-proxy/Dockerfile
+    environment:
+      PORT: "3000"
+      # Isolated seafarer contract sandbox. No writes to NMC/SI/Oracle.
+      SDB_ENABLED: ${SDB_ENABLED:-true}
+      SDB_STORE_PATH: /data/sdb-readiness-sandbox.json
+      SDB_SSO_BINDINGS_JSON: ${SDB_SSO_BINDINGS_JSON:-}
+      SDB_ACADEMY_WEBHOOK_SECRET: ${SDB_ACADEMY_WEBHOOK_SECRET:-}
+      SDB_MARASI_WEBHOOK_SECRET: ${SDB_MARASI_WEBHOOK_SECRET:-}
+      SDB_MOI_ICP_WEBHOOK_SECRET: ${SDB_MOI_ICP_WEBHOOK_SECRET:-}
+      AIRIA_MENA_KEY: ${AIRIA_MENA_KEY:-}
+      MOEI_AI_VAULT_MASTER_KEY: ${MOEI_AI_VAULT_MASTER_KEY:-}
+      AIRIA_BASE_URL: ${AIRIA_BASE_URL:-https://api.mena.airia.ai}
+      AIRIA_TIMEOUT_MS: "120000"
+      # Dashboard focus reuses configured maritime A02 risk signals followed
+      # by A01 situation-assessment; never a new pipeline or response schema.
+      # Opt-in ONLY: explicit operator click + possible TWO paid AI requests.
+      NMC_DASHBOARD_AI_FOCUS_ENABLED: ${NMC_DASHBOARD_AI_FOCUS_ENABLED:-false}
+      # Autonomous fleet assessment is opt-in at server deployment, never a UI action.
+      # Set NMC_FLEET_AUTO_ENABLED=true once after reviewing potential Airia costs.
+      NMC_FLEET_AUTO_ENABLED: ${NMC_FLEET_AUTO_ENABLED:-false}
+      NMC_FLEET_REFRESH_SECONDS: ${NMC_FLEET_REFRESH_SECONDS:-3600}
+      # Safe staged rollout: first run with MAX_VESSELS=1, inspect 2 Airia requests.
+      NMC_FLEET_AUTO_MAX_VESSELS: ${NMC_FLEET_AUTO_MAX_VESSELS:-99}
+      NMC_FLEET_AUTO_RETRY_FAILED: ${NMC_FLEET_AUTO_RETRY_FAILED:-false}
+      NMC_FLEET_STORE_PATH: /data/fleet-assessments.json
+      # Dashboard administration is read-only unless BOTH server-side keys are configured.
+      # Use separate long random secrets for editor and publisher permissions.
+      # Single POC Admin: configure secret in local .env / secured environment,
+      # never commit credentials to Git or pass them in the URL.
+      MOEI_ADMIN_USERNAME: ${MOEI_ADMIN_USERNAME:-admin}
+      MOEI_ADMIN_PASSWORD: ${MOEI_ADMIN_PASSWORD:-}
+      # Google OIDC SSO (default): fail closed until OAuth credentials are configured.
+      # Explicit local password mode is for controlled POC troubleshooting ONLY.
+      MOEI_AUTH_MODE: ${MOEI_AUTH_MODE:-google}
+      MOEI_GOOGLE_CLIENT_ID: ${MOEI_GOOGLE_CLIENT_ID:-}
+      MOEI_GOOGLE_CLIENT_SECRET: ${MOEI_GOOGLE_CLIENT_SECRET:-}
+      MOEI_GOOGLE_REDIRECT_URI: ${MOEI_GOOGLE_REDIRECT_URI:-http://localhost:4200/api/moei/auth/google/callback}
+      MOEI_GOOGLE_USERS_PATH: /data/moei-google-users.json
+      NMC_DASHBOARD_EDITOR_KEY: ${NMC_DASHBOARD_EDITOR_KEY:-}
+      NMC_DASHBOARD_PUBLISHER_KEY: ${NMC_DASHBOARD_PUBLISHER_KEY:-}
+      NMC_DASHBOARD_STORE_PATH: /data/nmc-dashboard-workspace.json
+      # In-app maritime alerts detect high/critical risk only from SAVED assessments.
+      # No agent calls, no AI cost, no updates to fleet results.
+      NMC_ALERT_SCAN_ENABLED: ${NMC_ALERT_SCAN_ENABLED:-true}
+      NMC_ALERT_SCAN_SECONDS: ${NMC_ALERT_SCAN_SECONDS:-30}
+      NMC_ALERT_ESCALATE_MINUTES: ${NMC_ALERT_ESCALATE_MINUTES:-15}
+      NMC_ALERT_STORE_PATH: /data/nmc-alert-workspace.json
+      NMC_CASE_STORE_PATH: /data/nmc-case-workspace.json
+      # Smart Inspection POC: ERP Excel snapshots and scheduling proposals in volume.
+      # Does not modify Oracle schema, fleet assessments or NMC case history.
+      SI_ERP_STORE_PATH: /data/si-erp-workforce.json
+      SI_SCHEDULING_STORE_PATH: /data/si-scheduling-poc.json
+      # Explicitly marked POC DEMO enrichment. Set false for any real ERP use.
+      # Does not mutate imported workbook or regulatory records.
+      SI_SCHEDULING_DEMO_MODE: ${SI_SCHEDULING_DEMO_MODE:-true}
+      # PR #125 inspector identity: server-side MOEI email -> ERP inspector ID.
+      # Local .env only; never accept identity mapping from a request body.
+      SI_V2_INSPECTOR_IDENTITY_MAP_JSON: ${SI_V2_INSPECTOR_IDENTITY_MAP_JSON:-}
+      SI_SELECTION_STORE_PATH: /data/si-psc-selection.json
+      # Smart Inspection AI development: MOCK returns fixture advice without
+      # ANY Airia call or expense. NMC A01/A02 fleet/incident paths stay unchanged.
+      # Explicitly switch to 'airia' ONLY when each real pipeline is approved.
+      SI_AI_PROVIDER: ${SI_AI_PROVIDER:-mock}
+      # Audited POC planning overrides share /data volume. Does NOT change
+      # the Oracle authoritative inspection case/decision ledger.
+      SI_INSPECTION_PLAN_PATH: /data/si-inspection-plan.json
+      SI_C01_ENABLED: ${SI_C01_ENABLED:-false}
+      AIRIA_SI_C01_PIPELINE_ID: ${AIRIA_SI_C01_PIPELINE_ID:-}
+      # A04 may incur paid AI requests. It NEVER runs on page load.
+      # Explicitly opt in after API contract acceptance and source evidence review.
+      SI_A04_ENABLED: ${SI_A04_ENABLED:-false}
+      SI_P01_ENABLED: ${SI_P01_ENABLED:-false}
+      AIRIA_SI_P01_PIPELINE_ID: ${AIRIA_SI_P01_PIPELINE_ID:-}
+      SI_PREPARATION_STORE_PATH: /data/si-preparations.json
+      # Dynamic checklist library and inspector review states survive container updates.
+      # Oracle-authoritative checklist storage when NMC_DB_MODE=oracle.
+      # Explicit SI_CHECKLIST_STORAGE=json allows controlled rollback.
+      # Legacy /data documents are NEVER auto-imported or discarded.
+      SI_CHECKLIST_STORAGE: ${SI_CHECKLIST_STORAGE:-}
+      SI_CHECKLIST_LIBRARY_PATH: /data/si-checklist-library.json
+      SI_CHECKLIST_CASES_PATH: /data/si-checklist-case-answers.json
+      SI_CHECKLIST_EVIDENCE_PATH: /data/si-checklist-evidence
+      # Airia is opt-in, separate builder and multimodal vision pipelines.
+      # No AI charges until a user explicitly requests a suggestion.
+      SI_CHECKLIST_AIRIA_ENABLED: ${SI_CHECKLIST_AIRIA_ENABLED:-false}
+      AIRIA_SI_CHECKLIST_BUILDER_PIPELINE_ID: ${AIRIA_SI_CHECKLIST_BUILDER_PIPELINE_ID:-}
+      AIRIA_SI_CHECKLIST_VISION_PIPELINE_ID: ${AIRIA_SI_CHECKLIST_VISION_PIPELINE_ID:-}
+
+      # A03 Drive PDF extraction and agent calls are OFF until opt-in and approved.
+      NMC_A03_ENABLED: ${NMC_A03_ENABLED:-false}
+      NMC_DRIVE_ROOT_FOLDER_ID: ${NMC_DRIVE_ROOT_FOLDER_ID:-}
+      NMC_DRIVE_CREDENTIALS_PATH: /run/secrets/nmc-drive-google.json
+      NMC_DOCUMENT_STORE_PATH: /data/nmc-document-intelligence.json
+      NMC_RUNTIME_SETTINGS_STORE_PATH: /data/nmc-runtime-settings.json
+      NMC_A01_ENABLED: ${NMC_A01_ENABLED:-true}
+      NMC_A02_ENABLED: ${NMC_A02_ENABLED:-true}
+      # A03 automation is disabled until Publisher enables it from Runtime Settings.
+      NMC_A03_AUTO_ENABLED: ${NMC_A03_AUTO_ENABLED:-false}
+      # 'oracle' requires compose.oracle.yaml, NMC_AI user and V1 migration.
+      NMC_DB_MODE: ${NMC_DB_MODE:-json}
+      NMC_DB_CONNECT_STRING: ${NMC_DB_CONNECT_STRING:-oracle-free-23:1521/freepdb1}
+      NMC_DB_USER: ${NMC_DB_USER:-NMC_AI}
+      NMC_DB_PASSWORD: ${NMC_DB_PASSWORD:-}
+      # Default: deterministic offline copy of the same 420-vessel Google Sheet fixture.
+      # Explicit 'google_sheets' requires a read-only service account mounted by compose.google-psc.yaml.
+      PSC_SOURCE_MODE: ${PSC_SOURCE_MODE:-snapshot}
+      PSC_GOOGLE_SHEET_ID: ${PSC_GOOGLE_SHEET_ID:-1sefQv6E-Avvgmklv4WQbpFBEc7MmlCAcOc0c-rI_Wmg}
+      PSC_GOOGLE_CREDENTIALS_PATH: /run/secrets/nmc-psc-google.json
+    volumes:
+      - nmc-fleet-results:/data
+    expose:
+      - "3000"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/ai/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+    networks:
+      - nmc
+
+  nmc:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "127.0.0.1:${NMC_HOST_PORT:-4200}:80"
+    depends_on:
+      ai-proxy:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - nmc
+
+  nmc-dev:
+    profiles: ["dev"]
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    ports:
+      - "127.0.0.1:${NMC_DEV_HOST_PORT:-4201}:4200"
+    volumes:
+      - ./:/workspace
+      - nmc-dev-node-modules:/workspace/node_modules
+    depends_on:
+      ai-proxy:
+        condition: service_healthy
+    networks:
+      - nmc
+
+networks:
+  nmc:
+    driver: bridge
+
+volumes:
+  nmc-fleet-results:
+  nmc-dev-node-modules:

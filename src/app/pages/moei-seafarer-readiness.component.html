@@ -1,0 +1,1450 @@
+<div class="seafarer-shell" [attr.dir]="lang.dir">
+  <app-nmc-platform-header
+    area="seafarers"
+    [unreadAlerts]="unread"
+  ></app-nmc-platform-header>
+  <app-nmc-navigation></app-nmc-navigation>
+  <main class="seafarer-main">
+    <div class="breadcrumb">
+      {{ t("MARITIME SERVICES", "الخدمات البحرية") }} <span>/</span>
+      {{ t("SEAFARER MANAGEMENT", "إدارة البحارة") }}
+    </div>
+    <header class="page-heading">
+      <div>
+        <p class="eyebrow">
+          {{
+            t(
+              "FROM FIRST QUALIFICATION TO YOUR NEXT VOYAGE",
+              "من أول مؤهل إلى رحلتك التالية"
+            )
+          }}
+        </p>
+        <h1>{{ title }}</h1>
+        <p>
+          {{
+            t(
+              "One connected profile. Clear requirements. A simpler SDB journey.",
+              "ملف مترابط، ومتطلبات واضحة، ورحلة أسهل للحصول على سجل البحار."
+            )
+          }}
+        </p>
+      </div>
+      <div class="heading-actions">
+        <a class="quiet" routerLink="/moei/seafarers/notifications"
+          >♧ {{ t("Notifications", "الإشعارات") }}
+          <b *ngIf="unread">{{ unread }}</b></a
+        ><button class="quiet" (click)="load()" [disabled]="loading || busy">
+          ↻ {{ t("Refresh", "تحديث") }}
+        </button>
+      </div>
+    </header>
+    <nav
+      class="section-nav"
+      [attr.aria-label]="t('Seafarer workspace', 'إدارة البحارة')"
+    >
+      <a
+        routerLink="/moei/seafarers/readiness"
+        [class.active]="view === 'readiness'"
+        >{{ t("Pre Application Readiness", "جاهزية ما قبل التقديم") }}</a
+      >
+      <a
+        routerLink="/moei/seafarers/services"
+        [class.active]="view === 'services'"
+        >{{ t("Seafarer Services", "خدمات البحارة") }}</a
+      >
+      <a
+        routerLink="/moei/seafarers/company"
+        [class.active]="view === 'company'"
+        >{{ t("Company No Objection", "عدم ممانعة الشركات") }}</a
+      >
+      <a
+        *ngIf="canPreview || data?.actor?.operations"
+        routerLink="/moei/seafarers/fulfilment"
+        [class.active]="view === 'fulfilment'"
+        >{{ t("Printing & Delivery", "الطباعة والتسليم") }}</a
+      >
+    </nav>
+    <div class="sandbox-note">
+      <span class="sandbox-dot"></span
+      >{{
+        t(
+          "POC · Synthetic source records, illustrative fees and simulated issuance. External messaging and live government services are not connected.",
+          "نموذج تجريبي · بيانات ورسوم وإصدار تجريبي. خدمات الجهات الخارجية والإرسال الفعلي غير مربوطة."
+        )
+      }}
+    </div>
+    <div
+      class="preview-bar"
+      *ngIf="canPreview && (view === 'services' || view === 'company')"
+    >
+      <span>{{
+        t(
+          "Sandbox preview through your authenticated account",
+          "معاينة تجريبية عبر حسابك المسجّل"
+        )
+      }}</span
+      ><label
+        >{{ t("View as", "معاينة ملف") }}
+        <select [(ngModel)]="previewId" (change)="changePreview()">
+          <ng-container *ngFor="let p of demoDirectory"
+            ><option *ngIf="view !== 'company' || p.companyId" [value]="p.id">
+              {{ p.name }} ·
+              {{
+                view === "company"
+                  ? companyName(p.companyId)
+                  : label(p.readiness.service)
+              }}
+            </option></ng-container
+          >
+        </select></label
+      >
+    </div>
+    <div class="alert error" role="alert" *ngIf="error">{{ error }}</div>
+    <div class="alert success" role="status" *ngIf="notice">{{ notice }}</div>
+    <div class="loading-state" *ngIf="loading">
+      {{ t("Loading verified source records…", "جارٍ تحميل بيانات المصادر…") }}
+    </div>
+    <ng-container *ngIf="data as d">
+      <ng-container *ngIf="view === 'readiness'">
+        <section class="metrics">
+          <button (click)="statusFilter = 'ALL'">
+            <span class="metric-icon navy">♙</span>
+            <div>
+              <small>{{ t("Potential seafarers", "البحارة المرشحون") }}</small
+              ><strong>{{ d.summary.candidates }}</strong
+              ><span>{{
+                t("From first qualifying certificate", "من أول شهادة مؤهلة")
+              }}</span>
+            </div></button
+          ><button (click)="statusFilter = 'READY'">
+            <span class="metric-icon teal">✓</span>
+            <div>
+              <small>{{ t("Ready to apply", "جاهزون للتقديم") }}</small
+              ><strong>{{ d.summary.ready }}</strong
+              ><span>{{
+                t("All current requirements met", "استيفاء المتطلبات الحالية")
+              }}</span>
+            </div></button
+          ><button (click)="statusFilter = 'ON_HOLD'">
+            <span class="metric-icon amber">Ⅱ</span>
+            <div>
+              <small>{{ t("On hold", "موقوفون مؤقتًا") }}</small
+              ><strong>{{ d.summary.holds }}</strong
+              ><span>{{
+                t("Academy or employer decision", "قرار الأكاديمية أو الشركة")
+              }}</span>
+            </div></button
+          ><button (click)="statusFilter = 'PENDING_VERIFICATION'">
+            <span class="metric-icon blue">↻</span>
+            <div>
+              <small>{{ t("Awaiting verification", "بانتظار التحقق") }}</small
+              ><strong>{{ d.summary.pending }}</strong
+              ><span>{{
+                t("Source refresh required", "تحديث من المصدر مطلوب")
+              }}</span>
+            </div>
+          </button>
+        </section>
+        <section class="source-strip">
+          <div *ngFor="let c of d.connectors">
+            <span class="source-symbol">{{
+              c.source === "ACADEMY" ? "◇" : c.source === "MARASI" ? "✚" : "▣"
+            }}</span
+            ><span
+              ><strong>{{ sourceName(c.source) }}</strong
+              ><small>{{
+                t(
+                  "Contract sandbox · event updates",
+                  "بيئة عقود تجريبية · تحديث بالأحداث"
+                )
+              }}</small></span
+            ><span class="source-tag">{{ t("SANDBOX", "تجريبي") }}</span>
+          </div>
+        </section>
+      </ng-container>
+
+      <div
+        class="readiness-layout"
+        *ngIf="view === 'readiness' || view === 'company'"
+      >
+        <section class="card candidates">
+          <div class="card-title">
+            <div>
+              <h2>
+                {{
+                  view === "company"
+                    ? t("Your company seafarers", "بحارة شركتك")
+                    : t("Candidate readiness", "جاهزية المرشحين")
+                }}
+              </h2>
+              <p>
+                {{
+                  view === "company"
+                    ? t(
+                        "Renewal clearances for your associated seafarers.",
+                        "عدم ممانعة تجديد سجلات البحارة المرتبطين بشركتك."
+                      )
+                    : t(
+                        "A profile opens after the first eligible academy certificate.",
+                        "يفتح الملف بعد أول شهادة مؤهلة من الأكاديمية."
+                      )
+                }}
+              </p>
+            </div>
+            <span class="count">{{ rows.length }}</span>
+          </div>
+          <div class="filters">
+            <label class="search"
+              ><span>⌕</span
+              ><input
+                [(ngModel)]="search"
+                [placeholder]="
+                  t('Name, candidate ID or SID', 'الاسم أو رقم المرشح أو SID')
+                "
+                [attr.aria-label]="
+                  t('Search seafarers', 'بحث البحارة')
+                " /></label
+            ><select
+              [(ngModel)]="statusFilter"
+              [attr.aria-label]="t('Readiness status', 'حالة الجاهزية')"
+            >
+              <option value="ALL">{{ t("All statuses", "كل الحالات") }}</option>
+              <option value="READY">{{ label("READY") }}</option>
+              <option value="INCOMPLETE">{{ label("INCOMPLETE") }}</option>
+              <option value="ON_HOLD">{{ label("ON_HOLD") }}</option>
+              <option value="PENDING_VERIFICATION">
+                {{ label("PENDING_VERIFICATION") }}
+              </option>
+            </select>
+          </div>
+          <div class="candidate-list">
+            <button
+              class="candidate-row"
+              *ngFor="let p of rows"
+              [class.selected]="selectedId === p.id"
+              (click)="select(p)"
+            >
+              <span class="avatar">{{ initials(p.name) }}</span
+              ><span class="candidate-name"
+                ><strong>{{ p.name }}</strong
+                ><small>{{ p.id }} · {{ label(p.readiness.service) }}</small
+                ><span class="readiness-meter"
+                  ><i [style.width.%]="p.readiness.percent"></i></span
+                ><small
+                  >{{ p.readiness.passed }}/{{ p.readiness.total }}
+                  {{ t("checks complete", "متطلب مستوفى") }}</small
+                ></span
+              ><span class="candidate-state"
+                ><span class="badge" [attr.data-state]="p.readiness.status">{{
+                  label(p.readiness.status)
+                }}</span
+                ><strong
+                  >{{ p.readiness.percent }}<small>%</small></strong
+                ></span
+              >
+            </button>
+            <p class="empty" *ngIf="!rows.length">
+              {{ t("No seafarers match this view.", "لا توجد سجلات مطابقة.") }}
+            </p>
+          </div>
+        </section>
+        <section class="profile-panel" *ngIf="selected as p">
+          <div class="card profile-card">
+            <div class="profile-heading">
+              <div class="avatar large">
+                {{ initials(p.name) }}<span>✓</span>
+              </div>
+              <div>
+                <small class="eyebrow">{{
+                  t("POTENTIAL SEAFARER PROFILE", "ملف البحار المرشح")
+                }}</small>
+                <h2>{{ p.name }}</h2>
+                <p>
+                  {{ p.rank }} · {{ p.nationality }} ·
+                  {{
+                    p.existingSdb?.sid ||
+                      t("First SID on issuance", "SID بعد الإصدار الأول")
+                  }}
+                </p>
+              </div>
+              <span class="badge" [attr.data-state]="p.readiness.status">{{
+                label(p.readiness.status)
+              }}</span>
+            </div>
+            <div class="profile-facts">
+              <div>
+                <small>{{ t("Journey", "الخدمة") }}</small
+                ><b>{{ label(p.readiness.service) }}</b>
+              </div>
+              <div>
+                <small>{{
+                  t("Academy / employer", "الأكاديمية / الشركة")
+                }}</small
+                ><b>{{ companyName(p.companyId) }}</b>
+              </div>
+              <div>
+                <small>{{ t("Last profile update", "آخر تحديث للملف") }}</small
+                ><b>{{ p.lastUpdated | date: "medium" }}</b>
+              </div>
+            </div>
+            <div
+              class="readiness-summary"
+              [class.ready]="p.readiness.status === 'READY'"
+            >
+              <span>{{ p.readiness.status === "READY" ? "✓" : "!" }}</span>
+              <div>
+                <strong>{{ label(p.readiness.status) }}</strong>
+                <p>
+                  {{
+                    p.readiness.status === "READY"
+                      ? t(
+                          "You can proceed to your SDB request.",
+                          "يمكنك الانتقال لطلب السجل."
+                        )
+                      : t(
+                          "Complete the items below. Changes are reflected from the owning source.",
+                          "استكمل العناصر التالية. يتم تحديثها من الجهة المسؤولة."
+                        )
+                  }}
+                </p>
+              </div>
+              <b>{{ p.readiness.percent }}%</b>
+            </div>
+          </div>
+          <section class="card" *ngIf="view === 'company'">
+            <div class="card-title">
+              <div>
+                <h2>{{ t("Record company decision", "تسجيل قرار الشركة") }}</h2>
+                <p>
+                  {{
+                    t(
+                      "Only your company can record or release its own objection.",
+                      "تسجّل شركتك اعتراضها أو ترفعه على البحارة المرتبطين بها فقط."
+                    )
+                  }}
+                </p>
+              </div>
+            </div>
+            <div class="current-hold" *ngIf="p.clearances['COMPANY'] as c">
+              <span class="badge" [attr.data-state]="c.status">{{
+                label(c.status)
+              }}</span>
+              <p>
+                {{ c.reason || t("No objection recorded", "عدم ممانعة مسجل") }}
+              </p>
+              <small
+                >{{ c.reference }} · {{ c.updatedAt | date: "medium" }}</small
+              >
+            </div>
+            <div class="form-grid">
+              <label
+                >{{ t("Decision", "القرار")
+                }}<select [(ngModel)]="companyStatus">
+                  <option value="HOLD">
+                    {{ t("Objection / HOLD", "اعتراض / إيقاف") }}
+                  </option>
+                  <option value="NO_OBJECTION">
+                    {{
+                      t(
+                        "No objection / release company HOLD",
+                        "لا مانع / رفع إيقاف الشركة"
+                      )
+                    }}
+                  </option>
+                </select></label
+              ><label
+                >{{ t("Case / decision reference", "مرجع الحالة / القرار") }}
+                <span>*</span
+                ><input [(ngModel)]="caseReference" maxlength="100" /></label
+              ><label class="wide" *ngIf="companyStatus === 'HOLD'"
+                >{{
+                  t("Reason shown to the seafarer", "السبب الذي سيظهر للبحار")
+                }}
+                <span>*</span
+                ><textarea
+                  [(ngModel)]="holdReason"
+                  maxlength="500"
+                  rows="3"
+                ></textarea>
+              </label>
+            </div>
+            <div class="card-actions">
+              <button
+                class="primary"
+                (click)="decision()"
+                [disabled]="
+                  busy ||
+                  !caseReference.trim() ||
+                  (companyStatus === 'HOLD' && !holdReason.trim()) ||
+                  !p.existingSdb
+                "
+              >
+                {{
+                  t(
+                    "Save decision & notify seafarer",
+                    "حفظ القرار وإشعار البحار"
+                  )
+                }}
+              </button>
+            </div>
+          </section>
+          <section class="card">
+            <div class="card-title">
+              <div>
+                <h2>
+                  {{
+                    t(
+                      "Qualifications & medical fitness",
+                      "المؤهلات والكشف الطبي"
+                    )
+                  }}
+                </h2>
+                <p>
+                  {{
+                    t(
+                      "Individual certificate status, dates and source references.",
+                      "حالة وصلاحية ومرجع كل شهادة على حدة."
+                    )
+                  }}
+                </p>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>{{ t("Certificate", "الشهادة") }}</th>
+                    <th>{{ t("Status", "الحالة") }}</th>
+                    <th>{{ t("Issued", "الإصدار") }}</th>
+                    <th>{{ t("Expires", "الانتهاء") }}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr *ngFor="let c of p.certificates">
+                    <td>
+                      <strong>{{ c.type }}</strong
+                      ><small>{{ c.title }}</small
+                      ><small>{{ c.reference }}</small>
+                    </td>
+                    <td>
+                      <span
+                        class="badge"
+                        [attr.data-state]="
+                          certificateState(
+                            c.status,
+                            c.expiryDate,
+                            p.readiness.evaluatedAt
+                          )
+                        "
+                        >{{
+                          certificateLabel(
+                            c.status,
+                            c.expiryDate,
+                            p.readiness.evaluatedAt
+                          )
+                        }}</span
+                      >
+                    </td>
+                    <td>{{ c.issueDate | date: "dd MMM yyyy" }}</td>
+                    <td>{{ c.expiryDate | date: "dd MMM yyyy" }}</td>
+                  </tr>
+                  <tr *ngIf="p.medical as m">
+                    <td>
+                      <strong>{{ t("Medical fitness", "الكشف الطبي") }}</strong
+                      ><small>MARASI · {{ m.reference }}</small>
+                    </td>
+                    <td>
+                      <span
+                        class="badge"
+                        [attr.data-state]="
+                          certificateState(
+                            m.status === 'FIT' ? 'VALID' : m.status,
+                            m.expiryDate,
+                            p.readiness.evaluatedAt
+                          )
+                        "
+                        >{{
+                          certificateLabel(
+                            m.status === "FIT" ? "VALID" : m.status,
+                            m.expiryDate,
+                            p.readiness.evaluatedAt
+                          )
+                        }}</span
+                      ><small>{{ label(m.status) }}</small>
+                    </td>
+                    <td>{{ m.issuedAt | date: "dd MMM yyyy" }}</td>
+                    <td>{{ m.expiryDate | date: "dd MMM yyyy" }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+          <section class="card">
+            <div class="card-title">
+              <h2>
+                {{ t("Passport & photograph", "الجواز والصورة الشخصية") }}
+              </h2>
+              <span class="source-tag">MOI / ICP</span>
+            </div>
+            <div class="identity-grid">
+              <div class="photo-placeholder">
+                <span>{{ initials(p.name) }}</span
+                ><small>{{
+                  p.photoReference
+                    ? t(
+                        "Source photo linked · sample",
+                        "مرجع الصورة مرتبط · تجريبي"
+                      )
+                    : t("Photo pending", "بانتظار الصورة")
+                }}</small>
+              </div>
+              <div class="profile-facts">
+                <div>
+                  <small>{{ t("Passport number", "رقم الجواز") }}</small
+                  ><b>{{ p.passport?.number || "—" }}</b>
+                </div>
+                <div>
+                  <small>{{ t("Issue date", "تاريخ الإصدار") }}</small
+                  ><b>{{ p.passport?.issueDate || "—" }}</b>
+                </div>
+                <div>
+                  <small>{{ t("Expiry date", "تاريخ الانتهاء") }}</small
+                  ><b>{{ p.passport?.expiryDate || "—" }}</b>
+                </div>
+                <div>
+                  <small>{{
+                    t("Photograph source reference", "مرجع الصورة")
+                  }}</small
+                  ><b>{{ p.photoReference || "—" }}</b>
+                </div>
+              </div>
+            </div>
+          </section>
+          <section class="card">
+            <div class="card-title">
+              <h2>{{ t("Readiness requirements", "متطلبات الجاهزية") }}</h2>
+              <span class="count"
+                >{{ p.readiness.passed }}/{{ p.readiness.total }}</span
+              >
+            </div>
+            <div class="check-row" *ngFor="let c of p.readiness.checks">
+              <span class="check-symbol" [attr.data-state]="c.result">{{
+                c.result === "PASS" ? "✓" : c.result === "HOLD" ? "Ⅱ" : "!"
+              }}</span>
+              <div>
+                <strong>{{ c.label }}</strong>
+                <p>{{ c.reason }}</p>
+                <small
+                  >{{ sourceName(c.source) }}
+                  <span *ngIf="c.reference">· {{ c.reference }}</span></small
+                >
+              </div>
+              <span class="badge" [attr.data-state]="c.result">{{
+                label(c.result)
+              }}</span>
+            </div>
+          </section>
+          <details class="card sandbox-tools" *ngIf="d.actor.operations">
+            <summary>
+              {{
+                t(
+                  "Integration sandbox · source-event controls",
+                  "محاكاة التكامل · أحداث الجهات"
+                )
+              }}
+            </summary>
+            <p>
+              {{
+                t(
+                  "These actions simulate inbound source events and create an audit record.",
+                  "تحاكي هذه الإجراءات أحداث الجهات وتُسجل في سجل التتبع."
+                )
+              }}
+            </p>
+            <div class="source-actions">
+              <button
+                class="quiet"
+                (click)="simulate('COMPLETE_COPS')"
+                [disabled]="busy"
+              >
+                {{
+                  t("Academy: complete 4 CoPs", "الأكاديمية: استكمال 4 CoPs")
+                }}</button
+              ><button
+                class="quiet"
+                (click)="simulate('MEDICAL_FIT')"
+                [disabled]="busy"
+              >
+                {{ t("MARASI: valid medical", "مراسي: كشف طبي سارٍ") }}</button
+              ><button
+                class="quiet"
+                (click)="simulate('PASSPORT_VALID')"
+                [disabled]="busy"
+              >
+                {{
+                  t("MOI/ICP: passport & photo", "الهوية: الجواز والصورة")
+                }}</button
+              ><button
+                class="quiet"
+                (click)="simulate('ACADEMY_HOLD')"
+                [disabled]="busy"
+              >
+                {{ t("Academy: HOLD", "الأكاديمية: إيقاف") }}</button
+              ><button
+                class="quiet"
+                (click)="simulate('ACADEMY_CLEAR')"
+                [disabled]="busy"
+              >
+                {{ t("Academy: no objection", "الأكاديمية: لا مانع") }}</button
+              ><button
+                class="quiet"
+                (click)="simulate('SOURCE_OUTAGE')"
+                [disabled]="busy"
+              >
+                {{ t("MARASI: unavailable", "مراسي: غير متاح") }}</button
+              ><button
+                class="quiet"
+                (click)="simulate('NEW_CANDIDATE')"
+                [disabled]="busy"
+              >
+                ＋
+                {{
+                  t(
+                    "First qualifying CoP → new candidate",
+                    "أول CoP مؤهل ← مرشح جديد"
+                  )
+                }}
+              </button>
+            </div>
+          </details>
+        </section>
+      </div>
+
+      <ng-container *ngIf="view === 'services'">
+        <div class="portal-welcome">
+          <div>
+            <small>{{ t("YOUR MARITIME JOURNEY", "رحلتك البحرية") }}</small>
+            <h2>
+              {{ t("Welcome", "أهلًا")
+              }}{{ selected ? ", " + selected.name : "" }}
+            </h2>
+            <p>
+              {{
+                t(
+                  "Your qualifications are already connected. See what is ready and continue your request.",
+                  "مؤهلاتك مترابطة بالفعل. راجع جاهزيتك واستكمل طلبك."
+                )
+              }}
+            </p>
+          </div>
+          <div class="welcome-seal">⚓</div>
+        </div>
+        <p class="empty card" *ngIf="!selected">
+          {{
+            t(
+              "No Potential Seafarer profile is associated with this SSO account. A qualifying academy certificate starts the profile; the account association must be verified.",
+              "لا يوجد ملف بحار مرشح مرتبط بحساب الدخول. تبدأ الجاهزية بعد أول شهادة مؤهلة من الأكاديمية، ويلزم التحقق من ربط الحساب."
+            )
+          }}
+        </p>
+        <ng-container *ngIf="selected as p">
+          <section class="portal-grid" *ngIf="!app">
+            <div class="service-card">
+              <span class="service-icon">▤</span
+              ><span class="service-tag">{{
+                t("SEAFARER SERVICES", "خدمات البحارة")
+              }}</span>
+              <h2>
+                {{
+                  t(
+                    "Issue / Renew Seaman’s Discharge Book",
+                    "إصدار / تجديد سجل البحار"
+                  )
+                }}
+              </h2>
+              <p>
+                {{
+                  t(
+                    "Electronic SDB with an optional printed booklet. One service identifies the correct journey from your record.",
+                    "سجل إلكتروني مع نسخة مطبوعة اختيارية. خدمة واحدة تحدد مسار الإصدار أو التجديد من ملفك."
+                  )
+                }}
+              </p>
+              <div class="service-facts">
+                <span
+                  >{{ t("Your journey", "مسارك") }}
+                  <b>{{ label(p.readiness.service) }}</b></span
+                ><span
+                  >{{ t("Current SID", "SID الحالي") }}
+                  <b>{{
+                    p.existingSdb?.sid ||
+                      t("New on first issuance", "جديد عند أول إصدار")
+                  }}</b></span
+                >
+              </div>
+              <button
+                class="primary"
+                (click)="begin()"
+                [disabled]="busy || p.readiness.status !== 'READY'"
+              >
+                {{ t("Start SDB request", "بدء طلب السجل") }} ←</button
+              ><small>{{
+                t(
+                  "Readiness is rechecked before payment and issuance.",
+                  "تُراجع الجاهزية مجددًا قبل السداد والإصدار."
+                )
+              }}</small>
+            </div>
+            <section class="card readiness-portal">
+              <div class="card-title">
+                <h2>{{ t("Your readiness", "حالة جاهزيتك") }}</h2>
+                <span class="badge" [attr.data-state]="p.readiness.status">{{
+                  label(p.readiness.status)
+                }}</span>
+              </div>
+              <div
+                class="progress-ring"
+                [style.--progress]="p.readiness.percent + '%'"
+              >
+                <div>
+                  <b>{{ p.readiness.percent }}<small>%</small></b
+                  ><span
+                    >{{ p.readiness.passed }}/{{ p.readiness.total }}
+                    {{ t("verified", "مستوفى") }}</span
+                  >
+                </div>
+              </div>
+              <p *ngIf="p.readiness.status === 'READY'" class="ready-copy">
+                {{
+                  t(
+                    "All current requirements are satisfied. You can apply now.",
+                    "كل المتطلبات الحالية مستوفاة. يمكنك التقديم الآن."
+                  )
+                }}
+              </p>
+              <div class="blocker" *ngFor="let c of p.readiness.blockers">
+                <span>!</span>
+                <div>
+                  <strong>{{ c.label }}</strong>
+                  <p>{{ c.reason }}</p>
+                  <small>{{ sourceName(c.source) }}</small>
+                </div>
+              </div>
+              <details>
+                <summary>
+                  {{
+                    t(
+                      "View all requirements & validity dates",
+                      "عرض كل المتطلبات وتواريخ الصلاحية"
+                    )
+                  }}
+                </summary>
+                <div class="check-row" *ngFor="let c of p.readiness.checks">
+                  <span class="check-symbol" [attr.data-state]="c.result">{{
+                    c.result === "PASS" ? "✓" : "!"
+                  }}</span>
+                  <div>
+                    <b>{{ c.label }}</b
+                    ><small>{{ c.expiryDate || c.reason }}</small>
+                  </div>
+                </div>
+              </details>
+            </section>
+          </section>
+          <section class="journey-card card" *ngIf="app as a">
+            <div class="journey-heading">
+              <div>
+                <small class="eyebrow"
+                  >{{ label(a.service) }} · {{ a.id }}</small
+                >
+                <h2>
+                  {{ t("Your Seaman’s Discharge Book", "سجل البحار الخاص بك") }}
+                </h2>
+              </div>
+              <span class="badge" [attr.data-state]="a.status">{{
+                label(a.status)
+              }}</span>
+            </div>
+            <ol class="stepper">
+              <li
+                *ngFor="let s of steps; let i = index"
+                [class.current]="step === i"
+                [class.done]="step > i"
+              >
+                <span>{{ step > i ? "✓" : i + 1 }}</span
+                ><b>{{ t(s[0], s[1]) }}</b>
+              </li>
+            </ol>
+            <div
+              class="alert warning"
+              *ngIf="p.readiness.status !== 'READY' && a.status !== 'ISSUED'"
+            >
+              {{
+                t(
+                  "A prerequisite changed. Payment and issuance are paused until your readiness is restored.",
+                  "تغير أحد المتطلبات. يتوقف السداد والإصدار حتى استعادة الجاهزية."
+                )
+              }}
+              <div *ngFor="let c of p.readiness.blockers">
+                {{ c.label }}: {{ c.reason }}
+              </div>
+            </div>
+            <section class="journey-step" *ngIf="step === 1">
+              <h3>{{ t("Choose your SDB format", "اختر نوع السجل") }}</h3>
+              <p>
+                {{
+                  t(
+                    "Every issued SDB includes an electronic record. Add a printed booklet if needed.",
+                    "يشمل كل إصدار سجلًا إلكترونيًا. أضف نسخة مطبوعة عند الحاجة."
+                  )
+                }}
+              </p>
+              <div class="choice-grid">
+                <label class="choice" [class.chosen]="format === 'ELECTRONIC'"
+                  ><input
+                    type="radio"
+                    name="format"
+                    value="ELECTRONIC"
+                    [(ngModel)]="format"
+                  /><span class="choice-icon">▣</span
+                  ><strong>{{
+                    t("Electronic SDB", "السجل الإلكتروني")
+                  }}</strong>
+                  <p>
+                    {{
+                      t(
+                        "Available in your account after successful issuance.",
+                        "متاح في حسابك بعد إتمام الإصدار."
+                      )
+                    }}
+                  </p>
+                  <small>{{
+                    t(
+                      "No printing or delivery charge",
+                      "بدون رسوم طباعة أو إرسال"
+                    )
+                  }}</small></label
+                ><label
+                  class="choice"
+                  [class.chosen]="format === 'ELECTRONIC_PRINT'"
+                  ><input
+                    type="radio"
+                    name="format"
+                    value="ELECTRONIC_PRINT"
+                    [(ngModel)]="format"
+                  /><span class="choice-icon">▤</span
+                  ><strong>{{
+                    t("Electronic + Printed Booklet", "إلكتروني + نسخة مطبوعة")
+                  }}</strong>
+                  <p>
+                    {{
+                      t(
+                        "Choose postal delivery or collection from the service centre.",
+                        "اختر الإرسال بالبريد أو الاستلام من المقر."
+                      )
+                    }}
+                  </p>
+                  <small
+                    >+ {{ d.fees.print }} {{ d.fees.currency }}
+                    {{
+                      t("illustrative printing fee", "رسوم طباعة تجريبية")
+                    }}</small
+                  ></label
+                >
+              </div>
+              <div class="journey-actions">
+                <button class="primary" (click)="nextFormat()">
+                  {{ t("Continue", "متابعة") }} ←
+                </button>
+              </div>
+            </section>
+            <section class="journey-step" *ngIf="step === 2">
+              <h3>
+                {{
+                  format === "ELECTRONIC_PRINT"
+                    ? t(
+                        "Delivery & recipient details",
+                        "طريقة التسليم وبيانات المستلم"
+                      )
+                    : t("Confirm your contact details", "تأكيد بيانات التواصل")
+                }}
+              </h3>
+              <div
+                class="choice-grid compact"
+                *ngIf="format === 'ELECTRONIC_PRINT'"
+              >
+                <label class="choice" [class.chosen]="delivery === 'POST'"
+                  ><input
+                    type="radio"
+                    name="delivery"
+                    value="POST"
+                    [(ngModel)]="delivery"
+                  /><strong>{{ t("Send by post", "الإرسال بالبريد") }}</strong
+                  ><small
+                    >+ {{ d.fees.post }} {{ d.fees.currency }}
+                    {{
+                      t("illustrative delivery fee", "رسوم إرسال تجريبية")
+                    }}</small
+                  ></label
+                ><label class="choice" [class.chosen]="delivery === 'PICKUP'"
+                  ><input
+                    type="radio"
+                    name="delivery"
+                    value="PICKUP"
+                    [(ngModel)]="delivery"
+                  /><strong>{{
+                    t(
+                      "Collect from MOEI service centre",
+                      "الاستلام من مقر الوزارة"
+                    )
+                  }}</strong
+                  ><small>{{
+                    t(
+                      "You will receive a collection appointment.",
+                      "ستصلك رسالة بموعد الاستلام."
+                    )
+                  }}</small></label
+                >
+              </div>
+              <p class="prefill-note">
+                ✓
+                {{
+                  t(
+                    "Pre-filled from your profile. You can edit delivery and contact details. Verified identity and qualifications remain source-owned.",
+                    "تمت تعبئة البيانات من ملفك. يمكنك تعديل بيانات التواصل والاستلام؛ بيانات الهوية والمؤهلات تُحدّث من المصدر."
+                  )
+                }}
+              </p>
+              <div class="form-grid">
+                <label
+                  >{{ t("Recipient name", "اسم المستلم") }} *<input
+                    [(ngModel)]="recipient.recipient"
+                    maxlength="160"
+                    autocomplete="name" /></label
+                ><label
+                  >{{ t("Mobile number", "رقم الهاتف") }} *<input
+                    [(ngModel)]="recipient.phone"
+                    maxlength="40"
+                    type="tel"
+                    autocomplete="tel" /></label
+                ><label
+                  >{{ t("Email address", "البريد الإلكتروني") }} *<input
+                    [(ngModel)]="recipient.email"
+                    maxlength="160"
+                    type="email"
+                    autocomplete="email" /></label
+                ><label
+                  class="wide"
+                  *ngIf="format === 'ELECTRONIC_PRINT' && delivery === 'POST'"
+                  >{{ t("Delivery address", "عنوان التسليم") }} *<textarea
+                    [(ngModel)]="recipient.address"
+                    maxlength="300"
+                    rows="3"
+                    autocomplete="street-address"
+                  ></textarea>
+                </label>
+              </div>
+              <label class="declaration"
+                ><input type="checkbox" [(ngModel)]="declaration" /><span>{{
+                  t(
+                    "I confirm this SDB request, the presented source information and my contact / delivery details.",
+                    "أؤكد طلب السجل وصحة بيانات المصادر المعروضة وبيانات التواصل والاستلام."
+                  )
+                }}</span></label
+              >
+              <div class="journey-actions">
+                <button class="quiet" (click)="step = 1">
+                  {{ t("Back", "السابق") }}</button
+                ><button
+                  class="primary"
+                  (click)="confirmOptions()"
+                  [disabled]="
+                    busy ||
+                    !declaration ||
+                    !recipient.recipient.trim() ||
+                    !recipient.phone.trim() ||
+                    !recipient.email.trim() ||
+                    (format === 'ELECTRONIC_PRINT' &&
+                      delivery === 'POST' &&
+                      !recipient.address.trim()) ||
+                    p.readiness.status !== 'READY'
+                  "
+                >
+                  {{
+                    t("Confirm & generate invoice", "تأكيد وإصدار الفاتورة")
+                  }}
+                  ←
+                </button>
+              </div>
+            </section>
+            <section
+              class="journey-step"
+              *ngIf="step === 3 && a.invoice as invoice"
+            >
+              <h3>{{ t("Your invoice is ready", "فاتورتك جاهزة") }}</h3>
+              <div class="invoice-layout">
+                <div class="invoice-sheet">
+                  <div class="invoice-top">
+                    <strong
+                      >MOEI
+                      <span>{{
+                        t("SDB SERVICES", "خدمات سجل البحار")
+                      }}</span></strong
+                    >
+                    <div>
+                      <b>{{ invoice.id }}</b
+                      ><small>{{ a.createdAt | date: "dd MMM yyyy" }}</small>
+                    </div>
+                  </div>
+                  <div class="invoice-client">
+                    <small>{{ t("BILLED TO", "صادرة إلى") }}</small
+                    ><strong>{{ p.name }}</strong
+                    ><span>{{ label(a.service) }} · {{ label(a.format) }}</span>
+                  </div>
+                  <div class="invoice-line" *ngFor="let line of invoice.lines">
+                    <span>{{ line.description }}</span
+                    ><b
+                      >{{ line.amount | number: "1.2-2" }}
+                      {{ invoice.currency }}</b
+                    >
+                  </div>
+                  <div class="invoice-total">
+                    <span>{{ t("Total", "الإجمالي") }}</span
+                    ><strong
+                      >{{ invoice.total | number: "1.2-2" }}
+                      <small>{{ invoice.currency }}</small></strong
+                    >
+                  </div>
+                  <p class="invoice-demo">
+                    {{
+                      t(
+                        "Illustrative sandbox invoice · fees require MOEI confirmation.",
+                        "فاتورة تجريبية · الرسوم تخضع لاعتماد الوزارة."
+                      )
+                    }}
+                  </p>
+                </div>
+                <aside class="invoice-summary">
+                  <h4>{{ t("Your choices", "اختياراتك") }}</h4>
+                  <p>{{ label(a.format) }}</p>
+                  <p>{{ label(a.delivery) }}</p>
+                  <p>
+                    {{ a.recipient.recipient }}<br />{{ a.recipient.email }}
+                  </p>
+                  <p *ngIf="a.delivery === 'POST'">{{ a.recipient.address }}</p>
+                  <small>{{
+                    t(
+                      "Source readiness is checked again before payment.",
+                      "تُراجع جاهزية المصادر مرة أخرى قبل السداد."
+                    )
+                  }}</small>
+                </aside>
+              </div>
+              <div class="journey-actions">
+                <button
+                  class="primary"
+                  (click)="step = 4"
+                  [disabled]="busy || p.readiness.status !== 'READY'"
+                >
+                  {{ t("Proceed to payment", "الانتقال للسداد") }} ←
+                </button>
+              </div>
+            </section>
+            <section
+              class="journey-step payment-step"
+              *ngIf="step === 4 && a.invoice as invoice"
+            >
+              <span class="payment-lock">▣</span>
+              <h3>{{ t("Complete your payment", "إتمام السداد") }}</h3>
+              <p>{{ invoice.id }} · {{ label(a.service) }}</p>
+              <strong class="payment-amount"
+                >{{ invoice.total | number: "1.2-2" }}
+                <small>{{ invoice.currency }}</small></strong
+              >
+              <div class="payment-sandbox">
+                <label
+                  >{{ t("Sandbox payment response", "نتيجة السداد التجريبية")
+                  }}<select [(ngModel)]="paymentResult">
+                    <option value="SUCCESS">
+                      {{ t("Successful payment", "سداد ناجح") }}
+                    </option>
+                    <option value="FAILED">
+                      {{ t("Failed payment", "سداد فاشل") }}
+                    </option>
+                    <option value="CANCELLED">
+                      {{ t("Cancelled by customer", "إلغاء العميل") }}
+                    </option>
+                  </select></label
+                >
+                <p>
+                  {{
+                    t(
+                      "No bank card or real payment is requested. A production payment gateway will confirm the transaction server-to-server.",
+                      "لا تُطلب بطاقة أو دفعة فعلية. بوابة السداد الفعلية تؤكد المعاملة مباشرةً مع الخادم."
+                    )
+                  }}
+                </p>
+              </div>
+              <button
+                class="primary"
+                (click)="pay()"
+                [disabled]="busy || p.readiness.status !== 'READY'"
+              >
+                {{
+                  busy
+                    ? t("Processing…", "جارٍ المعالجة…")
+                    : t(
+                        "Pay & issue SDB · sandbox",
+                        "سداد وإصدار السجل · تجريبي"
+                      )
+                }}
+              </button>
+              <p
+                *ngIf="a.payment && a.payment.result !== 'SUCCESS'"
+                class="payment-failed"
+              >
+                {{ t("Previous attempt: ", "المحاولة السابقة: ")
+                }}{{ a.payment.result }} ·
+                {{
+                  t(
+                    "You can retry this invoice.",
+                    "يمكنك إعادة محاولة سداد الفاتورة."
+                  )
+                }}
+              </p>
+              <div class="journey-actions">
+                <button class="quiet" (click)="step = 3">
+                  {{ t("View invoice", "عرض الفاتورة") }}
+                </button>
+              </div>
+            </section>
+            <section
+              class="journey-step"
+              *ngIf="step === 5 && a.digital as digital"
+            >
+              <div class="issued-heading">
+                <span>✓</span>
+                <div>
+                  <h3>
+                    {{
+                      t(
+                        "Your electronic SDB is available",
+                        "السجل الإلكتروني متاح"
+                      )
+                    }}
+                  </h3>
+                  <p>
+                    {{
+                      t(
+                        "Keep your SID. Track any printed booklet from your account.",
+                        "احتفظ برقم SID، وتابع النسخة المطبوعة من حسابك."
+                      )
+                    }}
+                  </p>
+                </div>
+              </div>
+              <div class="digital-layout">
+                <article class="digital-sdb">
+                  <header><span>⚓ MOEI</span><b>eSDB</b></header>
+                  <small>UNITED ARAB EMIRATES</small>
+                  <h3>SEAMAN’S DISCHARGE BOOK</h3>
+                  <div class="digital-identity">
+                    <span class="digital-photo">{{
+                      initials(digital.name)
+                    }}</span>
+                    <div>
+                      <small>SEAFARER NAME</small
+                      ><strong>{{ digital.name }}</strong
+                      ><small>SEAFARER ID (SID)</small><b>{{ digital.sid }}</b>
+                    </div>
+                  </div>
+                  <div class="digital-dates">
+                    <div>
+                      <small>SDB NUMBER</small><b>{{ digital.number }}</b>
+                    </div>
+                    <div>
+                      <small>ISSUED</small><b>{{ digital.issuedAt }}</b>
+                    </div>
+                    <div>
+                      <small>EXPIRES</small><b>{{ digital.expiryDate }}</b>
+                    </div>
+                  </div>
+                  <footer>SPECIMEN · SANDBOX · NOT AN OFFICIAL DOCUMENT</footer>
+                </article>
+                <aside class="issued-summary">
+                  <h4>{{ t("Request complete", "اكتمل الطلب") }}</h4>
+                  <p>
+                    <b>{{ t("Service", "الخدمة") }}</b> {{ label(a.service) }}
+                  </p>
+                  <p>
+                    <b>{{ t("Payment", "السداد") }}</b>
+                    {{ a.payment?.reference }}
+                  </p>
+                  <p>
+                    <b>{{ t("Verification reference", "مرجع التحقق") }}</b>
+                    {{ digital.verificationReference }}
+                  </p>
+                  <p *ngIf="digital.previousSdb">
+                    <b>{{ t("Previous SDB", "السجل السابق") }}</b>
+                    {{ digital.previousSdb }}
+                  </p>
+                  <button class="quiet" (click)="download()">
+                    ↓
+                    {{
+                      t(
+                        "Download sandbox record",
+                        "تنزيل بيانات السجل التجريبي"
+                      )
+                    }}
+                  </button>
+                </aside>
+              </div>
+              <section class="delivery-tracker" *ngIf="a.fulfilment as f">
+                <div>
+                  <span class="service-icon small">{{
+                    a.format === "ELECTRONIC" ? "✓" : "▤"
+                  }}</span>
+                  <div>
+                    <h4>
+                      {{
+                        a.format === "ELECTRONIC"
+                          ? t(
+                              "Electronic-only request complete",
+                              "اكتمل طلب السجل الإلكتروني"
+                            )
+                          : t("Your printed booklet", "النسخة المطبوعة")
+                      }}
+                    </h4>
+                    <p>{{ label(f.status) }}</p>
+                  </div>
+                </div>
+                <div *ngIf="f.trackingNumber">
+                  <b>{{ f.carrier }}</b>
+                  <p>
+                    {{ t("Tracking number", "رقم التتبع") }}:
+                    {{ f.trackingNumber }}
+                  </p>
+                </div>
+                <div *ngIf="f.pickupAt">
+                  <b>{{ t("Collection appointment", "موعد الاستلام") }}</b>
+                  <p>{{ f.pickupAt | date: "medium" }}</p>
+                </div>
+                <p>
+                  {{
+                    t(
+                      "Updates appear in your notifications. External SMS/email delivery is not connected in this sandbox.",
+                      "التحديثات متاحة في إشعاراتك. إرسال SMS والبريد الفعلي غير مربوط في البيئة التجريبية."
+                    )
+                  }}
+                </p>
+              </section>
+            </section>
+          </section>
+          <section class="card portal-updates">
+            <div class="card-title">
+              <h2>{{ t("Latest updates", "آخر التحديثات") }}</h2>
+              <a routerLink="/moei/seafarers/notifications"
+                >{{ t("View all", "عرض الكل") }} ←</a
+              >
+            </div>
+            <div class="update-row" *ngFor="let n of profileNotices">
+              <span class="update-dot" [class.unread]="!n.read"></span>
+              <div>
+                <strong>{{ n.title }}</strong>
+                <p>{{ n.body }}</p>
+                <small>{{ n.at | date: "medium" }}</small>
+              </div>
+            </div>
+          </section>
+        </ng-container>
+      </ng-container>
+
+      <section class="card" *ngIf="view === 'notifications'">
+        <div class="card-title">
+          <div>
+            <h2>{{ t("Your notification centre", "مركز الإشعارات") }}</h2>
+            <p>
+              {{
+                t(
+                  "Certificate progress, medical updates, holds, readiness, payment and delivery in one timeline.",
+                  "تطور الشهادات والكشف الطبي والإيقاف والجاهزية والسداد والتسليم في مكان واحد."
+                )
+              }}
+            </p>
+          </div>
+          <span class="count">{{ unread }} {{ t("unread", "غير مقروء") }}</span>
+        </div>
+        <article
+          class="notification-row"
+          *ngFor="let n of notices"
+          [class.is-unread]="!n.read"
+        >
+          <span class="notification-icon" [class.hold]="n.type === 'HOLD'">{{
+            n.type === "HOLD"
+              ? "Ⅱ"
+              : n.type === "ISSUED"
+                ? "✓"
+                : n.type === "WELCOME"
+                  ? "★"
+                  : "♧"
+          }}</span>
+          <div>
+            <small
+              >{{ n.profileId }} · {{ n.type }} ·
+              {{ n.at | date: "medium" }}</small
+            >
+            <h3>{{ n.title }}</h3>
+            <p>{{ n.body }}</p>
+            <span class="in-app">{{
+              t(
+                "In-app delivered · SMS/email not connected",
+                "وصل داخل المنصة · SMS والبريد غير مربوطين"
+              )
+            }}</span>
+          </div>
+          <button class="quiet" *ngIf="!n.read" (click)="read(n)">
+            {{ t("Mark read", "تمت القراءة") }}
+          </button>
+        </article>
+        <p class="empty" *ngIf="!notices.length">
+          {{
+            t(
+              "No notifications in your account yet.",
+              "لا توجد إشعارات لحسابك بعد."
+            )
+          }}
+        </p>
+      </section>
+
+      <section class="fulfilment-layout" *ngIf="view === 'fulfilment'">
+        <div class="card">
+          <div class="card-title">
+            <div>
+              <h2>{{ t("Printed booklet orders", "طلبات النسخ المطبوعة") }}</h2>
+              <p>
+                {{
+                  t(
+                    "Print production, dispatch and handover are tracked separately.",
+                    "متابعة الطباعة والشحن والتسليم كلٌّ على حدة."
+                  )
+                }}
+              </p>
+            </div>
+            <span class="count">{{ printApplications.length }}</span>
+          </div>
+          <button
+            class="print-row"
+            *ngFor="let row of printApplications"
+            (click)="
+              fulfilApp = row.app;
+              trackingNumber = '';
+              carrier = '';
+              pickupAt = ''
+            "
+            [class.selected]="fulfilApp?.id === row.app.id"
+          >
+            <div>
+              <strong>{{ row.profile.name }}</strong
+              ><small>{{ row.app.id }} · {{ label(row.app.delivery) }}</small>
+            </div>
+            <span class="badge">{{
+              label(row.app.fulfilment?.status || "")
+            }}</span>
+          </button>
+          <p class="empty" *ngIf="!printApplications.length">
+            {{
+              t(
+                "Printed booklet orders appear after successful payment and issuance.",
+                "تظهر طلبات الطباعة بعد نجاح السداد والإصدار."
+              )
+            }}
+          </p>
+        </div>
+        <section class="card" *ngIf="fulfilApp as a">
+          <div class="card-title">
+            <h2>{{ t("Fulfilment order", "أمر التسليم") }}</h2>
+            <span class="badge">{{ label(a.fulfilment?.status || "") }}</span>
+          </div>
+          <div class="form-grid">
+            <label
+              >{{ t("Recipient", "المستلم")
+              }}<input [value]="a.recipient.recipient" readonly /></label
+            ><label
+              >{{ t("Contact number", "رقم التواصل")
+              }}<input [value]="a.recipient.phone" readonly /></label
+            ><label class="wide"
+              >{{ t("Address", "العنوان")
+              }}<textarea
+                [value]="a.recipient.address"
+                readonly
+              ></textarea></label
+            ><ng-container *ngIf="nextFulfil(a) === 'DISPATCHED'"
+              ><label
+                >{{ t("Carrier", "شركة الشحن") }} *<input
+                  [(ngModel)]="carrier"
+                  maxlength="100" /></label
+              ><label
+                >{{ t("Tracking number", "رقم التتبع") }} *<input
+                  [(ngModel)]="trackingNumber"
+                  maxlength="100" /></label></ng-container
+            ><label class="wide" *ngIf="nextFulfil(a) === 'READY_FOR_PICKUP'"
+              >{{ t("Collection appointment", "موعد الاستلام") }} *<input
+                type="datetime-local"
+                [(ngModel)]="pickupAt"
+            /></label>
+          </div>
+          <div class="fulfil-history">
+            <p *ngFor="let e of a.fulfilment?.history">
+              ✓ {{ label(e.status) }} <small>{{ e.at | date: "medium" }}</small>
+            </p>
+          </div>
+          <button
+            class="primary"
+            *ngIf="nextFulfil(a)"
+            (click)="fulfil()"
+            [disabled]="
+              busy ||
+              (nextFulfil(a) === 'DISPATCHED' &&
+                (!carrier.trim() || !trackingNumber.trim())) ||
+              (nextFulfil(a) === 'READY_FOR_PICKUP' && !pickupAt)
+            "
+          >
+            {{ label(nextFulfil(a)) }} ·
+            {{ t("Confirm & notify", "تأكيد وإشعار") }}
+          </button>
+        </section>
+      </section>
+      <details
+        class="card audit"
+        *ngIf="view === 'readiness' && d.actor.operations"
+      >
+        <summary>
+          {{
+            t("Source events & audit trail", "أحداث المصادر وسجل التتبع")
+          }}
+          ({{ d.audit.length }})
+        </summary>
+        <div class="audit-row" *ngFor="let e of d.audit">
+          <small>{{ e.at | date: "medium" }}</small
+          ><strong>{{ e.profileId }} · {{ e.event }}</strong
+          ><span>{{ e.detail }}</span
+          ><small>{{ e.actor }}</small>
+        </div>
+      </details>
+    </ng-container>
+    <footer class="seafarer-footer">
+      <strong>{{
+        t(
+          "MOEI · Seafarer Services",
+          "وزارة الطاقة والبنية التحتية · خدمات البحارة"
+        )
+      }}</strong
+      ><span>{{
+        t(
+          "Source-linked readiness · One SDB journey",
+          "جاهزية مرتبطة بالمصادر · رحلة موحدة لسجل البحار"
+        )
+      }}</span>
+    </footer>
+  </main>
+</div>

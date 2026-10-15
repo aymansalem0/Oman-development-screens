@@ -1,18 +1,20 @@
+import { NmcNavigationComponent } from '../components/nmc-navigation.component';
 import { CommonModule } from '@angular/common';
 import { Component, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { NmcVesselProfile } from '../data/nmc-vessel-catalog';
 import {
-  NMC_OPERATIONAL_VESSELS,
-  getOperationalVesselByImo
-} from '../data/nmc-expanded-vessel-catalog';
+  AIRIA_DEMO_99_VESSELS,
+  getAiriaDemoVesselByImo
+} from '../data/airia-demo-cohort';
 import { LanguageService } from '../services/language.service';
 import { NmcRiskEngineService } from '../services/nmc-risk-engine.service';
 import {
   NmcCaseStateService,
   NmcInspectionOutcome
 } from '../services/nmc-case-state.service';
+import {NmcCasesService,NmcCentralCase} from '../services/nmc-cases.service';
 
 type CheckStatus = 'Pending' | 'Pass' | 'Deficiency' | 'N/A';
 type Severity = 'Minor' | 'Major' | 'Critical';
@@ -32,7 +34,7 @@ interface InspectionCheck {
 @Component({
   selector: 'app-nmc-smart-inspection',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink],
+  imports: [CommonModule, FormsModule, RouterLink, NmcNavigationComponent],
   templateUrl: './nmc-smart-inspection.component.html',
   styleUrl: './nmc-smart-inspection.component.css'
 })
@@ -43,21 +45,56 @@ export class NmcSmartInspectionComponent implements OnInit {
   generalNote = '';
   submitted = false;
   existingOutcome?: NmcInspectionOutcome;
+  centralCase:NmcCentralCase|null=null;
+  centralLoading=true;
+  centralBusy=false;
+  centralError='';
 
   constructor(
     private route: ActivatedRoute,
     private router: Router,
     public lang: LanguageService,
     private caseState: NmcCaseStateService,
-    private riskEngine: NmcRiskEngineService
+    private riskEngine: NmcRiskEngineService,
+    private readonly cases:NmcCasesService
   ) {}
 
   ngOnInit(): void {
-    const imo = this.route.snapshot.paramMap.get('imo') || NMC_OPERATIONAL_VESSELS[0].imo;
-    const profile = getOperationalVesselByImo(imo) || NMC_OPERATIONAL_VESSELS[0];
+    const imo = this.route.snapshot.paramMap.get('imo') || AIRIA_DEMO_99_VESSELS[0].imo;
+    const profile = getAiriaDemoVesselByImo(imo) || AIRIA_DEMO_99_VESSELS[0];
     this.vessel = this.riskEngine.applyToVessel(profile);
     this.existingOutcome = this.caseState.getInspectionOutcome(this.vessel.imo);
     this.buildChecklist();
+    this.cases.byImo(this.vessel.imo).subscribe({
+      next:result=>{
+        this.centralLoading=false;
+        this.centralCase=result.case?.status==='RESOLVED'?null:result.case;
+        const scheduled=this.activeScheduledReferral;
+        if(scheduled?.inspector)this.inspectorName=scheduled.inspector;
+        // Rebuild after loading the central source assessment so severity isn't
+        // inferred from the unrelated 87-point catalog fixture.
+        this.buildChecklist();
+        if(scheduled){
+          // A legacy case outcome must NOT complete a new A01 scheduling
+          // request; this is a separate inspection session.
+          this.existingOutcome=undefined;
+          this.submitted=false;
+        }else if(this.centralCase?.inspectionOutcome){
+          const o=this.centralCase.inspectionOutcome;
+          this.existingOutcome={...o,riskReduction:0,inspector:'Smart Inspection',
+            result:o.result as NmcInspectionOutcome['result']};
+          this.submitted=true;
+        } else {
+          // Central case is the source of truth; ignore old browser-only data.
+          this.existingOutcome=undefined;
+          this.submitted=false;
+        }
+      },
+      error:error=>{
+        this.centralLoading=false;
+        this.centralError=this.cases.readableError(error,this.lang.isArabic);
+      }
+    });
   }
 
   copy(en: string, ar: string): string {
@@ -81,15 +118,28 @@ export class NmcSmartInspectionComponent implements OnInit {
   }
 
   get caseId(): string {
-    return `NMC-CASE-2026-${this.vessel.imo.slice(-4)}`;
+    return this.centralCase?'NMC-'+this.centralCase.id.slice(0,8).toUpperCase():'—';
+  }
+
+  get activeScheduledReferral(){
+    return this.centralCase?.inspectionRequests?.find(r=>r.status==='SCHEDULED');
   }
 
   get inspectionId(): string {
-    return `NMC-INS-2026-${this.vessel.imo.slice(-4)}`;
+    const referral=this.activeScheduledReferral;
+    return referral
+      ?'NMC-INS-'+referral.id.replaceAll('-','').slice(0,20).toUpperCase()
+      :`NMC-INS-2026-${this.vessel.imo.slice(-4)}`;
+  }
+
+  // Case-originated inspection must use the saved AI assessment at case creation,
+  // not the unrelated synthetic vessel-catalog risk (e.g. 87 vs saved 60).
+  get incomingRisk(): number {
+    return this.centralCase?.sourceScore ?? this.vessel.risk;
   }
 
   get riskLabel(): string {
-    const level = this.riskEngine.levelForScore(this.vessel.risk);
+    const level = this.riskEngine.levelForScore(this.incomingRisk);
     const map: Record<string,string> = {
       Critical: this.copy('Critical', 'حرج'),
       High: this.copy('High', 'مرتفع'),
@@ -100,7 +150,7 @@ export class NmcSmartInspectionComponent implements OnInit {
   }
 
   get riskClass(): string {
-    return this.riskEngine.levelForScore(this.vessel.risk).toLowerCase();
+    return this.riskEngine.levelForScore(this.incomingRisk).toLowerCase();
   }
 
   get completedChecks(): number {
@@ -123,8 +173,16 @@ export class NmcSmartInspectionComponent implements OnInit {
     return this.findings.filter(item => item.severity === 'Major').length;
   }
 
+  get isSchedulingRequired():boolean{
+    if(!this.centralCase?.actionPlan)return false;
+    // Never reuse earlier COMPLETED inspections to authorize a new field visit.
+    return !this.activeScheduledReferral;
+  }
+
   get canSubmit(): boolean {
-    return this.completedChecks === this.checks.length && !!this.inspectorName.trim();
+    return (!this.centralCase?.actionPlan||!!this.activeScheduledReferral) &&
+      !this.isSchedulingRequired && !this.submitted &&
+      this.completedChecks === this.checks.length && !!this.inspectorName.trim();
   }
 
   get resultLabel(): string {
@@ -133,13 +191,8 @@ export class NmcSmartInspectionComponent implements OnInit {
     return this.copy('Cleared', 'مستوفاة');
   }
 
-  get estimatedRiskReduction(): number {
-    if (!this.canSubmit) return 0;
-    if (this.criticalFindings > 0) return 4;
-    if (this.majorFindings > 0) return 10;
-    if (this.findings.length > 0) return 14;
-    return ['High','Critical'].includes(this.riskEngine.levelForScore(this.vessel.risk)) ? 18 : 8;
-  }
+  // Inspection Pass/Fail alone is not a new five-factor A01/A02 risk assessment.
+  // Until evidence refresh + deterministic recalculation completes, risk impact is UNKNOWN.
 
   setStatus(item: InspectionCheck, status: CheckStatus): void {
     item.status = status;
@@ -174,18 +227,41 @@ export class NmcSmartInspectionComponent implements OnInit {
 
     const outcome: NmcInspectionOutcome = {
       inspectionId: this.inspectionId,
-      completedAt: '23:35',
+      completedAt: new Date().toISOString(),
       result,
       findingsCount: this.findings.length,
       criticalFindings: this.criticalFindings,
-      riskReduction: this.estimatedRiskReduction,
+      riskReduction: 0, // compatibility-only local DTO; never treated as verified risk impact
       summary: this.generalNote.trim() || summary,
       inspector: this.inspectorName.trim()
     };
 
-    this.caseState.setInspectionOutcome(this.vessel.imo, outcome);
-    this.existingOutcome = outcome;
-    this.submitted = true;
+    if(this.centralLoading||this.centralBusy||this.centralError)return;
+    if(!this.centralCase){
+      this.centralError=this.copy(
+        'Open an acknowledged alert as a central maritime case before submitting this inspection.',
+        'افتح حالة مركزية من تنبيه مستلم قبل تسجيل نتيجة المعاينة.');
+      return;
+    }
+    this.centralBusy=true;
+    this.cases.inspection(this.centralCase,{
+      inspectionId:outcome.inspectionId,result:outcome.result,
+      findingsCount:outcome.findingsCount,criticalFindings:outcome.criticalFindings,
+      summary:outcome.summary
+    }).subscribe({
+      next:response=>{
+        this.centralBusy=false;
+        this.centralCase=response.case;
+        // Existing preview consumers remain compatible; Oracle is authoritative.
+        this.caseState.setInspectionOutcome(this.vessel.imo,outcome);
+        this.existingOutcome=outcome;
+        this.submitted=true;
+      },
+      error:error=>{
+        this.centralBusy=false;
+        this.centralError=this.cases.readableError(error,this.lang.isArabic);
+      }
+    });
   }
 
   returnToCase(): void {
@@ -195,7 +271,7 @@ export class NmcSmartInspectionComponent implements OnInit {
   }
 
   private buildChecklist(): void {
-    const level = this.riskEngine.levelForScore(this.vessel.risk);
+    const level = this.riskEngine.levelForScore(this.incomingRisk);
     const critical = level === 'Critical';
     const high = level === 'Critical' || level === 'High';
 

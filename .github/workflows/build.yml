@@ -2,9 +2,10 @@ name: Angular Build
 
 on:
   push:
-    branches: [main]
+    branches: [main, 'feature/nmc-*', 'feature/si-*', 'feature/moei-*']
+  workflow_dispatch:
   pull_request:
-    branches: [main]
+    branches: [main, feature/smart-inspection-poc, 'feature/nmc-*', 'feature/si-*', 'feature/moei-*']
 
 jobs:
   build:
@@ -21,5 +22,140 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      - name: Verify deterministic Docker fleet-evidence build
+        # Uses the same adapter command that failed inside the ai-proxy Docker image.
+        # Runs offline: no Oracle, Airia or backend service required.
+        run: node ./ai-proxy/build-fleet-evidence.mjs
+
+      - name: Validate MOEI platform menu and settings routes
+        run: node --test scripts/test-moei-navigation.mjs
+
+      - name: NMC Command Center incident filter regression
+        run: node --test scripts/test-nmc-command-incident-filters.mjs
+      - name: NMC alert badge / active KPI parity regression
+        run: node --test scripts/test-nmc-alert-badge-parity.mjs
+      - name: Vessel 360 A03 retirement and tabs regression
+        run: node --test scripts/test-nmc-v360-a03-retired-regression.mjs
+      - name: Unified operations dashboard AI-focus regression
+        run: |
+          node --test scripts/test-nmc-unified-kpi-ui.mjs
+          node --test ai-proxy/test/nmc-dashboard-focus.test.mjs
+      - name: Unified Smart Inspection candidates one-grid regression
+        run: node --test scripts/test-si-unified-candidate-grid.mjs
+
+      - name: MOEI single Admin login and UI regression
+        run: node --test scripts/test-moei-admin-login-ui.mjs
+
+      - name: SI-C01 visible access regression
+        run: node --test scripts/test-si-c01-visible-access.mjs
+
+      - name: Smart Inspection guided plan and reason regression
+        run: node --test scripts/test-si-plan-stepper.mjs
+
+      - name: Smart Inspection independent factor percentages regression
+        run: node --test scripts/test-si-plan-factor-quotas.mjs
+
+      - name: SI-02 preparation case list and deep-link regression
+        run: node --test scripts/test-si02-preparation-route.mjs
+
+      - name: SI-09 management read-model regression
+        run: node --test ai-proxy/test/si-management-report.test.mjs
+
+      - name: Seafarer readiness, company clearance, source webhooks and SDB journey
+        run: node --test ai-proxy/test/seafarer-workspace.test.mjs ai-proxy/test/seafarer-http.test.mjs
+
       - name: Build
         run: npm run build
+
+  dashboard-backend:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install backend dependencies
+        run: npm --prefix ai-proxy install --no-audit --no-fund
+
+      - name: Unified SI inspection-plan persistence and priority regressions
+        run: node --test ai-proxy/test/si-inspection-plan.test.mjs
+
+      - name: SI capacity-first source quotas and complete vessel dossier regressions
+        run: node --test ai-proxy/test/si-integrated-capacity-plan.test.mjs ai-proxy/test/si-capacity-exception-alternatives.test.mjs ai-proxy/test/si-integrated-capacity-atomic.test.mjs ai-proxy/test/si-vessel-dossier.test.mjs
+
+      - name: Unified MOEI Admin session security regression
+        run: node --test ai-proxy/test/moei-poc-auth.test.mjs
+      - name: Google SSO allowlist, PKCE and verified-token security tests
+        run: node --test ai-proxy/test/moei-google-sso.test.mjs
+
+      - name: Oracle 018 adapter migration readiness, audit and lifecycle
+        run: node --test ai-proxy/test/si-rolling-oracle.test.mjs
+
+      - name: SI-C01 configured pool B policy and verified vessel selection
+        run: node --test ai-proxy/test/si-configured-c01-selection.test.mjs
+      - name: SI-C01 UAT policy preview publication and mock plan lifecycle
+        run: node --test ai-proxy/test/si-c01-policy-lifecycle-uat.test.mjs
+      - name: SI-C01 bounded 112-path POC data and small plan
+        run: node --test ai-proxy/test/si-poc-small-plan-policy.test.mjs
+      - name: Assigned inspector POC identity, source dossier and guided A04 step regression
+        run: node --test ai-proxy/test/si-inspector-guided-work-orders.test.mjs
+
+      - name: SI-01 rolling to SI-02 approval and day-two cycle end-to-end
+        run: node --test ai-proxy/test/si-rolling-endtoend.test.mjs
+
+      - name: SI-01 rolling plan independent Oracle/JSON lifecycle and versions
+        run: node --test ai-proxy/test/si-rolling-plans.test.mjs
+
+      - name: SI-01 bulk plan approval orchestration regression
+        run: node --test ai-proxy/test/si-bulk-inspection-plan.test.mjs
+
+      - name: Central AI governance and Airia credential regression
+        run: node --test ai-proxy/test/ai-governance-centralized.test.mjs
+      - name: Airia DQ and Smart Inspection workflow contract boundary tests
+        run: node --test ai-proxy/test/nmc-airia-data-quality.test.mjs ai-proxy/test/si-airia-workflow-advisors.test.mjs
+
+      - name: NMC + SI Oracle schema reconciliation and Checklist API router regression
+        run: node --test ai-proxy/test/schema-reconcile.test.mjs
+
+      - name: Oracle checklist persistence and fail-closed JSON migration tests
+        run: node --test ai-proxy/test/si-checklist-oracle.test.mjs
+
+      - name: Dynamic maritime checklists and Airia assistant regression
+        run: node --test ai-proxy/test/si-checklist-dynamic.test.mjs
+
+      - name: SI-02 persistent preparation registry tests
+        run: node --test ai-proxy/test/si-preparation-queue.test.mjs
+
+      - name: SI AI MOCK contract regressions (C01/P01/A04)
+        run: node --test ai-proxy/test/si-agent-mock.test.mjs
+
+      - name: Check backend JavaScript syntax
+        run: npm --prefix ai-proxy run check
+
+      - name: Dashboard workspace regression tests
+        run: npm --prefix ai-proxy test
+
+  windows-si-json-regression:
+    name: Windows Node 24 PSC JSON persistence
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node 24 (POC workstation parity)
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install backend dependencies
+        run: npm --prefix ai-proxy install --no-audit --no-fund
+      - name: Windows atomic write, PSC selection, candidate tests (3 successive runs)
+        shell: pwsh
+        run: |
+          1..3 | ForEach-Object {
+            Write-Host "PSC Windows retry regression run $_ / 3"
+            node --test ai-proxy/test/atomic-json-store.test.mjs ai-proxy/test/si-psc-selection.test.mjs ai-proxy/test/si-candidate-targeting.test.mjs
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }

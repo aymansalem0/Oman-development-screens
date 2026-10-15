@@ -1,0 +1,314 @@
+<div class="si-layout" [attr.dir]="lang.dir">
+  <app-nmc-navigation></app-nmc-navigation>
+  <main class="prep-main">
+    <header class="prep-hero">
+      <div><small>{{copy("MOEI · SMART INSPECTION · STEPS 05–08","وزارة الطاقة والبنية التحتية · المعاينة الذكية · المراحل ٠٥–٠٨")}}</small>
+        <h1>{{copy("Inspection Preparation & AI Dossier","تحضير المعاينة وملف الذكاء الاصطناعي")}}</h1>
+        <p>{{copy('Approved case → Evidence review → Explicit A04 → Supervisor validation','حالة معتمدة ← مراجعة الأدلة ← تشغيل A04 بعد موافقة ← اعتماد المشرف')}}</p>
+      </div>
+      <div class="hero-actions">
+        <a routerLink="/moei/smart-inspection/candidates">{{copy("← Candidate Center","← مركز مرشحي المعاينة")}}</a>
+        <a [routerLink]="['/moei/smart-inspection/lifecycle',id]">{{copy('Continue Full Inspection Cycle →','استكمال دورة المعاينة الكاملة ←')}}</a>
+        <a [routerLink]="['/moei/smart-inspection/checklists',id]">
+          {{copy('Dynamic Checklists & AI Assistant','قوائم المعاينة الديناميكية ومساعد AI')}}
+        </a>
+        <button (click)="load()" [disabled]="busy||loading">{{copy("↻ Refresh","↻ تحديث")}}</button>
+      </div>
+    </header>
+    <div class="notice error" *ngIf="error" role="alert">{{error}}</div>
+    <div class="notice success" *ngIf="success" role="status">{{success}}</div>
+    <div class="notice" *ngIf="loading">{{copy("Loading approved case and current NMC references…","جارٍ تحميل الحالة المعتمدة ومراجع المركز البحري…")}}</div>
+    <div class="notice" *ngIf="!loading&&!data&&error">
+      <a routerLink="/moei/smart-inspection/preparation">
+        {{copy('← Back to approved inspection cases','← العودة إلى حالات المعاينة المعتمدة')}}
+      </a>
+    </div>
+    <div class="notice" *ngIf="!loading&&data&&!saved">
+      {{copy('This case is approved, but no preparation snapshot or AI dossier has been saved yet. Review the vessel evidence and use Prepare Case before requesting A04.',
+        'الحالة معتمدة، لكن لم يتم حفظ تحضير أو ملف ذكاء اصطناعي بعد. راجع أدلة السفينة ثم اختر تحضير الحالة قبل طلب A04.')}}
+    </div>
+    <div class="notice" *ngIf="busy">{{copy("Saving decision or requesting explicitly authorized A04…","جارٍ حفظ القرار أو طلب تشغيل A04 بعد اعتماد صريح…")}}</div>
+
+    <section class="panel access">
+      <header><h2>{{copy("Approved Inspection Case","حالة المعاينة المعتمدة")}}</h2><p>{{copy("Access is authorised by your unified Admin session. No repeated Editor or Publisher keys.",
+ "يتم التحقق من الصلاحيات بواسطة جلسة المدير الموحدة دون إدخال مفاتيح في كل شاشة.")}}</p></header>
+      <div class="form-grid">
+        
+        
+        
+        <div class="load-action">
+          <strong *ngIf="id" class="access-case">{{copy('Case ID','معرّف الحالة')}}: {{id}}</strong>
+          <button class="primary" type="button" (click)="load()" [disabled]="busy||loading">
+            {{copy("Refresh Approved Case","تحديث بيانات الحالة")}}
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel full-dossier" *ngIf="fullDossier as file">
+     <header>
+      <h2>{{copy('Complete AI-Ready Vessel Inspection Dossier',
+       'الدوسيه المتكامل للسفينة — جاهز للتحليل بالذكاء الاصطناعي')}}</h2>
+      <p>{{copy('Source-backed file combining vessel identity, all referrals, saved risk, inspection history, certificates, assignment, mandatory checklist and optional A04 assessment. Read-only: no AI call occurs when opening this file.',
+       'ملف موحد من هوية السفينة وإحالات المعاينة والمخاطر المحفوظة والتفتيشات السابقة والشهادات وتكليف المهندس وقائمة المعاينة ونتيجة A04 الاختيارية. فتح الملف للقراءة فقط ولا يشغّل AI.')}}</p>
+     </header>
+     <div class="dossier-grid">
+      <article><small>IMO</small><strong>{{file.imo}}</strong>
+       <span>{{file.sections.identity.vesselName||'—'}} · {{file.sections.identity.flag||'—'}}</span></article>
+      <article><small>{{copy('Preparation','التحضير')}}</small>
+       <strong>{{file.readiness.preparationSaved?copy('Prepared','تم التحضير'):
+        copy('Pending','لم يبدأ')}}</strong>
+       <span>{{copy('Revision','الإصدار')}}: {{file.revision}}</span></article>
+      <article><small>{{copy('AI A04','الذكاء الاصطناعي A04')}}</small>
+       <strong>{{file.sections.aiAnalysis.status}}</strong>
+       <span>{{file.readiness.aiReviewed?copy('Reviewed by supervisor','راجعها المشرف'):
+        copy('Supervisor review pending','مراجعة المشرف مطلوبة')}}</span></article>
+      <article><small>{{copy('Evidence gaps','النواقص')}}</small>
+       <strong>{{file.missingEvidence.length}}</strong>
+       <span>{{copy('Explicitly disclosed','معلنة وليست بيانات مختلقة')}}</span></article>
+     </div>
+     <div class="dossier-group" *ngIf="file.sections.assignments as order">
+      <h3>{{copy('Assigned inspector and visit','المهندس المكلف وموعد المعاينة')}}</h3>
+      <div class="dossier-grid">
+       <article><small>{{copy('Inspector','المهندس')}}</small>
+        <strong>{{order.inspectorName||'—'}}</strong></article>
+       <article><small>{{copy('Port','الميناء')}}</small>
+        <strong>{{order.portName||'—'}}</strong></article>
+       <article><small>{{copy('Start / End','بداية ونهاية المعاينة')}}</small>
+        <strong>{{order.startLocal||'—'}}</strong>
+        <span>{{order.endLocal||'—'}}</span></article>
+       <article><small>{{copy('Work order','أمر التكليف')}}</small>
+        <strong>{{order.status}}</strong><span>{{order.orderId}}</span></article>
+      </div>
+     </div>
+     <div class="dossier-group">
+      <h3>{{copy('Source evidence and regulatory inspection reasons',
+       'الأدلة وأسباب المعاينة النظامية')}}</h3>
+      <div class="dossier-evidence" *ngFor="let ref of file.sections.referrals.allSourceReasons">
+       <strong>{{ref.sourceType}} · {{ref.inspectionRegime}}</strong>
+       <span>{{ref.sourceReference||ref.eventKey}}</span>
+       <p>{{ref.narrative||copy('No source narrative supplied','لا يوجد وصف من المصدر')}}</p>
+       <small>{{copy('Evidence IDs','معرفات الأدلة')}}: {{ref.evidenceIds.join(' · ')||'—'}}</small>
+      </div>
+     </div>
+     <div class="dossier-group">
+      <h3>{{copy('Saved NMC risk, certificates and inspection history',
+       'مخاطر NMC المحفوظة والشهادات وسجل المعاينات')}}</h3>
+      <p *ngIf="file.sections.risk as risk"><b>{{risk.level}} · {{risk.score}}/100</b>
+       · {{copy('Assessment reference','مرجع التقييم')}}: {{risk.evaluationId}}</p>
+      <p *ngIf="!file.sections.risk" class="notice error">
+       {{copy('No saved current risk. A04 cannot invent a score.',
+        'لا يوجد تقييم مخاطر حالي محفوظ، ولا يستطيع A04 اختلاق درجة للمخاطر.')}}</p>
+      <div class="dossier-grid">
+       <article><small>{{copy('Certificates from source','الشهادات من المصدر')}}</small>
+        <strong>{{file.sections.sourceEvidence.certificates.length}}</strong>
+        <details *ngIf="file.sections.sourceEvidence.certificates.length">
+         <summary>{{copy('Show details','عرض التفاصيل')}}</summary>
+         <pre *ngFor="let cert of file.sections.sourceEvidence.certificates">{{cert|json}}</pre>
+        </details></article>
+       <article><small>{{copy('Historical inspections','سجل المعاينات السابقة')}}</small>
+        <strong>{{file.sections.sourceEvidence.inspectionHistory.length}}</strong>
+        <details *ngIf="file.sections.sourceEvidence.inspectionHistory.length">
+         <summary>{{copy('Show details','عرض التفاصيل')}}</summary>
+         <pre *ngFor="let item of file.sections.sourceEvidence.inspectionHistory">{{item|json}}</pre>
+        </details></article>
+       <article><small>{{copy('Open findings','الملاحظات المفتوحة')}}</small>
+        <strong>{{file.sections.sourceEvidence.openDeficiencies.length}}</strong>
+        <details *ngIf="file.sections.sourceEvidence.openDeficiencies.length">
+         <summary>{{copy('Show details','عرض التفاصيل')}}</summary>
+         <div *ngFor="let item of file.sections.sourceEvidence.openDeficiencies">
+          {{item.id}} · {{item.description||'—'}} · {{item.status}}</div>
+        </details></article>
+       <article><small>{{copy('Reviewed external documents','المستندات الخارجية المراجعة')}}</small>
+        <strong>{{file.sections.sourceEvidence.documents.length}}</strong>
+        <span>{{file.sections.sourceEvidence.externalDocumentsVerified?
+          copy('Authenticity verified','تم التحقق من الأصالة'):
+          copy('Authenticity not verified','لم يتم التحقق من الأصالة')}}</span>
+       </article>
+      </div>
+     </div>
+     <div class="dossier-group">
+      <h3>{{copy('Mandatory inspection checklist','قائمة المعاينة الإلزامية')}}</h3>
+      <p>{{file.sections.inspectionChecklist.mandatoryBaseItemIds.length}}
+       {{copy('base item categories','مجموعات بنود أساسية')}} ·
+       {{file.sections.inspectionChecklist.checklistStatus||
+        copy('Pending order activation','في انتظار تفعيل الأمر')}}</p>
+      <div class="dossier-chips"><span *ngFor="let check of file.sections.inspectionChecklist.mandatoryBaseItemIds">
+       {{itemLabel(check)}}</span></div>
+      <p class="hint">{{copy('A04 proposals cannot delete the mandatory checklist or become confirmed deficiencies without inspection and human review.',
+       'مقترحات A04 لا تحذف البنود الإلزامية ولا تتحول إلى مخالفات مؤكدة دون المعاينة والمراجعة البشرية.')}}</p>
+     </div>
+     <div class="dossier-group">
+      <h3>{{copy('AI A04 dossier and supervisor approval','تحليل A04 واعتماد المشرف')}}</h3>
+      <p><strong>{{file.sections.aiAnalysis.status}}</strong> ·
+       {{file.sections.aiAnalysis.provider||'—'}}</p>
+      <p *ngIf="file.sections.aiAnalysis.mock" class="notice">
+       {{copy('POC MOCK output, not a real Airia model assessment.',
+        'نتيجة POC تجريبية وليست تحليلًا صادرًا من نموذج Airia فعلي.')}}</p>
+      <p *ngIf="file.sections.aiAnalysis.modelDraft as draft">
+       {{copy('Focus areas','مجالات التركيز')}}: {{draft.focusAreas.length}} ·
+       {{copy('Suggested extra items','البنود المقترحة')}}: {{draft.suggestedAdditionalItems.length}} ·
+       {{copy('Evidence gaps','نواقص الأدلة')}}: {{draft.missingEvidence.length}}
+      </p>
+      <p *ngIf="!file.readiness.aiGenerated" class="notice">
+       {{copy('Use the explicit A04 action below after the deterministic case preparation is saved. AI is not executed on dossier loading.',
+        'استخدم زر A04 أدناه بعد حفظ التحضير. لا يتم تشغيل الذكاء الاصطناعي بمجرد فتح الملف.')}}</p>
+     </div>
+     <div class="dossier-group" *ngIf="file.missingEvidence.length">
+      <h3>{{copy('Missing evidence / action required','الأدلة الناقصة والإجراءات المطلوبة')}}</h3>
+      <div *ngFor="let gap of file.missingEvidence" class="dossier-gap">{{gap}}</div>
+     </div>
+     <p class="hint">{{copy('This read model never authorizes a regulatory inspection, confirms a live ERP booking or implies that unverified documents are authentic.',
+      'هذا الملف لا يصدر اعتمادًا تنظيميًا، ولا يثبت حجز ERP رسميًا، ولا يؤكد أصالة مستندات لم يتم التحقق منها.')}}</p>
+    </section>
+    <p class="notice" *ngIf="dossierLoading">{{copy('Assembling vessel dossier…',
+      'جارٍ تجميع الدوسيه…')}}</p>
+    <p class="notice error" *ngIf="fullDossierError" role="alert">{{fullDossierError}}</p>
+
+    <ng-container *ngIf="data as d">
+      <div class="stats">
+        <article><small>{{copy("INSPECTION / IMO","المعاينة / IMO")}}</small><strong>{{d.context.imo}}</strong><span>{{d.context.vessel.name}} · {{d.context.vessel.flag}}</span></article>
+        <article><small>{{copy("PREPARATION STATUS","حالة التحضير")}}</small><strong [class.warn]="d.stale">{{statusLabel(d.saved?.status)}}</strong><span>{{copy('Revision','مراجعة')}} {{d.saved?.version||0}}</span></article>
+        <article><small>{{copy("CURRENT NMC RISK","مخاطر المركز البحري الحالية")}}</small><strong *ngIf="d.context.risk as risk">{{risk.score}} / 100</strong><strong *ngIf="!d.context.risk" class="warn">{{copy("NO SAVED RISK","لا يوجد تقييم محفوظ")}}</strong><span>{{d.context.risk?.level?statusLabel(d.context.risk?.level):copy('Review only','للمراجعة فقط')}} · v{{d.context.risk?.policyRevision||'—'}}</span></article>
+        <article><small>{{copy("A04 PROVIDER ACCESS","حالة تشغيل وكيل A04")}}</small><strong>{{d.a04Enabled?(d.a04Provider==='MOCK'?copy('MOCK · NO AIRIA','تجريبي · دون Airia'):copy('AIRIA · ENABLED','Airia · مفعّل')):copy('DISABLED','غير مفعّل')}}</strong><span>{{copy("No AI on GET, prepare or review","لا يستدعى AI أثناء العرض أو التحضير أو المراجعة")}}</span></article>
+      </div>
+      <div class="notice error" *ngIf="d.stale">
+        {{copy("Source evidence or active NMC risk has changed since this preparation. Refresh preparation explicitly before any A04 or approval.","تغيرت أدلة المصدر أو تقييم المخاطر منذ التحضير. حدّث التحضير صراحة قبل تشغيل A04 أو الاعتماد.")}}
+      </div>
+      <div class="notice" *ngIf="!d.context.risk">{{copy("No current saved A01/A02 assessment. Deterministic preparation is possible, but A04 is blocked until a valid NMC risk projection exists.","لا يوجد تقييم A01/A02 حالي محفوظ. يمكن التحضير وفق القواعد، لكن يُمنع تشغيل A04 حتى توفر تقييم مخاطر صالح.")}}</div>
+      <div class="notice" *ngIf="!d.a04Enabled">
+        {{copy("A04 is opt-in: configure AIRIA_MENA_KEY and SI_A04_ENABLED=true on the server only after approving potential usage costs and confirming the actual A04 output schema. No mock dossier is presented as an Airia result.","تشغيل A04 اختياري. يجب إعداد AIRIA_MENA_KEY وSI_A04_ENABLED=true بالخادم بعد الموافقة على تكلفة الاستخدام والتحقق من شكل الاستجابة. لا تُعرض نتائج تجريبية على أنها نتيجة Airia.")}}
+      </div>
+
+      <section class="panel" *ngIf="d.context.inspectionReasons?.length">
+        <header>
+          <h2>{{copy('01 · All Reasons for Inspection','٠١ · جميع أسباب المعاينة')}}</h2>
+          <p>{{copy('All linked source referrals are preserved; the case never selects one reason and loses another.',
+            'كل الإحالات المسببة للمعاينة محفوظة؛ لا يتم اختيار سبب وإسقاط سبب آخر.')}}</p>
+        </header>
+        <div class="context-grid">
+          <div><small>{{copy('Approved plan','الخطة المعتمدة')}}</small>
+            <strong>{{d.context.approvedPlanId||'—'}}</strong></div>
+          <div><small>{{copy('Source reasons','أسباب الإحالة')}}</small>
+            <strong>{{d.context.inspectionReasons?.length||0}}</strong></div>
+          <div><small>{{copy('Inspection scopes','نطاقات المعاينة')}}</small>
+            <strong>{{d.context.inspectionScopes?.length||0}}</strong></div>
+        </div>
+        <div class="evidence-panel" *ngFor="let source of d.context.inspectionReasons">
+          <div class="info">
+            <strong>{{source.sourceType}} · {{source.inspectionRegime}}</strong>
+            <span>{{copy('Source reference','مرجع المصدر')}}: {{source.sourceReference}}</span>
+          </div>
+          <p *ngIf="source.reason">{{source.reason}}</p>
+          <p class="muted" *ngIf="!source.reason">
+            {{copy('No narrative was supplied by the original source; its reference and evidence are retained.',
+              'لم يرد وصف من المصدر الأصلي؛ تم الاحتفاظ بالمرجع والأدلة المتاحة.')}}</p>
+          <div class="evidence-chips"><code *ngFor="let ev of source.evidenceIds">{{ev}}</code></div>
+        </div>
+        <div class="evidence-panel">
+          <h3>{{copy('Source-based field inspection objectives','أهداف الفحص الميداني المستمدة من كل إحالة')}}</h3>
+          <div *ngFor="let objective of d.context.sourceInspectionObjectives" class="info">
+            <strong>{{objective.inspectionRegime}} · {{objective.sourceType}}</strong>
+            <span>{{objective.inspectionReason||
+              copy('Inspect the cited referral with supporting source evidence',
+                'التحقق من الإحالة والوثائق المرتبطة بها')}}</span>
+            <code>{{objective.objectiveId}}</code>
+          </div>
+        </div>
+        <p class="hint">{{copy('Distinct statutory requirements remain traceable and are not silently combined into an authorization.',
+          'تبقى المتطلبات النظامية المستقلة واضحة ولا يتم دمجها تلقائياً في تصريح تنظيمي واحد.')}}</p>
+      </section>
+
+      <section class="panel">
+        <header><h2>{{copy("02 · Approved Case & Evidence Manifest","٠٢ · الحالة المعتمدة وقائمة الأدلة")}}</h2><p>{{copy("The dossier is tied to this exact SI inspection case and saved NMC source assessment.","يرتبط الملف بحالة المعاينة هذه وتقييم المصدر المحفوظ في المركز البحري.")}}</p></header>
+        <div class="context-grid">
+          <div><small>{{copy("SI Inspection Case","حالة المعاينة الذكية")}}</small><strong>{{d.inspectionCase.id}}</strong></div>
+          <div><small>{{copy("Regime","نظام المعاينة")}}</small><strong>{{d.context.targetRegime}}</strong></div>
+          <div><small>{{copy("Human-approved by","اعتمدها")}}</small><strong>{{d.context.createdCaseApprovedBy}}</strong></div>
+          <div><small>{{copy("Risk source assessment","التقييم المصدر للمخاطر")}}</small><strong>{{d.context.sourceAssessmentId||copy('NOT ASSESSED','لم تُقيّم')}}</strong></div>
+          <div><small>{{copy("Targeting policy version","إصدار سياسة الاستهداف")}}</small><strong>{{d.context.targetingPolicyVersion}}</strong></div>
+          <div><small>{{copy("Evidence bundle","حزمة الأدلة")}}</small><strong>{{d.context.bundleRef}}</strong></div>
+        </div>
+        <div class="evidence-panel">
+          <div class="info"><strong>{{d.context.evidenceManifestRefs.length}} {{copy('referenced evidence IDs','معرف دليل مشار إليه')}}</strong><span>{{copy('Source: synthetic NMC vessel bundle','المصدر: حزمة بيانات السفينة التجريبية من المركز البحري')}} · {{d.context.externalDocumentsVerified?copy('Verified external documents','مستندات خارجية موثّقة'):copy('NO authenticated external document PDFs','لا توجد نسخ مستندات خارجية موثّقة')}}</span></div>
+          <div class="evidence-chips"><code *ngFor="let ev of d.context.evidenceManifestRefs">{{ev}}</code></div>
+          <div><h3>{{copy("Open finding references","مراجع الملاحظات المفتوحة")}}</h3>
+            <span class="muted" *ngIf="!d.context.openFindingRefs.length">{{copy("None asserted in the current source bundle","لا توجد مراجع مؤكدة في حزمة المصدر الحالية")}}</span>
+            <code *ngFor="let ref of d.context.openFindingRefs" class="inline-code">{{ref}}</code></div>
+        </div>
+        <button class="primary" (click)="prepare()" [disabled]="busy||loading||d.saved?.status==='APPROVED'||d.saved?.status==='GENERATING'">
+          {{d.saved?copy('Refresh Preparation Snapshot','تحديث بيانات التحضير'):copy('Prepare Case — No AI Call','تحضير الحالة دون تشغيل AI')}}
+        </button>
+        <p class="hint">{{copy("Preparation snapshots evidence, current central risk and mandatory checklist IDs; it never changes NMC risk or invokes Airia.","يحفظ التحضير لقطة من الأدلة والمخاطر الحالية وبنود المعاينة الإلزامية دون تغيير التقييم أو استدعاء Airia.")}}</p>
+      </section>
+
+      <section class="panel">
+        <header><h2>{{copy("03 · Mandatory Base Checklist","٠٣ · قائمة المعاينة الإلزامية")}}</h2><p>{{copy("Exactly the same eight POC checklist identifiers used by the existing Smart Inspection workbench. A04 cannot delete or replace a check.","نفس البنود الأساسية الثمانية المستخدمة في منصة المعاينة. لا يستطيع A04 حذف أي بند أو استبداله.")}}</p></header>
+        <div class="checklist-grid">
+          <div *ngFor="let id of d.context.baseChecklistItemIds;let index=index" class="check">
+            <span class="check-index">{{index+1|number:'2.0-0'}}</span>
+            <div><strong>{{itemLabel(id)}}</strong><small>{{id}}</small></div>
+            <span class="check-status" [class.focus]="countFocus(id)!=='BASE'">{{countFocus(id)}}</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <header><h2>{{copy("04 · On-Demand A04 Smart Inspection","٠٤ · تشغيل المعاينة الذكية A04 عند الطلب")}}</h2><p>{{copy("Generates a","ينشئ")}} <b>{{copy("focus overlay and missing-evidence suggestions only","اقتراحات لمجالات التركيز والأدلة الناقصة فقط")}}</b>{{copy('. No automatic additions to approved inspection scope.','. لا تُضاف بنود تلقائيًا إلى نطاق المعاينة المعتمد.')}}</p></header>
+        <div class="form-grid small-grid">
+          <label>{{copy("Requested response language","لغة الاستجابة المطلوبة")}}<select [(ngModel)]="language"><option value="en">{{copy("English","الإنجليزية")}}</option><option value="ar">العربية</option></select></label>
+          <div class="load-action"><button class="primary" (click)="generate()" [disabled]="!canGenerate">
+            {{copy("Generate AI Pre-Inspection Dossier (A04)","إنشاء ملف التحضير بالذكاء الاصطناعي (A04)")}}
+          </button></div>
+        </div>
+        <p class="hint">{{d.a04Provider==='MOCK'?
+          copy('MOCK MODE: fixed response from backend, 0 Airia calls. Requires saved NMC risk, existing evidence and human dossier approval.',
+               'وضع تجريبي: استجابة ثابتة من الخادم دون استدعاء Airia. يلزم تقييم وأدلة محفوظة واعتماد المشرف.'):
+          copy('AIRIA MODE: model call may be billable. Explicit confirmation and current evidence are required.',
+               'وضع Airia: قد يترتب عليه تكلفة ويحتاج تأكيداً صريحاً وأدلة حالية.')}}</p>
+        <div *ngIf="d.saved?.status==='GENERATING'" class="notice">{{copy("A04 request started and locked. Refresh later; do not retry blindly.","بدأ طلب A04 وتم قفله. حدّث لاحقًا ولا تعاود الإرسال دون التحقق.")}}</div>
+        <div *ngIf="d.saved?.status==='FAILED'" class="notice error">{{copy('A04 validation or provider failed','فشل التحقق من A04 أو الاتصال بالمزوّد')}}: {{d.saved?.lastFailure}}. {{copy('No dossier was fabricated. Explicit retry required.','لم يتم اختلاق ملف أو بيانات، ويلزم إعادة طلب صريحة.')}}</div>
+      </section>
+
+      <section class="panel" *ngIf="d.saved?.dossier as ai">
+        <header><h2>{{copy("05 · AI Dossier — Human Review Required","٠٥ · ملف AI — مطلوب اعتماد بشري")}}</h2>
+          <p>{{copy("AI suggestions are NOT inspection findings, statutory rule decisions, or confirmed evidence. Approval records acceptance of an advisory overlay only.","توصيات الذكاء الاصطناعي ليست نتائج معاينة ولا قرارات تنظيمية ولا أدلة مؤكدة. الاعتماد يخص الإرشادات المقترحة فقط.")}}</p></header>
+        <div class="meta">
+          <span>{{copy('Agent','الوكيل')}} A04 · {{ai.source}}</span>
+          <span>{{copy('Confidence','مستوى الثقة')}} {{ai.agentConfidence|percent:'1.0-1'}}</span>
+          <span>{{copy('Generated','وقت الإنشاء')}} {{ai.generatedAt|date:'medium'}}</span>
+          <span>{{copy('Correlation','مرجع التتبع')}} {{short(ai.requestCorrelationId)}}</span>
+        </div>
+        <h3>{{copy('Focus Areas','مجالات التركيز')}} ({{ai.focusAreas.length}})</h3>
+        <div class="focus-grid">
+          <div class="focus-card" *ngFor="let f of ai.focusAreas">
+            <div><strong>{{f.category}}</strong><span>{{f.priority}}</span></div>
+            <p>{{f.reason}}</p>
+            <small>{{copy('Evidence','الأدلة')}}: {{f.evidenceIds.join(' · ')}}</small>
+          </div>
+          <p class="muted" *ngIf="!ai.focusAreas.length">{{copy("No focus areas returned. The mandatory checklist still applies.","لم يُعد أي مجال للتركيز، وتظل قائمة المعاينة الإلزامية سارية.")}}</p>
+        </div>
+        <h3>{{copy("Existing checklist focus overlay","مجالات التركيز على البنود الحالية")}}</h3>
+        <div class="focus-line" *ngFor="let c of ai.checklistFocus">
+          <strong>{{itemLabel(c.existingItemId)}}</strong><span>{{c.focus}}</span><small>{{c.reason}}</small>
+          <small *ngIf="c.reasonEvidenceIds.length">{{copy('Evidence','الأدلة')}}: {{c.reasonEvidenceIds.join(' · ')}}</small>
+        </div>
+        <h3>{{copy("Predicted deficiency hypotheses (never confirmed)","فرضيات المخالفات المتوقعة (غير مؤكدة)")}}</h3>
+        <div class="focus-line" *ngFor="let p of ai.predictedDeficiencies">
+          <strong>{{p.category}}</strong><span>{{copy("HYPOTHESIS ONLY","فرضية فقط")}}</span><small>{{p.evidenceIds.join(' · ')}}</small>
+        </div>
+        <p *ngIf="!ai.predictedDeficiencies.length" class="muted">{{copy("No predictions returned.","لم تُعد توقعات.")}}</p>
+        <h3>{{copy("Evidence gaps","نواقص الأدلة")}}</h3>
+        <p class="missing" *ngFor="let gap of ai.missingEvidence">{{gap}}</p>
+        <p *ngIf="!ai.missingEvidence.length" class="muted">{{copy("No missing-evidence suggestions returned; external verification status remains unchanged.","لا توجد نواقص مقترحة؛ وحالة التحقق من المصدر الخارجي لم تتغير.")}}</p>
+        <p *ngIf="ai.suggestedAdditionalItems.length" class="notice">{{copy('Suggested additional checks (advisory only)','فحوص إضافية مقترحة (استشارية فقط)')}}: {{ai.suggestedAdditionalItems.length}}. {{copy('No items are automatically added to the mandatory checklist.','لا تُضاف بنود تلقائيًا إلى قائمة المعاينة الإلزامية.')}}</p>
+        <div class="review-bar" *ngIf="d.saved?.status==='DRAFT_REVIEW'">
+          <label>{{copy("Supervisor decision","قرار المشرف")}}<select [(ngModel)]="reviewDecision"><option value="APPROVE">{{copy("Approve advisory overlay","اعتماد الإرشادات المقترحة")}}</option><option value="REJECT">{{copy("Reject AI dossier","رفض ملف AI")}}</option></select></label>
+          <label>{{copy("Decision justification","مبررات القرار")}}<input [(ngModel)]="reason" [placeholder]="copy('Document the business reason (8+ characters)','وثّق سبب القرار (٨ أحرف على الأقل)')" maxlength="500"/></label>
+          <button class="primary" (click)="review()" [disabled]="busy||d.stale">{{copy("Save Supervisor Decision","حفظ قرار المشرف")}}</button>
+        </div>
+        <div *ngIf="d.saved?.review as r" class="notice success">{{copy('Recorded','تم تسجيل')}} {{statusLabel(r.decision)}} {{copy('by','بواسطة')}} {{r.actor}} · {{r.at|date:'medium'}} · {{r.reason}}</div>
+      </section>
+    </ng-container>
+  </main>
+</div>

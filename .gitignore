@@ -4,3 +4,13 @@
 /.vscode
 .DS_Store
 npm-debug.log*
+.env
+.env.*
+!.env.example
+/ai-proxy/node_modules
+
+# Local read-only Google service account secret. NEVER push credentials.
+/secrets/
+
+# Local/CI screenshots and temporary seafarer workflow fixtures
+/tmp/

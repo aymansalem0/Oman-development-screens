@@ -1,3 +1,4 @@
+import {AIRIA_OFFSHORE_CORRIDORS} from './airia-maritime-motion';
 export type RiskLevel = 'Critical' | 'High' | 'Watch' | 'Normal';
 export type RouteDirection = 1 | -1;
 
@@ -28,12 +29,14 @@ export interface NmcVesselProfile {
   lastUpdate: number;
   routeKey: string;
   segmentIndex: number;
+  routeProgress?: number;
   direction: RouteDirection;
   dataConfidence: number;
   riskConfidence: number;
 }
 
 export const SEA_ROUTES: Record<string, [number, number][]> = {
+  ...AIRIA_OFFSHORE_CORRIDORS,
   jebelAli: [[25.48,55.02],[25.36,55.05],[25.24,55.08],[25.13,55.08],[25.04,55.06],[24.99,55.04]],
   dubai: [[25.54,55.08],[25.45,55.13],[25.37,55.18],[25.31,55.22],[25.28,55.25]],
   sharjah: [[25.65,55.10],[25.56,55.15],[25.48,55.20],[25.41,55.25],[25.37,55.29]],

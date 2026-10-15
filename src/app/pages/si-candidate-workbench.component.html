@@ -1,0 +1,574 @@
+<div class="si-layout" [attr.dir]="lang.dir">
+  <app-nmc-navigation></app-nmc-navigation>
+  <main class="si-workbench">
+    <header class="si-hero si-compact-hero">
+      <div>
+        <small>{{copy('MOEI · SMART INSPECTION','وزارة الطاقة والبنية التحتية · المعاينة الذكية')}}</small>
+        <h1>{{copy('Inspection Candidate & Targeting','السفن المرشحة للمعاينة والاستهداف')}}</h1>
+        <p>{{copy('One candidate pool, independently numbered rolling plans; AI advice requires human approval.',
+          'قائمة مرشحين مستمرة وخطط معاينات مستقلة بأرقام وفترات تنفيذ؛ توصيات AI تتطلب اعتمادًا بشريًا.')}}</p>
+      </div>
+      <div class="hero-actions">
+        <a routerLink="/moei/smart-inspection/management">{{copy('Inspection Management','إدارة المعاينات')}}</a>
+        <a routerLink="/moei/smart-inspection/psc-targeting">{{copy('PSC Pool','قائمة PSC')}}</a>
+        <button type="button" (click)="refresh()" [disabled]="loading||busy||planBusy">
+          {{copy('↻ Refresh','↻ تحديث')}}</button>
+      </div>
+    </header>
+
+    <p *ngIf="error" class="notice error" role="alert">{{error}}</p>
+    <p *ngIf="success" class="notice success" role="status">{{success}}</p>
+    <p *ngIf="loading" class="notice">{{copy('Loading source-backed candidate vessels…','جارٍ تحميل السفن المرشحة من المصادر…')}}</p>
+
+
+    <section class="si-rolling-management">
+     <div class="si-rolling-top">
+       <div><p class="si-rolling-eyebrow">SMART INSPECTION · ROLLING PLANS</p>
+        <h2>{{copy('Inspection Planning Management','إدارة خطط المعاينات')}}</h2>
+        <p>{{copy('Create independent plans any day, including several per day. Approved cases remain untouched.',
+          'أنشئ خططًا مستقلة في أي وقت، بما فيها أكثر من خطة يوميًا، مع الحفاظ على المعاينات المعتمدة.')}}</p>
+       </div>
+       <button type="button" (click)="openCreatePlan()" [disabled]="planningBusy||!auth.isAdmin">
+         + {{copy('Create New Plan','إنشاء خطة جديدة')}}</button>
+     </div>
+     <p *ngIf="planningError" class="notice error" role="alert">{{planningError}}</p>
+     <div class="si-rolling-form" *ngIf="newPlanVisible">
+       <label>{{copy('Plan Name','اسم الخطة')}}<input [(ngModel)]="newPlan.title" maxlength="180"/></label>
+       <label>{{copy('Execution From','التنفيذ من')}}
+         <input type="date" [(ngModel)]="newPlan.startsOn"/></label>
+       <label>{{copy('Execution To','التنفيذ إلى')}}
+         <input type="date" [(ngModel)]="newPlan.endsOn"/></label>
+       <label class="si-rolling-notes">{{copy('Notes','ملاحظات')}}
+         <input [(ngModel)]="newPlan.notes" maxlength="1200"/></label>
+       <div class="si-rolling-actions">
+         <button type="button" (click)="createRollingPlan()" [disabled]="planningBusy">
+           {{copy('Save New Draft','حفظ المسودة')}}</button>
+         <button type="button" (click)="newPlanVisible=false">
+           {{copy('Back','رجوع')}}</button>
+       </div>
+     </div>
+     <p class="si-rolling-note" *ngIf="!rollingPlans.length">
+      {{copy('No plans yet. Create one to select and rank vessels.',
+        'لا توجد خطط بعد. أنشئ خطة جديدة لاختيار السفن وترتيبها.')}}
+     </p>
+     <div class="si-rolling-cards">
+       <article *ngFor="let p of rollingPlans" class="si-rolling-card"
+        [class.current]="activePlanId===p.id">
+         <div class="si-rolling-card-head"><strong>{{p.number}}</strong>
+           <span>{{p.status.replaceAll('_',' ')}}</span></div>
+         <h3>{{p.title}}</h3>
+         <p>{{p.startsOn}} → {{p.endsOn}} · {{p.vesselCount}} {{copy('selected','مختارة')}} / {{p.candidateCount||0}} {{copy('candidates','مرشحة')}} <span *ngIf="p.deferredCount"> · {{p.deferredCount}} {{copy('deferred','مؤجلة')}}</span></p>
+         <p>{{copy('Version','إصدار')}} {{p.revision}}</p>
+         <div class="si-rolling-actions">
+          <button type="button" (click)="openRollingPlan(p)" [disabled]="planBusy">
+           {{p.status==='DRAFT'||p.status==='READY_FOR_APPROVAL'?
+             copy('Open Plan','فتح الخطة'):copy('View Plan History','عرض سجل الخطة')}}</button>
+          <button type="button" *ngIf="p.status==='DRAFT'||p.status==='READY_FOR_APPROVAL'"
+             (click)="cancelRollingPlan(p)" [disabled]="planningBusy">
+           {{copy('Cancel Draft','إلغاء المسودة')}}</button>
+         </div>
+       </article>
+     </div>
+     <p *ngIf="activePlan as p" class="si-rolling-current">
+       {{copy('Selected plan','الخطة المختارة')}}: <strong>{{p.number}} · {{p.title}}</strong>
+       · {{p.status.replaceAll('_',' ')}} · {{p.startsOn}} → {{p.endsOn}}
+     </p>
+     <p *ngIf="!activePlanId" class="si-rolling-note">
+      {{copy('Choose a draft plan before running C01 or changing the inspection selection.',
+        'اختر خطة مسودة قبل تشغيل C01 أو تعديل قائمة الاختيار.')}}
+     </p>
+    </section>
+    <div class="si-rolling-current" *ngIf="plan&&!plan.readOnlyHistorical">
+       <strong>{{copy('Available for this plan','السفن المتاحة للخطة')}}: {{plan.availableCount||0}}</strong>
+       · {{copy('Included','مدرجة')}}: {{plan.selectedForPlan||0}}
+       · {{copy('Not selected / Carry forward','غير مختارة / تُراجع في خطة لاحقة')}}: {{plan.notSelectedCount||0}}
+       · {{copy('Deferred','مؤجلة')}}: {{plan.deferredCount||0}}
+       <small>{{copy('New draft shows eligible candidates before AI. Unselected vessels remain available for future plans.',
+         'المسودة تعرض السفن المؤهلة قبل تشغيل AI. السفن غير المختارة تظل متاحة للخطط القادمة.')}}</small>
+     </div>
+    <p class="si-rolling-note" *ngIf="plan?.readOnlyHistorical" role="status">
+      {{copy('Historical plan shown from its saved approval snapshot. Current source data may differ; this plan cannot be edited.',
+        'الخطة المعروضة محفوظة من وقت اعتمادها؛ قد تختلف بيانات المصادر الحالية، ولا يمكن تعديل هذه الخطة.')}}
+    </p>
+    <section class="si-psc-direct-summary" *ngIf="pscQuota as p" aria-label="PSC Excel quota">
+      <div class="si-psc-summary-title">
+        <div>
+          <strong>{{copy('PSC · Direct Excel Quota Selection','PSC · تطبيق الحصة مباشرة من Excel')}}</strong>
+          <p>{{copy('Published monthly quota automatically shortlists saved PSC port calls. SI-C01 then gives optional evidence-based advice when you explicitly run AI. Neither action approves an inspection.',
+            'تُطبق الحصة الشهرية المنشورة تلقائيًا على أحداث PSC المحفوظة، ثم يقدم SI-C01 توصياته المبنية على الأدلة عند تشغيل AI صراحةً. لا يعتمد أي منهما المعاينة رسميًا.')}}</p>
+        </div>
+        <div class="si-psc-summary-links">
+          <a routerLink="/moei/smart-inspection/settings/sources/psc-port-calls">
+            {{copy('Import PSC Excel','استيراد Excel PSC')}}</a>
+          <a routerLink="/moei/smart-inspection/settings/psc-quotas">
+            {{copy('Quota Rules','قواعد الحصة')}}</a>
+        </div>
+      </div>
+      <div class="si-psc-summary-numbers">
+        <span><strong>{{p.summary.eligiblePortCalls}}</strong>{{copy('Imported eligible Port Calls','أحداث وصول مؤهلة')}}</span>
+        <span><strong>{{p.summary.selectedPortCalls}}</strong>{{copy('Shortlisted for review','مرشحة للمراجعة')}}</span>
+        <span><strong>{{p.summary.automaticallyShortlistedPortCalls??0}}</strong>{{copy('By published rules','بالقواعد المنشورة')}}</span>
+        <span><strong>{{p.summary.inPoolPortCalls}}</strong>{{copy('Outside current quota','خارج الحصة الحالية')}}</span>
+      </div>
+      <div class="si-psc-summary-buckets">
+        <span *ngFor="let b of p.summary.buckets">
+          {{b.period}} · {{b.port}} · {{b.selectionRate}}%
+          · {{b.selectedCount}}/{{b.targetCount}}
+          <strong *ngIf="b.overQuota">{{copy('· Existing decisions exceed quota','· قرارات سابقة تتجاوز الحصة')}}</strong>
+        </span>
+      </div>
+      <small>{{copy('Quota counts Port Call events, not distinct IMOs. The vessel list below merges sources by IMO. Existing officer PSC decisions are preserved, and NMC / Service Requests do not consume PSC quota.',
+        'تحسب الحصة أحداث الوصول وليس عدد السفن المختلفة؛ وتجمع القائمة أدناه مصادر كل سفينة حسب IMO. تُحفظ قرارات PSC السابقة، ولا تخصم إحالات NMC أو طلبات الخدمات من الحصة.')}}</small>
+    </section>
+    <section class="stats si-kpis" *ngIf="dashboard as d">
+      <article><small>{{copy('ACTIVE FLEET','الأسطول النشط')}}</small><strong>{{d.summary.evaluatedPopulation}}</strong><span>{{copy('Tracked source vessels','سفن مصدر البيانات')}}</span></article>
+      <article><small>{{copy('ASSESSED RISK','السفن المقيمة')}}</small><strong>{{d.summary.assessedRiskVessels}}</strong><span>{{copy('Saved NMC risk assessments','تقييمات مخاطر NMC المحفوظة')}}</span></article>
+      <article><small>{{copy('EXPECTED INSPECTION VESSELS','السفن المتوقع فحصها')}}</small><strong>{{d.summary.candidateVessels}}</strong><span>{{d.summary.candidates}} {{copy('candidate workflows','مسار ترشيح')}}</span></article>
+      <article><small>{{copy('AI RECOMMENDED FOR INSPECTION','السفن التي اختارها AI للخطة')}}</small><strong class="si-ai-number">{{aiSelectedCount===null?'—':aiSelectedCount}}</strong><span>{{copy('AI advice before configured quota enforcement · not approved','توصيات AI قبل تطبيق سقف النسب')}}</span></article>
+      <article><small>{{copy('CURRENT INSPECTION PLAN','السفن المدرجة في الخطة')}}</small><strong>{{planSelectedCount===null?'—':planSelectedCount}}</strong><span>{{copy('After officer amendments','بعد تعديلات الموظف')}}</span></article>
+      <article><small>{{copy('APPROVED INSPECTION CASES','المعاينات المعتمدة')}}</small><strong>{{d.summary.inspectionsCreated}}</strong><span>{{copy('Approved by authorised officers','معتمدة من الموظفين المخولين')}}</span></article>
+    </section>
+
+    <section *ngIf="plan?.selectionProposal as a" class="si-panel" aria-label="AI configured vessel selection result">
+      <h2>{{copy('SI-C01 · Configured AI Vessel Selection Proposal','SI-C01 · نتيجة اختيار السفن بالقواعد المنشورة')}}</h2>
+      <p>{{copy('AI recommendations were validated against source eligibility and the published independent quotas. This is a proposed selection ONLY; no plan has been authorised and no inspection case has been created.',
+        'تم التحقق من توصيات AI مقابل أهلية المصادر والنسب المستقلة المنشورة. هذه قائمة اختيار مقترحة فقط ولم تُعتمد المعاينة أو تنشأ حالات تنفيذ.')}}</p>
+      <div class="si-ai-selection-stats">
+        <span><b>{{a.pscRisk.eligibleImos}}</b> {{copy('PSC eligible IMOs','سفن PSC المؤهلة')}}</span>
+        <span><b>{{a.pscRisk.aiSelectedImos.length}} / {{a.pscRisk.cap}}</b> {{copy('PSC selected / cap','PSC مختارة / السقف')}}</span>
+        <span><b>{{a.uaeFlag.eligibleImos}}</b> {{copy('UAE candidate IMOs B','سفن الإمارات المرشحة B')}}</span>
+        <span><b>{{a.uaeFlag.aiSelectedImos.length}} / {{a.uaeFlag.cap}}</b> {{copy('UAE selected / cap','إماراتية مختارة / السقف')}}</span>
+        <span *ngIf="a.serviceRequests"><b>{{a.serviceRequests.aiSelectedImos.length}} / {{a.serviceRequests.cap===null?'—':a.serviceRequests.cap}}</b> {{copy('Service vessels in THIS plan','سفن خدمات داخل الخطة الحالية')}}</span>
+        <span *ngIf="a.serviceRequests"><b>{{a.serviceRequests.waitingInBacklogImos.length}}</b> {{copy('Verified service requests still pending','طلبات خدمات موثقة ما زالت بالانتظار')}}</span>
+        <span><b>{{a.mandatoryImos.length}}</b> {{copy('Protected NMC referrals','إحالات NMC المحمية')}}</span>
+        <span *ngIf="a.maxPlannedVessels!==null&&a.maxPlannedVessels!==undefined"><b>{{a.maxPlannedVessels}}</b> {{copy('POC maximum plan size','الحد الأقصى لسفن خطة POC')}}</span>
+        <span><b>{{a.overlappingImos.length}}</b> {{copy('Overlap deduplicated','التداخل بلا تكرار')}}</span>
+        <span><b>{{a.selectedImos.length}}</b> {{copy('AI-proposed unique vessels','سفن مقترحة دون تكرار')}}</span>
+        <span><b>{{a.manualReviewImos.length}}</b> {{copy('Manual review · optional','مراجعة يدوية · اختيارية')}}</span>
+      </div>
+      <p class="notice" *ngIf="a.maxPlanExceededByProtectedSources">{{copy('Protected NMC referrals exceed the configured plan maximum. Explicit supervisor capacity exception is required; never drop protected cases.', 'إحالات NMC المحمية تجاوزت الحد الأقصى للخطة. يلزم معالجة استثناء الطاقة من المشرف، ولا تُحذف الإحالات.')}}</p>
+      <p class="notice" *ngIf="plan?.mock">{{copy('MOCK ONLY — deterministic fixture, no Airia analysis. Do not treat these as actual AI judgements.','محاكاة MOCK فقط دون تحليل Airia حقيقي؛ لا تعتبر النتائج أحكامًا من AI.')}}</p>
+      <div class="si-ai-selection-review" *ngFor="let r of a.selectedRows">
+        <strong>IMO {{r.imo}}</strong>
+        <span>{{r.selectionBasis.join(' + ')}}</span>
+        <span>{{copy('Confidence','الثقة')}}: {{r.aiRecommendationConfidence===null?'—':r.aiRecommendationConfidence}}</span>
+        <small>{{copy('Evidence IDs','مراجع الأدلة')}}: {{r.evidenceRefs.join(' · ')||'—'}}</small>
+      </div>
+      <p *ngIf="a.aiRecommendedButQuotaExcluded.length">{{copy('AI recommendations beyond published quotas (not selected):','توصيات AI خارج السقف المنشور (غير مختارة):')}} {{a.aiRecommendedButQuotaExcluded.join(', ')}}</p>
+    </section>
+
+    <section class="si-panel si-unified-queue">
+      <header class="si-list-header">
+        <div>
+          <h2>{{copy('Inspection Candidate List & AI Priority','قائمة السفن المرشحة وترتيب أولوية AI')}}</h2>
+          <p>{{copy('One vessel per IMO, source-aware. Remove, include or reprioritise in the plan with a reason. Official inspection approvals use one supervisor decision for the entire selected plan.',
+              'صف واحد لكل سفينة ومصادرها. يمكن الاستبعاد أو الإدراج أو تعديل ترتيب الأولوية مع تسجيل السبب؛ تعتمد جميع السفن المختارة بقرار مشرف واحد.')}}</p>
+        </div>
+        <span class="si-plan-mode" [class.si-ai-active]="planAiPhase!=='idle'" aria-live="polite">
+          {{planAiPhase==='analyzing'?copy('AIRIA · Analysing candidates…','Airia · جاري تحليل السفن…'):
+            planAiPhase==='updating'?copy('Updating plan…','جاري تحديث الخطة…'):
+            providerLabel+' · '+
+            (plan?.generatedAt?(plan?.generatedAt|date:'short'):copy('Not evaluated','لم تُقيّم'))}}
+        </span>
+      </header>
+
+      <div class="si-compact-credentials">
+        <span class="si-admin-user">✓ Admin · {{copy('Authenticated session','جلسة موحدة')}}</span>
+        <button type="button" (click)="loadInspectionPlan()" [disabled]="planBusy||loading">
+          {{copy('Load Plan','تحميل الخطة')}}</button>
+        <button type="button" class="primary" (click)="generateInspectionPlan()"
+                [disabled]="planBusy||loading||!plan||!activePlanEditable"
+                [attr.aria-busy]="planAiPhase!=='idle'">
+          <span *ngIf="planAiPhase!=='idle'" class="si-analysis-spinner" aria-hidden="true"></span>
+          {{planAiPhase==='analyzing'?copy('AI analysing priority…','AI يحلل الأولويات…'):
+            planAiPhase==='updating'?copy('Updating selection…','جاري تحديث الاختيار…'):
+            plan?.agentRunId?copy('Re-run AI Selection & Priority','إعادة حساب اختيار وترتيب AI'):
+            copy('Generate AI Selection & Priority','إنشاء اختيار وترتيب AI')}}
+        </button>
+        <span class="si-zero-ai">{{plan?.provider==='AIRIA'?
+          copy('AIRIA: explicit confirmed analysis','Airia: تحليل يبدأ بتأكيد المستخدم'):
+          copy('MOCK: 0 Airia calls','MOCK: بدون اتصال Airia')}}</span>
+      </div>
+      <section class="si-data-readiness" *ngIf="plan?.dataReadiness as ready"
+        [class.si-readiness-review]="ready.status==='REVIEW_RECOMMENDED'"
+        aria-label="AI candidate data readiness">
+        <div class="si-readiness-head">
+          <strong>{{copy('Data readiness before AI analysis','جاهزية البيانات قبل تحليل AI')}}</strong>
+          <span class="si-readiness-state">
+            {{ready.status==='NO_CANDIDATES'?copy('No eligible candidates','لا توجد سفن مؤهلة'):
+              ready.status==='SCOPE_LIMIT'?copy('Scope exceeds 100 workflows','عدد المسارات يتجاوز 100'):
+              ready.status==='REVIEW_RECOMMENDED'?copy('Source review recommended','يُنصح بمراجعة المصادر'):
+              ready.status==='READY_WITH_GAPS'?copy('Available with data gaps','البيانات متاحة مع بعض النواقص'):
+              copy('Source evidence available','الأدلة متاحة')}}
+          </span>
+        </div>
+        <div class="si-readiness-metrics">
+          <span><strong>{{ready.eligibleVessels}}</strong>
+            {{copy('Eligible vessels','سفينة مؤهلة')}}</span>
+          <span><strong>{{ready.confirmedEtdVessels}} / {{ready.eligibleVessels}}</strong>
+            {{copy('Verified ETD','موعد مغادرة مؤكد')}}</span>
+          <span><strong>{{ready.incidentReviewedVessels}} / {{ready.eligibleVessels}}</strong>
+            {{copy('Reviewed incident severity','خطورة حادث تمت مراجعتها')}}</span>
+          <span><strong>{{ready.riskAssessedVessels}} / {{ready.eligibleVessels}}</strong>
+            {{copy('Saved vessel risk','تقييم مخاطر سفينة محفوظ')}}</span>
+          <span><strong>{{ready.evidenceBackedVessels}} / {{ready.eligibleVessels}}</strong>
+            {{copy('Source evidence','أدلة مصدر محفوظة')}}</span>
+          <span><strong>{{ready.conflictingEtdVessels}}</strong>
+            {{copy('Conflicting ETD','تعارض في المغادرة')}}</span>
+        </div>
+        <p class="si-readiness-hint">
+          {{copy('Coverage reflects saved records for this candidate snapshot, not automatically generated facts. Missing ETD or reviewed incident severity does not block AI advice, but execution priority stays pending additional rules where neither is available. No AI call is made to show this panel.',
+            'الأرقام مستمدة من المصادر المحفوظة لنفس قائمة المرشحين، وليست بيانات منشأة تلقائيًا. غياب تاريخ المغادرة أو خطورة حادث معتمدة لا يمنع توصية AI، لكن ترتيب التنفيذ يظل بانتظار قواعد إضافية إذا غاب الاثنان. عرض هذه البيانات لا يستدعي AI.')}}
+        </p>
+      </section>
+      <div *ngIf="planAiPhase!=='idle'" class="si-ai-analysis-panel" role="status" aria-live="polite">
+        <span class="si-analysis-spinner" aria-hidden="true"></span>
+        <div class="si-ai-analysis-text">
+          <strong>{{planAiPhase==='analyzing'?
+            copy('AI priority analysis in progress','جاري تحليل أولويات المعاينات'):
+            copy('Applying validated results to the plan','جاري تحديث الخطة بالنتائج المتحقق منها')}}</strong>
+          <p>{{planAiPhase==='analyzing'?
+            copy('Sending available saved candidate sources, verified ETDs (where present), reviewed incident signals and evidence to Airia. Missing or conflicting data are identified, not invented. Waiting for the actual response; no inspection is approved automatically.',
+              'يتم إرسال مصادر الترشيح المحفوظة وتواريخ المغادرة المؤكدة إن وُجدت، وإشارات الحوادث المعتمدة والأدلة إلى Airia، مع توضيح البيانات الناقصة أو المتعارضة دون اختلاقها. لا تُعتمد أي معاينة تلقائيًا.'):
+            copy('Airia returned its recommendations. Refreshing the persisted plan for officer review.',
+              'وصلت توصيات Airia، ويجري تحديث بيانات الخطة المحفوظة لمراجعة المسؤول.')}}
+          </p>
+          <div class="si-ai-indeterminate" aria-hidden="true"><span></span></div>
+        </div>
+      </div>
+      <p class="notice error" role="alert" *ngIf="planError">{{planError}}</p>
+      <p class="notice success" role="status" *ngIf="planNotice">{{planNotice}}</p>
+      <p class="si-helper" *ngIf="!plan?.agentRunId">
+        {{copy('Available candidates are shown immediately. Include or defer manually with a reason, or run C01 to propose source-backed vessel priority.',
+          'السفن المتاحة ظاهرة فور إنشاء الخطة. أدرجها أو أجّلها يدويًا مع السبب، أو شغّل C01 لاقتراح الأولويات استنادًا للمصادر.')}}
+      </p>
+      <p class="si-helper si-stale" *ngIf="plan?.stale">
+        {{copy('Candidate source or policy has changed. Previous AI ranks are hidden until explicitly recalculated.',
+          'تغيرت بيانات الترشيح أو السياسات؛ أُخفي الترتيب السابق إلى أن تتم إعادة حسابه صراحة.')}}
+      </p>
+      <p class="si-helper" *ngIf="plan?.agentRunId">
+        {{copy('Plan version','نسخة الخطة')}} {{plan?.revision}} ·
+        {{copy('Only explicit confirmed changes re-run C01; published NMC-referral precedence remains protected.',
+          'يُعاد تشغيل C01 عند تأكيد التغيير فقط، مع الحفاظ على أولوية إحالات NMC المعتمدة.')}}
+      </p>
+
+      <section class="si-plan-wizard-cta">
+        <h2>{{copy('Create Inspection Plan','إنشاء خطة المعاينات')}}</h2>
+        <p>{{copy('Review selected vessels and all referral reasons in a guided approval wizard.',
+          'راجع السفن المختارة وجميع أسباب الإحالة في شاشة خطوات منفصلة.')}}</p>
+        <a *ngIf="approvalReady"
+           class="si-plan-wizard-button"
+           [routerLink]="['/moei/smart-inspection/plan/create',activePlanId]">
+          {{copy('Review & Approve Plan →','مراجعة واعتماد الخطة ←')}}
+        </a>
+        <span class="si-rolling-note"
+         *ngIf="!approvalReady">
+         {{copy('Include at least one eligible vessel manually or via C01 before supervisor approval.',
+           'أدرج سفينة مؤهلة واحدة على الأقل يدويًا أو من C01 قبل اعتماد المشرف.')}}
+        </span>
+      </section>
+
+      <div class="filters si-inline-filters">
+        <input type="search" [(ngModel)]="search"
+          [placeholder]="copy('Search vessel, IMO or source reference…','بحث باسم السفينة أو IMO أو مصدر الترشيح…')"
+          [attr.aria-label]="copy('Search candidates','بحث السفن المرشحة')"/>
+        <select [(ngModel)]="sourceFilter" [attr.aria-label]="copy('Source','المصدر')">
+          <option value="ALL">{{copy('All sources','جميع المصادر')}}</option>
+          <option value="NMC_CASE">NMC</option>
+          <option value="SERVICE_REQUEST">{{copy('Service Requests','طلبات الخدمة')}}</option>
+          <option value="PSC_PORT_CALL">PSC</option>
+        </select>
+        <select [(ngModel)]="statusFilter" [attr.aria-label]="copy('Status','الحالة')">
+          <option value="ALL">{{copy('All statuses','كل الحالات')}}</option>
+          <option value="PENDING_REVIEW">{{copy('Pending review','قيد المراجعة')}}</option>
+          <option value="INSPECTION_CREATED">{{copy('Case created','تم إنشاء المعاينة')}}</option>
+          <option value="EXTERNALLY_SCHEDULED">{{copy('Already scheduled','مجدولة مسبقاً')}}</option>
+          <option value="DEFERRED">{{copy('Deferred','مؤجلة')}}</option>
+          <option value="REJECTED">{{copy('Rejected','مرفوضة')}}</option>
+        </select>
+      </div>
+
+      <section class="si-bulk-toolbar" *ngIf="activePlanEditable&&plan&&!plan.readOnlyHistorical"
+        [attr.aria-label]="copy('Bulk vessel planning actions','إجراءات التخطيط الجماعية للسفن')">
+        <div class="si-bulk-tools">
+          <div class="si-bulk-description">
+            <strong>{{copy('Bulk actions on candidates','إجراءات جماعية على السفن المرشحة')}}</strong>
+            <span>{{bulkSelectedCount}} {{copy('vessels selected','سفن محددة')}}</span>
+            <small>{{copy('Select individual vessels or all eligible vessels in the current search/filter. Selection is by IMO and does not change underlying source records.',
+              'اختر سفنًا منفردة أو كل السفن المؤهلة في نتائج البحث والفلاتر الحالية. الاختيار حسب IMO ولا يغير بيانات المصادر الأصلية.')}}</small>
+          </div>
+          <div class="si-bulk-buttons">
+            <button type="button" [disabled]="!bulkSelectedCount||planBusy||plan.stale"
+              (click)="startBulkAction('NOT_SELECTED')">
+              {{copy('Exclude selected','استبعاد المحدد')}}
+            </button>
+            <button type="button" [disabled]="!bulkSelectedCount||planBusy||plan.stale"
+              (click)="startBulkAction('DEFER')">
+              {{copy('Defer selected','تأجيل المحدد')}}
+            </button>
+            <button type="button" [disabled]="!bulkSelectedCount||planBusy"
+              (click)="clearBulkSelection()">
+              {{copy('Clear selection','إلغاء التحديد')}}
+            </button>
+          </div>
+        </div>
+        <form *ngIf="bulkAction" class="si-bulk-form" (ngSubmit)="saveBulkAction()">
+          <strong>{{bulkAction==='DEFER'?
+            copy('Defer selected vessels','تأجيل السفن المحددة'):
+            copy('Exclude selected vessels from this plan','استبعاد السفن المحددة من هذه الخطة')}}
+            · {{bulkSelectedCount}} {{copy('vessels','سفن')}}</strong>
+          <label>{{copy('Shared operational reason (required)','سبب الإجراء الموحد (إلزامي)')}}
+            <textarea name="bulkReason" [(ngModel)]="bulkReason"
+              rows="2" minlength="8" maxlength="500" required
+              [placeholder]="copy('Explain the decision applied to all selected vessels',
+                'اكتب سببًا واضحًا ينطبق على جميع السفن المحددة')"></textarea>
+          </label>
+          <label *ngIf="bulkAction==='DEFER'">
+            {{copy('Review again on','تاريخ إعادة المراجعة')}}
+            <input type="date" name="bulkReviewAfter"
+              [(ngModel)]="bulkReviewAfter" required/>
+          </label>
+          <div class="si-bulk-buttons">
+            <button type="submit" class="primary"
+              [disabled]="planBusy||!bulkSelectedCount||bulkReason.trim().length<8||
+                (bulkAction==='DEFER'&&!bulkReviewAfter)">
+              {{copy('Confirm & save for all selected','تأكيد وحفظ لكل السفن المحددة')}}
+            </button>
+            <button type="button" (click)="bulkAction=null">
+              {{copy('Cancel','إلغاء')}}</button>
+          </div>
+          <small>{{copy('One audited draft-plan revision; no Airia request, regulatory rejection or inspection case deletion.',
+            'تحديث واحد مؤرشف لمسودة الخطة، دون استدعاء Airia أو رفض تنظيمي أو حذف حالات المعاينة.')}}</small>
+        </form>
+      </section>
+      <div class="table-scroll" [attr.aria-busy]="planAiPhase!=='idle'">
+        <table class="si-unified-table">
+          <thead><tr>
+            <th class="si-bulk-check-cell">
+              <input type="checkbox" [checked]="bulkAllVisibleSelected"
+                [disabled]="!bulkVisibleEligible.length||planBusy||!auth.isAdmin"
+                [attr.aria-label]="copy('Select all eligible vessels in current results','تحديد كل السفن المؤهلة في النتائج الحالية')"
+                (change)="toggleBulkVisible($any($event.target).checked)"/>
+            </th>
+            <th>{{copy('AI Priority','أولوية AI')}}</th>
+            <th>{{copy('Vessel / IMO','السفينة / IMO')}}</th>
+            <th>{{copy('Candidate Sources','مصادر الترشيح')}}</th>
+            <th>{{copy('NMC Risk','مخاطر NMC')}}</th>
+            <th>{{copy('AI Selection','اختيار AI')}}</th>
+            <th>{{copy('Inspection Plan','خطة المعاينات')}}</th>
+            <th>{{copy('Officer Action','إجراء الموظف')}}</th>
+            <th>{{copy('AI Explanation','تفسير AI')}}</th>
+          </tr></thead>
+          <tbody>
+            <ng-container *ngFor="let v of vessels;trackBy:trackVessel">
+              <tr [class.si-plan-selected]="planRow(v)?.planSelected"
+                  [class.si-plan-locked]="v.createdWorkflows>0">
+                <td class="si-bulk-check-cell">
+                  <input type="checkbox" [checked]="bulkSelectedImos.has(v.imo)"
+                    [disabled]="!bulkEligible(v)"
+                    [attr.aria-label]="copy('Select vessel','تحديد السفينة')+' '+v.vesselName+' IMO '+v.imo"
+                    (change)="toggleBulkVessel(v,$any($event.target).checked)"/>
+                </td>
+                <td class="si-priority-cell">
+                  <strong *ngIf="planRow(v)?.effectiveRank as rank">#{{rank}}</strong>
+                  <span *ngIf="!planRow(v)?.effectiveRank" class="pending">—</span>
+                </td>
+                <td><strong>{{v.vesselName}}</strong>
+                  <small>IMO {{v.imo}} · {{v.flag}} · {{v.vesselType}}</small>
+                  <small *ngIf="v.createdWorkflows">{{v.createdWorkflows}}
+                    {{copy('approved inspection case(s)','حالة معاينة معتمدة')}}</small></td>
+                <td><span *ngFor="let s of v.sourceTypes" class="source-pill">{{statusText(s)}}</span>
+                  <small>{{v.sourceEvents.length}} {{copy('source events','أحداث مصدر')}}</small></td>
+                <td>
+                  <strong *ngIf="v.currentRisk as risk">{{risk.score}}/100</strong>
+                  <small *ngIf="v.currentRisk as risk">{{statusText(risk.level)}}</small>
+                  <span *ngIf="!v.currentRisk" class="pending">{{copy('Unassessed','لم تُقيّم')}}</span>
+                </td>
+                <td>
+                  <span class="si-ai-status" *ngIf="planRow(v)?.aiRecommended===true">
+                    {{copy('AI Recommended','مرشحة بواسطة AI')}}</span>
+                  <span *ngIf="planRow(v)?.aiRecommended===false" class="pending">
+                    {{copy('Not selected','غير مختارة')}}</span>
+                  <span *ngIf="planRow(v)?.aiRecommended===null||!planRow(v)" class="pending">—</span>
+                </td>
+                <td>
+                  <span class="si-in-plan" *ngIf="planRow(v)?.planSelected">
+                    {{copy('Included','مدرجة')}}</span>
+                  <span class="pending" *ngIf="planRow(v)?.planSelected===false">
+                    {{copy('Not in plan','خارج الخطة')}}</span>
+                  <span class="pending" *ngIf="planRow(v)?.planSelected===null||!planRow(v)">—</span>
+                  <small *ngIf="planRow(v)?.selectionOrigin==='OFFICER_AMENDED'">
+                    {{copy('Officer amended','تعديل الموظف')}}</small>
+                  <small *ngIf="planRow(v)?.disposition==='DEFER'">
+                    {{copy('Deferred until','مؤجلة حتى')}} {{planRow(v)?.reviewAfter}}</small>
+                  <small *ngIf="planRow(v)?.disposition==='NOT_APPLICABLE'">
+                    {{copy('Not Applicable in this plan','غير منطبقة على هذه الخطة')}}</small>
+                  <small *ngIf="planRow(v)?.previousPlan">
+                    {{copy('Previous decision','القرار السابق')}}: {{planRow(v)?.previousDisposition}}
+                    · {{planRow(v)?.previousPlan}}
+                    <span *ngIf="planRow(v)?.reviewDue">· {{copy('Review due','مطلوب إعادة المراجعة')}}</span></small>
+                </td>
+                <td class="si-row-actions">
+                  <div *ngIf="activePlanEditable&&plan&&planRow(v)?.editable"
+                    class="si-rolling-actions">
+                    <button type="button" *ngIf="!planRow(v)?.planSelected"
+                      (click)="openManualDecision(v,'INCLUDE')" [disabled]="planBusy">
+                      {{copy('Include','إدراج')}}</button>
+                    <button type="button" *ngIf="planRow(v)?.planSelected"
+                      (click)="openManualDecision(v,'NOT_SELECTED')" [disabled]="planBusy">
+                      {{copy('Remove','استبعاد')}}</button>
+                    <button type="button"
+                      (click)="openManualDecision(v,'DEFER')" [disabled]="planBusy">
+                      {{copy('Defer','تأجيل')}}</button>
+                    <button type="button" *ngIf="!planRow(v)?.mandatoryReferral"
+                      (click)="openManualDecision(v,'NOT_APPLICABLE')" [disabled]="planBusy">
+                      {{copy('Not Applicable','غير منطبق')}}</button>
+                  </div>
+                  <button type="button"
+                    *ngIf="plan?.agentRunId&&planRow(v)?.editable&&planRow(v)?.planSelected"
+                    (click)="openPlanEdit(v,true,true)"
+                    [disabled]="planBusy">{{copy('Change Rank via C01','تغيير الأولوية عبر C01')}}</button>
+                  <small *ngIf="!planRow(v)?.editable">
+                    {{copy('No pending plan action','لا يوجد إجراء تخطيط معلق')}}</small>
+                </td>
+                <td><button type="button" (click)="toggleVesselDetail(v)">
+                  {{expandedImo===v.imo?copy('Hide Details','إخفاء'):
+                    copy('Why AI? / Review','لماذا اختارها AI؟')}}</button>
+                </td>
+              </tr>
+              <tr class="si-plan-edit-row" *ngIf="manualEditingImo===v.imo">
+                <td colspan="9">
+                  <form (ngSubmit)="saveManualDecision()" class="si-inline-change">
+                    <strong>{{copy('Officer decision','قرار الموظف')}}:
+                      {{manualAction}} · {{v.vesselName}} (IMO {{v.imo}})</strong>
+                    <label>{{copy('Operational reason (required)','سبب القرار التشغيلي (إلزامي)')}}
+                      <input type="text" name="manualReason"
+                        [(ngModel)]="manualReason" required minlength="8" maxlength="500"
+                        [placeholder]="copy('Explain why this vessel is included, omitted or deferred',
+                          'سجل سبب إدراج السفينة أو عدم اختيارها أو تأجيلها')"/>
+                    </label>
+                    <label *ngIf="manualAction==='DEFER'">
+                      {{copy('Reconsider on','تاريخ إعادة النظر')}}
+                      <input type="date" name="manualReviewAfter"
+                        [(ngModel)]="manualReviewAfter" required/>
+                    </label>
+                    <button type="submit" class="primary"
+                      [disabled]="planBusy||manualReason.trim().length<8||
+                         (manualAction==='DEFER'&&!manualReviewAfter)">
+                      {{copy('Save without AI','حفظ دون تشغيل AI')}}
+                    </button>
+                    <button type="button" (click)="closeManualDecision()">
+                      {{copy('Cancel','إلغاء')}}</button>
+                    <small>{{copy('This action is recorded only in the selected draft plan and does not create an inspection case.',
+                      'يسجل القرار في مسودة الخطة المختارة فقط، ولا ينشئ حالة معاينة رسمية.')}}</small>
+                  </form>
+                </td>
+              </tr>
+              <tr class="si-plan-edit-row" *ngIf="planEditingImo===v.imo">
+                <td colspan="9">
+                  <form (ngSubmit)="savePlanEdit()" class="si-inline-change">
+                    <strong>{{planSelection?copy('Include / Change Rank','إدراج أو تغيير ترتيب'):
+                      copy('Remove from Inspection Plan','استبعاد من الخطة')}} · {{v.vesselName}}</strong>
+                    <label *ngIf="planSelection">
+                      {{copy('Requested Priority Position (optional)','رقم ترتيب الأولوية المطلوب (اختياري)')}}
+                      <input type="number" name="priority" [(ngModel)]="planRequestedRank"
+                             min="1" max="100" step="1"/>
+                    </label>
+                    <label>{{copy('Officer Reason · required','سبب الموظف · إلزامي')}}
+                      <input type="text" name="reason" [(ngModel)]="planReason"
+                             required minlength="8" maxlength="500"
+                             [placeholder]="copy('Explain the operational reason','اكتب السبب التشغيلي')"/>
+                    </label>
+                    <button type="submit" class="primary" [disabled]="planBusy||planReason.trim().length<8">
+                      {{copy('Confirm & Recalculate with C01','تأكيد وإعادة ترتيب C01')}}
+                    </button>
+                    <button type="button" (click)="cancelPlanEdit()">{{copy('Cancel','إلغاء')}}</button>
+                    <small>{{copy('Protected NMC referral priority and legal case approvals cannot be overridden by plan changes.',
+                      'لا تتغير أولوية إحالات NMC المحمية أو قرارات اعتماد حالات المعاينة.')}}</small>
+                  </form>
+                </td>
+              </tr>
+              <tr *ngIf="expandedImo===v.imo" class="si-ai-detail-row">
+                <td colspan="9">
+                  <div class="si-detail-compact">
+                    <div>
+                      <h3>{{copy('AI Selection Rationale','سبب اختيار السفينة من AI')}}</h3>
+                      <p>{{planRow(v)?.selectionReason||copy('Generate the C01 plan to see a source-grounded recommendation.',
+                        'شغّل خطة C01 لعرض تفسير مرتبط بالمصدر.')}}</p>
+                      <p *ngIf="planRow(v)?.regimeAdvisories?.length">
+                        <strong>{{copy('Priority explanation source','مصدر تفسير الأولوية')}}:</strong>
+                        {{planRow(v)?.regimeAdvisories?.[0]?.priorityRationaleSource==='DETERMINISTIC_BUSINESS_RULE'?
+                          copy('Configured ranking rules (AI rationale unavailable)','قواعد ترتيب الأولوية المعتمدة (تفسير AI غير متاح)'):
+                          plan?.provider==='AIRIA'?copy('Airia AI response','استجابة Airia'):
+                          copy('POC mock response','استجابة POC التجريبية')}}
+                      </p>
+                      <ng-container *ngFor="let advice of planRow(v)?.regimeAdvisories||[]">
+                        <p *ngIf="advice.selectionReviewGate==='AIRIA_OUTPUT_NOT_VERIFIED'" class="notice">
+                          <strong>{{copy('AI advisory requires manual review','توصية AI تتطلب مراجعة بشرية')}}</strong>
+                          {{copy('Airia did not supply verifiable advice for this candidate. Its saved source evidence is retained; AI inclusion was not applied.',
+                            'لم تقدم Airia توصية موثقة لهذا المرشح. الأدلة المحفوظة باقية، ولم يتم تطبيق إدراج آلي من AI.')}}
+                        </p>
+                        <p *ngIf="advice.selectionReviewGate==='BELOW_PUBLISHED_CONFIDENCE'">
+                          <strong>{{copy('AI recommendation requires manual review','توصية AI تحتاج مراجعة بشرية')}}:</strong>
+                          {{copy('The model proposed inclusion with confidence','اقترح AI إدراج السفينة بدرجة ثقة')}}
+                          {{advice.confidence*100 | number:'1.0-1'}}%
+                          {{copy('below the published threshold. No automatic AI selection was applied.',
+                            'أقل من الحد المنشور. لم يتم إدراج السفينة تلقائيًا بتوصية AI.')}}
+                        </p>
+                      </ng-container>
+                      <p><strong>{{copy('Evidence IDs','مراجع الأدلة')}}:</strong>
+                        {{planRow(v)?.evidenceRefs?.join(' · ')||'—'}}</p>
+                      <p><strong>{{copy('Missing Data','البيانات الناقصة')}}:</strong>
+                        {{planRow(v)?.dataGaps?.join(' · ')||'—'}}</p>
+                    </div>
+                    <div>
+                      <h3>{{copy('Priority Explanation','سبب ترتيب أولوية المعاينة')}}</h3>
+                      <p>{{planRow(v)?.priorityReason||'—'}}</p>
+                      <p *ngIf="planRow(v)?.officerReason">
+                        <strong>{{copy('Officer amendment','تعديل الموظف')}}:</strong>
+                        {{planRow(v)?.officerReason}} · {{planRow(v)?.officerActor}}
+                      </p>
+                      <p>{{copy('Regulatory selection / scheduling is always a separate officer-controlled action.',
+                        'اعتماد المعاينة وجدولتها إجراءات منفصلة تحت مسؤولية الموظف المختص.')}}</p>
+                    </div>
+                    <div class="si-official-decision">
+                      <h3>{{copy('Official Inspection Decision','قرار المعاينة الرسمي')}}</h3>
+                      <label>{{copy('Inspection Type','نوع المعاينة')}}
+                        <select [ngModel]="selectedKey" (ngModelChange)="selectWorkflow($event)" [ngModelOptions]="{standalone:true}">
+                          <option value="">{{copy('Choose regime','اختر نوع المعاينة')}}</option>
+                          <option *ngFor="let w of v.workflows" [value]="w.candidateKey">
+                            {{statusText(w.regime)}} · {{statusText(w.status)}}</option>
+                        </select>
+                      </label>
+                      <ng-container *ngIf="selected as c">
+                        <p>{{statusText(c.regime)}} · {{statusText(c.eligibility)}} · {{statusText(c.status)}}</p>
+                        <a *ngIf="c.inspectionCase" [routerLink]="['/moei/smart-inspection/preparation',c.inspectionCase.id]">
+                          {{copy('Open Approved Inspection →','فتح المعاينة المعتمدة ←')}}</a>
+                        <ng-container *ngIf="!c.inspectionCase">
+                          <label>{{copy('Official decision reason','سبب القرار الرسمي')}}
+                            <input type="text" [(ngModel)]="decisionNote" maxlength="500"/>
+                          </label>
+                          <p class="si-helper">{{copy(
+                            'Inspections are now approved at the complete-plan level. Review the vessel list above and use Approve Complete Plan once.',
+                            'يتم اعتماد المعاينات الآن على مستوى الخطة بالكامل. راجع قائمة السفن أعلاه ثم استخدم زر اعتماد الخطة بالكامل.'
+                          )}}</p>
+                          <button type="button" (click)="decide('DEFER')" [disabled]="busy">
+                            {{copy('Defer','تأجيل')}}</button>
+                          <button type="button" (click)="decide('REJECT')" [disabled]="busy">
+                            {{copy('Reject','رفض')}}</button>
+                        </ng-container>
+                      </ng-container>
+                    </div>
+                  </div>
+                </td>
+              </tr>
+            </ng-container>
+            <tr *ngIf="!vessels.length"><td colspan="9" class="empty">
+              {{copy('No matching candidate vessels. Check the NMC referral, service and selected PSC sources.',
+                'لا توجد سفن مطابقة؛ راجع إحالات NMC والخدمات والسفن المختارة من PSC.')}}</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+</div>

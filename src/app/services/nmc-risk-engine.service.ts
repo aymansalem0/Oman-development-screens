@@ -1,9 +1,11 @@
 import { Injectable } from '@angular/core';
-import { BehaviorSubject } from 'rxjs';
+import { BehaviorSubject, Observable } from 'rxjs';
+import { HttpClient, HttpHeaders } from '@angular/common/http';
+import { map, tap } from 'rxjs/operators';
 import { NmcVesselProfile, RiskLevel } from '../data/nmc-vessel-catalog';
-import { NMC_OPERATIONAL_VESSELS } from '../data/nmc-expanded-vessel-catalog';
+import {AIRIA_DEMO_99_VESSELS} from '../data/airia-demo-cohort';
 
-export type RiskFactorKey = 'movement' | 'inspection' | 'certificate' | 'dataQuality' | 'history';
+export type RiskFactorKey = 'movement' | 'inspection' | 'certificate' | 'dataQuality' | 'history' | 'documentIntegrity';
 export type RiskCalculationMode = 'weighted' | 'conservative' | 'max-signal';
 
 export interface RiskWeights {
@@ -12,6 +14,7 @@ export interface RiskWeights {
   certificate: number;
   dataQuality: number;
   history: number;
+  documentIntegrity: number;
 }
 
 export interface RiskThresholds {
@@ -31,6 +34,18 @@ export interface RiskEngineConfig {
   changeReason: string;
 }
 
+export interface CentralPolicyVersion{
+  revision:number;policyRef:string;previousRevision:number|null;
+  config:RiskEngineConfig;reason:string;publishedBy:string;actorRole:string;
+  publishedAt:string;
+}
+export interface CentralRiskDraft {
+  baseRevision:number;draftRevision:number;config:RiskEngineConfig;
+  updatedBy:string;updatedAt:string;
+}
+export interface CentralPolicyPublishResponse {
+  status:'ok';published:CentralPolicyVersion&{projectionCount:number};
+}
 export interface RiskFactorEvaluation {
   key: RiskFactorKey;
   severity: number;
@@ -65,7 +80,8 @@ const DEFAULT_CONFIG: RiskEngineConfig = {
     inspection: 28,
     certificate: 20,
     dataQuality: 14,
-    history: 13
+    history: 13,
+    documentIntegrity: 0
   },
   thresholds: {
     watch: 45,
@@ -81,11 +97,21 @@ const DEFAULT_CONFIG: RiskEngineConfig = {
 export class NmcRiskEngineService {
   private readonly storageKey = 'moei-nmc-risk-engine-config:v1';
   private readonly baselineRisk = new Map<number, number>(
-    NMC_OPERATIONAL_VESSELS.map(vessel => [vessel.id, vessel.risk])
+    AIRIA_DEMO_99_VESSELS.map(vessel => [vessel.id, vessel.risk])
   );
 
-  private readonly configSubject = new BehaviorSubject<RiskEngineConfig>(this.loadConfig());
+  private readonly configSubject = new BehaviorSubject<RiskEngineConfig>(this.cloneConfig(DEFAULT_CONFIG));
   readonly config$ = this.configSubject.asObservable();
+  activeVersion:CentralPolicyVersion|null=null;
+  centralReady=false;
+  centralError='';
+  private fetchInProgress=false;
+  constructor(private readonly http:HttpClient){
+    this.refreshCentral();
+    // Every tab converges on a single Oracle-backed version; no browser localStorage
+    // can override the server's active policy.
+    setInterval(()=>this.refreshCentral(),15000);
+  }
 
   get config(): RiskEngineConfig {
     return this.cloneConfig(this.configSubject.value);
@@ -95,34 +121,86 @@ export class NmcRiskEngineService {
     return this.cloneConfig(DEFAULT_CONFIG);
   }
 
+  /** Legacy localStorage is available ONLY as a manually importable draft. */
+  get legacyBrowserDraft():RiskEngineConfig|null{
+    try{
+      const raw=localStorage.getItem(this.storageKey);
+      if(!raw)return null;
+      const parsed=JSON.parse(raw) as RiskEngineConfig;
+      return this.validate(parsed).length?null:this.cloneConfig(parsed);
+    }catch{return null;}
+  }
+  syncPublishedFromStorage():void{this.refreshCentral();}
+  refreshCentral():void{
+    if(this.fetchInProgress)return;
+    this.fetchInProgress=true;
+    this.http.get<{status:'ok';active:CentralPolicyVersion}>('/api/ai/risk-policy')
+      .subscribe({
+        next:result=>{
+          this.fetchInProgress=false;this.centralError='';
+          this.centralReady=true;this.setCentralVersion(result.active);
+        },
+        error:e=>{
+          this.fetchInProgress=false;
+          this.centralReady=false;
+          this.centralError=e?.error?.error||'RISK_POLICY_UNAVAILABLE';
+        }
+      });
+  }
+  private setCentralVersion(version:CentralPolicyVersion):void{
+    const next=this.cloneConfig(version.config);
+    if(this.validate(next).length){
+      this.centralReady=false;this.centralError='INVALID_CENTRAL_RISK_POLICY';
+      return;
+    }
+    const changed=this.activeVersion?.revision!==version.revision;
+    this.activeVersion=version;
+    if(changed||JSON.stringify(this.configSubject.value)!==JSON.stringify(next))
+      this.configSubject.next(next);
+  }
+  savedDraft():Observable<CentralRiskDraft|null>{
+    return this.http.get<{status:'ok';draft:CentralRiskDraft|null}>('/api/ai/risk-policy/draft')
+      .pipe(map(r=>r.draft));
+  }
+  saveCentralDraft(config:RiskEngineConfig,expectedRevision:number,
+    expectedDraftRevision:number,updatedBy:string,accessKey:string):
+    Observable<CentralRiskDraft>{
+    if(!accessKey.trim())throw new Error('EDITOR_ACCESS_KEY_REQUIRED');
+    const headers=new HttpHeaders({'X-NMC-DASHBOARD-KEY':accessKey.trim()});
+    return this.http.post<{status:'ok';draft:CentralRiskDraft}>('/api/ai/risk-policy/draft',{
+      expectedRevision,expectedDraftRevision,config,updatedBy
+    },{headers}).pipe(map(r=>r.draft));
+  }
+  history():Observable<CentralPolicyVersion[]>{
+    return this.http.get<{status:'ok';history:CentralPolicyVersion[]}>('/api/ai/risk-policy/history')
+      .pipe(map(r=>r.history));
+  }
+  publishCentral(config:RiskEngineConfig,expectedRevision:number,accessKey:string):
+      Observable<CentralPolicyPublishResponse>{
+    if(!accessKey.trim())throw new Error('PUBLISHER_ACCESS_KEY_REQUIRED');
+    const headers=new HttpHeaders({'X-NMC-DASHBOARD-KEY':accessKey.trim()});
+    return this.http.post<CentralPolicyPublishResponse>('/api/ai/risk-policy/publish',{
+      expectedRevision,config,reason:config.changeReason,publishedBy:config.publishedBy
+    },{headers}).pipe(tap(response=>{
+      const {projectionCount:_,...version}=response.published;
+      this.centralReady=true;this.centralError='';
+      this.setCentralVersion(version);
+    }));
+  }
+
   cloneConfig(config: RiskEngineConfig): RiskEngineConfig {
-    return JSON.parse(JSON.stringify(config)) as RiskEngineConfig;
+    const copy=JSON.parse(JSON.stringify(config)) as RiskEngineConfig;
+    // Keep the legacy JSON field for compatibility but never weight A03.
+    copy.weights.documentIntegrity=0;
+    return copy;
   }
 
-  publish(config: RiskEngineConfig): RiskEngineConfig {
-    const next = this.cloneConfig(config);
-    next.version = this.nextVersion(this.configSubject.value.version);
-    next.publishedAt = new Intl.DateTimeFormat('en-GB', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false
-    }).format(new Date()).replace(',', ' ·');
-    next.publishedBy = next.publishedBy || 'NMC Risk Administrator';
-    next.changeReason = next.changeReason || 'Risk model configuration updated';
-
-    this.saveConfig(next);
-    this.configSubject.next(next);
-    return this.cloneConfig(next);
+  publish(_config: RiskEngineConfig): RiskEngineConfig {
+    throw new Error('CENTRAL_RISK_POLICY_PUBLISH_REQUIRED');
   }
-
   resetToDefaults(): RiskEngineConfig {
-    const defaults = this.cloneConfig(DEFAULT_CONFIG);
-    this.saveConfig(defaults);
-    this.configSubject.next(defaults);
-    return defaults;
+    // Reset is a DRAFT operation; the active policy changes only after publication.
+    return this.cloneConfig(DEFAULT_CONFIG);
   }
 
   evaluate(vessel: NmcVesselProfile, config: RiskEngineConfig = this.configSubject.value): RiskEvaluation {
@@ -177,6 +255,61 @@ export class NmcRiskEngineService {
       delta: score - baseScore,
       level: this.levelForScore(score, config),
       factors: factorEntries
+    };
+  }
+
+
+  /**
+   * Calculates a POC risk score exclusively from five validated AI severities.
+   * No synthetic baseline calibration is applied to actual AI-derived severities.
+   * Does NOT publish a decision, change vessel state or perform any enforcement.
+   */
+  evaluateFromAiSignals(
+    vessel: NmcVesselProfile,
+    severities: Record<RiskFactorKey, number>,
+    config: RiskEngineConfig = this.configSubject.value
+  ): RiskEvaluation {
+    const keys: RiskFactorKey[] = ['movement', 'inspection', 'certificate', 'dataQuality', 'history'];
+    // Historical sixth factor is not active in the NMC five-factor model.
+    if (!keys.every(key => Number.isFinite(severities[key]) && severities[key] >= 0 && severities[key] <= 100)) {
+      throw new Error('Five core vessel AI signals are required for risk projection.');
+    }
+
+    let score = this.weightedScore(severities, config.weights);
+    const highestSignal = Math.max(...keys.map(key => severities[key]));
+    if (config.mode === 'conservative') {
+      score += Math.max(0, highestSignal - score) * 0.28;
+    } else if (config.mode === 'max-signal') {
+      score = (score * 0.68) + (highestSignal * 0.32);
+    }
+    score = Math.round(this.clamp(score, 0, 100));
+
+    const factors: RiskFactorEvaluation[] = keys.map(key => {
+      const weight = Math.max(0, Number(config.weights[key] || 0));
+      return {
+        key,
+        severity: severities[key],
+        weight,
+        rawContribution: this.weightContribution(severities[key], weight, config.weights),
+        contribution: 0
+      };
+    });
+
+    const rawTotal = factors.reduce((total, factor) => total + factor.rawContribution, 0);
+    let assigned = 0;
+    factors.forEach((factor, index) => {
+      factor.contribution = index === factors.length - 1
+        ? Math.max(0, score - assigned)
+        : (rawTotal ? Math.max(0, Math.round(factor.rawContribution / rawTotal * score)) : 0);
+      assigned += factor.contribution;
+    });
+    const baseScore = this.getBaselineRisk(vessel);
+    return {
+      score,
+      baseScore,
+      delta: score - baseScore,
+      level: this.levelForScore(score, config),
+      factors
     };
   }
 
@@ -239,8 +372,19 @@ export class NmcRiskEngineService {
     const errors: string[] = [];
     const totalWeight = Object.values(config.weights).reduce((sum, value) => sum + Number(value || 0), 0);
 
-    if (Math.round(totalWeight) !== 100) {
-      errors.push('Risk factor weights must total 100%.');
+    if (Object.values(config.weights).some(value =>
+      !Number.isInteger(value) || value < 0 || value > 100)) {
+      errors.push('Each risk factor weight must be a whole percentage between 0 and 100.');
+    }
+    if (totalWeight !== 100) {
+      errors.push('Risk factor weights must total exactly 100%.');
+    }
+    if (!['weighted','conservative','max-signal'].includes(config.mode)) {
+      errors.push('Calculation mode is not valid.');
+    }
+    if (![config.thresholds.watch,config.thresholds.high,config.thresholds.critical]
+      .every(Number.isInteger)) {
+      errors.push('Risk thresholds must be whole numbers.');
     }
 
     if (
@@ -291,7 +435,9 @@ export class NmcRiskEngineService {
         deterministic(7, 21, 10) * 0.75 +
         (age > 20 ? 5 : age > 15 ? 3 : 0),
         0, 100
-      )
+      ),
+      documentIntegrity: 0 // No A03 evidence in local fixtures; zero weight by default. Never claim verified quality.
+
     };
   }
 

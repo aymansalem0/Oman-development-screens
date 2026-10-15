@@ -117,7 +117,7 @@ a, button, textarea { font: inherit; }
 
 .ai-main {
   max-width: none;
-  margin: 0 0 0 216px;
+  margin: 0 0 0 240px;
   padding: 106px 24px 34px;
 }
 
@@ -989,7 +989,7 @@ a, button, textarea { font: inherit; }
 }
 .ai-shell.rtl .ai-main {
   margin-left: 0;
-  margin-right: 216px;
+  margin-right: 240px;
 }
 .ai-shell.rtl .nav-item {
   text-align: right;
@@ -1086,3 +1086,47 @@ a, button, textarea { font: inherit; }
     width: 100%;
   }
 }
+
+
+/* A live factor evaluation must not be mistaken for the synthetic assessment preview. */
+.live-risk-interpretation {
+  margin-top: 12px;
+  padding: 18px 20px;
+  background: linear-gradient(120deg, #f1fbf8 0%, #f8fcff 100%);
+  border: 1px solid #c2e6d8;
+  border-radius: 14px;
+  color: #315c57;
+}
+.live-risk-interpretation h3 { margin-top: 4px; font-size: 17px; font-weight: 800; }
+.live-risk-interpretation p { margin: 11px 0 0; font-size: 11px; line-height: 1.65; color: #526f69; }
+.live-risk-interpretation p strong { color: #1e6150; }
+.live-risk-interpretation .sample-toggle {
+  margin-top: 15px;
+  border: 1px solid #badad1;
+  background: #fff;
+  border-radius: 9px;
+  color: #176c5a;
+  padding: 10px 14px;
+  font-size: 11px;
+  font-weight: 750;
+  cursor: pointer;
+}
+.live-risk-interpretation .sample-toggle:hover { background: #effaf6; }
+.sample-warning {
+  margin: 14px 0 9px;
+  padding: 11px 14px;
+  background: #fff7e9;
+  color: #855b23;
+  border: 1px solid #efd9b4;
+  border-radius: 10px;
+  font-size: 11px;
+  line-height: 1.6;
+  font-weight: 700;
+}
+
+
+.case-decision-alert{border:1px solid #d6e8ed;background:#f7fbfc;color:#507081;border-radius:10px;padding:12px 15px;font-size:11px;line-height:1.65;margin:10px 0}
+.case-decision-alert a{color:#087f76;text-decoration:underline;margin-inline-start:8px}
+.case-decision-alert.success{border-color:#bde7d5;background:#f0fbf5;color:#167652}
+.case-decision-save{border:1px solid #087f76;background:#0d9385;color:#fff;border-radius:9px;padding:10px 13px;font-size:11px;font-weight:750;margin:10px 0;cursor:pointer}
+.case-decision-save:disabled{opacity:.55;cursor:wait}

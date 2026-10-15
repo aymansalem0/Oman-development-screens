@@ -3,9 +3,9 @@
     <div class="brand-block">
       <div class="brand-mark">▣</div>
       <div>
-        <div class="eyebrow">{{ copy('MOEI · National Maritime Center', 'وزارة الطاقة والبنية التحتية · المركز البحري الوطني') }}</div>
+        <div class="eyebrow">{{ copy('MOEI Maritime Unified Platform', 'المنصة البحرية الموحدة لوزارة الطاقة والبنية التحتية') }}</div>
         <h1>{{ copy('NMC Case Workspace', 'مساحة عمل الحالة بالمركز البحري') }}</h1>
-        <p>{{ copy('Coordinated maritime action, ownership, SLA and resolution', 'تنسيق الإجراءات البحرية والملكية ومستويات الخدمة والإغلاق') }}</p>
+        <p>{{ copy('Coordinated maritime decisions, execution and verified resolution', 'القرارات البحرية والتنفيذ والإغلاق بعد التحقق') }}</p>
       </div>
     </div>
 
@@ -20,64 +20,64 @@
     </div>
   </header>
 
-  <aside class="nmc-sidebar">
-    <div class="sidebar-section-label">{{ copy('OPERATIONS', 'العمليات') }}</div>
-
-    <a class="nav-item" routerLink="/moei/nmc">
-      <span class="nav-icon">◉</span>
-      <span>{{ copy('Command Center', 'مركز القيادة') }}</span>
-    </a>
-
-    <a class="nav-item" [routerLink]="['/moei/nmc/vessel', vessel.imo]">
-      <span class="nav-icon">⌖</span>
-      <span>{{ copy('Vessel Monitoring', 'مراقبة السفن') }}</span>
-    </a>
-
-    <button type="button" class="nav-item">
-      <span class="nav-icon">⚠</span>
-      <span>{{ copy('Alerts & Events', 'التنبيهات والأحداث') }}</span>
-    </button>
-
-    <a class="nav-item active" [routerLink]="['/moei/nmc/vessel', vessel.imo, 'case']">
-      <span class="nav-icon">▣</span>
-      <span>{{ copy('Cases & Incidents', 'الحالات والحوادث') }}</span>
-    </a>
-
-    <a class="nav-item" [routerLink]="['/moei/nmc/vessel', vessel.imo, 'smart-inspection']">
-      <span class="nav-icon">✓</span>
-      <span>{{ copy('Smart Inspection', 'المعاينة الذكية') }}</span>
-    </a>
-
-    <div class="sidebar-section-label second">{{ copy('INTELLIGENCE', 'الاستخبارات') }}</div>
-
-    <a class="nav-item" [routerLink]="['/moei/nmc/vessel', vessel.imo, 'ai-assessment']">
-      <span class="nav-icon">✦</span>
-      <span>{{ copy('Maritime Intelligence', 'الاستخبارات البحرية') }}</span>
-    </a>
-
-    <button type="button" class="nav-item">
-      <span class="nav-icon">▥</span>
-      <span>{{ copy('Dashboards', 'لوحات المعلومات') }}</span>
-    </button>
-
-    <a class="nav-item" routerLink="/moei/nmc/admin/risk-configuration">
-      <span class="nav-icon">⚙</span>
-      <span>{{ copy('Configuration', 'الإعدادات') }}</span>
-    </a>
-
-    <div class="system-health">
-      <div>
-        <span class="health-dot"></span>
-        <strong>{{ copy('Systems operational', 'الأنظمة تعمل بصورة طبيعية') }}</strong>
-      </div>
-      <small>{{ copy('Case orchestration active', 'تنسيق الحالات نشط') }}</small>
-    </div>
-  </aside>
+  <app-nmc-navigation></app-nmc-navigation>
 
   <main class="case-main">
+    <div *ngIf="centralLoading" class="central-case-banner">
+      {{copy('Loading centrally recorded maritime case…','جاري تحميل الحالة البحرية المحفوظة مركزيًا…')}}
+    </div>
+    <div *ngIf="centralError" class="central-case-banner error" role="alert">{{centralError}}</div>
+    <div *ngIf="centralSuccess" class="central-case-banner success" role="status">{{centralSuccess}}</div>
+    <section *ngIf="(!centralCase||centralCase.status==='RESOLVED')&&!centralLoading" class="central-case-empty">
+      <span>▣</span>
+      <h2>{{centralCase?.status==='RESOLVED'
+            ?copy('The previous case is closed — open a new case from an acknowledged alert',
+                  'الحالة السابقة مغلقة — افتح حالة جديدة من تنبيه مستلم')
+            :copy('No maritime case has been opened for this vessel',
+                  'لم يتم فتح حالة بحرية لهذه السفينة')}}</h2>
+      <p>{{copy('Notifications report events and receipt only. An NMC Officer may open an operational case here after acknowledging an active alert; decisions and AI recommendations are then managed inside the case. Previous resolved cases remain in the audit history.',
+                'شاشة التنبيهات لعرض الأحداث وتسجيل استلامها فقط. يمكن لموظف المركز فتح حالة تشغيلية من هنا بعد استلام تنبيه نشط، ثم إدارة القرارات وتوصيات الذكاء الاصطناعي داخل الحالة.')}}</p>
+
+      <p *ngIf="caseAlertLoading" class="case-alert-loading">
+        {{copy('Checking eligible acknowledged alerts…','جارٍ التحقق من التنبيهات المستلمة والمؤهلة…')}}
+      </p>
+      <div *ngIf="!caseAlertLoading&&caseEligibleAlerts.length" class="case-alert-candidates">
+        <h3>{{copy('Acknowledged alerts available for case opening',
+                    'التنبيهات المستلمة والمتاحة لفتح حالة')}}</h3>
+        <article class="case-alert-choice" *ngFor="let alert of caseEligibleAlerts">
+          <div class="case-alert-description">
+            <strong>{{copy('Maritime risk alert','تنبيه مخاطر بحرية')}} · {{alert.severity}} · IMO {{alert.imo}}</strong>
+            <small>{{alert.createdAt|date:'medium'}} · {{alert.sourceLevel}} · {{alert.sourceScore}}/100</small>
+            <p>{{alert.triggeringRiskTrigger==='CRITICAL_OPEN_FINDING'
+              ?copy('A critical open maritime finding is recorded','توجد ملاحظة بحرية حرجة مفتوحة')
+              :copy('A high or critical vessel risk classification was recorded','تم تسجيل تصنيف مخاطر مرتفع أو حرج للسفينة')}}</p>
+          </div>
+          <button type="button" class="case-open-button" [disabled]="caseCreateBusy||centralBusy"
+                  (click)="createCaseFromAlert(alert)">
+            + {{copy('Open Maritime Case','فتح حالة بحرية')}}
+          </button>
+        </article>
+        <p class="case-ai-consent">
+          {{copy('Opening a case makes one explicit A01 request (possible AI usage cost). No AI recommendation becomes an approved task until an authorized officer accepts it.',
+                  'فتح الحالة يستدعي A01 مرة واحدة بعد موافقة صريحة (وقد يترتب عليه تكلفة استخدام). لا تتحول توصيات AI إلى مهام معتمدة إلا بعد موافقة الموظف المخوّل.')}}
+        </p>
+      </div>
+      <p *ngIf="!caseAlertLoading&&!caseEligibleAlerts.length" class="case-alert-empty">
+        {{caseUnacknowledgedAlerts>0
+          ?copy('This vessel has a new alert that must be acknowledged in Notifications before opening a case.',
+                'توجد تنبيهات جديدة لهذه السفينة؛ يجب استلامها في شاشة التنبيهات أولًا قبل فتح حالة.')
+          :copy('No eligible acknowledged active alerts were found for this vessel.',
+                'لا توجد تنبيهات نشطة مستلمة ومؤهلة لفتح حالة لهذه السفينة.')}}
+      </p>
+      <a routerLink="/moei/nmc/alerts" class="case-alert-back">
+        {{copy('Back to Alerts & Notifications','العودة إلى التنبيهات والإشعارات')}} →
+      </a>
+    </section>
+    <ng-container *ngIf="centralCase">
+
     <section class="case-hero">
       <div class="case-identity">
-        <span class="case-kicker">{{ copy('ACTIVE MARITIME CASE', 'حالة بحرية نشطة') }}</span>
+        <span class="case-kicker">{{centralCase.status==='RESOLVED'?copy('RESOLVED MARITIME CASE','حالة بحرية مغلقة'):copy('ACTIVE MARITIME CASE','حالة بحرية نشطة')}}</span>
         <div class="case-title-row">
           <div>
             <h2>{{ caseId }}</h2>
@@ -87,27 +87,27 @@
         </div>
 
         <div class="case-context">
-          <span>{{ copy('Case owner', 'مالك الحالة') }}: <strong>{{ copy('NMC Duty Officer', 'ضابط مناوبة المركز البحري') }}</strong></span>
-          <span>{{ copy('Opened', 'تاريخ الفتح') }}: <strong>07 Oct 2026 · 22:45</strong></span>
+          <span>{{ copy('Case owner', 'مالك الحالة') }}: <strong>{{copy('NMC Duty Officer', 'ضابط مناوبة المركز البحري')}}</strong></span>
+          <span>{{ copy('Opened', 'تاريخ الفتح') }}: <strong>{{centralCase.createdAt|date:'medium'}}</strong></span>
           <span>{{ copy('Source', 'المصدر') }}: <strong>{{ copy('AI assessment + human approval', 'تقييم الذكاء الاصطناعي + اعتماد بشري') }}</strong></span>
         </div>
       </div>
 
       <div class="case-metrics">
         <article class="metric-card risk" [ngClass]="riskClass">
-          <small>{{ copy('Current risk', 'المخاطر الحالية') }}</small>
+          <small>{{copy('Risk at case creation (saved AI assessment)','المخاطر عند فتح الحالة (تقييم AI المحفوظ)')}}</small>
           <strong>{{ currentRisk }}</strong>
           <span>{{ riskLevelLabel }}</span>
         </article>
         <article class="metric-card">
-          <small>{{ copy('Risk change', 'تغير المخاطر') }}</small>
-          <strong [class.positive-change]="riskDelta < 0">{{ riskDelta > 0 ? '+' : '' }}{{ riskDelta }}</strong>
-          <span>{{ copy('from', 'من') }} {{ vessel.risk }}</span>
+          <small>{{ copy('Post-inspection risk reassessment', 'إعادة تقييم المخاطر بعد المعاينة') }}</small>
+          <strong>{{ riskReassessmentPending ? copy('Pending', 'مطلوبة') : copy('Not applicable yet', 'غير مطلوبة حاليًا') }}</strong>
+          <span>{{ copy('No assumed risk reduction', 'لا يوجد تخفيض افتراضي للمخاطر') }}</span>
         </article>
         <article class="metric-card">
-          <small>{{ copy('Case progress', 'تقدم الحالة') }}</small>
+          <small>{{ copy('Task completion · not case readiness', 'إنجاز المهام · ليس جاهزية الإغلاق') }}</small>
           <strong>{{ progressPercent }}%</strong>
-          <span>{{ completedTasks }}/{{ tasks.length }} {{ copy('tasks complete', 'مهام مكتملة') }}</span>
+          <span>{{ completedTasks }}/{{ tasks.length }} {{ copy('approved operational tasks completed', 'مهام تشغيلية معتمدة مكتملة') }}</span>
         </article>
         <article class="metric-card">
           <small>{{ copy('Open / escalated', 'مفتوحة / مصعدة') }}</small>
@@ -117,11 +117,79 @@
       </div>
     </section>
 
+    <div class="case-risk-reference" *ngIf="centralCase as linked">
+      <span>{{copy('Immutable source assessment','التقييم الأصلي غير القابل للتعديل')}}: {{linked.sourceAssessmentId || '—'}} · {{linked.sourceLevel}}</span>
+      <a [routerLink]="['/moei/nmc/vessel',linked.imo,'risk']">{{copy('View Full Risk Intelligence & Evidence →','عرض تفاصيل تحليل المخاطر والأدلة ←')}}</a>
+    </div>
+    <section class="case-incident-workflow" *ngIf="(centralCase.incidentEvents||[]).length">
+      <div class="case-incident-head">
+        <h3>{{copy('Maritime Incidents · Automated Intake & Case Actions',
+          'الحوادث البحرية · الاستقبال التلقائي وإجراءات إدارة الحالات')}}</h3>
+        <span>{{centralCase.incidentEvents?.length}} {{copy('linked incident(s)','حادث مرتبط')}}</span>
+      </div>
+      <p class="case-incident-caption">
+        {{copy('A02/A01 analysis and NMC incident risk are recorded automatically. Only an NMC officer can approve a follow-up. Actions and task ownership are managed here.',
+        'يُسجل تحليل A02/A01 ودرجة مخاطر الحادث تلقائيًا. لا تعتمد المتابعة إلا بواسطة موظف، وتدار المهام والمسؤوليات من داخل هذه الحالة.')}}
+      </p>
+
+      <article class="case-incident-event" *ngFor="let inc of centralCase.incidentEvents">
+        <div class="case-incident-summary">
+          <div>
+            <strong>{{inc.incidentId}} · {{inc.incidentType}}</strong>
+            <small>{{inc.sourceOrganization}} · {{inc.portOrZone}}</small>
+          </div>
+          <span class="case-incident-risk">{{inc.incidentRiskScore}}/100 · {{inc.incidentRiskBand}}</span>
+        </div>
+        <p class="case-incident-description">{{inc.sourceDescription}}</p>
+        <p class="case-incident-provenance">
+          {{copy('Source status','حالة البلاغ')}}: {{inc.sourceOperationalStatus}} ·
+          {{copy('A01 proposed follow-up','المتابعة المقترحة من A01')}}:
+          <strong>{{inc.suggestedFollowup}}</strong> ·
+          {{copy('Next step','الخطوة التالية')}}: {{inc.suggestedFollowupState}}
+        </p>
+        <div class="case-incident-decision" *ngIf="inc.decisionStatus==='PENDING_HUMAN_REVIEW'; else incidentDecisionDone">
+          <span>{{copy('Awaiting officer decision · no tasks have been assigned for this incident',
+            'بانتظار قرار الموظف · لم تُسند مهام لهذا الحادث بعد')}}</span>
+          <label>{{copy('Approved follow-up / modification','المتابعة المطلوبة / التعديل')}}
+            <select [(ngModel)]="incidentFollowupSelection[inc.incidentId]">
+              <option *ngFor="let route of incidentFollowupOptions" [value]="route">{{route}}</option>
+            </select>
+          </label>
+          <textarea rows="2" maxlength="500" [(ngModel)]="incidentOfficerReasons[inc.incidentId]"
+            [placeholder]="copy('Officer reason and evidence review — required','مبرر القرار ومراجعة الأدلة — إلزامي')"></textarea>
+          <div class="case-incident-buttons">
+            <button type="button" [disabled]="centralBusy"
+              (click)="reviewCaseIncident(inc.incidentId,'ACCEPT')">
+              {{copy('Accept recommended action','اعتماد الإجراء المقترح')}}
+            </button>
+            <button type="button" class="secondary-btn" [disabled]="centralBusy"
+              (click)="reviewCaseIncident(inc.incidentId,'MODIFY')">
+              {{copy('Modify follow-up','تعديل المتابعة')}}
+            </button>
+            <button type="button" class="secondary-btn" [disabled]="centralBusy"
+              (click)="reviewCaseIncident(inc.incidentId,'REJECT')">
+              {{copy('Reject & request verification','رفض وطلب تحقق')}}
+            </button>
+          </div>
+        </div>
+        <ng-template #incidentDecisionDone>
+          <div class="case-incident-approved">
+            ✓ {{copy('Officer approved','اعتمد الموظف')}}: {{inc.officerName}} ·
+            {{inc.officerDecision}} · {{inc.approvedFollowup}}
+            <p>{{copy('Reason','المبرر')}}: {{inc.officerReason}}</p>
+            <small>{{copy('Execution and tracking continue through the central tasks listed below.',
+              'يستمر التنفيذ والمتابعة من خلال المهام المركزية الموجودة أدناه.')}}</small>
+          </div>
+        </ng-template>
+      </article>
+    </section>
+
     <section class="case-progress-strip">
       <div class="progress-head">
         <div>
-          <strong>{{ copy('Case progress', 'تقدم الحالة') }}</strong>
-          <p>{{ copy('Mandatory tasks must be completed before case resolution.', 'يجب استكمال المهام الإلزامية قبل إغلاق الحالة.') }}</p>
+          <strong>{{ copy('Approved operational task completion', 'إنجاز المهام التشغيلية المعتمدة') }}</strong>
+          <p>{{ copy('Task percentage does not include pending AI decisions or post-inspection risk verification.',
+              'نسبة إنجاز المهام لا تشمل قرارات AI المعلقة أو إعادة تقييم المخاطر بعد المعاينة.') }}</p>
         </div>
         <span>{{ progressPercent }}%</span>
       </div>
@@ -132,18 +200,263 @@
       </div>
     </section>
 
+
+    <nav class="case-journey" [attr.aria-label]="copy('Case lifecycle','مراحل الحالة')">
+      <span>{{copy('01 · Case overview','٠١ · ملخص الحالة')}}</span>
+      <span>{{copy('02 · Situation & evidence','٠٢ · الموقف والأدلة')}}</span>
+      <span>{{copy('03 · Human decision','٠٣ · القرار البشري')}}</span>
+      <span>{{copy('04 · Execution / inspection','٠٤ · التنفيذ والمعاينة')}}</span>
+      <span>{{copy('05 · Reassessment','٠٥ · إعادة التقييم')}}</span>
+      <span>{{copy('06 · Verified closure','٠٦ · الإغلاق بعد التحقق')}}</span>
+    </nav>
+    <section class="ai-action-panel" aria-label="Airia A01 action plan">
+      <div class="ai-action-heading">
+        <div>
+          <span class="section-kicker">{{copy('02—03 · SITUATION & DECISION INTELLIGENCE','٠٢—٠٣ · تحليل الموقف والقرار')}}</span>
+          <h3>{{copy('Case intelligence & human decision','معلومات الحالة والقرار البشري')}}</h3>
+          <p>{{copy('A01 proposes. The human officer approves the operational route; the original saved risk is not changed here.',
+            'يقترح A01 ويعتمد الموظف المسار التشغيلي؛ ولا تُعدّل درجة المخاطر الأصلية المحفوظة هنا.')}}</p>
+        </div>
+        <button *ngIf="!centralCase.actionPlan" type="button" class="ai-plan-button"
+                [disabled]="centralBusy||caseStatus==='Resolved'" (click)="generateAiActions()">
+          ↻ {{ copy('Retry A01 recommendations', 'إعادة محاولة تحميل توصيات A01') }}
+        </button>
+      </div>
+      <div class="ai-plan-alert" *ngIf="!centralCase.actionPlan">
+        {{ copy('A01 recommendations are prepared automatically when Create Maritime Case is confirmed. If this case was opened before the change or A01 failed, use Retry. No tasks are invented.',
+          'يتم إعداد توصيات A01 عند تأكيد إنشاء الحالة البحرية. إذا كانت الحالة قديمة أو فشل A01، استخدم إعادة المحاولة. لن ننشئ مهام افتراضية.') }}
+      </div>
+      <ng-container *ngIf="centralCase.actionPlan as plan">
+        <div class="ai-plan-alert" *ngIf="plan.sourceCurrency?.historicalSource" role="alert">
+          <strong>{{copy('HISTORICAL CASE ASSESSMENT — OFFICER REVIEW REQUIRED',
+            'تقييم تاريخي للحالة — المراجعة البشرية مطلوبة')}}</strong>
+          <p>{{copy('A01 recommendations were generated using the original case risk and evidence, NOT the latest vessel risk. Compare the updated vessel intelligence before approving any operation.',
+            'تم إعداد توصيات A01 باستخدام مخاطر وأدلة الحالة الأصلية، وليس أحدث تقييم للسفينة. قارن تحليل المخاطر الأحدث قبل اعتماد أي إجراء تشغيلي.')}}</p>
+          <small>{{copy('Original risk','المخاطر الأصلية')}}: {{plan.sourceScore}}/100 ·
+            {{copy('Latest risk at review','أحدث مخاطر وقت المراجعة')}}:
+            {{plan.sourceCurrency?.latestRiskScore ?? '—'}}/100 ·
+            {{plan.sourceCurrency?.latestAssessmentId || '—'}}</small>
+        </div>
+        <div class="case-situation">
+          <div>
+            <span class="section-kicker">{{copy('WHAT IS HAPPENING?','ما الذي يحدث؟')}}</span>
+            <h4>{{copy('A01 situation assessment','تقييم الموقف بواسطة A01')}}</h4>
+            <p>{{plan.summary || copy('No situation summary returned by A01.','لم يرجع A01 ملخصًا للموقف.')}}</p>
+          </div>
+          <div>
+            <span class="section-kicker">{{copy('WHY DOES IT MATTER?','لماذا يستحق الاهتمام؟')}}</span>
+            <h4>{{copy('Operational significance','الأهمية التشغيلية')}}</h4>
+            <p>{{plan.whyItMatters || copy('No explanation supplied; manual verification required.','لم يقدم A01 تفسيرًا؛ يلزم التحقق البشري.')}}</p>
+          </div>
+          <small>{{copy('Immutable saved risk','المخاطر الأصلية المحفوظة')}}:
+            {{plan.sourceScore}}/100 · {{plan.sourceLevel}} · {{plan.sourceAssessmentId}}</small>
+        </div>
+        <article class="primary-decision" *ngIf="plan.primaryProposedDecision as primary">
+          <span class="section-kicker">{{copy('PRIMARY AI-PROPOSED DECISION · NOT AUTHORIZATION','القرار الرئيسي المقترح من AI · ليس اعتمادًا')}}</span>
+          <h4>{{lang.isArabic?primary.titleAr:primary.titleEn}}</h4>
+          <p>{{lang.isArabic?primary.rationaleAr:primary.rationaleEn}}</p>
+          <p><strong>{{copy('Expected outcome','النتيجة المتوقعة')}}:</strong>
+            {{lang.isArabic?primary.expectedOutcomeAr:primary.expectedOutcomeEn}}</p>
+          <small>{{copy('Supporting evidence','الأدلة الداعمة')}}: {{primary.evidenceIds.join(', ')}}</small>
+          <p class="primary-note">{{copy('Human approval and configured authority checks are still required. Review the linked actions below.',
+            'يلزم الاعتماد البشري والتحقق من الصلاحيات؛ راجع إجراءات التنفيذ أدناه.')}}</p>
+        </article>
+        <div class="legacy-decision-upgrade" *ngIf="canConvertLegacyA01" role="region"
+          [attr.aria-label]="copy('Saved-A01 single-decision upgrade','تحويل توصيات A01 المحفوظة إلى قرار واحد')">
+          <span class="section-kicker">{{copy('EXISTING CASE · SAVED AIRIA A01 OUTPUT',
+            'حالة حالية · استجابة Airia A01 محفوظة')}}</span>
+          <h4>{{copy('Review one maritime decision with its linked actions',
+            'مراجعة قرار بحري واحد وإجراءاته المرتبطة')}}</h4>
+          <p>{{copy('This case already has individual A01 recommendations saved under the earlier workflow. Convert the same saved recommendations into one NMC-proposed business decision, without calling Airia again or changing the source risk. The original A01 outputs remain in case history.',
+            'هذه الحالة تحتوي توصيات A01 محفوظة بالنظام السابق. يمكنك تحويل نفس التوصيات إلى قرار تشغيلي واحد بقواعد NMC دون استدعاء Airia مجددًا أو تغيير المخاطر الأصلية؛ مع الاحتفاظ بالتوصيات الأصلية في سجل الحالة.')}}</p>
+          <button type="button" class="ai-plan-button"
+            [disabled]="centralBusy" (click)="initializeOperationalDecision()">
+            {{copy('Create one decision from saved A01 · No AI call',
+              'استخراج قرار واحد من A01 المحفوظ · بدون استدعاء AI')}}
+          </button>
+        </div>
+        <div class="decision-unavailable" *ngIf="!canConvertLegacyA01 && !plan.primaryProposedDecision && !centralCase.operationalDecision" role="status">
+          <strong>{{copy('Case-level AI decision not yet available','القرار الرئيسي المقترح من AI غير متاح بعد')}}</strong>
+          <p>{{copy('The current Airia integration returns individual action proposals, not the approved case-level decision contract. Below are legacy action proposals only; no primary decision or final authorization is fabricated.',
+            'التكامل الحالي مع Airia يُرجع إجراءات مقترحة منفصلة وليس عقد القرار الرئيسي المعتمد للحالة. المعروض أدناه إجراءات مقترحة بالنمط السابق، دون اختلاق قرار رئيسي أو اعتماد نهائي.')}}</p>
+        </div>
+
+        <section class="single-decision-card" *ngIf="centralCase.operationalDecision as op">
+          <div class="single-decision-head">
+            <span class="section-kicker">{{copy('ONE OPERATIONAL DECISION · A01 INFORMED',
+              'قرار تشغيلي واحد · مدعوم بتحليل A01')}}</span>
+            <span class="single-decision-badge">{{op.decisionStatus}}</span>
+          </div>
+          <h3>{{lang.isArabic?(op.approvedTitleAr||op.titleAr):(op.approvedTitleEn||op.titleEn)}}</h3>
+          <p *ngIf="!selectedActionNeedsOfficerRationale"><strong>{{copy('Why this route','مبررات المسار')}}:</strong> {{op.rationale}}</p>
+          <p *ngIf="selectedActionNeedsOfficerRationale" class="decision-provenance" role="alert">
+            {{copy('A01 returned evidence IDs but no action-specific rationale. Review the saved Situation Assessment and evidence above. To accept this NMC-selected decision, an officer must enter a verified business reason below; it will be recorded as human-authored, never as an A01 explanation.',
+              'أعاد A01 معرفات الأدلة دون مبرر خاص بهذا الإجراء. راجع تحليل الموقف والأدلة المحفوظة أعلاه. لاعتماد القرار المختار بقواعد NMC، يجب أن يسجل الموظف مبررًا تشغيليًا موثقًا أدناه؛ وسيُحفظ كمبرر بشري وليس كتفسير صادر عن A01.')}}</p>
+          <p><strong>{{copy('Original Airia A01 proposal (unchanged)','توصية Airia A01 الأصلية (دون تغيير)')}}:</strong>
+            {{op.originalA01Proposal.title}} · {{op.originalA01Proposal.actionType}}</p>
+          <div class="decision-trace">
+            <span>{{copy('Risk remains','المخاطر ثابتة')}}: {{centralCase.sourceScore}}/100 · {{centralCase.sourceLevel}}</span>
+            <span>{{copy('Evidence','الأدلة')}}: {{op.evidenceIds.join(', ')}}</span>
+            <span>{{copy('A01 confidence','ثقة A01')}}: {{op.confidence*100|number:'1.0-0'}}%</span>
+          </div>
+          <p class="decision-provenance">
+            {{copy('The primary route is selected by NMC POC rules from actual A01 proposed actions. It is NOT a directly AI-authored port/detention order or a legal authorization.',
+              'المسار الرئيسي مختار بقواعد NMC التجريبية من توصيات A01 الفعلية، وليس أمر منع أو احتجاز صادرًا عن AI ولا اعتمادًا قانونيًا.')}}
+          </p>
+          <h4>{{copy('Decision-linked execution actions','الإجراءات المرتبطة بالقرار')}}</h4>
+          <ol class="decision-step-list">
+            <li *ngFor="let step of (op.approvedWorkflowSteps || op.workflowSteps)">
+              <strong>{{lang.isArabic?step.titleAr:step.titleEn}}</strong>
+              <small>{{step.role}} · {{step.kind}}</small>
+            </li>
+          </ol>
+          <div class="decision-review-form" *ngIf="op.decisionStatus==='PENDING_HUMAN_REVIEW'">
+            <label>{{copy('Alternative decision (for Modify)','قرار بديل (للتعديل)')}}</label>
+            <select [(ngModel)]="selectedOperationalCode" [disabled]="centralBusy || !decisionCatalogue.length">
+              <option value="">{{copy('Select a different decision','اختر قرارًا بديلًا')}}</option>
+              <option *ngFor="let item of decisionCatalogue" [value]="item.code"
+                [disabled]="item.code===op.code">
+                {{lang.isArabic?item.titleAr:item.titleEn}}
+                {{item.regulated ? copy(' — regulated; simulation only',' — منظم؛ محاكاة فقط'):''}}
+              </option>
+            </select>
+            <small *ngIf="decisionCatalogueError" class="decision-provenance">{{decisionCatalogueError}}</small>
+            <textarea rows="3" [(ngModel)]="operationalDecisionReason"
+              [placeholder]="selectedActionNeedsOfficerRationale?
+                  copy('Officer-verified business reason required for Accept / Modify / Reject',
+                       'مبرر تشغيلي موثق إلزامي للاعتماد أو التعديل أو الرفض'):
+                  copy('Business justification — mandatory for Modify/Reject',
+                       'سبب القرار التشغيلي — إلزامي للتعديل أو الرفض')"></textarea>
+            <div class="ai-decision-buttons">
+              <button type="button" [disabled]="centralBusy"
+                (click)="decideOperational('ACCEPT')">
+                ✓ {{copy('Accept decision & create action plan','اعتماد القرار وإنشاء خطة التنفيذ')}}
+              </button>
+              <button type="button" [disabled]="centralBusy || !decisionCatalogue.length"
+                (click)="decideOperational('MODIFY')">
+                {{copy('Modify decision & rebuild action plan','تعديل القرار وإعادة بناء خطة التنفيذ')}}
+              </button>
+              <button type="button" [disabled]="centralBusy"
+                (click)="decideOperational('REJECT')">
+                {{copy('Reject decision','رفض القرار')}}
+              </button>
+            </div>
+          </div>
+          <div *ngIf="op.decisionStatus!=='PENDING_HUMAN_REVIEW'" class="decision-approved">
+            <strong>{{copy('Human decision','القرار البشري')}}: {{op.humanDecision}}</strong>
+            <span>{{op.decisionNote || '—'}}</span>
+            <p *ngIf="op.humanDecision==='MODIFY'">
+              {{copy('The original AI proposal was preserved and its modification was queued for the future AI decision-improvement agent. It has NOT been transmitted.',
+                'تم حفظ اقتراح AI الأصلي وإضافة التعديل إلى طابور تغذية Agent تحسين القرارات مستقبلًا؛ لم يتم إرساله بعد.')}}
+            </p>
+          </div>
+        </section>
+        <section *ngIf="centralCase.restriction as restriction" class="poc-restriction">
+          <span class="section-kicker">{{copy('REGULATORY WORKFLOW — NON-OPERATIONAL POC SIMULATION',
+            'مسار تنظيمي — محاكاة تجريبية غير تشغيلية')}}</span>
+          <h4>{{restriction.type==='DETENTION'
+            ?copy('Proposed detention / no departure until rectification',
+              'احتجاز مقترح / منع المغادرة لحين الإصلاح')
+            :copy('Proposed prohibition of UAE port entry','منع دخول الموانئ الإماراتية المقترح')}}</h4>
+          <strong>{{restriction.status}}</strong>
+          <p>{{copy('No legal detention, entry ban, departure blockade or message to any UAE port occurs. A supervisor simulation approval and evidence record are required.',
+            'لا يتم احتجاز سفينة حقيقية أو منع دخولها أو مغادرتها أو إرسال تعليمات إلى أي ميناء إماراتي. يلزم اعتماد مشرف تجريبي وتوثيق الأدلة.')}}</p>
+          <button *ngIf="restriction.status==='PENDING_AUTHORITY_APPROVAL'" type="button"
+            [disabled]="centralBusy" (click)="authorizePocRestriction()">
+            {{copy('Authorize restriction in POC simulator only','اعتماد القيد داخل المحاكاة فقط')}}
+          </button>
+          <button *ngIf="restriction.status==='SIMULATED_ACTIVE'" type="button"
+            [disabled]="centralBusy" (click)="releasePocRestriction()">
+            {{copy('Release simulated restriction after evidence review','رفع قيد المحاكاة بعد مراجعة الأدلة')}}
+          </button>
+          <small *ngIf="restriction.authorityReference">{{copy('Demo authority reference','مرجع اعتماد المحاكاة')}}:
+            {{restriction.authorityReference}}</small>
+        </section>
+        <ng-container *ngIf="!centralCase.operationalDecision && !canConvertLegacyA01">
+        <h4 class="action-section-title">{{copy('Proposed execution actions · officer review','إجراءات التنفيذ المقترحة · للمراجعة البشرية')}}</h4>
+        <div class="ai-action-rows">
+          <article class="ai-action-row" *ngFor="let action of plan.proposedActions">
+            <div class="ai-action-detail">
+              <div class="ai-action-title"><b>{{action.title}}</b>
+                <span class="ai-decision-state">{{action.decision}}</span></div>
+              <p *ngIf="action.reason!=='A01 recommendation linked to the validated source evidence IDs'">{{action.reason}}</p>
+              <p *ngIf="action.reason==='A01 recommendation linked to the validated source evidence IDs'" class="decision-unavailable">
+                {{copy('A01 did not provide action-specific business reasoning. This is only an evidence-linked legacy placeholder and must not be treated as an explanation.',
+                  'لم يقدم A01 مبررًا تشغيليًا خاصًا بهذا الإجراء؛ النص السابق مجرد بديل قديم مرتبط بالأدلة وليس تفسيرًا صالحًا للاعتماد.')}}
+              </p>
+              <small>A01 · {{action.actionType}} · {{action.ownerRole}} · {{action.priority}} ·
+                {{ copy('confidence', 'الثقة') }} {{(action.confidence*100)|number:'1.0-0'}}% ·
+                {{action.evidenceIds.join(', ')}}</small>
+              <p *ngIf="action.decisionNote"><strong>{{copy('Recorded human reason','سبب القرار البشري المسجل')}}:</strong> {{action.decisionNote}}</p>
+              <p *ngIf="action.replacementActionType" class="effective-route">
+                {{copy('Human-selected execution route','مسار التنفيذ المختار من الموظف')}}:
+                <strong>{{humanActionLabel(action.replacementActionType)}}</strong> · {{action.replacementOwnerRole}}
+              </p>
+            </div>
+            <div *ngIf="action.decision==='PENDING'" class="ai-action-decisions">
+              <label class="replacement-label" [for]="'replace-'+action.actionId">
+                  {{copy('Replacement route (for Modify)','المسار البديل (عند التعديل)')}}
+                </label>
+                <select [id]="'replace-'+action.actionId" [(ngModel)]="replacementActionTypes[action.actionId]">
+                  <option value="">{{copy('Select a different execution action','اختر إجراء تنفيذ مختلفًا')}}</option>
+                  <option *ngFor="let route of humanActionTypes" [value]="route"
+                    [disabled]="route===action.actionType">{{humanActionLabel(route)}}</option>
+                </select>
+                <textarea [(ngModel)]="actionNotes[action.actionId]"
+                   [placeholder]="copy('Business reason (required for Modify / Reject)','السبب التشغيلي (إلزامي للتعديل أو الرفض)')"
+                   rows="2"></textarea>
+              <div class="ai-decision-buttons">
+                <button type="button" [disabled]="centralBusy" (click)="decideAiAction(action,'ACCEPT')">✓ {{copy('Accept','اعتماد')}}</button>
+                <button type="button" [disabled]="centralBusy" (click)="decideAiAction(action,'MODIFY')">{{copy('Approve modified route','اعتماد الإجراء البديل')}}</button>
+                <button type="button" [disabled]="centralBusy" (click)="decideAiAction(action,'REJECT')">{{copy('Reject','رفض')}}</button>
+              </div>
+            </div>
+          </article>
+        </div>
+        </ng-container>
+        <section class="case-inspection-bridge" *ngIf="centralCase.inspectionRequests?.length || centralCase.inspectionOutcome">
+          <h4>{{copy('04—05 · Smart Inspection hand-off & outcomes','٠٤—٠٥ · إحالات ونتائج المعاينة الذكية')}}</h4>
+          <p>{{copy('NMC owns the operational case. Smart Inspection owns field execution; only recorded scheduling and results appear here.',
+              'المركز البحري يدير الحالة التشغيلية؛ والمعاينة الذكية مسؤولة عن التنفيذ الميداني، ولا تظهر هنا إلا الجداول والنتائج المسجلة.')}}</p>
+          <div class="inspection-referral" *ngFor="let request of centralCase.inspectionRequests">
+            <strong>{{humanActionLabel('PRIORITY_INSPECTION')}}</strong>
+            <span>{{request.status}} · {{request.port||'—'}} · {{request.inspector||'—'}}</span>
+            <small>{{copy('Linked action','الإجراء المرتبط')}}: {{request.actionId}} ·
+              {{copy('Inspection request','طلب معاينة')}}: {{request.id}}</small>
+          </div>
+          <div class="inspection-referral" *ngIf="centralCase.inspectionOutcome as outcome">
+            <strong>{{copy('Recorded inspection outcome','نتيجة المعاينة المسجلة')}}</strong>
+            <span>{{outcome.result}} · {{copy('Findings','الملاحظات')}}: {{outcome.findingsCount}} ·
+              {{copy('Critical','حرجة')}}: {{outcome.criticalFindings}}</span>
+            <small>{{outcome.summary}}</small>
+          </div>
+          <div class="decision-unavailable" *ngIf="riskReassessmentPending">
+            {{copy('Closure is blocked until a verified A02 refresh and new saved deterministic assessment are integrated. Original risk remains unchanged.',
+            'الإغلاق متوقف حتى ربط تحديث A02 الموثق وتقييم مخاطر حتمي جديد ومحفوظ؛ ولا تتغير الدرجة الأصلية.')}}</div>
+          <a class="inspection-link" [routerLink]="['/moei/smart-inspection/candidates']">
+            {{copy('Open Smart Inspection Candidate & Targeting Center →','فتح مركز ترشيحات المعاينة الذكية ←')}}</a>
+        </section>
+      </ng-container>
+    </section>
     <section class="workspace-grid">
       <div class="left-column">
         <article class="panel task-panel">
           <div class="panel-header">
             <div>
               <span class="section-kicker">{{ copy('ACTION ORCHESTRATION', 'تنسيق الإجراءات') }}</span>
-              <h3>{{ copy('Tasks & SLA', 'المهام ومستويات الخدمة') }}</h3>
-              <p>{{ copy('Each action has ownership, evidence, SLA and escalation status.', 'لكل إجراء مسؤولية وأدلة ومستوى خدمة وحالة تصعيد.') }}</p>
+              <h3>{{ copy('Approved tasks & follow-up', 'المهام المعتمدة والمتابعة') }}</h3>
+              <p>{{ copy('Only approved tasks appear here with ownership, evidence and operational status.', 'لا تظهر هنا إلا المهام المعتمدة مع المسؤول والأدلة والحالة التشغيلية.') }}</p>
             </div>
             <span class="task-count">{{ tasks.length }} {{ copy('tasks', 'مهام') }}</span>
           </div>
 
+          <div class="ai-plan-alert" *ngIf="!tasks.length">
+            {{centralCase.actionPlan
+              ?copy('No approved tasks yet. Review the proposed single decision above; only approved actions appear here.',
+                    'لا توجد مهام معتمدة بعد. راجع القرار الرئيسي أعلاه؛ لن تظهر هنا إلا الإجراءات المعتمدة.')
+              :copy('Recommendations are not yet available. No historical or template tasks are displayed.',
+                    'التوصيات غير متاحة بعد؛ لن تظهر مهام قديمة أو ثابتة.')}}
+          </div>
           <div class="task-list">
             <article class="task-card" *ngFor="let task of tasks" [class.selected]="selectedTask?.id === task.id">
               <button type="button" class="task-main" (click)="openTask(task)">
@@ -162,7 +475,7 @@
 
                   <div class="task-facts">
                     <span><small>{{ copy('Owner', 'المسؤول') }}</small><b>{{ task.owner }}</b></span>
-                    <span><small>{{ copy('SLA / Due', 'مستوى الخدمة / الاستحقاق') }}</small><b>{{ task.dueLabel }}</b></span>
+                    <span><small>{{ copy('Follow-up', 'المتابعة') }}</small><b>{{ task.dueLabel }}</b></span>
                     <span><small>{{ copy('Evidence', 'الأدلة') }}</small><b>{{ task.evidence.length }} {{ copy('linked', 'مرتبطة') }}</b></span>
                     <span><small>{{ copy('Required', 'إلزامية') }}</small><b>{{ task.mandatory ? copy('Yes', 'نعم') : copy('No', 'لا') }}</b></span>
                   </div>
@@ -171,24 +484,24 @@
 
               <div class="task-actions">
                 <button
-                  *ngIf="task.id === 'priority-inspection'"
+                  *ngIf="inspectionTask(task)"
                   type="button"
                   class="inspection-action"
-                  (click)="openSmartInspection()"
+                  (click)="openInspectionForTask(task)"
                 >
-                  ✓ {{ task.status === 'Completed' ? copy('View Inspection', 'عرض المعاينة') : copy('Open Inspection', 'فتح المعاينة') }}
+                  ✓ {{ task.status === 'Completed' ? copy('View Inspection', 'عرض المعاينة') : copy('Schedule / Open Inspection', 'جدولة / فتح المعاينة') }}
                 </button>
 
-                <ng-container *ngIf="task.id !== 'priority-inspection'">
-                  <button type="button" class="start" (click)="startTask(task)" [disabled]="task.status === 'In Progress' || task.status === 'Completed' || task.status === 'Escalated'">
+                <ng-container *ngIf="!inspectionTask(task)">
+                  <button type="button" class="start" (click)="startTask(task)" [disabled]="centralBusy || caseStatus==='Resolved' || task.status === 'In Progress' || task.status === 'Completed' || task.status === 'Escalated'">
                     ▶ {{ copy('Start', 'بدء') }}
                   </button>
-                  <button type="button" class="complete" (click)="completeTask(task)" [disabled]="task.status === 'Completed'">
+                  <button type="button" class="complete" (click)="completeTask(task)" [disabled]="centralBusy || caseStatus==='Resolved' || task.status === 'Completed'">
                     ✓ {{ copy('Complete', 'استكمال') }}
                   </button>
                 </ng-container>
 
-                <button type="button" class="escalate" (click)="escalateTask(task)" [disabled]="task.status === 'Completed' || task.status === 'Escalated'">
+                <button type="button" class="escalate" (click)="escalateTask(task)" [disabled]="centralBusy || caseStatus==='Resolved' || task.status === 'Completed' || task.status === 'Escalated'">
                   ↑ {{ copy('Escalate', 'تصعيد') }}
                 </button>
               </div>
@@ -251,8 +564,10 @@
               <span class="section-kicker">{{ copy('RESOLUTION CONTROL', 'التحكم في الإغلاق') }}</span>
               <h3>{{ copy('Close case with evidence', 'إغلاق الحالة بالأدلة') }}</h3>
             </div>
-            <span class="ready-badge" [class.ready]="mandatoryComplete">
-              {{ mandatoryComplete ? copy('Ready', 'جاهزة') : copy('Not ready', 'غير جاهزة') }}
+            <span class="ready-badge" [class.ready]="readyForResolution||caseStatus==='Resolved'">
+              {{caseStatus==='Resolved'
+                ? copy('Closed','مغلقة')
+                : readyForResolution ? copy('Ready','جاهزة') : copy('Not ready','غير جاهزة')}}
             </span>
           </div>
 
@@ -265,11 +580,24 @@
                   <small>{{ completedTasks }}/{{ tasks.length }} {{ copy('tasks complete', 'مهام مكتملة') }}</small>
                 </p>
               </div>
-              <div [class.complete]="currentRisk < vessel.risk">
-                <span>{{ currentRisk < vessel.risk ? '✓' : '○' }}</span>
+              <div [class.complete]="!!centralCase.actionPlan&&pendingAiActionCount===0">
+                <span>{{centralCase.actionPlan&&pendingAiActionCount===0?'✓':'○'}}</span>
                 <p>
-                  <strong>{{ copy('Risk recalculated', 'تمت إعادة احتساب المخاطر') }}</strong>
-                  <small>{{ vessel.risk }} → {{ currentRisk }}</small>
+                  <strong>{{ copy('A01 proposals reviewed by an officer', 'اعتماد أو رفض جميع توصيات A01 بواسطة الموظف') }}</strong>
+                  <small>{{pendingAiActionCount}} {{ copy('decisions still pending', 'قرارات ما زالت معلقة') }}</small>
+                </p>
+              </div>
+              <div [class.complete]="!riskReassessmentPending">
+                <span>{{riskReassessmentPending?'○':'✓'}}</span>
+                <p>
+                  <strong>{{riskReassessmentPending
+                    ?copy('Post-inspection risk reassessment pending','إعادة تقييم المخاطر بعد المعاينة معلقة')
+                    :copy('No unreassessed inspection outcome','لا توجد معاينة مكتملة تنتظر إعادة التقييم')}}</strong>
+                  <small>{{riskReassessmentPending
+                    ?copy('The original saved risk remains unchanged. A verified A02 refresh and a new saved assessment are required before closure.',
+                       'المخاطر المحفوظة لم تتغير. يلزم تحديث A02 وتقييم مخاطر جديد ومحفوظ قبل الإغلاق.')
+                    :copy('Any future inspection outcome must undergo separate evidence-based reassessment.',
+                       'أي نتيجة معاينة مستقبلية تحتاج إلى إعادة تقييم مستقلة قائمة على الأدلة.')}}</small>
                 </p>
               </div>
             </div>
@@ -280,13 +608,14 @@
               'لخص نتيجة التحقق والإجراءات المكتملة وأي متطلبات مراقبة متبقية...'
             )"></textarea>
 
-            <button type="button" class="resolve-btn" (click)="resolveCase()" [disabled]="!mandatoryComplete || caseStatus === 'Resolved'">
+            <button type="button" class="resolve-btn" (click)="resolveCase()" [disabled]="centralBusy || !readyForResolution || caseStatus === 'Resolved'">
               ✓ {{ caseStatus === 'Resolved' ? copy('Case resolved', 'تم إغلاق الحالة') : copy('Resolve NMC Case', 'إغلاق الحالة بالمركز البحري') }}
             </button>
           </div>
         </article>
       </aside>
     </section>
+    </ng-container>
   </main>
 
   <div class="task-backdrop" *ngIf="selectedTask" (click)="closeTask()"></div>
@@ -314,7 +643,7 @@
         <strong>{{ task.owner }}</strong>
       </div>
       <div>
-        <small>{{ copy('SLA / Due', 'مستوى الخدمة / الاستحقاق') }}</small>
+        <small>{{ copy('Follow-up', 'المتابعة') }}</small>
         <strong>{{ task.dueLabel }}</strong>
       </div>
     </div>
@@ -331,7 +660,7 @@
 
     <div class="drawer-actions">
       <button
-        *ngIf="task.id === 'priority-inspection'"
+        *ngIf="inspectionTask(task)"
         type="button"
         class="inspection-action"
         (click)="closeTask(); openSmartInspection()"
@@ -339,7 +668,7 @@
         ✓ {{ task.status === 'Completed' ? copy('View Smart Inspection', 'عرض المعاينة الذكية') : copy('Open Smart Inspection', 'فتح المعاينة الذكية') }}
       </button>
 
-      <ng-container *ngIf="task.id !== 'priority-inspection'">
+      <ng-container *ngIf="!inspectionTask(task)">
         <button type="button" (click)="startTask(task)" [disabled]="task.status === 'In Progress' || task.status === 'Completed' || task.status === 'Escalated'">
           ▶ {{ copy('Start task', 'بدء المهمة') }}
         </button>

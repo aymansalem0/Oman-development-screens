@@ -1,0 +1,45 @@
+name: SI Rolling Inspection Plan Regression
+on:
+  push:
+    branches:
+      - feature/si-rolling-inspection-plans-20261013
+      - feature/si-poc-business-completion-20261013
+  workflow_dispatch:
+
+jobs:
+  si-rolling:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install backend runtime
+        run: npm install --prefix ai-proxy --omit=dev --no-audit --no-fund
+      - name: Missing Airia response contracts — four safe local advisor mocks
+        run: node --test ai-proxy/test/si-poc-workflow-advisors.test.mjs
+      - name: Oracle 018 database adapter persistence and audit regression
+        run: node --test ai-proxy/test/si-rolling-oracle.test.mjs
+
+      - name: Complete no-cost SI-01 to SI-02 business scenario
+        run: node --test ai-proxy/test/si-rolling-endtoend.test.mjs
+      - name: Rolling plans and historical approval guards
+        run: node --test ai-proxy/test/si-rolling-plans.test.mjs
+      - name: Source event eligibility and duplicate defense
+        run: node --test ai-proxy/test/si-candidate-targeting.test.mjs
+      - name: C01 new plan uses updated real pending-source evidence (not last plan)
+        run: node --test ai-proxy/test/si-poc-plan-c01-current-source.test.mjs
+      - name: C01 source-aware live pending / approved scheduled NMC and original A04/P01 mock contracts
+        run: node --test ai-proxy/test/si-agent-mock.test.mjs
+      - name: Existing C01 plan compatibility
+        run: node --test ai-proxy/test/si-inspection-plan.test.mjs
+      - name: Existing bulk plan compatibility
+        run: node --test ai-proxy/test/si-bulk-inspection-plan.test.mjs
+      - name: Application syntax
+        run: |
+          node --check ai-proxy/si-rolling-plan-store.mjs
+          node --check ai-proxy/si-inspection-plan.mjs
+          node --check ai-proxy/si-bulk-inspection-plan.mjs
+          node --check ai-proxy/si-candidate-targeting.mjs
+          node --check ai-proxy/server.mjs

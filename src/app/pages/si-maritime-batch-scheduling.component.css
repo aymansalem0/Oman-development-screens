@@ -1,0 +1,133 @@
+.marine-layout{font-family:Arial,sans-serif;background:#f2f7f8;color:#163e4d;min-height:100vh}
+.marine-main{margin-inline-start:232px;max-width:1750px;padding:28px}
+.marine-hero{background:linear-gradient(125deg,#083e55,#147084);color:#fff;padding:28px;border-radius:16px}
+.marine-hero small{letter-spacing:1px;color:#bfecf0}
+.marine-hero p{line-height:1.6;max-width:1080px}.marine-hero a{color:#d1f6ff;font-weight:700}
+.marine-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:18px 0}
+.marine-kpis div,.marine-panel{background:#fff;border:1px solid #d7e8ec;border-radius:12px;padding:19px}
+.marine-kpis span{display:block;font-size:12px;color:#496773}.marine-kpis strong{font-size:26px}
+.marine-panel{margin:18px 0}.marine-panel h2{color:#07576b;margin-top:0}
+.marine-panel p{line-height:1.6}.marine-scroll{overflow-x:auto}
+table{border-collapse:collapse;width:100%;min-width:1100px;font-size:12px}
+th,td{padding:12px;text-align:start;vertical-align:top;border-bottom:1px solid #e1eff1}
+th{background:#e5f3f4}td small{display:block;color:#5d7684;margin-top:5px}
+input,select{box-sizing:border-box;padding:7px;border:1px solid #b3cfd5;border-radius:5px;max-width:175px;width:100%}
+.marine-check{display:flex;gap:4px;align-items:center;margin-top:8px}.marine-check input{width:auto}
+.marine-actions{display:flex;align-items:center;gap:20px;padding-top:18px}
+button{border:0;background:#087f75;color:white;padding:12px 18px;border-radius:8px;cursor:pointer;font-weight:700}
+button:disabled{opacity:.5}.marine-notice{padding:13px;background:#eaf4f5;border-radius:8px}
+.marine-error{padding:14px;background:#fff0ef;color:#ad3535;border-radius:8px}
+.unscheduled{color:#bc3b3b}
+@media(max-width:1100px){.marine-main{margin:0;padding:14px}.marine-kpis{grid-template-columns:repeat(2,1fr)}}
+
+/* Read-only scheduling cockpit: plan view, engineer allocation, visit dates. */
+.marine-title-line{display:flex;gap:12px;justify-content:space-between;
+ align-items:center;flex-wrap:wrap;margin:0 0 15px}
+.marine-title-line h2{margin:0;}
+.marine-tag{display:inline-block;background:#e8f6f1;border:1px solid #bcdfd6;
+ color:#136b58;border-radius:99px;padding:6px 10px;font-size:11px;font-weight:800}
+.marine-note{font-size:12px;color:#4d6d79}
+.marine-workforce{display:grid;grid-template-columns:repeat(auto-fit,minmax(245px,1fr));gap:9px}
+.marine-workforce article,.marine-board-card{border:1px solid #d8e6eb;border-radius:10px;
+ background:#f8fbfc;padding:14px;min-width:0}
+.marine-workforce strong,.marine-workforce small{display:block}
+.marine-workforce strong{color:#07576b;font-size:13px;margin-bottom:7px}
+.marine-workforce small{font-size:11px;line-height:1.6;color:#486a79}
+.marine-board-controls{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.marine-board-controls button{background:#e6f1f5;color:#1e6274;border:1px solid #bcd6df;
+ padding:8px 12px;font-size:11px}
+.marine-board-controls button.active{background:#066e77;color:#fff;border-color:#066e77}
+.marine-board-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));
+ gap:13px;margin-top:12px}
+.marine-board-card h3{font-size:15px;margin:0;color:#0b566c}
+.marine-board-card h3 small{font-size:10px;color:#537485;font-weight:500}
+.marine-board-card p{font-size:11px;color:#587b87;margin:6px 0 10px}
+.marine-board-slot{border-top:1px solid #d9e8ee;padding:9px 0;
+ display:grid;gap:4px;font-size:11px;color:#254d60}
+.marine-board-slot strong{color:#0d5c70}
+.marine-board-slot small{color:#708997;line-height:1.5}
+.marine-unscheduled{padding:12px;border:1px solid #f0d7b8;background:#fffaf3;
+ border-radius:10px;margin-top:17px}
+.marine-unscheduled h3{color:#995918;font-size:13px;margin:0 0 10px}
+.marine-unscheduled>div{display:flex;gap:12px;flex-wrap:wrap;
+ border-top:1px solid #f0e0c9;padding:9px 0;font-size:12px}
+.marine-unscheduled strong{color:#813f0c}
+.marine-preview-warning{margin-top:14px;padding:12px;border-radius:8px;
+ border:1px solid #d9ccf2;background:#f5f0ff;color:#594179;font-weight:700;font-size:11px}
+@media(max-width:650px){.marine-board-grid{grid-template-columns:1fr}}
+
+/* Airia S01 is a separately confirmed advisory on ERP-verified options. */
+.marine-ai-button{background:#6848a1;border:1px solid #513587;white-space:nowrap}
+.marine-ai-advice{padding:15px;margin:12px 0;border:1px solid #d9cced;
+ border-radius:11px;background:#fbf9ff}
+.marine-ai-advice h3{margin:0;color:#543580;font-size:15px}
+.marine-ai-rank{border-top:1px solid #e1d8ed;padding:11px 0;
+ display:grid;grid-template-columns:minmax(150px,1fr) auto;gap:6px;color:#3a4461}
+.marine-ai-rank strong{font-size:12px}
+.marine-ai-rank p,.marine-ai-rank small{grid-column:1 / -1;margin:0;font-size:11px}
+.marine-ai-rank small{color:#68808d;overflow-wrap:anywhere}
+.marine-actions{flex-wrap:wrap;gap:10px}
+.marine-actions small{display:block;flex-basis:100%;color:#66818e;line-height:1.55}
+
+/* Explicit ERP-readiness feedback next to the previously disabled SI-S01 action. */
+.marine-ai-readiness{font-size:12px;color:#356f80;background:#e9f5f7;
+ border-inline-start:4px solid #078b91;padding:9px 12px;border-radius:7px;
+ margin:10px 0 14px;line-height:1.6}
+.marine-ai-readiness:empty{display:none}
+.marine-readiness-panel{padding:14px;margin:12px 0;background:#fffaf0;
+ border:1px solid #eddbb7;border-radius:10px;color:#654a22}
+.marine-readiness-panel h3{margin:0 0 8px;font-size:14px;color:#7f5520}
+.marine-readiness-panel p{font-size:11px;margin:5px 0 10px;line-height:1.55}
+.marine-readiness-panel ul{padding-inline-start:20px;margin:5px 0 0}
+.marine-readiness-panel li{padding:6px 0;border-bottom:1px solid #efdfc2;font-size:11px}
+.marine-readiness-panel li:last-child{border-bottom:0}
+.marine-readiness-panel li strong{display:inline-block;margin-inline-end:12px}
+.marine-readiness-panel li span{color:#865c2f}
+
+/* Approved schedule / engineer work orders, MOEI POC only */
+.si-workorders-panel{border-top:4px solid #008d88}
+.si-schedule-approve{background:#007d74;color:white;border:1px solid #04746a;
+ border-radius:9px;padding:12px 16px;cursor:pointer;font-weight:750;min-width:220px}
+.si-schedule-approve:disabled{opacity:.4;cursor:not-allowed}
+.si-workorders-table{min-width:910px}
+.si-workorders-table td{vertical-align:top}
+.si-workorders-table td small{display:block;color:#647e8d;margin-top:5px}
+.si-order-links{display:flex;flex-direction:column;gap:5px;margin-top:8px}
+.si-order-links a{color:#006d8d;text-decoration:underline;font-size:11px}
+.si-workorder-actions{display:flex;flex-direction:column;align-items:start;gap:7px;margin-top:8px}
+.si-workorder-actions button{background:#e7f5f2;color:#06695e;font-size:11px;
+ border:1px solid #b5d9d0;border-radius:7px;padding:8px 11px;cursor:pointer}
+.si-workorder-actions button:disabled{opacity:.5}
+.si-field-started{color:#097c6a;font-weight:700;font-size:11px}
+.si-order-error{color:#a92c37!important;font-weight:700}
+
+/* Plan-level per-vessel scheduling exception diagnostics (read-only). */
+.si-details-toggle{display:inline-block;background:#e7f2f5;color:#075d74;
+ border:1px solid #b5d5db;border-radius:7px;font-size:11px;
+ padding:7px 10px;margin-top:7px;cursor:pointer}
+.si-diagnostic-code{font:10px/1.5 monospace;color:#927152;overflow-wrap:anywhere}
+.si-unscheduled-details{border:1px solid #d8c39f;background:#fffcf6;
+ border-radius:12px;padding:20px;margin-top:17px;color:#274e5b}
+.si-unscheduled-details h3{font-size:16px;color:#965321;margin:0}
+.si-unscheduled-details h4{font-size:13px;color:#375d6b;margin:15px 0 8px}
+.si-diagnostic-summary{border-inline-start:4px solid #b98232;
+ padding:10px 12px;background:#fff0d6;border-radius:6px;font-weight:750;font-size:12px}
+.si-diagnostic-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));
+ gap:10px;margin:12px 0}
+.si-diagnostic-metrics>div{background:#fff;border:1px solid #ebd9bd;
+ border-radius:8px;padding:12px;min-width:0}
+.si-diagnostic-metrics small{display:block;color:#647786;font-size:11px;line-height:1.5}
+.si-diagnostic-metrics strong{display:block;color:#295c68;font-size:16px;
+ margin:5px 0 0;overflow-wrap:anywhere}
+.si-diagnostic-metrics>div:first-child strong{font-size:11px;font-family:monospace}
+.si-diagnostic-table{min-width:660px}
+.si-diagnostic-exclusions{columns:2;padding-inline-start:22px;font-size:12px}
+.si-diagnostic-exclusions li{break-inside:avoid;margin:0 0 8px;line-height:1.7}
+.si-diagnostic-warning{font-size:12px;background:#fff0e3;color:#885223;
+ padding:12px;border:1px solid #e6ca9b;border-radius:8px}
+.si-diagnostic-actions{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:16px}
+.si-diagnostic-actions a{display:inline-block;background:#117e82;color:#fff;
+ padding:10px 13px;text-decoration:none;border-radius:8px;font-weight:750;font-size:12px}
+@media(max-width:850px){.si-diagnostic-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .si-diagnostic-exclusions{columns:1}}
+@media(max-width:490px){.si-diagnostic-metrics{grid-template-columns:1fr}}

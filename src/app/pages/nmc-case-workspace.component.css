@@ -75,7 +75,7 @@ a, button, textarea { font:inherit; }
   left:0;
   top:82px;
   bottom:0;
-  width:216px;
+  width:240px;
   z-index:25;
   padding:20px 12px 16px;
   background:#fff;
@@ -119,7 +119,7 @@ a, button, textarea { font:inherit; }
 }
 
 .case-main {
-  margin-left:216px;
+  margin-left:240px;
   padding:106px 24px 34px;
 }
 
@@ -425,7 +425,7 @@ a, button, textarea { font:inherit; }
   font-family:"Segoe UI",Tahoma,Arial,sans-serif;
 }
 .case-shell.rtl .nmc-sidebar { left:auto; right:0; border-right:0; border-left:1px solid #e6edf3; }
-.case-shell.rtl .case-main { margin-left:0; margin-right:216px; }
+.case-shell.rtl .case-main { margin-left:0; margin-right:240px; }
 .case-shell.rtl .nav-item,.case-shell.rtl .task-main { text-align:right; }
 .case-shell.rtl .nav-item.active { background:linear-gradient(270deg,#eaf9f6,#f5fcfb); }
 .case-shell.rtl .top-actions { justify-content:flex-start; }
@@ -505,3 +505,201 @@ a, button, textarea { font:inherit; }
 .task-actions .inspection-action {
   grid-row: span 2;
 }
+
+
+/* Central case status and empty state — only real, explicitly opened cases. */
+.central-case-banner{margin-bottom:14px;padding:12px 16px;background:#edf7fb;color:#225e75;border:1px solid #cae4ee;border-radius:11px;font-size:12px}
+.central-case-banner.error{background:#fff0f0;color:#ad3d48;border-color:#f3c6ca}
+.central-case-banner.success{background:#eaf8f1;color:#0a7b5f;border-color:#a8e3cf}
+.central-case-empty{background:#fff;border:1px solid #dce7ee;border-radius:16px;padding:50px 28px;text-align:center;box-shadow:0 10px 35px #2f4f600e}
+.central-case-empty>span{display:inline-flex;width:60px;height:60px;align-items:center;justify-content:center;border-radius:16px;background:#e9f7f4;color:#168273;font-size:29px}
+.central-case-empty h2{font-size:20px;color:#1d4859;margin:17px 0 12px}
+.central-case-empty p{font-size:12px;color:#6e8996;line-height:1.8;max-width:610px;margin:0 auto 22px}
+.central-case-empty a{display:inline-flex;background:#0d8c82;color:#fff;font-weight:750;padding:11px 17px;border-radius:9px;text-decoration:none;font-size:12px}
+
+
+/* Maritime case intake belongs in Case Management after alert acknowledgment. */
+.case-alert-candidates{margin:20px auto 0;max-width:850px;text-align:start}
+.case-alert-candidates h3{color:#1d4859;font-size:14px;margin:0 0 12px}
+.case-alert-choice{display:flex;justify-content:space-between;align-items:center;gap:20px;
+  padding:15px 17px;margin:10px 0;border:1px solid #d9e8ed;border-radius:13px;background:#f6fafb}
+.case-alert-description{min-width:0;flex:1}
+.case-alert-description strong{display:block;color:#244d63;font-size:13px}
+.case-alert-description small{display:block;margin:6px 0;color:#587d8c;font-size:11px}
+.central-case-empty .case-alert-description p{margin:5px 0 0;max-width:none;font-size:11px;text-align:start}
+.case-open-button{border:1px solid #0d8c82;border-radius:10px;background:#0d8c82;color:#fff;
+  font-weight:750;font-size:12px;padding:12px 15px;white-space:nowrap;cursor:pointer}
+.case-open-button:hover{background:#0b706b}
+.case-open-button:disabled{cursor:wait;opacity:.52}
+.central-case-empty .case-ai-consent,.central-case-empty .case-alert-loading,
+.central-case-empty .case-alert-empty{max-width:850px;margin:14px auto;font-size:12px;line-height:1.7;color:#617e90}
+.central-case-empty .case-ai-consent{font-size:11px;padding:12px;background:#e8f7f4;
+  border:1px solid #cee9e2;border-radius:9px;color:#225e5a}
+.central-case-empty a.case-alert-back{background:#fff;border:1px solid #d2e6e1;color:#0d766e;margin-top:12px}
+@media(max-width:700px){.case-alert-choice{flex-direction:column;align-items:stretch}
+  .case-open-button{width:100%;white-space:normal}}
+
+/* A01 action-plan approval (separate from generated central tasks) */
+.ai-action-panel{background:#fff;border:1px solid #cfdee9;border-radius:16px;padding:20px;margin:18px 0;box-shadow:0 6px 16px #113b5310}
+.ai-action-heading,.ai-action-title{display:flex;align-items:center;justify-content:space-between;gap:16px}
+.ai-action-heading h3{color:#123c51;margin:6px 0}
+.ai-action-heading p,.ai-action-detail p{color:#526c7e;margin:7px 0;line-height:1.5}
+.ai-plan-button,.ai-decision-buttons button{cursor:pointer;background:#126c72;border:0;border-radius:9px;color:#fff;padding:11px 15px;font-weight:700}
+.ai-plan-button:disabled,.ai-decision-buttons button:disabled{opacity:.55;cursor:wait}
+.ai-plan-alert{padding:14px;background:#eaf4f7;border-radius:10px;color:#345d6e}
+.ai-plan-context{background:#f4fbf9;padding:12px;border-radius:9px;line-height:1.65}
+.ai-plan-context small{display:block;color:#466878}
+.ai-action-rows{display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:12px}
+.ai-action-row{border:1px solid #d9e6eb;border-radius:12px;padding:14px;background:#fbfdfd}
+.ai-action-detail small{color:#47707c;overflow-wrap:anywhere}
+.ai-decision-state{font-size:11px;border-radius:20px;padding:4px 9px;background:#e4eff4;color:#215a66}
+.ai-action-decisions{margin-top:10px}
+.ai-action-decisions textarea{width:100%;min-height:55px;padding:9px;border:1px solid #cddde3;border-radius:8px}
+.ai-decision-buttons{display:flex;flex-wrap:wrap;gap:8px;margin-top:7px}
+.ai-decision-buttons button:nth-child(2){background:#28698b}
+.ai-decision-buttons button:nth-child(3){background:#9b4848}
+.case-legacy-notice{
+  display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;
+  margin:10px 14px;padding:13px 15px;border-radius:10px;
+  background:#fff9ee;border:1px solid #f2dfb5;color:#755522;
+  font-size:11px;line-height:1.6;
+}
+.case-legacy-notice strong{font-weight:850;color:#815917}
+.case-legacy-notice span:nth-child(2){flex:1 1 100%;color:#795c34}
+.case-legacy-notice span:last-child{font-weight:700}
+.ai-queue-note{margin-top:14px;background:#eaf7f4;padding:12px;border-radius:9px}
+.ai-queue-note a{color:#087e85;font-weight:700}
+@media(max-width:800px){.ai-action-heading{flex-direction:column;align-items:stretch}.ai-action-rows{grid-template-columns:1fr}}
+
+
+/* NMC Case Management V2: explicit business stages & human review. */
+.case-journey{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px;margin:18px 0}
+.case-journey span{padding:12px 9px;background:#e9f5f5;border:1px solid #cde5e1;border-radius:9px;
+ color:#245a63;font-weight:800;font-size:11px;text-align:center;line-height:1.5}
+.case-situation{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;
+ margin:16px 0;padding:18px;background:#f7fbfd;border:1px solid #d7e8ed;border-radius:12px}
+.case-situation>div{min-width:0}
+.case-situation h4,.primary-decision h4,.case-inspection-bridge h4{margin:7px 0;font-size:16px;color:#163f56}
+.case-situation p,.primary-decision p,.case-inspection-bridge p{margin:8px 0;color:#49697b;font-size:12px;line-height:1.85}
+.case-situation>small{grid-column:1/-1;color:#387581;overflow-wrap:anywhere}
+.primary-decision{margin:18px 0;padding:18px 20px;background:#effaf5;border:1px solid #a8d9c7;
+ border-inline-start:5px solid #168776;border-radius:12px}
+.primary-decision small{overflow-wrap:anywhere;color:#2e6259}
+.primary-note{font-weight:700}
+.decision-unavailable{margin:14px 0;padding:15px 17px;background:#fff9ed;border:1px solid #efdbb3;
+ border-radius:11px;color:#705a2e;font-size:12px;line-height:1.85}
+.decision-unavailable p{margin:6px 0 0;color:#705a2e}
+.action-section-title{color:#204f63;font-size:14px;margin:23px 0 12px}
+.effective-route{padding:9px 12px;background:#eaf8f4;border:1px solid #ccece2;border-radius:7px}
+.replacement-label{display:block;color:#2a5669;font-weight:700;font-size:11px;margin:8px 0}
+.ai-action-decisions select{width:100%;padding:11px 10px;min-height:42px;margin-bottom:10px;
+ border:1px solid #c9dce5;border-radius:8px;background:white;color:#21465a;font-size:12px}
+.case-inspection-bridge{margin-top:20px;padding:18px;border:1px solid #cbe4e5;border-radius:12px;background:#f3fbfb}
+.inspection-referral{display:flex;flex-wrap:wrap;gap:9px 15px;align-items:center;padding:12px 0;
+ border-top:1px solid #d8e8eb;font-size:12px}
+.inspection-referral strong{color:#1e536a}
+.inspection-referral small{flex-basis:100%;color:#547b87;overflow-wrap:anywhere}
+.inspection-link{display:inline-block;margin-top:9px;font-size:12px;color:#0e776d;font-weight:800}
+@media(max-width:1100px){.case-journey{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:680px){.case-journey{grid-template-columns:repeat(2,minmax(0,1fr))}.case-situation{grid-template-columns:1fr}}
+
+/* A01-informed NMC decision mapping is POC-local; regulatory routes are never live. */
+.single-decision-card {
+  margin:18px 0 16px;padding:20px;border:1px solid #b9d9df;
+  border-radius:16px;background:linear-gradient(180deg,#f7fcfd,#fff);
+}
+.single-decision-head {display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;}
+.single-decision-card h3 {font-size:20px;color:#153d54;margin:13px 0;}
+.single-decision-card h4 {font-size:14px;margin:18px 0 11px;}
+.single-decision-card p {line-height:1.7;font-size:12px;color:#395268;}
+.single-decision-card strong {color:#123850;}
+.single-decision-badge {padding:7px 12px;border-radius:8px;background:#dcefeb;
+ color:#085950;font-size:10px;font-weight:800;}
+.decision-trace {display:flex;flex-wrap:wrap;gap:8px;margin:13px 0;}
+.decision-trace span {font-size:10px;background:#e9f5f7;border-radius:8px;padding:7px 10px;}
+.decision-provenance {font-size:11px!important;color:#8b4b12!important;
+ background:#fffaee;border:1px solid #f0dfa8;padding:11px;border-radius:9px;}
+.decision-step-list {margin:10px 0 19px;padding-inline-start:23px;}
+.decision-step-list li {padding:11px 12px;border-bottom:1px solid #e3ebee;font-size:12px;}
+.decision-step-list small {display:block;color:#627b89;margin-top:5px;}
+.decision-review-form {display:grid;gap:10px;padding:13px;border:1px solid #c9dee4;
+ border-radius:12px;background:white;}
+.decision-review-form label {font-weight:800;font-size:11px;}
+.decision-review-form select,.decision-review-form textarea {
+ width:100%;max-width:100%;min-width:0;border:1px solid #bacdd7;border-radius:10px;
+ padding:10px;background:#fff;color:#153d54;font:inherit;font-size:13px;
+}
+.decision-approved {border-radius:10px;border:1px solid #c8e0dc;background:#eef8f4;
+ display:grid;gap:7px;padding:14px;font-size:12px;}
+.poc-restriction {margin:16px 0;padding:18px;border:2px solid #edca93;border-radius:14px;
+ background:#fffaf0;color:#5d3d13;}
+.poc-restriction h4 {font-size:17px;margin:11px 0;}
+.poc-restriction strong {display:inline-block;background:#ffe5c0;border-radius:7px;
+ padding:6px 10px;font-size:11px;}
+.poc-restriction p,.poc-restriction small {font-size:12px;line-height:1.6;display:block;margin:10px 0;}
+.poc-restriction button {border:1px solid #c18c40;background:#834b14;color:white;
+ border-radius:9px;padding:10px 16px;cursor:pointer;font:inherit;font-size:12px;}
+.poc-restriction button:disabled {opacity:.5;cursor:not-allowed;}
+@media (max-width:650px) {
+ .single-decision-card,.poc-restriction {padding:13px;}
+ .single-decision-card h3 {font-size:17px;}
+ .decision-review-form .ai-decision-buttons {display:grid;grid-template-columns:1fr;}
+}
+
+/* Upgrade previously saved (unreviewed) A01 cases without a second AI call. */
+.legacy-decision-upgrade{
+  margin:14px 0 18px;padding:20px 23px;
+  background:linear-gradient(120deg,#ebf8f6,#f8fdfc);
+  border:2px solid #60b7a8;border-radius:13px;
+  color:#174b4c;
+}
+.legacy-decision-upgrade h4{
+  margin:10px 0;font-size:18px;color:#0e534b;
+}
+.legacy-decision-upgrade p{
+  font-size:13px;line-height:1.8;max-width:880px;margin:8px 0 15px;
+}
+.legacy-decision-upgrade button{
+  font-size:13px;min-height:45px;background:#08786a;
+}
+.legacy-decision-upgrade button:hover{background:#075e53;}
+@media(max-width:650px){
+  .legacy-decision-upgrade{padding:14px;}
+  .legacy-decision-upgrade button{width:100%;white-space:normal;}
+}
+
+
+/* Source-linked incident actions live inside the ONE central maritime case. */
+.case-incident-workflow{padding:19px 20px;background:#fff;border:1px solid #d6e5ed;
+ border-radius:16px;margin:15px 0;box-shadow:0 4px 20px rgba(31,57,85,.04)}
+.case-incident-head{display:flex;align-items:center;justify-content:space-between;gap:12px;}
+.case-incident-head h3{font-size:16px;color:#25445b;margin:0;}
+.case-incident-head>span{font-size:11px;padding:5px 10px;border-radius:14px;background:#ecf3fc;color:#315d83;}
+.case-incident-caption{font-size:12px;line-height:1.6;color:#678195;}
+.case-incident-officer{display:block;font-size:11px;font-weight:750;color:#2e5766;margin:12px 0;}
+.case-incident-officer input{margin:7px 0;max-width:370px;display:block;width:100%;
+ border:1px solid #cad9e4;padding:10px;border-radius:8px;}
+.case-incident-event{border:1px solid #dbe5ef;background:#fafcfe;padding:15px;
+ border-radius:12px;margin:13px 0;}
+.case-incident-summary{display:flex;justify-content:space-between;gap:10px;align-items:center;}
+.case-incident-summary strong{display:block;color:#25465c;font-size:13px;}
+.case-incident-summary small{display:block;color:#688296;font-size:10px;margin-top:4px;}
+.case-incident-risk{font-size:11px;background:#e3ebf3;padding:6px 10px;
+ border-radius:20px;color:#234b72;font-weight:850;}
+.case-incident-description{font-size:12px;color:#3a5b6c;line-height:1.6;white-space:pre-wrap;}
+.case-incident-provenance{font-size:11px;color:#526b7f;line-height:1.5;}
+.case-incident-decision{margin-top:12px;padding:12px;background:#eff6fb;border-radius:9px;}
+.case-incident-decision>span{display:block;font-size:11px;color:#996224;font-weight:750;margin-bottom:9px;}
+.case-incident-decision label{display:block;font-size:11px;color:#45677e;}
+.case-incident-decision select,.case-incident-decision textarea{
+ display:block;width:100%;border-radius:7px;border:1px solid #b7cedd;
+ padding:9px;margin:7px 0;background:#fff;font-size:12px;color:#2c4a62}
+.case-incident-buttons{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;}
+.case-incident-buttons button{cursor:pointer;border-radius:8px;border:1px solid #087e79;
+ padding:9px 11px;font-size:11px;background:#087e79;color:white;font-weight:800;}
+.case-incident-buttons .secondary-btn{border-color:#98b2c4;background:#fff;color:#28546f;}
+.case-incident-buttons button:disabled{opacity:.5;cursor:not-allowed;}
+.case-incident-approved{background:#ecf7ef;color:#266047;padding:10px;
+ border-radius:9px;font-size:11px;margin-top:10px;}
+.case-incident-approved p{margin:7px 0;}
+@media(max-width:720px){.case-incident-workflow{padding:12px;}.case-incident-summary{flex-wrap:wrap;}}

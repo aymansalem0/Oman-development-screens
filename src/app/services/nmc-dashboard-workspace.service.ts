@@ -1,0 +1,136 @@
+import { Injectable } from '@angular/core';
+import { HttpClient, HttpErrorResponse, HttpHeaders } from '@angular/common/http';
+import { Observable, catchError, throwError } from 'rxjs';
+import { DashboardDefinition, DashboardMenuPlacement } from './nmc-dashboard-store.service';
+
+interface DashboardListResponse {status:'ok';dashboards:DashboardDefinition[];}
+export interface PublishedDashboardMenuItem {
+  id:string;title:string;menuPlacement:DashboardMenuPlacement;
+}
+interface PublishedDashboardMenuResponse {
+  status:'ok';dashboards:PublishedDashboardMenuItem[];
+}
+interface DashboardOneResponse {status:'ok';dashboard:DashboardDefinition;}
+export interface DashboardRevision {version:number;action:string;role:string;at:string;}
+interface DashboardRevisionsResponse {status:'ok';revisions:DashboardRevision[];}
+
+@Injectable({providedIn:'root'})
+export class NmcDashboardWorkspaceService {
+  private readonly root='/api/ai/dashboards';
+  private editorKey='MOEI_SESSION';
+  private publisherKey='MOEI_SESSION';
+
+  constructor(private readonly http:HttpClient){}
+
+  /** Lists published dashboard links only; never includes drafts or widget data. */
+  publishedMenu():Observable<PublishedDashboardMenuResponse>{
+    return this.http.get<PublishedDashboardMenuResponse>(this.root+'/published');
+  }
+
+  list():Observable<DashboardListResponse>{
+    return this.http.get<DashboardListResponse>(this.root);
+  }
+
+  get(id:string):Observable<DashboardOneResponse>{
+    return this.http.get<DashboardOneResponse>(this.root+'/'+encodeURIComponent(id));
+  }
+
+  /** Public read-only representation; draft/archived dashboards return 404. */
+  published(id:string):Observable<DashboardOneResponse>{
+    return this.http.get<DashboardOneResponse>(
+      this.root+'/published/'+encodeURIComponent(id)
+    );
+  }
+
+  revisions(id:string):Observable<DashboardRevisionsResponse>{
+    return this.http.get<DashboardRevisionsResponse>(this.root+'/'+encodeURIComponent(id)+'/revisions');
+  }
+
+  create(dashboard:DashboardDefinition):Observable<DashboardOneResponse>{
+    const key=this.requireKey('editor');
+    return this.http.post<DashboardOneResponse>(this.root,{dashboard},{headers:this.headers(key)})
+      .pipe(catchError(err=>this.catchCredentialFailure(err,'editor')));
+  }
+
+  /** Start a central editable revision without unpublishing the live dashboard. */
+  editPublished(id:string):Observable<DashboardOneResponse>{
+    const key=this.requireKey('editor');
+    return this.http.post<DashboardOneResponse>(
+      this.root+'/'+encodeURIComponent(id)+'/edit',{},
+      {headers:this.headers(key)}
+    ).pipe(catchError(err=>this.catchCredentialFailure(err,'editor')));
+  }
+
+  save(dashboard:DashboardDefinition,expectedVersion:number):Observable<DashboardOneResponse>{
+    const key=this.requireKey('editor');
+    const payload={dashboard:{...dashboard,version:expectedVersion}};
+    return this.http.put<DashboardOneResponse>(
+      this.root+'/'+encodeURIComponent(dashboard.id),payload,{headers:this.headers(key)}
+    ).pipe(catchError(err=>this.catchCredentialFailure(err,'editor')));
+  }
+
+  publish(id:string,version:number):Observable<DashboardOneResponse>{
+    const key=this.requireKey('publisher');
+    return this.http.post<DashboardOneResponse>(
+      this.root+'/'+encodeURIComponent(id)+'/publish',{version},{headers:this.headers(key)}
+    ).pipe(catchError(err=>this.catchCredentialFailure(err,'publisher')));
+  }
+
+  /** Change a published dashboard's sidebar section without altering its widgets. */
+  movePublished(id:string,version:number,menuPlacement:DashboardMenuPlacement):Observable<DashboardOneResponse>{
+    const key=this.requireKey('publisher');
+    return this.http.patch<DashboardOneResponse>(
+      this.root+'/'+encodeURIComponent(id)+'/placement',
+      {version,menuPlacement},{headers:this.headers(key)}
+    ).pipe(catchError(err=>this.catchCredentialFailure(err,'publisher')));
+  }
+
+  archive(id:string,version:number):Observable<{status:'ok'}>{
+    const key=this.requireKey('editor');
+    return this.http.request<{status:'ok'}>('DELETE',this.root+'/'+encodeURIComponent(id),{
+      body:{version},headers:this.headers(key)
+    }).pipe(catchError(err=>this.catchCredentialFailure(err,'editor')));
+  }
+
+  private headers(key:string):HttpHeaders {
+    return new HttpHeaders({'X-NMC-DASHBOARD-KEY':key});
+  }
+
+  private requireKey(_kind:'editor'|'publisher'):string{
+    // Central POC Admin HttpOnly session is checked by backend.
+    // No in-page key dialogs; interceptor strips this non-secret placeholder.
+    return 'MOEI_SESSION';
+  }
+  private catchCredentialFailure(error:unknown,_kind:'editor'|'publisher'):Observable<never>{
+    return throwError(()=>error);
+  }
+
+  readableError(error:unknown,arabic=false):string{
+    const code=(error instanceof HttpErrorResponse
+      ?(error.error as {error?:string}|null)?.error
+      :error instanceof Error?error.message:null)||'DASHBOARD_STORE_UNAVAILABLE';
+    const messages:Record<string,[string,string]>={
+      ACCESS_KEY_REQUIRED:['A valid management access key is required.','يتطلب الإجراء مفتاح وصول معتمد.'],
+      DASHBOARD_ACCESS_DENIED:['Access key was not accepted.','مفتاح الوصول غير صحيح.'],
+      DASHBOARD_WRITE_NOT_CONFIGURED:['Workspace editing is not configured on the server.','إدارة لوحات المعلومات غير مفعلة على الخادم.'],
+      DASHBOARD_SCHEMA_NOT_READY:['Central dashboard storage is not installed.','لم يتم تهيئة التخزين المركزي للوحات المعلومات.'],
+      DASHBOARD_VERSION_CONFLICT:['Another version exists. Refresh shared dashboards before saving.','هناك إصدار أحدث. حدّث لوحات المعلومات المشتركة قبل الحفظ.'],
+      PUBLISHED_DASHBOARD_LOCKED:['Published dashboards are read-only. Create an editable copy.','اللوحات المنشورة للعرض فقط. أنشئ نسخة قابلة للتعديل.'],
+      DASHBOARD_PUBLISHED_VERSION_CONFLICT:[
+        'The published dashboard has changed since editing started. Please review its latest version before publishing.',
+        'تغير إصدار لوحة المعلومات المنشورة منذ بدء التعديل. راجع أحدث إصدار قبل إعادة النشر.'
+      ],
+      DASHBOARD_PUBLISHED_PARENT_NOT_FOUND:[
+        'The original published dashboard is no longer available.',
+        'لوحة المعلومات الأصلية المنشورة لم تعد متاحة.'
+      ],
+      DASHBOARD_NOT_PUBLISHED:[
+        'This action requires a published dashboard.',
+        'يتطلب هذا الإجراء لوحة معلومات منشورة.'
+      ],
+      DASHBOARD_STORE_UNAVAILABLE:['Workspace service is unavailable.','خدمة إدارة اللوحات غير متاحة.']
+    };
+    const entry=messages[code];
+    return entry?entry[arabic?1:0]:(arabic?'تعذر تنفيذ العملية.':'Operation could not be completed.');
+  }
+}

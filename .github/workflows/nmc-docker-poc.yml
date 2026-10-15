@@ -1,0 +1,94 @@
+name: NMC Docker POC validation
+
+on:
+  push:
+    branches: ['feature/nmc-*', 'feature/si-*', 'feature/moei-*']
+  pull_request:
+    branches: [main, feature/smart-inspection-poc, 'feature/nmc-*', 'feature/si-*', 'feature/moei-*']
+  workflow_dispatch:
+
+jobs:
+  docker-baseline:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate compose configuration
+        run: docker compose config --quiet
+      - name: Build Angular and AI proxy images
+        run: docker compose build nmc ai-proxy
+      - name: Unit-test PSC proxy and schemas
+        run: |
+          node --test ai-proxy/test/seafarer-workspace.test.mjs ai-proxy/test/seafarer-http.test.mjs
+          node --check ai-proxy/moei-poc-auth.mjs
+          node --test ai-proxy/test/moei-poc-auth.test.mjs
+          node --check ai-proxy/moei-google-sso.mjs
+          node --check ai-proxy/moei-google-users.mjs
+          node --test ai-proxy/test/moei-google-sso.test.mjs
+          node --check ai-proxy/server.mjs
+          node --check ai-proxy/si-inspection-preparation.mjs
+          node --check ai-proxy/case-source-provenance.mjs
+          node --test ai-proxy/test/case-source-provenance.test.mjs
+          node --check ai-proxy/psc-reader.mjs
+          node --check ai-proxy/fleet-ai.mjs
+          node --check ai-proxy/fleet-scheduler.mjs
+          node --check ai-proxy/data-quality.mjs
+          node --check ai-proxy/oracle-quality-backfill.mjs
+          node --check ai-proxy/build-fleet-evidence.mjs
+          node --test ai-proxy/test/fleet-scheduler.test.mjs
+          node --test ai-proxy/test/oracle-bind-names.test.mjs
+          node --test ai-proxy/test/data-quality.test.mjs
+          mkdir -p /tmp/psc-adapter
+          cp ai-proxy/airia-demo-cohort.mjs ai-proxy/airia-demo-99.json ai-proxy/psc-reader.mjs ai-proxy/fleet-ai.mjs ai-proxy/data-quality.mjs ai-proxy/document-risk-evidence.mjs tools/psc/psc-fixtures.mjs src/app/data/nmc-vessel-catalog.ts src/app/data/nmc-expanded-vessel-catalog.ts /tmp/psc-adapter/
+          cp ai-proxy/test/psc-reader.test.mjs /tmp/psc-adapter/test-psc.mjs
+          sed -i "s@'../psc-reader.mjs'@'./psc-reader.mjs'@" /tmp/psc-adapter/test-psc.mjs
+          node --test /tmp/psc-adapter/test-psc.mjs
+          cp ai-proxy/test/fleet-ai.test.mjs /tmp/psc-adapter/test-fleet.mjs
+          sed -i "s@'../fleet-ai.mjs'@'./fleet-ai.mjs'@" /tmp/psc-adapter/test-fleet.mjs
+          node --test /tmp/psc-adapter/test-fleet.mjs
+      # Legacy login smoke is explicitly local-mode CI-only; default deployment
+      # remains Google SSO and requires verified Google account on allowlist.
+      - name: Generate CI-only Admin credential
+        run: |
+          echo "MOEI_AUTH_MODE=local" >> "$GITHUB_ENV"
+          echo "MOEI_ADMIN_PASSWORD=ci-test-$(openssl rand -hex 24)" >> "$GITHUB_ENV"
+      - name: Start local POC
+        run: docker compose up -d --wait
+      - name: Smoke test Angular and proxy
+        run: |
+          set -eu
+          base=http://127.0.0.1:4200
+          jar=/tmp/moei-admin-ci-session.cookie
+          curl -fsS "$base/" | grep -qi '<html'
+          curl -fsS "$base/api/ai/health" | grep -q '"aiConfigured":false'
+          # Both NMC and Inspection APIs reject unauthenticated browser callers.
+          test "$(curl -s -o /dev/null -w '%{http_code}' "$base/api/ai/fleet/status")" = "401"
+          test "$(curl -s -o /dev/null -w '%{http_code}' "$base/api/si/v1/candidates/dashboard")" = "401"
+          curl -fsS -c "$jar" -H 'Content-Type: application/json' \
+            --data "$(printf '{"username":"admin","password":"%s"}' "$MOEI_ADMIN_PASSWORD")" \
+            "$base/api/moei/auth/login" | grep -q '"role":"ADMIN"'
+          test "$(curl -s -o /dev/null -w '%{http_code}' "$base/api/seafarers/v1/dashboard")" = "401"
+          curl -fsS -b "$jar" "$base/api/seafarers/v1/dashboard" | grep -q '"mode":"CONTRACT_SANDBOX"'
+          curl -fsS -b "$jar" "$base/api/moei/auth/session" | grep -q '"role":"ADMIN"'
+          curl -fsS -b "$jar" "$base/api/ai/fleet/status" | grep -q '"fleetSize":99'
+          curl -fsS -b "$jar" "$base/api/si/v1/candidates/dashboard" | grep -q '"evaluatedPopulation":99'
+          curl -fsS -b "$jar" "$base/api/si/v1/rules" | grep -Fq '"ranking":{"criteria":["DEPARTURE_SOON","INCIDENT_SEVERITY"]}'
+          curl -fsS -b "$jar" "$base/api/si/v1/candidate-sources/template/SERVICE_REQUEST" -o /tmp/si-service.xlsx
+          curl -fsS -b "$jar" "$base/api/si/v1/candidate-sources/template/PSC_PORT_CALL" -o /tmp/si-psc.xlsx
+          unzip -t /tmp/si-service.xlsx >/dev/null
+          unzip -t /tmp/si-psc.xlsx >/dev/null
+          # Invalid scope stays rejected, even with an authenticated Admin.
+          test "$(curl -s -b "$jar" -o /dev/null -w '%{http_code}' "$base/api/si/v1/candidate-sources/template/NMC_CASE")" = "405"
+          # Mutations require a CSRF header in addition to a signed-in cookie.
+          test "$(curl -s -b "$jar" -o /dev/null -w '%{http_code}' -X POST "$base/api/si/v1/candidates/source-events")" = "403"
+          curl -fsS "$base/api/ai/psc/health" | grep -q '"sourceMode":"snapshot"'
+          curl -fsS -b "$jar" "$base/api/ai/psc/vessels/9328471" | grep -q '"sourceMode":"LOCAL_FIXTURE_SNAPSHOT"'
+          curl -fsS -b "$jar" "$base/api/ai/psc/vessels/9328471" | grep -q '"inspections":4'
+          test "$(curl -s -b "$jar" -o /dev/null -w '%{http_code}' "$base/api/ai/psc/vessels/1234567")" = "404"
+          curl -fsS -b "$jar" -H 'X-MOEI-CSRF: 1' -X POST "$base/api/moei/auth/logout" | grep -q '"status":"ok"'
+          test "$(curl -s -b "$jar" -o /dev/null -w '%{http_code}' "$base/api/ai/fleet/status")" = "401"
+      - name: Logs if failing
+        if: failure()
+        run: docker compose logs --tail=100
+      - name: Shutdown
+        if: always()
+        run: docker compose down --volumes

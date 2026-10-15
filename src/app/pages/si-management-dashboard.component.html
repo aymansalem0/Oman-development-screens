@@ -1,0 +1,150 @@
+<div class="si-layout" [attr.dir]="lang.dir">
+  <app-nmc-navigation></app-nmc-navigation>
+  <main class="si-management">
+    <header class="head">
+      <div>
+        <small>MOEI · SMART INSPECTION · MANAGEMENT VISIBILITY</small>
+        <h1>{{copy('Inspection Management & Performance','إدارة المعاينات ومؤشرات الأداء')}}</h1>
+        <p>{{copy('Priorities, workload, findings, repeat deficiencies, delays and outcomes from saved inspection cases only.',
+          'الأولويات وعبء العمل والملاحظات المتكررة والتأخير والنتائج من سجلات المعاينات المحفوظة فقط.')}}</p>
+      </div>
+      <nav class="top-links" [attr.aria-label]="copy('Related inspection workspaces','صفحات المعاينة المرتبطة')">
+        <a routerLink="/moei/smart-inspection/candidates">{{copy('Candidates','الترشيحات')}}</a>
+        <a routerLink="/moei/smart-inspection/lifecycle">{{copy('Inspections','المعاينات')}}</a>
+        <a routerLink="/moei/smart-inspection/scheduling">{{copy('Scheduling','الجدولة')}}</a>
+      </nav>
+    </header>
+
+    <section class="panel access">
+      <button type="button" class="primary" [disabled]="busy" (click)="load()">
+        {{busy?copy('Loading…','جارٍ التحميل…'):copy('Refresh Saved Records','تحديث السجلات المحفوظة')}}
+      </button>
+      <span class="source">{{copy('Read-only · no AI or data changes','قراءة فقط · دون تشغيل AI أو تغيير البيانات')}}</span>
+    </section>
+    <p class="message error" role="alert" *ngIf="error">{{error}}</p>
+    <ng-container *ngIf="report as d">
+      <div class="context">
+        <span class="pill">{{copy('SYNTHETIC POC · NOT OFFICIAL MOEI STATISTICS','تجريبي · ليست إحصاءات رسمية')}}</span>
+        <span>{{copy('Recorded as of','تاريخ التقرير')}} {{d.generatedAt|date:'medium'}}</span>
+        <span *ngIf="!d.candidateSourceAvailable" class="warn">
+          {{copy('Candidate feed unavailable: candidate counts unknown, not zero.',
+            'مصدر الترشيحات غير متاح: العدد غير معروف وليس صفراً.')}}
+        </span>
+      </div>
+      <section class="kpi-grid" [attr.aria-label]="copy('Inspection metrics','مؤشرات المعاينات')">
+        <article *ngFor="let card of cards" class="kpi" [class.urgent]="card.important&&card.value">
+          <span>{{copy(card.titleEn,card.titleAr)}}</span>
+          <strong>{{display(card.value)}}</strong>
+          <small>{{copy(card.helpEn,card.helpAr)}}</small>
+        </article>
+      </section>
+
+      <div class="analytics">
+        <section class="panel">
+          <h2>{{copy('Case Flow & Bottlenecks','توزيع الحالات والاختناقات التشغيلية')}}</h2>
+          <p class="caption">{{copy('All approved inspection cases grouped by saved lifecycle stage.',
+            'جميع حالات المعاينة المعتمدة وفق مرحلة التشغيل المحفوظة.')}}</p>
+          <div class="bar-row" *ngFor="let s of d.byStage">
+            <span>{{stageName(s.stage)}}</span>
+            <div class="bar-track"><div class="bar-fill"
+              [style.width.%]="asPercent(s.count,largestStageCount)"></div></div>
+            <strong>{{s.count}}</strong>
+          </div>
+          <div class="metrics-note">
+            <strong>{{copy('Average elapsed time to closure','متوسط الوقت حتى الإغلاق')}}:
+              {{d.kpis.averageClosureHours===null?'—':display(d.kpis.averageClosureHours)}}
+              <span *ngIf="d.kpis.averageClosureHours!==null">{{copy('hours','ساعة')}}</span>
+            </strong>
+            <small>{{d.kpis.timedClosedCases}}
+              {{copy('closed cases with verified timestamps','حالات مغلقة ذات توقيتات محفوظة')}}</small>
+          </div>
+        </section>
+        <section class="panel">
+          <h2>{{copy('Inspector Workload','عبء عمل المفتشين')}}</h2>
+          <p class="caption">{{copy('Open assigned inspection cases only. Case assignments are not capacity commitments.',
+            'المعاينات المسندة غير المغلقة فقط، وليست تأكيداً للطاقة الاستيعابية.')}}</p>
+          <div class="table-wrap">
+            <table><thead><tr>
+              <th>{{copy('Inspector','المفتش')}}</th>
+              <th>{{copy('Active','نشطة')}}</th>
+              <th>{{copy('Field','ميدانية')}}</th>
+              <th>{{copy('Report Review','مراجعة تقرير')}}</th>
+              <th>{{copy('Open Actions','إجراءات مفتوحة')}}</th>
+            </tr></thead><tbody>
+              <tr *ngFor="let u of d.workload"><td>{{u.inspector}}</td>
+                <td>{{u.assigned}}</td><td>{{u.inField}}</td>
+                <td>{{u.pendingReports}}</td><td>{{u.openActions}}</td></tr>
+              <tr *ngIf="!d.workload.length"><td colspan="5" class="empty">
+                {{copy('No active saved inspector assignments.','لا توجد تكليفات نشطة محفوظة.')}}</td></tr>
+            </tbody></table>
+          </div>
+        </section>
+      </div>
+
+      <section class="panel">
+        <h2>{{copy('Recurring Deficiency Categories','الملاحظات المتكررة حسب بند الفحص')}}</h2>
+        <p class="caption">{{copy('Only inspector-confirmed findings in saved inspection reports; no AI hypotheses included. A repeated vessel-check pair requires more than one separate case for the same IMO.',
+          'ملاحظات المفتش المؤكدة والمحفظة فقط، دون فرضيات AI. يتطلب التكرار أكثر من حالة معاينة مستقلة لنفس السفينة ونفس البند.')}}</p>
+        <div class="repeats" *ngFor="let check of d.recurringChecks.slice(0,12)">
+          <div><strong>{{check.title}}</strong><small>{{check.checkId}}</small></div>
+          <div class="bar-track"><div class="bar-fill amber"
+               [style.width.%]="asPercent(check.findings,maxFindingCount)"></div></div>
+          <span>{{check.findings}} {{copy('findings','ملاحظات')}}
+            · {{check.affectedVessels}} {{copy('vessels','سفن')}}</span>
+        </div>
+        <p class="empty" *ngIf="!d.recurringChecks.length">
+          {{copy('No saved deficiencies to analyze yet.','لا توجد ملاحظات محفوظة للتحليل.')}}</p>
+      </section>
+
+      <section class="panel">
+        <div class="cases-head">
+          <div><h2>{{copy('Saved Inspection Case Drill-down','تفاصيل حالات المعاينات المحفوظة')}}</h2>
+            <p class="caption">{{copy('Select a case to review original inspection records, evidence references and audit trail.',
+              'اختر الحالة لمراجعة المعاينة الأصلية ومراجع الأدلة وسجل التدقيق.')}}</p>
+          </div>
+          <button type="button" (click)="clearFilters()">{{copy('Clear Filters','مسح التصفية')}}</button>
+        </div>
+        <div class="filters">
+          <input type="search" [(ngModel)]="search" [placeholder]="copy('Search IMO, vessel, case or inspector…','بحث بالسفينة أو الحالة أو المفتش')" [attr.aria-label]="copy('Search cases','بحث الحالات')"/>
+          <select [(ngModel)]="stage" [attr.aria-label]="copy('Stage filter','فلتر المرحلة')">
+            <option value="ALL">{{copy('All stages','جميع المراحل')}}</option>
+            <option *ngFor="let s of allStages" [value]="s">{{stageName(s)}}</option>
+          </select>
+          <select [(ngModel)]="regime" [attr.aria-label]="copy('Inspection regime filter','فلتر نوع المعاينة')">
+            <option value="ALL">{{copy('All regimes','جميع الأنواع')}}</option>
+            <option *ngFor="let r of allRegimes" [value]="r">{{r}}</option>
+          </select>
+          <select [(ngModel)]="inspector" [attr.aria-label]="copy('Inspector filter','فلتر المفتش')">
+            <option value="ALL">{{copy('All inspectors','جميع المفتشين')}}</option>
+            <option *ngFor="let x of allInspectors" [value]="x">{{x}}</option>
+          </select>
+        </div>
+        <div class="table-wrap">
+          <table><thead><tr>
+            <th>{{copy('Vessel / Case','السفينة / الحالة')}}</th>
+            <th>{{copy('Regime','النوع')}}</th>
+            <th>{{copy('Stage','المرحلة')}}</th>
+            <th>{{copy('Inspector','المفتش')}}</th>
+            <th>{{copy('Findings','الملاحظات')}}</th>
+            <th>{{copy('Overdue Actions','المتأخرة')}}</th>
+            <th></th>
+          </tr></thead><tbody>
+            <tr *ngFor="let c of filteredCases;trackBy:trackCase">
+              <td><strong>{{c.vesselName}}</strong><small>IMO {{c.imo}} · {{c.id}}</small></td>
+              <td>{{c.regime}}</td><td>{{stageName(c.stage)}}</td>
+              <td>{{c.inspector||'—'}}</td>
+              <td>{{c.findings}} <span *ngIf="c.critical">· {{c.critical}} CRITICAL</span></td>
+              <td [class.warn]="c.overdueActions>0">{{c.overdueActions}}</td>
+              <td><a [routerLink]="['/moei/smart-inspection/lifecycle',c.id]">
+                {{copy('Open Case →','فتح الحالة ←')}}</a></td>
+            </tr>
+            <tr *ngIf="!filteredCases.length"><td colspan="7" class="empty">
+              {{copy('No cases match the active filters.','لا توجد حالات مطابقة.')}}</td></tr>
+          </tbody></table>
+        </div>
+      </section>
+      <p class="footnote">{{copy('POC source: persisted inspection ledger and current candidate queue. No automatic NMC rescoring, regulatory enforcement or Airia calls.',
+        'المصدر: سجل المعاينات المحفوظ والترشيحات الحالية. لا إعادة تقييم تلقائية لـNMC ولا إجراءات تنظيمية ولا استدعاءات Airia.')}}</p>
+    </ng-container>
+  </main>
+</div>

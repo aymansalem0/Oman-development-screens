@@ -1,96 +1,23 @@
 <div class="nmc-shell" [class.rtl]="lang.isArabic" [attr.dir]="lang.dir">
-  <header class="nmc-topbar">
-    <div class="brand-block">
-      <div class="brand-mark">⚓</div>
-      <div>
-        <div class="eyebrow">{{ copy('MOEI · Maritime Transformation', 'وزارة الطاقة والبنية التحتية · التحول البحري') }}</div>
-        <h1>{{ copy('National Maritime Center', 'المركز البحري الوطني') }}</h1>
-        <p>{{ copy('Operational picture · Maritime situational awareness', 'الصورة التشغيلية · الوعي البحري بالموقف') }}</p>
-      </div>
-    </div>
+  <app-nmc-platform-header area="nmc" [feedLive]="feedLive"
+     [clock]="formattedNow" [unreadAlerts]="unreadAlertCount"
+     (languageChanged)="refreshMapForLanguage()"></app-nmc-platform-header>
 
-    <div class="topbar-status">
-      <div class="live-pill" [class.paused]="!feedLive">
-        <span class="pulse-dot"></span>
-        {{ feedLive ? copy('AIS / LRIT FEED LIVE', 'تغذية AIS / LRIT مباشرة') : copy('FEED PAUSED', 'التغذية متوقفة') }}
-      </div>
-      <span class="clock">{{ formattedNow }}</span>
-    </div>
-
-    <div class="topbar-actions">
-      <button type="button" class="language-btn" (click)="toggleLanguage()">{{ lang.isArabic ? 'English' : 'العربية' }}</button>
-      <button type="button" class="icon-btn" [attr.aria-label]="copy('Notifications', 'الإشعارات')">🔔<b>3</b></button>
-      <div class="user-chip">
-        <span class="user-avatar">NO</span>
-        <span>
-          <strong>{{ copy('NMC Officer', 'ضابط المركز البحري الوطني') }}</strong>
-          <small>{{ copy('Duty Operations', 'العمليات المناوبة') }}</small>
-        </span>
-      </div>
-    </div>
-  </header>
-
-  <aside class="nmc-sidebar">
-    <div class="sidebar-section-label">{{ copy('OPERATIONS', 'العمليات') }}</div>
-
-    <button type="button" class="nav-item active">
-      <span class="nav-icon">◉</span>
-      <span>{{ copy('Command Center', 'مركز القيادة') }}</span>
-    </button>
-    <button type="button" class="nav-item">
-      <span class="nav-icon">⌖</span>
-      <span>{{ copy('Vessel Monitoring', 'مراقبة السفن') }}</span>
-      <span class="count-badge">{{ monitoredCount }}</span>
-    </button>
-    <button type="button" class="nav-item">
-      <span class="nav-icon">⚠</span>
-      <span>{{ copy('Alerts & Events', 'التنبيهات والأحداث') }}</span>
-      <span class="count-badge warning">{{ attentionCount }}</span>
-    </button>
-    <button type="button" class="nav-item">
-      <span class="nav-icon">▣</span>
-      <span>{{ copy('Cases & Incidents', 'الحالات والحوادث') }}</span>
-      <span class="count-badge">4</span>
-    </button>
-    <button type="button" class="nav-item">
-      <span class="nav-icon">✓</span>
-      <span>{{ copy('Smart Inspection', 'المعاينة الذكية') }}</span>
-    </button>
-
-    <div class="sidebar-section-label second">{{ copy('INTELLIGENCE', 'الاستخبارات') }}</div>
-
-    <button type="button" class="nav-item">
-      <span class="nav-icon">✦</span>
-      <span>{{ copy('Maritime Intelligence', 'الاستخبارات البحرية') }}</span>
-    </button>
-    <button type="button" class="nav-item">
-      <span class="nav-icon">▥</span>
-      <span>{{ copy('Dashboards', 'لوحات المعلومات') }}</span>
-    </button>
-    <a class="nav-item" routerLink="/moei/nmc/admin/risk-configuration">
-      <span class="nav-icon">⚙</span>
-      <span>{{ copy('Configuration', 'الإعدادات') }}</span>
-    </a>
-
-    <div class="system-health">
-      <div>
-        <span class="health-dot"></span>
-        <strong>{{ copy('Systems operational', 'الأنظمة تعمل بصورة طبيعية') }}</strong>
-      </div>
-      <small>{{ copy('5 / 5 data sources available', '5 / 5 مصادر بيانات متاحة') }}</small>
-    </div>
-  </aside>
+  <app-nmc-navigation></app-nmc-navigation>
 
   <main class="nmc-main">
     <section class="page-heading">
       <div>
         <div class="breadcrumb">{{ copy('National Maritime Center', 'المركز البحري الوطني') }} / <b>{{ copy('Operational Picture', 'الصورة التشغيلية') }}</b></div>
         <h2>{{ copy('UAE Maritime Operational Picture', 'الصورة التشغيلية البحرية لدولة الإمارات') }}</h2>
-        <p>{{ copy('Real-time vessel traffic, maritime risk and prioritized operational attention in one national view.', 'حركة السفن والمخاطر البحرية والأولويات التشغيلية لحظياً ضمن رؤية وطنية موحدة.') }}</p>
+        <p>{{ copy('Synthetic traffic simulation and evidence-driven AI vessel assessment. Not a live national traffic or enforcement system.', 'محاكاة حركة السفن وتقييم مخاطرها بالذكاء الاصطناعي بناءً على الأدلة التجريبية. ليست منظومة إنفاذ أو حركة بحرية رسمية.') }}</p>
       </div>
 
       <div class="heading-actions">
         <button type="button" class="secondary-btn" (click)="resetMapView()">⌂ {{ copy('Reset map', 'إعادة ضبط الخريطة') }}</button>
+        <button type="button" class="secondary-btn db-fetch-btn" (click)="fetchAgain()" [disabled]="fetchingSaved" [attr.aria-busy]="fetchingSaved">
+          ↻ {{ fetchingSaved ? copy('Fetching saved data…','جارٍ استرجاع البيانات المحفوظة…') : copy('Fetch Again (Database)','جلب أحدث البيانات من قاعدة البيانات') }}
+        </button>
         <button type="button" class="primary-btn" (click)="toggleFeed()">
           <span>{{ feedLive ? '❚❚' : '▶' }}</span>
           {{ feedLive ? copy('Pause live feed', 'إيقاف التغذية المباشرة') : copy('Resume live feed', 'استئناف التغذية المباشرة') }}
@@ -98,46 +25,144 @@
       </div>
     </section>
 
-    <section class="kpi-grid">
-      <article class="kpi-card">
-        <div class="kpi-icon teal">⌖</div>
-        <div>
-          <span class="kpi-label">{{ copy('AIS / LRIT traffic contacts', 'أهداف AIS / LRIT البحرية') }}</span>
-          <strong>≈{{ monitoredCount }}</strong>
-          <small>{{ copy('in / approaching UAE operational area', 'داخل / تقترب من النطاق التشغيلي للإمارات') }}</small>
-          <div class="traffic-breakdown">
-            <span>{{ trafficSnapshot.insideUaeMonitoredArea }} {{ copy('inside', 'داخل النطاق') }}</span>
-            <span>{{ trafficSnapshot.approachingUaeArea }} {{ copy('approaching', 'تقترب') }}</span>
+
+    <!-- ONE boundary. All operational KPIs are related, but are not additive:
+         assessed != pending, High excludes Critical, attention overlaps incidents. -->
+    <section class="nmc-unified-kpi-board" role="region"
+             [attr.aria-label]="copy('Unified maritime operational indicators',
+                'المؤشرات التشغيلية البحرية الموحدة')">
+      <header class="nmc-kpi-board-head">
+        <div class="nmc-kpi-heading">
+          <span class="nmc-kpi-eyebrow">{{copy('NATIONAL MARITIME CENTER · OPERATIONAL PULSE',
+            'المركز البحري الوطني · المؤشرات التشغيلية')}}</span>
+          <h3>{{copy('Maritime Operations Overview',
+                    'ملخص العمليات البحرية')}}</h3>
+          <p>{{copy('One current picture of vessel coverage, maritime risk and operational workflows. Counts represent different entities and must not be added together.',
+                    'صورة موحدة للتغطية البحرية والمخاطر وسير العمل. الأرقام تمثل كيانات مختلفة ولا يجوز جمعها مباشرةً.')}}</p>
+        </div>
+        <div class="nmc-kpi-actions">
+          <a class="nmc-kpi-incidents-link" routerLink="/moei/nmc/incidents">
+            ⚑ {{copy('Incident Center','مركز الحوادث')}} ↗
+          </a>
+          <button type="button" class="nmc-kpi-ask-ai"
+                  (click)="requestAiKpiFocus()"
+                  [disabled]="!aiKpiFocusAvailable||aiKpiFocusBusy"
+                  [attr.aria-busy]="aiKpiFocusBusy"
+                  [title]="aiKpiFocusAvailable
+                    ?copy('Uses existing A02 risk signals then A01 situation assessment (up to TWO Airia executions). Same request/response fields, with dashboard context.',
+                          'يستخدم A02 لمؤشرات المخاطر ثم A01 لتقييم الموقف (قد ينتج استدعاءان من Airia). نفس حقول الطلب والاستجابة مع سياق لوحة القيادة.')
+                    :aiKpiFocusStatusLoaded&&!aiKpiFocusContextReady
+                    ?copy('No eligible saved full vessel assessment with all five risk signals and bundle; verify Oracle source readiness before any Airia call.',
+                          'لا يوجد تقييم سفينة محفوظ ومكتمل بالمؤشرات الخمسة والأدلة المطلوبة؛ تحقق من بيانات Oracle قبل أي طلب Airia.')
+                    :copy('A01/A02 dashboard review is disabled; opt in from server configuration.',
+                          'مراجعة المؤشرات بواسطة A01/A02 معطلة؛ يلزم تفعيلها من إعدادات الخادم.')">
+            ✦ {{aiKpiFocusBusy
+              ?copy('Analyzing priority…','جارٍ تحديد الأولوية…')
+              :copy('Ask AI: What needs focus?','اسأل AI: ما الأهم الآن؟')}}
+          </button>
+          <button type="button" class="nmc-kpi-reset"
+                  (click)="resetDashboardView()"
+                  [disabled]="aiKpiFocusBusy"
+                  [attr.aria-label]="copy('Reset dashboard view and clear filters, vessel selection and AI focus',
+                    'إعادة ضبط عرض لوحة القيادة وإلغاء الفلاتر واختيار السفينة وتمييز AI')"
+                  [title]="copy('Reset dashboard view only. Does not delete saved assessments, incidents or cases.',
+                    'إعادة ضبط العرض فقط دون حذف تقييمات السفن أو الحوادث أو الحالات المحفوظة.')">
+            <span aria-hidden="true">↺</span> {{copy('Reset Dashboard','إعادة ضبط اللوحة')}}
+          </button>
+        </div>
+      </header>
+
+      <p *ngIf="dashboardResetNotice" class="nmc-kpi-reset-notice" role="status" aria-live="polite">
+        {{dashboardResetNotice}}
+      </p>
+
+      <div class="nmc-unified-kpi-grid">
+        <article class="nmc-unified-kpi-card"
+                 *ngFor="let kpi of dashboardKpis;trackBy:dashboardKpiTrack"
+                 [class.nmc-ai-selected]="aiFocusedKpi(kpi.id)"
+                 [class.nmc-kpi-critical]="kpi.id==='criticalRiskVessels'"
+                 [attr.aria-label]="copy(kpi.labelEn,kpi.labelAr)+': '+kpi.display">
+          <div class="nmc-kpi-card-upper">
+            <span class="nmc-kpi-card-icon" aria-hidden="true">{{kpi.icon}}</span>
+            <span *ngIf="aiFocusedKpi(kpi.id)" class="nmc-ai-priority-label">
+              ✦ {{copy('AI FOCUS','أولوية AI')}}
+            </span>
           </div>
-        </div>
-      </article>
+          <span class="nmc-kpi-card-label">{{copy(kpi.labelEn,kpi.labelAr)}}</span>
+          <strong class="nmc-kpi-card-value">{{kpi.display}}</strong>
+          <span class="nmc-kpi-card-hint">{{copy(kpi.hintEn,kpi.hintAr)}}</span>
+        </article>
+      </div>
 
-      <article class="kpi-card">
-        <div class="kpi-icon sky">◎</div>
+      <div class="nmc-kpi-ai-result" *ngIf="aiKpiFocus && aiFocusIsCurrent" role="status">
+        <span class="nmc-kpi-ai-result-icon">✦</span>
         <div>
-          <span class="kpi-label">{{ copy('Require attention', 'تتطلب الانتباه') }}</span>
-          <strong>{{ attentionCount }}</strong>
-          <small>{{ copy('risk score ≥ 45', 'درجة المخاطر ≥ 45') }}</small>
+          <strong>{{copy('AI-prioritized attention · officer review only',
+                          'المؤشر الأهم وفق AI · للمراجعة البشرية فقط')}}</strong>
+          <p>{{lang.isArabic?aiKpiFocus.selection.reasonAr:aiKpiFocus.selection.reasonEn}}</p>
+          <p><b>{{copy('A01 situation assessment','تقييم الموقف من A01')}}:</b>
+            {{aiKpiFocus.selection.a01Summary}}</p>
+          <div *ngIf="aiKpiFocus.selection.a01Actions?.length">
+            <b>{{copy('Evidence-backed recommendations for officer review','التوصيات المدعومة بالأدلة للمراجعة البشرية')}}</b>
+            <div *ngFor="let action of aiKpiFocus.selection.a01Actions" class="si-poc-agent-advice">
+              <strong>{{action.actionType}} · {{action.priority}}</strong>
+              <p>{{action.summary||copy('Review available evidence and validate with duty officer.',
+                'يرجى مراجعة الأدلة والتحقق بواسطة المسؤول.')}}</p>
+              <small>{{copy('Cited evidence IDs','معرّفات الأدلة')}}:
+                {{action.evidenceIds.join(', ')||'—'}}</small>
+              <small> · {{copy('Human approval required','يتطلب موافقة بشرية')}}</small>
+            </div>
+          </div>
+          <div *ngIf="aiKpiFocus.selection.a01Evidence?.length">
+            <b>{{copy('Supporting maritime evidence','الأدلة البحرية الداعمة')}}</b>
+            <p *ngFor="let ev of aiKpiFocus.selection.a01Evidence">
+              {{ev.title}} · {{ev.evidenceIds.join(', ')}}
+            </p>
+          </div>
+          <small>{{copy('Anchored to saved vessel assessment','استنادًا إلى تقييم السفينة المحفوظ')}}:
+            IMO {{aiKpiFocus.sourceImo}} · {{copy('A01 cited evidence','أدلة A01')}}:
+            {{aiKpiFocus.selection.evidenceIds.length}}</small>
+          <small>{{copy('Existing Airia A02 + A01 maritime agents','الوكيلان البحريان الحاليان Airia A02 + A01')}}
+            · {{aiKpiFocus.analyzedAt|date:'medium'}}
+            · {{aiKpiFocus.reused?copy('reused identical snapshot','أعيد استخدام نفس البيانات'):
+                                    copy('new analysis','تحليل جديد')}}</small>
         </div>
-      </article>
+      </div>
+      <p class="nmc-kpi-ai-stale" *ngIf="aiKpiFocus&&!aiFocusIsCurrent" role="status">
+        {{copy('Operational counts changed after the AI review. Its highlight was removed; request a new review if needed.',
+          'تغيرت القيم التشغيلية بعد مراجعة AI؛ أزيل تمييز المؤشر القديم. يمكن طلب مراجعة جديدة عند الحاجة.')}}
+      </p>
+      <p class="nmc-kpi-ai-error" *ngIf="aiKpiFocusError" role="alert">{{aiKpiFocusError}}</p>
 
-      <article class="kpi-card">
-        <div class="kpi-icon amber">▲</div>
-        <div>
-          <span class="kpi-label">{{ copy('High risk', 'مخاطر مرتفعة') }}</span>
-          <strong>{{ highRiskCount }}</strong>
-          <small>{{ copy('priority monitoring', 'مراقبة ذات أولوية') }}</small>
-        </div>
-      </article>
-
-      <article class="kpi-card critical-card">
-        <div class="kpi-icon coral">!</div>
-        <div>
-          <span class="kpi-label">{{ copy('Critical events', 'أحداث حرجة') }}</span>
-          <strong>{{ criticalCount }}</strong>
-          <small>{{ copy('immediate action required', 'إجراء فوري مطلوب') }}</small>
-        </div>
-      </article>
+      <footer class="nmc-kpi-board-footer">
+        <span class="nmc-kpi-source-tag">{{copy('SYNTHETIC POC','بيانات تجريبية')}}</span>
+        <span>{{fleetSnapshot?.scheduler?.enabled
+          ?copy('Automatic fleet assessment active','تقييم الأسطول التلقائي نشط')
+          :copy('Automatic fleet assessment paused','تقييم الأسطول التلقائي متوقف')}}</span>
+        <span>{{copy('Saved AI risk: A01/A02 · Incidents: Google Sheet POC',
+                     'مخاطر A01/A02 محفوظة · الحوادث: Google Sheet تجريبي')}}</span>
+        <span *ngIf="latestDatabaseFetchAt">{{copy('Oracle refreshed','تحديث Oracle')}}:
+          {{latestDatabaseFetchAt|date:'mediumTime'}}</span>
+        <span *ngIf="incidentFeedLastUpdatedAt">{{copy('Incident feed checked','مراجعة مصدر الحوادث')}}:
+          {{incidentFeedLastUpdatedAt|date:'mediumTime'}}</span>
+        <span *ngIf="aiKpiFocusStatusLoaded&&!aiKpiFocusContextReady" class="nmc-kpi-config-warning">
+          {{copy('No complete saved A01/A02 vessel evidence is available. The focus action is unavailable until source verification succeeds.',
+                 'لا توجد أدلة تقييم سفينة مكتملة ومحفوظة لـA01/A02. لا يمكن تشغيل تحديد الأولوية حتى التحقق من المصدر.')}}
+        </span>
+        <span *ngIf="!aiKpiFocusAvailable && aiKpiFocusStatusLoaded&&aiKpiFocusContextReady" class="nmc-kpi-config-warning">
+          {{copy('AI KPI focus uses existing A02/A01 agents; enable explicit opt-in on the server.',
+                 'أولوية المؤشرات تستخدم الوكيلين A02/A01 الحاليين؛ فعّل الخيار صراحةً في الخادم.')}}
+        </span>
+        <span *ngIf="incidentSourceError" class="nmc-kpi-config-warning">
+          {{copy('Incident source unavailable — count unknown.',
+                 'مصدر الحوادث غير متاح — العدد غير معروف.')}}
+        </span>
+        <span *ngIf="fleetSnapshot?.scheduler?.blockedFailedVessels as blocked" class="nmc-kpi-config-warning">
+          {{blocked}} {{copy('previous failed fleet assessments skipped',
+                            'تقييمات أسطول فاشلة سابقة تم تخطيها')}}
+        </span>
+      </footer>
+      <p *ngIf="fleetError" class="nmc-kpi-ai-error" role="alert">{{fleetError}}</p>
     </section>
 
     <section class="workspace-grid">
@@ -146,15 +171,15 @@
           <div>
             <div class="panel-title-row">
               <h3>{{ copy('Live Maritime Picture', 'الصورة البحرية الحية') }}</h3>
-              <span class="real-map-badge">{{ copy('LIVE MAP', 'خريطة حية') }}</span>
+              <span class="real-map-badge">{{ copy('POC MAP', 'خريطة تجريبية') }}</span>
               <span class="traffic-profile-badge">
                 {{ correlatedProfileCount }} {{ copy('correlated vessel profiles', 'ملف سفينة مترابط') }}
               </span>
             </div>
             <p>
               {{ copy(
-                'OpenStreetMap live basemap · UAE waters and approach areas · detailed profiles shown from the wider AIS/LRIT traffic picture',
-                'خريطة OpenStreetMap حية · مياه الإمارات ومناطق الاقتراب · الملفات التفصيلية المعروضة جزء من الصورة الأوسع لحركة AIS/LRIT'
+                'OpenStreetMap basemap · ONLY the 99 Airia partner demo identities · synthetic positions follow fixed offshore sea corridors; NOT live AIS',
+                'خريطة OpenStreetMap · عرض ٩٩ سفينة من قائمة Airia فقط · حركة تجريبية ضمن مسارات بحرية بعيدة عن اليابسة وليست AIS مباشرًا'
               ) }}
             </p>
           </div>
@@ -169,12 +194,32 @@
               />
             </label>
 
+            <select [(ngModel)]="assessmentFilter" (ngModelChange)="onFilterChange()"
+                    class="assessment-filter"
+                    [attr.aria-label]="copy('Filter by AI assessment status', 'تصفية حسب حالة التقييم بالذكاء الاصطناعي')">
+              <option value="All">{{copy('All assessments','جميع حالات التقييم')}}</option>
+              <option value="Assessed">{{copy('AI Assessed Only','تم تقييمها بالذكاء الاصطناعي فقط')}} ({{assessedCount}})</option>
+              <option value="Pending">{{copy('Not AI assessed','لم تُقيّم بعد بالذكاء الاصطناعي')}} ({{pendingCount}})</option>
+            </select>
+
             <select [(ngModel)]="riskFilter" (ngModelChange)="onFilterChange()" [attr.aria-label]="copy('Filter by risk', 'تصفية حسب المخاطر')">
               <option value="All">{{ copy('All', 'الكل') }}</option>
               <option value="Critical">{{ copy('Critical', 'حرج') }}</option>
               <option value="High">{{ copy('High', 'مرتفع') }}</option>
               <option value="Watch">{{ copy('Watch', 'مراقبة') }}</option>
               <option value="Normal">{{ copy('Normal', 'طبيعي') }}</option>
+              <option value="Pending">{{ copy('Pending AI', 'بانتظار AI') }}</option>
+            </select>
+
+            <select [(ngModel)]="incidentFilter" (ngModelChange)="setIncidentFilter($event)"
+                    class="incident-filter"
+                    [attr.aria-label]="copy('Filter vessels by active maritime incident status', 'تصفية السفن حسب حالة الحوادث البحرية النشطة')">
+              <option value="All">{{copy('All incident statuses','جميع حالات الحوادث')}}</option>
+              <option value="Active">{{copy('⚑ Active Incidents','⚑ حوادث نشطة')}} ({{incidentSourceError?'—':incidentVesselCount}})</option>
+              <option value="Critical">{{copy('Critical Incidents','حوادث حرجة')}}</option>
+              <option value="High">{{copy('High-Risk Incidents','حوادث مرتفعة المخاطر')}}</option>
+              <option value="PendingReview">{{copy('Pending Human Review','بانتظار المراجعة البشرية')}}</option>
+              <option value="None">{{copy('No Active Incidents','بدون حوادث نشطة')}}</option>
             </select>
 
             <select [(ngModel)]="typeFilter" (ngModelChange)="onFilterChange()" [attr.aria-label]="copy('Filter by vessel type', 'تصفية حسب نوع السفينة')">
@@ -183,15 +228,43 @@
           </div>
         </div>
 
+        <p class="map-filter-summary" role="status">
+          {{visibleMapCount}} / {{correlatedProfileCount}}
+          {{copy('vessels shown on map', 'سفينة ظاهرة على الخريطة')}}
+          <span *ngIf="assessmentFilter==='Assessed'"> · {{copy('Completed saved A01/A02 assessments only','تقييمات A01/A02 المحفوظة والمكتملة فقط')}}</span>
+          <span *ngIf="assessmentFilter==='Pending'"> · {{copy('Includes pending and failed assessments','تشمل التقييمات المعلقة والفاشلة')}}</span>
+          <span *ngIf="incidentFilter!=='All'"> · ⚑ {{incidentFilterLabel()}}</span>
+          <span *ngIf="incidentFilter!=='All'&&incidentFeedRefreshing"> · {{copy('Refreshing source incidents…','جارٍ تحديث بلاغات الحوادث…')}}</span>
+          <span *ngIf="incidentFilter!=='All'&&incidentSourceError" role="alert">
+            · {{copy('Incident source unavailable — results cannot be verified.','مصدر الحوادث غير متاح — لا يمكن التحقق من النتائج.')}}
+          </span>
+        </p>
         <div class="map-stage">
           <div #mapContainer class="real-map" dir="ltr"></div>
+          <div class="map-overlay map-assessed-empty" *ngIf="assessmentFilter==='Assessed'&&visibleMapCount===0"
+               role="status">
+            <strong>{{copy('No AI-assessed vessels to display yet','لا توجد سفن مكتملة التقييم بالذكاء الاصطناعي لعرضها حتى الآن')}}</strong>
+            <span>{{copy('This filter only shows successfully saved A01/A02 assessments. Failed and pending vessels are not counted.',
+                         'يعرض هذا الفلتر تقييمات A01/A02 المكتملة والمحـفوظة فقط، ولا يشمل السفن المعلقة أو الفاشلة.')}}</span>
+          </div>
 
           <div class="map-overlay map-legend">
+            <span class="vessel-risk-legend-caption">{{copy('A01/A02 vessel risk (inner ring)','مخاطر السفينة A01/A02 (الإطار الداخلي)')}}</span>
             <span><i class="dot critical"></i> {{ copy('Critical', 'حرج') }}</span>
             <span><i class="dot high"></i> {{ copy('High', 'مرتفع') }}</span>
             <span><i class="dot watch"></i> {{ copy('Watch', 'مراقبة') }}</span>
             <span><i class="dot normal"></i> {{ copy('Normal', 'طبيعي') }}</span>
             <span><i class="route-key"></i> {{ copy('Selected sea route', 'المسار البحري المحدد') }}</span>
+          </div>
+          <div class="map-overlay incident-map-legend" role="note">
+            <strong>{{copy('Incident outline','إطار علامة الحادث')}}</strong>
+            <span><i class="incident-legend-ring critical"></i>{{copy('Critical','حرج')}}</span>
+            <span><i class="incident-legend-ring high"></i>{{copy('High','مرتفع')}}</span>
+            <span><i class="incident-legend-ring moderate"></i>{{copy('Moderate','متوسط')}}</span>
+            <span><i class="incident-legend-ring low"></i>{{copy('Low','منخفض')}}</span>
+            <span><i class="incident-legend-ring unassessed"></i>{{copy('Not rated','بدون تصنيف')}}</span>
+            <small>{{copy('Incident vessels: colored ship and outer ring = incident policy band when assessed, otherwise unverified source severity. Inner ring = saved A01/A02 vessel risk.',
+                'عند وجود حادث: لون السفينة والإطار الخارجي يمثل درجة الحادث المحسوبة بقواعد NMC أو خطورة البلاغ غير المؤكدة. الإطار الداخلي لمخاطر A01/A02.')}}</small>
           </div>
         </div>
       </div>
@@ -200,56 +273,134 @@
         <div class="panel-header">
           <div>
             <h3>{{ copy('Requires Attention Now', 'تتطلب الانتباه الآن') }}</h3>
-            <p>{{ copy('Prioritized by operational risk', 'مرتبة حسب المخاطر التشغيلية') }}</p>
+            <p>{{copy('Saved vessel risk and separately reported active incidents','مخاطر السفن المحفوظة وبلاغات الحوادث النشطة بصورة مستقلة')}}</p>
           </div>
-          <span class="priority-count">{{ attentionCount }}</span>
+          <div class="attention-filter-actions">
+            <button type="button" class="attention-incident-shortcut"
+                    [class.active]="incidentFilter==='Active'"
+                    [attr.aria-pressed]="incidentFilter==='Active'"
+                    (click)="setIncidentFilter(incidentFilter==='Active'?'All':'Active')"
+                    [attr.aria-label]="copy('Toggle only vessels with active maritime incidents',
+                      'عرض السفن ذات الحوادث البحرية النشطة فقط أو العودة للكل')">
+              ⚑ {{copy('Active Incidents','حوادث نشطة')}}
+              <strong>{{incidentSourceError?'—':incidentVesselCount}}</strong>
+            </button>
+            <span class="priority-count">{{ attentionCount }}</span>
+          </div>
         </div>
 
         <div class="attention-list">
-          <div
-            *ngFor="let vessel of attentionVessels; let i = index"
-            class="attention-item"
-            [class.active]="selectedVessel?.id === vessel.id"
-            role="button"
-            tabindex="0"
-            [attr.title]="selectedVessel?.id === vessel.id
-              ? copy('Click again to open Vessel 360', 'اضغط مرة أخرى لفتح Vessel 360')
-              : copy('Focus vessel on map', 'عرض السفينة على الخريطة')"
-            (click)="handleVesselInteraction(vessel)"
-            (keydown.enter)="handleVesselInteraction(vessel)"
-            (keydown.space)="$event.preventDefault(); handleVesselInteraction(vessel)"
-          >
-            <div class="rank" [ngClass]="riskClass(vessel.risk)">{{ attentionRank(i) }}</div>
-
-            <div class="attention-main">
-              <div class="attention-title">
-                <strong>{{ vessel.name }}</strong>
-                <span class="risk-chip" [ngClass]="riskClass(vessel.risk)">
-                  {{ riskLabel(vessel.risk) }} · {{ vessel.risk }}
-                </span>
+          <p *ngIf="incidentFilter!=='All' && attentionCount===0" class="attention-incident-empty" role="status">
+            {{incidentSourceError?
+              copy('Incident source unavailable — cannot verify incident filters. Try Refresh.',
+                   'مصدر الحوادث غير متاح — لا يمكن التحقق من التصفية. حاول تحديث البيانات.'):
+              incidentFeedRefreshing?
+              copy('Loading current maritime incident records…','جارٍ تحميل بلاغات الحوادث الحالية…'):
+              copy('No vessels in the attention queue match this incident filter.',
+                   'لا توجد سفن في قائمة المتابعة تطابق فلتر الحوادث المحدد.')}}
+          </p>
+          <ng-container *ngFor="let vessel of attentionVessels; let i = index">
+            <div class="attention-item"
+              [class.active]="selectedVessel?.id === vessel.id"
+              [class.has-incident]="hasActiveIncidents(vessel.imo)"
+              [ngClass]="incidentClass(vessel.imo)"
+              role="button" tabindex="0"
+              [attr.title]="selectedVessel?.id === vessel.id
+                ? copy('Click again to open Vessel 360','اضغط مرة أخرى لفتح ملف السفينة')
+                : copy('Focus vessel on map','عرض السفينة على الخريطة')"
+              (click)="handleVesselInteraction(vessel)"
+              (keydown.enter)="handleVesselInteraction(vessel)"
+              (keydown.space)="$event.preventDefault();handleVesselInteraction(vessel)">
+              <div class="rank" [ngClass]="riskClass(vessel.risk,vessel.imo)">{{attentionRank(i)}}</div>
+              <div class="attention-main">
+                <div class="attention-title">
+                  <strong>{{vessel.name}}</strong>
+                  <a class="risk-chip risk-inspect-link" [ngClass]="riskClass(vessel.risk,vessel.imo)"
+                    [routerLink]="['/moei/nmc/vessel',vessel.imo,'risk']"
+                    (click)="$event.stopPropagation()"
+                    [attr.aria-label]="copy('Analyze vessel risk for '+vessel.name,'تحليل مخاطر السفينة '+vessel.name)">
+                    {{riskLabel(vessel.risk,vessel.imo)}} · {{riskDisplay(vessel)}}
+                  </a>
+                </div>
+                <p>{{vesselTypeLabel(vessel.type)}} · {{flagLabel(vessel.flag)}} · {{zoneLabel(vessel.zone)}}</p>
+                <div class="attention-meta">
+                  <span>IMO {{vessel.imo}}</span>
+                  <span>{{vessel.speed | number:'1.1-1'}} {{copy('kn','عقدة')}}</span>
+                  <span>→ {{vessel.destination}}</span>
+                </div>
+                <div class="attention-incident-action" *ngIf="hasActiveIncidents(vessel.imo)">
+                  <button type="button" class="attention-incident-button"
+                    [ngClass]="incidentClass(vessel.imo)"
+                    [attr.aria-expanded]="expandedIncidentImo===vessel.imo"
+                    [attr.aria-label]="copy('Show incident details for '+vessel.name,'عرض حوادث السفينة '+vessel.name)"
+                    (click)="$event.stopPropagation();toggleVesselIncidents(vessel.imo)"
+                    (keydown.enter)="$event.stopPropagation()"
+                    (keydown.space)="$event.stopPropagation()">
+                    <span aria-hidden="true">⚑</span>
+                    {{incidentsForVessel(vessel.imo).length}} {{copy('Incident(s)','حادث / حوادث')}}
+                    <small>{{incidentBandLabel(vessel.imo)}}</small>
+                    <span aria-hidden="true">{{expandedIncidentImo===vessel.imo?'⌃':'⌄'}}</span>
+                  </button>
+                </div>
               </div>
-
-              <p>{{ vesselTypeLabel(vessel.type) }} · {{ flagLabel(vessel.flag) }} · {{ zoneLabel(vessel.zone) }}</p>
-
-              <div class="attention-meta">
-                <span>IMO {{ vessel.imo }}</span>
-                <span>{{ vessel.speed | number:'1.1-1' }} {{ copy('kn', 'عقدة') }}</span>
-                <span>→ {{ vessel.destination }}</span>
-              </div>
+              <button type="button" class="attention-360-btn"
+                [class.selected]="selectedVessel?.id === vessel.id"
+                (click)="$event.stopPropagation();openVessel(vessel)"
+                [attr.aria-label]="copy('Open Vessel 360','فتح ملف السفينة')"
+                [attr.title]="copy('Open Vessel 360','فتح ملف السفينة')">
+                <strong>360°</strong>
+                <small>{{copy('Open','فتح')}}</small>
+              </button>
             </div>
-
-            <button
-              type="button"
-              class="attention-360-btn"
-              [class.selected]="selectedVessel?.id === vessel.id"
-              (click)="$event.stopPropagation(); openVessel(vessel)"
-              [attr.aria-label]="copy('Open Vessel 360', 'فتح Vessel 360')"
-              [attr.title]="copy('Open Vessel 360', 'فتح Vessel 360')"
-            >
-              <strong>360°</strong>
-              <small>{{ copy('Open', 'فتح') }}</small>
-            </button>
-          </div>
+            <div *ngIf="expandedIncidentImo===vessel.imo" class="attention-incident-details"
+              [attr.aria-label]="copy('Active maritime incidents for '+vessel.name,'بلاغات السفينة '+vessel.name)">
+              <div class="attention-incident-heading">
+                <strong>{{copy('Active maritime incidents','الحوادث البحرية قيد المتابعة')}}</strong>
+                <span>IMO {{vessel.imo}}</span>
+              </div>
+              <div class="attention-incident-report" *ngFor="let report of incidentsForVessel(vessel.imo)">
+                <div class="attention-incident-report-title">
+                  <strong>{{report.incidentType}} · {{report.incidentId}}</strong>
+                  <span [ngClass]="'incident-'+incidentSeverityBand(report).toLowerCase()">
+                    {{incidentSeverityBand(report)}}
+                  </span>
+                </div>
+                <p class="attention-incident-report-source">{{report.sourceOrganization}}
+                  · {{report.portOrZone}} · {{report.reportedAt|date:'short'}}</p>
+                <p class="attention-incident-description">{{report.description}}</p>
+                <div class="attention-incident-report-status">
+                  <span>{{copy('Source status','حالة المصدر')}}: {{report.sourceIncidentStatus}}</span>
+                  <span>{{copy('Follow-up','المتابعة')}}: {{report.operationalStatus}}</span>
+                  <span *ngIf="report.aiAssessment && !report.aiAssessmentStale">
+                    {{copy('Incident risk · NMC rules','درجة مخاطر الحادث بقواعد NMC')}}: {{report.aiAssessment.incidentRiskScore}}/100
+                  </span>
+                  <span *ngIf="!report.aiAssessment || report.aiAssessmentStale">
+                    {{copy('Reported severity (unverified)','خطورة واردة من المصدر (غير مؤكدة)')}}:
+                    {{report.reportedSeverity}}
+                  </span>
+                </div>
+                <p class="attention-incident-recommendation"
+                  *ngIf="report.aiAssessment && !report.aiAssessmentStale">
+                  <strong>{{copy('AI proposed follow-up','متابعة مقترحة من AI')}}:</strong>
+                  {{report.aiAssessment.aiProposedFollowup}} · {{report.aiAssessment.aiReasoning}}
+                </p>
+                <p class="attention-incident-recommendation" *ngIf="report.nextFollowup">
+                  <strong>{{report.nextFollowup.approval==='OFFICER_APPROVED'?
+                    copy('Officer-approved next-step','متابعة معتمدة من الموظف'):
+                    copy('AI-suggested next-step (pending approval)','متابعة يقترحها AI (بانتظار الاعتماد)')}}:</strong>
+                  {{report.nextFollowup.status}}
+                </p>
+              </div>
+              <a [routerLink]="['/moei/nmc/vessel',vessel.imo,'case']"
+                 class="attention-incident-detail-link" (click)="$event.stopPropagation()">
+                {{copy('Open Case Management · follow-up actions →','فتح إدارة الحالة ومتابعة الإجراءات ←')}}
+              </a>
+              <a routerLink="/moei/nmc/incidents" class="attention-incident-detail-link"
+                (click)="$event.stopPropagation()" style="margin-inline-start:12px">
+                {{copy('Incident source & assessment','مصدر الحادث وتقييمه')}}
+              </a>
+            </div>
+          </ng-container>
         </div>
 
         <div class="attention-pagination" *ngIf="attentionPageCount > 1">
@@ -284,7 +435,8 @@
             <span class="ai-icon">✦</span>
             <div>
               <strong>{{ copy('Continuous prioritization', 'تحديد الأولويات بصورة مستمرة') }}</strong>
-              <p>{{ copy('All monitored vessels are continuously evaluated as movement and risk signals change.', 'يتم تقييم جميع السفن تحت المراقبة باستمرار مع تغير مؤشرات الحركة والمخاطر.') }}</p>
+              <p>{{copy('Saved A01/A02 vessel risk or a separately reported active incident can bring a vessel here. Incident-only vessels keep their original Pending AI vessel risk.',
+'تظهر السفينة بسبب مخاطر A01/A02 المحفوظة أو بلاغ حادث نشط مستقل. السفن التي دخلت بسبب الحوادث تظل مخاطرها الأصلية بانتظار AI إن لم تُقيّم بعد.')}}</p>
             </div>
           </div>
         </div>
@@ -296,11 +448,12 @@
         <div class="panel-header">
           <div>
             <h3>{{ copy('Live Event Stream', 'تدفق الأحداث المباشر') }}</h3>
-            <p>{{ copy('Movement, monitoring and correlated maritime events', 'أحداث الحركة والمراقبة والأحداث البحرية المترابطة') }}</p>
+            <p>{{ copy('Latest completed synthetic AI risk assessments', 'أحدث تقييمات مخاطر AI التجريبية المكتملة') }}</p>
           </div>
           <span class="stream-indicator"><i></i> streaming</span>
         </div>
 
+        <div *ngIf="events.length === 0" class="fleet-empty">{{ copy("No completed AI events yet", "لا توجد أحداث AI مكتملة بعد") }}</div>
         <div class="event-list">
           <div class="event-row" *ngFor="let event of events.slice(0,5)">
             <div class="event-time">{{ event.time }}</div>
@@ -319,6 +472,12 @@
         </div>
       </div>
 
+      <div class="vessel-panel panel vessel-unselected" *ngIf="!selectedVessel" role="status">
+        <div class="vessel-unselected-icon">⌖</div>
+        <h3>{{ copy('Select a vessel to view details', 'اختر سفينة لعرض بياناتها') }}</h3>
+        <p>{{ copy('Click a vessel on the map or in Requires Attention Now. Vessel details and its route are displayed only after selection.', 'اضغط على سفينة في الخريطة أو قائمة تتطلب الانتباه الآن؛ لن تظهر بيانات السفينة ومسارها إلا بعد اختيارها.') }}</p>
+      </div>
+
       <div class="vessel-panel panel" *ngIf="selectedVessel as v">
         <div class="vessel-panel-head">
           <div>
@@ -327,11 +486,13 @@
             <p>IMO {{ v.imo }} · MMSI {{ v.mmsi }}</p>
           </div>
 
-          <div class="big-risk" [ngClass]="riskClass(v.risk)">
-            <small>{{ copy('RISK', 'المخاطر') }}</small>
-            <strong>{{ v.risk }}</strong>
-            <span>{{ riskLabel(v.risk) }}</span>
-          </div>
+          <a class="big-risk risk-inspect-link" [ngClass]="riskClass(v.risk,v.imo)"
+             [routerLink]="['/moei/nmc/vessel',v.imo,'risk']"
+             [attr.aria-label]="copy('Open current risk factor analysis','فتح تحليل عوامل المخاطر الحالية')">
+            <small>{{ copy('CURRENT RISK · OPEN ANALYSIS', 'المخاطر الحالية · افتح التحليل') }}</small>
+            <strong>{{ riskDisplay(v) }}</strong>
+            <span>{{ riskLabel(v.risk,v.imo) }}</span>
+          </a>
         </div>
 
         <div class="vessel-data-grid">
@@ -368,7 +529,7 @@
         <div class="scenario-alert" *ngIf="v.risk >= 65">
           <span class="scenario-icon">!</span>
           <div>
-            <strong>{{ riskLabel(v.risk) }} {{ copy('attention level', 'مستوى الانتباه') }}</strong>
+            <strong>{{ riskLabel(v.risk,v.imo) }} {{ copy('attention level', 'مستوى الانتباه') }}</strong>
             <p>{{ copy("Open Vessel 360 to review the vessel's correlated movement, compliance, certificates, inspections and risk evidence.", 'افتح Vessel 360 لمراجعة الحركة المترابطة والامتثال والشهادات والمعاينات وأدلة المخاطر الخاصة بالسفينة.') }}</p>
           </div>
         </div>
@@ -383,4 +544,5 @@
       </div>
     </section>
   </main>
+  <app-nmc-platform-footer></app-nmc-platform-footer>
 </div>

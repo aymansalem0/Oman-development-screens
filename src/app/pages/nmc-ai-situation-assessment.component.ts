@@ -1,3 +1,4 @@
+import { NmcNavigationComponent } from '../components/nmc-navigation.component';
 import { CommonModule } from '@angular/common';
 import { Component, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
@@ -6,11 +7,15 @@ import {
   NmcVesselProfile
 } from '../data/nmc-vessel-catalog';
 import {
-  NMC_OPERATIONAL_VESSELS,
-  getOperationalVesselByImo
-} from '../data/nmc-expanded-vessel-catalog';
+  AIRIA_DEMO_99_VESSELS,
+  getAiriaDemoVesselByImo
+} from '../data/airia-demo-cohort';
 import { LanguageService } from '../services/language.service';
+import { NmcLiveAiPanelComponent, NmcLiveRiskResult } from './nmc-live-ai-panel.component';
 import { NmcRiskEngineService } from '../services/nmc-risk-engine.service';
+import { NmcVesselEvidenceService } from '../services/nmc-vessel-evidence.service';
+import { NmcFleetAiService, FleetAiAssessment } from '../services/nmc-fleet-ai.service';
+import {NmcCasesService,NmcCentralCase} from '../services/nmc-cases.service';
 
 type DecisionStatus = 'Pending' | 'Accepted' | 'Modified' | 'Rejected';
 type EvidenceType = 'Movement' | 'Inspection' | 'Certificate' | 'Data Quality' | 'History';
@@ -44,7 +49,7 @@ interface AiRecommendation {
 @Component({
   selector: 'app-nmc-ai-situation-assessment',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink],
+  imports: [CommonModule, FormsModule, RouterLink, NmcLiveAiPanelComponent, NmcNavigationComponent],
   templateUrl: './nmc-ai-situation-assessment.component.html',
   styleUrl: './nmc-ai-situation-assessment.component.css'
 })
@@ -53,6 +58,15 @@ export class NmcAiSituationAssessmentComponent implements OnInit {
   evidence: AiEvidence[] = [];
   recommendations: AiRecommendation[] = [];
   selectedEvidence?: AiEvidence;
+  liveResult: NmcLiveRiskResult | null = null;
+  fleetAssessment: FleetAiAssessment | null = null;
+  /** Tracks any attempted live run, including partial/unsupported agent responses. */
+  liveAttempted = false;
+  showSampleAssessment = false;
+  centralCase:NmcCentralCase|null=null;
+  centralBusy=false;
+  centralError='';
+  centralMessage='';
 
   readonly generatedAt = '07 Oct 2026 · 22:43:06';
   readonly modelLabel = 'Maritime Situation Intelligence';
@@ -60,14 +74,75 @@ export class NmcAiSituationAssessmentComponent implements OnInit {
   constructor(
     private route: ActivatedRoute,
     public lang: LanguageService,
-    private riskEngine: NmcRiskEngineService
+    private riskEngine: NmcRiskEngineService,
+    private readonly vesselEvidence: NmcVesselEvidenceService,
+    private readonly fleetAi: NmcFleetAiService,
+    private readonly cases: NmcCasesService
   ) {}
 
   ngOnInit(): void {
-    const imo = this.route.snapshot.paramMap.get('imo') || NMC_OPERATIONAL_VESSELS[0].imo;
-    const profile = getOperationalVesselByImo(imo) || NMC_OPERATIONAL_VESSELS[0];
+    const imo = this.route.snapshot.paramMap.get('imo') || AIRIA_DEMO_99_VESSELS[0].imo;
+    const profile = getAiriaDemoVesselByImo(imo) || AIRIA_DEMO_99_VESSELS[0];
     this.vessel = this.riskEngine.applyToVessel(profile);
     this.rebuildAssessment();
+    this.loadCentralCase();
+    this.fleetAi.assessment(profile.imo).subscribe({
+      next:row=>{
+        if(row.status==='COMPLETED' && Number.isFinite(row.score) &&
+           row.configVersion===this.riskEngine.config.version){
+          this.fleetAssessment=row;
+          this.showSampleAssessment=false;
+        }
+      },
+      error:()=>{this.fleetAssessment=null;}
+    });
+  }
+
+  private loadCentralCase():void {
+    this.cases.byImo(this.vessel.imo).subscribe({
+      next:response=>{
+        this.centralCase=response.case?.status==='RESOLVED'?null:response.case;
+        if(this.centralCase){
+          for(const item of this.recommendations){
+            const entry=this.centralCase.decisions.find(d=>d.recommendationId===item.id);
+            if(entry){
+              item.decision=entry.decision==='ACCEPT'?'Accepted':
+                entry.decision==='MODIFY'?'Modified':'Rejected';
+              item.officerNote=entry.note;
+            }
+          }
+        }
+      },
+      error:err=>{this.centralError=this.cases.readableError(err,this.lang.isArabic);}
+    });
+  }
+
+  saveDecision(item:AiRecommendation):void {
+    if(!this.centralCase||this.centralBusy||item.decision==='Pending')return;
+    if(item.decision!=='Accepted'&&!item.officerNote.trim()){
+      this.centralError=this.copy('Enter an explanation for this decision.',
+        'أدخل سبب هذا القرار.');
+      return;
+    }
+    const decision=item.decision==='Accepted'?'ACCEPT':
+      item.decision==='Modified'?'MODIFY':'REJECT';
+    this.centralBusy=true;this.centralError='';this.centralMessage='';
+    const current=this.centralCase;
+    this.cases.decision(current,item.id,decision,item.officerNote,
+      this.evidenceFor(item).map(e=>e.record)).subscribe({
+      next:response=>{
+        this.centralBusy=false;
+        this.centralCase=response.case;
+        this.centralMessage=this.copy(
+          'Decision saved to the maritime case audit trail.',
+          'تم حفظ القرار في سجل الحالة البحرية.');
+      },
+      error:err=>{
+        this.centralBusy=false;
+        this.centralError=this.cases.readableError(err,this.lang.isArabic);
+        if(err?.status===409)this.loadCentralCase();
+      }
+    });
   }
 
   copy(en: string, ar: string): string {
@@ -90,8 +165,37 @@ export class NmcAiSituationAssessmentComponent implements OnInit {
     });
   }
 
+  onLiveRunStarted(): void {
+    this.liveAttempted = true;
+    this.showSampleAssessment = false;
+    this.selectedEvidence = undefined;
+  }
+
+  onLiveRiskChange(result: NmcLiveRiskResult | null): void {
+    this.liveResult = result;
+    this.showSampleAssessment = false;
+    this.selectedEvidence = undefined;
+  }
+
+  get displayedRisk(): number {
+    return this.liveResult?.risk.score ?? this.fleetAssessment?.score ?? this.vessel.risk;
+  }
+
+  get criticalFinding(): string | null {
+    if (!this.liveResult || !this.vessel) return null;
+    const finding = this.vesselEvidence.create(this.vessel).deficiencies
+      .find(item => item.status === 'Open' && item.severity === 'Critical');
+    return finding?.description || null;
+  }
+
+  get displayedRiskKind(): string {
+    return this.liveResult ? this.copy('Provisional AI signals', 'مؤشرات ذكاء اصطناعي مبدئية')
+      : this.fleetAssessment ? this.copy('Saved AI fleet risk · provisional', 'مخاطر الأسطول المحفوظة · مبدئية')
+      : this.copy('Synthetic baseline', 'السيناريو التجريبي');
+  }
+
   get riskLevelLabel(): string {
-    const level = this.riskEngine.levelForScore(this.vessel.risk);
+    const level = this.riskEngine.levelForScore(this.displayedRisk);
     const labels: Record<string, string> = {
       Critical: this.copy('Critical', 'حرج'),
       High: this.copy('High', 'مرتفع'),
@@ -102,7 +206,7 @@ export class NmcAiSituationAssessmentComponent implements OnInit {
   }
 
   get riskClass(): string {
-    return this.riskEngine.levelForScore(this.vessel.risk).toLowerCase();
+    return this.riskEngine.levelForScore(this.displayedRisk).toLowerCase();
   }
 
   get baseRisk(): number {

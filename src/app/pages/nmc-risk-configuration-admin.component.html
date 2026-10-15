@@ -1,68 +1,29 @@
 <div class="risk-admin-shell" [class.rtl]="lang.isArabic" [attr.dir]="lang.dir">
   <header class="admin-topbar">
     <div class="brand-block">
-      <div class="brand-mark">⚙</div>
+      <app-nmc-ministry-logo class="risk-ministry-logo"></app-nmc-ministry-logo>
       <div>
-        <div class="eyebrow">{{ copy('MOEI · National Maritime Center', 'وزارة الطاقة والبنية التحتية · المركز البحري الوطني') }}</div>
+        <div class="eyebrow">{{ copy('MOEI Maritime Unified Platform', 'المنصة البحرية الموحدة لوزارة الطاقة والبنية التحتية') }}</div>
         <h1>{{ copy('Risk Configuration Administration', 'إدارة إعدادات المخاطر') }}</h1>
-        <p>{{ copy('Configure scoring logic, weights and operational thresholds', 'تهيئة منطق احتساب المخاطر والأوزان والحدود التشغيلية') }}</p>
+        <p>{{ copy('Central Oracle risk-policy versions · saved A01/A02 signals · auditable changes',
+                 'إصدارات إعدادات المخاطر المركزية في Oracle · مؤشرات AI المحفوظة · تاريخ تغييرات قابل للتدقيق') }}</p>
       </div>
     </div>
 
     <div class="top-actions">
       <button type="button" class="language-btn" (click)="toggleLanguage()">{{ lang.isArabic ? 'English' : 'العربية' }}</button>
       <a class="secondary-btn" routerLink="/moei/nmc">{{ copy('Back to Command Center', 'العودة إلى مركز القيادة') }}</a>
+      <button type="button" class="secondary-btn" (click)="saveDraft()" [disabled]="!canSaveDraft">
+        {{draftSaving?copy('Saving…','جارٍ الحفظ…'):copy('Save Draft','حفظ مسودة')}}</button>
+      <button type="button" class="secondary-btn" (click)="toggleHistory()">
+        {{historyVisible?copy('Hide History','إخفاء السجل'):copy('View History','عرض السجل')}}</button>
       <button type="button" class="publish-btn" (click)="publish()" [disabled]="!canPublish">
-        ✓ {{ copy('Publish & Apply', 'نشر وتطبيق') }}
+        ✓ {{ publishing ? copy('Publishing…','جارٍ النشر…') : copy('Publish New Central Version','نشر إصدار مركزي جديد') }}
       </button>
     </div>
   </header>
 
-  <aside class="nmc-sidebar">
-    <div class="sidebar-section-label">{{ copy('OPERATIONS', 'العمليات') }}</div>
-    <a class="nav-item" routerLink="/moei/nmc">
-      <span class="nav-icon">◉</span>
-      <span>{{ copy('Command Center', 'مركز القيادة') }}</span>
-    </a>
-    <button type="button" class="nav-item">
-      <span class="nav-icon">⌖</span>
-      <span>{{ copy('Vessel Monitoring', 'مراقبة السفن') }}</span>
-    </button>
-    <button type="button" class="nav-item">
-      <span class="nav-icon">⚠</span>
-      <span>{{ copy('Alerts & Events', 'التنبيهات والأحداث') }}</span>
-    </button>
-    <button type="button" class="nav-item">
-      <span class="nav-icon">▣</span>
-      <span>{{ copy('Cases & Incidents', 'الحالات والحوادث') }}</span>
-    </button>
-    <button type="button" class="nav-item">
-      <span class="nav-icon">✓</span>
-      <span>{{ copy('Smart Inspection', 'المعاينة الذكية') }}</span>
-    </button>
-
-    <div class="sidebar-section-label second">{{ copy('INTELLIGENCE', 'الاستخبارات') }}</div>
-    <button type="button" class="nav-item">
-      <span class="nav-icon">✦</span>
-      <span>{{ copy('Maritime Intelligence', 'الاستخبارات البحرية') }}</span>
-    </button>
-    <button type="button" class="nav-item">
-      <span class="nav-icon">▥</span>
-      <span>{{ copy('Dashboards', 'لوحات المعلومات') }}</span>
-    </button>
-    <a class="nav-item active" routerLink="/moei/nmc/admin/risk-configuration">
-      <span class="nav-icon">⚙</span>
-      <span>{{ copy('Configuration', 'الإعدادات') }}</span>
-    </a>
-
-    <div class="system-health">
-      <div>
-        <span class="health-dot"></span>
-        <strong>{{ copy('Risk engine active', 'محرك المخاطر نشط') }}</strong>
-      </div>
-      <small>{{ published.version }}</small>
-    </div>
-  </aside>
+  <app-nmc-navigation></app-nmc-navigation>
 
   <main class="admin-main">
     <section class="page-heading">
@@ -70,18 +31,41 @@
         <span class="section-kicker">{{ copy('BUSINESS-CONFIGURABLE RISK ENGINE', 'محرك مخاطر قابل للتهيئة بواسطة الأعمال') }}</span>
         <h2>{{ copy('Maritime Risk Model Configuration', 'تهيئة نموذج المخاطر البحرية') }}</h2>
         <p>{{ copy(
-          'Change how vessel risk is calculated and classified. Preview the impact across all 420 monitored vessels before publishing.',
-          'غيّر طريقة احتساب وتصنيف مخاطر السفن، وعاين التأثير على جميع السفن الـ420 قبل النشر.'
+          'Change how saved A01/A02 factor severities are weighted and classified. The preview covers saved AI-assessed vessels only; no unassessed vessels are invented.',
+          'غيّر أوزان مؤشرات A01/A02 وتصنيفها. تتم معاينة تأثير الإعدادات على السفن التي لديها تقييم AI محفوظ فقط، دون اختلاق نتائج للسفن غير المقيّمة.'
         ) }}</p>
       </div>
 
       <div class="published-meta">
-        <span>{{ copy('Published ruleset', 'مجموعة القواعد المنشورة') }}</span>
+        <span>{{ copy('ACTIVE CENTRAL POLICY · Oracle','السياسة المركزية النشطة · Oracle') }}</span>
         <strong>{{ published.version }}</strong>
-        <small>{{ published.publishedAt }} · {{ published.publishedBy }}</small>
+        <small>{{ published.publishedAt }} · {{ published.publishedBy }} ·
+          {{copy('Revision','مراجعة')}} {{activeRevision}}</small>
       </div>
     </section>
 
+    <div class="central-policy-banner" role="status">
+      <strong *ngIf="policyReady">✓ {{copy('Latest published version is effective platform-wide',
+                                         'آخر إصدار منشور هو الفعّال على مستوى المنصة')}}</strong>
+      <strong *ngIf="!policyReady">⚠ {{copy('Central Oracle Risk Policy not loaded — publication disabled',
+                                          'لم يتم تحميل إعدادات المخاطر من Oracle — النشر غير متاح')}}</strong>
+      <p *ngIf="!policyReady">{{riskEngine.centralError||'Waiting for Oracle risk policy'}}
+        · {{copy('Apply migration 007 before publishing. Your prior browser policy is not automatically activated.',
+                 'يجب تنفيذ Migration 007 قبل النشر. إعدادات المتصفح القديمة لا تُفعّل تلقائيًا.')}}</p>
+      <button type="button" (click)="riskEngine.refreshCentral()">
+        {{copy('Refresh Active Version','تحديث الإصدار النشط')}}</button>
+      <button type="button" *ngIf="priorBrowserDraft" (click)="importBrowserDraft()">
+        {{copy('Import Legacy Browser Settings as Draft','استيراد إعدادات المتصفح السابقة كمسودة')}}</button>
+    </div>
+    <div class="success-banner" *ngIf="draftSaveMessage"><span>✓</span><strong>{{draftSaveMessage}}</strong></div>
+    <div class="validation-banner" role="alert" *ngIf="draftError"><span>!</span><strong>{{draftError}}</strong></div>
+    <div class="validation-banner" role="alert" *ngIf="draftStale">
+      <span>!</span><strong>{{copy('Saved draft belongs to a previous published revision. It was not applied automatically. Review current policy before resaving.',
+        'المسودة المحفوظة تخص إصدارًا منشورًا سابقًا ولم تُطبق تلقائيًا. راجع الإعدادات النشطة قبل الحفظ مجددًا.')}}</strong>
+    </div>
+    <div class="validation-banner" role="alert" *ngIf="publicationError">
+      <span>!</span><strong>{{publicationError}}</strong>
+    </div>
     <div class="success-banner" *ngIf="publishedMessage">
       <span>✓</span>
       <strong>{{ publishedMessage }}</strong>
@@ -96,6 +80,19 @@
       </div>
     </div>
 
+    <div class="risk-admin-readiness" role="note">
+      <div><strong>{{copy('Verified saved AI assessment coverage','تغطية تقييمات AI المحفوظة')}}</strong>
+        <p>{{copy('Stored AI assessments','تقييمات AI المحفوظة')}}: <b>{{savedInputs.length}}</b> /
+          {{copy('Monitored vessels','السفن المراقبة')}}: 420 ·
+          {{copy('Without saved assessment','بدون تقييم AI محفوظ')}}: {{420 - savedInputs.length}}</p>
+        <p>{{copy('Preview compares the last centrally published Oracle policy with your unsaved draft. On supervisor publication, the new version becomes active for every user. Source AI evidence and historical cases remain immutable.',
+                   'تقارن المعاينة آخر سياسة منشورة مركزيًا في Oracle بالمسودة غير المنشورة. عند اعتماد المشرف يصبح الإصدار الجديد نشطًا لجميع المستخدمين. أدلة AI والحالات التاريخية لا تتغير.')}}</p>
+        <p class="risk-admin-error" *ngIf="savedError" role="alert">{{savedError}}</p>
+        <p *ngIf="savedLoading">{{copy('Loading saved A01/A02 assessments…','جارٍ تحميل تقييمات A01/A02 المحفوظة…')}}</p>
+      </div>
+      <button type="button" class="secondary-action" (click)="reloadSaved()" [disabled]="savedLoading">
+        {{copy('Reload saved AI evidence','إعادة تحميل أدلة AI المحفوظة')}}</button>
+    </div>
     <section class="admin-grid">
       <div class="configuration-column">
         <article class="panel">
@@ -239,10 +236,12 @@
           </div>
 
           <div class="governance-actions">
+            <button type="button" class="secondary-action" (click)="saveDraft()" [disabled]="!canSaveDraft">
+              {{draftSaving?copy('Saving…','جارٍ الحفظ…'):copy('Save Draft (not active)','حفظ مسودة (غير نشطة)')}}</button>
             <button type="button" class="secondary-action" (click)="discardChanges()">{{ copy('Discard Draft', 'إلغاء التعديلات') }}</button>
             <button type="button" class="secondary-action" (click)="resetDraftToDefaults()">{{ copy('Load Defaults', 'تحميل الإعدادات الافتراضية') }}</button>
             <button type="button" class="publish-action" (click)="publish()" [disabled]="!canPublish">
-              ✓ {{ copy('Publish & Recalculate 420 Vessels', 'نشر وإعادة احتساب مخاطر 420 سفينة') }}
+              ✓ {{publishing?copy('Publishing…','جارٍ النشر…'):copy('Publish New Central Risk Version','نشر إصدار جديد للمخاطر مركزيًا')}}
             </button>
           </div>
         </article>
@@ -254,18 +253,18 @@
             <div>
               <span class="section-kicker">{{ copy('IMPACT ANALYSIS', 'تحليل التأثير') }}</span>
               <h3>{{ copy('Before publishing', 'قبل النشر') }}</h3>
-              <p>{{ copy('Live preview across the monitored fleet.', 'معاينة مباشرة على جميع السفن المراقبة.') }}</p>
+              <p>{{ copy('Comparison uses saved A01/A02 factors for assessed vessels only.', 'المقارنة تستخدم عوامل A01/A02 المحفوظة للسفن التي تم تقييمها فقط.') }}</p>
             </div>
           </div>
 
           <div class="impact-summary">
             <div>
-              <small>{{ copy('Vessels re-scored', 'سفن ستتم إعادة تقييمها') }}</small>
+              <small>{{ copy('Saved AI vessels with score changes', 'سفن تغيرت درجتها في المعاينة') }}</small>
               <strong>{{ changedVesselCount }}</strong>
-              <span>/ 420</span>
+              <span>/ {{savedInputs.length}}</span>
             </div>
             <div>
-              <small>{{ copy('Classification changes', 'تغيرات في التصنيف') }}</small>
+              <small>{{ copy('Saved AI vessel classification changes', 'تغير تصنيف السفن المقيمة') }}</small>
               <strong>{{ changedLevelCount }}</strong>
               <span>{{ copy('vessels', 'سفينة') }}</span>
             </div>
@@ -352,7 +351,7 @@
         <article class="panel published-panel">
           <div class="panel-header">
             <div>
-              <span class="section-kicker">{{ copy('CURRENT PRODUCTION RULESET', 'مجموعة القواعد الحالية') }}</span>
+              <span class="section-kicker">{{ copy('CURRENT ACTIVE ORACLE POLICY','سياسة المخاطر النشطة الحالية في Oracle') }}</span>
               <h3>{{ published.version }}</h3>
             </div>
             <span class="live-badge">{{ copy('ACTIVE', 'نشطة') }}</span>
@@ -366,6 +365,59 @@
           </div>
         </article>
       </aside>
+    </section>
+    <section class="panel risk-version-history" id="risk-version-history" *ngIf="historyVisible">
+      <div class="panel-header">
+        <div>
+          <span class="section-kicker">{{copy('IMMUTABLE RISK POLICY AUDIT HISTORY',
+                                             'التاريخ غير القابل للتعديل لإصدارات المخاطر')}}</span>
+          <h3>{{copy('Risk Settings Version History','سجل إصدارات وتعديلات إعدادات المخاطر')}}</h3>
+          <p>{{copy('Every central publication records a full policy snapshot, its previous revision, publisher and change reason. Newest published revision is effective.',
+                   'يسجل كل نشر مركزي نسخة كاملة من الإعدادات، ومرجع الإصدار السابق، واسم الناشر وسبب التغيير. أحدث إصدار منشور هو الفعّال.')}}</p>
+        </div>
+        <button type="button" class="secondary-action" [disabled]="historyLoading" (click)="loadVersionHistory()">
+          {{copy('Refresh History','تحديث السجل')}}</button>
+      </div>
+      <div class="risk-version-row" *ngFor="let entry of policyHistory">
+        <div class="risk-version-identity">
+          <strong>{{entry.policyRef}}</strong>
+          <span class="live-badge" *ngIf="entry.revision===activeRevision">{{copy('CURRENT / ACTIVE','الحالي / النشط')}}</span>
+          <small>{{copy('Version reference','مرجع الإصدار')}} #{{entry.revision}} ·
+            {{copy('Previous','السابق')}} #{{entry.previousRevision||'—'}}</small>
+        </div>
+        <div class="risk-version-detail">
+          <p><b>{{copy('Published','تاريخ النشر')}}:</b> {{entry.publishedAt | date:'medium'}} ·
+             <b>{{copy('By','بواسطة')}}:</b> {{entry.publishedBy}} · {{entry.actorRole}}</p>
+          <p><b>{{copy('Reason','السبب')}}:</b> {{entry.reason}}</p>
+          <p><b>{{copy('Changes','التعديلات')}}:</b> {{describeVersionDiff(entry)}}</p>
+          <small>{{copy('Thresholds','حدود التصنيف')}}: {{entry.config.thresholds.watch}} /
+            {{entry.config.thresholds.high}} / {{entry.config.thresholds.critical}} ·
+            {{copy('Mode','طريقة الحساب')}}: {{entry.config.mode}}</small>
+          <div class="history-values">
+            <div class="history-value-row heading"><span>{{copy('Setting','المتغير')}}</span>
+              <span>{{copy('Previous','السابق')}}</span><span>{{copy('At this publication','في هذا الإصدار')}}</span></div>
+            <div class="history-value-row"><span>{{copy('Calculation mode','طريقة الحساب')}}</span>
+              <span>{{previousConfig(entry)?.mode||'—'}}</span><b>{{entry.config.mode}}</b></div>
+            <div class="history-value-row" *ngFor="let key of factorKeys">
+              <span>{{factorLabel(key)}} ({{copy('weight','الوزن')}})</span>
+              <span>{{previousConfig(entry)?.weights?.[key]??'—'}}%</span>
+              <b>{{entry.config.weights[key]}}%</b>
+            </div>
+            <div class="history-value-row"><span>{{copy('Watch threshold','حد المراقبة')}}</span>
+              <span>{{previousConfig(entry)?.thresholds?.watch??'—'}}</span><b>{{entry.config.thresholds.watch}}</b></div>
+            <div class="history-value-row"><span>{{copy('High threshold','حد المرتفع')}}</span>
+              <span>{{previousConfig(entry)?.thresholds?.high??'—'}}</span><b>{{entry.config.thresholds.high}}</b></div>
+            <div class="history-value-row"><span>{{copy('Critical threshold','حد الحرج')}}</span>
+              <span>{{previousConfig(entry)?.thresholds?.critical??'—'}}</span><b>{{entry.config.thresholds.critical}}</b></div>
+            <div class="history-value-row"><span>{{copy('Model name','اسم النموذج')}}</span>
+              <span>{{previousConfig(entry)?.name||'—'}}</span><b>{{entry.config.name}}</b></div>
+          </div>
+        </div>
+      </div>
+      <p *ngIf="!policyHistory.length" class="risk-version-empty">
+        {{copy('No central risk-policy history loaded. Apply Migration 007 or refresh.',
+               'لم يتم تحميل تاريخ إعدادات المخاطر المركزي؛ نفّذ Migration 007 أو حدّث السجل.')}}
+      </p>
     </section>
   </main>
 </div>

@@ -1,12 +1,19 @@
+import { NmcNavigationComponent } from '../components/nmc-navigation.component';
+import { NmcMinistryLogoComponent } from '../components/nmc-ministry-logo.component';
 import { CommonModule } from '@angular/common';
-import { Component, OnInit } from '@angular/core';
+import { Component, OnDestroy, OnInit } from '@angular/core';
+import { Subscription, forkJoin, of } from 'rxjs';
+import { catchError } from 'rxjs/operators';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
-import { NMC_OPERATIONAL_VESSELS } from '../data/nmc-expanded-vessel-catalog';
+import { AIRIA_DEMO_99_VESSELS } from '../data/airia-demo-cohort';
+import { NmcFleetAiService, FleetAiAssessment } from '../services/nmc-fleet-ai.service';
 import { NmcVesselProfile, RiskLevel } from '../data/nmc-vessel-catalog';
 import { LanguageService } from '../services/language.service';
 import {
   NmcRiskEngineService,
+  CentralPolicyVersion,
+  CentralRiskDraft,
   RiskCalculationMode,
   RiskEngineConfig,
   RiskFactorKey,
@@ -26,11 +33,20 @@ interface ImpactRow {
 @Component({
   selector: 'app-nmc-risk-configuration-admin',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink],
+  imports: [CommonModule, FormsModule, RouterLink, NmcNavigationComponent, NmcMinistryLogoComponent],
   templateUrl: './nmc-risk-configuration-admin.component.html',
   styleUrl: './nmc-risk-configuration-admin.component.css'
 })
-export class NmcRiskConfigurationAdminComponent implements OnInit {
+export class NmcRiskConfigurationAdminComponent implements OnInit, OnDestroy {
+  readonly subscriptions=new Subscription();
+  // Only real stored A01/A02 assessments enter the impact projection.
+  // Never present browser fixture calibrations as verified/assessed vessels.
+  savedInputs:Array<{vessel:NmcVesselProfile;assessment:FleetAiAssessment}>=[];
+  savedLoading=true;
+  savedError='';
+  originalAssessed=0;
+  get pendingAssessments():number{return AIRIA_DEMO_99_VESSELS.length-this.originalAssessed;}
+
   draft!: RiskEngineConfig;
   published!: RiskEngineConfig;
   currentStats!: RiskPopulationStats;
@@ -38,6 +54,31 @@ export class NmcRiskConfigurationAdminComponent implements OnInit {
   impactRows: ImpactRow[] = [];
   validationErrors: string[] = [];
   publishedMessage = '';
+  publicationError='';
+  publishing=false;
+  policyHistory:CentralPolicyVersion[]=[];
+  historyLoading=false;
+  historyVisible=false;
+  savedDraft:CentralRiskDraft|null=null;
+  draftReady=false;
+  draftSaving=false;
+  draftSaveMessage='';
+  draftActorName='';
+  draftError='';
+  private editorAccessKey='MOEI_SESSION';
+  private draftRequested=false;
+  get canSaveDraft():boolean{
+    return this.policyReady&&!this.draftSaving&&!!this.draft?.name?.trim();
+  }
+  get draftStale():boolean{
+    return !!this.savedDraft&&this.savedDraft.baseRevision!==this.activeRevision;
+  }
+  private publisherAccessKey='MOEI_SESSION';
+  private dirtyDraft=false;
+  get policyReady():boolean{return this.riskEngine.centralReady&&!!this.riskEngine.activeVersion;}
+  get activeRevision():number{return this.riskEngine.activeVersion?.revision||0;}
+  get priorBrowserDraft():boolean{return !!this.riskEngine.legacyBrowserDraft;}
+
 
   readonly factorKeys: RiskFactorKey[] = [
     'movement',
@@ -73,12 +114,157 @@ export class NmcRiskConfigurationAdminComponent implements OnInit {
 
   constructor(
     public lang: LanguageService,
-    public riskEngine: NmcRiskEngineService
+    public riskEngine: NmcRiskEngineService,
+    private fleetAi:NmcFleetAiService
   ) {}
 
   ngOnInit(): void {
     this.loadPublished();
+    this.subscriptions.add(this.riskEngine.config$.subscribe(()=>{
+      if(!this.riskEngine.centralReady)return;
+      const next=this.riskEngine.config;
+      if(this.published?.version===next.version)return;
+      this.published=next;
+      if(!this.dirtyDraft)this.draft=this.riskEngine.cloneConfig(next);
+      this.validationErrors=this.riskEngine.validate(this.draft);
+      this.rebuildPreview();
+      this.loadVersionHistory();
+      if(!this.draftRequested){
+        this.draftRequested=true;this.loadCentralDraft();
+      }
+    }));
+    this.loadVersionHistory();
+    this.loadSavedAssessments();
   }
+  loadVersionHistory():void{
+    this.historyLoading=true;
+    this.subscriptions.add(this.riskEngine.history().subscribe({
+      next:list=>{this.policyHistory=list;this.historyLoading=false;},
+      error:()=>{this.historyLoading=false;}
+    }));
+  }
+  loadCentralDraft():void{
+    this.subscriptions.add(this.riskEngine.savedDraft().subscribe({
+      next:draft=>{
+        this.savedDraft=draft;this.draftReady=true;
+        this.draftActorName=draft?.updatedBy||this.draftActorName;
+        if(draft&&draft.baseRevision===this.activeRevision&&!this.dirtyDraft){
+          this.draft=this.riskEngine.cloneConfig(draft.config);
+          this.validationErrors=this.riskEngine.validate(this.draft);
+          this.rebuildPreview();
+        }
+      },
+      error:e=>{
+        this.draftReady=false;
+        this.draftError=this.copy('Central draft unavailable: '+(e?.error?.error||'API_ERROR'),
+          'تعذر تحميل المسودة المركزية: '+(e?.error?.error||'API_ERROR'));
+      }
+    }));
+  }
+  saveDraft():void{
+    if(!this.canSaveDraft)return;
+    if(!this.editorAccessKey)this.editorAccessKey='MOEI_SESSION';
+    if(!this.editorAccessKey)return;
+    if(!this.draftActorName.trim())
+      this.draftActorName='admin';
+    if(this.draftActorName.trim().length<3)return;
+    this.draftSaving=true;this.draftError='';this.draftSaveMessage='';
+    this.subscriptions.add(this.riskEngine.saveCentralDraft(
+      this.draft,this.activeRevision,this.savedDraft?.draftRevision||0,
+      this.draftActorName,this.editorAccessKey).subscribe({
+      next:draft=>{
+        this.savedDraft=draft;this.draftReady=true;this.draftSaving=false;
+        this.dirtyDraft=false;
+        this.draftSaveMessage=this.copy(
+          'Draft #'+draft.draftRevision+' saved centrally. It is NOT active until Publish.',
+          'تم حفظ المسودة المركزية رقم '+draft.draftRevision+'. لن تصبح نشطة قبل النشر.');
+      },
+      error:e=>{
+        this.draftSaving=false;
+        if(e?.status===401)this.draftError='Login session expired.';
+        this.draftError=this.copy('Draft save failed: '+(e?.error?.error||'API_ERROR'),
+          'تعذر حفظ المسودة: '+(e?.error?.error||'API_ERROR'));
+      }
+    }));
+  }
+  toggleHistory():void{
+    this.historyVisible=!this.historyVisible;
+    if(this.historyVisible)this.loadVersionHistory();
+  }
+  previousConfig(entry:CentralPolicyVersion):RiskEngineConfig|null{
+    return this.policyHistory.find(x=>x.revision===entry.previousRevision)?.config||null;
+  }
+  describeVersionDiff(entry:CentralPolicyVersion):string{
+    const previous=this.policyHistory.find(x=>x.revision===entry.previousRevision);
+    if(!previous)return this.copy('Initial central baseline','النسخة المركزية الأساسية');
+    const changes:string[]=[];
+    if(entry.config.mode!==previous.config.mode)changes.push('Mode: '+previous.config.mode+' → '+entry.config.mode);
+    const a=previous.config.thresholds,b=entry.config.thresholds;
+    if(a.watch!==b.watch||a.high!==b.high||a.critical!==b.critical)
+      changes.push('Thresholds: '+[a.watch,a.high,a.critical].join('/')+' → '+
+        [b.watch,b.high,b.critical].join('/'));
+    for(const k of this.factorKeys)if(entry.config.weights[k]!==previous.config.weights[k])
+      changes.push(k+': '+previous.config.weights[k]+'% → '+entry.config.weights[k]+'%');
+    if(entry.config.name!==previous.config.name)changes.push('Model name updated');
+    return changes.join(' · ')||this.copy('Metadata-only update','تعديل البيانات الوصفية فقط');
+  }
+  importBrowserDraft():void{
+    const previous=this.riskEngine.legacyBrowserDraft;
+    if(!previous)return;
+    if(!window.confirm(this.copy(
+      'Import previous browser Risk Settings as an UNPUBLISHED draft? The central active policy remains unchanged until supervisor approval.',
+      'استيراد إعدادات المخاطر القديمة بالمتصفح كمسودة غير منشورة؟ ستبقى القواعد المركزية دون تغيير حتى اعتماد المشرف.')))return;
+    this.draft=this.riskEngine.cloneConfig(previous);
+    this.dirtyDraft=true;this.updateDraft();
+  }
+  ngOnDestroy():void{this.subscriptions.unsubscribe();}
+  reloadSaved():void{this.loadSavedAssessments();}
+  private loadSavedAssessments():void{
+    this.savedLoading=true;this.savedError='';
+    this.subscriptions.add(this.fleetAi.snapshot().subscribe({
+      next:snapshot=>{
+        const validImos=Object.values(snapshot.results)
+          .filter(r=>r.status==='COMPLETED'&&r.assessmentId)
+          .map(r=>r.imo);
+        const lookup=new Map(AIRIA_DEMO_99_VESSELS.map(v=>[v.imo,v]));
+        this.originalAssessed=validImos.length;
+        if(!validImos.length){
+          this.savedInputs=[];this.savedLoading=false;this.rebuildPreview();
+          return;
+        }
+        this.subscriptions.add(forkJoin(validImos.map(imo=>
+          this.fleetAi.assessment(imo).pipe(catchError(()=>of(null)))
+        )).subscribe({
+          next:all=>{
+            this.savedInputs=all.flatMap((assessment,i)=>{
+              const vessel=lookup.get(validImos[i]);
+              if(!vessel||!assessment||assessment.status!=='COMPLETED'||
+                 assessment.authoritative!==false||!Number.isFinite(assessment.score)||
+                 !assessment.assessmentId||!Array.isArray(assessment.signals)||
+                 !this.factorKeys.filter(key=>key!=='documentIntegrity').every(key=>assessment.signals.filter(x=>
+                   x.factor===key&&Number.isFinite(x.severity)).length===1))return [];
+              return [{vessel,assessment}];
+            });
+            this.savedLoading=false;
+            this.rebuildPreview();
+          },
+          error:()=>{
+            this.savedInputs=[];this.savedLoading=false;
+            this.savedError=this.copy('Could not read the saved AI evidence. No fixture-risk impact will be substituted.',
+              'تعذر تحميل أدلة AI المحفوظة، ولن نستخدم حسابات مخاطر افتراضية كبديل.');
+            this.rebuildPreview();
+          }
+        }));
+      },
+      error:()=>{
+        this.savedInputs=[];this.originalAssessed=0;this.savedLoading=false;
+        this.savedError=this.copy('Oracle fleet assessment results are unavailable. No preview can be trusted.',
+          'نتائج التقييمات المحفوظة في Oracle غير متاحة. لا يمكن الوثوق بالمعاينة.');
+        this.rebuildPreview();
+      }
+    }));
+  }
+
 
   copy(en: string, ar: string): string {
     return this.lang.pick(en, ar);
@@ -108,7 +294,10 @@ export class NmcRiskConfigurationAdminComponent implements OnInit {
   }
 
   get canPublish(): boolean {
-    return this.validationErrors.length === 0 && this.totalWeight === 100;
+    return this.policyReady&&!this.publishing&&
+      this.validationErrors.length === 0 && this.totalWeight === 100 &&
+      this.draft.changeReason.trim().length>=10 &&
+      this.draft.publishedBy.trim().length>=3;
   }
 
   get currentModeLabel(): string {
@@ -121,7 +310,8 @@ export class NmcRiskConfigurationAdminComponent implements OnInit {
       inspection: ['Inspection & deficiencies', 'المعاينات والملاحظات'],
       certificate: ['Certificates & regulatory status', 'الشهادات والحالة التنظيمية'],
       dataQuality: ['Data quality & source conflicts', 'جودة البيانات وتعارض المصادر'],
-      history: ['Vessel / operator history', 'السجل التاريخي للسفينة / المشغل']
+      history: ['Vessel / operator history', 'السجل التاريخي للسفينة / المشغل'],
+      documentIntegrity: ['Legacy A03 (disabled)', 'عامل A03 القديم (معطل)']
     };
     return this.copy(labels[key][0], labels[key][1]);
   }
@@ -132,7 +322,8 @@ export class NmcRiskConfigurationAdminComponent implements OnInit {
       inspection: ['Open deficiencies, inspection outcomes and technical exposure.', 'الملاحظات المفتوحة ونتائج المعاينة والتعرض الفني.'],
       certificate: ['Certificate validity, conditions and regulatory compliance signals.', 'صلاحية الشهادات وشروطها ومؤشرات الامتثال التنظيمي.'],
       dataQuality: ['Source confidence, completeness and unresolved data conflicts.', 'الثقة في المصادر واكتمال البيانات والتعارضات غير المحلولة.'],
-      history: ['Historical vessel, operator and recurring compliance patterns.', 'السجل التاريخي للسفينة والمشغل وأنماط الامتثال المتكررة.']
+      history: ['Historical vessel, operator and recurring compliance patterns.', 'السجل التاريخي للسفينة والمشغل وأنماط الامتثال المتكررة.'],
+      documentIntegrity: ['Disabled legacy A03 factor, not used in new risk scoring.', 'عامل A03 القديم معطل وغير مستخدم في حساب المخاطر الجديد.']
     };
     return this.copy(labels[key][0], labels[key][1]);
   }
@@ -158,7 +349,9 @@ export class NmcRiskConfigurationAdminComponent implements OnInit {
   }
 
   updateDraft(): void {
+    this.dirtyDraft=true;
     this.publishedMessage = '';
+    this.draftSaveMessage='';
     this.validationErrors = this.riskEngine.validate(this.draft);
     this.rebuildPreview();
   }
@@ -184,6 +377,7 @@ export class NmcRiskConfigurationAdminComponent implements OnInit {
   loadPublished(): void {
     this.published = this.riskEngine.config;
     this.draft = this.riskEngine.cloneConfig(this.published);
+    this.dirtyDraft=false;
     this.validationErrors = this.riskEngine.validate(this.draft);
     this.rebuildPreview();
   }
@@ -191,7 +385,9 @@ export class NmcRiskConfigurationAdminComponent implements OnInit {
   discardChanges(): void {
     this.draft = this.riskEngine.cloneConfig(this.published);
     this.publishedMessage = '';
-    this.updateDraft();
+    this.dirtyDraft=false;
+    this.validationErrors=this.riskEngine.validate(this.draft);
+    this.rebuildPreview();
   }
 
   resetDraftToDefaults(): void {
@@ -203,41 +399,84 @@ export class NmcRiskConfigurationAdminComponent implements OnInit {
   }
 
   publish(): void {
-    this.validationErrors = this.riskEngine.validate(this.draft);
-    if (this.validationErrors.length) return;
+    this.validationErrors=this.riskEngine.validate(this.draft);
+    if(!this.canPublish)return;
+    const count=this.savedInputs.length;
+    if(!window.confirm(this.copy(
+      'Publish a NEW centrally active Oracle risk-policy version for all users? Recalculate '+count+
+        ' saved AI assessments WITHOUT running agents; keep prior versions, audit and cases?',
+      'نشر إصدار مخاطر جديد نشط مركزيًا في Oracle لكل المستخدمين وإعادة حساب '+count+
+        ' تقييم AI محفوظ دون استدعاء الوكلاء، مع الاحتفاظ بتاريخ الإصدارات والحالات؟')))return;
+    if(!this.publisherAccessKey)this.publisherAccessKey='MOEI_SESSION';
+    if(!this.publisherAccessKey)return;
+    this.publishing=true;this.publicationError='';this.publishedMessage='';
+    this.subscriptions.add(this.riskEngine.publishCentral(this.draft,this.activeRevision,
+      this.publisherAccessKey).subscribe({
+      next:response=>{
+        this.publishing=false;this.dirtyDraft=false;
+        this.published=this.riskEngine.cloneConfig(response.published.config);
+        this.draft=this.riskEngine.cloneConfig(this.published);
+        this.rebuildPreview();
+        this.loadVersionHistory();
+        this.savedDraft=null;
+        this.loadCentralDraft(); // stale central draft is shown, never applied over the new policy.
+        this.publishedMessage=this.copy(
+          'Central version '+response.published.policyRef+' is ACTIVE. '+response.published.projectionCount+
+          ' saved assessments were projected; previous versions remain in History. No AI calls.',
+          'الإصدار المركزي '+response.published.policyRef+' أصبح نشطًا. تم حساب '+
+          response.published.projectionCount+' تقييم محفوظ؛ الإصدارات السابقة في السجل. دون استدعاءات AI.'
+        );
+      },
+      error:e=>{
+        this.publishing=false;
+        if(e?.status===401)this.publicationError='Login session expired.';
+        const code=e?.error?.error||'RISK_POLICY_PUBLISH_FAILED';
+        this.publicationError=this.copy(
+          'Central publication failed: '+code+'. The draft was preserved. Refresh policy and retry after checking the migration and key.',
+          'فشل النشر المركزي: '+code+'. تم الاحتفاظ بالمسودة. راجع الإصدار الحالي والهجرة ومفتاح المشرف.');
+        this.riskEngine.refreshCentral();
+      }
+    }));
+  }
 
-    this.published = this.riskEngine.publish(this.draft);
-    this.draft = this.riskEngine.cloneConfig(this.published);
-    this.rebuildPreview();
-    this.publishedMessage = this.copy(
-      `Published successfully. All ${NMC_OPERATIONAL_VESSELS.length} vessel risks were re-evaluated.`,
-      `تم النشر بنجاح. تمت إعادة تقييم مخاطر جميع السفن وعددها ${NMC_OPERATIONAL_VESSELS.length}.`
-    );
+  private evaluateSaved(vessel:NmcVesselProfile,assessment:FleetAiAssessment,config:RiskEngineConfig){
+    const keys=this.factorKeys;
+    if(keys.some(key=>!assessment.signals.some(s=>s.factor===key&&Number.isFinite(s.severity))))
+      return null;
+    const severities=Object.fromEntries(keys.map(key=>
+      [key,assessment.signals.find(s=>s.factor===key)!.severity])) as Record<RiskFactorKey,number>;
+    return this.riskEngine.evaluateFromAiSignals(vessel,severities,config);
+  }
+
+  private calculateSavedStats(config:RiskEngineConfig):RiskPopulationStats{
+    const stats:RiskPopulationStats={normal:0,watch:0,high:0,critical:0,attention:0,averageScore:0};
+    let total=0,calculated=0;
+    for(const {vessel,assessment} of this.savedInputs){
+      const risk=this.evaluateSaved(vessel,assessment,config);
+      if(!risk)continue;
+      stats[risk.level.toLowerCase() as 'normal'|'watch'|'high'|'critical']++;
+      if(risk.level!=='Normal')stats.attention++;
+      total+=risk.score;calculated++;
+    }
+    stats.averageScore=calculated?
+      Math.round(total/calculated*10)/10:0;
+    return stats;
   }
 
   private rebuildPreview(): void {
-    this.currentStats = this.riskEngine.stats(NMC_OPERATIONAL_VESSELS, this.published);
-    this.projectedStats = this.riskEngine.stats(NMC_OPERATIONAL_VESSELS, this.draft);
-
-    this.impactRows = NMC_OPERATIONAL_VESSELS
-      .map(vessel => {
-        const current = this.riskEngine.evaluate(vessel, this.published);
-        const projected = this.riskEngine.evaluate(vessel, this.draft);
-        return {
-          vessel,
-          currentScore: current.score,
-          currentLevel: current.level,
-          projectedScore: projected.score,
-          projectedLevel: projected.level,
-          delta: projected.score - current.score,
-          changedLevel: current.level !== projected.level
-        };
-      })
-      .sort((a,b) =>
-        Number(b.changedLevel) - Number(a.changedLevel) ||
-        Math.abs(b.delta) - Math.abs(a.delta) ||
-        b.projectedScore - a.projectedScore
-      )
-      .slice(0, 12);
+    if(!this.published||!this.draft)return;
+    this.currentStats=this.calculateSavedStats(this.published);
+    this.projectedStats=this.calculateSavedStats(this.draft);
+    this.impactRows=this.savedInputs.flatMap(({vessel,assessment})=>{
+      const current=this.evaluateSaved(vessel,assessment,this.published);
+      const projected=this.evaluateSaved(vessel,assessment,this.draft);
+      if(!current||!projected)return [];
+      return [{
+        vessel,currentScore:current.score,currentLevel:current.level,
+        projectedScore:projected.score,projectedLevel:projected.level,
+        delta:projected.score-current.score,changedLevel:current.level!==projected.level
+      }];
+    }).sort((a,b)=>Number(b.changedLevel)-Number(a.changedLevel)||
+      Math.abs(b.delta)-Math.abs(a.delta)||b.projectedScore-a.projectedScore).slice(0,12);
   }
 }

@@ -1,0 +1,411 @@
+<div class="marine-layout" [attr.dir]="lang.dir">
+ <app-nmc-navigation></app-nmc-navigation>
+ <main class="marine-main">
+  <header class="marine-hero">
+   <small>MOEI · SMART INSPECTION · V2 MARITIME SCHEDULING</small>
+   <h1>{{copy('Comprehensive Electronic Inspection Scheduling','الجدولة الإلكترونية الشاملة للمعاينات')}}</h1>
+   <p>{{copy('Approved Inspection Plan → ERP engineer availability → verified feasible scheduling alternatives → SI-S01 AI ranking → supervisor review.',
+     'خطة المعاينات المعتمدة ← إتاحة مهندسي ERP ← بدائل جدولة صالحة ← ترتيب SI-S01 بالذكاء الاصطناعي ← مراجعة واعتماد المسؤول.')}}</p>
+   <a routerLink="/moei/smart-inspection/scheduling">{{copy('← Approved Plans','← الخطط المعتمدة')}}</a>
+  </header>
+  <div class="marine-error" *ngIf="error" role="alert">{{error}}</div>
+  <div class="marine-notice" *ngIf="notice" role="status">{{notice}}</div>
+  <div class="marine-notice" *ngIf="loading">{{copy('Loading approved plan and workforce…','تحميل الخطة المعتمدة والمهندسين…')}}</div>
+  <ng-container *ngIf="context as ctx">
+   <div *ngIf="ctx.demoMode" class="marine-demo-banner" role="status">
+    <strong>{{copy('POC DEMO · SYNTHETIC SCHEDULING DATA',
+      'عرض تجريبي · بيانات جدولة افتراضية')}}</strong>
+    <p>{{copy('Only approved vessel identities and genuinely stored source facts are reused. Missing visit details, access confirmations, engineer qualifications, shifts, available ports and travel are presentation fixtures. AI recommendations remain advisory; no real booking or approval.',
+      'أرقام السفن وأسباب الترشيح المحفوظة مأخوذة من الخطة المعتمدة. أما بيانات الزيارة الناقصة وتأكيد إتاحة الموقع وتخصصات المهندسين ووردياتهم والتنقل فهي افتراضية للعرض فقط. لا يوجد حجز أو اعتماد فعلي.')}}</p>
+    <small>{{copy('Vessels completed with POC data','سفن تم استكمالها ببيانات تجريبية')}}: {{ctx.demoFilledVessels||0}}
+      · {{copy('ERP basis','مرجع ERP')}}: {{ctx.erpSnapshotId}}</small>
+   </div>
+   <section class="marine-kpis">
+    <div><span>{{copy('Approved vessels','السفن المعتمدة')}}</span><strong>{{ctx.approvedVessels}}</strong></div>
+    <div><span>{{copy('Proposed slots','المواعيد المقترحة')}}</span><strong>{{proposal?.summary?.proposed??'—'}}</strong></div>
+    <div><span>{{copy('Unscheduled','غير المجدولة')}}</span><strong>{{proposal?.summary?.unscheduled??'—'}}</strong></div>
+    <div><span>{{copy('Cases / bookings created','الحالات والحجوزات')}}</span><strong>0 / 0</strong></div>
+   </section>
+   <section class="marine-panel">
+    <h2>{{copy('Vessels from the approved inspection plan · visit inputs','السفن الناتجة عن خطة المعاينات المعتمدة · بيانات الزيارة')}}</h2>
+    <p *ngIf="ctx.demoMode" class="marine-demo-notice">{{copy('The presentation fields below use an explicitly synthetic POC overlay; approved vessel identities and original ERP/source records remain unchanged.',
+      'تستخدم حقول العرض بيانات POC تجريبية واضحة، مع الحفاظ على هوية السفن المعتمدة وسجلات المصادر وERP الأصلية دون تعديل.')}}</p>
+    <p>{{copy('Imported ETA/ETD are final in the POC and locked in this board. For NMC or services without dates, enter final times directly; no date signoff is needed. Site access remains a safety gate.',
+      'تُعامل مواعيد الوصول والمغادرة المستوردة كنهائية في الـPOC ولا تُعدّل هنا. يمكن إدخال المواعيد النهائية لإحالات NMC والخدمات عند غيابها دون اعتماد منفصل. يجب تأكيد إتاحة الموقع.')}}</p>
+    <div class="marine-scroll"><table>
+     <thead><tr>
+      <th>{{copy('Vessel / IMO','السفينة / IMO')}}</th>
+      <th>{{copy('Source / Regimes','المصدر / النطاقات')}}</th>
+      <th>{{copy('Port','الميناء')}}</th>
+      <th>ETA (UAE)</th><th>ETD (UAE)</th>
+      <th>{{copy('Inspection berth / site','موقع المعاينة')}}</th>
+      <th>{{copy('Minutes','الدقائق')}}</th>
+     </tr></thead>
+     <tbody><tr *ngFor="let v of ctx.items">
+      <td><b>{{v.name}}</b><small>IMO {{v.imo}}</small>
+       <small *ngIf="v.demoFilled" class="marine-demo-chip">POC MOCK · {{v.demoFieldNames?.length||0}} {{copy('fields','حقول')}}</small></td>
+      <td><small>{{v.sourceTypes.join(' · ')}}</small>
+       <small>{{v.regimes.join(' · ')}}</small><small>{{v.vesselType}}</small>
+       <small *ngIf="v.nmcReferrals.length">NMC × {{v.nmcReferrals.length}}</small></td>
+      <td><select [(ngModel)]="v.portId" (ngModelChange)="invalidateProposal()" [disabled]="v.portSourceLocked">
+       <option value="">—</option><option *ngFor="let p of ctx.ports" [value]="p.portId">{{p.name}}</option>
+      </select></td>
+      <td><b *ngIf="v.etaLocal">{{v.etaLocal}}</b>
+       <input *ngIf="!v.etaLocal" [(ngModel)]="v.earliestLocal" (ngModelChange)="invalidateProposal()" placeholder="YYYY-MM-DD HH:mm" maxlength="16">
+      </td>
+      <td><b *ngIf="v.etdLocal">{{v.etdLocal}}</b>
+       <input *ngIf="!v.etdLocal" [(ngModel)]="v.latestFinishLocal" (ngModelChange)="invalidateProposal()" placeholder="YYYY-MM-DD HH:mm" maxlength="16">
+       <small>{{v.etdSource}}</small></td>
+      <td><select [(ngModel)]="v.locationType" (ngModelChange)="invalidateProposal()">
+       <option value="BERTH">{{copy('Berth','رصيف')}}</option>
+       <option value="ANCHORAGE">{{copy('Anchorage','مرسى')}}</option>
+       <option value="TERMINAL">{{copy('Terminal','محطة')}}</option></select>
+       <input [(ngModel)]="v.locationName" (ngModelChange)="invalidateProposal()" [placeholder]="copy('Exact location','الموقع المحدد')" maxlength="120">
+       <label class="marine-check"><input type="checkbox" [(ngModel)]="v.siteAccessConfirmed" (ngModelChange)="invalidateProposal()">
+         {{copy('Site accessible','موقع المعاينة متاح')}}</label>
+      </td>
+      <td><input type="number" min="30" max="720" step="30" [(ngModel)]="v.durationMinutes" (ngModelChange)="invalidateProposal()"></td>
+     </tr></tbody>
+    </table></div>
+    <div class="marine-actions">
+     <button type="button" [disabled]="busy||aiBusy" (click)="preview()">
+      {{busy?copy('Calculating ERP availability…','جارٍ تحليل إتاحة ERP…'):
+       copy('1 · Calculate feasible schedules','١ · حساب بدائل الجدولة الممكنة')}}</button>
+     <button type="button" class="marine-ai-button"
+      [disabled]="busy||aiBusy" (click)="runAi()">
+      {{aiBusy?copy('Analyzing with Airia…','جارٍ تحليل Airia…'):
+       copy('2 · AI Schedule with SI-S01','٢ · الجدولة باستخدام SI-S01 AI')}}</button>
+     <button type="button" *ngIf="aiAdvice" (click)="restoreBaseline()" [disabled]="aiBusy">
+       {{copy('Compare ERP baseline','مقارنة جدول ERP الأساسي')}}</button>
+     <small>{{copy('You may click AI Schedule directly: it automatically runs the free ERP feasibility check first. Airia is called only if a valid alternative exists AND you separately confirm a potentially billable call.',
+      'يمكنك الضغط مباشرة على جدولة AI: سيحسب النظام إتاحة ERP مجانًا أولًا. لن يستدعي Airia إلا بوجود بديل صالح وبعد موافقتك الصريحة على استدعاء قد يكون مدفوعًا.')}}</small>
+    </div>
+    <p class="marine-ai-readiness" role="status">{{aiBlockedReason}}</p>
+    <section *ngIf="readinessIssues.length" class="marine-readiness-panel"
+      [attr.aria-label]="copy('Missing scheduling prerequisites','بيانات الجدولة الناقصة')">
+     <h3>{{copy('Scheduling data required for','بيانات الجدولة المطلوب استكمالها لـ')}}
+       {{readinessIssues.length}} {{copy('vessel(s)','سفينة')}}</h3>
+     <p>{{copy('Fill only verified scheduling facts. No dates, berth access or source evidence will be invented for AI.',
+       'استكمل بيانات الزيارة المؤكدة فقط. لن يتم اختلاق مواعيد أو إتاحة رصيف أو مراجع أدلة للذكاء الاصطناعي.')}}</p>
+     <ul>
+      <li *ngFor="let item of readinessIssues">
+       <strong>{{item.name}} · IMO {{item.imo}}</strong>
+       <span>{{item.issues.join(' · ')}}</span>
+      </li>
+     </ul>
+    </section>
+   </section>
+   <section class="marine-panel" *ngIf="ctx.workforce?.length">
+    <div class="marine-title-line">
+      <h2>{{copy('Available engineer roster — ERP POC snapshot',
+        'المهندسون المتاحون — من بيانات ERP التجريبية')}}</h2>
+      <span *ngIf="ctx.demoMode" class="marine-demo-chip">POC MOCK ENGINEERS</span>
+      <a *ngIf="ctx.pocSelfInspectorId" routerLink="/moei/smart-inspection/my-work-orders" class="marine-demo-chip">
+        {{copy('My Work Orders →','أوامر التكليف الخاصة بي ←')}}</a>
+      <span class="marine-tag">{{ctx.workforce?.length}}
+        {{copy('active engineers','مهندسين نشطين')}}</span>
+    </div>
+    <p class="marine-note">
+      {{ctx.demoMode?
+        copy('Synthetic qualification and capacity data are designed only for POC. The same scheduling engine checks these DEMO shifts, travel and free slots without touching official HR data.',
+          'التخصصات والطاقة اليومية والورديات افتراضية للعرض فقط. يراجع محرك الجدولة نفس قيود الموارد التجريبية دون تعديل بيانات الموارد البشرية الفعلية.'):
+        copy('Qualifications and daily capacity come from the imported ERP snapshot, subject to shift/leave/booking checks.',
+          'التخصصات والطاقة اليومية من ملف ERP المستورد، وتخضع لفحص الورديات والإجازات والحجوزات.')}}
+    </p>
+    <div class="marine-workforce">
+      <article *ngFor="let engineer of ctx.workforce"
+        [class.marine-my-poc-engineer]="ctx.pocSelfInspectorId===engineer.inspectorId">
+        <strong>{{engineer.inspectorName}}</strong>
+        <span *ngIf="ctx.pocSelfInspectorId===engineer.inspectorId" class="marine-demo-chip">
+          {{copy('MY POC ACCOUNT · ASSIGNABLE ENGINEER','حسابي في POC · ضمن المهندسين المتاحين للإسناد')}}
+        </span>
+        <small>{{engineer.inspectorId}} · {{copy('Daily capacity','الطاقة اليومية')}}: {{engineer.dailyCapacity}}</small>
+        <small>{{copy('Qualified scopes','النطاقات المؤهلة')}}: {{engineer.qualifications.join(' · ')||'—'}}</small>
+        <small *ngIf="engineer.homePortId">{{copy('Home port','ميناء العمل')}}: {{engineer.homePortId}}</small>
+      </article>
+    </div>
+   </section>
+   <section *ngIf="proposal as p" class="marine-panel">
+    <h2>{{copy('Inspector assignments and scheduling exceptions','توزيع المهندسين واستثناءات الجدولة')}}</h2>
+     <p class="marine-note">{{copy(
+       'If an eligible inspector is unavailable at the vessel port, the scheduler also considers qualified engineers from other ports. Travel time, shifts, conflicts and explicit supervisor approval still apply; demo travel times are synthetic.',
+       'عند عدم توفر مهندس مؤهل بميناء السفينة، يبحث النظام عن مهندسين مؤهلين بموانئ أخرى، مع احتساب زمن الانتقال والورديات والتعارضات واعتماد المشرف. أزمنة الانتقال بالعرض تجريبية.')}}</p>
+    <p class="marine-notice">{{aiAdvice?
+       (aiAdvice.provider==='POC_MOCK'?
+       copy('POC MOCK simulated a ranking of synthetic feasible schedules; it is not live AI or approved ERP scheduling.',
+        'محاكاة POC رتّبت بدائل جدول تجريبية؛ ليست نتيجة AI حقيقي أو جدولة ERP معتمدة.'):
+       copy('AIRIA SI-S01 ranked verified whole-plan alternatives. A human supervisor must separately approve the final schedule.',
+        'رتب SI-S01 عبر Airia بدائل الجدولة الصالحة، ولا يزال اعتماد الجدول من صلاحية المشرف.')):
+       copy('ERP hard constraints verified by a deterministic scheduler. Click AI Schedule to compare up to three complete, feasible alternatives; no Airia call has occurred.',
+        'تحقّق محرك الجدولة من قيود ERP. اضغط الجدولة بالذكاء الاصطناعي لمقارنة حتى ثلاثة بدائل متكاملة صالحة؛ لم يتم استدعاء Airia بعد.')}}</p>
+    <section class="marine-ai-advice" *ngIf="aiAdvice as ai">
+     <div class="marine-title-line">
+      <h3>{{copy('SI-S01 AI schedule recommendation','توصية AI SI-S01 للجدولة')}}</h3>
+      <span class="marine-tag">{{ai.provider==='POC_MOCK'?'POC MOCK':'AIRIA'}} · {{copy('Advisory only','استشاري فقط')}}</span>
+     </div>
+     <div *ngFor="let ranked of ai.rankedOptions" class="marine-ai-rank">
+      <strong>{{copy('Option','البديل')}} #{{ranked.rank}}
+       <span *ngIf="ranked.optionId===ai.chosenOptionId">{{copy('· Displayed','· المعروض')}}</span>
+      </strong>
+      <small>{{copy('Confidence','الثقة')}}: {{ranked.confidence*100 | number:'1.0-1'}}%</small>
+      <p>{{ranked.rationale}}</p>
+      <small>{{copy('Evidence','الأدلة')}}: {{ranked.evidenceRefs.join(' · ')||'—'}}</small>
+     </div>
+     <p class="marine-preview-warning">{{copy('AI never confirms bookings or authorizes inspection cases. Revalidation and supervisor schedule approval are separate steps.',
+      'لا يؤكد AI الحجز أو يعتمد حالات المعاينة؛ إعادة التحقق واعتماد المسؤول مرحلتان منفصلتان.')}}</p>
+    </section>
+    <div class="marine-title-line">
+      <div class="marine-board-controls" role="group" [attr.aria-label]="copy('Schedule board view','طريقة عرض الجدولة')">
+        <button type="button" [class.active]="boardView==='VESSELS'"
+          [attr.aria-pressed]="boardView==='VESSELS'" (click)="boardView='VESSELS'">
+          {{copy('By vessel','حسب السفينة')}}</button>
+        <button type="button" [class.active]="boardView==='ENGINEERS'"
+          [attr.aria-pressed]="boardView==='ENGINEERS'" (click)="boardView='ENGINEERS'">
+          {{copy('By engineer','حسب المهندس')}}</button>
+        <button type="button" [class.active]="boardView==='DATES'"
+          [attr.aria-pressed]="boardView==='DATES'" (click)="boardView='DATES'">
+          {{copy('By date','حسب اليوم')}}</button>
+      </div>
+      <span class="marine-tag">{{assignedEngineerCount}} {{copy('engineers allocated','مهندسين تم توزيعهم')}}</span>
+    </div>
+    <div *ngIf="boardView==='VESSELS'" class="marine-scroll"><table>
+     <thead><tr><th>IMO</th><th>{{copy('Status','الحالة')}}</th>
+      <th>{{copy('Engineer','المهندس')}}</th><th>{{copy('Time','الميعاد')}}</th>
+      <th>{{copy('Site','المكان')}}</th><th>{{copy('Reason / Score','السبب / التقييم')}}</th></tr></thead>
+     <tbody><tr *ngFor="let r of p.rows">
+      <td>{{r.imo}}</td><td><b [class.unscheduled]="r.status==='UNSCHEDULED'">{{r.status}}</b></td>
+      <td>{{r.assignment?.inspectorName||'—'}}
+       <small *ngIf="r.assignment?.crossPort" class="marine-demo-chip">
+        {{copy('Cross-port · from','من ميناء آخر · من')}}
+        {{r.assignment?.originPortName||r.assignment?.originPortId}}
+        · {{r.assignment?.travelMinutes}} {{copy('min travel','دقيقة انتقال')}}
+        · {{copy('Supervisor signoff','اعتماد المشرف')}}
+       </small></td>
+      <td>{{r.assignment?.startLocal||'—'}}<br>{{r.assignment?.endLocal||''}}</td>
+      <td>{{r.assignment?.locationName||'—'}}</td>
+      <td><ng-container *ngIf="r.status==='UNSCHEDULED';else score">
+       <strong class="unscheduled">{{diagnosticsLabel(r.diagnostics)}}</strong>
+       <small class="si-diagnostic-code">{{r.diagnostics?.code||r.blocker}}</small>
+       <button type="button" class="si-details-toggle" (click)="inspectUnscheduled(r.imo)">
+        {{copy('View reasons in plan','عرض أسباب التعذر في الخطة')}}
+       </button>
+      </ng-container><ng-template #score>{{(r.assignment?.score??0)+'/100'}}</ng-template></td>
+     </tr></tbody></table></div>
+    <ng-container *ngIf="p.board as board">
+      <div *ngIf="boardView==='ENGINEERS'" class="marine-board-grid">
+        <article class="marine-board-card" *ngFor="let group of board.engineers">
+          <h3>{{group.inspectorName}} <small>{{group.inspectorId}}</small></h3>
+          <p>{{group.vesselCount}} {{copy('planned visits','زيارات مقترحة')}}
+            · {{group.dates.join(' · ')}}</p>
+          <div class="marine-board-slot" *ngFor="let slot of group.assignments">
+            <strong>IMO {{slot.imo}}</strong>
+            <span>{{slot.startLocal}} → {{slot.endLocal}}</span>
+            <small>{{slot.portName}} · {{slot.locationName}}</small>
+           <small *ngIf="slot.crossPort" class="marine-demo-chip">
+            {{copy('From','من')}} {{slot.originPortName||slot.originPortId}} ·
+            {{slot.travelMinutes}} {{copy('min travel','دقيقة انتقال')}}
+           </small>
+          </div>
+        </article>
+        <p class="marine-notice" *ngIf="!board.engineers.length">
+          {{copy('No feasible engineer allocations. Review the unscheduled vessels below.',
+            'لا توجد توزيعات مناسبة. راجع السفن غير المجدولة أدناه.')}}
+        </p>
+      </div>
+      <div *ngIf="boardView==='DATES'" class="marine-board-grid">
+        <article class="marine-board-card" *ngFor="let day of board.days">
+          <h3>{{day.dateLocal}}</h3>
+          <p>{{day.vesselCount}} {{copy('planned visits','زيارات مقترحة')}}</p>
+          <div class="marine-board-slot" *ngFor="let slot of day.assignments">
+            <strong>IMO {{slot.imo}} · {{slot.inspectorName}}</strong>
+            <span>{{slot.startLocal}} → {{slot.endLocal}}</span>
+            <small>{{slot.portName}} · {{slot.locationName}}</small>
+           <small *ngIf="slot.crossPort" class="marine-demo-chip">
+            {{copy('From','من')}} {{slot.originPortName||slot.originPortId}} ·
+            {{slot.travelMinutes}} {{copy('min travel','دقيقة انتقال')}}
+           </small>
+          </div>
+        </article>
+        <p class="marine-notice" *ngIf="!board.days.length">
+          {{copy('No proposed dates available. Review source time windows and ERP constraints.',
+            'لا توجد مواعيد مقترحة؛ راجع الفترات الزمنية وقيود ERP.')}}
+        </p>
+      </div>
+      <div *ngIf="board.unscheduled.length" class="marine-unscheduled">
+        <h3>{{copy('Unscheduled vessels requiring coordinator action',
+          'سفن غير مجدولة وتحتاج تدخل منسق المعاينات')}}</h3>
+        <div *ngFor="let missing of board.unscheduled">
+          <strong>IMO {{missing.imo}}</strong><span>{{diagnosticsLabel(missing.diagnostics)}}</span>
+          <button type="button" class="si-details-toggle" (click)="inspectUnscheduled(missing.imo)">
+           {{copy('Details','التفاصيل')}}
+          </button>
+        </div>
+      </div>
+      <section class="si-unscheduled-details" id="si-unscheduled-details"
+               *ngIf="selectedUnscheduled as failure" aria-live="polite">
+       <div class="marine-title-line">
+        <h3>{{copy('Unscheduled inspection · plan details','معاينة غير مجدولة · تفاصيل الخطة')}} · IMO {{failure.imo}}</h3>
+        <button type="button" class="si-details-toggle" (click)="inspectUnscheduled(failure.imo)">
+         {{copy('Close','إغلاق')}}
+        </button>
+       </div>
+       <p class="si-diagnostic-summary">{{diagnosticsLabel(failure.diagnostics)}}</p>
+       <p *ngIf="visitDetails(failure.imo) as vessel">
+        <strong>{{vessel.name}}</strong> · {{vessel.portName||vessel.portId||'—'}} ·
+        {{copy('Inspection scope','نطاق المعاينة')}}: {{vessel.regimes.join(' · ')}}
+       </p>
+       <ng-container *ngIf="failure.diagnostics as d">
+        <div class="si-diagnostic-metrics">
+         <div><small>{{copy('Plan reason code','رمز سبب عدم الجدولة')}}</small><strong>{{d.code}}</strong></div>
+         <div><small>{{copy('Eligible candidate slots reviewed','المواعيد المرشحة التي فحصها المحرك')}}</small><strong>{{d.candidateOptions}}</strong></div>
+         <div><small>{{copy('Candidate inspectors','المهندسون المرشحون')}}</small><strong>{{d.candidateInspectors}}</strong></div>
+         <div><small>{{copy('Conflicts with selected inspections','تعارضات مع معاينات أخرى')}}</small><strong>{{d.timeOrTravelConflicts}}</strong></div>
+         <div><small>{{copy('Daily capacity conflicts','تعارضات الطاقة اليومية')}}</small><strong>{{d.dailyCapacityConflicts}}</strong></div>
+         <div><small>{{copy('Unused insertable slots','مواعيد ما زالت قابلة للإضافة')}}</small><strong>{{d.optionsStillInsertable}}</strong></div>
+        </div>
+        <p class="marine-note">{{copy('Requested visit window','الفترة المطلوبة للمعاينة')}}:
+         {{d.earliestLocal||'—'}} → {{d.deadlineLocal||'—'}} ·
+         {{copy('Duration','المدة')}}: {{d.durationMinutes||'—'}} {{copy('minutes','دقيقة')}}
+        </p>
+        <div *ngIf="d.competingVisits.length">
+         <h4>{{copy('Assignments competing for the same engineer / time / travel','معاينات تتعارض مع المهندس أو الموعد أو وقت الانتقال')}}</h4>
+         <div class="marine-scroll"><table class="si-diagnostic-table">
+          <thead><tr><th>IMO</th><th>{{copy('Engineer','المهندس')}}</th>
+           <th>{{copy('Port','الميناء')}}</th><th>{{copy('Time','الميعاد')}}</th></tr></thead>
+          <tbody><tr *ngFor="let visit of d.competingVisits">
+           <td>{{visit.imo}}</td><td>{{visit.inspectorName||visit.inspectorId}}</td>
+           <td>{{visit.portId}}</td><td>{{visit.startLocal}} → {{visit.endLocal}}</td>
+          </tr></tbody>
+         </table></div>
+        </div>
+        <div *ngIf="d.inspectorExclusions.length">
+         <h4>{{copy('Excluded ERP engineers (first 20)','المهندسون المستبعدون من ERP (أول 20)')}}</h4>
+         <ul class="si-diagnostic-exclusions">
+          <li *ngFor="let excluded of d.inspectorExclusions">
+           <b>{{excluded.inspectorId}}</b>:
+           <span *ngFor="let code of excluded.reasonCodes;let last=last">
+            {{exclusionLabel(code)}}<span *ngIf="!last"> · </span>
+           </span>
+          </li>
+         </ul>
+        </div>
+        <p *ngIf="d.category==='OPTIMIZER_SEARCH_LIMIT'" class="si-diagnostic-warning">
+         {{copy('The bounded solver left an insertable slot in the selected plan. This does not demonstrate a real capacity shortage. Recalculate or review alternatives.',
+          'ترك محرك البحث المحدود موعدًا قابلًا للإضافة بالخطة المختارة. هذا لا يثبت وجود عجز فعلي؛ أعد الحساب أو راجع البدائل.')}}
+        </p>
+        <p *ngIf="d.category==='PLAN_RESOURCE_CONTENTION'" class="si-diagnostic-warning">
+         {{copy('Review alternative visit times within the source-final vessel window, qualified inspectors and cross-port travel. Not all possible schedules have been exhaustively checked.',
+          'راجع مواعيد المعاينة البديلة ضمن فترة السفينة النهائية وأهلية المهندسين والانتقال بين الموانئ. لم يتم فحص جميع توزيعات الجدولة الممكنة بصورة شاملة.')}}
+        </p>
+       </ng-container>
+       <div class="si-diagnostic-actions">
+        <a [routerLink]="['/moei/smart-inspection/plan/create',ctx.planId]"
+          [queryParams]="{imo:failure.imo,origin:'scheduling'}">
+         {{copy('Open this vessel in the approved inspection plan','فتح تفاصيل السفينة في خطة المعاينات المعتمدة')}}
+        </a>
+        <button type="button" (click)="preview()" [disabled]="busy||aiBusy">
+         {{copy('Recalculate schedule','إعادة حساب الجدولة')}}
+        </button>
+       </div>
+       <p class="marine-note">{{copy(
+        'Read-only scheduling diagnostic; neither the approved roster, source records nor ERP bookings were changed.',
+        'تفاصيل تشخيصية للجدولة فقط؛ لم تتغير قائمة السفن المعتمدة أو بيانات المصادر أو حجوزات ERP.')}}</p>
+      </section>
+      <p class="marine-preview-warning">
+        {{copy('This is a read-only proposal, NOT an approved schedule. No engineer booking, inspection dossier or NMC state change has occurred.',
+          'هذه جدولة مقترحة للعرض فقط وليست معتمدة. لم يتم حجز أي مهندس أو إنشاء ملف معاينة أو تغيير حالة في NMC.')}}
+      </p>
+    </ng-container>
+   </section>
+  </ng-container>
+  <section class="marine-panel si-workorders-panel">
+    <p *ngIf="workOrdersError" class="marine-preview-warning" role="alert">
+      {{copy('Work-order approval is not available until Oracle Migration 019 and prerequisites are applied. Error: ',
+       'لن تعمل أوامر التكليف قبل تطبيق Migration 019 ومتطلباتها على Oracle. رمز الخطأ: ')}}
+       {{workOrdersError}}</p>
+    <div class="marine-title-line">
+      <div>
+        <h2>{{copy('03 · Approve Schedule & Issue Inspector Work Orders',
+          '٠٣ · اعتماد الجدولة وإصدار أوامر تكليف المهندسين')}}</h2>
+        <p class="marine-note">{{copy(
+         'An authorized supervisor approves the entire source-verified schedule once. Each vessel receives its own traceable assignment order. This POC does not book live ERP resources.',
+         'يعتمد المسؤول المخوّل الجدول بالكامل مرة واحدة ثم يصدر أمر تكليف مستقل لكل سفينة. لا يتم حجز موارد ERP الفعلية في هذا الـPOC.')}}</p>
+      </div>
+      <button type="button" [disabled]="!canApproveSchedule" (click)="approveSchedule()"
+       class="si-schedule-approve">
+       {{scheduleBusy?copy('Saving approval…','جارٍ حفظ الاعتماد…'):
+       copy('Approve Complete Schedule & Issue Orders',
+        'اعتماد الجدولة بالكامل وإصدار أوامر التكليف')}}
+      </button>
+    </div>
+    <p *ngIf="proposal && proposal.summary.unscheduled>0" class="marine-preview-warning">
+      {{copy('Schedule approval requires an assignment for EVERY selected vessel. Correct the unscheduled rows and recalculate.',
+        'اعتماد الجدولة يتطلب توزيع مهندس وموعد لكل سفينة معتمدة. استكمل السفن غير المجدولة ثم أعد الحساب.')}}</p>
+    <p *ngIf="!approvedSchedule && !proposal" class="marine-note">
+      {{copy('Calculate the schedule or run SI-S01 first. The supervisor approval action will appear when all selected vessels can be assigned.',
+       'احسب الجدولة أو شغّل SI-S01 أولًا. سيتاح الاعتماد بعد إمكانية توزيع جميع سفن الخطة.')}}</p>
+    <ng-container *ngIf="approvedSchedule as schedule">
+      <p class="marine-notice"><strong>{{copy('Approved assignment orders','أوامر التكليف المعتمدة')}}</strong>
+       · {{schedule.approvedAt}} · {{schedule.orders.length}}
+       · {{schedule.mode==='POC_MOCK'?'POC MOCK':'ERP EXCEL POC'}}
+       · {{copy('ERP booking not created','لا يوجد حجز فعلي في ERP')}}</p>
+      <div class="table-wrap"><table class="marine-table si-workorders-table">
+        <thead><tr>
+          <th>{{copy('IMO / Order','السفينة / الأمر')}}</th>
+          <th>{{copy('Assigned engineer','المهندس المكلف')}}</th>
+          <th>{{copy('Port / Date','الميناء / الموعد')}}</th>
+          <th>{{copy('Checklist & AI','القوائم و AI')}}</th>
+          <th>{{copy('Status & action','الحالة والإجراء')}}</th>
+        </tr></thead>
+        <tbody><tr *ngFor="let order of schedule.orders">
+          <td><strong>IMO {{order.imo}}</strong>
+            <small>{{order.id.slice(0,8)}}</small></td>
+          <td>{{order.assignment.inspectorName}}
+            <small>{{order.assignment.inspectorId}}</small>
+           <small *ngIf="order.assignment.crossPort" class="marine-demo-chip">
+            {{copy('Cross-port approved · from','معتمد من ميناء آخر · من')}}
+            {{order.assignment.originPortName||order.assignment.originPortId}} ·
+            {{order.assignment.travelMinutes}} {{copy('min','دقيقة')}}
+           </small></td>
+          <td>{{order.assignment.portName}}
+            <small>{{order.assignment.startLocal}}</small></td>
+          <td><strong>{{order.checklistStatus}}</strong>
+            <small>{{order.aiStatus}}</small>
+            <div *ngIf="order.caseId" class="si-order-links">
+              <a [routerLink]="['/moei/smart-inspection/checklists',order.caseId]">
+                {{copy('Mandatory checklist','قائمة المعاينة')}}</a>
+              <a [routerLink]="['/moei/smart-inspection/preparation',order.caseId]">
+                {{copy('A04 dossier & review','ملف A04 ومراجعته')}}</a>
+              <a [routerLink]="['/moei/smart-inspection/lifecycle',order.caseId]">
+                {{copy('Inspection workflow','دورة المعاينة')}}</a>
+            </div>
+          </td>
+          <td><strong>{{order.status}}</strong>
+            <small *ngIf="order.error" class="si-order-error">{{order.error}}</small>
+            <div class="si-workorder-actions">
+              <button type="button" [disabled]="!!orderBusyId"
+                *ngIf="['ISSUED','PREPARATION_NEEDS_REVIEW','PREPARING'].includes(order.status)"
+                (click)="workOrderAction(order,'activate')">
+                {{copy('Execute assignment · Prepare Checklist',
+                 'تنفيذ أمر التكليف · تجهيز القائمة')}}</button>
+              <button type="button" [disabled]="!!orderBusyId"
+                *ngIf="order.status==='READY_FOR_SCOPE_REVIEW'"
+                (click)="workOrderAction(order,'scope')">
+                {{copy('Supervisor: Approve Scope','المشرف: اعتماد النطاق')}}</button>
+              <button type="button" [disabled]="!!orderBusyId"
+                *ngIf="order.status==='READY_FOR_FIELD'"
+                (click)="workOrderAction(order,'start')">
+                {{copy('Inspector: Start Inspection','المفتش: بدء المعاينة')}}</button>
+              <span *ngIf="order.status==='FIELD_STARTED'" class="si-field-started">
+                {{copy('Field inspection started','بدأت المعاينة الميدانية')}}</span>
+            </div>
+          </td>
+        </tr></tbody>
+      </table></div>
+      <p class="marine-preview-warning">
+        {{copy('Mandatory published checklist items are prepared first. AI A04 suggestions are drafts until human review and are never automatically part of the mandatory regulatory scope.',
+         'تُجهز بنود القائمة الإلزامية المنشورة أولًا. مقترحات AI A04 تظل مسودات تحتاج مراجعة بشرية ولا تُضاف تلقائيًا للنطاق الإلزامي.')}}</p>
+    </ng-container>
+  </section>
+ </main>
+</div>

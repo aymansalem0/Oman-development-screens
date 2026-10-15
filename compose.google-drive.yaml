@@ -1,0 +1,7 @@
+# Optional A03-only Google Drive POC read access. Do not share credentials.
+# Enable with -f compose.yaml -f compose.google-drive.yaml [-f compose.oracle.yaml].
+# Google Drive service account: Viewer on ONE configured folder, not all Drive.
+services:
+  ai-proxy:
+    volumes:
+      - ./secrets/nmc-drive-google.json:/run/secrets/nmc-drive-google.json:ro

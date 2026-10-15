@@ -1,0 +1,9 @@
+# Optional: enable live Google Sheets reads. Never copy service-account JSON into Git.
+# Run with: docker compose -f compose.yaml -f compose.google-psc.yaml up -d --build
+# Requires ./secrets/nmc-psc-google.json (read-only account with access ONLY to the POC Sheet).
+services:
+  ai-proxy:
+    environment:
+      PSC_SOURCE_MODE: google_sheets
+    volumes:
+      - ./secrets/nmc-psc-google.json:/run/secrets/nmc-psc-google.json:ro

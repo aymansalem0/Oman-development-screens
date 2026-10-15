@@ -3,7 +3,7 @@
     <div class="brand-block">
       <div class="brand-mark">✓</div>
       <div>
-        <div class="eyebrow">{{ copy('MOEI · National Maritime Center', 'وزارة الطاقة والبنية التحتية · المركز البحري الوطني') }}</div>
+        <div class="eyebrow">{{ copy('MOEI Maritime Unified Platform', 'المنصة البحرية الموحدة لوزارة الطاقة والبنية التحتية') }}</div>
         <h1>{{ copy('Priority Smart Inspection', 'المعاينة الذكية ذات الأولوية') }}</h1>
         <p>{{ copy('Case-triggered inspection with inherited risk context and evidence', 'معاينة ناتجة عن الحالة مع توريث سياق المخاطر والأدلة') }}</p>
       </div>
@@ -20,61 +20,15 @@
     </div>
   </header>
 
-  <aside class="nmc-sidebar">
-    <div class="sidebar-section-label">{{ copy('OPERATIONS', 'العمليات') }}</div>
-
-    <a class="nav-item" routerLink="/moei/nmc">
-      <span class="nav-icon">◉</span>
-      <span>{{ copy('Command Center', 'مركز القيادة') }}</span>
-    </a>
-
-    <a class="nav-item" [routerLink]="['/moei/nmc/vessel', vessel.imo]">
-      <span class="nav-icon">⌖</span>
-      <span>{{ copy('Vessel Monitoring', 'مراقبة السفن') }}</span>
-    </a>
-
-    <button type="button" class="nav-item">
-      <span class="nav-icon">⚠</span>
-      <span>{{ copy('Alerts & Events', 'التنبيهات والأحداث') }}</span>
-    </button>
-
-    <a class="nav-item" [routerLink]="['/moei/nmc/vessel', vessel.imo, 'case']">
-      <span class="nav-icon">▣</span>
-      <span>{{ copy('Cases & Incidents', 'الحالات والحوادث') }}</span>
-    </a>
-
-    <a class="nav-item active" [routerLink]="['/moei/nmc/vessel', vessel.imo, 'smart-inspection']">
-      <span class="nav-icon">✓</span>
-      <span>{{ copy('Smart Inspection', 'المعاينة الذكية') }}</span>
-    </a>
-
-    <div class="sidebar-section-label second">{{ copy('INTELLIGENCE', 'الاستخبارات') }}</div>
-
-    <a class="nav-item" [routerLink]="['/moei/nmc/vessel', vessel.imo, 'ai-assessment']">
-      <span class="nav-icon">✦</span>
-      <span>{{ copy('Maritime Intelligence', 'الاستخبارات البحرية') }}</span>
-    </a>
-
-    <button type="button" class="nav-item">
-      <span class="nav-icon">▥</span>
-      <span>{{ copy('Dashboards', 'لوحات المعلومات') }}</span>
-    </button>
-
-    <a class="nav-item" routerLink="/moei/nmc/admin/risk-configuration">
-      <span class="nav-icon">⚙</span>
-      <span>{{ copy('Configuration', 'الإعدادات') }}</span>
-    </a>
-
-    <div class="system-health">
-      <div>
-        <span class="health-dot"></span>
-        <strong>{{ copy('Inspection workflow active', 'مسار المعاينة نشط') }}</strong>
-      </div>
-      <small>{{ copy('Case context inherited', 'تم توريث سياق الحالة') }}</small>
-    </div>
-  </aside>
+  <app-nmc-navigation></app-nmc-navigation>
 
   <main class="inspection-main">
+    <div *ngIf="centralLoading" role="status" class="inspection-central-note">
+      {{copy('Checking the linked maritime case…','جاري التحقق من الحالة البحرية المرتبطة…')}}
+    </div>
+    <div *ngIf="centralError" role="alert" class="inspection-central-note error">
+      {{centralError}}
+    </div>
     <section class="inspection-hero">
       <div class="hero-left">
         <span class="case-kicker">{{ copy('CASE-TRIGGERED INSPECTION', 'معاينة ناتجة عن الحالة') }}</span>
@@ -96,7 +50,7 @@
       <div class="hero-metrics">
         <article class="metric-card risk" [ngClass]="riskClass">
           <small>{{ copy('Incoming risk', 'المخاطر عند الاستلام') }}</small>
-          <strong>{{ vessel.risk }}</strong>
+          <strong>{{ incomingRisk }}</strong>
           <span>{{ riskLabel }}</span>
         </article>
         <article class="metric-card">
@@ -110,9 +64,9 @@
           <span>{{ criticalFindings }} {{ copy('critical', 'حرجة') }}</span>
         </article>
         <article class="metric-card impact">
-          <small>{{ copy('Estimated risk change', 'التغير المتوقع في المخاطر') }}</small>
-          <strong>-{{ estimatedRiskReduction }}</strong>
-          <span>{{ copy('after completion', 'بعد الاستكمال') }}</span>
+          <small>{{ copy('Post-inspection risk', 'المخاطر بعد المعاينة') }}</small>
+          <strong>{{ copy('Pending', 'بانتظار التقييم') }}</strong>
+          <span>{{ copy('Evidence refresh and recalculation required', 'يلزم تحديث الأدلة وإعادة الحساب') }}</span>
         </article>
       </div>
     </section>
@@ -133,6 +87,11 @@
       </div>
     </section>
 
+    <div *ngIf="isSchedulingRequired" class="inspection-central-note error" role="alert">
+      {{copy('This NMC referral must be scheduled and assigned by Smart Inspection before recording results.',
+        'يجب جدولة إحالة NMC وإسنادها بواسطة المعاينة الذكية قبل تسجيل النتائج.')}}
+      <a [routerLink]="['/moei/smart-inspection/candidates']">{{copy('Open scheduling queue','فتح قائمة الجدولة')}}</a>
+    </div>
     <section class="inspection-grid">
       <div class="left-column">
         <article class="panel checklist-panel">
@@ -208,19 +167,19 @@
             <div class="impact-preview">
               <div>
                 <small>{{ copy('Incoming risk', 'المخاطر عند الاستلام') }}</small>
-                <strong>{{ vessel.risk }}</strong>
+                <strong>{{ incomingRisk }}</strong>
               </div>
               <span>→</span>
               <div>
-                <small>{{ copy('Expected after return to NMC', 'المتوقع بعد الإرجاع إلى NMC') }}</small>
-                <strong>{{ vessel.risk - estimatedRiskReduction }}</strong>
+                <small>{{ copy('After return to NMC', 'بعد العودة إلى المركز البحري') }}</small>
+                <strong>{{ copy('Reassessment pending', 'بانتظار إعادة التقييم') }}</strong>
               </div>
             </div>
 
             <label>{{ copy('General inspection note', 'ملاحظة عامة للمعاينة') }}</label>
             <textarea [(ngModel)]="generalNote" [placeholder]="copy('Summarize the inspection outcome...', 'لخص نتيجة المعاينة...')"></textarea>
 
-            <button type="button" class="submit-btn" (click)="submitInspection()" [disabled]="!canSubmit || submitted">
+            <button type="button" class="submit-btn" (click)="submitInspection()" [disabled]="!canSubmit || submitted || centralLoading || centralBusy || !!centralError">
               ✓ {{ submitted ? copy('Inspection submitted to NMC', 'تم إرسال نتيجة المعاينة إلى NMC') : copy('Complete & Return Result to NMC', 'استكمال وإرسال النتيجة إلى NMC') }}
             </button>
 
@@ -239,7 +198,7 @@
           </div>
           <div class="outcome-body">
             <span class="outcome-badge">{{ existingOutcome.result }}</span>
-            <strong>-{{ existingOutcome.riskReduction }} {{ copy('risk impact', 'تأثير على المخاطر') }}</strong>
+            <strong>{{ copy('Risk impact pending evidence-based reassessment', 'تأثير المعاينة على المخاطر ينتظر إعادة التقييم المستند إلى الأدلة') }}</strong>
             <p>{{ existingOutcome.summary }}</p>
             <small>{{ existingOutcome.completedAt }} · {{ existingOutcome.inspector }}</small>
           </div>

@@ -1,0 +1,181 @@
+<div class="nmc-shell" [attr.dir]="lang.dir">
+ <header class="incident-topbar">
+  <div class="brand">
+   <app-nmc-ministry-logo></app-nmc-ministry-logo>
+   <div><small>MOEI · {{copy('National Maritime Center','المركز البحري الوطني')}}</small>
+    <h1>{{copy('Maritime Incident Intelligence','ذكاء وإدارة الحوادث البحرية')}}</h1></div>
+  </div>
+  <div class="top-actions">
+   <span class="simulation">{{copy('SYNTHETIC POC · NOT LIVE EMERGENCY REPORTING','بيانات تجريبية · ليست نظام بلاغات طوارئ فعلي')}}</span>
+   <button type="button" class="lang-toggle" (click)="lang.toggle()">{{lang.isArabic?'English':'العربية'}}</button>
+  </div>
+ </header>
+ <app-nmc-navigation></app-nmc-navigation>
+ <main class="incident-main">
+  <div class="breadcrumbs"><a routerLink="/moei/nmc">{{copy('Command Center','مركز القيادة')}}</a> › {{copy('Maritime Incidents','الحوادث البحرية')}}</div>
+  <div class="titlebar">
+   <div><span class="overline">{{copy('NMC-01 · EVENT & INCIDENT AWARENESS','NMC-01 · الوعي بالحوادث والأحداث')}}</span>
+    <h2>{{copy('Maritime Incident Monitoring','متابعة الحوادث البحرية')}}</h2>
+    <p>{{copy('Synthetic incident sources, existing A01/A02 evidence interpretation and a separate deterministic incident risk policy. Not the official vessel risk score.',
+      'بلاغات تجريبية من منصة البلاغات والموانئ مع تقييم AI خاص بكل حادث، منفصل عن درجة مخاطر السفينة الرسمية.')}}</p>
+   </div>
+   <div class="toolbar">
+    <a class="sheet-link" [href]="sourceSheet" target="_blank" rel="noopener noreferrer">{{copy('Open Google Sheet ↗','فتح Google Sheet ↗')}}</a>
+    <button type="button" class="refresh" [disabled]="loading || busy" (click)="refresh()">↻ {{copy('Refresh sources','تحديث المصادر')}}</button>
+   </div>
+  </div>
+  <div *ngIf="error" class="message error" role="alert">{{error}}</div>
+  <div *ngIf="success" class="message success" role="status">{{success}}</div>
+  <div *ngIf="data?.sourceValidationWarnings" class="message warn" role="status">
+    {{data?.sourceValidationWarnings}}
+    {{copy('source rows are incomplete or invalid; valid incidents remain visible.',
+      'صفوف بيانات غير مكتملة أو خاطئة في المصدر؛ الحوادث الصحيحة ما زالت ظاهرة.')}}
+  </div>
+  <div *ngIf="!health?.sourceConfigured" class="message warn">
+   {{copy('The sheet is ready. The Docker incident data source still needs service-account configuration. No sample data is silently substituted.',
+      'الشيت جاهز، لكن ربط Docker بحساب خدمة Google لا يزال يحتاج إعدادًا. لن يتم عرض بيانات وهمية بدل المصدر.')}}</div>
+  <section class="score-cards">
+   <article><span>{{copy('Received incidents','الحوادث المستلمة')}}</span><strong>{{data?.summary?.total ?? '—'}}</strong><small>{{copy('Google Sheet source records','سجلات Google Sheet')}}</small></article>
+   <article><span>{{copy('Open / under follow-up','مفتوحة / تحت المتابعة')}}</span><strong>{{data?.summary?.unresolved ?? '—'}}</strong><small>{{copy('Status owned by reporting officers','الحالة يحددها الموظفون')}}</small></article>
+   <article><span>{{copy('A01/A02-informed incidents','حوادث تم تفسيرها باستخدام A01/A02')}}</span><strong>{{assessedCount}}</strong><small>{{copy('Separate incident risk model','نموذج مخاطر خاص بالحوادث')}}</small></article>
+   <article><span>{{copy('High / Critical incident risk','مخاطر الحوادث مرتفعة / حرجة')}}</span><strong>{{urgentCount}}</strong><small>{{copy('Rules-based incident score · not vessel risk','درجة حادث بقواعد NMC، وليست مخاطر السفينة')}}</small></article>
+  </section>
+  <section class="workbench">
+   <aside class="incident-list">
+    <div class="list-header">
+     <h3>{{copy('Incident Intake Queue','قائمة البلاغات المستلمة')}}</h3>
+     <span class="count">{{filtered.length}}</span>
+    </div>
+    <div class="filters">
+     <input type="search" [(ngModel)]="search" [placeholder]="copy('Search IMO, vessel or incident','بحث بالسفينة أو IMO أو الحادث')"/>
+     <select [(ngModel)]="sourceFilter">
+      <option value="ALL">{{copy('All reporting sources','جميع مصادر البلاغات')}}</option>
+      <option value="REPORTING_PLATFORM">{{copy('Maritime Reporting Platform','منصة البلاغات البحرية')}}</option>
+      <option value="PORT_AUTHORITY">{{copy('Port Authority','الجهات والموانئ')}}</option>
+     </select>
+    </div>
+    <p *ngIf="!filtered.length" class="list-empty">{{copy('No incidents found. Check Sheet connectivity or filters.','لا توجد حوادث. راجع الاتصال بالشيت أو الفلاتر.')}}</p>
+    <button type="button" *ngFor="let incident of filtered"
+      class="incident-list-item" [class.active]="selectedId===incident.incidentId"
+      (click)="select(incident.incidentId)">
+      <div class="list-line"><strong>{{incident.vesselName||incident.incidentId}}</strong>
+       <span class="risk-pill" *ngIf="incident.aiAssessment" [class.critical]="incident.aiAssessment.incidentRiskBand==='CRITICAL'"
+         [class.high]="incident.aiAssessment.incidentRiskBand==='HIGH'">
+         {{incident.aiAssessment.incidentRiskScore}} / 100</span>
+       <span class="pending-pill" *ngIf="!incident.aiAssessment">{{copy('Not assessed','لم يُقيّم')}}</span>
+      </div>
+      <div class="incident-meta">{{incident.incidentType}} · {{incident.portOrZone}}</div>
+      <div class="incident-meta">{{incident.sourceOrganization}} · {{incident.sourceReference}}</div>
+      <div class="status-line">{{incident.operationalStatus}} · IMO {{incident.imo||'—'}}</div>
+      <div class="status-line" *ngIf="incident.nextFollowup">
+        {{copy('Next step','الخطوة التالية')}}: {{incident.nextFollowup.status}}
+        · {{incident.nextFollowup.approval==='OFFICER_APPROVED'?
+          copy('Officer approved','معتمدة من الموظف'):
+          copy('AI proposed','مقترحة من AI')}}
+      </div>
+    </button>
+   </aside>
+   <article class="incident-detail" *ngIf="selected as incident; else noSelection">
+    <div class="detail-header">
+     <div><span class="overline">{{incident.incidentId}}</span>
+      <h3>{{incident.incidentType}} · {{incident.vesselName||copy('Unidentified vessel','سفينة غير محددة')}}</h3>
+      <p>{{incident.sourceOrganization}} · {{incident.sourceReference}}</p>
+     </div>
+     <div class="status-tag">{{incident.operationalStatus}}</div>
+    </div>
+    <div class="meta-grid">
+      <div><span>{{copy('Source','المصدر')}}</span><strong>{{incident.sourceType}}</strong></div>
+      <div><span>{{copy('Reported at','وقت البلاغ')}}</span><strong>{{incident.reportedAt||'—'}}</strong></div>
+      <div><span>{{copy('Location','الموقع')}}</span><strong>{{incident.portOrZone||'—'}}</strong></div>
+      <div><span>{{copy('Reported severity','الخطورة المبلغ عنها')}}</span><strong>{{incident.reportedSeverity||'—'}}</strong></div>
+    </div>
+    <section class="description">
+      <h4>{{copy('Original incident description · unchanged','وصف الحادث الأصلي · بدون تعديل')}}</h4>
+      <p>{{incident.description}}</p>
+      <small>{{copy('This is a source statement, not a verified incident finding.','هذا وصف الجهة المبلغة، وليس واقعة تم التحقق منها رسميًا.')}}</small>
+    </section>
+    <section class="ai-assessment">
+     <div class="section-heading">
+      <div><span class="overline">{{copy('EXISTING A01/A02 + NMC INCIDENT RISK RULES','سياق A01/A02 الحالي · ٤ عوامل بقواعد NMC')}}</span>
+       <h4>{{copy('Incident Risk Assessment & Follow-up','تقييم مخاطر الحادث وخطة المتابعة')}}</h4></div>
+      <span class="triage-auto-pill">
+        {{incident.aiAssessment?
+          copy('✓ Automatically assessed','✓ تم التقييم تلقائيًا'):
+          copy('⟳ Automatic source triage','⟳ تقييم تلقائي من مصادر البلاغات')}}
+      </span>
+     </div>
+     <div class="message warn" *ngIf="!health?.aiConfigured">
+      {{copy('Incident analysis reuses existing Airia A01/A02. Ensure both agents and the shared Airia key are enabled.',
+        'تحليل الحادث يستخدم نفس Airia A01/A02. تأكد من تفعيل الوكيلين ومفتاح Airia الحالي.')}}</div>
+     <div class="message warn" *ngIf="!incident.aiReviewRequested">
+      {{copy('Set AI_Review_Request to YES in Google Sheets before spending an AI call.',
+       'غيّر AI_Review_Request إلى YES في Google Sheets قبل استدعاء AI.')}}</div>
+     <div class="message warn" *ngIf="incident.aiAssessmentStale">
+      {{copy('The description was edited since AI last analyzed it. Old AI results are not reused.',
+       'وصف الحادث تغير بعد آخر تحليل. لن يعاد استخدام نتائج قديمة.')}}</div>
+     <div *ngIf="incident.aiAssessment as ai" class="ai-result">
+      <div class="risk-banner">
+       <div><span>{{copy('Incident Risk Score','درجة مخاطر الحادث')}}</span>
+        <strong>{{ai.incidentRiskScore}}<small>/100</small></strong></div>
+       <div><span class="band" [class.critical]="ai.incidentRiskBand==='CRITICAL'"
+           [class.high]="ai.incidentRiskBand==='HIGH'">{{ai.incidentRiskBand}}</span>
+        <small>{{copy('Confidence','الثقة')}}: {{ai.confidence | number:'1.2-2'}}</small></div>
+      </div>
+      <div class="risk-factors">
+       <div><span>{{copy('Impact','التأثير')}}</span><strong>{{ai.impact}}/5</strong></div>
+       <div><span>{{copy('Urgency','الإلحاح')}}</span><strong>{{ai.urgency}}/5</strong></div>
+       <div><span>{{copy('Exposure','التعرض')}}</span><strong>{{ai.exposure}}/5</strong></div>
+       <div><span>{{copy('Recurrence','احتمال التكرار')}}</span><strong>{{ai.recurrence}}/5</strong></div>
+      </div>
+      <p class="reason"><strong>{{copy('AI analysis','تحليل AI')}}:</strong> {{ai.aiReasoning}}</p>
+      <div class="followup" *ngIf="ai.a02IncidentCompliance as comp">
+        <span>{{copy('A02 · Existing vessel compliance signals (context only)','A02 · إشارات امتثال السفينة الحالية (سياق فقط)')}}</span>
+        <strong>{{comp.status}}</strong>
+        <p>{{comp.reasoning}}</p>
+        <small>{{copy('A02 evidence','أدلة A02')}}: {{comp.evidenceIds.join(', ')||'—'}}</small>
+      </div>
+      <p class="ai-provenance" *ngIf="ai.aiEvidenceIds?.length">
+        {{copy('A01 incident evidence','أدلة الحادث في A01')}}:
+        {{ai.aiEvidenceIds?.join(', ')}} · {{ai.contractVersion}}
+      </p>
+      <div class="followup">
+       <span>{{copy('AI-proposed follow-up','المتابعة المقترحة من AI')}}</span>
+       <strong>{{ai.aiProposedFollowup}}</strong>
+       <span>{{copy('Suggested next-step status (NOT executed)','حالة المتابعة المقترحة (لم تنفذ)')}}</span>
+       <strong>{{ai.suggestedFollowupState}}</strong>
+       <span>{{copy('Approval required','تتطلب اعتماد الموظف')}}</span>
+      </div>
+      <p *ngIf="ai.missingInformation?.length" class="missing">
+       {{copy('Missing information','بيانات مطلوبة للتحقق')}}: {{ai.missingInformation.join(' · ')}}</p>
+      <p class="ai-provenance">AI {{ai.aiProvider}} · {{ai.aiModel}} · {{ai.assessedAt}}
+       <br/>{{copy('Incident score is computed by NMC rules using source report and grounded A01 actions; the model does not return a numeric incident score. Official vessel risk stays unchanged. No enforcement.',
+        'التقييم استرشادي ومنفصل عن Overall Risk الخاص بالسفينة. لا يوجد تنفيذ تلقائي لأي عقوبة أو منع.')}}</p>
+      <div class="case-management-followup">
+        <h4>{{copy('Case Management owns follow-up decisions','القرارات والمتابعة داخل إدارة الحالات')}}</h4>
+        <p>{{copy('The NMC backend automatically opens or links a maritime case after an evidence-grounded assessment. Officers approve actions, assign and track tasks inside that case.',
+        'يفتح NMC حالة بحرية أو يربط الحادث بحالة قائمة بعد التقييم تلقائيًا. اعتماد الإجراءات وإسناد المهام ومتابعتها يتم داخل إدارة الحالات.')}}</p>
+        <div *ngIf="incident.linkedCaseId; else waitingForCase" class="case-ready">
+          <strong>{{copy('Case','الحالة')}}: {{incident.linkedCaseId}}</strong>
+          <span>{{incident.linkedCaseStatus}} · {{incident.caseIncidentDecisionStatus}}</span>
+          <a [routerLink]="['/moei/nmc/vessel',incident.imo,'case']">
+            {{copy('Open Case Management →','فتح إدارة الحالة ←')}}
+          </a>
+        </div>
+        <ng-template #waitingForCase>
+          <span class="case-sync-pending">
+            {{copy('Waiting for automatic case creation/linking. Check backend triage/case-store status if this persists.',
+              'جارٍ ربط الحالة تلقائيًا. إذا استمر الانتظار، راجع تشغيل معالجة البلاغات وقاعدة بيانات الحالات.')}}
+          </span>
+        </ng-template>
+      </div>
+     </div>
+     <div *ngIf="!incident.aiAssessment" class="no-ai">
+      {{copy('Automatic A02→A01 assessment is queued for opted-in source reports. No user click is necessary; valid saved vessel evidence and an A01 citation to the incident source are required.',
+        'يُعالج NMC البلاغ تلقائيًا باستخدام A02 ثم A01 دون الحاجة لزر، بشرط وجود أدلة السفينة وحصولنا على استشهاد A01 بدليل البلاغ.')}}</div>
+    </section>
+   </article>
+   <ng-template #noSelection><div class="incident-detail empty">{{copy('Select a source incident to inspect its description and risk.',
+     'اختر حادثًا لعرض الوصف والتقييم.')}}</div></ng-template>
+  </section>
+ </main>
+</div>
