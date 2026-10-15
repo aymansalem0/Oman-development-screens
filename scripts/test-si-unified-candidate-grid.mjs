@@ -72,7 +72,9 @@ test('one official supervisor approval covers the plan, not each vessel row',()=
  assert.match(html,/si-rolling-management/);
  assert.match(html,/\(click\)="generateIntegratedDraft\(\)"/);
  assert.match(html,/\(click\)="saveIntegratedDraft\(\)"/);
- assert.match(ts,/this\.http\.post<DraftIntegratedPreview>\('\/api\/si\/v1\/inspection-plans\/draft-preview'/);
+ assert.match(ts,/this\.http\.post<IntegratedDraftJob>\('\/api\/si\/v1\/inspection-plans\/draft-preview'/);
+ assert.match(ts,/draft-jobs\//);
+ assert.match(ts,/completedBatches/);
  assert.match(backend,/draft-\(recalculate\|save\)/);
  assert.doesNotMatch(html,/\(click\)="decide\('APPROVE'\)"/);
  assert.doesNotMatch(html,/\[\(ngModel\)\]="publisherKey"/);

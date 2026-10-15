@@ -62,7 +62,17 @@
         <p class="si-rolling-note">{{copy('Priority is determined by verified ETD, then reviewed incident severity; risk scores do not set execution order. Approval and work orders remain supervisor-only.',
          'الأولوية حسب ETD المؤكد، ثم خطورة الحوادث المعتمدة؛ درجات مخاطر السفن لا تحدد ترتيب التنفيذ. الاعتماد وأوامر التكليف للمشرف فقط.')}}</p>
        </div>
-       <p class="notice error" *ngIf="planningError" role="alert">{{planningError}}</p>
+       <div *ngIf="newDraftJobId&&newDraftBusy" class="si-draft-job-progress"
+         role="status" aria-live="polite">
+        <strong>{{copy('Airia C01 batch execution in progress — no automatic retry',
+         'جاري تشغيل دفعات Airia C01 — دون إعادة تشغيل تلقائية')}}</strong>
+        <div>{{copy('Verified batches','دفعات تم التحقق منها')}}:
+         <b>{{newDraftCompletedBatches}} / {{newDraftExpectedBatches}}</b>
+         · {{newDraftJobPhase}}</div>
+        <p>{{copy('Keep the page open or refresh to resume checking the same job. Do not click Generate again or start another paid run.',
+         'اترك الصفحة مفتوحة أو أعد تحميلها لمتابعة نفس Job. لا تبدأ تشغيلًا آخر مدفوعًا.')}}
+        </p>
+       </div>
        <div class="si-rolling-actions">
         <button type="button" class="si-plan-wizard-button" (click)="generateIntegratedDraft()"
          [disabled]="newDraftBusy||!newDraftAiConsent||newDraftProvider==='UNKNOWN'||(newDraftProvider==='AIRIA'&&!newDraftCostConsent)">
