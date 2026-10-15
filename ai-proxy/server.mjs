@@ -1195,7 +1195,7 @@ const server = createServer(async (req, res) => {
           return respond(res,409,{error:'SI_INTEGRATED_SCHEDULING_BATCH_LIMIT_40'});
         const original=siErp.requireSnapshot();
         const workforce=body.demoMode?
-          buildPocErpSchedulingOverlay(original):original;
+          buildPocErpSchedulingOverlay(original,{operator:moeiAuth.require(req)}):original;
         const planDraft=makeCapacityDraftPlan(plan,selection);
         const source=maritimePlanSchedulingContext(planDraft,dashboard,original);
         const context=body.demoMode?
@@ -1387,7 +1387,7 @@ const server = createServer(async (req, res) => {
         const demo=query.get('demo')==='1';
         if(demo&&process.env.SI_SCHEDULING_DEMO_MODE!=='true')
           return respond(res,403,{error:'SI_POC_DEMO_MODE_NOT_ENABLED'});
-        const erp=demo?buildPocErpSchedulingOverlay(originalErp):originalErp;
+        const erp=demo?buildPocErpSchedulingOverlay(originalErp,{operator:moeiAuth.require(req)}):originalErp;
         const source=maritimePlanSchedulingContext(plan,dashboard,originalErp);
         return respond(res,200,demo?
           fillPocSchedulingVisitContext(source,erp):source);
@@ -1426,7 +1426,7 @@ const server = createServer(async (req, res) => {
           return respond(res,422,{error:'SI_POC_DEMO_SOURCE_REQUIRES_DEMO_MODE'});
         const plan=await siRollingPlans.get(v2Schedule[1]);
         const originalSnapshot=siErp.requireSnapshot();
-        const snapshot=demo?buildPocErpSchedulingOverlay(originalSnapshot):originalSnapshot;
+        const snapshot=demo?buildPocErpSchedulingOverlay(originalSnapshot,{operator:moeiAuth.require(req)}):originalSnapshot;
         const dashboard=await siTargeting.dashboard();
         const sourceContext=maritimePlanSchedulingContext(plan,dashboard,originalSnapshot);
         const context=demo?
@@ -1530,7 +1530,7 @@ const server = createServer(async (req, res) => {
             return respond(res,403,{error:'SI_POC_DEMO_MODE_NOT_ENABLED'});
           const plan=await siRollingPlans.get(planId);
           const original=siErp.requireSnapshot(),dashboard=await siTargeting.dashboard();
-          const snapshot=body.demoMode?buildPocErpSchedulingOverlay(original):original;
+          const snapshot=body.demoMode?buildPocErpSchedulingOverlay(original,{operator:moeiAuth.require(req)}):original;
           const sourceContext=maritimePlanSchedulingContext(plan,dashboard,original);
           const context=body.demoMode?
             fillPocSchedulingVisitContext(sourceContext,snapshot):sourceContext;
