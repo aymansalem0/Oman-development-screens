@@ -1,5 +1,6 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject } from 'rxjs';
+import {SI_DASHBOARD_METRIC_DEFINITIONS} from './si-dashboard-metric-catalog';
 
 export type DashboardWidgetKind = 'kpi' | 'bar' | 'table' | 'position';
 /** The 'bar' widget kind is a distribution widget; chartType selects the renderer. */
@@ -28,7 +29,8 @@ export const DASHBOARD_MENU_PLACEMENTS: Array<{value:DashboardMenuPlacement;en:s
 export type DashboardMetric =
   | 'vesselCount' | 'assessedCount' | 'attentionCount' | 'highCriticalCount'
   | 'priorityCount' | 'averageRisk' | 'byRisk' | 'byFlag'
-  | 'byType' | 'byZone' | 'vesselTable' | 'vesselPositions';
+  | 'byType' | 'byZone' | 'vesselTable' | 'vesselPositions'
+  | (string & {});
 
 export interface DashboardWidget {
   id: string;
@@ -73,15 +75,23 @@ export const DASHBOARD_METRICS: Record<DashboardWidgetKind, Array<{
     {value:'attentionCount',en:'Vessels requiring attention',ar:'السفن التي تتطلب متابعة'},
     {value:'highCriticalCount',en:'High and critical risk',ar:'المخاطر المرتفعة والحرجة'},
     {value:'priorityCount',en:'Priority review vessels',ar:'السفن ذات أولوية المراجعة'},
-    {value:'averageRisk',en:'Average assessed risk',ar:'متوسط مخاطر السفن المقيمة'}
+    {value:'averageRisk',en:'Average assessed risk',ar:'متوسط مخاطر السفن المقيمة'},
+    ...SI_DASHBOARD_METRIC_DEFINITIONS.filter(m=>m.kind==='kpi')
+      .map(m=>({value:m.id,en:m.en,ar:m.ar}))
   ],
   bar: [
     {value:'byRisk',en:'Vessels by risk level',ar:'السفن حسب مستوى المخاطر'},
     {value:'byFlag',en:'Vessels by flag',ar:'السفن حسب دولة العلم'},
     {value:'byType',en:'Vessels by type',ar:'السفن حسب النوع'},
-    {value:'byZone',en:'Vessels by operational area',ar:'السفن حسب المنطقة التشغيلية'}
+    {value:'byZone',en:'Vessels by operational area',ar:'السفن حسب المنطقة التشغيلية'},
+    ...SI_DASHBOARD_METRIC_DEFINITIONS.filter(m=>m.kind==='bar')
+      .map(m=>({value:m.id,en:m.en,ar:m.ar}))
   ],
-  table: [{value:'vesselTable',en:'Vessel monitoring table',ar:'جدول متابعة السفن'}],
+  table: [
+    {value:'vesselTable',en:'Vessel monitoring table',ar:'جدول متابعة السفن'},
+    ...SI_DASHBOARD_METRIC_DEFINITIONS.filter(m=>m.kind==='table')
+      .map(m=>({value:m.id,en:m.en,ar:m.ar}))
+  ],
   position: [{value:'vesselPositions',en:'Vessel position plot',ar:'توزيع مواقع السفن'}]
 };
 
