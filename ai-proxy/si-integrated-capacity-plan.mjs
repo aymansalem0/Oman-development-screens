@@ -211,6 +211,83 @@ export function selectIntegratedPlanVessels({
   selectionHash:sha({sourceHash:inspectionPlan.sourceHash,
    revision:plan.revision,roster,quotas}),advisoryOnly:true};
 }
+/**
+ * Freeze the saved pre-approval vessel scope during capacity revalidation.
+ *
+ * Integrated draft creation has ALREADY run the full C01 → priority →
+ * capacity pipeline, and its final capacity-feasible vessel set is the
+ * operator-visible saved Draft. A fresh unscoped capacity search would
+ * opportunistically re-add earlier overflow vessels. It must never do that.
+ *
+ * Keep the full C01 quota/evidence audit, but evaluate inspector assignments
+ * ONLY for those saved IMOs. A changed source, new shortlist or an unknown
+ * saved vessel requires an explicit human draft review, not a silent rewrite.
+ */
+export function scopeIntegratedSelectionToSavedDraft(selection,plan){
+ const saved=plan?.capacityDraft;
+ if(!saved)return selection; // legacy draft: original approval flow
+ if(String(saved.status||'').startsWith('STALE_'))
+  fail('SI_DRAFT_CAPACITY_STALE_RECALCULATE_REQUIRED',409);
+ if(saved.status==='CAPACITY_EXCEPTION_DRAFT')
+  fail('SI_DRAFT_CAPACITY_EXCEPTIONS_RESOLVE_BEFORE_APPROVAL',409);
+ if(saved.status!=='CAPACITY_VERIFIED_DRAFT')return selection;
+ if(saved.sourceHash!==selection.sourceHash)
+  fail('SI_DRAFT_SOURCE_CHANGED_REVIEW_REQUIRED',409);
+ const originalImos=selection.roster.map(v=>v.imo);
+ const originalSet=new Set(originalImos);
+ const archived=Array.isArray(saved.c01SelectedImos)?
+  saved.c01SelectedImos:originalImos;
+ if(archived.length!==originalImos.length||
+  new Set(archived).size!==archived.length||
+  archived.some(imo=>!originalSet.has(imo)))
+  fail('SI_DRAFT_C01_SCOPE_CHANGED_REVIEW_REQUIRED',409);
+ if(!Array.isArray(saved.selectedImos)||!saved.selectedImos.length||
+   new Set(saved.selectedImos).size!==saved.selectedImos.length||
+   saved.selectedImos.some(imo=>!originalSet.has(imo))||
+   selection.mandatoryImos.some(imo=>!saved.selectedImos.includes(imo)))
+  fail('SI_DRAFT_SAVED_VESSELS_REQUIRE_REVIEW',409);
+ const approved=new Set(saved.selectedImos);
+ const roster=selection.roster.filter(v=>approved.has(v.imo))
+  .map((v,index)=>({...v,planRank:index+1}));
+ if(roster.length!==saved.selectedImos.length)
+  fail('SI_DRAFT_SAVED_VESSELS_REQUIRE_REVIEW',409);
+ const finalImos=roster.map(v=>v.imo);
+ const draftScope={
+   locked:true,mode:'SAVED_CAPACITY_FEASIBLE_IMOS',
+   selectedImos:finalImos,
+   c01OriginallySelectedCount:originalImos.length,
+   previouslyOutsideCapacity:(saved.capacityExcluded||[]).map(x=>({
+     imo:x.imo,reasonCode:x.reasonCode
+   }))
+ };
+ return {...selection,roster,draftScope,
+  quotas:{...selection.quotas,selectedImos:finalImos,
+   savedDraftScope:'CAPACITY_VERIFIED_DRAFT_NO_SILENT_ADDITIONS'},
+  selectionHash:sha({
+   sourceHash:selection.sourceHash,planRevision:selection.planRevision,
+   fullC01SelectionHash:selection.selectionHash,savedDraftImos:finalImos,
+   draftScope:'CAPACITY_VERIFIED_DRAFT_NO_SILENT_ADDITIONS'
+  })
+ };
+}
+
+/** Compare refreshed plan alternatives to the exact saved Draft vessel set.
+ * Changing staff/times is permitted; changing vessel scope is NOT.
+ */
+export function savedDraftCapacityCoverage(selection,variant){
+ if(!selection?.draftScope?.locked)return {
+  locked:false,matches:true,missingImos:[],unexpectedImos:[]};
+ const required=new Set(selection.draftScope.selectedImos);
+ const offered=(variant?.assignments||[]).map(x=>x.imo);
+ const assigned=new Set(offered);
+ const missingImos=[...required].filter(imo=>!assigned.has(imo));
+ const unexpectedImos=[...assigned].filter(imo=>!required.has(imo));
+ return {locked:true,matches:missingImos.length===0&&
+   unexpectedImos.length===0&&offered.length===required.size,
+  missingImos,unexpectedImos,savedCount:required.size,
+  feasibleNow:assigned.size};
+}
+
 export function makeCapacityDraftPlan(plan,selection){
  if(plan.id!==selection.planId||plan.revision!==selection.planRevision)
   fail('SI_INTEGRATED_PLAN_CHANGED_REPREVIEW',409);
