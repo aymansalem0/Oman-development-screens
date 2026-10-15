@@ -40,6 +40,7 @@ import { SiAiPrioritization, SiPriorityError } from './si-ai-prioritization.mjs'
 import {SiCandidateAgent,SiCandidateAgentError} from './si-candidate-agent.mjs';
 import {validateDraftMetadata,buildIntegratedDraft,publicDraftPreview,
  SiDraftCreationError} from './si-integrated-draft-creation.mjs';
+import {SiIntegratedDraftJobs,SiDraftJobError} from './si-integrated-draft-jobs.mjs';
 import {SiInspectionPlan} from './si-inspection-plan.mjs';
 import {SiRollingPlanStore,SiRollingPlanError} from './si-rolling-plan-store.mjs';
 import {SiBulkInspectionPlan,SiBulkApprovalError} from './si-bulk-inspection-plan.mjs';
@@ -314,6 +315,7 @@ const siRollingPlans=new SiRollingPlanStore({mode:dbMode,oracleRepository:reposi
 // Short-lived, session-bound cost-consented C01 draft previews. No durable
 // side effects until Save Draft; restart/expiry requires an explicit new preview.
 const siDraftPreviews=new Map(),DRAFT_TTL_MS=30*60*1000;
+const siDraftJobs=new SiIntegratedDraftJobs();
 async function calculateNewDraft({id,metadata,source,ai,identity,requests=null}){
  const dashboard=await siTargeting.dashboard();
  const erpSnapshot=siErp.requireSnapshot();
@@ -1124,6 +1126,14 @@ const server = createServer(async (req, res) => {
       // command; preview/recalculate never writes cases, plans or ERP bookings.
       // The initial plan row is inserted atomically with the verified roster,
       // priorities and workforce proposal when the operator presses Save Draft.
+      const draftJobPath=/^\\/api\\/si\\/v1\\/inspection-plans\\/draft-jobs\\/([a-f0-9-]{36})$/.exec(path);
+      if(draftJobPath&&req.method==='GET'){
+        dashboards.assertRole(req,'EDITOR');
+        const identity=moeiAuth.require(req,{mutate:false});
+        const actor=identity.email||identity.username;
+        const job=siDraftJobs.get(draftJobPath[1],actor);
+        return respond(res,200,siDraftJobs.view(job));
+      }
       if(path==='/api/si/v1/inspection-plans/draft-preview'&&req.method==='POST'){
         dashboards.assertRole(req,'EDITOR');
         const identity=moeiAuth.require(req,{mutate:true});
@@ -1139,20 +1149,31 @@ const server = createServer(async (req, res) => {
         if(source.candidates.length>500)
           return respond(res,422,{error:'SI_C01_BATCH_LIMIT_500_SCOPE_REQUIRED'});
         const batches=Math.ceil(source.candidates.length/(siAiProvider==='airia'?25:100));
+        if(batches<1)return respond(res,422,{error:'SI_C01_NO_PENDING_CANDIDATES'});
         if(batches>1&&input.confirmBatchCount!==batches)
           return respond(res,422,{error:'SI_C01_BATCH_COUNT_CONFIRMATION_REQUIRED',
             requiredBatches:batches,sourceCandidates:source.candidates.length});
-        const ai=await siCandidateAgent.run({
-          actor,confirmRun:true,confirmCost:input.confirmCost===true,
-          confirmBatchCount:batches,expectedSnapshotHash:source.snapshotHash
+        // A single POST returns immediately. Polling has NO AI cost and never
+        // starts another Airia request. Identical in-flight runs are reused
+        // by actor and source; even on browser reload there is one paid run.
+        const job=siDraftJobs.start({
+          actor,metadata,sourceHash:source.snapshotHash,expectedBatches:batches,
+          execute:async(onProgress,setPhase)=>{
+            const ai=await siCandidateAgent.run({
+              actor,confirmRun:true,confirmCost:input.confirmCost===true,
+              confirmBatchCount:batches,expectedSnapshotHash:source.snapshotHash,
+              onProgress
+            });
+            setPhase('MATCHING_QUALIFIED_INSPECTORS_AND_CAPACITY');
+            const fresh=await siCandidateAgent.source();
+            if(fresh.snapshotHash!==source.snapshotHash)
+              throw new SiDraftCreationError('SI_DRAFT_SOURCE_CHANGED_REGENERATE',409);
+            const id=uuidDraft(),previewId=uuidDraft();
+            const result=await calculateNewDraft({id,metadata,source:fresh,ai,identity});
+            return saveNewDraftPreview(previewId,actor,metadata,fresh,ai,result);
+          }
         });
-        const fresh=await siCandidateAgent.source();
-        if(fresh.snapshotHash!==source.snapshotHash)
-          return respond(res,409,{error:'SI_DRAFT_SOURCE_CHANGED_REGENERATE'});
-        const id=uuidDraft(),previewId=uuidDraft();
-        const result=await calculateNewDraft({id,metadata,source:fresh,ai,identity});
-        return respond(res,200,{status:'INTEGRATED_DRAFT_PREVIEW',
-          ...saveNewDraftPreview(previewId,actor,metadata,fresh,ai,result)});
+        return respond(res,job.status==='COMPLETED'?200:202,job);
       }
       const draftAction=/^\/api\/si\/v1\/inspection-plans\/draft-(recalculate|save)$/.exec(path);
       if(draftAction&&req.method==='POST'){
@@ -2145,7 +2166,7 @@ const server = createServer(async (req, res) => {
           ...(Number.isInteger(e.returnedCount)?{returnedCount:e.returnedCount}:{}),
           ...(Number.isInteger(e.batchIndex)?{batchIndex:e.batchIndex}:{}),
           ...(Number.isInteger(e.batchCount)?{batchCount:e.batchCount}:{})});
-      if(e instanceof SiError||e instanceof SiPocAdvisorError||e instanceof SiRollingPlanError||e instanceof SiIntegratedPlanError||e instanceof SiDraftCreationError||
+      if(e instanceof SiError||e instanceof SiPocAdvisorError||e instanceof SiRollingPlanError||e instanceof SiIntegratedPlanError||e instanceof SiDraftCreationError||e instanceof SiDraftJobError||
        e instanceof SiBulkApprovalError||e instanceof SiCandidateAgentError||e instanceof SiLifecycleError||e instanceof SiSelectionError||e instanceof SiPriorityError||e instanceof SiPreparationError||e instanceof SiWorkOrderError||e instanceof SiTargetingError||e instanceof MoeiAuthError||e instanceof DashboardError)
         return respond(res,e.status,{error:e.code});
       if(Number.isInteger(e?.status)&&e.status>=400&&e.status<500)
