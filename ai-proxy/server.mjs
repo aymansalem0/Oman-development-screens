@@ -42,8 +42,12 @@ import {SiInspectionPlan} from './si-inspection-plan.mjs';
 import {SiRollingPlanStore,SiRollingPlanError} from './si-rolling-plan-store.mjs';
 import {SiBulkInspectionPlan,SiBulkApprovalError} from './si-bulk-inspection-plan.mjs';
 import {mockSiP01,mockSiA04,mockSiC01} from './si-agent-mock.mjs';
-import { SiInspectionPreparation, SiPreparationError } from './si-inspection-preparation.mjs';
-import {assembleSiVesselDossier} from './si-vessel-dossier.mjs';
+import { SiInspectionPreparation, SiPreparationError, validateA04 } from './si-inspection-preparation.mjs';
+import {assembleSiVesselDossier,assemblePendingWorkOrderDossier} from './si-vessel-dossier.mjs';
+import {projectGuidedInspection,findGuidedStep,
+ buildA04FocusedFieldRequest,projectA04FocusedFieldAdvice
+} from './si-guided-inspection.mjs';
+import {pocInspectorIdForActor} from './si-inspector-identity.mjs';
 import {suggestCapacityExceptionActions} from './si-capacity-exception-alternatives.mjs';
 import { SiInspectionLifecycle, SiLifecycleError } from './si-inspection-lifecycle.mjs';
 import {SiScheduleOrders,SiWorkOrderError} from './si-schedule-orders.mjs';
@@ -384,6 +388,18 @@ const siScheduleOrders=new SiScheduleOrders({
  targeting:siTargeting,preparation:siPreparation,
  checklists:siChecklistField,lifecycle:siLifecycle,cases
 });
+/** Server-only assignment guard reused by every inspector-facing route. */
+async function assignedGuidedView(sessionActor,orderId){
+ const {schedule,order}=await siScheduleOrders.mineOrder(sessionActor,orderId);
+ if(!order.caseId)
+   throw new SiWorkOrderError('SI_WORK_ORDER_ACTIVATE_FIRST',409);
+ const [preparation,checklist,lifecycle]=await Promise.all([
+   siPreparation.get(order.caseId),siChecklistField.preview(order.caseId),
+   siLifecycle.snapshot(order.caseId)
+ ]);
+ return {schedule,order,preparation,checklist,lifecycle,
+   guide:projectGuidedInspection({order,preparation,checklist,lifecycle})};
+}
 const actionPlanRuns=new Set(); // process-local duplicate A01 invocation guard; version-lock remains authoritative
 let alertScanTimer=null;
 function rescheduleAlertScan(){
