@@ -63,6 +63,11 @@
           <button type="button" (click)="openRollingPlan(p)" [disabled]="planBusy">
            {{p.status==='DRAFT'||p.status==='READY_FOR_APPROVAL'?
              copy('Open Plan','فتح الخطة'):copy('View Plan History','عرض سجل الخطة')}}</button>
+          <a *ngIf="p.status==='DRAFT'||p.status==='READY_FOR_APPROVAL'"
+             class="si-plan-wizard-button"
+             [routerLink]="['/moei/smart-inspection/plan/create',p.id]"
+             [queryParams]="{stage:'capacity'}">
+           {{copy('Check Capacity & Approval →','فحص الطاقة والاعتماد ←')}}</a>
           <button type="button" *ngIf="p.status==='DRAFT'||p.status==='READY_FOR_APPROVAL'"
              (click)="cancelRollingPlan(p)" [disabled]="planningBusy">
            {{copy('Cancel Draft','إلغاء المسودة')}}</button>
