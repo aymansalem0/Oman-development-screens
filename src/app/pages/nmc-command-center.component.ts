@@ -107,6 +107,7 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
   private selectedTrack?: L.Polyline;
   private lastInteractiveVesselId?: number;
   private riskSubscription?: Subscription;
+  private alertSummarySubscription?: Subscription;
   private fleetPoller?: ReturnType<typeof setInterval>;
   private alertPoller?: ReturnType<typeof setInterval>;
   private fleetLoadInFlight = false;
@@ -230,6 +231,12 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
   }
 
   ngOnInit(): void {
+    // The navigation badge and this KPI always consume the same most recent
+    // backend alert summary; an acknowledgment may change "unread" only.
+    this.alertSummarySubscription=this.alertsService.summary$.subscribe(summary=>{
+      this.unreadAlertCount=summary?.unread??0;
+      this.activeAlertCount=summary?.active??null;
+    });
     // Configuration GET is free and never starts Airia.
     this.aiKpi.status().subscribe({
       next:r=>{
@@ -263,6 +270,7 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
   ngOnDestroy(): void {
     if (this.timer) clearInterval(this.timer);
     this.riskSubscription?.unsubscribe();
+    this.alertSummarySubscription?.unsubscribe();
     if(this.fleetPoller)clearInterval(this.fleetPoller);
     if(this.alertPoller)clearInterval(this.alertPoller);
     this.map?.remove();
@@ -399,12 +407,11 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
       this.fleetResult(v)?.operationalPriority==='Priority Review');
   }
   private loadOperations():void{
+    // This call refreshes NmcAlertsService.summary$ for BOTH the
+    // command-center KPI and the sidebar badge in the same Angular tick.
     this.alertsService.overviewForBrowserPolicy().subscribe({
-      next:response=>{
-        this.unreadAlertCount=response.summary.unread;
-        this.activeAlertCount=response.summary.active;
-      },
-      error:()=>{this.unreadAlertCount=0;this.activeAlertCount=null;}
+      next:()=>{},
+      error:()=>{}
     });
     this.incidentFeedRefreshing=true;
     this.incidentsService.list().subscribe({

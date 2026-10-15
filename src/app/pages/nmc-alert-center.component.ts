@@ -311,7 +311,9 @@ export class NmcAlertCenterComponent implements OnInit,OnDestroy{
     return (this.overview?.alerts||[]).filter(alert=>{
       if(alert.dismissedAt)return false;
       const status=this.filter==='ALL'||(
-        this.filter==='ACTIVE'?alert.status!=='RESOLVED':alert.status===this.filter);
+        this.filter==='ACTIVE'?!
+          ['RESOLVED','SUPERSEDED'].includes(alert.status):
+          alert.status===this.filter);
       const matches=!search||[
         alert.imo,alert.title,alert.detail,alert.sourceAssessmentId||''
       ].some(value=>value.toLowerCase().includes(search));
