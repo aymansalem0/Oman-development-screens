@@ -176,7 +176,18 @@
            <td>{{row.sourceTypes.join(' + ')}}<small>{{row.priorityCriterion}}</small>
             <small *ngIf="row.priorityReason">{{row.priorityReason}}</small></td>
            <td>{{row.inspectorName||'—'}}</td>
-           <td>{{row.startLocal||'—'}} <small *ngIf="row.endLocal">→ {{row.endLocal}}</small></td>
+           <td>
+            <strong *ngIf="row.visitWindow as w">
+             {{copy('Available from','متاحة من')}} {{w.feasibleFromLocal}}
+             <small>{{copy('Until','حتى')}} {{w.feasibleUntilLocal}}</small>
+             <small *ngIf="w.berthAtLocal">
+              {{copy('Confirmed berth','تراكي مؤكد')}}: {{w.berthAtLocal}}</small>
+            </strong>
+            <small *ngIf="row.startLocal">
+             {{copy('Inspector visit','زيارة المهندس')}}:
+             {{row.startLocal}} → {{row.endLocal}}</small>
+            <span *ngIf="!row.visitWindow&&!row.startLocal">—</span>
+           </td>
            <td>{{row.status}}<small *ngIf="row.blocker">{{row.blocker}}</small></td>
           </tr></tbody>
          </table>
@@ -200,11 +211,22 @@
            <label>{{copy('Duration (minutes)','المدة بالدقائق')}}
             <input type="number" min="30" max="720" [(ngModel)]="req.durationMinutes"
              (ngModelChange)="draftVisitsChanged()" [disabled]="newDraftDemoMode"/></label>
-           <label>{{copy('Visit from (UAE local)','بداية الزيارة بتوقيت الإمارات')}}
+           <label>{{copy('Confirmed berthing time (UAE, optional)','وقت التراكي المؤكد (الإمارات، اختياري)')}}
+            <input [(ngModel)]="req.berthAtLocal"
+             (ngModelChange)="draftVisitsChanged()" [disabled]="newDraftDemoMode"
+             placeholder="YYYY-MM-DD HH:mm"/></label>
+           <label>{{copy('Berthing evidence reference','مرجع إثبات التراكي')}}
+            <input [(ngModel)]="req.berthEvidenceReference"
+             (ngModelChange)="draftVisitsChanged()" [disabled]="newDraftDemoMode"
+             placeholder="Port movement / berth reference"/></label>
+           <label>{{copy('Officer confirmed berthing','تم تأكيد التراكي بواسطة الموظف')}}
+            <input type="checkbox" [(ngModel)]="req.berthConfirmed"
+             (ngModelChange)="draftVisitsChanged()" [disabled]="newDraftDemoMode"/></label>
+           <label>{{copy('ETA / arrival — earliest possible vessel access','ETA / الوصول — بداية إتاحة السفينة')}}
             <input [(ngModel)]="req.earliestLocal" (ngModelChange)="draftVisitsChanged()"
              [disabled]="newDraftDemoMode||draft.visitInputs[i].sourceArrivalLocked"
              placeholder="YYYY-MM-DD HH:mm"/></label>
-           <label>{{copy('Visit until (UAE local)','نهاية الزيارة بتوقيت الإمارات')}}
+           <label>{{copy('ETD / departure — latest possible completion','ETD / المغادرة — آخر موعد لإنهاء المعاينة')}}
             <input [(ngModel)]="req.latestFinishLocal" (ngModelChange)="draftVisitsChanged()"
              [disabled]="newDraftDemoMode||draft.visitInputs[i].sourceDepartureLocked"
              placeholder="YYYY-MM-DD HH:mm"/></label>

@@ -22,6 +22,57 @@ const localMs=s=>{
   throw new SiError('SI_V2_LOCAL_TIME_INVALID',422);
  return ms;
 };
+const fmtLocal=ms=>new Date(ms+4*HOUR).toISOString().slice(0,16).replace('T',' ');
+/**
+ * Find the actual schedulable INTERSECTION of:
+ *   vessel ETA (or officer-confirmed berthing if later) .. final ETD
+ *   plan Execution From .. Execution To (inclusive dates)
+ *   current clock and the available engineer's shifts (checked by scheduler).
+ *
+ * The unmodified request remains the source/audit record. Clipping is only
+ * an internal solver constraint. Neither ETA nor ETD is synthesized/rewritten.
+ */
+export function boundMaritimeVesselWindow(row,plan,nowMs){
+ if(!row)return {reason:'VESSEL_SCHEDULING_DATA_REQUIRED'};
+ let arrival,departure;
+ try{arrival=localMs(row.earliestLocal);departure=localMs(row.latestFinishLocal);}
+ catch{return {reason:'VESSEL_TIME_WINDOW_INVALID'};}
+ if(departure<=arrival)
+  return {reason:'VESSEL_ARRIVAL_MUST_PRECEDE_DEPARTURE'};
+ let berth=null;
+ if(row.berthAtLocal){
+  if(row.locationType!=='BERTH'||row.siteAccessConfirmed!==true||
+     row.berthConfirmed!==true||
+     typeof row.berthEvidenceReference!=='string'||
+     row.berthEvidenceReference.trim().length<6)
+   return {reason:'CONFIRMED_BERTHING_TIME_AND_EVIDENCE_REQUIRED'};
+  try{berth=localMs(row.berthAtLocal);}
+  catch{return {reason:'BERTHING_TIME_INVALID'};}
+  if(berth>=departure)
+   return {reason:'BERTHING_AFTER_VESSEL_DEPARTURE'};
+ }
+ const planStart=typeof plan?.startsOn==='string'&&
+  /^\d{4}-\d\d-\d\d$/.test(plan.startsOn)?
+  Date.parse(plan.startsOn+'T00:00:00+04:00'):-Infinity;
+ const planEnd=typeof plan?.endsOn==='string'&&
+  /^\d{4}-\d\d-\d\d$/.test(plan.endsOn)?
+  Date.parse(plan.endsOn+'T00:00:00+04:00')+24*HOUR:Infinity;
+ // The earliest possible start is after both physical arrival/access and
+ // the current time, never simply (ETD - N hours).
+ const earliest=Math.max(arrival,berth??-Infinity,planStart,
+  Math.ceil((nowMs+MINUTE)/MINUTE)*MINUTE);
+ const latest=Math.min(departure,planEnd);
+ if(earliest>=latest)return {reason:
+  berth!==null&&berth>=Math.min(departure,planEnd)?
+   'BERTHING_OUTSIDE_EXECUTION_WINDOW':
+   'SI_VISIT_OUTSIDE_EXECUTION_PLAN_PERIOD'};
+ return {value:{...row,earliestLocal:fmtLocal(earliest),
+  latestFinishLocal:fmtLocal(latest)},
+  bounds:{etaLocal:row.earliestLocal,etdLocal:row.latestFinishLocal,
+   berthAtLocal:row.berthAtLocal||null,
+   feasibleFromLocal:fmtLocal(earliest),feasibleUntilLocal:fmtLocal(latest),
+   planStartsOn:plan?.startsOn||null,planEndsOn:plan?.endsOn||null}};
+};
 const localDate=ms=>new Date(ms+4*HOUR).toISOString().slice(0,10);
 const travel=(data,p1,p2)=>{
  if(p1===p2)return 0;
@@ -246,11 +297,13 @@ export function proposeMaritimeBatchSchedule({
        regimes:v.regimes||[],options:[],
        reason:'NMC_REFERRAL_ALREADY_SCHEDULED_RECONCILE',exclusions:[]};
   }
-  const validated=validateMaritimeSchedulingInput(v.imo,byImo.get(v.imo),
-   erpSnapshot.data,nowMs);
+  const bounded=boundMaritimeVesselWindow(byImo.get(v.imo),plan,nowMs);
+  const validated=bounded.value?
+   validateMaritimeSchedulingInput(v.imo,bounded.value,erpSnapshot.data,nowMs):
+   {reason:bounded.reason};
   const base={imo:v.imo,rank:Number(v.planRank)||i+1,
    regimes:v.regimes||[],options:[],reason:validated.reason||null,
-   exclusions:[]};
+   bounds:bounded.bounds||null,exclusions:[]};
   if(!validated.value)return base;
   const input=validated.value;
   let out;
@@ -265,7 +318,16 @@ export function proposeMaritimeBatchSchedule({
     PORT_STATE_CONTROL:'PSC',FOCUSED_INSPECTION:'FOCUSED',
     UAE_SERVICE_INSPECTION:'SERVICE',FOLLOW_UP_INSPECTION:'FOLLOW_UP'
   }[s])).filter(Boolean);
-  const qualified=out.options.filter(opt=>required.every(r=>
+  const earliestBound=localMs(input.earliestLocal);
+  const departureBound=localMs(input.deadlineLocal);
+  // Defensive: even an external/fixture scheduler that ignores input bounds
+  // cannot supply a slot before arrival/berthing or after final departure.
+  const qualified=out.options.filter(opt=>
+    Number.isFinite(Date.parse(opt.startUtc))&&
+    Number.isFinite(Date.parse(opt.endUtc))&&
+    Date.parse(opt.startUtc)>=earliestBound&&
+    Date.parse(opt.endUtc)<=departureBound&&
+    Date.parse(opt.endUtc)>Date.parse(opt.startUtc)&&required.every(r=>
     erpSnapshot.data.Qualifications.some(q=>
       q.inspector_id===opt.inspectorId&&q.inspection_regime===r&&
       ['ANY',input.vesselType].includes(norm(q.vessel_type))&&
@@ -327,6 +389,7 @@ export function proposeMaritimeBatchSchedule({
   const allocations=new Map(schedule.map(o=>[o.imo,o]));
   return sortedJobs.map(j=>({
    imo:j.imo,planRank:j.rank,regimes:j.regimes,
+   visitWindow:j.bounds||null,
    status:allocations.has(j.imo)?'PROPOSED':'UNSCHEDULED',
    assignment:allocations.get(j.imo)||null,
    blocker:allocations.has(j.imo)?null:j.reason||'GLOBAL_PLAN_CONFLICT_OR_CAPACITY',

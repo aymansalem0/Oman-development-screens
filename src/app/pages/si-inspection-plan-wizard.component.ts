@@ -16,6 +16,7 @@ interface CapacityItem{
  imo:string;name:string;portId:string;portName:string;portSourceLocked:boolean;
  vesselType:string;regime:string;regimes:string[];
  locationType:string;locationName:string;siteAccessConfirmed:boolean;
+ berthAtLocal:string;berthConfirmed:boolean;berthEvidenceReference:string;
  durationMinutes:number;etaLocal:string;etdLocal:string;
  earliestLocal:string;latestFinishLocal:string;
  windowSource:string;windowEvidenceReference:string;dateEvidenceReference:string;
@@ -309,12 +310,24 @@ interface CapacityPreview{
          <input type="number" min="30" max="720" step="30"
           [(ngModel)]="v.durationMinutes" [disabled]="capacityDemoMode"
           (ngModelChange)="invalidateCapacityPreview()"/></label>
-        <label>{{copy('Visit from (Dubai local)','بداية الفترة (توقيت الإمارات)')}}
+        <label>{{copy('Confirmed berthing time (optional, UAE)','وقت التراكي المؤكد (اختياري، الإمارات)')}}
+         <input [(ngModel)]="v.berthAtLocal" [disabled]="capacityDemoMode"
+          (ngModelChange)="invalidateCapacityPreview()"
+          placeholder="YYYY-MM-DD HH:mm"/></label>
+        <label>{{copy('Berth event / evidence reference','مرجع إثبات التراكي')}}
+         <input [(ngModel)]="v.berthEvidenceReference" [disabled]="capacityDemoMode"
+          (ngModelChange)="invalidateCapacityPreview()"
+          placeholder="Port berth movement reference"/></label>
+        <label class="capacity-check">
+         <input type="checkbox" [(ngModel)]="v.berthConfirmed"
+          [disabled]="capacityDemoMode" (ngModelChange)="invalidateCapacityPreview()"/>
+         {{copy('Berthing time checked by officer','تم تأكيد موعد التراكي بواسطة الموظف')}}</label>
+        <label>{{copy('Vessel arrival ETA · earliest vessel access','وصول السفينة ETA · بداية نافذة الإتاحة')}}
          <input [(ngModel)]="v.earliestLocal"
           [disabled]="!!v.etaLocal||capacityDemoMode"
           (ngModelChange)="invalidateCapacityPreview()"
           placeholder="YYYY-MM-DD HH:mm"/></label>
-        <label>{{copy('Visit until (Dubai local)','نهاية الفترة (توقيت الإمارات)')}}
+        <label>{{copy('Final vessel departure ETD · latest completion','مغادرة السفينة ETD · آخر موعد لإنهاء المعاينة')}}
          <input [(ngModel)]="v.latestFinishLocal"
           [disabled]="!!v.etdLocal||capacityDemoMode"
           (ngModelChange)="invalidateCapacityPreview()"
@@ -917,6 +930,8 @@ export class SiInspectionPlanWizardComponent implements OnInit,OnDestroy{
    imo:v.imo,portId:v.portId,vesselType:v.vesselType,regime:v.regime,
    locationType:v.locationType,locationName:v.locationName,
    siteAccessConfirmed:v.siteAccessConfirmed,
+   berthAtLocal:v.berthAtLocal||'',berthConfirmed:v.berthConfirmed===true,
+   berthEvidenceReference:v.berthEvidenceReference||'',
    durationMinutes:Number(v.durationMinutes),
    earliestLocal:v.etaLocal||v.earliestLocal,
    latestFinishLocal:v.etdLocal||v.latestFinishLocal,

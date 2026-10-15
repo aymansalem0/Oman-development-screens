@@ -14,6 +14,7 @@ import {SiPscSelectionService,PscSelectionPool} from '../services/si-psc-selecti
 interface DraftVisitRequest {
  imo:string;portId:string;vesselType:string;regime:string;locationType:string;
  locationName:string;siteAccessConfirmed:boolean;durationMinutes:number;
+ berthAtLocal?:string;berthConfirmed?:boolean;berthEvidenceReference?:string;
  earliestLocal:string;latestFinishLocal:string;windowSource:string;
  windowEvidenceReference:string;
 }
@@ -31,7 +32,9 @@ interface DraftIntegratedPreview {
  items:{imo:string;planRank:number;vesselName:string;priorityReason:string|null;
   priorityCriterion:string;mandatory:boolean;status:string;blocker:string|null;
   inspectorName:string|null;portName:string|null;startLocal:string|null;
-  endLocal:string|null;sourceTypes:string[]}[];
+  endLocal:string|null;sourceTypes:string[];
+  visitWindow?:{etaLocal:string;etdLocal:string;berthAtLocal:string|null;
+   feasibleFromLocal:string;feasibleUntilLocal:string}|null}[];
 }
 interface IntegratedDraftJob {
  status:'QUEUED'|'RUNNING'|'COMPLETED'|'FAILED';

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {proposeMaritimeBatchSchedule,validateMaritimeSchedulingInput,projectMaritimeSchedulingBoard,explainUnscheduledMaritimeJob} from '../si-maritime-batch-scheduling.mjs';
+import {proposeMaritimeBatchSchedule,validateMaritimeSchedulingInput,projectMaritimeSchedulingBoard,explainUnscheduledMaritimeJob,boundMaritimeVesselWindow} from '../si-maritime-batch-scheduling.mjs';
 const now=Date.parse('2026-10-14T09:00:00+04:00');
 const plan={id:'99999999-9999-4999-8999-999999999999',number:'IP-TEST',
  revision:3,status:'APPROVED',approvedBy:'MOEI_TEST_SUPERVISOR',
@@ -226,4 +226,93 @@ test('Source-blocked vessel is reported from source reason without invented engi
  assert.equal(row.diagnostics.competingVisits.length,0);
  assert.equal(blocked.board.unscheduled[0].diagnostics.code,
   'VESSEL_SCHEDULING_DATA_REQUIRED');
+});
+
+test('Arrival-to-departure interval is intersected with plan period BEFORE generating engineer slots',()=>{
+ const window=boundMaritimeVesselWindow({
+  ...request('9328471','FOCUSED'),
+  earliestLocal:'2026-10-20 06:00',
+  latestFinishLocal:'2026-10-23 22:00'},
+  {startsOn:'2026-10-21',endsOn:'2026-10-22'},now);
+ assert.equal(window.reason,undefined);
+ assert.equal(window.value.earliestLocal,'2026-10-21 00:00');
+ assert.equal(window.value.latestFinishLocal,'2026-10-23 00:00');
+ let inputSeen=null;
+ const localOption=(input,local)=>{
+  const at=Date.parse(local.replace(' ','T')+':00+04:00'),end=at+90*60000;
+  const localFmt=n=>new Date(n+4*3600000).toISOString().slice(0,16).replace('T',' ');
+  return {optionId:'ENG1-'+at,inspectorId:'ENG1',inspectorName:'Engineer 1',
+   portId:'FUJ',portName:'Fujairah',startUtc:new Date(at).toISOString(),
+   endUtc:new Date(end).toISOString(),startLocal:localFmt(at),
+   endLocal:localFmt(end),score:91};
+ };
+ const custom={buildOptions(input){
+  inputSeen=input;
+  return {options:[localOption(input,'2026-10-21 09:00')],exclusions:[]};
+ }};
+ const lone={...plan,startsOn:'2026-10-21',endsOn:'2026-10-22',
+  approvedVessels:[plan.approvedVessels[0]]};
+ const proposal=invoke({plan:lone,scheduler:custom,requests:[{
+  ...request('9328471','FOCUSED'),earliestLocal:'2026-10-20 06:00',
+  latestFinishLocal:'2026-10-23 22:00'}]});
+ assert.equal(proposal.summary.proposed,1,
+  'Vessel departing Oct 23 must be inspectable during plan Oct 21–22');
+ assert.equal(inputSeen.earliestLocal,'2026-10-21 00:00');
+ assert.equal(inputSeen.deadlineLocal,'2026-10-23 00:00');
+ assert.equal(proposal.rows[0].visitWindow.etaLocal,'2026-10-20 06:00');
+ assert.equal(proposal.rows[0].visitWindow.etdLocal,'2026-10-23 22:00');
+ assert.equal(proposal.rows[0].visitWindow.feasibleFromLocal,'2026-10-21 00:00');
+});
+test('Confirmed berthing later than ETA sets the first permissible inspection time',()=>{
+ const source=request('9328471','FOCUSED');
+ source.earliestLocal='2026-10-20 06:00';
+ source.latestFinishLocal='2026-10-23 16:00';
+ source.berthAtLocal='2026-10-22 12:00';
+ source.berthConfirmed=true;
+ source.berthEvidenceReference='MSW-BERTH-MOVEMENT-009';
+ const bound=boundMaritimeVesselWindow(source,
+  {startsOn:'2026-10-16',endsOn:'2026-10-23'},now);
+ assert.equal(bound.value.earliestLocal,'2026-10-22 12:00');
+ assert.equal(bound.value.latestFinishLocal,'2026-10-23 16:00');
+ const past=boundMaritimeVesselWindow({...source,
+  berthAtLocal:'2026-10-24 06:00'},
+  {startsOn:'2026-10-16',endsOn:'2026-10-24'},now);
+ assert.equal(past.reason,'BERTHING_AFTER_VESSEL_DEPARTURE');
+ const missing=boundMaritimeVesselWindow({...source,
+  berthEvidenceReference:''},{startsOn:'2026-10-16',endsOn:'2026-10-23'},now);
+ assert.equal(missing.reason,'CONFIRMED_BERTHING_TIME_AND_EVIDENCE_REQUIRED');
+});
+test('Past arrival does not make a vessel unschedulable if ETD and plan still allow a visit',()=>{
+ const bound=boundMaritimeVesselWindow({
+  ...request('9328471','FOCUSED'),
+  earliestLocal:'2026-10-13 08:00',
+  latestFinishLocal:'2026-10-20 17:00'},
+  {startsOn:'2026-10-16',endsOn:'2026-10-19'},now);
+ assert.equal(bound.value.earliestLocal,'2026-10-16 00:00');
+ assert.equal(bound.value.latestFinishLocal,'2026-10-20 00:00');
+});
+test('Options before actual confirmed berthing or after final ETD are rejected defensively',()=>{
+ const req={...request('9328471','FOCUSED'),
+  earliestLocal:'2026-10-20 08:00',
+  latestFinishLocal:'2026-10-22 17:00',
+  berthAtLocal:'2026-10-21 12:00',
+  berthConfirmed:true,berthEvidenceReference:'PORT-BERTH-MOVEMENT-09'};
+ const startEnd=(local,minutes=90)=>{
+  const t=Date.parse(local.replace(' ','T')+':00+04:00');
+  const end=t+minutes*60000,fmt=x=>new Date(x+4*3600000)
+   .toISOString().slice(0,16).replace('T',' ');
+  return {optionId:String(t),inspectorId:'ENG1',inspectorName:'Engineer 1',
+   portId:'FUJ',portName:'Fujairah',startUtc:new Date(t).toISOString(),
+   endUtc:new Date(end).toISOString(),startLocal:fmt(t),
+   endLocal:fmt(end),score:91};
+ };
+ const p={...plan,startsOn:'2026-10-20',endsOn:'2026-10-22',
+  approvedVessels:[plan.approvedVessels[0]]};
+ const preview=invoke({plan:p,requests:[req],scheduler:{buildOptions(){
+  return {options:[startEnd('2026-10-21 09:00'),
+   startEnd('2026-10-22 16:00'),startEnd('2026-10-21 13:00')],exclusions:[]};
+ }}});
+ assert.equal(preview.summary.proposed,1);
+ assert.equal(preview.rows[0].assignment.startLocal,'2026-10-21 13:00');
+ assert.equal(preview.rows[0].visitWindow.berthAtLocal,'2026-10-21 12:00');
 });

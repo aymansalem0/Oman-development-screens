@@ -28,13 +28,31 @@ export function maritimePlanSchedulingContext(plan,dashboard,snapshot){
   const original=dashboard.vesselCandidates.find(x=>x.imo===entry.imo);
   const eventKeys=new Set(entry.inspectionReasons.flatMap(x=>[x.eventKey]));
   const events=(original?.sourceEvents||[]).filter(x=>eventKeys.has(x.eventKey));
-  // The source's exact dates are used. No ETA-derived fake ETD.
-  const dateEvent=events.find(x=>x.departureAt&&
-   ['SOURCE_FINAL','SOURCE_REVIEWED'].includes(x.approval));
+  // Independently recorded MSW Port Call movements may verify a vessel's
+  // physical presence even if its legal inspection trigger was an NMC case.
+  // Operational evidence adds dates ONLY; it never creates inspection reasons,
+  // quota eligibility or regulatory referral approval.
+  const movements=[...events,...(original?.operationalSourceEvents||[])]
+   .filter(x=>['SOURCE_FINAL','SOURCE_REVIEWED'].includes(x.approval));
+  const verifiedEtd=original?.departureStatus==='VERIFIED'?
+   Date.parse(original.departureAt):null;
+  const dateEvent=original?.departureStatus==='CONFLICT'?null:
+   Number.isFinite(verifiedEtd)?
+    movements.find(x=>x.departureAt&&
+     Date.parse(x.departureAt)===verifiedEtd):
+    movements.find(x=>x.departureAt&&Number.isFinite(Date.parse(x.departureAt)));
   const portEvent=dateEvent||events.find(e=>e.port)||null;
   const port=findPort(portEvent?.port);
-  const firstEta=events.find(e=>e.eta&&Number.isFinite(Date.parse(e.eta+':00+04:00')));
-  const arrivalLocal=firstEta?.eta?firstEta.eta.replace('T',' '):'';
+  // Pair ETA to the final/current port call; never combine unrelated
+  // historical arrival and departure timestamps across ports.
+  const candidates=movements.filter(e=>e.eta&&
+   /^20\d\d-\d\d-\d\d[T ]\d\d:\d\d$/.test(e.eta)&&
+   Number.isFinite(Date.parse(e.eta.replace(' ','T')+':00+04:00'))&&
+   (!dateEvent||!dateEvent.port||e.port===dateEvent.port));
+  const etaValues=new Set(candidates.map(e=>e.eta.replace('T',' ')));
+  const etaEvent=dateEvent?.eta&&etaValues.has(dateEvent.eta.replace('T',' '))?
+   dateEvent:etaValues.size===1?candidates[0]:null;
+  const arrivalLocal=etaEvent?.eta?etaEvent.eta.replace('T',' '):'';
   const departureLocal=dateEvent?localFromUtc(dateEvent.departureAt):'';
   const nmc=entry.inspectionReasons.filter(x=>x.sourceType==='NMC_CASE')
    .map(x=>({id:x.sourceEventId,caseReference:x.sourceReference}));
@@ -50,6 +68,11 @@ export function maritimePlanSchedulingContext(plan,dashboard,snapshot){
    // port in the form must remain editable before schedule preview.
    portSourceLocked:!!port?.port_id,
    etaLocal:arrivalLocal,etdLocal:departureLocal,
+   etaSourceReference:etaEvent?.sourceReference||null,
+   // The POC MSW feed currently has no recorded berth-arrival timestamp.
+   // A supervisor/officer may attest a later berth time with evidence while
+   // leaving the final ETA and ETD unchanged.
+   berthAtLocal:'',berthConfirmed:false,berthEvidenceReference:'',
    etdSource:dateEvent?'SOURCE_FINAL_NO_DATE_APPROVAL':'ETD_NOT_PROVIDED',
    dateEvidenceReference:dateEvent?.sourceReference||'',
    nmcReferrals:nmc,
@@ -82,7 +105,7 @@ export function maritimePlanSchedulingContext(plan,dashboard,snapshot){
   erpSnapshotId:snapshot.snapshotId,
   workforce:inspectors,items:context,
   instruction:'ETD from MSW is final on import. Supervisor approves only the resulting schedule, not the date.',
-  warning:'Unknown berth, missing NMC/Service ETD or vessel access => UNSCHEDULED until supplied, not fabricated.'};
+  warning:'The inspection can start at ETA or a later confirmed berth arrival, and must finish no later than final ETD. Missing vessel access/ETD remains UNSCHEDULED, not fabricated.'};
 }
 export function validateOperatorScheduleAgainstSource(context,requests,{demo=false,context:demoContext=null}={}){
  if(!Array.isArray(requests)||requests.length>500)
@@ -117,5 +140,22 @@ export function validateOperatorScheduleAgainstSource(context,requests,{demo=fal
    throw new SiError('SI_V2_FINAL_MSW_SOURCE_REQUIRED',409);
   if(source.etdLocal&&row.windowEvidenceReference!==source.dateEvidenceReference)
    throw new SiError('SI_V2_FINAL_MSW_ETD_PROVENANCE_INVALID',409);
+  // Berthing time is an optional officer-confirmed ADDITIONAL constraint.
+  // It may tighten a verified ETA→ETD window, never replace source dates.
+  if(row.berthAtLocal){
+   if(typeof row.berthAtLocal!=='string'||
+      !/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(row.berthAtLocal)||
+      row.locationType!=='BERTH'||row.siteAccessConfirmed!==true||
+      row.berthConfirmed!==true||
+      typeof row.berthEvidenceReference!=='string'||
+      row.berthEvidenceReference.trim().length<6)
+    throw new SiError('SI_V2_BERTHING_CONFIRMATION_EVIDENCE_REQUIRED',422);
+   const epoch=x=>Date.parse(x.replace(' ','T')+':00+04:00');
+   const berth=epoch(row.berthAtLocal);
+   if(!Number.isFinite(berth)||
+      (source.etaLocal&&berth<epoch(source.etaLocal))||
+      (source.etdLocal&&berth>=epoch(source.etdLocal)))
+    throw new SiError('SI_V2_BERTHING_OUTSIDE_SOURCE_WINDOW',409);
+  }
  }
 }
