@@ -19,15 +19,19 @@ const eligible=c=>c?.status==='PENDING_REVIEW'||(
  c?.status==='EXTERNALLY_SCHEDULED'&&
  c.events?.some(e=>e.sourceType==='NMC_CASE'&&e.approval==='APPROVED'));
 const mandatory=row=>row.mandatoryReferral===true||row.requiredInPlan===true;
+const sourceVerified=e=>e.sourceType==='NMC_CASE'?
+  e.approval==='APPROVED':['SOURCE_FINAL','SOURCE_REVIEWED'].includes(e.approval);
 const isManualInclude=row=>row.selectionOrigin==='OFFICER_AMENDED'&&
  row.planSelected===true&&row.disposition==='INCLUDE';
 function sourceEvidence(imo,dashboard){
- const workflows=(dashboard.candidates||[]).filter(c=>c.imo===imo&&eligible(c))
+ const workflows=(dashboard.candidates||[]).filter(c=>
+   c.imo===imo&&eligible(c)&&c.events?.some(sourceVerified))
   .sort((a,b)=>Number(b.events.some(e=>e.sourceType==='NMC_CASE'))-
    Number(a.events.some(e=>e.sourceType==='NMC_CASE'))||
    a.regime.localeCompare(b.regime));
  const triggers=new Map();
  for(const workflow of workflows)for(const event of workflow.events||[]){
+  if(!sourceVerified(event))continue; // UNVERIFIED is review-only evidence.
   const eventKey=event.eventKey||[event.sourceType,event.sourceEventId,
    workflow.regime].join(':');
   if(!triggers.has(eventKey))triggers.set(eventKey,{
@@ -88,29 +92,68 @@ export function selectIntegratedPlanVessels({
  const uae=rows.filter(x=>goodFlag(x.flag))
   .sort((a,b)=>compareInspections(a,b)||a.imo.localeCompare(b.imo));
  const count=(n,p)=>Math.floor(n*p/100);
- const pscSelected=psc.slice(0,count(psc.length,pscRiskRatePercent));
- const uaeSelected=uae.slice(0,count(uae.length,uaeFlagRatePercent));
+ // A saved, source-hash-bound C01 result controls WHICH vessels fill the
+ // quotas. Never backfill an AI rejection with deterministic risk ranking.
+ // Existing legacy drafts without a published configured AI selection policy
+ // keep their original source-backed deterministic behavior.
+ const ai=inspectionPlan.selectionProposal?.aiSelectionValidated===true&&
+   inspectionPlan.selectionProposal.snapshotHash===inspectionPlan.sourceHash?
+   inspectionPlan.selectionProposal:null;
+ // Published C01 provides global source-verified factor cohorts.
+ // Never re-run deterministic risk sampling to fill a rejected AI candidate.
+ if(ai){
+   psc.splice(0,psc.length,...psc.filter(v=>!mandatory(v)));
+   uae.splice(0,uae.length,...uae.filter(v=>!mandatory(v)));
+ }
+ const pscAi=ai?new Set(ai.pscRisk.aiSelectedImos):null;
+ const uaeAi=ai?new Set(ai.uaeFlag.aiSelectedImos):null;
+ const serviceAi=ai?.serviceRequests?.aiSelectedImos?
+   new Set(ai.serviceRequests.aiSelectedImos):null;
+ const service=rows.filter(x=>x.sources?.includes('SERVICE_REQUEST')&&!mandatory(x));
+ const pscSelected=ai?
+   psc.filter(v=>pscAi.has(v.imo)):
+   psc.slice(0,count(psc.length,pscRiskRatePercent));
+ const uaeSelected=ai?
+   uae.filter(v=>uaeAi.has(v.imo)):
+   uae.slice(0,count(uae.length,uaeFlagRatePercent));
+ const serviceSelected=ai&&serviceAi?
+   service.filter(v=>serviceAi.has(v.imo)):[];
  const forced=rows.filter(x=>mandatory(x)||isManualInclude(x));
- const selectedImos=new Set([...forced,...pscSelected,...uaeSelected].map(x=>x.imo));
+ const selectedImos=new Set([...forced,...serviceSelected,
+   ...pscSelected,...uaeSelected].map(x=>x.imo));
+ const maxPlan=ai?.maxPlannedVessels??null;
+ if(maxPlan!==null&&selectedImos.size>maxPlan)
+   fail('SI_POC_PLAN_MAX_VESSELS_EXCEEDED_OFFICER_REVIEW',409);
  const ordered=rows.filter(x=>selectedImos.has(x.imo)).sort((a,b)=>
-  Number(mandatory(b))-Number(mandatory(a))||
-  compareInspections(a,b)||a.imo.localeCompare(b.imo));
+   Number(mandatory(b))-Number(mandatory(a))||
+   compareInspections(a,b)||a.imo.localeCompare(b.imo));
  const roster=ordered.map((row,index)=>({
   imo:row.imo,planRank:index+1,vesselType:row.vesselType||null,
   ...sourceEvidence(row.imo,dashboard)
  }));
  const quotas={
-  pscRisk:{ratePercent:pscRiskRatePercent,eligibleImos:psc.length,
+  pscRisk:{ratePercent:pscRiskRatePercent,
+   eligibleImos:ai?.pscRisk?.eligibleImos??psc.length,
    targetedImos:pscSelected.length,selectedImos:pscSelected.map(x=>x.imo),
    savedRiskAvailable:psc.filter(x=>x.risk&&
     Number.isFinite(Number(x.risk.score))).length},
-  uaeFlag:{ratePercent:uaeFlagRatePercent,eligibleImos:uae.length,
+  uaeFlag:{ratePercent:uaeFlagRatePercent,
+   eligibleImos:ai?.uaeFlag?.eligibleImos??uae.length,
    targetedImos:uaeSelected.length,selectedImos:uaeSelected.map(x=>x.imo)},
+  serviceRequests:{eligibleImos:ai?.serviceRequests?.eligibleImos??service.length,
+   planCap:ai?.serviceRequests?.cap??null,
+   selectedImos:serviceSelected.map(x=>x.imo),
+   pendingInCandidateBacklog:ai?.serviceRequests?.waitingInBacklogImos.length??null},
+  maxPlannedVessels:maxPlan,
   mandatoryOrManual:{count:forced.length,imos:forced.map(x=>x.imo)},
   selectedImos:roster.map(x=>x.imo),
-  overlapImos:pscSelected.filter(x=>uaeSelected.some(y=>y.imo===x.imo))
-   .map(x=>x.imo),
-  availableCandidates:rows.length,advisoryOnly:true
+  overlapImos:ai?.overlappingImos||pscSelected.filter(x=>
+    uaeSelected.some(y=>y.imo===x.imo)).map(x=>x.imo),
+  availableCandidates:rows.length,advisoryOnly:true,
+   selectionMethod:ai?'VERIFIED_C01_AI_WITH_PUBLISHED_QUOTAS':
+     'LEGACY_RULE_BASED_FALLBACK_NO_AI_SELECTION',
+   aiAgentRunId:ai?inspectionPlan.agentRunId:null,
+   selectionPolicyRevision:ai?.policyRevision??null
  };
  return {planId:plan.id,sourceHash:inspectionPlan.sourceHash,
   planRevision:plan.revision,roster,quotas,

@@ -92,6 +92,13 @@ jobs:
       - name: Oracle 018 adapter migration readiness, audit and lifecycle
         run: node --test ai-proxy/test/si-rolling-oracle.test.mjs
 
+      - name: SI-C01 configured pool B policy and verified vessel selection
+        run: node --test ai-proxy/test/si-configured-c01-selection.test.mjs
+      - name: SI-C01 UAT policy preview publication and mock plan lifecycle
+        run: node --test ai-proxy/test/si-c01-policy-lifecycle-uat.test.mjs
+      - name: SI-C01 bounded 112-path POC data and small plan
+        run: node --test ai-proxy/test/si-poc-small-plan-policy.test.mjs
+
       - name: SI-01 rolling to SI-02 approval and day-two cycle end-to-end
         run: node --test ai-proxy/test/si-rolling-endtoend.test.mjs
 

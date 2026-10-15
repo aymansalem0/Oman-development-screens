@@ -33,6 +33,13 @@ function atomicSave(file,data){
 /** Build IMO-level rows; C01 advice is per inspection regime, not regulatory approval. */
 export function projectInspectionPlan(dashboard,source,run,overrides={},carryForward={}){
  const recMap=new Map((run?.recommendations||[]).map(r=>[r.candidateKey,r]));
+ // An optional source-backed vessel must be in the VERIFIED C01 selection
+ // proposal after configured quota validation, not just have model praise.
+ const c01Selection=run?.selectionProposal?.aiSelectionValidated===true&&
+   run.selectionProposal.snapshotHash===source.snapshotHash?
+   new Set(run.selectionProposal.selectedImos):null;
+ const basisByImo=new Map((run?.selectionProposal?.selectedRows||[])
+   .map(x=>[x.imo,x]));
  const grouped=new Map();
  const all=dashboard.vesselCandidates||[];
  const availableKeys=new Set(source.candidates.map(c=>c.candidateKey));
@@ -53,7 +60,9 @@ export function projectInspectionPlan(dashboard,source,run,overrides={},carryFor
   // The model is advisory, not an authorization gate.
   const planSelected=eligible?
    (typeof note?.selected==='boolean'?note.selected:
-    run!==null?(requiredInPlan||aiSelected)&&!waitingOnDeferred:false):false;
+    run!==null?(requiredInPlan||
+     (c01Selection?c01Selection.has(v.imo):aiSelected))&&
+     !waitingOnDeferred:false):false;
   const locked=!eligible;
   grouped.set(v.imo,{
    imo:v.imo,vesselName:v.vesselName,flag:v.flag,vesselType:v.vesselType,
@@ -68,8 +77,12 @@ export function projectInspectionPlan(dashboard,source,run,overrides={},carryFor
    pendingWorkflows:v.pendingWorkflows,
    approvedCases:v.createdWorkflows,externalScheduled:v.scheduledWorkflows,
    aiRecommended:run?aiSelected:null,
+   aiQuotaSelected:c01Selection?c01Selection.has(v.imo):null,
+   aiSelectionBasis:basisByImo.get(v.imo)?.selectionBasis||[],
    planSelected:run||typeof note?.selected==='boolean'?planSelected:null,
-   selectionOrigin:note?'OFFICER_AMENDED':run&&requiredInPlan?'PUBLISHED_SOURCE_RULE':run?'AI_ADVISORY':'NOT_EVALUATED',
+   selectionOrigin:note?'OFFICER_AMENDED':run&&requiredInPlan?'PUBLISHED_SOURCE_RULE':
+    run&&c01Selection?'AI_SELECTION_WITHIN_PUBLISHED_QUOTAS':
+    run?'AI_ADVISORY':'NOT_EVALUATED',
    disposition:note?.disposition||'AVAILABLE',
    reviewAfter:note?.reviewAfter||prior?.reviewAfter||null,
    previousDisposition:prior?.disposition||null,
@@ -168,6 +181,7 @@ export class SiInspectionPlan{
    revision:state.revision,generatedAt:current?.generatedAt||null,
    agentRunId:current?.agentRunId||null,
    selectionMode:current?.agentRunId?'AI_ASSISTED':'MANUAL',
+   selectionProposal:current?.selectionProposal||null,
    manualSelection,availableCount,deferredCount,notSelectedCount,
    dataReadiness:historical?null:summarizeC01Readiness(source),
    candidatesAtCreation:cycle?.candidateSnapshot?.length??null,
@@ -368,6 +382,7 @@ export class SiInspectionPlan{
     revision:next.revision,sourceHash:source.snapshotHash,
     aiRecommendedVessels:rows.filter(r=>r.aiRecommended).length,
     selectedForPlan:rows.filter(r=>r.planSelected).length,
+    selectionProposal:ai.selectionProposal,
     humanApprovalStillRequired:true,rows};
   }finally{this.busy=false;}
  }

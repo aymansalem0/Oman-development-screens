@@ -90,16 +90,81 @@ export function getSiC01AdvisoryRules(config){
     priorityInstructions:value.priorityInstructions.trim()
   };
 }
+/**
+ * Business-owned SI-C01 SELECTION policy. Pool B: UAE-flagged vessels are
+ * drawn ONLY from source-eligible Candidate Center vessels (not the fleet).
+ * These are second-stage candidate-vessel sampling rates AFTER the separately
+ * published PSC event quota.  Never silently apply them to raw Port Calls.
+ * Defaults reflect the pre-existing plan wizard 15% / 0% and are NOT statutory.
+ */
+export const SI_SELECTION_POLICY_DEFAULT=Object.freeze({
+  pscRiskRatePercent:15,uaeFlagRatePercent:0,
+  uaePoolMode:'ELIGIBLE_CANDIDATES_ONLY',
+  pscPoolMode:'PUBLISHED_PSC_SHORTLIST_ONLY',
+  aiSelectionMode:'RECOMMEND_WITHIN_ELIGIBLE_QUOTAS',
+  // POC demonstration: a source-final service request stays in the queue,
+  // but only a small number enters any ONE inspection plan. Never delete it.
+  serviceRequestPlanCap:4,
+  maxPlannedVessels:12
+});
+export const isSiVerifiedEvent=e=>Boolean(e&&(
+  e.sourceType==='NMC_CASE'?e.approval==='APPROVED':
+  ['PSC_PORT_CALL','SERVICE_REQUEST'].includes(e.sourceType)&&
+  ['SOURCE_FINAL','SOURCE_REVIEWED'].includes(e.approval)
+));
+export const isSiProtectedReferral=c=>Boolean(c?.events?.some(e=>
+  e.sourceType==='NMC_CASE'&&e.approval==='APPROVED'));
+export function getSiSelectionPolicy(config){
+  const raw=config?.selection??SI_SELECTION_POLICY_DEFAULT;
+  // Older published selection revisions have only five fields. Do not
+  // silently turn their 60+ pending service requests into a small-cap plan:
+  // the newly configurable cap is activated by an EXPLICIT republish.
+  const legacyKeys=['pscRiskRatePercent','uaeFlagRatePercent',
+    'uaePoolMode','pscPoolMode','aiSelectionMode'];
+  const allKeys=Object.keys(SI_SELECTION_POLICY_DEFAULT);
+  const keys=Object.keys(raw||{}).sort().join('|');
+  const legacy=keys===[...legacyKeys].sort().join('|');
+  const current=keys===[...allKeys].sort().join('|');
+  // validateRules() normalizes a stored 5-key policy to seven fields with
+  // null caps. That normalized legacy shape must survive a second read,
+  // rather than throwing before the publisher explicitly republishes it.
+  const normalizedLegacy=current&&
+    raw.serviceRequestPlanCap===null&&raw.maxPlannedVessels===null;
+  if(!raw||typeof raw!=='object'||Array.isArray(raw)||
+     (!legacy&&!current)||
+     !Number.isInteger(raw.pscRiskRatePercent)||
+     raw.pscRiskRatePercent<0||raw.pscRiskRatePercent>100||
+     !Number.isInteger(raw.uaeFlagRatePercent)||
+     raw.uaeFlagRatePercent<0||raw.uaeFlagRatePercent>100||
+     raw.uaePoolMode!=='ELIGIBLE_CANDIDATES_ONLY'||
+     raw.pscPoolMode!=='PUBLISHED_PSC_SHORTLIST_ONLY'||
+     raw.aiSelectionMode!=='RECOMMEND_WITHIN_ELIGIBLE_QUOTAS'||
+     (current&&!normalizedLegacy&&(!Number.isInteger(raw.serviceRequestPlanCap)||
+       raw.serviceRequestPlanCap<0||raw.serviceRequestPlanCap>30||
+       !Number.isInteger(raw.maxPlannedVessels)||
+       raw.maxPlannedVessels<1||raw.maxPlannedVessels>50||
+       raw.serviceRequestPlanCap>raw.maxPlannedVessels)))
+    throw new SiTargetingError('SI_SELECTION_POLICY_INVALID',422);
+  // null explicitly indicates the legacy version has no active cap.
+  return {...raw,
+    serviceRequestPlanCap:legacy||normalizedLegacy?null:raw.serviceRequestPlanCap,
+    maxPlannedVessels:legacy||normalizedLegacy?null:raw.maxPlannedVessels};
+}
+// Existing unconfigured installations retain their legacy C01 behaviour
+// until a PUBLISHER explicitly publishes the optional vessel-selection
+// policy. The editor still shows proposed defaults but initial startup must
+// not silently impose new PSC/UAE quotas.
 const defaultRules=Object.freeze({
   ranking:{criteria:['DEPARTURE_SOON','INCIDENT_SEVERITY']},
   aiAdvisory:SI_C01_ADVISORY_DEFAULT
 });
 function validateRules(value){
   if(!value||typeof value!=='object'||Array.isArray(value)||
-     Object.keys(value).some(x=>!['ranking','aiAdvisory'].includes(x))||
+     Object.keys(value).some(x=>!['ranking','aiAdvisory','selection'].includes(x))||
      !Object.hasOwn(value,'ranking'))return null;
   try{return {ranking:getSiRankingPolicy(value),
-    aiAdvisory:getSiC01AdvisoryRules(value)};}catch{return null;}
+    aiAdvisory:getSiC01AdvisoryRules(value),
+    selection:getSiSelectionPolicy(value)};}catch{return null;}
 }
 export class SiTargetingError extends Error{
   constructor(code,status=400){super(code);this.code=code;this.status=status;}
@@ -511,9 +576,52 @@ export class SiCandidateTargeting{
     if(!parsed)throw new SiTargetingError('SI_RULES_INVALID',422);
     const data=await this.dashboard();
     const before={ranking:getSiRankingPolicy(data.policy.config),
-      aiAdvisory:getSiC01AdvisoryRules(data.policy.config)};
+      aiAdvisory:getSiC01AdvisoryRules(data.policy.config),
+      selection:getSiSelectionPolicy(data.policy.config)};
     const changed=JSON.stringify(before)!==JSON.stringify(parsed);
+    // POC planning is NOT source deletion. A final/reviewed MSW request
+    // remains in its backlog, but does not automatically force itself into
+    // the current 12-vessel rolling plan. UNVERIFIED inputs are review-only.
+    const activeCandidates=data.candidates.filter(c=>
+      c.status==='PENDING_REVIEW'||(c.status==='EXTERNALLY_SCHEDULED'&&
+        isSiProtectedReferral(c)));
+    const verifiedCandidates=activeCandidates.filter(c=>
+      c.events.some(isSiVerifiedEvent));
+    const poolIds=new Set(verifiedCandidates.map(c=>c.imo));
+    const pool=(data.vesselCandidates||[]).filter(v=>poolIds.has(v.imo));
+    const mandatoryIds=new Set(verifiedCandidates.filter(isSiProtectedReferral)
+      .map(c=>c.imo));
+    const pscIds=new Set(verifiedCandidates.filter(c=>c.events.some(e=>
+      e.sourceType==='PSC_PORT_CALL'&&isSiVerifiedEvent(e))).map(c=>c.imo));
+    const serviceIds=new Set(verifiedCandidates.filter(c=>c.events.some(e=>
+      e.sourceType==='SERVICE_REQUEST'&&isSiVerifiedEvent(e))).map(c=>c.imo));
+    const optionalPool=pool.filter(v=>!mandatoryIds.has(v.imo));
+    const psc=optionalPool.filter(v=>pscIds.has(v.imo));
+    const services=optionalPool.filter(v=>serviceIds.has(v.imo));
+    const uae=optionalPool.filter(v=>['UAE','AE','ARE','UNITED ARAB EMIRATES',
+      'الإمارات','الإمارات العربية المتحدة'].includes(
+      String(v.flag||'').trim().toUpperCase().replace(/[\s._-]+/g,' ')));
+    const pscCap=Math.floor(psc.length*parsed.selection.pscRiskRatePercent/100);
+    const uaeCap=Math.floor(uae.length*parsed.selection.uaeFlagRatePercent/100);
+    const serviceCap=parsed.selection.serviceRequestPlanCap;
+    const maxPlan=parsed.selection.maxPlannedVessels;
+    const rawPlanCeiling=mandatoryIds.size+pscCap+uaeCap+
+      (serviceCap===null?services.length:Math.min(services.length,serviceCap));
     return {status:'PREVIEW',fleetSnapshotId:data.fleetSnapshotId,
+      selectionImpact:{
+        candidatePoolImos:pool.length,pscEligibleImos:psc.length,
+        uaeEligibleImos:uae.length,serviceEligibleImos:services.length,
+        pscTargetImos:pscCap,uaeTargetImos:uaeCap,
+        serviceTargetImos:serviceCap===null?null:Math.min(services.length,serviceCap),
+        maxPlannedVessels:maxPlan,
+        theoreticalSelectedCeiling:maxPlan===null?rawPlanCeiling:
+          Math.min(maxPlan,rawPlanCeiling),
+        unverifiedCandidates:activeCandidates.length-verifiedCandidates.length,
+        mandatoryImos:mandatoryIds.size,
+        pendingServiceRequestsRemainInBacklog:true,
+        independentFactors:true,aiRunRequiredToChooseOptionalImos:true,
+        pscQuotaFirst:true,uaePopulation:'ELIGIBLE_CANDIDATES_ONLY'
+      },
       evaluatedPopulation:data.summary.evaluatedPopulation,rulesetVersion:data.policy.version,
       affectedImos:[],affectedCandidateCount:0,
       potentialRankingCandidates:changed?

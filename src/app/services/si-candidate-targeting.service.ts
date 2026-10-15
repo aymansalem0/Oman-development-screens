@@ -47,10 +47,33 @@ export interface SiC01AdvisoryRules{
  selectionInstructions:string;
  priorityInstructions:string;
 }
+export interface SiSelectionRules{
+  pscRiskRatePercent:number;uaeFlagRatePercent:number;
+  uaePoolMode:'ELIGIBLE_CANDIDATES_ONLY';
+  pscPoolMode:'PUBLISHED_PSC_SHORTLIST_ONLY';
+  aiSelectionMode:'RECOMMEND_WITHIN_ELIGIBLE_QUOTAS';
+  serviceRequestPlanCap:number|null;maxPlannedVessels:number|null;
+}
+export interface SiSelectionProposal{
+  mode:'AI_RECOMMENDATION_UNDER_PUBLISHED_POLICY_NOT_APPROVAL';
+  policyRevision:number;snapshotHash:string;approved:false;
+  pscRisk:{eligibleImos:number;cap:number;aiSelectedImos:string[];missingRisk:number};
+  uaeFlag:{eligibleImos:number;cap:number;aiSelectedImos:string[]};
+  serviceRequests?:{eligibleImos:number;cap:number|null;aiSelectedImos:string[];
+     waitingInBacklogImos:string[]};
+  maxPlannedVessels?:number|null;
+  maxPlanExceededByProtectedSources?:boolean;
+  mandatoryImos:string[];selectedImos:string[];
+  overlappingImos:string[];aiRecommendedButQuotaExcluded:string[];
+  manualReviewImos:string[];sourceCandidateImos:number;
+  selectedRows:{imo:string;selectionBasis:string[];candidateKeys:string[];
+    evidenceRefs:string[];aiRecommendationConfidence:number|null}[];
+}
 export interface SiTargetingPolicyConfig{
   /** Active execution priority (separate from source workflow eligibility). */
   ranking?:{criteria:('DEPARTURE_SOON'|'INCIDENT_SEVERITY')[]};
   aiAdvisory?:SiC01AdvisoryRules;
+  selection?:SiSelectionRules;
   /** Legacy historical scoring only; no longer drives C01 selection/ranking. */
   sourceTriggerScores?:{NMC_CASE:number;SERVICE_REQUEST:number;PSC_PORT_CALL:number};
   /** Legacy archived policy shape (historical P01 views only). */
@@ -102,6 +125,15 @@ export interface SiImpact{
   affectedImos:string[];affectedCandidateCount:number;unevaluatedRiskVessels:number;
   warning:string;aiSettingsChanged?:boolean;
   potentialRankingCandidates?:number;requiresManualAiRerun?:boolean;
+  selectionImpact?:{
+    candidatePoolImos:number;pscEligibleImos:number;uaeEligibleImos:number;
+    pscTargetImos:number;uaeTargetImos:number;mandatoryImos:number;
+    serviceEligibleImos:number;serviceTargetImos:number|null;
+    maxPlannedVessels:number|null;theoreticalSelectedCeiling:number;
+    unverifiedCandidates:number;pendingServiceRequestsRemainInBacklog:true;
+    independentFactors:true;aiRunRequiredToChooseOptionalImos:true;
+    pscQuotaFirst:true;uaePopulation:'ELIGIBLE_CANDIDATES_ONLY'
+  };
 }
 export interface SiC01Recommendation{
   candidateKey:string;imo:string;regime:string;
@@ -118,7 +150,8 @@ export interface SiC01Preview {
  snapshotHash:string;policyRevision:number;pscQuotaPolicyRevision:number|null;
  riskPolicyRevision:number;eligibleCount:number;externalCalls:0;
  aiAdvisory?:SiC01AdvisoryRules;
- expectedBatches?:number;estimatedAiriaCalls?:number;
+ selectionPolicy?:SiSelectionRules;
+  expectedBatches?:number;estimatedAiriaCalls?:number;
  candidates:{candidateKey:string;imo:string;regime:string;
     vesselName:string;sourceTypes:string[];allowedEvidence:string[];
     currentRisk:SiCandidate['currentRisk']}[];
@@ -130,6 +163,7 @@ export interface SiC01Run{
  snapshotHash:string;policyRevision:number;riskPolicyRevision:number;
  actor:string;generatedAt:string;externalCalls:number;humanDecisionRequired:true;
  mutations:false;warning:string;recommendations:SiC01Recommendation[];
+  configuredSelectionPolicy?:SiSelectionRules;selectionProposal?:SiSelectionProposal;
  batchesValidated?:number;candidatesAnalyzed?:number;
  verifiedAiRecommendations?:number;manualReviewDueToAiContract?:number;
  ignoredUnknownRecommendations?:number;verificationFailures?:Record<string,number>;
@@ -140,7 +174,9 @@ export interface SiInspectionPlanRow{
  risk:SiCandidate['currentRisk'];
  pendingWorkflows:number;approvedCases:number;externalScheduled:number;
  aiRecommended:boolean|null;planSelected:boolean|null;
- selectionOrigin:'AI_ADVISORY'|'OFFICER_AMENDED'|'NOT_EVALUATED';
+  aiQuotaSelected?:boolean|null;aiSelectionBasis?:string[];
+ selectionOrigin:'AI_ADVISORY'|'OFFICER_AMENDED'|'NOT_EVALUATED'|
+    'PUBLISHED_SOURCE_RULE'|'AI_SELECTION_WITHIN_PUBLISHED_QUOTAS';
  disposition?:'AVAILABLE'|'INCLUDE'|'NOT_SELECTED'|'DEFER'|'NOT_APPLICABLE';
  reviewAfter?:string|null;previousDisposition?:string|null;
  previousPlan?:string|null;reviewDue?:boolean;
@@ -176,6 +212,7 @@ export interface SiInspectionPlanState{
  planId?:string|null;planNumber?:string|null;planStatus?:string|null;
  readOnlyHistorical?:boolean;historicalSourceChanged?:boolean;
  selectionMode?:'MANUAL'|'AI_ASSISTED';manualSelection?:boolean;
+  selectionProposal?:SiSelectionProposal|null;
  availableCount?:number;deferredCount?:number;notSelectedCount?:number;
  candidatesAtCreation?:number|null;
  dataReadiness?:SiC01DataReadiness|null;
@@ -193,6 +230,7 @@ export interface SiInspectionPlanResult{
  verifiedAiRecommendations?:number;manualReviewDueToAiContract?:number;
  ignoredUnknownRecommendations?:number;verificationFailures?:Record<string,number>;
  humanApprovalStillRequired:true;rows:SiInspectionPlanRow[];
+  selectionProposal?:SiSelectionProposal;
 }
 @Injectable({providedIn:'root'})
 export class SiCandidateTargetingService{

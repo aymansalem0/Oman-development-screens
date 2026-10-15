@@ -4,7 +4,7 @@ import {FormsModule} from '@angular/forms';
 import {RouterLink} from '@angular/router';
 import {NmcNavigationComponent} from '../components/nmc-navigation.component';
 import {LanguageService} from '../services/language.service';
-import {SiCandidateTargetingService,SiDashboard,SiImpact,SiTargetingPolicyConfig,SiC01AdvisoryRules,SiC01Signal} from '../services/si-candidate-targeting.service';
+import {SiCandidateTargetingService,SiDashboard,SiImpact,SiTargetingPolicyConfig,SiSelectionRules,SiC01AdvisoryRules,SiC01Signal} from '../services/si-candidate-targeting.service';
 
 /** Entry rules ≠ execution ranking. Operational rules, not NMC vessel risk. */
 @Component({
@@ -17,9 +17,9 @@ import {SiCandidateTargetingService,SiDashboard,SiImpact,SiTargetingPolicyConfig
    <header class="heading">
     <div>
      <small>{{copy('SETTINGS / SMART INSPECTION','الإعدادات / المعاينة الذكية')}}</small>
-     <h1>{{copy('AI Selection & Priority Rules','إدارة قواعد اختيار السفن وأولويات AI')}}</h1>
-     <p>{{copy('Manage published SI-C01 selection signals and advisory instructions. Source eligibility and official execution priority remain protected business decisions.',
-      'إدارة إشارات الاختيار والتعليمات الاستشارية لوكيل SI-C01. تظل أهلية السفن وترتيب التنفيذ الرسمي محكومة بقواعد الأعمال المعتمدة.')}}</p>
+     <h1>{{copy('Inspection Selection & Priority Policy','إعدادات اختيار السفن وترتيب أولويات المعاينات')}}</h1>
+     <p>{{copy('Configure candidate entry, independent PSC-risk and UAE-flag quotas, verified execution priorities and SI-C01 AI selection. The AI returns source-grounded vessel selection under the PUBLISHED business policy.',
+      'ضبط أهلية المرشحين ونسب PSC والعلم الإماراتي وقواعد الأولويات وتعليمات SI-C01. يختار AI السفن من المصادر ضمن السياسة المنشورة ويظل الاعتماد بشريًا.')}}</p>
     </div>
     <div class="actions">
      <a routerLink="/moei/smart-inspection/candidates">{{copy('Candidate Center','قائمة المرشحين')}}</a>
@@ -34,13 +34,11 @@ import {SiCandidateTargetingService,SiDashboard,SiImpact,SiTargetingPolicyConfig
     <article><small>{{copy('PENDING CANDIDATES','المرشحون المنتظرون')}}</small><strong>{{d.summary.pendingVessels}}</strong></article>
     <article><small>{{copy('AVAILABLE VESSEL SOURCES','مصادر السفن')}}</small><strong>3</strong></article>
    </section>
-   <nav class="policy-tabs" aria-label="Inspection rules">
-    <button type="button" [class.active]="tab==='AI_RULES'" (click)="tab='AI_RULES'">
-     {{copy('01 · AI Selection & Priority','٠١ · قواعد الاختيار والأولوية للذكاء الاصطناعي')}}</button>
-    <button type="button" [class.active]="tab==='ENTRY'" (click)="tab='ENTRY'">
-     {{copy('02 · Protected Entry Rules','٠٢ · قواعد الأهلية المحمية')}}</button>
-    <button type="button" [class.active]="tab==='RANKING'" (click)="tab='RANKING'">
-     {{copy('03 · Official Execution Order','٠٣ · ترتيب التنفيذ الرسمي')}}</button>
+   <nav class="policy-tabs" aria-label="Inspection selection rules">
+    <button type="button" [class.active]="tab==='ENTRY'" (click)="tab='ENTRY'">{{copy('1. Eligibility & Selection','١. أهلية السفن واختيارها')}}</button>
+    <button type="button" [class.active]="tab==='RANKING'" (click)="tab='RANKING'">{{copy('2. Priority Rules','٢. قواعد ترتيب الأولويات')}}</button>
+    <button type="button" [class.active]="tab==='AI_RULES'" (click)="tab='AI_RULES'">{{copy('3. AI Advisory Configuration','٣. إعدادات وكيل AI')}}</button>
+    <button type="button" [class.active]="tab==='PUBLISH'" (click)="tab='PUBLISH'">{{copy('4. Policy Impact & Publishing','٤. معاينة الأثر والنشر')}}</button>
    </nav>
    <section class="panel" *ngIf="tab==='ENTRY'">
     <h2>{{copy('Inspection Eligibility & Candidate Entry','شروط دخول السفن إلى قائمة المعاينة')}}</h2>
@@ -67,7 +65,32 @@ import {SiCandidateTargetingService,SiDashboard,SiImpact,SiTargetingPolicyConfig
        'تُطبّق حصص PSC المنشورة على أحداث Excel المحفوظة تلقائيًا، ويظل الترشيح للمراجعة وليس اعتمادًا للمعاينة.')}}</small></div>
      <a routerLink="/moei/smart-inspection/settings/psc-quotas" class="policy-link">{{copy('PSC settings','إعدادات PSC')}}</a>
     </div>
-    <p class="helper">{{copy('Entry rules do not decide execution order. Final inspection plan approval remains with the authorised supervisor.',
+    <section class="si-selection-config" aria-label="Business selection factors">
+     <h3>{{copy('Candidate Entry · Independent Selection Factors (Pool B)','دخول المرشحين · نسب اختيار مستقلة (مجموعة B)')}}</h3>
+     <p class="rule-info">{{copy('UAE Flag B is limited to source-eligible Candidate Center vessels. Approved NMC referrals are protected. Verified service requests remain in the backlog, but only a small configured number enters THIS POC plan. UNVERIFIED requests await review.',
+       'المجموعة B تشمل السفن الإماراتية المؤهلة في قائمة المرشحين فقط. إحالات NMC المعتمدة محمية. طلبات الخدمة الموثقة تبقى بالانتظار، ويدخل منها الخطة العدد المحدد فقط؛ غير الموثق يحتاج مراجعة.')}}</p>
+     <div class="selection-percents">
+       <label>{{copy('PSC + Saved Risk · % of eligible candidate IMOs','PSC + المخاطر المحفوظة · % من السفن المرشحة المؤهلة')}}
+         <input type="number" min="0" max="100" step="1" [(ngModel)]="selectionRules.pscRiskRatePercent" (ngModelChange)="rulesChanged()" aria-label="PSC plus risk percent"/> %
+       </label>
+       <label>{{copy('UAE Flag B · % of eligible candidate IMOs','العلم الإماراتي B · % من السفن المرشحة المؤهلة')}}
+         <input type="number" min="0" max="100" step="1" [(ngModel)]="selectionRules.uaeFlagRatePercent" (ngModelChange)="rulesChanged()" aria-label="UAE flag percent"/> %
+       </label>
+     </div>
+     <div class="selection-percents">
+       <label>{{copy('Verified service requests per POC plan','عدد سفن طلبات الخدمات لكل خطة POC')}}
+        <input type="number" min="0" max="30" step="1" [(ngModel)]="selectionRules.serviceRequestPlanCap" (ngModelChange)="rulesChanged()" aria-label="Service requests per plan"/>
+       </label>
+       <label>{{copy('Maximum unique vessels in this plan','الحد الأقصى للسفن المختلفة في الخطة')}}
+        <input type="number" min="1" max="50" step="1" [(ngModel)]="selectionRules.maxPlannedVessels" (ngModelChange)="rulesChanged()" aria-label="Maximum vessels per plan"/>
+       </label>
+      </div>
+      <p class="rule-info">{{copy('PSC is TWO sequential, visible screens: Stage 1 is the published PSC Port Call event quota; Stage 2 is this PSC + Risk percentage applied to the resulting eligible distinct vessels. They are NOT one rate. UAE-flag selection is independent. A vessel in both is counted once.',
+       'اختيار PSC يتم على مرحلتين واضحتين: الأولى حصة أحداث Port Call المنشورة، والثانية نسبة PSC + المخاطر هنا على السفن المؤهلة الناتجة دون تكرار IMO. النسبتان ليستا نسبة واحدة. نسبة العلم الإماراتي مستقلة، والسفينة المشتركة تحسب مرة واحدة.')}}</p>
+     <p class="helper">{{copy('SI-C01 returns SELECT / DEFER / MANUAL REVIEW evidence-backed recommendations within each cap; no AI recommendation can expand eligibility, replace missing saved risk or approve an inspection.',
+       'يرجع SI-C01 توصيات اختيار أو تأجيل أو مراجعة يدوية مع الأدلة في حدود الحصص، دون توسيع الأهلية أو اختراع مخاطر غير محفوظة أو اعتماد معاينة.')}}</p>
+   </section>
+   <p class="helper">{{copy('Entry rules do not decide execution order. Final inspection plan approval remains with the authorised supervisor.',
       'قواعد الدخول لا تحدد ترتيب التنفيذ، واعتماد خطة المعاينة يظل من اختصاص المسؤول المخول.')}}</p>
    </section>
    <section class="panel" *ngIf="tab==='RANKING'">
@@ -89,8 +112,8 @@ import {SiCandidateTargetingService,SiDashboard,SiImpact,SiTargetingPolicyConfig
      <small>{{copy('Until defined, vessels with no verified ETD or incident data stay visible in stable IMO order with missing-data explanation. Never fabricate a date or severity.',
       'حتى اعتماد باقي المعايير، تظهر السفن بلا موعد مغادرة أو حادث معتمد بترتيب IMO ثابت مع توضيح البيانات الناقصة.')}}</small>
     </div></div>
-    <p class="helper">{{copy('The official execution order is currently fixed by approved business rules, independent of vessel risk or AI prompt changes. AI advisory guidance can be managed in the first tab.',
-     'ترتيب التنفيذ الرسمي ثابت حاليًا وفق قواعد الأعمال المعتمدة، ولا يتغير بدرجة مخاطر السفينة أو تعليمات AI. يمكن إدارة التوجيهات الاستشارية من التبويب الأول.')}}</p>
+    <p class="helper">{{copy('The official execution order is currently fixed by approved business rules, independent of vessel risk or AI prompt changes. AI advisory guidance can be managed in the third tab.',
+     'ترتيب التنفيذ الرسمي ثابت حاليًا وفق قواعد الأعمال المعتمدة، ولا يتغير بدرجة مخاطر السفينة أو تعليمات AI. يمكن إدارة توجيهات AI الاستشارية من التبويب الثالث.')}}</p>
 
    </section>
    <section class="panel" *ngIf="tab==='AI_RULES'">
@@ -112,8 +135,8 @@ import {SiCandidateTargetingService,SiDashboard,SiImpact,SiTargetingPolicyConfig
       <input type="number" min="0" max="1" step="0.05"
         [(ngModel)]="aiRules.minimumSelectionConfidence" (ngModelChange)="rulesChanged()"/>
      </label>
-     <p class="rule-info">{{copy('Recommendations below the configured threshold become Manual Review. Mandatory NMC referrals and eligible service requests remain protected.',
-       'التوصيات الأقل من الحد تتحول إلى مراجعة بشرية. لا تُستبعد إحالات NMC الإلزامية أو طلبات الخدمات المؤهلة.')}}</p>
+     <p class="rule-info">{{copy('Recommendations below the threshold become Manual Review. Approved NMC referrals remain mandatory. Verified service requests stay queued until selected for a plan.',
+       'التوصيات الأقل من الحد تتحول لمراجعة بشرية. إحالات NMC المعتمدة محمية، وتظل طلبات الخدمات الموثقة بالانتظار حتى اختيارها للخطة.')}}</p>
      <label>{{copy('Additional selection instructions for AI · up to 600 characters','تعليمات إضافية لاختيار السفن · حتى ٦٠٠ حرف')}}
       <textarea rows="4" maxlength="600" [(ngModel)]="aiRules.selectionInstructions"
        (ngModelChange)="rulesChanged()" placeholder="e.g. Explain why source evidence supports inspection review"></textarea>
@@ -131,9 +154,19 @@ import {SiCandidateTargetingService,SiDashboard,SiImpact,SiTargetingPolicyConfig
      <p class="rule-info">{{copy('Changes are saved only after authorised publication, increment the policy version, and are applied to future explicit SI-C01 runs. Draft previews do not call Airia or rewrite approved plans.',
        'لا تُحفظ التعديلات إلا بعد النشر بصلاحية معتمدة، مع زيادة رقم الإصدار. وتطبق على تشغيل SI-C01 اللاحق صراحةً. المعاينة لا تشغل Airia ولا تعدل الخطط المعتمدة.')}}</p>
     </div>
-        <button class="primary" type="button" (click)="preview()" [disabled]="busy||loading||!dashboard">{{copy('Preview AI Rule Changes','معاينة تعديل قواعد AI')}}</button>
+        </section>
+   <section class="panel" *ngIf="tab==='PUBLISH'">
+    <h2>{{copy('Policy Impact & Publishing','معاينة تأثير السياسة والنشر')}}</h2>
+    <p>{{copy('Preview is read-only. Configure two independent candidate-level quotas, review all source-backed populations, then publish one version used by every future explicit SI-C01 run.',
+      'المعاينة قراءة فقط. اضبط نسبتي اختيار السفن المستقلتين، راجع المجتمعات المؤهلة من المصادر، ثم انشر إصدارًا واحدًا يستخدمه SI-C01 عند تشغيله لاحقًا.')}}</p>
+    <div class="rule-info"><strong>{{copy('Policy to be sent to AI SI-C01','السياسة التي سترسل إلى وكيل SI-C01')}}</strong>
+      <p>PSC + Risk {{selectionRules.pscRiskRatePercent}}% · UAE Flag B {{selectionRules.uaeFlagRatePercent}}% · {{copy('Service cap','حد الخدمات')}} {{selectionRules.serviceRequestPlanCap}} · {{copy('Total plan max','حد الخطة')}} {{selectionRules.maxPlannedVessels}} · {{copy('Confidence','الحد الأدنى للثقة')}} {{aiRules.minimumSelectionConfidence}}</p>
+      <small>{{copy('Published PSC Port Call quotas remain a separate first-stage source gate. Selection is a proposed shortlist only, never an inspection authorization.',
+      'حصة أحداث PSC المنشورة مرحلة مصدر مستقلة أولاً. اختيار AI مسودة ترشيح فقط وليس تصريح معاينة.')}}</small>
+    </div>
+    <button class="primary" type="button" (click)="preview()" [disabled]="busy||loading||!dashboard">{{copy('Preview Configured Policy Impact (No AI)','معاينة تأثير السياسة المنشورة (بدون AI)')}}</button>
     <section class="impact" *ngIf="impact as p">
-     <strong>{{copy('Rule impact preview — no AI calls','معاينة تأثير القواعد — بدون استدعاءات AI')}}</strong>
+     <strong>{{copy('Business policy impact — NO AI calls','معاينة أثر سياسة الأعمال — دون استدعاءات AI')}}</strong>
      <p>{{p.evaluatedPopulation}} {{copy('tracked vessels','سفينة مسجلة')}} ·
         {{p.potentialRankingCandidates||0}} {{copy('candidates may require reranking','قد تحتاج إعادة ترتيب')}}</p>
      <small>{{copy('Unverified ETD and incident severity are not scored. Preview is not approval.',
@@ -144,9 +177,28 @@ import {SiCandidateTargetingService,SiDashboard,SiImpact,SiTargetingPolicyConfig
      <label>{{copy('Business justification (min. 8 characters)','مبرر إداري (٨ أحرف على الأقل)')}}
        <textarea [(ngModel)]="reason" rows="2" maxlength="500"></textarea></label>
      <button class="primary" type="button" [disabled]="busy||!impact||!impact.aiSettingsChanged" (click)="publish()">
-       {{copy('Publish SI-C01 AI Rules Version','نشر إصدار قواعد SI-C01')}}</button>
+       {{copy('Publish New Inspection Selection Policy Version','نشر إصدار سياسة اختيار السفن')}}</button>
     </div>
 
+   
+    <section *ngIf="impact?.selectionImpact as si" class="selection-impact">
+      <h3>{{copy('Selection pool B · deterministic impact','تأثير نسب الاختيار على المجموعة B')}}</h3>
+      <div class="selection-impact-grid">
+        <div><small>{{copy('Eligible distinct IMO','السفن المؤهلة')}}</small><strong>{{si.candidatePoolImos}}</strong></div>
+        <div><small>{{copy('PSC eligible','سفن PSC المؤهلة')}}</small><strong>{{si.pscEligibleImos}}</strong></div>
+        <div><small>{{copy('PSC selection cap','سقف اختيار PSC')}}</small><strong>{{si.pscTargetImos}}</strong></div>
+        <div><small>{{copy('UAE-flag eligible','سفن العلم الإماراتي المؤهلة')}}</small><strong>{{si.uaeEligibleImos}}</strong></div>
+        <div><small>{{copy('UAE selection cap','سقف اختيار الإمارات')}}</small><strong>{{si.uaeTargetImos}}</strong></div>
+        <div><small>{{copy('Protected NMC referrals','إحالات NMC المحمية')}}</small><strong>{{si.mandatoryImos}}</strong></div>
+        <div><small>{{copy('Verified service request queue','طلبات الخدمات الموثقة بالانتظار')}}</small><strong>{{si.serviceEligibleImos}}</strong></div>
+        <div><small>{{copy('Service vessels allowed per plan','سفن الخدمات في الخطة')}}</small><strong>{{si.serviceTargetImos===null?'—':si.serviceTargetImos}}</strong></div>
+        <div><small>{{copy('Plan max / projected ceiling','حد الخطة / السقف النظري')}}</small><strong>{{si.maxPlannedVessels===null?'—':si.maxPlannedVessels}} / {{si.theoreticalSelectedCeiling}}</strong></div>
+        <div><small>{{copy('Unverified candidate paths','مسارات غير موثقة للمراجعة')}}</small><strong>{{si.unverifiedCandidates}}</strong></div>
+      </div>
+      <p class="helper">{{copy('Targets are caps, NOT an AI result. Publish and explicitly run SI-C01 in Candidate Center to receive named vessels, reasons, evidence references, confidence, missing data and quota exclusions. Supervisor approval remains separate.',
+        'الأرقام حدود اختيار وليست نتيجة AI. انشر الإعدادات وشغل SI-C01 صراحةً من Candidate Center للحصول على السفن والأسباب والأدلة والثقة والنواقص والاستبعادات، مع استمرار الاعتماد البشري.')}}</p>
+    </section>
+    <a routerLink="/moei/smart-inspection/candidates" class="policy-link">{{copy('Candidate Center · Run AI Selection →','قائمة المرشحين · تشغيل اختيار AI ←')}}</a>
    </section>
   </main>
  </div>
@@ -167,6 +219,15 @@ import {SiCandidateTargetingService,SiDashboard,SiImpact,SiTargetingPolicyConfig
  .stats strong{display:block;font-size:27px;margin-top:8px;color:#09697b}
  .policy-tabs{display:flex;gap:10px;margin:16px 0;flex-wrap:wrap}
  .policy-tabs button.active{background:#087c76;color:white;border-color:#087c76}
+ .selection-percents,.selection-impact-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:14px 0}
+ .selection-percents label{background:#f5fafb;border:1px solid #d4e6ed;border-radius:10px;padding:12px}
+ .selection-percents input{width:95px;margin:8px 5px;padding:10px;border:1px solid #c6dbe3;border-radius:8px}
+ .si-selection-config{margin-top:18px;padding:15px;border:1px solid #d5e6eb;border-radius:12px}
+ .selection-impact-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+ .selection-impact-grid div{background:#f2f9fb;border:1px solid #d9eaed;padding:14px;border-radius:9px}
+ .selection-impact-grid small{display:block;color:#587d8c;font-size:11px}
+ .selection-impact-grid strong{font-size:24px;color:#006f75}
+ @media(max-width:740px){.selection-percents,.selection-impact-grid{grid-template-columns:1fr}}
  .panel h2{font-size:18px;color:#14516c;margin:0 0 12px}
  .panel h3{font-size:15px;color:#16516b}
  .rule{display:grid;grid-template-columns:44px minmax(0,1fr) auto;gap:17px;align-items:center;border-bottom:1px solid #e2edf0;padding:18px 4px}
@@ -198,7 +259,14 @@ import {SiCandidateTargetingService,SiDashboard,SiImpact,SiTargetingPolicyConfig
  `]
 })
 export class SiTargetingSettingsComponent implements OnInit{
- tab:'ENTRY'|'RANKING'|'AI_RULES'='AI_RULES';
+ tab:'ENTRY'|'RANKING'|'AI_RULES'|'PUBLISH'='ENTRY';
+ selectionRules:SiSelectionRules={
+   pscRiskRatePercent:15,uaeFlagRatePercent:0,
+   uaePoolMode:'ELIGIBLE_CANDIDATES_ONLY',
+   pscPoolMode:'PUBLISHED_PSC_SHORTLIST_ONLY',
+   aiSelectionMode:'RECOMMEND_WITHIN_ELIGIBLE_QUOTAS',
+   serviceRequestPlanCap:4,maxPlannedVessels:12
+ };
  readonly signals:{code:SiC01Signal;en:string;ar:string;detailEn:string;detailAr:string}[]=[
   {code:'SOURCE_EVENT_EVIDENCE',en:'Verified source events & evidence',ar:'أحداث المصادر والأدلة الموثقة',
    detailEn:'Source documents, referral IDs, stored PSC/service events',detailAr:'مستندات المصدر والإحالات وأحداث PSC والخدمات المحفوظة'},
@@ -211,7 +279,7 @@ export class SiTargetingSettingsComponent implements OnInit{
  ];
  aiRules:SiC01AdvisoryRules={
   selectionSignals:['SOURCE_EVENT_EVIDENCE','VERIFIED_ETD','REVIEWED_INCIDENT','SAVED_VESSEL_RISK'],
-  minimumSelectionConfidence:0,selectionInstructions:'',priorityInstructions:''
+  minimumSelectionConfidence:0.75,selectionInstructions:'Select only source-verified, evidence-backed candidate vessels. Protect approved NMC referrals. Verified service requests remain in the central queue; put at most serviceRequestPlanCap of them in THIS rolling plan. Enforce PSC+Risk, UAE Pool B and maxPlannedVessels from configuredSelectionPolicy. Return SELECT / DEFER / MANUAL_REVIEW with references, confidence and gaps; never fabricate data or approve inspections.',priorityInstructions:'Explain execution order: nearest verified future ETD first, then active human-reviewed incident severity. Never invent an ETD, substitute ETA, use saved vessel risk for official execution ordering or imply regulatory approval. Describe missing evidence and officer review.'
  };
  toggleSignal(code:SiC01Signal,checked:boolean):void{
   const next=new Set(this.aiRules.selectionSignals);
@@ -231,12 +299,19 @@ export class SiTargetingSettingsComponent implements OnInit{
   this.api.dashboard().subscribe({
     next:d=>{
       this.dashboard=d;this.loading=false;
-      const saved=d.policy.config.aiAdvisory;
+     const v=d.policy.config.selection;
+     this.selectionRules={...this.selectionRules,...v,
+       // Revision 6 has no cap: explicit publication required to activate.
+       serviceRequestPlanCap:Number.isInteger(v?.serviceRequestPlanCap)?
+         v!.serviceRequestPlanCap:4,
+       maxPlannedVessels:Number.isInteger(v?.maxPlannedVessels)?
+         v!.maxPlannedVessels:12};
+     const saved=d.policy.config.aiAdvisory;
       this.aiRules=saved?{
         selectionSignals:[...saved.selectionSignals],
         minimumSelectionConfidence:saved.minimumSelectionConfidence,
-        selectionInstructions:saved.selectionInstructions,
-        priorityInstructions:saved.priorityInstructions
+        selectionInstructions:saved.selectionInstructions||'Select only source-verified, evidence-backed candidate vessels. Protect approved NMC referrals. Verified service requests remain in the central queue; put at most serviceRequestPlanCap of them in THIS rolling plan. Enforce PSC+Risk, UAE Pool B and maxPlannedVessels from configuredSelectionPolicy. Return SELECT / DEFER / MANUAL_REVIEW with references, confidence and gaps; never fabricate data or approve inspections.',
+        priorityInstructions:saved.priorityInstructions||'Explain execution order: nearest verified future ETD first, then active human-reviewed incident severity. Never invent an ETD, substitute ETA, use saved vessel risk for official execution ordering or imply regulatory approval. Describe missing evidence and officer review.'
       }:{
         selectionSignals:['SOURCE_EVENT_EVIDENCE','VERIFIED_ETD','REVIEWED_INCIDENT','SAVED_VESSEL_RISK'],
         minimumSelectionConfidence:0,selectionInstructions:'',priorityInstructions:''
@@ -251,6 +326,25 @@ export class SiTargetingSettingsComponent implements OnInit{
   this.busy=false;this.success='';
  }
  private validAiRules():boolean{
+  if(!Number.isInteger(this.selectionRules.pscRiskRatePercent)||
+     this.selectionRules.pscRiskRatePercent<0||this.selectionRules.pscRiskRatePercent>100||
+     !Number.isInteger(this.selectionRules.uaeFlagRatePercent)||
+     this.selectionRules.uaeFlagRatePercent<0||this.selectionRules.uaeFlagRatePercent>100){
+    this.error=this.copy('Selection percentages must be integers between 0 and 100.',
+      'نسب الاختيار يجب أن تكون أعدادًا صحيحة من صفر إلى ١٠٠.');return false;
+  }
+  if(!Number.isInteger(this.selectionRules.serviceRequestPlanCap)||
+     this.selectionRules.serviceRequestPlanCap===null||
+     this.selectionRules.serviceRequestPlanCap<0||
+     this.selectionRules.serviceRequestPlanCap>30||
+     !Number.isInteger(this.selectionRules.maxPlannedVessels)||
+     this.selectionRules.maxPlannedVessels===null||
+     this.selectionRules.maxPlannedVessels<1||
+     this.selectionRules.maxPlannedVessels>50||
+     this.selectionRules.serviceRequestPlanCap>this.selectionRules.maxPlannedVessels){
+    this.error=this.copy('Service plan cap must be 0–30 and at most the total plan maximum (1–50).',
+      'حد الخدمات من صفر إلى ٣٠ ولا يتجاوز حد السفن من ١ إلى ٥٠.');return false;
+  }
   const confidence=this.aiRules.minimumSelectionConfidence;
   if(!this.aiRules.selectionSignals.length||typeof confidence!=='number'||
     !Number.isFinite(confidence)||confidence<0||confidence>1||
@@ -263,7 +357,8 @@ export class SiTargetingSettingsComponent implements OnInit{
  }
  private rankingConfig():SiTargetingPolicyConfig{
   return {ranking:{criteria:['DEPARTURE_SOON','INCIDENT_SEVERITY']},
-    aiAdvisory:{
+   selection:{...this.selectionRules},
+   aiAdvisory:{
       selectionSignals:[...this.aiRules.selectionSignals],
       minimumSelectionConfidence:this.aiRules.minimumSelectionConfidence,
       selectionInstructions:this.aiRules.selectionInstructions,
@@ -284,13 +379,13 @@ export class SiTargetingSettingsComponent implements OnInit{
   if(this.reason.trim().length<8){
    this.error=this.copy('Provide an 8-character business justification','أدخل مبررًا إداريًا لا يقل عن ٨ أحرف');return;
   }
-  if(!window.confirm(this.copy('Publish SI-C01 advisory rules? This changes future AI prompts, but cannot change completed or approved plans.',
-   'نشر قواعد SI-C01 الاستشارية؟ ستؤثر على تعليمات AI المستقبلية ولن تغير الخطط المكتملة أو المعتمدة.')))return;
+  if(!window.confirm(this.copy('Publish the configured vessel selection rules and SI-C01 AI policy? Future explicit AI runs use the new version; approved plans remain immutable.',
+   'نشر قواعد اختيار السفن وإعدادات SI-C01؟ سيتم تطبيقها على تشغيل AI الجديد دون تعديل الخطط المعتمدة.')))return;
   this.busy=true;this.error='';
   this.api.publish({config:this.rankingConfig(),expectedVersion:this.dashboard.policy.version,
     publishedBy:this.reviewer,reason:this.reason.trim()},this.publisherKey).subscribe({
    next:()=>{this.busy=false;this.reason='';this.refresh();this.success=
-     this.copy('Published new SI-C01 advisory rules version','تم نشر إصدار جديد لقواعد SI-C01 الاستشارية');},
+     this.copy('Published new inspection selection policy version','تم نشر إصدار جديد لقواعد اختيار السفن');},
    error:e=>this.showError(e)
   });
  }

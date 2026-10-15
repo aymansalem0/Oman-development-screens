@@ -58,8 +58,13 @@ test('Saved PSC Excel events immediately receive the published quota shortlist, 
     assert.equal(d.summary.bySource.NMC_CASE,1);
     assert.equal(d.summary.bySource.SERVICE_REQUEST,1);
     assert.equal(d.summary.candidates,5);
+    // The source system correctly shortlisted 3 PSC rows, but this fixture
+    // intentionally marks them UNVERIFIED. They remain visible in the PSC
+    // queue, never reaching SI-C01 until human/source verification.
     assert.equal(buildC01Source(d,{version:1}).candidates.some(x=>
-      x.sourceTypes.includes('PSC_PORT_CALL')),true);
+      x.sourceTypes.includes('PSC_PORT_CALL')),false);
+    assert.equal(buildC01Source(d,{version:1}).candidates.filter(x=>
+      x.sourceTypes.includes('SERVICE_REQUEST')).length,0);
     const pool=await w.selection.pool();
     assert.equal(pool.summary.eligiblePortCalls,20);
     assert.equal(pool.summary.inPoolPortCalls,17);

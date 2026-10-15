@@ -6,7 +6,8 @@
 import {createHash,randomUUID} from 'node:crypto';
 import {mockSiC01,SI_MOCK_MARKER} from './si-agent-mock.mjs';
 import {getSiRankingPolicy,inspectionRanking} from './si-inspection-ranking.mjs';
-import {getSiC01AdvisoryRules} from './si-candidate-targeting.mjs';
+import {getSiC01AdvisoryRules,getSiSelectionPolicy,isSiVerifiedEvent,isSiProtectedReferral} from './si-candidate-targeting.mjs';
+import {projectC01ConfiguredSelection} from './si-ai-selection-projection.mjs';
 
 const hash=x=>createHash('sha256').update(JSON.stringify(x)).digest('hex');
 const unique=a=>[...new Set(a.filter(x=>typeof x==='string'&&x.trim()))];
@@ -19,14 +20,21 @@ export function buildC01Source(dashboard,pscPolicy=null){
     throw new SiCandidateAgentError('SI_C01_SOURCE_UNAVAILABLE',503);
   const ranking=getSiRankingPolicy(dashboard.policy.config);
   const aiAdvisory=getSiC01AdvisoryRules(dashboard.policy.config);
+  const selection=getSiSelectionPolicy(dashboard.policy.config);
+  // Backward compatibility for saved legacy policy snapshots with no
+  // explicitly published candidate-vessel sampling rules.
+  const selectionPolicyActive=Boolean(dashboard.policy.config?.selection);
   const vesselSignals=new Map((dashboard.vesselCandidates||[]).map(v=>[v.imo,v]));
   const candidates=dashboard.candidates
     .filter(c=>!c.inspectionCase&&(
       c.status==='PENDING_REVIEW'||
       (c.status==='EXTERNALLY_SCHEDULED'&&
         c.events.some(e=>e.sourceType==='NMC_CASE'&&e.approval==='APPROVED'))))
+    // Unverified rows remain in Candidate Center for source verification.
+    .filter(c=>c.events.some(isSiVerifiedEvent))
     .map(c=>{
       const vessel=vesselSignals.get(c.imo)||{};
+      const verifiedEvents=c.events.filter(isSiVerifiedEvent);
       // Forward the saved source fields needed for a grounded recommendation.
       // No invented ETD, incident severity or alternate vessel risk is allowed.
       const departureAt=vessel.departureVerified===true?vessel.departureAt:null;
@@ -57,15 +65,16 @@ export function buildC01Source(dashboard,pscPolicy=null){
       // savedRisk.assessmentId to C01 (SI contract §6). Preserve source proof;
       // no model-inferred risk, certificate or operational rank is added.
       const allowedEvidence=unique([
-        ...[...c.events,...operationalSourceEvents].flatMap(e=>
+        ...[...verifiedEvents,...operationalSourceEvents].flatMap(e=>
           [e.eventKey,e.sourceEventId,e.sourceReference,...(e.evidenceIds||[])]),
         c.currentRisk?.assessmentId
       ]);
       return {candidateKey:c.key,imo:c.imo,regime:c.regime,
-        vesselName:c.vesselName,eligibility:c.eligibility,
+        vesselName:c.vesselName,flag:vessel.flag||c.flag||'',
+        eligibility:c.eligibility,
         currentRisk:c.currentRisk||null,
-        sourceTypes:unique(c.events.map(e=>e.sourceType)),
-        sourceEvents:c.events.map(e=>({
+        sourceTypes:unique(verifiedEvents.map(e=>e.sourceType)),
+        sourceEvents:verifiedEvents.map(e=>({
           sourceType:e.sourceType,eventKey:e.eventKey,
           sourceEventId:e.sourceEventId,sourceReference:e.sourceReference,
           provenance:e.provenance,approval:e.approval,
@@ -95,11 +104,17 @@ export function buildC01Source(dashboard,pscPolicy=null){
               Date.parse(e.departureAt)===Date.parse(departureAt))
             .flatMap(e=>[e.eventKey,e.sourceReference,...e.evidenceIds])):[]},
         missingData,
-        requiredInPlan:c.events.some(e=>e.sourceType==='SERVICE_REQUEST'||
-          (e.sourceType==='NMC_CASE'&&e.approval==='APPROVED'))};
+        // A verified service request stays in the central queue even when
+        // not scheduled in THIS rolling plan. NMC approved referrals are
+        // the only unconditional required cohort after policy publication.
+        actionableServiceRequest:verifiedEvents.some(e=>
+          e.sourceType==='SERVICE_REQUEST'&&isSiVerifiedEvent(e)),
+        requiredInPlan:isSiProtectedReferral(c)||
+          ((!selectionPolicyActive||!Number.isInteger(selection.serviceRequestPlanCap))&&
+            verifiedEvents.some(e=>e.sourceType==='SERVICE_REQUEST'&&isSiVerifiedEvent(e)))};
     }).sort((a,b)=>a.candidateKey.localeCompare(b.candidateKey));
   const source={schemaVersion:'SI-C01-v1',
-    ranking,aiAdvisory,
+    ranking,aiAdvisory,selection,selectionPolicyActive,
     policyRevision:dashboard.policy.version,
     riskPolicyRevision:dashboard.riskPolicyRevision,
     pscQuotaPolicyRevision:pscPolicy?.version??null,
@@ -454,6 +469,7 @@ export class SiCandidateAgent{
    pscQuotaPolicyRevision:s.pscQuotaPolicyRevision,
    riskPolicyRevision:s.riskPolicyRevision,eligibleCount:s.candidates.length,
    aiAdvisory:s.aiAdvisory,
+   selectionPolicy:s.selectionPolicyActive?s.selection:null,
    expectedBatches:Math.ceil(s.candidates.length/(this.provider==='airia'?25:100)),
    estimatedAiriaCalls:this.provider==='airia'?Math.ceil(s.candidates.length/25):0,
    candidates:s.candidates,externalCalls:0,
@@ -464,7 +480,7 @@ export class SiCandidateAgent{
  }
  async run(input={}){
   if(this.inProgress)throw new SiCandidateAgentError('SI_C01_IN_PROGRESS',409);
-  if(input.confirmRun!==true||(this.provider==='airia'&&input.confirmCost!==true)||typeof input.actor!=='string'||
+  if(input.confirmRun!==true||typeof input.actor!=='string'||
      !input.actor.trim()||input.actor.length>120||
      !/^[a-f0-9]{64}$/i.test(input.expectedSnapshotHash||''))
     throw new SiCandidateAgentError('SI_C01_CONFIRMATION_REQUIRED',422);
@@ -475,11 +491,11 @@ export class SiCandidateAgent{
     throw new SiCandidateAgentError('SI_C01_SOURCE_CHANGED_REPREVIEW',409);
    if(!s.candidates.length)
     throw new SiCandidateAgentError('SI_C01_NO_PENDING_CANDIDATES',422);
-   // A full 99-vessel fleet can have >100 *regime* candidates after Excel
-   // rules activate. Explicitly consent to the REAL number of Airia calls.
+   // A full 99-vessel source pool can have >100 *regime* candidate paths.
+   // Verify the batch count to avoid skipping any source candidates.
    // Keep bounded batches; never truncate inputs or silently run extra calls.
-   // Smaller real-provider chunks reduce response truncation and let the
-   // partner schema return every recommendation. Calls are pre-confirmed.
+   // Smaller provider chunks reduce response truncation and let Airia
+   // return every recommendation. Batch count is explicit and auditable.
    const batchSize=this.provider==='airia'?25:100;
    const batchCount=Math.ceil(s.candidates.length/batchSize);
    if(s.candidates.length>500)
@@ -495,6 +511,10 @@ export class SiCandidateAgent{
        (x.requestedRank===null||
         (Number.isInteger(x.requestedRank)&&x.requestedRank>=1&&x.requestedRank<=100)))
        .slice(0,100):[];
+   // Every paid Airia batch receives the global denominators and caps.
+   // A 25-candidate chunk must never re-apply a 15% rate as its own cap.
+   const publishedBounds=s.selectionPolicyActive?
+     projectC01ConfiguredSelection(s,[]):null;
    const payload={schemaVersion:'SI-C01-v1',
      requestMeta:{correlationId:'SI-C01-'+randomUUID(),actor:input.actor.trim(),
        language:'en',mode:'ADVISORY_ONLY'},
@@ -503,6 +523,30 @@ export class SiCandidateAgent{
      // Configurable source-backed guidance is only advisory; always
      // subordinate to these immutable process/evidence/approval constraints.
      aiAdvisory:s.aiAdvisory,
+     // Published policy is sent to C01 without changing its response schema.
+     configuredSelectionPolicy:s.selectionPolicyActive?{
+       ...s.selection,
+       eligibleSelectionPool:publishedBounds?{
+         distinctCandidateImos:publishedBounds.sourceCandidateImos,
+         pscEligibleImos:publishedBounds.pscRisk.eligibleImos,
+         pscCap:publishedBounds.pscRisk.cap,
+         uaeEligibleImos:publishedBounds.uaeFlag.eligibleImos,
+         uaeCap:publishedBounds.uaeFlag.cap,
+         mandatoryOutsideCaps:publishedBounds.mandatoryImos.length,
+         serviceRequestEligibleImos:publishedBounds.serviceRequests?.eligibleImos??null,
+         serviceRequestPlanCap:publishedBounds.serviceRequests?.cap??null,
+         maxPlannedVessels:s.selection.maxPlannedVessels
+       }:null,
+       aiConfidenceThreshold:s.aiAdvisory.minimumSelectionConfidence,
+       approvedNmcReferralsAlwaysIncluded:true,
+       verifiedServiceRequestsRemainInBacklog:true,
+       unverifiedSourceEventsNeverSelected:true,
+       duplicateImosAllowed:false,
+       neverOverridePscPortCallQuota:true,
+       missingVesselRisk:'MANUAL_REVIEW_NOT_INVENTED',
+       finalHumanApprovalRequired:true,
+       neverAllowSilentPolicyActivation:true
+     }:null,
      outputContract:{
        format:'STRICT_JSON_OBJECT_NO_MARKDOWN',
        topLevel:{recommendations:'array: exactly one per supplied candidateKey'},
@@ -530,7 +574,12 @@ export class SiCandidateAgent{
        doNotOverrideEligibilityOrPSCQuota:true,
        configuredGuidanceIsNonRegulatory:true,
        considerSelectedSignalsOnlyForAdvisoryInterpretation:true,
-       minimumConfidenceForAutomaticAdvice:s.aiAdvisory.minimumSelectionConfidence
+       minimumConfidenceForAutomaticAdvice:s.aiAdvisory.minimumSelectionConfidence,
+       performSelectionWithinPublishedQuotas:s.selectionPolicyActive,
+       uaeFlagSelectionPool:'SOURCE_ELIGIBLE_CANDIDATE_CENTER_ONLY',
+       returnSelectDeferOrManualReviewForEveryCandidate:true,
+       neverGenerateUnapprovedCandidates:true,
+       doNotForceAllServiceRequestsIntoOnePlan:true
      },
      officerPlanChanges,
      riskPolicyRevision:s.riskPolicyRevision,
@@ -576,6 +625,10 @@ export class SiCandidateAgent{
      for(const [key,count] of Object.entries(checked.failuresByCode))
       verificationFailures[key]=(verificationFailures[key]||0)+count;
    }
+   // Verified AI output only: the backend applies the configured caps and
+   // protects statutory source obligations. Never materialize cases here.
+   const selectionProposal=s.selectionPolicyActive?
+     projectC01ConfiguredSelection(s,recommendations):null;
    const result={status:'ADVISORY_REVIEW_REQUIRED',agentCode:'SI-C01',
      agentRunId:randomUUID(),provider:this.provider.toUpperCase(),
      mock:this.provider==='mock',simulationLabel:this.provider==='mock'?SI_MOCK_MARKER:null,
@@ -589,6 +642,7 @@ export class SiCandidateAgent{
      ignoredUnknownRecommendations:unexpectedCount,
      verificationFailures,
      humanDecisionRequired:true,mutations:false,
+     configuredSelectionPolicy:s.selection,selectionProposal,
      warning:this.provider==='mock'?
        'STATIC TEST LOGIC ONLY: NO AIRIA CALL; NO REAL MODEL ANALYSIS OR APPROVAL.':
        'Advisory only. '+verifiedCount+' verified AI recommendations; '+
