@@ -138,11 +138,15 @@
         <span><b>{{a.pscRisk.aiSelectedImos.length}} / {{a.pscRisk.cap}}</b> {{copy('PSC selected / cap','PSC مختارة / السقف')}}</span>
         <span><b>{{a.uaeFlag.eligibleImos}}</b> {{copy('UAE candidate IMOs B','سفن الإمارات المرشحة B')}}</span>
         <span><b>{{a.uaeFlag.aiSelectedImos.length}} / {{a.uaeFlag.cap}}</b> {{copy('UAE selected / cap','إماراتية مختارة / السقف')}}</span>
-        <span><b>{{a.mandatoryImos.length}}</b> {{copy('Protected source obligations','التزامات المصادر المحمية')}}</span>
+        <span *ngIf="a.serviceRequests"><b>{{a.serviceRequests.aiSelectedImos.length}} / {{a.serviceRequests.cap===null?'—':a.serviceRequests.cap}}</b> {{copy('Service vessels in THIS plan','سفن خدمات داخل الخطة الحالية')}}</span>
+        <span *ngIf="a.serviceRequests"><b>{{a.serviceRequests.waitingInBacklogImos.length}}</b> {{copy('Verified service requests still pending','طلبات خدمات موثقة ما زالت بالانتظار')}}</span>
+        <span><b>{{a.mandatoryImos.length}}</b> {{copy('Protected NMC referrals','إحالات NMC المحمية')}}</span>
+        <span *ngIf="a.maxPlannedVessels!==null&&a.maxPlannedVessels!==undefined"><b>{{a.maxPlannedVessels}}</b> {{copy('POC maximum plan size','الحد الأقصى لسفن خطة POC')}}</span>
         <span><b>{{a.overlappingImos.length}}</b> {{copy('Overlap deduplicated','التداخل بلا تكرار')}}</span>
         <span><b>{{a.selectedImos.length}}</b> {{copy('AI-proposed unique vessels','سفن مقترحة دون تكرار')}}</span>
         <span><b>{{a.manualReviewImos.length}}</b> {{copy('Manual review · optional','مراجعة يدوية · اختيارية')}}</span>
       </div>
+      <p class="notice" *ngIf="a.maxPlanExceededByProtectedSources">{{copy('Protected NMC referrals exceed the configured plan maximum. Explicit supervisor capacity exception is required; never drop protected cases.', 'إحالات NMC المحمية تجاوزت الحد الأقصى للخطة. يلزم معالجة استثناء الطاقة من المشرف، ولا تُحذف الإحالات.')}}</p>
       <p class="notice" *ngIf="plan?.mock">{{copy('MOCK ONLY — deterministic fixture, no Airia analysis. Do not treat these as actual AI judgements.','محاكاة MOCK فقط دون تحليل Airia حقيقي؛ لا تعتبر النتائج أحكامًا من AI.')}}</p>
       <div class="si-ai-selection-review" *ngFor="let r of a.selectedRows">
         <strong>IMO {{r.imo}}</strong>
