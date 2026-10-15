@@ -358,6 +358,25 @@ export class SiCandidateWorkbenchComponent implements OnInit,OnDestroy{
   planRow(v:SiVesselCandidate):SiInspectionPlanRow|null{
     return this.planLookup.get(v.imo)||null;
   }
+  vesselOutsidePlan(v:SiVesselCandidate):boolean{
+    return this.planRow(v)?.periodEligibility?.status==='OUTSIDE_EXECUTION_PLAN';
+  }
+  vesselPlanPeriodMessage(v:SiVesselCandidate):string{
+    const p=this.planRow(v)?.periodEligibility;
+    if(!p||p.status!=='OUTSIDE_EXECUTION_PLAN')return '';
+    const name=v.vesselName+' (IMO '+v.imo+')';
+    const dates=p.planStartsOn+' → '+p.planEndsOn;
+    const reason=p.reasonCode==='ARRIVAL_AFTER_PLAN_END'?
+      this.copy('verified vessel ETA is AFTER plan end',
+        'موعد وصول السفينة المؤكد بعد انتهاء فترة الخطة'):
+      this.copy('verified vessel ETD is BEFORE plan start',
+        'موعد مغادرة السفينة المؤكد قبل بداية فترة الخطة');
+    return this.copy(
+      'Cannot include '+name+'. Its '+reason+
+      '. Execution Plan: '+dates+'. Choose a plan covering the verified vessel visit window.',
+      'لا يمكن إدراج السفينة '+name+'، لأن '+reason+
+      '. فترة تنفيذ الخطة: '+dates+'. اختر خطة تشمل موعد وجود السفينة بالميناء.');
+  }
   get aiSelectedCount():number|null{return this.plan?.aiRecommendedVessels??null;}
   get planSelectedCount():number|null{return this.plan?.selectedForPlan??null;}
   get providerLabel():string{return this.plan?.provider||'NOT LOADED';}
@@ -465,6 +484,10 @@ export class SiCandidateWorkbenchComponent implements OnInit,OnDestroy{
     const row=this.planRow(v);
     if(!this.activePlanEditable||!this.activePlanId||!this.plan||!row?.editable||
        this.planBusy||!this.auth.isAdmin)return;
+    if(action==='INCLUDE'&&this.vesselOutsidePlan(v)){
+      this.planError=this.vesselPlanPeriodMessage(v);this.manualEditingImo='';
+      return;
+    }
     if(action==='NOT_APPLICABLE'&&row.mandatoryReferral){
       this.planError=this.copy('Mandatory NMC referrals cannot be marked Not Applicable.',
         'لا يمكن استبعاد إحالات NMC الإلزامية باعتبارها غير منطبقة.');return;
@@ -490,6 +513,12 @@ export class SiCandidateWorkbenchComponent implements OnInit,OnDestroy{
       this.planError=this.copy('Choose a valid review date.',
         'اختر تاريخ مراجعة صحيحًا.');return;
     }
+    if(this.manualAction==='INCLUDE'){
+      const vessel=this.dashboard?.vesselCandidates.find(v=>v.imo===this.manualEditingImo);
+      if(vessel&&this.vesselOutsidePlan(vessel)){
+        this.planError=this.vesselPlanPeriodMessage(vessel);return;
+      }
+    }
     this.planBusy=true;this.planError='';
     this.api.selectRollingVessel(this.activePlanId,{
       imo:this.manualEditingImo,action:this.manualAction,
@@ -504,8 +533,17 @@ export class SiCandidateWorkbenchComponent implements OnInit,OnDestroy{
       },
       error:e=>{
         this.planBusy=false;
-        this.planError=e?.error?.error||'SI_PLAN_SELECTION_FAILED';
-        if(this.planError.includes('CHANGED'))this.loadInspectionPlan();
+        const code=e?.error?.error||'SI_PLAN_SELECTION_FAILED';
+        if(code==='SI_VESSEL_OUTSIDE_EXECUTION_PLAN'){
+          const vessel=this.dashboard?.vesselCandidates.find(v=>v.imo===this.manualEditingImo);
+          this.planError=vessel?this.vesselPlanPeriodMessage(vessel):
+           this.copy('Cannot include this vessel: confirmed visit window is outside the Execution Plan.',
+            'لا يمكن إدراج هذه السفينة: موعد وجودها المؤكد خارج فترة تنفيذ الخطة.');
+          this.loadInspectionPlan();
+        }else{
+          this.planError=code;
+          if(code.includes('CHANGED'))this.loadInspectionPlan();
+        }
       }
     });
   }
