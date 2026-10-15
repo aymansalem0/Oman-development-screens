@@ -176,7 +176,18 @@
            <td>{{row.sourceTypes.join(' + ')}}<small>{{row.priorityCriterion}}</small>
             <small *ngIf="row.priorityReason">{{row.priorityReason}}</small></td>
            <td>{{row.inspectorName||'—'}}</td>
-           <td>{{row.startLocal||'—'}} <small *ngIf="row.endLocal">→ {{row.endLocal}}</small></td>
+           <td>
+            <strong *ngIf="row.visitWindow as w">
+             {{copy('Available from','متاحة من')}} {{w.feasibleFromLocal}}
+             <small>{{copy('Until','حتى')}} {{w.feasibleUntilLocal}}</small>
+             <small *ngIf="w.berthAtLocal">
+              {{copy('Confirmed berth','تراكي مؤكد')}}: {{w.berthAtLocal}}</small>
+            </strong>
+            <small *ngIf="row.startLocal">
+             {{copy('Inspector visit','زيارة المهندس')}}:
+             {{row.startLocal}} → {{row.endLocal}}</small>
+            <span *ngIf="!row.visitWindow&&!row.startLocal">—</span>
+           </td>
            <td>{{row.status}}<small *ngIf="row.blocker">{{row.blocker}}</small></td>
           </tr></tbody>
          </table>
