@@ -7,10 +7,37 @@ export class DashboardError extends Error {
   constructor(code, status=400) { super(code); this.code=code; this.status=status; }
 }
 
+/**
+ * Backend allowlist for Smart Inspection Dashboard Manager variables.
+ * Metadata/data live in Angular's si-dashboard-metric-catalog.ts and are
+ * explicitly labelled POC synthetic; centrally stored dashboards only
+ * persist widget configuration, never sample operating facts.
+ */
+export const SI_DASHBOARD_METRICS=Object.freeze({
+ kpi:[
+ 'siAiAnalyzedVessels','siAiAnalyzedWorkflows','siAiRunCount',
+ 'siAiEvidenceRate','siAiCoverageRate','siAiRecommended',
+ 'siAiAcceptanceRate','siAiManualReviews','siAiOverrides',
+ 'siAiProcessingSeconds','siAiPlanningMinutesSaved',
+ 'siOpsCandidateVessels','siOpsAiShortlisted','siOpsCapacityFeasible',
+ 'siOpsCapacityOverflow','siOpsCapacityMatchRate',
+ 'siOpsEngineerUtilization','siOpsScheduled','siOpsCompleted',
+ 'siOpsOnTimeRate','siOpsOpenFindings','siOpsOverdueActions',
+ 'siOpsClosureHours'
+ ],
+ bar:[
+ 'siAiCoverageTrend','siAiSelectionTrend','siAiAcceptanceTrend',
+ 'siAiTimeTrend','siAiDecisionMix','siOpsSelectionFunnel',
+ 'siOpsInspectionTrend','siOpsCapacityTrend','siOpsCapacityReasons',
+ 'siOpsInspectorLoad','siOpsPortLoad'
+ ],
+ table:['siAiRunRegister','siOpsPlanRegister']
+});
 const TYPES=Object.freeze({
-  kpi:['vesselCount','assessedCount','attentionCount','highCriticalCount','priorityCount','averageRisk'],
-  bar:['byRisk','byFlag','byType','byZone'],
-  table:['vesselTable'],
+  kpi:['vesselCount','assessedCount','attentionCount','highCriticalCount',
+    'priorityCount','averageRisk',...SI_DASHBOARD_METRICS.kpi],
+  bar:['byRisk','byFlag','byType','byZone',...SI_DASHBOARD_METRICS.bar],
+  table:['vesselTable',...SI_DASHBOARD_METRICS.table],
   position:['vesselPositions']
 });
 const RISK=['All','Normal','Watch','High','Critical','Pending'];
