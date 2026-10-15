@@ -4,7 +4,7 @@
  * Read-only projection: no models, source writes, inspection approvals or
  * statutory decisions occur when a vessel is selected.
  */
-import {createHash} from 'node:crypto';
+import {createHash,randomUUID} from 'node:crypto';
 import {SI_BASE_CHECKLIST} from './si-inspection-preparation.mjs';
 
 const unique=v=>[...new Set(v.filter(Boolean))];
@@ -208,7 +208,7 @@ export function buildA04FocusedFieldRequest({preparation,step,language='en'}={})
  if(!preparation?.context||!step?.stepId)throw Error('SI_FIELD_AI_CONTEXT_REQUIRED');
  const c=preparation.context;
  const now=new Date().toISOString();
- return {requestMeta:{correlationId:'SI-STEP-'+hash(step.stepId+'|'+now),
+ return {requestMeta:{correlationId:'SI-A04-'+randomUUID(),
    schemaVersion:'2.0',language,requestedAt:now},
   inspectionId:c.inspectionId,caseId:c.caseId,
   subject:{type:'VESSEL',imo:c.imo,name:c.vessel?.name},
