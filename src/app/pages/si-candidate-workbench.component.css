@@ -479,3 +479,17 @@ button:disabled{opacity:.55;cursor:not-allowed}
  overflow-wrap:anywhere}
 .si-vessel-movement-date>span{color:#708391;font-size:11px}
 .si-vessel-movement-date>.si-vessel-date-conflict{font-weight:700;color:#ad493a}
+
+
+.si-auto-planning-flow{display:flex;gap:9px;align-items:center;flex-wrap:wrap;
+ margin:13px 0;padding:12px;border:1px solid #b9d6dc;
+ border-radius:8px;background:#f2f8fa;font-size:11px;color:#235871;font-weight:700}
+.si-auto-planning-flow b{color:#158b80;font-size:14px}
+.si-auto-in-plan{color:#0e7467;font-size:11px}
+.si-auto-outside-plan{color:#ab6930;font-size:11px}
+.si-auto-capacity-blocker{color:#a73636;font-size:11px}
+.si-auto-capacity-overflow{padding:15px;margin:15px 0;border-radius:9px;
+ border:1px solid #dec8af;background:#fffaf3}
+.si-auto-capacity-overflow h4{margin:0 0 9px;color:#80522d}
+.si-auto-capacity-overflow p,.si-auto-capacity-overflow div{
+ margin:5px 0;color:#655b50;font-size:11px;line-height:1.7}
