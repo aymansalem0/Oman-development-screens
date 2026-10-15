@@ -634,8 +634,13 @@
                   <div *ngIf="activePlanEditable&&plan&&planRow(v)?.editable"
                     class="si-rolling-actions">
                     <button type="button" *ngIf="!planRow(v)?.planSelected"
-                      (click)="openManualDecision(v,'INCLUDE')" [disabled]="planBusy">
+                      (click)="openManualDecision(v,'INCLUDE')"
+                      [disabled]="planBusy||vesselOutsidePlan(v)"
+                      [title]="vesselPlanPeriodMessage(v)">
                       {{copy('Include','إدراج')}}</button>
+                    <small *ngIf="vesselOutsidePlan(v)"
+                      class="si-vessel-period-blocked" role="status">
+                      {{vesselPlanPeriodMessage(v)}}</small>
                     <button type="button" *ngIf="planRow(v)?.planSelected"
                       (click)="openManualDecision(v,'NOT_SELECTED')" [disabled]="planBusy">
                       {{copy('Remove','استبعاد')}}</button>
