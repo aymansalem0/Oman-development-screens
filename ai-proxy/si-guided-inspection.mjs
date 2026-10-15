@@ -226,7 +226,7 @@ export function buildA04FocusedFieldRequest({preparation,step,language='en'}={})
    focusedFieldStep:{title:step.title,stepId:step.stepId,
      category:step.category,required:step.mandatory,
      evidenceRefs:step.references,
-     instruction:'Propose EXACT inspector field actions to check, what source documents to compare, what observations/photos to capture, and which source gaps to flag. Never predict compliance, do not answer the checklist, do not invent documents or findings. Express practical actions in checklistFocus[].reason for the nearest base checklist category; cite permitted evidence IDs.'}},
+     instruction:'Give specific, practical, numbered field actions for THIS exact question, including what to inspect physically, which authorized source documents to compare, what photos/measurements to record, and which evidence gaps require inspector verification. Express the steps in focusAreas[].reason with focusAreas[].category EXACTLY equal to the requested focusedFieldStep.title. Also provide checklistFocus[] for the closest existing mandatory base check where applicable. Reference ONLY supplied evidence IDs. Do not predict compliance, generate deficiency findings, invent evidence, or supply inspector answers.'}},
   inspectionRegimes:c.targetRegimes,provenance:c.provenance,
   officialScoringRequested:false,
   requestedOutputs:['FOCUS_OVERLAY','MISSING_EVIDENCE'],
@@ -237,17 +237,26 @@ export function projectA04FocusedFieldAdvice(validated,step){
  const matching=options.filter(x=>
   x.existingItemId===step.members.find(m=>m.kind==='LIFECYCLE'&&base[m.id])?.id||
   x.existingItemId===checkIdForStep(step));
+ const exactAreas=list(validated.focusAreas).filter(x=>
+   normalizeInspectionQuestion(x.category)===normalizeInspectionQuestion(step.title)
+   &&text(x.reason));
+ const specific=exactAreas.length>0||matching.length>0;
  const details=matching.length?matching:options;
+ const actions=[
+   ...exactAreas.map(x=>({
+     instruction:x.reason,focus:'EXACT_CHECKLIST_QUESTION',
+     evidenceRefs:list(x.evidenceIds),approvedObservation:false
+   })),
+   ...details.map(x=>({
+     instruction:x.reason,focus:x.focus,
+     evidenceRefs:list(x.reasonEvidenceIds),approvedObservation:false
+   }))
+ ];
  return {status:'AIRIA_A04_FIELD_GUIDANCE_ADVISORY',
   stepId:step.stepId,
-  stepSpecific:matching.length>0,
-  warnings:matching.length?[]:['AI_RETURNED_GENERAL_SCOPE_FOCUS_ONLY'],
-  actions:details.map(x=>({
-    instruction:x.reason,
-    focus:x.focus,
-    evidenceRefs:list(x.reasonEvidenceIds),
-    approvedObservation:false
-  })),
+  stepSpecific:specific,
+  warnings:specific?[]:['AI_RETURNED_GENERAL_SCOPE_FOCUS_ONLY'],
+  actions,
   focusAreas:list(validated.focusAreas).map(x=>({
    title:x.category,priority:x.priority,instruction:x.reason,
    evidenceRefs:list(x.evidenceIds)})),
