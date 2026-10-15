@@ -332,8 +332,8 @@ export class SiCandidateWorkbenchComponent implements OnInit{
     const message=mock?
       this.copy('Confirm officer planning change and re-run MOCK C01 with zero Airia calls? No official inspection case will be changed.',
         'تأكيد تعديل خطة المعاينات وإعادة ترتيب MOCK C01 دون اتصال Airia؟ لن تتغير حالات المعاينة الرسمية.'):
-      this.copy('Run '+calls+' Airia SI-C01 analysis calls for all current workflows? Each call may incur cost. Advice only.',
-        'تشغيل '+calls+' طلب تحليل Airia لتغطية جميع مسارات الترشيح؟ قد ينشأ عن كل طلب تكلفة. التوصيات استشارية فقط.');
+      this.copy('Run '+calls+' Airia SI-C01 analysis batches for the current source-verified workflows and apply the published small-plan selection caps? AI advice only, supervisor approves.',
+        'تشغيل '+calls+' دفعات تحليل Airia لمسارات المرشحين الموثقة وتطبيق حدود الخطة الصغيرة المنشورة؟ التوصيات استشارية والاعتماد للمشرف.');
     if(!window.confirm(message))return;
     this.planBusy=true;this.planError='';this.planNotice='';
     this.planAiPhase='analyzing';
@@ -378,9 +378,9 @@ export class SiCandidateWorkbenchComponent implements OnInit{
           this.copy('Source data changed during analysis. Reload the plan before retrying.',
             'تغيرت بيانات المصادر أثناء التحليل؛ أعد تحميل الخطة قبل إعادة المحاولة.'):
           this.copy('Airia C01 validation failure: '+diagnosis+
-            '. The plan is unchanged. Inspect the matching field in the Airia pipeline before another paid run.',
+            '. The plan is unchanged. Check the indicated field in the Airia pipeline before retrying.',
             'فشل فحص Airia C01: '+diagnosis+
-            '. الخطة لم تتغير. راجع الحقول المشار إليها داخل Airia قبل تشغيل مدفوع جديد.');
+            '. الخطة لم تتغير. راجع الحقول المشار إليها في Airia قبل إعادة التشغيل.');
         if(changed)this.loadInspectionPlan();
       }
     });
@@ -435,8 +435,8 @@ export class SiCandidateWorkbenchComponent implements OnInit{
     const prompt=isMock?
       this.copy('Generate a MOCK C01 advisory with zero Airia calls? It cannot approve an inspection.',
         'إنشاء توصية C01 تجريبية دون تشغيل Airia؟ لا تعتمد أي معاينة.'):
-      this.copy('Run '+calls+' Airia SI-C01 calls to cover every saved candidate workflow? This may incur cost. No inspection approval.',
-        'تشغيل '+calls+' طلب Airia SI-C01 لتغطية جميع مسارات الترشيح المحفوظة؟ قد ينشأ عنها تكلفة، ولن تُعتمد المعاينات تلقائيًا.');
+      this.copy('Run '+calls+' Airia SI-C01 analysis batches for all verified candidate workflows and select a small draft roster within published quotas? No automatic inspection approval.',
+        'تشغيل '+calls+' دفعات Airia SI-C01 لجميع مسارات المرشحين الموثقة واختيار عدد محدود لخطة مسودة ضمن القواعد المنشورة؟ لا يتم اعتماد المعاينات تلقائيًا.');
     if(!window.confirm(prompt))return;
     this.c01Busy=true;this.c01Error='';this.c01Message='';
     this.api.candidateAiRun(this.editorKey.trim(),{
