@@ -1423,6 +1423,13 @@ const server = createServer(async (req, res) => {
         const decision=validateIntegratedCapacityProposal(
           selection,proposal,body.selectedOptionId);
         const optimized=decision.variant;
+        // For integrated pre-save drafts, the requested plan execution period
+        // is an additional hard approval gate (including chosen alternatives).
+        if(plan.capacityDraft&&optimized.assignments.some(a=>
+          typeof a.startLocal!=='string'||typeof a.endLocal!=='string'||
+          a.startLocal.slice(0,10)<plan.startsOn||
+          a.endLocal.slice(0,10)>plan.endsOn))
+          return respond(res,409,{error:'SI_INTEGRATED_VISIT_OUTSIDE_PLAN_PERIOD'});
         const approvedProposal={
           ...proposal,planRevision:plan.revision+1,
           summary:{...proposal.summary,total:decision.selected.length,
