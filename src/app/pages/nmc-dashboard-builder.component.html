@@ -170,6 +170,12 @@
         ✎ {{copy('Editing the next revision of an existing published dashboard. The live version stays available until Republish.',
                   'تعديل الإصدار التالي من لوحة منشورة. النسخة الحالية تظل متاحة حتى إعادة النشر.')}}
       </p>
+      <div *ngIf="dashboardHasDemoMetrics" class="db-poc-metric-banner" role="note">
+        <strong>{{copy('POC SYNTHETIC DATA · illustrative only','بيانات تجريبية افتراضية للـPOC · للعرض فقط')}}</strong>
+        <span>{{copy('Sample period','الفترة التوضيحية')}}: {{siDemoPeriod}}.
+        {{copy('These AI and Smart Inspection variables are independent of live Airia, Oracle and ERP. They do not represent actual usage, completed inspections, measured improvements, or regulatory outcomes.',
+        'مؤشرات AI والمعاينات هنا مستقلة عن Airia وOracle وERP الفعلية، ولا تمثل حجم الاستخدام الحقيقي أو المعاينات المنجزة أو نتائج تشغيلية مؤكدة.')}}</span>
+      </div>
       <div class="db-statusline">
         <span>● {{copy('Risk rules','قواعد المخاطر')}}: {{riskVersion}}</span>
         <span>{{copy('Available assessments','التقييمات المتاحة')}}: {{assessed.length}} / {{fleet.length}}</span>
@@ -177,7 +183,7 @@
         <span *ngIf="dirty&&!viewOnly" class="db-unsaved">{{copy('Unsaved changes','تغييرات غير محفوظة')}}</span>
       </div>
       <p class="db-message" *ngIf="saveMessage">{{saveMessage}}</p>
-      <p class="db-error" *ngIf="dataError">{{dataError}}</p>
+      <p class="db-error" *ngIf="dataError&&dashboardUsesFleet">{{dataError}}</p>
 
       <div *ngIf="viewOnly" class="db-view-filters">
         <strong>{{copy('Filter results','تصفية النتائج')}}</strong>
@@ -271,7 +277,11 @@
           <div class="db-canvas-header">
             <div><span class="db-kicker">{{viewOnly?copy('MARITIME DASHBOARD','لوحة المعلومات البحرية'):copy('LIVE PREVIEW','المعاينة المباشرة')}}</span>
               <h3>{{board.title}}</h3>
-              <small>{{filtered.length}} {{copy('vessels matching selected filters','سفينة وفق الفلاتر المختارة')}}</small>
+              <small *ngIf="dashboardUsesFleet">
+                {{filtered.length}} {{copy('vessels matching selected filters','سفينة وفق الفلاتر المختارة')}}</small>
+              <small *ngIf="dashboardHasDemoMetrics">
+                {{copy('Synthetic Smart Inspection indicators · May to October 2026',
+                'مؤشرات المعاينة التجريبية · مايو إلى أكتوبر 2026')}}</small>
             </div>
             <span class="db-chip">{{board.widgets.length}} {{copy('widgets','مؤشرات')}}</span>
           </div>
@@ -299,10 +309,25 @@
                 </span>
               </div>
 
+              <div *ngIf="isSiDemoMetric(widget.metric)" class="db-demo-widget-source"
+                [title]="siMetricExplanation(widget.metric)">
+                {{copy('STATIC POC DATA · NOT OFFICIAL','بيانات افتراضية ثابتة · ليست رسمية')}}
+              </div>
               <div class="db-widget-config" *ngIf="!viewOnly">
                 <label>{{copy('Indicator','المؤشر')}}
                   <select [(ngModel)]="widget.metric" (ngModelChange)="changeMetric(widget)">
-                    <option *ngFor="let option of catalog[widget.type]" [value]="option.value">{{copy(option.en,option.ar)}}</option>
+                    <optgroup [label]="copy('Maritime / NMC','البيانات البحرية / NMC')">
+                      <option *ngFor="let option of metricGroupOptions(widget.type,'NMC')"
+                       [value]="option.value">{{copy(option.en,option.ar)}}</option>
+                    </optgroup>
+                    <optgroup [label]="copy('Smart Inspection · AI Performance','المعاينة الذكية · أداء AI')">
+                      <option *ngFor="let option of metricGroupOptions(widget.type,'AI_PERFORMANCE')"
+                       [value]="option.value">{{copy(option.en,option.ar)}} · POC</option>
+                    </optgroup>
+                    <optgroup [label]="copy('Smart Inspection · Inspection Operations','المعاينة الذكية · عمليات المعاينات')">
+                      <option *ngFor="let option of metricGroupOptions(widget.type,'INSPECTION_OPERATIONS')"
+                       [value]="option.value">{{copy(option.en,option.ar)}} · POC</option>
+                    </optgroup>
                   </select>
                 </label>
               </div>
@@ -328,7 +353,7 @@
                 </small>
               </div>
               <div class="db-kpi" *ngIf="widget.type==='kpi'">
-                <strong>{{isLoading?'…':metricNumber(widget.metric)}}</strong>
+                <strong>{{isSiDemoMetric(widget.metric)?metricNumber(widget.metric):isLoading?'…':metricNumber(widget.metric)}}</strong>
                 <span>{{metricName(widget.metric)}}</span>
               </div>
 
@@ -342,6 +367,19 @@
               </app-nmc-distribution-chart>
 
               <div class="db-table-wrap" *ngIf="widget.type==='table'">
+                <ng-container *ngIf="siDemoTableFor(widget.metric) as data; else nmcFleetTable">
+                  <table class="db-table">
+                    <thead><tr><th *ngFor="let header of data.headers">
+                      {{copy(header.en,header.ar)}}</th></tr></thead>
+                    <tbody><tr *ngFor="let cells of data.rows">
+                      <td *ngFor="let cell of cells">{{cell}}</td></tr></tbody>
+                  </table>
+                  <small class="db-demo-table-caption">
+                    {{copy('Demonstration dataset only · no official inspection or AI-run records',
+                    'سجل توضيحي فقط · ليس بيانات معاينات رسمية أو عمليات AI فعلية')}}
+                  </small>
+                </ng-container>
+                <ng-template #nmcFleetTable>
                 <table class="db-table">
                   <thead><tr>
                     <th>{{copy('Vessel','السفينة')}}</th><th>IMO</th><th>{{copy('Type','النوع')}}</th>
@@ -363,6 +401,7 @@
                   <span>{{tablePage}} / {{tablePages}}</span>
                   <button type="button" (click)="setPage(tablePage+1)" [disabled]="tablePage>=tablePages">›</button>
                 </div>
+                </ng-template>
               </div>
 
               <div class="db-position-wrap" *ngIf="widget.type==='position'">
