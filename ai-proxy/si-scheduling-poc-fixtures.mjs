@@ -105,13 +105,12 @@ export function fillPocSchedulingVisitContext(context,snapshot,{clock=()=>Date.n
   const baseDay=new Date(dayAt(tomorrow,'00:00')+Math.floor(index/8)*DAY_MS);
   const demoStart=dayAt(dubaiDay(baseDay.getTime()),'08:00');
   const sourceArrival=localEpoch(v.etaLocal);
-  const sourceDeparture=localEpoch(v.etdLocal);
   if(!v.etaLocal){
-   const beforeSource=Number.isFinite(sourceDeparture)&&sourceDeparture>now?
-    sourceDeparture-18*3600000:NaN;
-   const start=Number.isFinite(beforeSource)&&beforeSource>now+90*60000?
-    beforeSource:demoStart;
-   add('earliestLocal',fmt(start));
+   // Demo-only arrival is independent of ETD: NEVER work backwards
+   // from departure (-18h) to invent a vessel's arrival or berthing.
+   // If this synthetic start falls after a real final ETD, let the
+   // capacity solver flag the impossible window without changing ETD.
+   add('earliestLocal',fmt(demoStart));
   }
   if(!v.etdLocal){
    const arrival=Number.isFinite(sourceArrival)?sourceArrival:
