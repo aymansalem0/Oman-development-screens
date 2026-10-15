@@ -115,6 +115,12 @@ test('C01 request actually receives configured publisher rules, returns evidence
  assert.equal(called,1);
  assert.equal(run.externalCalls,0);
  assert.equal(seenPolicy.uaePoolMode,'ELIGIBLE_CANDIDATES_ONLY');
+ assert.equal(seenPolicy.eligibleSelectionPool.distinctCandidateImos,6);
+ assert.equal(seenPolicy.eligibleSelectionPool.pscEligibleImos,4);
+ assert.equal(seenPolicy.eligibleSelectionPool.pscCap,2);
+ assert.equal(seenPolicy.eligibleSelectionPool.uaeEligibleImos,1);
+ assert.equal(seenPolicy.eligibleSelectionPool.uaeCap,1);
+ assert.equal(seenPolicy.eligibleSelectionPool.mandatoryOutsideCaps,2);
  assert.equal(run.selectionProposal.pscRisk.cap,2);
  assert.equal(run.selectionProposal.uaeFlag.cap,1);
  assert.equal(run.selectionProposal.selectedImos.length,4);
