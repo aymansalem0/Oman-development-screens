@@ -7,6 +7,7 @@
  */
 import {createHash} from 'node:crypto';
 import {pocInspectorIdForActor} from './si-inspector-identity.mjs';
+import {projectMissingPocEta} from './si-poc-eta-projection.mjs';
 const hash=s=>createHash('sha256').update(String(s)).digest('hex').slice(0,16);
 const DUBAI_MS=4*3600000,DAY_MS=24*3600000;
 const fmt=ms=>new Date(ms+DUBAI_MS).toISOString().slice(0,16).replace('T',' ');
@@ -106,11 +107,15 @@ export function fillPocSchedulingVisitContext(context,snapshot,{clock=()=>Date.n
   const demoStart=dayAt(dubaiDay(baseDay.getTime()),'08:00');
   const sourceArrival=localEpoch(v.etaLocal);
   if(!v.etaLocal){
-   // Demo-only arrival is independent of ETD: NEVER work backwards
-   // from departure (-18h) to invent a vessel's arrival or berthing.
-   // If this synthetic start falls after a real final ETD, let the
-   // capacity solver flag the impossible window without changing ETD.
-   add('earliestLocal',fmt(demoStart));
+   // Use exactly the same deterministic POC-only ETA as Candidate Center,
+   // rather than displaying one ETA and scheduling a different one.
+   // A final MSW ETD stays immutable. No viable example -> UNSCHEDULED.
+   const proposed=projectMissingPocEta(v.imo,{
+     now,verifiedDepartureAt:v.etdLocal||null});
+   if(proposed){
+     add('earliestLocal',proposed.etaLocal);
+     add('demoEtaStatus',proposed.status);
+   }
   }
   if(!v.etdLocal){
    const arrival=Number.isFinite(sourceArrival)?sourceArrival:
