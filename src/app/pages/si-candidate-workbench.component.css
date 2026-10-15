@@ -427,3 +427,11 @@ button:disabled{opacity:.55;cursor:not-allowed}
 .si-draft-visit h5{font-size:12px;color:#12646c;margin:0 0 9px}
 @media(max-width:750px){.si-draft-form-grid{grid-template-columns:1fr}
   .si-draft-stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+
+.si-draft-saved-assignments{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:12px 0}
+.si-draft-saved-assignments article{padding:10px;border-radius:8px;background:#f0f8fa;border:1px solid #cfdee2}
+.si-draft-saved-assignments strong,.si-draft-saved-assignments small{display:block;margin:3px 0;overflow-wrap:anywhere}
+.si-draft-saved-assignments strong{font-size:11px;color:#145870}
+.si-draft-saved-assignments small{font-size:10px;color:#4b6975}
+@media(max-width:800px){.si-draft-saved-assignments{grid-template-columns:1fr}}
