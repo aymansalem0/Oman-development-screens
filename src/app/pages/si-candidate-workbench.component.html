@@ -196,7 +196,7 @@
              {{row.startLocal}} → {{row.endLocal}}</small>
             <span *ngIf="!row.visitWindow&&!row.startLocal">—</span>
            </td>
-           <td>{{row.status}}<small *ngIf="row.blocker">{{row.blocker}}</small></td>
+           <td>{{row.status}}<small *ngIf="row.blocker">{{capacityBlockerText(row.blocker)}}</small></td>
            <td>
             <strong *ngIf="row.inCurrentPlan" class="si-auto-in-plan">
              {{copy('IN DRAFT','داخل المسودة')}}</strong>
@@ -216,7 +216,7 @@
          <div *ngFor="let missing of draft.outsidePlan">
           <strong>IMO {{missing.imo}}</strong> ·
           {{copy('Priority','الأولوية')}} #{{missing.originalPriority}}
-          · {{missing.reasonCode}}</div>
+          · {{capacityBlockerText(missing.reasonCode)}}</div>
         </section>
         <section class="si-draft-inputs">
          <h4>{{copy('Capacity inputs — correct missing visit data, then recalculate before Save',
@@ -352,7 +352,7 @@
        <div *ngFor="let item of cap.capacityExcluded">
         <strong>IMO {{item.imo}}</strong> ·
         {{copy('Priority','الأولوية')}} #{{item.originalPriority}}
-        · {{item.reasonCode}}
+        · {{capacityBlockerText(item.reasonCode)}}
        </div>
       </section>
       <p *ngIf="cap.mandatoryUnscheduled.length" class="notice error">
@@ -361,7 +361,7 @@
        {{cap.mandatoryUnscheduled.join(', ')}}</p>
       <p *ngIf="cap.unscheduled.length" class="si-rolling-note">
        {{copy('Vessels still awaiting capacity','سفن بانتظار الطاقة')}}:
-       <span *ngFor="let row of cap.unscheduled">IMO {{row.imo}} · {{row.blocker||'CAPACITY_CONFLICT'}}; </span>
+       <span *ngFor="let row of cap.unscheduled">IMO {{row.imo}} · {{capacityBlockerText(row.blocker)}}; </span>
       </p>
       <p class="si-rolling-note">{{copy('Saved allocation is provisional. Supervisor approval revalidates current ERP, source and booking conflicts before issuing any work order.',
        'التخصيص مبدئي؛ عند اعتماد المشرف تُراجع المصادر والـERP والتعارضات الحالية قبل إصدار أي أمر تكليف.')}}</p>
