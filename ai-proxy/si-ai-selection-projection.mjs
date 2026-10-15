@@ -10,7 +10,7 @@ import {compareInspections} from './si-inspection-ranking.mjs';
 
 const isUae=x=>['UAE','AE','ARE','UNITED ARAB EMIRATES',
  'الإمارات','الإمارات العربية المتحدة'].includes(
- String(x||'').trim().toUpperCase().replace(/[\\s._-]+/g,' '));
+ String(x||'').trim().toUpperCase().replace(/[\s._-]+/g,' '));
 const unique=xs=>[...new Set(xs)];
 const confidenceOf=r=>Number.isFinite(r?.confidence)?r.confidence:-1;
 
