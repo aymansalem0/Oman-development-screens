@@ -49,7 +49,7 @@ export function projectC01ConfiguredSelection(source,recommendations){
  const limit=(n,percent)=>Math.floor(n*percent/100);
  const pscCap=limit(psc.length,policy.pscRiskRatePercent);
  const uaeCap=limit(uae.length,policy.uaeFlagRatePercent);
- const pscSelected=psc.filter(recommended).slice(0,pscCap);
+ const pscSelected=psc.filter(r=>r.risk!==null&&recommended(r)).slice(0,pscCap);
  const uaeSelected=uae.filter(recommended).slice(0,uaeCap);
  const mandatory=rows.filter(r=>r.mandatory);
  const selected=new Set([...pscSelected,...uaeSelected,...mandatory].map(r=>r.imo));
@@ -78,7 +78,8 @@ export function projectC01ConfiguredSelection(source,recommendations){
      aiRecommendationConfidence:score(r)<0?null:score(r)})),
    aiRecommendedButQuotaExcluded:rows.filter(r=>recommended(r)&&!selected.has(r.imo))
      .map(r=>r.imo),
-   manualReviewImos:rows.filter(r=>!recommended(r)&&!r.mandatory).map(r=>r.imo),
+   manualReviewImos:rows.filter(r=>!r.mandatory&&(!recommended(r)||
+     (r.psc&&r.risk===null&&!uaeSelected.includes(r)))).map(r=>r.imo),
    sourceCandidateImos:rows.length,approved:false,
    aiSelectionValidated:true,
    configuredPolicy:policy
