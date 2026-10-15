@@ -73,6 +73,19 @@ test('Preview is a read-only HUMAN-approved-plan maritime schedule for 2 vessels
  assert.equal(result.rows[0].assignment.locationType,'BERTH');
  assert.equal(invoke().proposalHash,result.proposalHash,'same evidence yields same hash');
 });
+test('Execution Plan dates are a HARD solver constraint before supervisor approval',()=>{
+ const blocked=invoke({plan:{...plan,startsOn:'2026-10-16',endsOn:'2026-10-19'}});
+ assert.equal(blocked.summary.proposed,0,
+  'October 20 inspector visits cannot enter an execution plan ending Oct 19');
+ assert.equal(blocked.summary.unscheduled,2);
+ assert.ok(blocked.rows.every(x=>
+  x.blocker==='SI_VISIT_OUTSIDE_EXECUTION_PLAN_PERIOD'));
+ assert.equal(blocked.variants.length,1);
+ assert.equal(blocked.variants[0].allocatedVessels,0);
+ const allowed=invoke({plan:{...plan,startsOn:'2026-10-16',endsOn:'2026-10-20'}});
+ assert.equal(allowed.summary.proposed,2,
+  'Same October 20 options are feasible when within plan dates');
+});
 test('Never double-book a single engineer or exceed batch daily limits',()=>{
  const result=invoke({existingBookings:[{inspectorId:'ENG2',startUtc:'2026-10-20T05:00:00.000Z',endUtc:'2026-10-20T06:00:00.000Z'},{inspectorId:'ENG2',startUtc:'2026-10-20T08:00:00.000Z',endUtc:'2026-10-20T10:30:00.000Z'}]});
  assert.equal(result.summary.proposed,1);
