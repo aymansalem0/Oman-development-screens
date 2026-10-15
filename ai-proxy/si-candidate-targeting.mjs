@@ -8,6 +8,7 @@ import {existsSync,readFileSync} from 'node:fs';
 import {atomicJsonWrite} from './atomic-json-store.mjs';
 import oracledb from 'oracledb';
 import {getSiRankingPolicy,compareInspections} from './si-inspection-ranking.mjs';
+import {projectMissingPocEta} from './si-poc-eta-projection.mjs';
 
 const copy=x=>JSON.parse(JSON.stringify(x));
 const iso=()=>new Date().toISOString();
@@ -435,7 +436,7 @@ export class SiCandidateTargeting{
    * decisions: PSC and Service Requests are different statutory workflows.
    * A single vessel may have multiple source events and multiple actions.
    */
-  _vesselCandidates(candidates,incidentSignals=new Map(),operationalEvents=[]){
+  _vesselCandidates(candidates,incidentSignals=new Map(),operationalEvents=[],{demoEta=false,clock=()=>Date.now()}={}){
     const vessels=new Map();
     for(const c of candidates){
       let item=vessels.get(c.imo);
@@ -443,6 +444,7 @@ export class SiCandidateTargeting{
         item={imo:c.imo,vesselName:c.vesselName,flag:c.flag,
           vesselType:c.vesselType,currentRisk:c.currentRisk,
           arrivalAt:null,arrivalStatus:'MISSING',arrivalSourceReference:null,
+          demoArrivalAt:null,demoArrivalStatus:null,
           departureAt:null,departureVerified:false,departureStatus:'MISSING',
           departureSourceReference:null,
           incidentSeverity:null,incidentHumanReviewed:false,incidentEvidenceRef:null,
@@ -535,9 +537,30 @@ export class SiCandidateTargeting{
       const forActiveDeparture=item.departureStatus==='VERIFIED'?
         acceptedEvents.filter(e=>e.departureVerified&&
           Date.parse(e.departureAt||'')===currentEtd):[];
-      const etaSources=(forActiveDeparture.length?forActiveDeparture:
-        acceptedEvents.filter(e=>Boolean(arrivalLocal(e))));
-      const etaRecords=etaSources.filter(e=>arrivalLocal(e));
+      // First prefer the same final port-call's ETA. A separate source
+      // may verify the current arrival even when that ETD record has no ETA:
+      // accept only same-port, chronological, ≤30 days before the final ETD.
+      const exact=forActiveDeparture.filter(e=>Boolean(arrivalLocal(e)));
+      let etaRecords=exact;
+      if(!etaRecords.length){
+        const final=forActiveDeparture[0]||null;
+        const refPort=typeof final?.port==='string'?
+          final.port.trim().toUpperCase():'';
+        const eligible=acceptedEvents.filter(e=>{
+          const eta=arrivalLocal(e);
+          if(!eta)return false;
+          const raw=eta.replace(' ','T');
+          const ms=/(?:Z|[+-]\\d\\d:\\d\\d)$/.test(raw)?
+           Date.parse(raw):Date.parse(raw+(/:\\d\\d$/.test(raw)?'':':00')+'+04:00');
+          const samePort=!refPort||
+            String(e.port||'').trim().toUpperCase()===refPort;
+          return Number.isFinite(ms)&&samePort&&
+            (!Number.isFinite(currentEtd)||
+              (ms<=currentEtd&&currentEtd-ms<=30*86400000));
+        });
+        // Distinct historical times cannot be silently reconciled.
+        etaRecords=eligible;
+      }
       const uniqueEta=new Set(etaRecords.map(e=>arrivalLocal(e)));
       if(item.departureStatus==='CONFLICT'){
         item.arrivalStatus='CONFLICT';
@@ -552,6 +575,16 @@ export class SiCandidateTargeting{
         const departureEvidence=departures.find(e=>
           e.departureAt===item.departureAt);
         item.departureSourceReference=departureEvidence?.sourceReference||null;
+      }
+      if(demoEta&&item.arrivalStatus==='MISSING'){
+        // Display-only training suggestion. No source event, eligibility,
+        // C01 snapshot evidence or legally verified ETA is altered.
+        const mock=projectMissingPocEta(item.imo,{now:clock(),
+          verifiedDepartureAt:item.departureVerified?item.departureAt:null});
+        if(mock){
+          item.demoArrivalAt=mock.etaLocal;
+          item.demoArrivalStatus=mock.status;
+        }
       }
       const incident=incidentSignals.get(item.imo);
       if(incident&&incident.humanReviewed===true&&
@@ -590,7 +623,8 @@ export class SiCandidateTargeting{
         }
       }catch{incidentSignals=new Map();}
     }
-    const vesselCandidates=this._vesselCandidates(candidates,incidentSignals,state.events);
+    const vesselCandidates=this._vesselCandidates(candidates,incidentSignals,state.events,
+      {demoEta:process.env.SI_SCHEDULING_DEMO_MODE==='true'});
     const summary={evaluatedPopulation:this.bundles.length,assessedRiskVessels:risks.size,
       candidateVessels:vesselCandidates.length,
       pendingVessels:vesselCandidates.filter(v=>v.pendingWorkflows>0).length,
