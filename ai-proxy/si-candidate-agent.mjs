@@ -459,7 +459,8 @@ export class SiCandidateAgent{
    snapshotHash:s.snapshotHash,policyRevision:s.policyRevision,
    pscQuotaPolicyRevision:s.pscQuotaPolicyRevision,
    riskPolicyRevision:s.riskPolicyRevision,eligibleCount:s.candidates.length,
-   aiAdvisory:s.aiAdvisory,selectionPolicy:s.selection,
+   aiAdvisory:s.aiAdvisory,
+   selectionPolicy:s.selectionPolicyActive?s.selection:null,
    expectedBatches:Math.ceil(s.candidates.length/(this.provider==='airia'?25:100)),
    estimatedAiriaCalls:this.provider==='airia'?Math.ceil(s.candidates.length/25):0,
    candidates:s.candidates,externalCalls:0,
@@ -514,7 +515,7 @@ export class SiCandidateAgent{
      // subordinate to these immutable process/evidence/approval constraints.
      aiAdvisory:s.aiAdvisory,
      // Published policy is sent to C01 without changing its response schema.
-     configuredSelectionPolicy:{
+     configuredSelectionPolicy:s.selectionPolicyActive?{
        ...s.selection,
        eligibleSelectionPool:publishedBounds?{
          distinctCandidateImos:publishedBounds.sourceCandidateImos,
@@ -531,7 +532,7 @@ export class SiCandidateAgent{
        neverOverridePscPortCallQuota:true,
        missingVesselRisk:'MANUAL_REVIEW_NOT_INVENTED',
        finalHumanApprovalRequired:true
-     },
+     ,neverAllowSilentPolicyActivation:true}:null,
      outputContract:{
        format:'STRICT_JSON_OBJECT_NO_MARKDOWN',
        topLevel:{recommendations:'array: exactly one per supplied candidateKey'},
@@ -560,7 +561,7 @@ export class SiCandidateAgent{
        configuredGuidanceIsNonRegulatory:true,
        considerSelectedSignalsOnlyForAdvisoryInterpretation:true,
        minimumConfidenceForAutomaticAdvice:s.aiAdvisory.minimumSelectionConfidence,
-       performSelectionWithinPublishedQuotas:true,
+       performSelectionWithinPublishedQuotas:s.selectionPolicyActive,
        uaeFlagSelectionPool:'SOURCE_ELIGIBLE_CANDIDATE_CENTER_ONLY',
        returnSelectDeferOrManualReviewForEveryCandidate:true,
        neverGenerateUnapprovedCandidates:true
