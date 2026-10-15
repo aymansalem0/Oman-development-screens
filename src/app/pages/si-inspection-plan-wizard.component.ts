@@ -25,6 +25,9 @@ interface CapacityItem{
 interface CapacityContext{
  planId:string;sourceHash:string;planRevision:number;demoMode?:boolean;
  selection:{selectionHash:string;
+  draftScope?:{locked:boolean;selectedImos:string[];
+   c01OriginallySelectedCount:number;
+   previouslyOutsideCapacity:{imo:string;reasonCode:string}[]};
   roster:{imo:string;planRank:number;inspectionReasons:{
    eventKey:string;sourceType:string;sourceReference:string;reason:string|null}[]}[];
   mandatoryImos:string[];
@@ -291,6 +294,12 @@ interface CapacityPreview{
        <p><b>{{ctx.selection.quotas.uaeFlag.targetedImos}}</b>
         <span>{{copy('UAE flag target','عدد السفن الإماراتية')}}</span></p>
       </div>
+      <p class="notice" *ngIf="ctx.selection.draftScope?.locked">
+       {{copy('This saved Draft contains '+ctx.selection.roster.length+
+        ' vessels. Only their inspector availability is being rechecked; other C01 candidates will not be added automatically.',
+        'هذه المسودة المحفوظة تشمل '+ctx.selection.roster.length+
+        ' سفينة. سيعاد فحص إتاحة المهندسين لهذه السفن فقط، دون إضافة سفن C01 أخرى تلقائيًا.')}}
+      </p>
       <p class="hint">{{copy('Source-backed mandatory candidates and separately recorded officer inclusions may add vessels beyond the two optional quota totals. The combined roster has one row per IMO.',
        'قد تزيد السفن الإلزامية والاختيارات اليدوية الموثقة عن إجمالي الحصتين الاختياريتين، مع عدم تكرار أي IMO.')}}</p>
       <div class="capacity-vessel-form" *ngFor="let v of ctx.items">
@@ -361,6 +370,12 @@ interface CapacityPreview{
        <p><b>{{schedule.summary.unscheduled}}</b>
         <span>{{copy('Capacity exceptions','استثناءات الطاقة')}}</span></p>
       </div>
+      <p class="notice error" *ngIf="!draftCapacityScopeMatches&&
+        capacityContext?.selection?.draftScope?.locked">
+       {{copy('Current inspector availability does not cover every saved Draft vessel. No vessel will be removed automatically. Review these IMOs:',
+        'إتاحة المهندسين الحالية لا تغطي جميع سفن المسودة المحفوظة. لن يتم حذف سفن تلقائيًا. راجع السفن:')}}
+       <b>{{missingDraftCapacityImos.join(', ')}}</b>
+      </p>
       <p class="notice error" *ngIf="capacityPreview?.selection?.capacity?.mandatoryUnscheduled?.length">
        {{copy('Mandatory inspection(s) cannot be scheduled: approval is blocked until the constraints are resolved.',
         'توجد معاينات إلزامية لم تتوفر لها طاقة: الاعتماد موقوف حتى معالجة القيود.')}}
@@ -452,6 +467,12 @@ interface CapacityPreview{
        [placeholder]="copy('Document the combined capacity-verified plan approval',
         'وثّق سبب اعتماد الخطة متضمنة السفن والموارد والمواعيد')"></textarea>
      </label>
+     <p class="notice error" *ngIf="!draftCapacityScopeMatches&&
+       capacityContext?.selection?.draftScope?.locked">
+       {{copy('Approval is blocked because the selected alternative does not cover all saved Draft vessels.',
+        'الاعتماد متوقف لأن البديل المختار لا يغطي جميع سفن المسودة المحفوظة.')}}
+       IMO {{missingDraftCapacityImos.join(', ')}}
+     </p>
      <p class="notice error" *ngIf="capacityError" role="alert">{{capacityError}}</p>
      <button type="button" class="approve" (click)="approve()"
       [disabled]="!canApproveCapacity">
@@ -816,7 +837,7 @@ export class SiInspectionPlanWizardComponent implements OnInit,OnDestroy{
      (quota?.uniqueSelectedCount||0)>0||maybeRequired);
   }
   if(this.step===3)
-   return !!this.capacityProposal&&!!this.capacityProposal.variants?.length&&
+   return this.draftCapacityScopeMatches&&!!this.capacityProposal&&!!this.capacityProposal.variants?.length&&
     this.capacityProposal.summary.proposed>0&&
     (this.capacityPreview?.selection.capacity.mandatoryUnscheduled.length||0)===0;
   return false;
@@ -887,8 +908,23 @@ export class SiInspectionPlanWizardComponent implements OnInit,OnDestroy{
   return this.capacityProposal?.variants.find(v=>
    v.optionId===this.preferredCapacityOptionId)||null;
  }
+ get draftCapacityScopeMatches():boolean{
+  const scope=this.capacityContext?.selection.draftScope;
+  if(!scope?.locked)return true;
+  const expected=new Set(scope.selectedImos);
+  const selected=this.approvedCapacityVariant?.assignments||[];
+  return expected.size===selected.length&&
+   new Set(selected.map(x=>x.imo)).size===selected.length&&
+   selected.every(x=>expected.has(x.imo));
+ }
+ get missingDraftCapacityImos():string[]{
+  const expected=this.capacityContext?.selection.draftScope?.selectedImos||[];
+  const selected=new Set((this.approvedCapacityVariant?.assignments||[])
+   .map(x=>x.imo));
+  return expected.filter(imo=>!selected.has(imo));
+ }
  get canApproveCapacity():boolean{
-  return !!this.planId&&!this.returnedFromScheduling&&!this.submitting&&
+  return this.draftCapacityScopeMatches&&!!this.planId&&!this.returnedFromScheduling&&!this.submitting&&
    !this.capacityBusy&&!this.capacityAiBusy&&this.auth.isAdmin&&
    !!this.capacityContext&&!!this.capacityProposal&&
    !!this.approvedCapacityVariant&&this.reason.trim().length>=8&&
@@ -1021,7 +1057,17 @@ export class SiInspectionPlanWizardComponent implements OnInit,OnDestroy{
       this.job=null;this.step=5;},
      error:e=>{
       this.submitting=false;
-      if(e?.error?.error==='SI_APPROVAL_TRANSACTION_FAILED'){
+      if(e?.error?.error==='SI_DRAFT_SAVED_CAPACITY_CHANGED_REVIEW_REQUIRED'){
+        this.capacityError=this.copy(
+          'Inspector capacity changed for saved vessel(s): '+
+            (e.error.missingImos||[]).join(', ')+
+            '. The plan was not approved; please review and recheck capacity.',
+          'تغيرت طاقة المهندسين للسفن المحفوظة: '+
+            (e.error.missingImos||[]).join(', ')+
+            '. لم تعتمد الخطة؛ يرجى مراجعة الإسناد وإعادة فحص الطاقة.'
+        );
+        this.invalidateCapacityPreview();
+      }else if(e?.error?.error==='SI_APPROVAL_TRANSACTION_FAILED'){
         const diagnostic=e.error;
         const phase:Record<string,[string,string]>={
          'PLAN_STATE_LOCK':['loading saved plan','تحميل الخطة المحفوظة'],
