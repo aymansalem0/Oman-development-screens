@@ -125,6 +125,11 @@ export function getSiSelectionPolicy(config){
   const keys=Object.keys(raw||{}).sort().join('|');
   const legacy=keys===[...legacyKeys].sort().join('|');
   const current=keys===[...allKeys].sort().join('|');
+  // validateRules() normalizes a stored 5-key policy to seven fields with
+  // null caps. That normalized legacy shape must survive a second read,
+  // rather than throwing before the publisher explicitly republishes it.
+  const normalizedLegacy=current&&
+    raw.serviceRequestPlanCap===null&&raw.maxPlannedVessels===null;
   if(!raw||typeof raw!=='object'||Array.isArray(raw)||
      (!legacy&&!current)||
      !Number.isInteger(raw.pscRiskRatePercent)||
@@ -134,7 +139,7 @@ export function getSiSelectionPolicy(config){
      raw.uaePoolMode!=='ELIGIBLE_CANDIDATES_ONLY'||
      raw.pscPoolMode!=='PUBLISHED_PSC_SHORTLIST_ONLY'||
      raw.aiSelectionMode!=='RECOMMEND_WITHIN_ELIGIBLE_QUOTAS'||
-     (current&&(!Number.isInteger(raw.serviceRequestPlanCap)||
+     (current&&!normalizedLegacy&&(!Number.isInteger(raw.serviceRequestPlanCap)||
        raw.serviceRequestPlanCap<0||raw.serviceRequestPlanCap>30||
        !Number.isInteger(raw.maxPlannedVessels)||
        raw.maxPlannedVessels<1||raw.maxPlannedVessels>50||
@@ -142,8 +147,8 @@ export function getSiSelectionPolicy(config){
     throw new SiTargetingError('SI_SELECTION_POLICY_INVALID',422);
   // null explicitly indicates the legacy version has no active cap.
   return {...raw,
-    serviceRequestPlanCap:current?raw.serviceRequestPlanCap:null,
-    maxPlannedVessels:current?raw.maxPlannedVessels:null};
+    serviceRequestPlanCap:legacy||normalizedLegacy?null:raw.serviceRequestPlanCap,
+    maxPlannedVessels:legacy||normalizedLegacy?null:raw.maxPlannedVessels};
 }
 // Existing unconfigured installations retain their legacy C01 behaviour
 // until a PUBLISHER explicitly publishes the optional vessel-selection
