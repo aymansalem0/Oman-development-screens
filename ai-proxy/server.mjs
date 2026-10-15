@@ -2194,6 +2194,10 @@ const server = createServer(async (req, res) => {
           ...(Number.isInteger(e.returnedCount)?{returnedCount:e.returnedCount}:{}),
           ...(Number.isInteger(e.batchIndex)?{batchIndex:e.batchIndex}:{}),
           ...(Number.isInteger(e.batchCount)?{batchCount:e.batchCount}:{})});
+      if(e instanceof SiCandidateAgentError&&
+       e.code==='SI_VESSEL_OUTSIDE_EXECUTION_PLAN')
+        return respond(res,409,{error:e.code,
+         periodEligibility:e.periodEligibility||null});
       if(e instanceof SiError||e instanceof SiPocAdvisorError||e instanceof SiRollingPlanError||e instanceof SiIntegratedPlanError||e instanceof SiDraftCreationError||e instanceof SiDraftJobError||
        e instanceof SiBulkApprovalError||e instanceof SiCandidateAgentError||e instanceof SiLifecycleError||e instanceof SiSelectionError||e instanceof SiPriorityError||e instanceof SiPreparationError||e instanceof SiWorkOrderError||e instanceof SiTargetingError||e instanceof MoeiAuthError||e instanceof DashboardError)
         return respond(res,e.status,{error:e.code});
