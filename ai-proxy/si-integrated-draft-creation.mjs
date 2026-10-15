@@ -89,6 +89,7 @@ export function buildIntegratedDraft({
   ai.selectionProposal.policyRevision!==dashboard.policy.version))
   fail('SI_C01_CONFIGURED_SELECTION_REQUIRED_RUN_AI',409);
  const plan={id,number:'NEW-DRAFT-PREVIEW',status:'DRAFT',revision:0,
+  startsOn:metadata.startsOn,endsOn:metadata.endsOn,
   candidateSourceHash:source.snapshotHash,selectionSourceHash:source.snapshotHash};
  const rows=projectInspectionPlan(dashboard,source,ai,{},
   {});
@@ -127,7 +128,11 @@ export function buildIntegratedDraft({
  });
  const mandatoryUnscheduled=selection.mandatoryImos.filter(imo=>
   proposal.rows.some(r=>r.imo===imo&&r.status==='UNSCHEDULED'));
- const outsidePeriod=reportDraftPeriodExceptions(proposal,metadata);
+ const outsidePeriod=[...new Set([
+   ...reportDraftPeriodExceptions(proposal,metadata),
+   ...proposal.rows.filter(r=>r.blocker==='SI_VISIT_OUTSIDE_EXECUTION_PLAN_PERIOD')
+    .map(r=>r.imo)
+ ])];
  const periodChecked=outsidePeriod.length===0;
  // Do not persist a READY draft if the chosen solver option violates the
  // requested plan execution window. No fabricated ETA/ETD to make it fit.
