@@ -1522,7 +1522,7 @@ const server = createServer(async (req, res) => {
       // Inspector workspace: all reads and writes are bound to the
       // authenticated session's assigned order, never a client-supplied IMO
       // or inspector ID. No unrelated vessel dossiers are exposed.
-      const myOrder=/^\\/api\\/si\\/v1\\/maritime-scheduling\\/my-work-orders\\/([a-f0-9-]{36})(?:\\/(dossier|guide)(?:\\/(answers|ai))?)?$/.exec(path);
+      const myOrder=/^\/api\/si\/v1\/maritime-scheduling\/my-work-orders\/([a-f0-9-]{36})(?:\/(dossier|guide)(?:\/(answers|ai))?)?$/.exec(path);
       if(myOrder){
         dashboards.assertRole(req,'EDITOR');
         const session=moeiAuth.require(req,{mutate:req.method==='POST'});
