@@ -114,5 +114,7 @@ test('legacy published five-field selection remains readable until explicitly re
  const migrated=getSiSelectionPolicy({selection:old});
  assert.equal(migrated.serviceRequestPlanCap,null);
  assert.equal(migrated.maxPlannedVessels,null);
+ assert.equal(getSiSelectionPolicy({selection:migrated}).serviceRequestPlanCap,null,
+  'legacy normalized config must be safely readable repeatedly');
  assert.equal(getSiSelectionPolicy({selection}).serviceRequestPlanCap,4);
 });
