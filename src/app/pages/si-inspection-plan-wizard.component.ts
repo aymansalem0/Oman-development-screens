@@ -950,8 +950,8 @@ export class SiInspectionPlanWizardComponent implements OnInit,OnDestroy{
   if(!this.capacityContext||!this.capacityProposal||
      this.capacityBusy||this.capacityAiBusy)return;
   if(!window.confirm(this.copy(
-    'Run SI-S01 AI to rank verified plan alternatives? Airia may charge for ONE explicit request. No approval or booking occurs.',
-    'هل تريد تشغيل SI-S01 لترتيب بدائل الخطة المعتمدة على الطاقة؟ قد تُحتسب تكلفة استدعاء Airia واحد فقط، دون اعتماد أو حجز تلقائي.')))return;
+    'Run SI-S01 to rank capacity-verified plan alternatives? Approval and resource booking remain separate.',
+    'هل تريد تشغيل SI-S01 لترتيب بدائل الخطة المتحققة من الطاقة؟ الاعتماد وحجز الموارد إجراءان منفصلان.')))return;
   this.capacityAiBusy=true;this.capacityError='';
   this.http.post<{chosenOptionId:string;provider:string;
     proposal:CapacitySchedule;proposalHash:string}>(

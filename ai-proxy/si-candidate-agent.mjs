@@ -592,43 +592,65 @@ export class SiCandidateAgent{
    // subset. No partial result is returned or persisted if ANY batch fails.
    // `suggestedRank` is local to each batch; statutory execution order is
    // independently calculated by the deterministic inspection ranking engine.
-   const recommendations=[];
-   let verifiedCount=0,quarantinedCount=0,unexpectedCount=0;
-   const verificationFailures={};
-   for(let i=0;i<batchCount;i++){
-     const subset=s.candidates.slice(i*batchSize,(i+1)*batchSize);
-     const batch={...payload,
-       requestMeta:batchCount===1?payload.requestMeta:{
-         ...payload.requestMeta,
-         parentCorrelationId:payload.requestMeta.correlationId,
-         correlationId:'SI-C01-'+randomUUID(),
-         batchIndex:i+1,batchCount
-       },
-       candidates:subset};
-     const scope={...s,candidates:subset};
-     let raw;
-     try{raw=await this.executeAgent(batch);}
-     catch{throw new SiCandidateAgentError('SI_C01_PROVIDER_UNAVAILABLE',502);}
-     let checked;
-     try{checked=reconcileC01(raw,scope);}
-     catch(e){
-      if(e instanceof SiCandidateAgentError){
-       e.batchIndex=i+1;
-       e.batchCount=batchCount;
-      }
-      throw e;
+   // All 112 (or more) eligible regime workflows are analyzed, not five
+   // physical vessels. Bound provider concurrency to avoid serial latency
+   // while keeping output in its original source order. Validation for EVERY
+   // group is complete before the business policy projects the final roster.
+   // Override 1..3 for provider rate limits: SI_C01_AIRIA_CONCURRENCY.
+   const requestedConcurrency=Number(process.env.SI_C01_AIRIA_CONCURRENCY||2);
+   const concurrency=this.provider==='airia'?
+     (Number.isInteger(requestedConcurrency)&&requestedConcurrency>=1&&
+      requestedConcurrency<=3?requestedConcurrency:2):1;
+   const results=new Array(batchCount);
+   let nextBatch=0,completed=0,processed=0,stopped=false;
+   const failed=[];
+   const worker=async()=>{
+     while(!stopped){
+       const i=nextBatch++;
+       if(i>=batchCount)return;
+       const subset=s.candidates.slice(i*batchSize,(i+1)*batchSize);
+       const batch={...payload,
+         requestMeta:batchCount===1?payload.requestMeta:{
+           ...payload.requestMeta,
+           parentCorrelationId:payload.requestMeta.correlationId,
+           correlationId:'SI-C01-'+randomUUID(),
+           batchIndex:i+1,batchCount
+         },
+         candidates:subset};
+       const scope={...s,candidates:subset};
+       try{
+         const raw=await this.executeAgent(batch);
+         const checked=reconcileC01(raw,scope);
+         results[i]=checked;
+         completed++;processed+=subset.length;
+         if(typeof input.onProgress==='function')
+           input.onProgress({
+             completedBatches:completed,batchCount,
+             processedWorkflows:processed,totalWorkflows:s.candidates.length,
+             analyzedVessels:[...new Set(s.candidates.map(c=>c.imo))].length
+           });
+       }catch(e){
+         const err=e instanceof SiCandidateAgentError?e:
+           new SiCandidateAgentError('SI_C01_PROVIDER_UNAVAILABLE',502);
+         err.batchIndex=i+1;err.batchCount=batchCount;
+         failed.push(err);stopped=true;
+         // Started calls must settle. Never issue more groups after failure.
+       }
      }
-     recommendations.push(...checked.recommendations);
-     verifiedCount+=checked.verifiedCount;
-     quarantinedCount+=checked.quarantinedCount;
-     unexpectedCount+=checked.unexpectedCount;
-     for(const [key,count] of Object.entries(checked.failuresByCode))
-      verificationFailures[key]=(verificationFailures[key]||0)+count;
-     // Callback is server-only and must not receive candidate data,
-     // source evidence, recommendations or provider credentials.
-     if(typeof input.onProgress==='function')
-      input.onProgress({completedBatches:i+1,batchCount});
-   }
+   };
+   await Promise.all(Array.from({length:Math.min(concurrency,batchCount)},
+     ()=>worker()));
+   if(failed.length)throw failed.sort((a,b)=>a.batchIndex-b.batchIndex)[0];
+   if(results.some(x=>!x))
+     throw new SiCandidateAgentError('SI_C01_INCOMPLETE_BATCH_VALIDATION',502);
+   const recommendations=results.flatMap(r=>r.recommendations);
+   const verifiedCount=results.reduce((n,r)=>n+r.verifiedCount,0);
+   const quarantinedCount=results.reduce((n,r)=>n+r.quarantinedCount,0);
+   const unexpectedCount=results.reduce((n,r)=>n+r.unexpectedCount,0);
+   const verificationFailures={};
+   for(const item of results)
+     for(const [key,count] of Object.entries(item.failuresByCode))
+       verificationFailures[key]=(verificationFailures[key]||0)+count;
    // Verified AI output only: the backend applies the configured caps and
    // protects statutory source obligations. Never materialize cases here.
    const selectionProposal=s.selectionPolicyActive?

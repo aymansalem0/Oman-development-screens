@@ -442,7 +442,9 @@ export class SiCandidateTargeting{
       if(!item){
         item={imo:c.imo,vesselName:c.vesselName,flag:c.flag,
           vesselType:c.vesselType,currentRisk:c.currentRisk,
+          arrivalAt:null,arrivalStatus:'MISSING',arrivalSourceReference:null,
           departureAt:null,departureVerified:false,departureStatus:'MISSING',
+          departureSourceReference:null,
           incidentSeverity:null,incidentHumanReviewed:false,incidentEvidenceRef:null,
           candidateKeys:[],regimes:[],sourceTypes:[],sourceEvents:[],
           operationalSourceEvents:[],
@@ -519,6 +521,37 @@ export class SiCandidateTargeting{
       }else if(departures.length){
         item.departureAt=departures[0].departureAt;
         item.departureVerified=true;item.departureStatus='VERIFIED';
+      }
+      // Vessel master sources can contain several historical movements.
+      // For the candidate grid, surface ONLY one unambiguous, verified ETA
+      // tied to the current verified ETD when available. Never infer ETA
+      // from ETD or display a conflicting arrival as confirmed.
+      const acceptedEvents=[...allDepartureEvidence.values()].filter(e=>
+        ['SOURCE_FINAL','SOURCE_REVIEWED'].includes(e.approval));
+      const arrivalLocal=e=>typeof e.eta==='string'&&
+        /^20\d\d-\d\d-\d\d[T ]\d\d:\d\d(?::\d\d)?(?:Z|[+-]\d\d:\d\d)?$/.test(e.eta)?
+        e.eta:null;
+      const currentEtd=Date.parse(item.departureAt||'');
+      const forActiveDeparture=item.departureStatus==='VERIFIED'?
+        acceptedEvents.filter(e=>e.departureVerified&&
+          Date.parse(e.departureAt||'')===currentEtd):[];
+      const etaSources=(forActiveDeparture.length?forActiveDeparture:
+        acceptedEvents.filter(e=>Boolean(arrivalLocal(e))));
+      const etaRecords=etaSources.filter(e=>arrivalLocal(e));
+      const uniqueEta=new Set(etaRecords.map(e=>arrivalLocal(e)));
+      if(item.departureStatus==='CONFLICT'){
+        item.arrivalStatus='CONFLICT';
+      }else if(uniqueEta.size>1){
+        item.arrivalStatus='CONFLICT';
+      }else if(uniqueEta.size===1){
+        item.arrivalAt=etaRecords[0].eta;
+        item.arrivalStatus='VERIFIED';
+        item.arrivalSourceReference=etaRecords[0].sourceReference||null;
+      }
+      if(item.departureVerified){
+        const departureEvidence=departures.find(e=>
+          e.departureAt===item.departureAt);
+        item.departureSourceReference=departureEvidence?.sourceReference||null;
       }
       const incident=incidentSignals.get(item.imo);
       if(incident&&incident.humanReviewed===true&&

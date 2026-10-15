@@ -53,7 +53,7 @@
           'الفحص المسبق · إحالات المصادر المعتمدة وسياسة اختيار الخطة')}}</h4>
          <button type="button" (click)="refreshDraftScope()"
           [disabled]="newDraftBusy||newDraftScopeLoading">
-          {{copy('↻ Reload Published Policy (free)','↻ تحديث السياسة المنشورة دون تكلفة')}}</button>
+          {{copy('↻ Reload Published Policy','↻ تحديث السياسة المنشورة')}}</button>
         </div>
         <p *ngIf="newDraftScopeLoading" class="si-rolling-note">
          {{copy('Checking authoritative source and current published policy without Airia calls…',
@@ -83,8 +83,8 @@
           <p>{{copy('The saved selection policy is legacy/uncapped. It currently forces ',
            'سياسة الاختيار المحفوظة قديمة أو بلا سقف، وتجعل ')}}
            <b>{{scope.legacyServiceRequestsForcedIntoOnePlan}}</b>
-           {{copy(' verified service-request vessels into this ONE plan. These are not the same as legally approved NMC referrals. Publish the explicitly approved service-request cap and plan maximum before running charged C01. No vessel is deleted or silently deferred.',
-            ' سفينة من طلبات الخدمة الموثقة إلزامية في هذه الخطة الواحدة. وهي ليست مثل إحالات NMC المعتمدة. انشر سقف طلبات الخدمة والحد الأقصى للسفن بعد اعتمادهما قبل تشغيل C01 المدفوع، دون حذف سفن أو تأجيلها بصمت.')}}</p>
+           {{copy(' verified service-request vessels into this ONE plan. These are not the same as legally approved NMC referrals. Publish the explicitly approved service-request cap and plan maximum before starting C01 analysis. No vessel is deleted or silently deferred.',
+            ' سفينة من طلبات الخدمة الموثقة إلزامية في هذه الخطة الواحدة. وهي ليست مثل إحالات NMC المعتمدة. انشر سقف طلبات الخدمة والحد الأقصى للسفن بعد اعتمادهما قبل تشغيل تحليل C01، دون حذف سفن أو تأجيلها بصمت.')}}</p>
           <a routerLink="/moei/smart-inspection/settings/targeting">
            {{copy('Open Selection Policy Settings →','فتح إعدادات سياسة اختيار السفن ←')}}</a>
           <p class="si-rolling-note">{{copy('POC proposed values: service cap 4, max vessels 12. They are NOT automatically activated; a PUBLISHER must explicitly approve and publish them.',
@@ -109,30 +109,31 @@
          {{copy('POC demo capacity: synthetic engineers, shifts and visit supplements; NOT official ERP',
           'طاقة POC التجريبية: مهندسون وورديات وبيانات زيارة افتراضية، وليست ERP رسمية')}}</label>
         <p>{{copy('C01 Provider','مزود C01')}}: <b>{{newDraftProvider}}</b>
-         · {{copy('Estimated C01 batches','دفعات C01 المتوقعة')}}: <b>{{newDraftExpectedBatches||'—'}}</b></p>
+         · {{copy('Eligible vessel pool','إجمالي السفن المؤهلة')}}: <b>{{newDraftScope?.eligibleVessels||'—'}}</b>
+         · {{copy('Candidate workflows','مسارات الترشيح')}}: <b>{{newDraftScope?.candidateWorkflows||'—'}}</b></p>
         <label><input type="checkbox" [(ngModel)]="newDraftAiConsent"/>
          {{copy('I explicitly request C01 source-verified candidate selection for this NEW draft.',
            'أوافق صراحةً على تشغيل C01 لاختيار سفن هذه المسودة وفق المصادر المعتمدة.')}}</label>
-        <label *ngIf="newDraftProvider==='AIRIA'"><input type="checkbox" [(ngModel)]="newDraftCostConsent"/>
-         {{copy('I explicitly approve the possible cost of all Airia C01 batches.',
-           'أوافق صراحةً على التكلفة المحتملة لجميع دفعات Airia C01.')}}</label>
         <p class="si-rolling-note">{{copy('Priority is determined by verified ETD, then reviewed incident severity; risk scores do not set execution order. Approval and work orders remain supervisor-only.',
          'الأولوية حسب ETD المؤكد، ثم خطورة الحوادث المعتمدة؛ درجات مخاطر السفن لا تحدد ترتيب التنفيذ. الاعتماد وأوامر التكليف للمشرف فقط.')}}</p>
        </div>
        <div *ngIf="newDraftJobId&&newDraftBusy" class="si-draft-job-progress"
          role="status" aria-live="polite">
-        <strong>{{copy('Airia C01 batch execution in progress — no automatic retry',
-         'جاري تشغيل دفعات Airia C01 — دون إعادة تشغيل تلقائية')}}</strong>
-        <div>{{copy('Verified batches','دفعات تم التحقق منها')}}:
-         <b>{{newDraftCompletedBatches}} / {{newDraftExpectedBatches}}</b>
-         · {{newDraftJobPhase}}</div>
-        <p>{{copy('Keep the page open or refresh to resume checking the same job. Do not click Generate again or start another paid run.',
-         'اترك الصفحة مفتوحة أو أعد تحميلها لمتابعة نفس Job. لا تبدأ تشغيلًا آخر مدفوعًا.')}}
+        <strong>{{copy('C01 is analyzing the complete eligible candidate pool',
+         'C01 يحلل جميع السفن المرشحة المؤهلة للخطة')}}</strong>
+        <div>{{copy('Physical vessels in pool','السفن الموجودة في قائمة المرشحين')}}:
+         <b>{{newDraftTotalVessels}}</b>
+         · {{copy('Candidate workflows analyzed','مسارات الترشيح التي اكتمل تحليلها')}}:
+         <b>{{newDraftProcessedWorkflows}} / {{newDraftTotalWorkflows}}</b>
+         · {{copy('Analysis groups completed','مجموعات التحليل المكتملة')}}:
+         {{newDraftCompletedBatches}} / {{newDraftExpectedBatches}}</div>
+        <p>{{copy('Keep the page open or refresh to resume checking the same job. Follow the current operation; do not start it twice.',
+         'اترك الصفحة مفتوحة أو أعد تحميلها لمتابعة نفس Job. لا تبدأ عملية تحليل ثانية أثناء تنفيذ الأولى.')}}
         </p>
        </div>
        <div class="si-rolling-actions">
         <button type="button" class="si-plan-wizard-button" (click)="generateIntegratedDraft()"
-         [disabled]="newDraftBusy||newDraftScopeLoading||!newDraftScope||newDraftScope.requiresOfficerAction||!newDraftAiConsent||newDraftProvider==='UNKNOWN'||(newDraftProvider==='AIRIA'&&!newDraftCostConsent)">
+         [disabled]="newDraftBusy||newDraftScopeLoading||!newDraftScope||newDraftScope.requiresOfficerAction||!newDraftAiConsent||newDraftProvider==='UNKNOWN'">
          {{newDraftBusy?copy('Calculating integrated plan…','جاري حساب الخطة المتكاملة…'):
            copy('01 · Generate Candidates + Priority + Capacity','١ · حساب السفن والأولويات وطاقة المهندسين')}}</button>
         <button type="button" (click)="newPlanVisible=false" [disabled]="newDraftBusy">
@@ -221,7 +222,7 @@
           'تم تعديل بيانات الزيارة؛ يجب إعادة حساب الطاقة قبل الحفظ.')}}</p>
         <div class="si-rolling-actions">
          <button type="button" (click)="recalculateIntegratedDraft()" [disabled]="newDraftBusy||newDraftDemoMode">
-          {{copy('02 · Recalculate Capacity (no AI charge)','٢ · إعادة حساب الطاقة دون تكلفة AI')}}</button>
+          {{copy('02 · Recalculate Inspector Capacity','٢ · إعادة حساب طاقة المهندسين')}}</button>
          <button type="button" class="si-plan-wizard-button" (click)="saveIntegratedDraft()"
           [disabled]="newDraftBusy||newDraftChanged">
           {{copy('03 · Save Complete Integrated DRAFT (no approval)',
@@ -574,6 +575,8 @@
             </th>
             <th>{{copy('AI Priority','أولوية AI')}}</th>
             <th>{{copy('Vessel / IMO','السفينة / IMO')}}</th>
+            <th>{{copy('ETA · Arrival (UAE)','ETA · وصول السفينة (الإمارات)')}}</th>
+            <th>{{copy('ETD · Departure (UAE)','ETD · مغادرة السفينة (الإمارات)')}}</th>
             <th>{{copy('Candidate Sources','مصادر الترشيح')}}</th>
             <th>{{copy('NMC Risk','مخاطر NMC')}}</th>
             <th>{{copy('AI Selection','اختيار AI')}}</th>
@@ -599,6 +602,32 @@
                   <small>IMO {{v.imo}} · {{v.flag}} · {{v.vesselType}}</small>
                   <small *ngIf="v.createdWorkflows">{{v.createdWorkflows}}
                     {{copy('approved inspection case(s)','حالة معاينة معتمدة')}}</small></td>
+                <td class="si-vessel-movement-date">
+                  <ng-container *ngIf="v.arrivalStatus==='VERIFIED'; else etaMissing">
+                   <strong>{{candidateMovementTime(v.arrivalAt)}}</strong>
+                   <small>{{copy('Verified source','مصدر موثق')}}</small>
+                   <small *ngIf="v.arrivalSourceReference" [title]="v.arrivalSourceReference">
+                    {{v.arrivalSourceReference}}</small>
+                  </ng-container>
+                  <ng-template #etaMissing>
+                   <span [class.si-vessel-date-conflict]="v.arrivalStatus==='CONFLICT'">
+                    {{v.arrivalStatus==='CONFLICT'?copy('Conflicting ETA','تعارض في ETA'):
+                      copy('ETA unavailable','موعد الوصول غير متاح')}}</span>
+                  </ng-template>
+                </td>
+                <td class="si-vessel-movement-date">
+                  <ng-container *ngIf="v.departureStatus==='VERIFIED'; else etdMissing">
+                   <strong>{{candidateMovementTime(v.departureAt)}}</strong>
+                   <small>{{copy('Verified source','مصدر موثق')}}</small>
+                   <small *ngIf="v.departureSourceReference" [title]="v.departureSourceReference">
+                    {{v.departureSourceReference}}</small>
+                  </ng-container>
+                  <ng-template #etdMissing>
+                   <span [class.si-vessel-date-conflict]="v.departureStatus==='CONFLICT'">
+                    {{v.departureStatus==='CONFLICT'?copy('Conflicting ETD','تعارض في ETD'):
+                      copy('ETD unavailable','موعد المغادرة غير متاح')}}</span>
+                  </ng-template>
+                </td>
                 <td><span *ngFor="let s of v.sourceTypes" class="source-pill">{{statusText(s)}}</span>
                   <small>{{v.sourceEvents.length}} {{copy('source events','أحداث مصدر')}}</small></td>
                 <td>
@@ -664,7 +693,7 @@
                 </td>
               </tr>
               <tr class="si-plan-edit-row" *ngIf="manualEditingImo===v.imo">
-                <td colspan="9">
+                <td colspan="11">
                   <form (ngSubmit)="saveManualDecision()" class="si-inline-change">
                     <strong>{{copy('Officer decision','قرار الموظف')}}:
                       {{manualAction}} · {{v.vesselName}} (IMO {{v.imo}})</strong>
@@ -692,7 +721,7 @@
                 </td>
               </tr>
               <tr class="si-plan-edit-row" *ngIf="planEditingImo===v.imo">
-                <td colspan="9">
+                <td colspan="11">
                   <form (ngSubmit)="savePlanEdit()" class="si-inline-change">
                     <strong>{{planSelection?copy('Include / Change Rank','إدراج أو تغيير ترتيب'):
                       copy('Remove from Inspection Plan','استبعاد من الخطة')}} · {{v.vesselName}}</strong>
@@ -716,7 +745,7 @@
                 </td>
               </tr>
               <tr *ngIf="expandedImo===v.imo" class="si-ai-detail-row">
-                <td colspan="9">
+                <td colspan="11">
                   <div class="si-detail-compact">
                     <div>
                       <h3>{{copy('AI Selection Rationale','سبب اختيار السفينة من AI')}}</h3>
@@ -790,7 +819,7 @@
                 </td>
               </tr>
             </ng-container>
-            <tr *ngIf="!vessels.length"><td colspan="9" class="empty">
+            <tr *ngIf="!vessels.length"><td colspan="11" class="empty">
               {{copy('No matching candidate vessels. Check the NMC referral, service and selected PSC sources.',
                 'لا توجد سفن مطابقة؛ راجع إحالات NMC والخدمات والسفن المختارة من PSC.')}}</td></tr>
           </tbody>

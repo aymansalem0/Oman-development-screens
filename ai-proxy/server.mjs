@@ -1179,6 +1179,8 @@ const server = createServer(async (req, res) => {
         // by actor and source; even on browser reload there is one paid run.
         const job=siDraftJobs.start({
           actor,metadata,sourceHash:source.snapshotHash,expectedBatches:batches,
+          totalWorkflows:source.candidates.length,
+          totalVessels:new Set(source.candidates.map(c=>c.imo)).size,
           execute:async(onProgress,setPhase)=>{
             const ai=await siCandidateAgent.run({
               actor,confirmRun:true,confirmCost:input.confirmCost===true,
