@@ -183,6 +183,15 @@ export class SiCandidateWorkbenchComponent implements OnInit{
       error:e=>{this.newDraftBusy=false;this.planningError=this.draftIssue(e);}
     });
   }
+  loadRollingPlans():void{
+    this.api.rollingPlans().subscribe({
+      next:r=>{
+        this.rollingPlans=r.plans;
+        this.planningError='';
+      },
+      error:e=>{this.planningError=e?.error?.error||'SI_ROLLING_PLANS_UNAVAILABLE';}
+    });
+  }
   openRollingPlan(p:SiRollingPlan):void{
     this.activePlanId=p.id;this.plan=null;this.planEditingImo='';
     this.clearBulkSelection();
