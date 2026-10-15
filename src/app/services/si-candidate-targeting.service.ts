@@ -22,6 +22,11 @@ export interface SiCandidate{
 export interface SiVesselCandidate{
   imo:string;vesselName:string;flag:string;vesselType:string;
   currentRisk:SiCandidate['currentRisk'];
+  arrivalAt?:string|null;arrivalStatus?:'MISSING'|'VERIFIED'|'CONFLICT';
+  arrivalSourceReference?:string|null;
+  departureAt?:string|null;departureVerified?:boolean;
+  departureStatus?:'MISSING'|'VERIFIED'|'CONFLICT';
+  departureSourceReference?:string|null;
   candidateKeys:string[];regimes:SiRegime[];
   sourceTypes:SiCandidateEvent['sourceType'][];
   sourceEvents:SiCandidateEvent[];
