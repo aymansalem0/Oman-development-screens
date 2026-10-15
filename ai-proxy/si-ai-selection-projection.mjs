@@ -38,12 +38,12 @@ export function projectC01ConfiguredSelection(source,recommendations){
  const recommended=r=>score(r)>=0;
  // AI decides which supported options should be shortlisted; risk is only
  // an evidence-backed tie-break within the PSC selection group.
- const psc=rows.filter(r=>r.psc).sort((a,b)=>
+ const psc=rows.filter(r=>r.psc&&!r.mandatory).sort((a,b)=>
    Number(recommended(b))-Number(recommended(a))||
    score(b)-score(a)||(b.risk??-1)-(a.risk??-1)||
    compareInspections(a.records[0],b.records[0])||
    a.imo.localeCompare(b.imo));
- const uae=rows.filter(r=>flag(r.flag)).sort((a,b)=>
+ const uae=rows.filter(r=>flag(r.flag)&&!r.mandatory).sort((a,b)=>
    Number(recommended(b))-Number(recommended(a))||
    score(b)-score(a)||a.imo.localeCompare(b.imo));
  const limit=(n,percent)=>Math.floor(n*percent/100);
