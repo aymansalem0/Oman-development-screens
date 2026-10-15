@@ -206,6 +206,39 @@
        <small>{{copy('New draft shows eligible candidates before AI. Unselected vessels remain available for future plans.',
          'المسودة تعرض السفن المؤهلة قبل تشغيل AI. السفن غير المختارة تظل متاحة للخطط القادمة.')}}</small>
      </div>
+    <section *ngIf="plan?.capacityDraft as cap" class="si-integrated-preview"
+      aria-label="Saved integrated inspector capacity draft">
+      <h3>{{copy('Saved Draft · Capacity & Inspector Assignments',
+       'المسودة المحفوظة · الطاقة وتوزيع المهندسين')}}</h3>
+      <p class="si-rolling-note">
+       {{cap.status}} · {{cap.generatedAt|date:'short'}}
+       · {{cap.demoMode?copy('POC synthetic workforce — NOT ERP booking',
+        'موارد تجريبية للـPOC وليست حجوزات ERP'):
+        copy('ERP source-backed workforce snapshot','طاقة تشغيلية وفق لقطة ERP')}}
+      </p>
+      <div class="si-draft-stats">
+       <div><strong>{{cap.selectedImos.length}}</strong><span>{{copy('Planned vessels','سفن الخطة')}}</span></div>
+       <div><strong>{{cap.proposedAssignments.length}}</strong><span>{{copy('Feasible inspector assignments','تكليفات مهندسين متاحة')}}</span></div>
+       <div><strong>{{cap.unscheduled.length}}</strong><span>{{copy('Capacity exceptions','استثناءات الطاقة')}}</span></div>
+      </div>
+      <div class="si-draft-saved-assignments">
+       <article *ngFor="let row of cap.proposedAssignments">
+        <strong>IMO {{row.imo}} · {{row.inspectorName}}</strong>
+        <small>{{row.portName}} · {{row.startLocal}} → {{row.endLocal}}</small>
+        <small *ngIf="row.crossPort">{{copy('Cross-port approval required','يتطلب اعتماد الانتقال بين الموانئ')}}</small>
+       </article>
+      </div>
+      <p *ngIf="cap.mandatoryUnscheduled.length" class="notice error">
+       {{copy('Mandatory inspections require capacity exception resolution before approval:',
+        'توجد معاينات إلزامية تتطلب معالجة تعارض الطاقة قبل الاعتماد:')}}
+       {{cap.mandatoryUnscheduled.join(', ')}}</p>
+      <p *ngIf="cap.unscheduled.length" class="si-rolling-note">
+       {{copy('Vessels still awaiting capacity','سفن بانتظار الطاقة')}}:
+       <span *ngFor="let row of cap.unscheduled">IMO {{row.imo}} · {{row.blocker||'CAPACITY_CONFLICT'}}; </span>
+      </p>
+      <p class="si-rolling-note">{{copy('Saved allocation is provisional. Supervisor approval revalidates current ERP, source and booking conflicts before issuing any work order.',
+       'التخصيص مبدئي؛ عند اعتماد المشرف تُراجع المصادر والـERP والتعارضات الحالية قبل إصدار أي أمر تكليف.')}}</p>
+    </section>
     <p class="si-rolling-note" *ngIf="plan?.readOnlyHistorical" role="status">
       {{copy('Historical plan shown from its saved approval snapshot. Current source data may differ; this plan cannot be edited.',
         'الخطة المعروضة محفوظة من وقت اعتمادها؛ قد تختلف بيانات المصادر الحالية، ولا يمكن تعديل هذه الخطة.')}}
