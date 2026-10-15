@@ -2,12 +2,12 @@ import {LanguageService} from '../services/language.service';
 import {MoeiAuthService} from '../services/moei-auth.service';
 import {CommonModule} from '@angular/common';
 import {HttpClient} from '@angular/common/http';
-import {Component,OnInit,ViewChild,ElementRef} from '@angular/core';
+import {Component,OnInit,OnDestroy,ViewChild,ElementRef} from '@angular/core';
 import {FormsModule} from '@angular/forms';
 import {RouterLink} from '@angular/router';
 import {NmcNavigationComponent} from '../components/nmc-navigation.component';
 import {SiCandidate,SiCandidateStatus,SiCandidateTargetingService,
-  SiDashboard,SiVesselCandidate,SiInspectionPlanState,SiInspectionPlanRow,SiRollingPlan,SiC01Run,SiC01Preview,SiC01Recommendation,SiPriorityStatus,SiPriorityPreview,SiPriorityRun,SiPriorityRecommendation,SiPriorityPreviewItem}
+  SiDashboard,SiVesselCandidate,SiInspectionPlanState,SiInspectionPlanRow,SiRollingPlan,SiC01Run,SiC01Preview,SiDraftScope,SiC01Recommendation,SiPriorityStatus,SiPriorityPreview,SiPriorityRun,SiPriorityRecommendation,SiPriorityPreviewItem}
   from '../services/si-candidate-targeting.service';
 import {SiPscSelectionService,PscSelectionPool} from '../services/si-psc-selection.service';
 
@@ -33,6 +33,15 @@ interface DraftIntegratedPreview {
   inspectorName:string|null;portName:string|null;startLocal:string|null;
   endLocal:string|null;sourceTypes:string[]}[];
 }
+interface IntegratedDraftJob {
+ status:'QUEUED'|'RUNNING'|'COMPLETED'|'FAILED';
+ jobId:string;phase:string;createdAt:string;
+ expectedBatches:number;completedBatches:number;
+ preview?:DraftIntegratedPreview;error?:string;
+ reasonCode?:string;failureCounts?:Record<string,number>;
+ batchIndex?:number;batchCount?:number;
+}
+const INTEGRATED_DRAFT_JOB_KEY='moei-si-integrated-draft-job-v1';
 type SourceFilter='ALL'|'NMC_CASE'|'SERVICE_REQUEST'|'PSC_PORT_CALL';
 type StatusFilter='ALL'|SiCandidateStatus;
 @Component({
@@ -41,7 +50,7 @@ type StatusFilter='ALL'|SiCandidateStatus;
   templateUrl:'./si-candidate-workbench.component.html',
   styleUrl:'./si-candidate-workbench.component.css'
 })
-export class SiCandidateWorkbenchComponent implements OnInit{
+export class SiCandidateWorkbenchComponent implements OnInit,OnDestroy{
   loading=false;busy=false;error='';success='';
   dashboard:SiDashboard|null=null;
   pscQuota:PscSelectionPool|null=null;
@@ -55,8 +64,12 @@ export class SiCandidateWorkbenchComponent implements OnInit{
   newDraftDemoMode=true;newDraftAiConsent=false;newDraftCostConsent=false;
   newDraftProvider:'AIRIA'|'MOCK'|'UNKNOWN'='UNKNOWN';
   newDraftExpectedBatches=0;newDraftPreview:DraftIntegratedPreview|null=null;
+  newDraftScope:SiDraftScope|null=null;newDraftScopeLoading=false;
+  newDraftScopeError='';
   newDraftRequests:DraftVisitRequest[]=[];newDraftChanged=false;
   newDraftBusy=false;newDraftNotice='';
+  newDraftJobId='';newDraftJobPhase='';newDraftCompletedBatches=0;
+  private draftPollTimer:ReturnType<typeof setTimeout>|null=null;
   get activePlan():SiRollingPlan|undefined{
     return this.rollingPlans.find(p=>p.id===this.activePlanId);
   }
@@ -80,11 +93,27 @@ export class SiCandidateWorkbenchComponent implements OnInit{
     this.newPlan={title:'Inspection Plan '+start,startsOn:start,
       endsOn:this.localDayOffset(7),notes:''};
     this.newDraftExpectedBatches=0;this.newDraftProvider='UNKNOWN';
-    // Read-only preflight: no Airia charges, no plan records.
+    this.refreshDraftScope();
+  }
+  refreshDraftScope():void{
+    if(this.newDraftBusy||this.newDraftScopeLoading)return;
+    this.newDraftScope=null;this.newDraftScopeError='';
+    this.newDraftScopeLoading=true;this.newDraftProvider='UNKNOWN';
+    // Read-only exact source + published policy preflight; no AI or writes.
     this.api.candidateAiPreview(this.editorKey.trim()).subscribe({
-      next:info=>{this.newDraftExpectedBatches=info.expectedBatches||1;
-        this.newDraftProvider=info.provider;},
-      error:()=>{this.newDraftProvider='UNKNOWN';}
+      next:info=>{
+        this.newDraftScopeLoading=false;
+        this.newDraftExpectedBatches=info.expectedBatches||0;
+        this.newDraftProvider=info.provider;
+        this.newDraftScope=info.draftScope||null;
+        if(this.newDraftScope?.requiresOfficerAction){
+          this.newDraftAiConsent=false;this.newDraftCostConsent=false;
+        }
+      },
+      error:e=>{
+        this.newDraftScopeLoading=false;this.newDraftProvider='UNKNOWN';
+        this.newDraftScopeError=this.draftIssue(e);
+      }
     });
   }
   draftParametersChanged():void{
@@ -95,18 +124,114 @@ export class SiCandidateWorkbenchComponent implements OnInit{
     this.newDraftChanged=true;this.newDraftNotice='';
   }
   private draftIssue(e:any):string{
-    const code=e?.error?.error||'SI_INTEGRATED_DRAFT_REQUEST_FAILED';
+    const code=e?.error?.error||e?.errorCode||'';
     const count=e?.error?.requiredBatches;
+    if(e?.error?.scope&&typeof e.error.scope==='object'){
+      this.newDraftScope=e.error.scope as SiDraftScope;
+      this.newDraftAiConsent=false;this.newDraftCostConsent=false;
+    }
     if(code==='SI_C01_BATCH_COUNT_CONFIRMATION_REQUIRED'&&
       Number.isInteger(count)&&count>0)this.newDraftExpectedBatches=count;
     const reasons=Object.entries(e?.error?.failureCounts||{})
       .filter(([,n])=>typeof n==='number'&&n>0)
       .map(([key,n])=>key+' ('+n+')').slice(0,3).join(', ');
-    return code+(reasons?' · '+reasons:'')+
-      (e?.error?.reasonCode?' · '+e.error.reasonCode:'');
+    if(code)return code+(reasons?' · '+reasons:'')+
+      (e?.error?.reasonCode?' · '+e.error.reasonCode:'')+
+      (e?.error?.batchIndex?' · batch '+e.error.batchIndex+'/'+
+        (e.error.batchCount||'?'):'');
+    const status=Number(e?.status)||0;
+    if(status===504||status===502||status===503){
+      return this.copy(
+        'HTTP '+status+' — proxy/backend connection failed. No confirmed draft was saved. Check the existing C01 job and server logs BEFORE considering a paid retry.',
+        'HTTP '+status+' — تعذر اتصال الخادم. لم يُؤكد حفظ أي مسودة. راجع حالة Job وسجلات C01 قبل إعادة تشغيل Airia بتكلفة جديدة.');
+    }
+    if(status===0)return this.copy(
+      'Network request interrupted. Check the job status and connection; do not rerun paid C01 until confirmed.',
+      'انقطع اتصال المتصفح. افحص حالة التشغيل والاتصال قبل إعادة C01 المدفوع.');
+    return 'SI_INTEGRATED_DRAFT_REQUEST_FAILED · HTTP '+status+
+      (e?.statusText?' · '+e.statusText:'');
+  }
+  private rememberIntegratedJob(id:string):void{
+    try{sessionStorage.setItem(INTEGRATED_DRAFT_JOB_KEY,id);}catch{}
+  }
+  private forgetIntegratedJob():void{
+    try{sessionStorage.removeItem(INTEGRATED_DRAFT_JOB_KEY);}catch{}
+  }
+  private stopIntegratedPolling():void{
+    if(this.draftPollTimer!==null){clearTimeout(this.draftPollTimer);
+      this.draftPollTimer=null;}
+  }
+  private adoptIntegratedPreview(draft:DraftIntegratedPreview):void{
+    this.newDraftBusy=false;this.newDraftPreview=draft;
+    this.newDraftJobId='';this.newDraftJobPhase='';
+    this.newDraftCompletedBatches=this.newDraftExpectedBatches;
+    this.newDraftRequests=draft.visitRequests.map(v=>({...v}));
+    this.newPlan={title:draft.metadata.title,startsOn:draft.metadata.startsOn,
+      endsOn:draft.metadata.endsOn,notes:draft.metadata.notes};
+    this.newDraftDemoMode=draft.demoOnly;
+    this.newDraftChanged=false;
+    this.forgetIntegratedJob();
+    this.newDraftNotice=this.copy(
+      'C01 selection, priority and qualified-inspector capacity finished. Review exceptions before saving this draft.',
+      'اكتمل اختيار السفن والأولوية وحساب طاقة المهندسين. راجع الاستثناءات قبل حفظ المسودة.');
+  }
+  private handleIntegratedJob(data:IntegratedDraftJob):void{
+    this.newDraftJobId=data.jobId;
+    this.newDraftJobPhase=data.phase;
+    this.newDraftCompletedBatches=data.completedBatches||0;
+    if(data.expectedBatches)this.newDraftExpectedBatches=data.expectedBatches;
+    if(data.status==='COMPLETED'){
+      this.stopIntegratedPolling();
+      if(data.preview)this.adoptIntegratedPreview(data.preview);
+      else{this.newDraftBusy=false;this.forgetIntegratedJob();
+        this.planningError='SI_DRAFT_JOB_COMPLETED_WITHOUT_PREVIEW';}
+      return;
+    }
+    if(data.status==='FAILED'){
+      this.stopIntegratedPolling();this.newDraftBusy=false;
+      this.forgetIntegratedJob();
+      this.planningError=this.draftIssue({
+        error:{error:data.error||'SI_DRAFT_JOB_FAILED',
+          reasonCode:data.reasonCode,failureCounts:data.failureCounts,
+          batchIndex:data.batchIndex,batchCount:data.batchCount}});
+      this.newDraftNotice=this.copy(
+        'This run is finished. Review the failed batch and logs before requesting any new paid C01 analysis.',
+        'انتهى التشغيل؛ راجع الدفعة الفاشلة والسجلات قبل طلب إعادة تشغيل C01 المدفوع.');
+      return;
+    }
+    this.newDraftBusy=true;
+    this.stopIntegratedPolling();
+    this.draftPollTimer=setTimeout(()=>this.pollIntegratedDraftJob(),2500);
+  }
+  private pollIntegratedDraftJob():void{
+    if(!this.newDraftJobId)return;
+    this.http.get<IntegratedDraftJob>(
+      '/api/si/v1/inspection-plans/draft-jobs/'+this.newDraftJobId).subscribe({
+      next:data=>this.handleIntegratedJob(data),
+      error:e=>{
+        this.stopIntegratedPolling();this.newDraftBusy=false;
+        this.planningError=this.draftIssue(e);
+        this.newDraftNotice=this.copy(
+          'A browser/network error does not prove the Airia job stopped. Reload this page to resume checking the same job without additional Airia charges.',
+          'خطأ المتصفح لا يعني توقف Airia؛ أعد تحميل الصفحة لاستكمال متابعة نفس Job دون تكلفة Airia إضافية.');
+        // Keep sessionStorage ID: reload only polls the SAME existing job.
+      }
+    });
+  }
+  private restoreIntegratedJob():void{
+    let existing:string|null=null;
+    try{existing=sessionStorage.getItem(INTEGRATED_DRAFT_JOB_KEY);}catch{}
+    if(!existing||!/^[a-f0-9-]{36}$/.test(existing))return;
+    this.newPlanVisible=true;this.newDraftJobId=existing;
+    this.newDraftBusy=true;this.newDraftNotice=this.copy(
+      'Resuming an existing C01 draft job; no new Airia request will be made.',
+      'استكمال متابعة Job قائم لإنشاء المسودة دون تشغيل Airia مرة أخرى.');
+    this.pollIntegratedDraftJob();
   }
   generateIntegratedDraft():void{
-    if(this.newDraftBusy||!this.newDraftAiConsent||!this.newPlan.title.trim()||
+    if(this.newDraftScopeLoading||!this.newDraftScope||
+      this.newDraftScope.requiresOfficerAction||
+      this.newDraftBusy||!this.newDraftAiConsent||!this.newPlan.title.trim()||
       !this.newPlan.startsOn||!this.newPlan.endsOn||
       this.newPlan.endsOn<this.newPlan.startsOn)return;
     if(this.newDraftProvider==='UNKNOWN'){
@@ -119,23 +244,30 @@ export class SiCandidateWorkbenchComponent implements OnInit{
         'يجب تأكيد تكلفة تشغيل Airia قبل إنشاء المقترح.');return;
     }
     if(!window.confirm(this.copy(
-      'Generate a single integrated draft proposal: C01 candidate selection, deterministic priority and capacity-verified inspector slots? '+this.newDraftExpectedBatches+
-      ' C01 batch(es). No approval, booking or work orders.',
-      'هل تريد توليد مقترح متكامل للسفن والأولوية والمهندسين والمواعيد؟ عدد دفعات C01: '+
-      this.newDraftExpectedBatches+' دون اعتماد أو حجز أو أوامر تكليف؟')))return;
+      'Start one tracked C01 job with '+this.newDraftExpectedBatches+
+      ' verified batches, followed by priority and inspector-capacity planning? Do not retry if you lose the browser connection; reload to resume.',
+      'هل تريد بدء Job يتابع '+this.newDraftExpectedBatches+
+      ' دفعات C01 ثم يحسب الأولويات وطاقة المهندسين؟ لو انقطع المتصفح أعد تحميل الصفحة للاستكمال دون إعادة Airia.')))return;
     this.newDraftBusy=true;this.planningError='';this.newDraftNotice='';
     this.newDraftPreview=null;this.newDraftRequests=[];this.newDraftChanged=false;
-    this.http.post<DraftIntegratedPreview>('/api/si/v1/inspection-plans/draft-preview',{
+    this.newDraftCompletedBatches=0;this.newDraftJobPhase='QUEUED';
+    this.http.post<IntegratedDraftJob>('/api/si/v1/inspection-plans/draft-preview',{
       ...this.newPlan,demoMode:this.newDraftDemoMode,
       confirmAi:true,confirmCost:this.newDraftCostConsent,
       confirmBatchCount:this.newDraftExpectedBatches||1
     }).subscribe({
-      next:x=>{this.newDraftBusy=false;this.newDraftPreview=x;
-        this.newDraftRequests=x.visitRequests.map(v=>({...v}));
+      next:data=>{
+        this.newDraftJobId=data.jobId;
+        this.rememberIntegratedJob(data.jobId);
+        this.handleIntegratedJob(data);
+      },
+      error:e=>{
+        this.newDraftBusy=false;
+        this.planningError=this.draftIssue(e);
         this.newDraftNotice=this.copy(
-          'Candidate, priority and workforce-capacity proposal generated. Review exceptions before saving.',
-          'تم إعداد مقترح متكامل للسفن والأولويات وطاقة المهندسين؛ راجع الاستثناءات قبل الحفظ.');},
-      error:e=>{this.newDraftBusy=false;this.planningError=this.draftIssue(e);}
+          'If this request was interrupted, do not start a second paid C01 run until you check the server logs.',
+          'لو انقطع الطلب، لا تبدأ تشغيل C01 مدفوعًا ثانيًا قبل مراجعة سجلات الخادم.');
+      }
     });
   }
   recalculateIntegratedDraft():void{
@@ -683,7 +815,8 @@ export class SiCandidateWorkbenchComponent implements OnInit{
   public readonly auth:MoeiAuthService,private readonly pscSelection:SiPscSelectionService,
   private readonly http:HttpClient){}
   copy(en:string,ar:string):string{return this.lang.pick(en,ar);}
-  ngOnInit():void{this.refresh();}
+  ngOnInit():void{this.refresh();this.restoreIntegratedJob();}
+  ngOnDestroy():void{this.stopIntegratedPolling();}
   refresh():void{
     if(this.loading)return;
     // Refresh both independent data sources. Previously this button only
