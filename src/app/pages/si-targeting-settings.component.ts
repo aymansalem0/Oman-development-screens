@@ -104,8 +104,8 @@ import {SiCandidateTargetingService,SiDashboard,SiImpact,SiTargetingPolicyConfig
      <small>{{copy('Until defined, vessels with no verified ETD or incident data stay visible in stable IMO order with missing-data explanation. Never fabricate a date or severity.',
       'حتى اعتماد باقي المعايير، تظهر السفن بلا موعد مغادرة أو حادث معتمد بترتيب IMO ثابت مع توضيح البيانات الناقصة.')}}</small>
     </div></div>
-    <p class="helper">{{copy('The official execution order is currently fixed by approved business rules, independent of vessel risk or AI prompt changes. AI advisory guidance can be managed in the first tab.',
-     'ترتيب التنفيذ الرسمي ثابت حاليًا وفق قواعد الأعمال المعتمدة، ولا يتغير بدرجة مخاطر السفينة أو تعليمات AI. يمكن إدارة التوجيهات الاستشارية من التبويب الأول.')}}</p>
+    <p class="helper">{{copy('The official execution order is currently fixed by approved business rules, independent of vessel risk or AI prompt changes. AI advisory guidance can be managed in the third tab.',
+     'ترتيب التنفيذ الرسمي ثابت حاليًا وفق قواعد الأعمال المعتمدة، ولا يتغير بدرجة مخاطر السفينة أو تعليمات AI. يمكن إدارة توجيهات AI الاستشارية من التبويب الثالث.')}}</p>
 
    </section>
    <section class="panel" *ngIf="tab==='AI_RULES'">
