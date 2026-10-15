@@ -34,6 +34,7 @@ export function buildC01Source(dashboard,pscPolicy=null){
     .filter(c=>c.events.some(isSiVerifiedEvent))
     .map(c=>{
       const vessel=vesselSignals.get(c.imo)||{};
+      const verifiedEvents=c.events.filter(isSiVerifiedEvent);
       // Forward the saved source fields needed for a grounded recommendation.
       // No invented ETD, incident severity or alternate vessel risk is allowed.
       const departureAt=vessel.departureVerified===true?vessel.departureAt:null;
@@ -64,7 +65,7 @@ export function buildC01Source(dashboard,pscPolicy=null){
       // savedRisk.assessmentId to C01 (SI contract §6). Preserve source proof;
       // no model-inferred risk, certificate or operational rank is added.
       const allowedEvidence=unique([
-        ...[...c.events,...operationalSourceEvents].flatMap(e=>
+        ...[...verifiedEvents,...operationalSourceEvents].flatMap(e=>
           [e.eventKey,e.sourceEventId,e.sourceReference,...(e.evidenceIds||[])]),
         c.currentRisk?.assessmentId
       ]);
@@ -72,8 +73,8 @@ export function buildC01Source(dashboard,pscPolicy=null){
         vesselName:c.vesselName,flag:vessel.flag||c.flag||'',
         eligibility:c.eligibility,
         currentRisk:c.currentRisk||null,
-        sourceTypes:unique(c.events.map(e=>e.sourceType)),
-        sourceEvents:c.events.map(e=>({
+        sourceTypes:unique(verifiedEvents.map(e=>e.sourceType)),
+        sourceEvents:verifiedEvents.map(e=>({
           sourceType:e.sourceType,eventKey:e.eventKey,
           sourceEventId:e.sourceEventId,sourceReference:e.sourceReference,
           provenance:e.provenance,approval:e.approval,
@@ -106,11 +107,11 @@ export function buildC01Source(dashboard,pscPolicy=null){
         // A verified service request stays in the central queue even when
         // not scheduled in THIS rolling plan. NMC approved referrals are
         // the only unconditional required cohort after policy publication.
-        actionableServiceRequest:c.events.some(e=>
+        actionableServiceRequest:verifiedEvents.some(e=>
           e.sourceType==='SERVICE_REQUEST'&&isSiVerifiedEvent(e)),
         requiredInPlan:isSiProtectedReferral(c)||
           (!Number.isInteger(selection.serviceRequestPlanCap)&&
-            c.events.some(e=>e.sourceType==='SERVICE_REQUEST'&&isSiVerifiedEvent(e)))};
+            verifiedEvents.some(e=>e.sourceType==='SERVICE_REQUEST'&&isSiVerifiedEvent(e)))};
     }).sort((a,b)=>a.candidateKey.localeCompare(b.candidateKey));
   const source={schemaVersion:'SI-C01-v1',
     ranking,aiAdvisory,selection,selectionPolicyActive,
