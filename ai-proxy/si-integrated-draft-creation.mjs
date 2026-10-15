@@ -201,6 +201,8 @@ export function publicDraftPreview(p,previewId){
   aiVerifiedCount:p.ai?.verifiedAiRecommendations??0,
   candidateCount:p.candidateCount,
   selectedCount:p.pipeline.aiSelectedCount,
+  notSelectedByAiCount:Math.max(0,
+   p.pipeline.sourceCandidateCount-p.pipeline.aiSelectedCount),
   prioritizedCount:p.pipeline.prioritizedCount,
   finalPlanCount:p.pipeline.inPlanCount,
   feasibleCount:p.pipeline.inPlanCount,
