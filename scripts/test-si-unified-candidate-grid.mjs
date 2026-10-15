@@ -73,7 +73,7 @@ test('one official supervisor approval covers the plan, not each vessel row',()=
  assert.match(html,/\(click\)="generateIntegratedDraft\(\)"/);
  assert.match(html,/\(click\)="saveIntegratedDraft\(\)"/);
  assert.match(ts,/this\.http\.post<DraftIntegratedPreview>\('\/api\/si\/v1\/inspection-plans\/draft-preview'/);
- assert.match(backend,/inspection-plans\/draft-save/);
+ assert.match(backend,/draft-\(recalculate\|save\)/);
  assert.doesNotMatch(html,/\(click\)="decide\('APPROVE'\)"/);
  assert.doesNotMatch(html,/\[\(ngModel\)\]="publisherKey"/);
  assert.match(backend,/const siInspectionPlan=new SiInspectionPlan/);
