@@ -118,10 +118,13 @@ export function getSiSelectionPolicy(config){
     throw new SiTargetingError('SI_SELECTION_POLICY_INVALID',422);
   return Object.fromEntries(keys.map(k=>[k,raw[k]]));
 }
+// Existing unconfigured installations retain their legacy C01 behaviour
+// until a PUBLISHER explicitly publishes the optional vessel-selection
+// policy. The editor still shows proposed defaults but initial startup must
+// not silently impose new PSC/UAE quotas.
 const defaultRules=Object.freeze({
   ranking:{criteria:['DEPARTURE_SOON','INCIDENT_SEVERITY']},
-  aiAdvisory:SI_C01_ADVISORY_DEFAULT,
-  selection:SI_SELECTION_POLICY_DEFAULT
+  aiAdvisory:SI_C01_ADVISORY_DEFAULT
 });
 function validateRules(value){
   if(!value||typeof value!=='object'||Array.isArray(value)||
