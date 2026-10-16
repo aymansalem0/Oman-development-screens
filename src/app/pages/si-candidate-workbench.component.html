@@ -463,8 +463,6 @@
 
       <div class="si-compact-credentials">
         <span class="si-admin-user">✓ Admin · {{copy('Authenticated session','جلسة موحدة')}}</span>
-        <button type="button" (click)="loadInspectionPlan()" [disabled]="planBusy||loading">
-          {{copy('Load Plan','تحميل الخطة')}}</button>
         <button type="button" *ngIf="canEditDraftSelection" class="primary" (click)="generateInspectionPlan()"
                 [disabled]="planBusy||loading||!plan||!activePlanEditable"
                 [attr.aria-busy]="planAiPhase!=='idle'">
