@@ -419,6 +419,7 @@ const siChecklistField=new (checklistStorage==='oracle'?
   ...(checklistStorage==='oracle'?{oracle:repository}:{}) ,
   library:siChecklistLibrary,targeting:siTargeting,
   airiaSuggest:input=>siChecklistAiria.call('vision',input),
+  airiaQuestionSuggest:input=>siChecklistAiria.call('builder',input),
   getSetting:key=>runtime.get(key)
 });
 const siLifecycle=new SiInspectionLifecycle({mode:dbMode,oracleRepository:repository,
@@ -1092,7 +1093,7 @@ const server = createServer(async (req, res) => {
             payload.expectedUpdatedAt));
         }
       }
-      const single=/^\/cases\/([a-f0-9-]{36})(?:\/(start|answers|ai\/suggest|ai\/review|submit))?$/.exec(rest);
+      const single=/^\/cases\/([a-f0-9-]{36})(?:\/(start|answers|evidence|ai\/suggest|ai\/review|ai\/questions|ai\/question-answer|ai\/question-review|submit))?$/.exec(rest);
       if(single){
         const id=single[1],operation=single[2];
         if(req.method==='GET'&&!operation)
@@ -1103,6 +1104,14 @@ const server = createServer(async (req, res) => {
         const payload=await requestJson(req,3300000);
         if(operation==='answers'&&req.method==='POST')
           return respond(res,200,await siChecklistField.saveAnswers(id,{...payload,actor:user}));
+        if(operation==='evidence'&&req.method==='POST')
+          return respond(res,201,await siChecklistField.attachEvidence(id,{...payload,actor:user}));
+        if(operation==='ai/questions'&&req.method==='POST')
+          return respond(res,200,await siChecklistField.suggestQuestions(id,{...payload,actor:user}));
+        if(operation==='ai/question-answer'&&req.method==='POST')
+          return respond(res,200,await siChecklistField.suggestAdvisoryAnswer(id,{...payload,actor:user}));
+        if(operation==='ai/question-review'&&req.method==='POST')
+          return respond(res,200,await siChecklistField.reviewAdvisoryAnswer(id,{...payload,actor:user}));
         if(operation==='ai/suggest'&&req.method==='POST')
           return respond(res,200,await siChecklistField.suggest(id,{...payload,actor:user}));
         if(operation==='ai/review'&&req.method==='POST')
