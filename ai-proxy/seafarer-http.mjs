@@ -138,7 +138,7 @@ export function createSeafarerHandler({
         });
         return true;
       }
-      const demoCase=path.match(/^\\/api\\/seafarers\\/v1\\/demo-scenarios\\/([A-Z0-9_]+)$/);
+      const demoCase=path.match(/^\/api\/seafarers\/v1\/demo-scenarios\/([A-Z0-9_]+)$/);
       if(demoCase&&req.method==='GET'){
         if(!actor.operations)reject('SDB_OPERATIONS_REQUIRED',403);
         const selected=sdbServiceScenarios(s.clock(),s.policy,
@@ -160,14 +160,14 @@ export function createSeafarerHandler({
         send(res,200,s.documentReviewQueue(actor));
         return true;
       }
-      const evidence=path.match(/^\\/api\\/seafarers\\/v1\\/profiles\\/([^/]+)\\/requirements\\/([^/]+)\\/evidence$/);
+      const evidence=path.match(/^\/api\/seafarers\/v1\/profiles\/([^/]+)\/requirements\/([^/]+)\/evidence$/);
       if(evidence&&req.method==='POST'){
         const {body}=await read(req);
         send(res,200,s.submitEvidence(actor,decodeURIComponent(evidence[1]),
           decodeURIComponent(evidence[2]),body));
         return true;
       }
-      const reviewed=path.match(/^\\/api\\/seafarers\\/v1\\/document-reviews\\/([^/]+)\\/decision$/);
+      const reviewed=path.match(/^\/api\/seafarers\/v1\/document-reviews\/([^/]+)\/decision$/);
       if(reviewed&&req.method==='POST'){
         const {body}=await read(req);
         send(res,200,s.reviewEvidence(actor,decodeURIComponent(reviewed[1]),
