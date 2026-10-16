@@ -33,7 +33,9 @@ export function parseQuestionAttachment(upload){
    !Object.hasOwn(EVIDENCE_TYPES,upload.mimeType))
   failure('SI_CHECKLIST_EVIDENCE_FORMAT_INVALID');
  const filename=String(upload.filename||'').trim();
- if(!filename||filename.length>135||/[\\/\\\x00-\\\x1f]/.test(filename))
+ if(!filename||filename.length>135||
+   filename.includes('/')||filename.includes('\\')||
+   [...filename].some(ch=>ch.charCodeAt(0)<32))
   failure('SI_CHECKLIST_EVIDENCE_FILENAME_INVALID');
  if(upload.mimeType!=='application/pdf'){
   const parsed=parseImage(upload);
@@ -249,7 +251,7 @@ export class SiChecklistField{
  async suggest(idValue,{level='ITEM',templateId,groupId,itemId,
    text,image,evidenceId,actor,confirmCost}={}){
   if(!safe(actor,120)||confirmCost!==true||
-   !VALID_LEVELS.includes(level)||!safe(text||'',2500)&&!image)
+   !VALID_LEVELS.includes(level)||(!safe(text||'',2500)&&!image&&!evidenceId))
    failure('SI_CHECKLIST_AI_CONFIRMATION_REQUIRED');
   if(!this.airiaSuggest)failure('SI_CHECKLIST_AIRIA_NOT_CONFIGURED',503);
   await this.context(idValue);
