@@ -87,7 +87,7 @@
      </div>
      <div class="cases-grid" *ngIf="scenarios.length">
       <button class="case-card" type="button" *ngFor="let s of filteredScenarios"
-       (click)="choose(s)" [class.selected]="selected?.id===s.id"
+       (click)="choose(s)" [disabled]="scenariosLoading" [class.selected]="selected?.id===s.id"
        [attr.aria-pressed]="selected?.id===s.id" [attr.data-testid]="'scenario-'+s.id">
        <div class="case-top">
         <span class="case-type" [class.renew]="isRenewal(s)">
@@ -109,7 +109,8 @@
        <div class="meter"><span [style.width.%]="s.readiness.percent"></span></div>
        <div class="case-footer">
         <span>{{s.readiness.passed}} / {{s.readiness.total}} {{t('checks passed','متطلبات مستوفاة')}}</span>
-        <b>{{t('View case','عرض الحالة')}} ←</b>
+        <b *ngIf="s.canContinue&&s.readiness.status==='READY'">{{t('Continue to SDB application','استكمال طلب سجل البحار')}} ←</b>
+        <b *ngIf="!s.canContinue||s.readiness.status!=='READY'">{{t('View missing requirements','عرض المتطلبات الناقصة')}} ←</b>
        </div>
       </button>
      </div>
