@@ -137,7 +137,9 @@ export class SiScheduleOrders{
     isMyPocEngineer:schedule.mode==='POC_MOCK'&&
       order.assignment?.inspectorId===pocInspectorIdForActor(actor),
     checklistStatus:order.checklistStatus,aiStatus:order.aiStatus,
-    scopeStatus:order.scopeStatus
+    scopeStatus:order.scopeStatus,
+    canSelfConfirmScope:schedule.mode==='POC_MOCK'&&
+      process.env.SI_POC_INSPECTOR_SELF_SCOPE_ENABLED==='true'
    })));
  }
  /** Case-scoped access without trusting a browser-supplied employee ID. */
@@ -539,8 +541,18 @@ export class SiScheduleOrders{
    }
   }finally{this.processing.delete(lock);}
  }
- async approveScope({planId,orderId,actor,reason,includeAiSuggestions=false}={}){
+ async approveScope({planId,orderId,actor,reason,includeAiSuggestions=false,
+  inspectorPocSelfConfirm=false}={}){
   const {schedule,order}=await this.order(planId,orderId);
+  if(inspectorPocSelfConfirm){
+   if(process.env.SI_POC_INSPECTOR_SELF_SCOPE_ENABLED!=='true'||
+     schedule.mode!=='POC_MOCK')
+    err('SI_INSPECTOR_POC_SELF_SCOPE_NOT_ENABLED',403);
+   if(!this.resolveInspectorIdentity(actor,order.assignment,schedule.mode))
+    err('SI_WORK_ORDER_NOT_ASSIGNED_TO_SESSION',403);
+   if(includeAiSuggestions)
+    err('SI_POC_INSPECTOR_CANNOT_APPROVE_A04_ADDITIONS',403);
+  }
   if(!label(actor,160)||!label(reason,500)||reason.trim().length<8)
    err('SI_WORK_ORDER_SCOPE_REASON_REQUIRED',422);
   if(order.status==='READY_FOR_FIELD'||order.status==='FIELD_STARTED')
@@ -555,7 +567,8 @@ export class SiScheduleOrders{
   // Recover from a crash after the authoritative lifecycle applied scope
   // approval / ASSIGN but before the order projection was updated.
   if(curr.record?.stage==='ASSIGNED'||curr.record?.stage==='IN_FIELD'){
-   order.scopeStatus='MANUAL_SCOPE_APPROVED';
+   order.scopeStatus=inspectorPocSelfConfirm?
+    'POC_INSPECTOR_MANDATORY_ACKNOWLEDGED':'MANUAL_SCOPE_APPROVED';
    order.status=curr.record.stage==='IN_FIELD'?'FIELD_STARTED':'READY_FOR_FIELD';
    await this.saveOrder(schedule,order,'ORDER_RECOVERED_FROM_LIFECYCLE',actor);
    return clone(order);
@@ -584,10 +597,25 @@ export class SiScheduleOrders{
     mode:order.assignment.sourceType==='NMC_CASE'?
      'NMC_SCHEDULED':(await this.targeting.inspectionCase(order.caseId))
        ?.nmcReferralId?'NMC_SCHEDULED':'POC_MANUAL'}});
-  order.scopeStatus=includeAiSuggestions?'MANDATORY_PLUS_REVIEWED_A04':'MANDATORY_APPROVED';
+  order.scopeStatus=inspectorPocSelfConfirm?
+   'POC_INSPECTOR_MANDATORY_ACKNOWLEDGED':
+   includeAiSuggestions?'MANDATORY_PLUS_REVIEWED_A04':'MANDATORY_APPROVED';
   order.status='READY_FOR_FIELD';order.error=null;
-  await this.saveOrder(schedule,order,'SUPERVISOR_APPROVED_SCOPE_AND_ASSIGNMENT',actor);
+  await this.saveOrder(schedule,order,inspectorPocSelfConfirm?
+   'POC_INSPECTOR_SELF_CONFIRMED_MANDATORY':
+   'SUPERVISOR_APPROVED_SCOPE_AND_ASSIGNMENT',actor);
   return clone(order);
+ }
+ /** POC-only assigned-inspector acknowledgement, not formal supervisor approval.
+  * Saves a distinct audit/status while allowing a synthetic guided inspection.
+  * Mandatory checklist remains pinned; A04 advice never becomes findings.
+  */
+ async confirmPocInspectorScope({planId,orderId,actor,reason}={}){
+  if(typeof reason!=='string'||reason.trim().length<8||reason.trim().length>400)
+   err('SI_POC_INSPECTOR_CONFIRMATION_REASON_REQUIRED',422);
+  return this.approveScope({planId,orderId,actor,
+   reason:'POC_DEMO_INSPECTOR_ACKNOWLEDGEMENT: '+reason.trim(),
+   includeAiSuggestions:false,inspectorPocSelfConfirm:true});
  }
  async startField({planId,orderId,actor,confirmPocDelegation=false}={}){
   const {schedule,order}=await this.order(planId,orderId);
