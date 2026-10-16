@@ -4,6 +4,7 @@ import {HttpClient} from '@angular/common/http';
 import {Router,RouterLink} from '@angular/router';
 import {NmcNavigationComponent} from '../components/nmc-navigation.component';
 import {LanguageService} from '../services/language.service';
+import {MoeiAuthService} from '../services/moei-auth.service';
 
 interface AssignedOrder{
  planId:string;scheduleId:string;orderId:string;imo:string;vesselName?:string;
@@ -31,6 +32,7 @@ interface Dossier{
    checklistStatus:string|null;publishedTemplateSnapshotPresent:boolean};
   aiAnalysis:{status:string;generated:boolean;
    modelDraft:{focusAreas:unknown[];checklistFocus:unknown[];
+    predictedDeficiencies:{category:string;hypothesisOnly:true;evidenceIds:string[]}[];
     suggestedAdditionalItems:unknown[];missingEvidence:string[]}|null;
    supervisorReview:unknown};
  };
@@ -98,9 +100,31 @@ interface Dossier{
       <p>IMO {{o.imo}} · {{o.assignment.portName}} · {{o.assignment.startLocal||o.assignment.startUtc}}</p>
       <span class="status-pill">{{statusLabel(o.status)}}</span>
      </div><span class="meta">{{o.mode==='POC_MOCK'?'POC · DEMO ERP':'ERP · EXCEL POC'}}</span></div>
+     <section class="prep-entry" aria-label="Inspection preparation actions">
+      <div class="prep-entry-text">
+       <small>{{t('INSPECTION PREPARATION · STEP 1','تجهيز المعاينة · الخطوة الأولى')}}</small>
+       <strong>{{canActivate(o)?
+        t('Prepare mandatory checklist and vessel evidence','تجهيز القائمة الإلزامية وأدلة السفينة'):
+        t('Mandatory checklist and case preparation','القائمة الإلزامية وتجهيز ملف المعاينة')}}</strong>
+       <p>{{t('The original mandatory checklist is prepared independently of AI. A04 suggestions remain optional hypotheses requiring human review.',
+        'يتم تجهيز القائمة الإلزامية الأصلية دون الاعتماد على AI، وتظل مقترحات A04 احتمالات اختيارية تتطلب مراجعة بشرية.')}}</p>
+      </div>
+      <div class="prep-entry-actions">
+       <button *ngIf="canActivate(o)" class="prep-primary" type="button"
+        (click)="activate(o)" [disabled]="busy">
+        {{t('1 · Prepare Inspection','١ · تجهيز المعاينة')}}
+       </button>
+       <a *ngIf="o.caseId&&auth.isAdmin" class="prep-primary"
+        [routerLink]="['/moei/smart-inspection/preparation',o.caseId]">
+        {{t('Open Preparation & A04 AI','فتح التجهيز وتحليل A04')}}
+       </a>
+       <span *ngIf="o.caseId&&!auth.isAdmin" class="prep-supervisor">
+        {{t('A04 requires an authorized admin. Your assigned vessel dossier is available below.',
+         'تحليل A04 يتطلب مسؤولًا مخوّلًا، ودوسيه السفينة المسندة متاح أدناه.')}}
+       </span>
+      </div>
+     </section>
      <div class="buttons">
-      <button *ngIf="canActivate(o)" type="button" (click)="activate(o)"
-       [disabled]="busy">{{t('Prepare Inspection Dossier & Checklist','تجهيز ملف المعاينة والقائمة')}}</button>
       <button *ngIf="o.status==='READY_FOR_FIELD'" type="button" (click)="execute(o)"
        [disabled]="busy">{{t('Execute Work Order','تنفيذ أمر التكليف')}}</button>
       <button *ngIf="o.status==='FIELD_STARTED'" type="button" (click)="continue(o)">
@@ -108,8 +132,6 @@ interface Dossier{
       <a *ngIf="o.status==='READY_FOR_SCOPE_REVIEW'"
        [routerLink]="['/moei/smart-inspection/scheduling/plan',o.planId]">
         {{t('Supervisor: Approve Scope','المشرف: اعتماد نطاق المعاينة')}}</a>
-      <a *ngIf="o.caseId" [routerLink]="['/moei/smart-inspection/preparation',o.caseId]">
-       {{t('Preparation & Optional A04','تجهيز المعاينة وA04 الاختياري')}}</a>
       <a *ngIf="o.caseId&&o.checklistStatus==='MANDATORY_PUBLISHED_TEMPLATE_SNAPSHOT'"
        [routerLink]="['/moei/smart-inspection/checklists',o.caseId]">
        {{t('Published Checklist Details','تفاصيل القائمة المنشورة')}}</a>
@@ -266,6 +288,17 @@ interface Dossier{
           <div class="record-row" *ngFor="let field of recordFields(item)">
            <span>{{field.label}}</span><strong>{{field.value}}</strong></div>
          </article>
+         <h4>{{t('A04 potential deficiencies — not confirmed findings',
+           'ملاحظات محتملة من A04 — ليست مخالفات مؤكدة')}}</h4>
+         <p class="empty" *ngIf="!ai.predictedDeficiencies?.length">
+          {{t('No potential deficiencies suggested. The original mandatory checklist remains unchanged.',
+           'لا توجد مخالفات محتملة مقترحة. تظل القائمة الإلزامية الأصلية كاملة دون تغيير.')}}</p>
+         <article class="record-item" *ngFor="let item of ai.predictedDeficiencies">
+          <strong>{{t('AI hypothesis only · Inspector verification required',
+           'احتمال مقترح من AI فقط · يلزم تحقق المفتش')}}</strong>
+          <div class="record-row" *ngFor="let field of recordFields(item)">
+           <span>{{field.label}}</span><strong>{{field.value}}</strong></div>
+         </article>
          <h4>{{t('A04 recommended checklist additions — review status above',
            'إضافات القائمة المقترحة من A04 — حالة المراجعة موضحة بالأعلى')}}</h4>
          <p class="empty" *ngIf="!ai.suggestedAdditionalItems.length">
@@ -327,6 +360,18 @@ interface Dossier{
  .dossier-top small{font-size:11px;color:#118b82;font-weight:700}.dossier-top h2{font-size:21px;margin:8px 0}
  .dossier-top p{font-size:12px;color:#7193a0}.meta{font-size:11px;color:#849da5}
  .status-pill{font-size:11px;background:#eaf6ed;border-radius:12px;padding:5px 9px;color:#2b7653}
+ .prep-entry{display:flex;align-items:center;justify-content:space-between;gap:18px;
+  flex-wrap:wrap;padding:20px;margin:18px 0 12px;border-radius:12px;
+  border:2px solid #0c827a;background:#f0fbfa}
+ .prep-entry-text{flex:1;min-width:230px}.prep-entry-text small{color:#077e76;font-weight:800;font-size:11px}
+ .prep-entry-text strong{display:block;margin:7px 0;font-size:16px;color:#124c57}
+ .prep-entry-text p{margin:0;line-height:1.6;color:#567783;font-size:12px}
+ .prep-entry-actions{display:flex;flex-direction:column;gap:8px;min-width:210px}
+ .prep-entry-actions .prep-primary{display:block;text-align:center;padding:13px 17px;
+  color:white;background:#087c75;border:1px solid #087c75;
+  border-radius:9px;font-size:13px;font-weight:800;text-decoration:none}
+ .prep-entry-actions button:disabled{opacity:.5;cursor:not-allowed}
+ .prep-supervisor{color:#647a85;font-size:11px;line-height:1.6;max-width:290px}
  .buttons{margin:18px 0}.dossier-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:15px 0}
  .fact{background:#f3f9fa;padding:13px;border-radius:10px}.fact small,.fact b{display:block}
  .fact small{font-size:10px;color:#7899a2}.fact b{font-size:12px;margin-top:7px;color:#17566d}
@@ -369,7 +414,7 @@ export class SiMyWorkOrdersComponent implements OnInit{
  private cache:Record<string,Dossier>={};
  private dossierRequestId=0;
  constructor(private readonly http:HttpClient,private readonly router:Router,
-  public readonly lang:LanguageService){}
+  public readonly lang:LanguageService,public readonly auth:MoeiAuthService){}
  t(en:string,ar:string):string{return this.lang.pick(en,ar);}
  ngOnInit():void{this.load();}
  statusCount(s:string):number{return this.orders.filter(x=>x.status===s).length;}
