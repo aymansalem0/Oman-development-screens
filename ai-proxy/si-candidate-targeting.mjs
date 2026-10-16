@@ -9,6 +9,7 @@ import {atomicJsonWrite} from './atomic-json-store.mjs';
 import oracledb from 'oracledb';
 import {getSiRankingPolicy,compareInspections} from './si-inspection-ranking.mjs';
 import {projectMissingPocEta} from './si-poc-eta-projection.mjs';
+import {sourceVerified} from './si-integrated-capacity-plan.mjs';
 
 const copy=x=>JSON.parse(JSON.stringify(x));
 const iso=()=>new Date().toISOString();
@@ -784,8 +785,9 @@ export class SiCandidateTargeting{
    * Does not collapse distinct statutory obligations: regimes[]/scopeSources[]
    * remain separately traceable even though field preparation is coordinated.
    */
-  async decideBatch({items,actor,note,approvedPlanId}={}){
-    if(!Array.isArray(items)||items.length<1||items.length>40||
+  async decideBatch({items,actor,note,approvedPlanId,verifiedOnly=false}={}){
+    if(typeof verifiedOnly!=='boolean'||
+       !Array.isArray(items)||items.length<1||items.length>40||
        !safeText(actor,120)||!safeText(note,500)||note.trim().length<8||
        !safeText(approvedPlanId,100))
       throw new SiTargetingError('SI_BULK_APPROVAL_INVALID',422);
@@ -812,7 +814,8 @@ export class SiCandidateTargeting{
       // Rebuild ALL underlying reasons directly from trusted server sources.
       const workflows=data.candidates.filter(c=>c.imo===item.imo&&
         (c.status==='PENDING_REVIEW'||(c.status==='EXTERNALLY_SCHEDULED'&&
-         c.events.some(e=>e.sourceType==='NMC_CASE'&&e.approval==='APPROVED'))));
+         c.events.some(e=>e.sourceType==='NMC_CASE'&&e.approval==='APPROVED')))&&
+        (!verifiedOnly||c.events.some(sourceVerified)));
       const actualKeys=workflows.map(c=>c.key);
       if(!workflows.length||actualKeys.length!==item.candidateKeys.length||
          actualKeys.some(k=>!item.candidateKeys.includes(k))||
@@ -831,6 +834,9 @@ export class SiCandidateTargeting{
       const sourceEvents=new Map();
       for(const workflow of ordered){
         for(const event of workflow.events){
+          // The capacity-verified approval already excludes UNVERIFIED rows.
+          // Do not upgrade review-only evidence into approved case triggers.
+          if(verifiedOnly&&!sourceVerified(event))continue;
           const key=event.eventKey||
             [event.sourceType,event.sourceEventId,workflow.regime].join(':');
           if(!sourceEvents.has(key))sourceEvents.set(key,{
