@@ -19,7 +19,8 @@ const eligible=c=>c?.status==='PENDING_REVIEW'||(
  c?.status==='EXTERNALLY_SCHEDULED'&&
  c.events?.some(e=>e.sourceType==='NMC_CASE'&&e.approval==='APPROVED'));
 const mandatory=row=>row.mandatoryReferral===true||row.requiredInPlan===true;
-const sourceVerified=e=>e.sourceType==='NMC_CASE'?
+/** The same source verification rule must govern approval and case creation. */
+export const sourceVerified=e=>e.sourceType==='NMC_CASE'?
   e.approval==='APPROVED':['SOURCE_FINAL','SOURCE_REVIEWED'].includes(e.approval);
 const isManualInclude=row=>row.selectionOrigin==='OFFICER_AMENDED'&&
  row.planSelected===true&&row.disposition==='INCLUDE';
