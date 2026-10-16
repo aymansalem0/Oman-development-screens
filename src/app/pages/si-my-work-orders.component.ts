@@ -131,11 +131,13 @@ interface Dossier{
       data-testid="si-step3-a04-approved">
       {{t('A04 APPROVED · Supervisor reviewed','A04 معتمد · تمت مراجعة المشرف')}}
      </span>
-     <span *ngIf="dossier?.readiness?.aiReviewed===true&&dossier?.sections?.aiAnalysis?.modelDraft as ai"
-      class="journey-a04-summary" data-testid="si-step3-a04-summary">
+     <ng-container *ngIf="dossier?.readiness?.aiReviewed===true">
+      <span *ngIf="dossier?.sections?.aiAnalysis?.modelDraft as ai"
+       class="journey-a04-summary" data-testid="si-step3-a04-summary">
       {{t('Focus areas','مجالات التركيز')}}: {{ai.focusAreas.length}} ·
       {{t('Extra questions','أسئلة إضافية')}}: {{ai.suggestedAdditionalItems.length}}
-     </span>
+      </span>
+     </ng-container>
      <span *ngIf="dossier?.readiness?.preparationSaved===true&&dossier?.readiness?.aiReviewed!==true"
       class="journey-done">{{t('Evidence prepared · A04 optional','تم تجهيز الأدلة · A04 اختياري')}}</span>
      <span *ngIf="!selected?.caseId" class="journey-wait">{{t('Available after dossier preparation','متاح بعد تجهيز الملف')}}</span>
