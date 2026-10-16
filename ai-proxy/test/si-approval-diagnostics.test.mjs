@@ -41,3 +41,22 @@ test('invalid caller stage, driver secrets and arbitrary error text are suppress
  assert.equal(result.oracleCode,undefined);
  assert.ok(!JSON.stringify(result).includes('SECRET DATA'));
 });
+
+test('ORA-01745 reports only allowed Oracle 019 schedule insert location and no SQL/bind values',()=>{
+ const e=Object.assign(new Error('private work order values'),{
+  code:'ORA-01745',errorNum:1745,
+  approvalStage:'SCHEDULE_WORK_ORDER_WRITE',
+  scheduleSqlStage:'WORK_ORDER_INSERT'
+ });
+ const out=classifySiApprovalFailure(e);
+ assert.equal(out.error,'SI_APPROVAL_TRANSACTION_FAILED');
+ assert.equal(out.stage,'SCHEDULE_WORK_ORDER_WRITE');
+ assert.equal(out.scheduleSqlStage,'WORK_ORDER_INSERT');
+ assert.equal(out.oracleCode,'ORA-01745');
+ assert.equal(out.status,500);
+ assert.equal(JSON.stringify(out).includes('private work order'),false);
+ const injected=classifySiApprovalFailure({...e,
+   scheduleSqlStage:'DROP TABLE WITH PRIVATE_SQL'});
+ assert.equal(injected.scheduleSqlStage,undefined,
+   'unknown SQL identifiers are never reflected to the UI');
+});

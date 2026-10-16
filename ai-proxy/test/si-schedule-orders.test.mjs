@@ -255,3 +255,65 @@ test('cross-port approval refuses missing travel or supervisor-approval evidence
   assert.equal((await x.orders.all()).length,0);
  }finally{x.done();}
 });
+
+
+test('Oracle 019 supervisor approval uses valid bind names and matching bind objects for all three writes',async()=>{
+ const x=workspace();
+ const writes=[];
+ const connection={
+  async execute(sql,binds={}){
+   if(sql.startsWith('INSERT INTO SI_SCHED_')){
+    const placeholders=[...sql.matchAll(/:([A-Za-z_][A-Za-z_0-9]*)/g)]
+      .map(match=>match[1]);
+    assert.ok(placeholders.length>0,'INSERT must be bound');
+    assert.ok(placeholders.every(name=>/^b_[a-z][a-z_0-9]*$/.test(name)),
+      'avoid reserved Oracle bind identifiers such as MODE / STATUS / SCHEDULE');
+    assert.deepEqual([...new Set(placeholders)].sort(),
+      Object.keys(binds).sort(),
+      'SQL and node-oracledb bind object must use identical names');
+    writes.push({sql,binds});
+   }
+   return {rows:[],rowsAffected:1};
+  },
+  async commit(){assert.fail('shared rolling-plan approval controls commit')},
+  async rollback(){assert.fail('shared rolling-plan approval controls rollback')}
+ };
+ try{
+  x.orders.mode='oracle';
+  const output=await x.approve({connection});
+  assert.equal(output.orders.length,1);
+  assert.equal(output.orders[0].imo,'9400643');
+  assert.deepEqual(writes.map(x=>
+    x.sql.match(/^INSERT INTO ([A-Z_]+)/)[1]),[
+    'SI_SCHED_APPROVAL','SI_SCHED_WORK_ORDER','SI_SCHED_ORDER_AUDIT']);
+  assert.equal(writes[1].binds.b_inspector_id,'ENG-1');
+  assert.equal(writes[1].binds.b_imo,'9400643');
+  assert.equal(writes[1].binds.b_start_utc,'2026-10-20T06:00:00.000Z');
+  assert.equal(writes[0].binds.b_mode_code,'POC_MOCK');
+ }finally{x.done();}
+});
+
+test('Oracle 019 write failure keeps precise work-order SQL stage for outer atomic rollback',async()=>{
+ const x=workspace();
+ let commitCount=0;
+ const connection={
+  async execute(sql,binds={}){
+   if(sql.startsWith('INSERT INTO SI_SCHED_WORK_ORDER')){
+    assert.equal(binds.b_inspector_id,'ENG-1');
+    const failure=new Error('Do not return inspector private data');
+    failure.code='ORA-01745';failure.errorNum=1745;
+    throw failure;
+   }
+   return {rows:[],rowsAffected:1};
+  },
+  async commit(){commitCount++;}
+ };
+ try{
+  x.orders.mode='oracle';
+  await assert.rejects(()=>x.approve({connection}),e=>
+    e.code==='ORA-01745'&&
+    e.scheduleSqlStage==='WORK_ORDER_INSERT');
+  assert.equal(commitCount,0,
+    'shared outer transaction is responsible for rollback and commit');
+ }finally{x.done();}
+});

@@ -15,6 +15,15 @@ import {resolveAssignedInspector,matchesAssignedInspector,pocInspectorIdForActor
 const id=()=>randomUUID(),at=()=>new Date().toISOString();
 const clone=v=>structuredClone(v);
 const doc=v=>({val:JSON.stringify(v),type:oracledb.DB_TYPE_CLOB});
+/** Bind values are never logged. The stage is a fixed non-sensitive ID. */
+const executeApprovalWrite=async(con,stage,statement,params)=>{
+ try{return await con.execute(statement,params);}
+ catch(error){
+  if(error&&typeof error==='object'&&!error.scheduleSqlStage)
+   error.scheduleSqlStage=stage;
+  throw error;
+ }
+};
 const UUID=/^[a-f0-9-]{36}$/i;
 const label=(v,max=180)=>typeof v==='string'&&v.trim().length&&
  v.trim().length<=max?v.trim():null;
@@ -227,28 +236,42 @@ export class SiScheduleOrders{
      officialRegulatoryInspectionAuthorized:false,
      orders};
     if(!con){this.write([...previous,record]);return record;}
-    await con.execute('INSERT INTO SI_SCHED_APPROVAL '+
+    await executeApprovalWrite(con,'SCHEDULE_HEADER_INSERT',
+     'INSERT INTO SI_SCHED_APPROVAL '+
      '(SCHEDULE_ID,PLAN_ID,PLAN_REVISION,PROPOSAL_HASH,OPTION_ID,'+
      'ERP_SNAPSHOT_ID,MODE_CODE,DOC_JSON,APPROVED_BY) '+
-     'VALUES(:id,:planId,:revision,:hash,:optionId,:erp,:mode,:data,:actor)',{
-      id:scheduleId,planId:plan.id,revision:plan.revision,hash:expectedHash,
-      optionId:selectedOptionId,erp:record.erpSnapshotId,mode:record.mode,
-      data:doc({...record,orders:[]}),actor:record.approvedBy});
+     'VALUES(:b_sched_id,:b_plan_id,:b_plan_revision,:b_proposal_hash,'+
+     ':b_option_id,:b_erp_snapshot_id,:b_mode_code,:b_approval_doc,'+
+     ':b_approved_actor)',{
+      b_sched_id:scheduleId,b_plan_id:plan.id,
+      b_plan_revision:plan.revision,b_proposal_hash:expectedHash,
+      b_option_id:selectedOptionId,b_erp_snapshot_id:record.erpSnapshotId,
+      b_mode_code:record.mode,
+      b_approval_doc:doc({...record,orders:[]}),
+      b_approved_actor:record.approvedBy});
     for(const o of orders){
-     await con.execute('INSERT INTO SI_SCHED_WORK_ORDER '+
+     await executeApprovalWrite(con,'WORK_ORDER_INSERT',
+      'INSERT INTO SI_SCHED_WORK_ORDER '+
       '(ORDER_ID,SCHEDULE_ID,IMO,INSPECTOR_ID,START_UTC,END_UTC,PORT_ID,'+
       'STATUS_CODE,VERSION_NO,DOC_JSON) VALUES '+
-      '(:id,:schedule,:imo,:inspector,:startUtc,:endUtc,:port,:status,1,:data)',{
-       id:o.id,schedule:scheduleId,imo:o.imo,
-       inspector:o.assignment.inspectorId,startUtc:o.assignment.startUtc,
-       endUtc:o.assignment.endUtc,port:o.assignment.portId,
-       status:o.status,data:doc(o)});
+      '(:b_order_id,:b_sched_id,:b_imo,:b_inspector_id,'+
+      ':b_start_utc,:b_end_utc,:b_port_id,:b_status_code,'+
+      '1,:b_order_doc)',{
+       b_order_id:o.id,b_sched_id:scheduleId,b_imo:o.imo,
+       b_inspector_id:o.assignment.inspectorId,
+       b_start_utc:o.assignment.startUtc,
+       b_end_utc:o.assignment.endUtc,
+       b_port_id:o.assignment.portId,
+       b_status_code:o.status,b_order_doc:doc(o)});
     }
-    await con.execute('INSERT INTO SI_SCHED_ORDER_AUDIT '+
+    await executeApprovalWrite(con,'SCHEDULE_AUDIT_INSERT',
+     'INSERT INTO SI_SCHED_ORDER_AUDIT '+
      '(AUDIT_ID,SCHEDULE_ID,EVENT_CODE,ACTOR,DETAILS_JSON) '+
-     "VALUES(:id,:schedule,'SUPERVISOR_APPROVED_SCHEDULE',:actor,:detail)",{
-      id:id(),schedule:scheduleId,actor:record.approvedBy,
-      detail:doc({optionId:selectedOptionId,vesselCount:orders.length,
+     "VALUES(:b_audit_id,:b_sched_id,'SUPERVISOR_APPROVED_SCHEDULE',"+
+     ':b_approved_actor,:b_audit_doc)',{
+      b_audit_id:id(),b_sched_id:scheduleId,
+      b_approved_actor:record.approvedBy,
+      b_audit_doc:doc({optionId:selectedOptionId,vesselCount:orders.length,
        erpSnapshotId:record.erpSnapshotId,mode:record.mode,
        crossPortApprovalConfirmed:record.crossPortApprovalConfirmed,
        crossPortOrders:record.crossPortOrders})});

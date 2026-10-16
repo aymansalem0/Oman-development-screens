@@ -1081,7 +1081,13 @@ export class SiInspectionPlanWizardComponent implements OnInit,OnDestroy{
          'ORACLE_COMMIT':['finalizing the transaction','إتمام معاملة Oracle'],
          'PREAPPROVAL_OR_DEPENDENCY':['verifying live dependencies','التحقق من البيانات والخدمات']
         };
-        const step=phase[diagnostic.stage]||phase['PREAPPROVAL_OR_DEPENDENCY'];
+        const operation:Record<string,[string,string]>={
+         'SCHEDULE_HEADER_INSERT':['saving the schedule header','حفظ بيانات الجدول'],
+         'WORK_ORDER_INSERT':['saving an inspector work order','حفظ أمر تكليف المهندس'],
+         'SCHEDULE_AUDIT_INSERT':['saving the schedule audit','تسجيل تدقيق الجدول']
+        };
+        const step=operation[diagnostic.scheduleSqlStage]||
+          phase[diagnostic.stage]||phase['PREAPPROVAL_OR_DEPENDENCY'];
         const ref=diagnostic.oracleCode?
           ' ('+diagnostic.oracleCode+')':'';
         this.capacityError=this.copy(
