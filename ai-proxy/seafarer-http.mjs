@@ -147,6 +147,18 @@ export function createSeafarerHandler({
         send(res,200,{mode:'CONTRACT_SANDBOX',scenario:selected});
         return true;
       }
+      if(req.method==='GET'&&path===root+'/readiness-requirements'){
+        // Public metadata for the signed-in applicant, no secrets or other
+        // customers' evidence; settings edits remain operations-only.
+        send(res,200,{version:s.state.readinessSettings.version,
+          requirements:s.state.readinessSettings.requirements
+            .filter(r=>r.active).map(r=>({
+              id:r.id,title:r.title,titleAr:r.titleAr,
+              source:r.source,inputMode:r.inputMode,scope:r.scope,
+              core:r.core,mandatory:r.mandatory
+            }))});
+        return true;
+      }
       if(req.method==='GET'&&path===root+'/readiness-settings'){
         send(res,200,s.readinessConfiguration(actor));
         return true;
