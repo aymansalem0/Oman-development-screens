@@ -317,3 +317,21 @@ test("OAuth preserves approved SDB return route through state and rejects extern
     );
   }
 });
+
+test('eight read-only case previews require an operator and never mutate SDB records',async t=>{
+ const {request,workspace}=await fixture(t);
+ const before=structuredClone(workspace.state);
+ assert.equal((await request('/demo-scenarios',{as:null})).status,401);
+ const denied=await request('/demo-scenarios',{as:'self'});
+ assert.equal(denied.status,403);
+ assert.equal(denied.data.error,'SDB_OPERATIONS_REQUIRED');
+ const preview=await request('/demo-scenarios');
+ assert.equal(preview.status,200);
+ assert.equal(preview.data.officialData,false);
+ assert.equal(preview.data.modelInvoked,false);
+ assert.equal(preview.data.scenarios.length,8);
+ assert.equal(preview.data.scenarios.filter(s=>s.canContinue).length,2);
+ assert.equal(preview.data.scenarios.filter(s=>!!s.existingSdb).length,4);
+ assert.deepEqual(workspace.state,before,
+  'demo preview cannot modify applicant/issuance/hold/notification store');
+});
