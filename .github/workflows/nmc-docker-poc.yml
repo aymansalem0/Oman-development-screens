@@ -24,6 +24,7 @@ jobs:
           node --check ai-proxy/moei-google-sso.mjs
           node --check ai-proxy/moei-google-users.mjs
           node --test ai-proxy/test/moei-google-sso.test.mjs
+          node --test ai-proxy/test/moei-inspector-account-mapping.test.mjs
           node --check ai-proxy/server.mjs
           node --check ai-proxy/si-inspection-preparation.mjs
           node --check ai-proxy/case-source-provenance.mjs
