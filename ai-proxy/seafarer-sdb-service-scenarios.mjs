@@ -5,6 +5,7 @@
  * by real SDB application guards. No model invocation is claimed.
  */
 import {demoState,evaluateReadiness,SDB_POLICY} from './seafarer-workspace.mjs';
+import {computedSdbReadiness,initialSdbSettings} from './seafarer-readiness-settings.mjs';
 
 const DEFINITIONS=Object.freeze([
  {id:'CADET_MISSING_CERTIFICATES',base:0,kind:'FIRST_ISSUE',category:'ACADEMY',
@@ -45,7 +46,8 @@ const DEFINITIONS=Object.freeze([
  * Read-only synthetic candidates; preparing fixtures never writes application
  * records, changes companies/academies or bypasses verified applicant binding.
  */
-export function sdbServiceScenarios(now=Date.now(),policy=SDB_POLICY){
+export function sdbServiceScenarios(now=Date.now(),policy=SDB_POLICY,
+ settings=initialSdbSettings(policy)){
  const baseline=demoState(now).profiles;
  return DEFINITIONS.map(def=>{
   const p=structuredClone(baseline[def.base]);
@@ -61,7 +63,7 @@ export function sdbServiceScenarios(now=Date.now(),policy=SDB_POLICY){
     reference:'DEMO-AC-RENEW-01',updatedAt:new Date(now).toISOString()
    };
   }
-  const readiness=evaluateReadiness(p,now,policy);
+  const readiness=computedSdbReadiness(p,now,policy,settings);
   const expected=def.kind==='RENEWAL'?'RENEWAL':'FIRST_ISSUE';
   if(readiness.service!==expected)
    throw new Error('SDB_DEMO_SCENARIO_SERVICE_MISMATCH');
