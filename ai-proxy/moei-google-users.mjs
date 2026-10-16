@@ -18,12 +18,14 @@ export function normalizeGoogleEmail(value){
   return email;
 }
 const safeRole=value=>{
-  if(!['ADMIN','VIEWER'].includes(value))throw new MoeiUsersError('MOEI_INVALID_ROLE',400);
+  if(!['ADMIN','VIEWER','INSPECTOR'].includes(value))throw new MoeiUsersError('MOEI_INVALID_ROLE',400);
   return value;
 };
 export class MoeiGoogleUsers{
-  constructor({path=process.env.MOEI_GOOGLE_USERS_PATH||'/data/moei-google-users.json'}={}){
+  constructor({path=process.env.MOEI_GOOGLE_USERS_PATH||'/data/moei-google-users.json',
+   inspectorValidator=()=>false}={}){
     this.path=path;
+    this.inspectorValidator=inspectorValidator;
     if(existsSync(path)){
       const json=JSON.parse(readFileSync(path,'utf8'));
       if(!Array.isArray(json.users))throw new MoeiUsersError('MOEI_USERS_STORE_INVALID',500);
@@ -41,7 +43,27 @@ export class MoeiGoogleUsers{
     writeFileSync(temp,JSON.stringify({version:1,users:this.users,audit:this.audit.slice(-500)},null,2),{mode:0o600});
     renameSync(temp,this.path);
   }
-  list(){return this.users.map(({googleSub,...user})=>({...user,linkedGoogleAccount:Boolean(googleSub)})).sort((a,b)=>a.email.localeCompare(b.email));}
+  setInspectorValidator(fn){
+    if(typeof fn!=='function')throw new MoeiUsersError('MOEI_INSPECTOR_VALIDATOR_REQUIRED',500);
+    this.inspectorValidator=fn;
+  }
+  list(){return this.users.map(({googleSub,...user})=>({...user,
+    inspectorId:user.role==='INSPECTOR'?user.inspectorId||null:null,
+    linkedGoogleAccount:Boolean(googleSub)})).sort((a,b)=>a.email.localeCompare(b.email));}
+  assignedInspector(email){
+    const user=this.find(email);
+    return user?.active&&user.role==='INSPECTOR'&&user.inspectorId&&
+      this.inspectorValidator(user.inspectorId)?user.inspectorId:null;
+  }
+  validateInspectorBinding(id,email){
+    if(typeof id!=='string'||!/^[-A-Za-z0-9_.]{2,120}$/.test(id)||
+       !this.inspectorValidator(id))
+      throw new MoeiUsersError('MOEI_INSPECTOR_NOT_IN_ACTIVE_ERP',422);
+    if(this.users.some(user=>user.email!==email&&user.active&&
+      user.role==='INSPECTOR'&&user.inspectorId===id))
+      throw new MoeiUsersError('MOEI_INSPECTOR_ALREADY_BOUND',409);
+    return id;
+  }
   find(email){return this.users.find(x=>x.email===normalizeGoogleEmail(email));}
   allowed(email,sub){
     const user=this.find(email);
@@ -58,25 +80,37 @@ export class MoeiGoogleUsers{
     this.audit.push({action,email,actor,at:new Date().toISOString()});
     this.audit=this.audit.slice(-500);
   }
-  add({email,role='VIEWER'},actor){
+  add({email,role='VIEWER',inspectorId=null},actor){
     const key=normalizeGoogleEmail(email);
     const selectedRole=safeRole(role);
     if(this.users.some(x=>x.email===key))throw new MoeiUsersError('MOEI_USER_ALREADY_EXISTS',409);
-    const user={email:key,role:selectedRole,active:true,googleSub:null,addedAt:new Date().toISOString(),addedBy:actor};
+    const assignment=selectedRole==='INSPECTOR'?
+      this.validateInspectorBinding(inspectorId,key):null;
+    if(selectedRole!=='INSPECTOR'&&inspectorId)
+      throw new MoeiUsersError('MOEI_INSPECTOR_ROLE_REQUIRED',422);
+    const user={email:key,role:selectedRole,inspectorId:assignment,active:true,
+      googleSub:null,addedAt:new Date().toISOString(),addedBy:actor};
     this.users.push(user);this.record('ADD',key,actor);this.persist();
     return this.list().find(x=>x.email===key);
   }
-  update(email,{active,role},actor){
+  update(email,{active,role,inspectorId},actor){
     const user=this.find(email);
     if(!user)throw new MoeiUsersError('MOEI_USER_NOT_FOUND',404);
-    if(typeof active!=='boolean'&&role===undefined)throw new MoeiUsersError('MOEI_NO_CHANGES',400);
+    if(typeof active!=='boolean'&&role===undefined&&inspectorId===undefined)
+      throw new MoeiUsersError('MOEI_NO_CHANGES',400);
     const nextRole=role===undefined?user.role:safeRole(role);
     const nextActive=active===undefined?user.active:active;
     if(typeof nextActive!=='boolean')throw new MoeiUsersError('MOEI_INVALID_ACTIVE',400);
     if(user.active&&user.role==='ADMIN'&&(!nextActive||nextRole!=='ADMIN')&&
        this.users.filter(x=>x.active&&x.role==='ADMIN').length<=1)
       throw new MoeiUsersError('MOEI_LAST_ADMIN_REQUIRED',409);
+    const nextInspectorId=nextRole==='INSPECTOR'?
+      this.validateInspectorBinding(inspectorId===undefined?user.inspectorId:inspectorId,
+        user.email):null;
+    if(nextRole!=='INSPECTOR'&&inspectorId!==undefined&&inspectorId!==null)
+      throw new MoeiUsersError('MOEI_INSPECTOR_ROLE_REQUIRED',422);
     user.role=nextRole;user.active=nextActive;
+    user.inspectorId=nextInspectorId;
     this.record('UPDATE',user.email,actor);this.persist();
     return this.list().find(x=>x.email===user.email);
   }
