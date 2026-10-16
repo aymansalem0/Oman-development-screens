@@ -146,6 +146,12 @@ export class SiChecklistsService{
    Observable<{evidence:ChecklistEvidence;version:number;explanation:string}>{
     return this.http.post<any>(this.url+'/cases/'+caseId+'/evidence',body);
  }
+ importA04Questions(caseId:string,expectedVersion:number):
+  Observable<{questions:SuggestedInspectionQuestion[];version:number;
+   imported:number;approvedDossierOnly:true}>{
+   return this.http.post<any>(this.url+'/cases/'+caseId+'/ai/import-a04',
+    {expectedVersion});
+ }
  suggestQuestions(caseId:string,operatorPrompt:string):
   Observable<{questions:SuggestedInspectionQuestion[];version:number;
     requiresInspectorReview:true;notStatutory:true}>{
