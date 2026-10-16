@@ -4,7 +4,7 @@ on:
   push:
     branches: ['feature/nmc-*', 'feature/si-*', 'feature/moei-*', 'integration/moei-seafarers-*', 'fix/moei-*', 'feat/moei-*']
   pull_request:
-    branches: [main, feature/smart-inspection-poc, 'feature/nmc-*', 'feature/si-*', 'feature/moei-*', 'integration/moei-seafarers-*']
+    branches: [main, feature/smart-inspection-poc, 'feature/nmc-*', 'feature/si-*', 'feature/moei-*', 'integration/moei-seafarers-*', 'fix/moei-*']
   workflow_dispatch:
 
 jobs:
