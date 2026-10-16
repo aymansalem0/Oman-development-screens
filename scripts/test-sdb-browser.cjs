@@ -62,17 +62,19 @@ const fs = require("node:fs");
     fullPage: false,
   });
   async function issue(profile, delivery) {
-    await route("services");
-    await page.locator('[data-testid="sdb-start-service"]').click();
-    if (profile === "SF-002" || profile === "SF-003") {
+    if (profile === "SF-004") {
+      // The company clearance was updated in the separate company workflow.
+      // Return to the customer application for that explicitly reviewed profile;
+      // changing profiles here must never bypass server-side checks.
+      await page.goto(base + "/#/moei/seafarers/sdb/" + profile);
+    } else {
+      await route("services");
+      await page.locator('[data-testid="sdb-start-service"]').click();
       const scenario = profile === "SF-002" ? "CADET_READY" : "RENEWAL_READY";
       await page.locator('[data-testid="scenario-" + scenario + ""]').click();
       await page.locator('[data-testid="sdb-proceed-" + scenario + ""]').click();
-    } else {
-      // Company HOLD was explicitly cleared in the company workflow.
-      // The operator may now inspect that same authorised SDB sandbox case.
-      await page.goto(base + "/#/moei/seafarers/sdb/" + profile);
     }
+    await page.locator(".service-card .primary").waitFor();
     await page.locator(".service-card .primary").click();
     await page.locator('input[name="format"]').first().waitFor();
     await page
