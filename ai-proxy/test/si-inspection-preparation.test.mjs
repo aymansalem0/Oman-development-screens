@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import {mkdtempSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
-import {SiInspectionPreparation,SiPreparationError,validateA04,SI_BASE_CHECKLIST}
+import {SiInspectionPreparation,SiPreparationError,validateA04,SI_BASE_CHECKLIST,
+ a04PocOutputGuidance}
   from '../si-inspection-preparation.mjs';
 
 const caseId='34a10cb2-c542-411b-b915-a661238ce8af';
@@ -31,13 +32,15 @@ const dossier={
 };
 function harness({enabled=false,assessment=risk,providerResponse=dossier}={}){
   const dir=mkdtempSync(join(tmpdir(),'si-prep-'));let calls=0,returned=assessment;
+  const inputs=[];
   const target={inspectionCase:async id=>id===caseId?approved:null};
   const svc=new SiInspectionPreparation({mode:'json',file:join(dir,'prep.json'),
     targeting:target,riskPolicy:{ready:true,vessel:async()=>returned},
-    bundles:[fixture],enabled,executeA04:async()=>{calls++;
+    bundles:[fixture],enabled,executeA04:async input=>{calls++;
+      inputs.push(structuredClone(input));
       if(providerResponse instanceof Error)throw providerResponse;
       return providerResponse;}});
-  return {svc,calls:()=>calls,changeRisk:x=>{returned=x;},
+  return {svc,calls:()=>calls,inputs:()=>inputs,changeRisk:x=>{returned=x;},
     cleanup:()=>rmSync(dir,{recursive:true,force:true})};
 }
 test('GET never calls Airia; evidence and mandatory checklist remain inspectable without risk',async()=>{
@@ -288,4 +291,67 @@ test('checklist Focus paths are diagnosable while unknown free-text remains reje
   reasonEvidenceIds:['INS-1']
  }]},{checkIds:SI_BASE_CHECKLIST,evidenceIds:fixture.evidenceIds});
  assert.equal(compliant.checklistFocus[0].focus,'VERIFY');
+});
+
+test('POC A04 includes source-bound output guidance INSIDE the single billable request userInput',async()=>{
+ const h=harness({enabled:true});
+ try{
+  await h.svc.prepare(caseId,{actor:'Inspector'});
+  const generated=await h.svc.generate(caseId,{
+   actor:'Inspector',expectedVersion:1,confirmCost:true,language:'en'
+  });
+  assert.equal(generated.saved.status,'DRAFT_REVIEW');
+  assert.equal(h.calls(),1,'no extra Airia call to configure the contract');
+  const [request]=h.inputs();
+  assert.equal(request.requestMeta.schemaVersion,'2.0');
+  assert.equal(request.requestMeta.language,'en');
+  assert.equal(request.officialScoringRequested,false);
+  assert.deepEqual(request.requestedOutputs,['FOCUS_OVERLAY','MISSING_EVIDENCE']);
+  assert.equal(request.outputGuidance.mode,'POC_IN_REQUEST_OUTPUT_GUIDANCE');
+  assert.equal(request.outputGuidance.responseFormat,'ONE_JSON_OBJECT_NO_MARKDOWN');
+  assert.deepEqual(request.outputGuidance.allowedPriorityValues,
+   ['CRITICAL','HIGH','WATCH','NORMAL','PRIORITY','ROUTINE']);
+  assert.deepEqual(request.outputGuidance.allowedChecklistFocusValues,
+   ['NMC_FOCUS','PRIORITY','VERIFY','REVIEW','ADDITIONAL']);
+  assert.deepEqual(request.outputGuidance.allowedChecklistItemIds,
+   request.baseChecklistItemIds);
+  assert.deepEqual(request.outputGuidance.allowedEvidenceIds,
+   request.evidenceManifestRefs);
+  assert.ok(request.outputGuidance.instructions.some(v=>v.includes('Do NOT return MEDIUM')));
+  assert.ok(request.outputGuidance.instructions.some(v=>v.includes('NOT natural-language')));
+  assert.ok(request.outputGuidance.instructions.some(v=>v.includes('Human inspector review')));
+  const wrapped={userInput:JSON.stringify(request),asyncOutput:false};
+  const inputFromAiria=JSON.parse(wrapped.userInput);
+  assert.deepEqual(inputFromAiria.outputGuidance,request.outputGuidance,
+   'the existing Airia transport stringifies all output hints into userInput');
+  assert.equal(generated.saved.dossier.requiresInspectorReview,true);
+ }finally{h.cleanup();}
+});
+
+test('POC response guidance is generated only from approved source identifiers, not a free-form user prompt',()=>{
+ const input={baseChecklistItemIds:['fire-safety','certificates','fire-safety'],
+  evidenceManifestRefs:['CERT-1','DEF-1','CERT-1']};
+ const guidance=a04PocOutputGuidance(input);
+ assert.deepEqual(guidance.allowedChecklistItemIds,['fire-safety','certificates']);
+ assert.deepEqual(guidance.allowedEvidenceIds,['CERT-1','DEF-1']);
+ assert.ok(!JSON.stringify(guidance).includes('AIRIA_API_KEY'));
+ assert.equal(input.baseChecklistItemIds.length,3,'no mutation of original checklist');
+});
+
+test('request instructions never override server-side validation when a model returns MEDIUM',async()=>{
+ const incorrect={...dossier,focusAreas:[{
+  ...dossier.focusAreas[0],priority:'MEDIUM'
+ }]};
+ const h=harness({enabled:true,providerResponse:incorrect});
+ try{
+  await h.svc.prepare(caseId,{actor:'Inspector'});
+  await assert.rejects(()=>h.svc.generate(caseId,{
+   actor:'Inspector',expectedVersion:1,confirmCost:true
+  }),e=>e.code==='SI_A04_FOCUS_INVALID');
+  assert.equal(h.calls(),1);
+  assert.equal(h.inputs()[0].outputGuidance.mode,'POC_IN_REQUEST_OUTPUT_GUIDANCE');
+  const record=await h.svc.get(caseId);
+  assert.equal(record.saved.status,'FAILED');
+  assert.equal(record.saved.dossier,null);
+ }finally{h.cleanup();}
 });
