@@ -306,17 +306,28 @@ export class SiScheduleOrders{
   }
   await this.db(async con=>{
    try{
-    const r=await con.execute('UPDATE SI_SCHED_WORK_ORDER SET '+
-     'STATUS_CODE=:status,CASE_ID=:caseId,VERSION_NO=:v,DOC_JSON=:data,'+
-     'UPDATED_AT=SYSTIMESTAMP WHERE ORDER_ID=:id AND VERSION_NO=:before',{
-      id:order.id,status:order.status,caseId:order.caseId,v:order.version,
-      data:doc(order),before:order.version-1});
+    // Oracle bind names here must follow the same safe convention as
+    // schedule approval writes. :before / :event / :schedule can raise
+    // ORA-01745 and previously prevented the first Prepare transition.
+    const r=await executeApprovalWrite(con,'WORK_ORDER_STATUS_UPDATE',
+     'UPDATE SI_SCHED_WORK_ORDER SET '+
+     'STATUS_CODE=:b_status_code,CASE_ID=:b_case_id,'+
+     'VERSION_NO=:b_version_no,DOC_JSON=:b_order_doc,'+
+     'UPDATED_AT=SYSTIMESTAMP WHERE ORDER_ID=:b_order_id '+
+     'AND VERSION_NO=:b_expected_version',{
+      b_order_id:order.id,b_status_code:order.status,
+      b_case_id:order.caseId,b_version_no:order.version,
+      b_order_doc:doc(order),b_expected_version:order.version-1});
     if(r.rowsAffected!==1)err('SI_WORK_ORDER_VERSION_CONFLICT',409);
-    await con.execute('INSERT INTO SI_SCHED_ORDER_AUDIT '+
+    await executeApprovalWrite(con,'WORK_ORDER_STATUS_AUDIT',
+     'INSERT INTO SI_SCHED_ORDER_AUDIT '+
      '(AUDIT_ID,SCHEDULE_ID,ORDER_ID,EVENT_CODE,ACTOR,DETAILS_JSON) '+
-     'VALUES(:audit,:schedule,:orderId,:event,:actor,:details)',{
-      audit:id(),schedule:schedule.id,orderId:order.id,event,actor,
-      details:doc({status:order.status,caseId:order.caseId,error:order.error})});
+     'VALUES(:b_audit_id,:b_schedule_id,:b_order_id,'+
+     ':b_event_code,:b_actor,:b_audit_doc)',{
+      b_audit_id:id(),b_schedule_id:schedule.id,b_order_id:order.id,
+      b_event_code:event,b_actor:actor,
+      b_audit_doc:doc({status:order.status,caseId:order.caseId,
+        error:order.error})});
     await con.commit();
    }catch(e){await con.rollback();throw e;}
   });return clone(order);
