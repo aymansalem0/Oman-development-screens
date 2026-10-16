@@ -278,6 +278,10 @@
             {{copy('The AI response did not match the approved Focus Area contract. Priority must be one of CRITICAL, HIGH, WATCH, NORMAL, PRIORITY, or ROUTINE. Check the Airia A04 output before any paid retry.',
               'استجابة الوكيل لا تطابق عقد مجالات التركيز المعتمد. قيم الأولوية المسموحة: CRITICAL أو HIGH أو WATCH أو NORMAL أو PRIORITY أو ROUTINE. راجع ناتج وكيل Airia A04 قبل أي إعادة محاولة مدفوعة.')}}
           </span>
+          <span *ngIf="d.saved?.lastFailure==='SI_A04_CHECKLIST_REF_INVALID'">
+            {{copy('The A04 checklist focus is not a controlled overlay value. Use NMC_FOCUS, PRIORITY, VERIFY, REVIEW or ADDITIONAL, with any inspection instruction in the reason field. This is advisory only and cannot modify the approved checklist.',
+              'مخرجات A04 غير مطابقة لقيم التركيز المحددة. استخدم NMC_FOCUS أو PRIORITY أو VERIFY أو REVIEW أو ADDITIONAL، وضع تعليمات المعاينة في حقل reason. تظل التوصيات استشارية ولا تغير قائمة المعاينة المعتمدة.')}}
+          </span>
           {{copy('No dossier was fabricated; a new call requires explicit confirmation.','لم يتم اختلاق ملف، وأي استدعاء جديد يحتاج موافقة صريحة.')}}
         </div>
       </section>
