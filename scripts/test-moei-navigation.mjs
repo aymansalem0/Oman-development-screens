@@ -167,3 +167,26 @@ test('opened sidebar survives Angular route changes without reopening on deep li
   assert.ok(navTs.includes('this.currentPath = url'));
   assert.ok(!navTs.includes('expandSelectedDashboard'));
 });
+
+test('Seafarer Management is a first-class maritime menu and all five pages are routed',()=>{
+  assert.ok(sidebarMenu.includes("'seafarers'"),
+    'seafarer menu must use the same single-expanded-group state');
+  assert.ok(navTs.includes('get seafarersExpanded()'));
+  assert.ok(nav.includes("toggleMain('seafarers')"));
+  assert.ok(nav.includes('[hidden]="!seafarersExpanded"'));
+  for(const route of [
+    'moei/seafarers/readiness',
+    'moei/seafarers/services',
+    'moei/seafarers/company',
+    'moei/seafarers/notifications',
+    'moei/seafarers/fulfilment'
+  ]){
+    assert.ok(routes.includes("path: '"+route+"'"),'route missing: '+route);
+    assert.ok(nav.includes('routerLink="/'+route+'"'),
+      'sidebar link missing: '+route);
+  }
+  assert.ok(routes.includes("route.path?.startsWith('moei/seafarers')?"),
+    'seafarer login return-path guard must precede the generic MOEI guard');
+  assert.ok(chrome.includes("'smart-inspection'|'seafarers'"),
+    'shared maritime header must support Seafarer page context');
+});
