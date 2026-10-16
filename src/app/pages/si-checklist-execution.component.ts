@@ -36,6 +36,9 @@ interface A04Dossier{saved?:{status:string;dossier?:{
      {{t('Inspection Lifecycle','دورة المعاينة')}}</a>
     <a routerLink="/moei/smart-inspection/settings/checklists" *ngIf="auth.isAdmin">
      {{t('Checklist Settings','إعدادات قوائم الفحص')}}</a>
+    <a *ngIf="returnOrderId" routerLink="/moei/smart-inspection/my-work-orders"
+     [queryParams]="{orderId:returnOrderId}" data-testid="si-return-to-order">
+     {{t('← Return to My Inspection Steps','← العودة إلى خطوات المعاينة')}}</a>
    </div></header>
    <p class="notice error" role="alert" *ngIf="error">{{error}}</p>
    <p class="notice good" *ngIf="message">{{message}}</p>
@@ -499,6 +502,10 @@ export class SiChecklistExecutionComponent implements OnInit,OnDestroy{
  constructor(private route:ActivatedRoute,private api:SiChecklistsService,
   private http:HttpClient,public lang:LanguageService,public auth:MoeiAuthService){}
  t(en:string,ar:string){return this.lang.pick(en,ar);}
+ get returnOrderId():string{
+  const orderId=this.route.snapshot.queryParamMap.get('orderId')||'';
+  return /^[a-f0-9-]{36}$/i.test(orderId)?orderId:'';
+ }
  get canUseField():boolean{return this.preview?.fieldAccess?.canMutate===true;}
  ngOnInit():void{
   this.sub=this.route.paramMap.subscribe(p=>{
