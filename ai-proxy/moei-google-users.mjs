@@ -76,7 +76,7 @@ export class MoeiGoogleUsers{
        !/^[A-Za-z0-9][A-Za-z0-9_.:-]{0,119}$/.test(inspectorId)))
       throw new MoeiUsersError('MOEI_INSPECTOR_ID_INVALID',422);
     if(inspectorId!==undefined&&inspectorId!==null&&
-       this.users.some(other=>other.email!==user.email&&other.active&&
+       this.users.some(other=>other.email!==user.email&&
         other.inspectorId===inspectorId))
       throw new MoeiUsersError('MOEI_INSPECTOR_ALREADY_LINKED',409);
     const nextRole=role===undefined?user.role:safeRole(role);
