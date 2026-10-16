@@ -120,6 +120,24 @@ export interface SdbProfile {
   };
   applications: SdbApplication[];
 }
+export interface SdbServiceScenario {
+ id:string;title:string;titleAr:string;situation:string;situationAr:string;
+ category:'ACADEMY'|'MARASI'|'COMPANY'|'READY';
+ profileId:string;person:{name:string;rank:string;nationality:string};
+ existingSdb:{sid:string;number:string;expiryDate:string}|null;
+ readiness:SdbProfile['readiness'];canContinue:boolean;
+ advisor:{mode:'EXPLAINABLE_RULES_POC';modelInvoked:false;
+  classifiedService:'FIRST_ISSUE'|'RENEWAL';score:number;
+  sourceBacked:boolean;requiresHumanClearance:boolean;
+  evidence:{key:string;source:string;status:string;reason:string;
+   reference:string|null;expiryDate:string|null}[];
+  nextActions:{key:string;owner:string;action:string}[];
+ };
+}
+export interface SdbServiceScenariosResponse{
+ mode:'CONTRACT_SANDBOX';officialData:false;modelInvoked:false;
+ scenarios:SdbServiceScenario[];
+}
 export interface SdbNotification {
   id: string;
   profileId: string;
@@ -173,6 +191,9 @@ export class SeafarerWorkspaceService {
   constructor(private http: HttpClient) {}
   dashboard(scope = "") {
     return this.http.get<SdbDashboard>(this.root + "/dashboard" + scope);
+  }
+  demoScenarios() {
+    return this.http.get<SdbServiceScenariosResponse>(this.root + "/demo-scenarios");
   }
   start(profileId: string, scope: string) {
     return this.http.post<SdbApplication>(
