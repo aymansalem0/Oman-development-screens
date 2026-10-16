@@ -48,6 +48,12 @@
           <span class="nav-icon">▦</span>
           <span class="nav-label">{{copy('Registered Seafarers & Sea Service','البحارة المسجلون والخدمة البحرية')}}</span>
         </a>
+        <a class="nav-link" routerLink="/moei/seafarers/settings/readiness"
+           [class.active]="currentPath==='/moei/seafarers/settings/readiness'"
+           [attr.aria-current]="currentPath==='/moei/seafarers/settings/readiness'?'page':null">
+          <span class="nav-icon">⚙</span>
+          <span class="nav-label">{{copy('Readiness Requirement Settings','إعدادات جاهزية البحارة')}}</span>
+        </a>
         <a class="nav-link" routerLink="/moei/seafarers/company"
            [class.active]="currentPath==='/moei/seafarers/company'"
            [attr.aria-current]="currentPath==='/moei/seafarers/company'?'page':null">
