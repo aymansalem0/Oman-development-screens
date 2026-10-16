@@ -53,6 +53,7 @@ test('C01 failed batches return diagnostic codes with no raw Airia payload or se
   const e=new Error('RAW UPSTREAM KEY sk_secret_do_not_echo');
   e.code='SI_C01_NO_VERIFIED_RECOMMENDATIONS';
   e.batchIndex=3;e.batchCount=5;
+  e.expectedCount=25;e.returnedCount=1;
   e.diagnosticCode='RECOMMENDATION_ITEM_SHAPE';
   e.failureCounts={RECOMMENDATION_ITEM_SHAPE:11,secret:'raw-details'};
   throw e;
@@ -65,6 +66,8 @@ test('C01 failed batches return diagnostic codes with no raw Airia payload or se
  assert.equal(result.completedBatches,2);
  assert.equal(result.batchIndex,3);
  assert.equal(result.batchCount,5);
+ assert.equal(result.expectedCount,25);
+ assert.equal(result.returnedCount,1);
  assert.equal(result.failureCounts.RECOMMENDATION_ITEM_SHAPE,11);
  assert.equal(result.failureCounts.secret,undefined);
  assert.doesNotMatch(JSON.stringify(result),/sk_secret|raw-details/);
