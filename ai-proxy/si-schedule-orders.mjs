@@ -388,6 +388,13 @@ export class SiScheduleOrders{
       err('SI_NMC_REFERRAL_REQUIRES_INDEPENDENT_CONFIRMED_BOOKING',409);
     }
    }
+   // Keep interrupted or failed A04 requests flagged across subsequent
+   // preparation retries. Never issue an implicit second paid Airia call.
+   const aiRequestNeedsReconciliation=[
+    'A04_REQUESTED_NO_AUTOMATIC_RETRY',
+    'A04_PREVIOUS_REQUEST_RECONCILIATION_REQUIRED',
+    'A04_FAILED_MANUAL_REVIEW_REQUIRED'
+   ].includes(order.aiStatus);
    const set=async(status,event,error=null)=>{
     order.status=status;order.error=error;
     await this.saveOrder(schedule,order,event,actor);
@@ -440,12 +447,13 @@ export class SiScheduleOrders{
     order.aiStatus=prepared.saved.status==='APPROVED'?
      'A04_ADDITIONS_APPROVED_BY_REVIEWER':
      prepared.saved.status==='DRAFT_REVIEW'?'A04_DRAFT_REVIEW_PENDING':
-      'NOT_REQUESTED';
+      aiRequestNeedsReconciliation?
+       'A04_PREVIOUS_REQUEST_RECONCILIATION_REQUIRED':'NOT_REQUESTED';
     if(generateAi&&prepared.saved.status==='PREPARED'){
      // An interrupted paid A04 request is never replayed automatically.
      // Reconcile the Airia run and saved dossier before manually requesting
      // another call, even after container restart.
-     if(order.aiStatus==='A04_REQUESTED_NO_AUTOMATIC_RETRY'){
+     if(aiRequestNeedsReconciliation){
       order.aiStatus='A04_PREVIOUS_REQUEST_RECONCILIATION_REQUIRED';
       await this.saveOrder(schedule,order,'A04_RETRY_BLOCKED',actor);
      }else{
