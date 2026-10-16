@@ -120,3 +120,46 @@ test('Oracle 018 never uses reserved SQL bind placeholder names',()=>{
  assert.match(source,/VALUES\(:id,:planNo,:title,:startDate,:endDate,:notes,/,
   'plan number must not be bound as Oracle reserved :number');
 });
+
+test('Oracle approved-plan link to newly created case uses qualified binds only',async()=>{
+ const db=new MockOracle(),store=make(db);
+ const planId='00000009-0000-4000-8000-000000000009';
+ const scheduleId='00000010-0000-4000-8000-000000000010';
+ const p={id:planId,status:'APPROVED',revision:2,
+  approvedVessels:[{imo:'9328471',planRank:1,caseId:null,
+   regimes:['PORT_STATE_CONTROL'],
+   inspectionReasons:[{eventKey:'PSC-VERIFIED-01',
+    sourceType:'PSC_PORT_CALL'}]}],audit:[]};
+ const writes=[];let commits=0,rollbacks=0;
+ const con={
+  async execute(sql,binds={}){
+   const names=[...sql.matchAll(/:([A-Za-z_][A-Za-z_0-9]*)/g)]
+    .map(x=>x[1]);
+   assert.ok(names.length,'all case-link writes must use binds');
+   assert.ok(names.every(name=>/^b_[a-z][a-z0-9_]*$/.test(name)));
+   assert.deepEqual([...new Set(names)].sort(),Object.keys(binds).sort());
+   writes.push(sql.replace(/\\s+/g,' ').trim());
+   return {rowsAffected:1};
+  },
+  async commit(){commits++;},
+  async rollback(){rollbacks++;}
+ };
+ store.db=async fn=>fn(con);
+ store.query=async(_con,sql,binds)=>{
+  assert.match(sql,/:b_plan_id/);
+  assert.deepEqual(binds,{b_plan_id:planId});
+  return [{STATE_JSON:JSON.stringify(p)}];
+ };
+ const linked=await store.attachScheduledCase(planId,'9328471',CASE_ID,
+  'inspector@moei.example',scheduleId);
+ assert.equal(linked.revision,3);
+ assert.equal(linked.approvedVessels[0].caseId,CASE_ID);
+ assert.deepEqual(linked.approvedVessels[0].inspectionReasons,
+  p.approvedVessels[0].inspectionReasons,'regulatory reason is immutable');
+ assert.equal(commits,1);assert.equal(rollbacks,0);
+ assert.equal(writes.length,4);
+ assert.match(writes[0],/^UPDATE SI_PLAN_ROLLING_VESSEL /);
+ assert.match(writes[1],/^UPDATE SI_PLAN_ROLLING /);
+ assert.match(writes[2],/^INSERT INTO SI_PLAN_ROLLING_VERSION /);
+ assert.match(writes[3],/^INSERT INTO SI_PLAN_ROLLING_AUDIT /);
+});
