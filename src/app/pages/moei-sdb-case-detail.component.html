@@ -1,0 +1,163 @@
+<div class="sdb-shell" [attr.dir]="lang.dir">
+ <app-nmc-platform-header area="seafarers"></app-nmc-platform-header>
+ <app-nmc-navigation></app-nmc-navigation>
+ <main class="sdb-main">
+  <div class="breadcrumbs">
+   <a routerLink="/moei/seafarers/services">{{t('Seafarer Services','خدمات البحارة')}}</a>
+   <span>›</span>{{t('SDB Application Readiness','جاهزية طلب سجل البحار')}}
+  </div>
+  <div class="case-header">
+   <div>
+    <p class="overline">SDB · AI-ASSISTED READINESS JOURNEY</p>
+    <h1>{{t('Your SDB readiness assessment','تقييم جاهزيتك لتقديم طلب سجل البحار')}}</h1>
+    <p>{{t('Every requirement is evaluated against the configured source, evidence and approval rules.',
+      'يتم تقييم كل متطلب وفق الجهة المغذية والأدلة وقواعد الاعتماد المهيأة للخدمة.')}}</p>
+   </div>
+   <a class="secondary" routerLink="/moei/seafarers/services">
+    {{t('← All services','← العودة للخدمات')}}</a>
+  </div>
+  <div class="sandbox">
+   <b>POC · AGENTIC AI READINESS</b>
+   {{t('A configurable rules-and-orchestration agent calculates this score in the sandbox. No generative AI model, live source verification, or actual document-content inspection is connected.',
+    'يحسب وكيل قواعد وتنسيق قابل للتهيئة درجة الجاهزية تجريبيًا. لا يوجد اتصال فعلي بنموذج ذكاء اصطناعي توليدي أو تحقق من الجهات الخارجية أو فحص لمحتوى المستندات.')}}
+  </div>
+  <div *ngIf="loading" class="loading-state">{{t('Evaluating requirements…','جارٍ تقييم المتطلبات…')}}</div>
+  <div *ngIf="error" class="feedback error" role="alert">{{error}}</div>
+  <div *ngIf="message" class="feedback success-alert" role="status">{{message}}</div>
+  <ng-container *ngIf="readiness as r">
+   <section class="result-hero">
+    <div class="result-summary">
+     <div class="result-service">{{displayService}} · {{name}}</div>
+     <div class="result-status" [attr.data-state]="r.status">
+      <span>{{r.status==='READY'?'✓':r.status==='ON_HOLD'?'⛔':'!'}}</span>
+      <h2>{{r.status==='READY'?
+       t('Ready — continue your application','جاهز — يمكنك استكمال الطلب'):
+       r.status==='ON_HOLD'?
+       t('On hold — source clearance required','موقوف — يلزم رفع الإيقاف من الجهة'):
+       t('Not ready — outstanding requirements','غير جاهز — توجد متطلبات ناقصة')}}</h2>
+     </div>
+     <p>{{r.status==='READY'?
+       t('The current verified sandbox profile may proceed to the existing electronic SDB application journey.',
+         'يمكن للملف المستوفي حاليًا متابعة دورة إصدار أو تجديد سجل البحار الإلكتروني.'):
+       t('The agent has identified which requirements block the application, where the evidence should come from and who must act.',
+         'حدد مساعد الجاهزية المتطلبات المانعة للتقديم ومصدر الأدلة والإجراء المطلوب لكل متطلب.')}}</p>
+     <div class="result-tags">
+      <span>{{t('Policy version','إصدار القواعد')}}: {{r.policyVersion}}</span>
+      <span *ngIf="existingSdb as book">{{t('Existing SDB','سجل سابق')}}: {{book.number}}</span>
+      <span>{{r.passed}} / {{r.total}} {{t('passed','مستوفى')}}</span>
+     </div>
+    </div>
+    <div class="score">
+     <span>{{r.percent}}%</span>
+     <small>{{t('Readiness score','مؤشر الجاهزية')}}</small>
+     <div class="score-rail"><i [style.width.%]="r.percent"></i></div>
+    </div>
+   </section>
+
+   <section class="agent-flow">
+    <div class="agent-head">
+     <span class="agent-orb">✦</span>
+     <div><h3>{{t('Agentic AI Readiness Engine','محرك Agentic AI لحساب الجاهزية')}}</h3>
+      <p>{{t('Configured requirements → provider evidence → service classification → readiness calculation → exception routing.',
+       'إعداد المتطلبات ← أدلة الجهات ← تحديد الإصدار أو التجديد ← حساب الجاهزية ← توجيه الاستثناءات.')}}</p></div>
+     <b class="agent-badge">{{t('EXPLAINABLE RULES · NO MODEL CALL','قواعد قابلة للتفسير · دون استدعاء نموذج')}}</b>
+    </div>
+    <div class="flow-steps">
+     <div><span>01</span>{{t('Detect existing SDB','اكتشاف سجل سابق')}}</div>
+     <div><span>02</span>{{t('Load service settings','تحميل إعدادات الخدمة')}}</div>
+     <div><span>03</span>{{t('Verify source evidence','فحص أدلة الجهات')}}</div>
+     <div><span>04</span>{{t('Explain readiness & route','حساب الجاهزية وتوجيه النواقص')}}</div>
+    </div>
+   </section>
+
+   <div class="result-grid">
+    <section class="requirements">
+     <div class="section-title">
+      <h3>{{r.status==='READY'?t('All service requirements','جميع متطلبات الخدمة'):
+        t('Missing & pending requirements','قائمة المتطلبات الناقصة وقيد التحقق')}}</h3>
+      <span>{{blockers.length}} {{t('outstanding','غير مستوفى')}}</span>
+     </div>
+     <div class="result-list" *ngIf="blockers.length;else readyList">
+      <div class="requirement result-item" *ngFor="let c of blockers" [attr.data-check]="c.key">
+       <span class="check-icon" [attr.data-state]="c.result">
+        {{c.result==='HOLD'?'⊘':'!'}}</span>
+       <div class="requirement-body">
+        <b>{{label(c)}}</b>
+        <small>{{source(c.source)}} · {{modeLabel(c)}}</small>
+        <p>{{action(c)}}</p>
+        <p class="original-reason" *ngIf="!lang.isArabic">{{c.reason}}</p>
+        <div class="evidence-card" *ngIf="documentFor(c) as evidence">
+         <b>{{t('Document review','مراجعة المستند')}}:
+          {{evidence.reviewStatus}}</b>
+         <small>{{evidence.filename}} · {{evidence.reference}}</small>
+         <p>{{t('AI queued; requires human verification. No model has run.',
+           'محال إلى انتظار AI؛ يتطلب مراجعة بشرية ولم يتم تشغيل نموذج بعد.')}}</p>
+        </div>
+        <div class="upload-box" *ngIf="mode(c)==='ATTACHMENT'">
+         <label *ngIf="canUpload">
+          {{t('Add supporting document','إضافة مستند داعم')}}
+          <input type="file" accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg"
+           [disabled]="busy" (change)="attach($event,c)"
+           [attr.aria-label]="t('Attach evidence for','إرفاق مستند لمتطلب')+' '+label(c)"/>
+         </label>
+         <small>{{t('POC accepts a SHA-256 fingerprint and metadata only; document bytes are not stored or analysed.',
+           'يحتفظ POC ببصمة SHA-256 وبيانات المستند فقط؛ لا يخزن أو يحلل محتواه.')}}</small>
+        </div>
+       </div>
+       <span class="check-state" [attr.data-state]="c.result">{{status(c.result)}}</span>
+      </div>
+     </div>
+     <ng-template #readyList><p class="all-done">✓
+       {{t('Every currently applicable requirement passed.','جميع المتطلبات الحالية مستوفاة.')}}</p></ng-template>
+     <details class="passed-collapse" *ngIf="r.passed">
+      <summary>{{t('View completed requirements','عرض المتطلبات المستوفاة')}}
+       ({{r.passed}})</summary>
+      <div class="requirement result-item" *ngFor="let c of checks">
+       <ng-container *ngIf="c.result==='PASS'">
+        <span class="check-icon" data-state="PASS">✓</span>
+        <div class="requirement-body"><b>{{label(c)}}</b>
+         <small>{{source(c.source)}} · {{modeLabel(c)}}</small></div>
+        <span class="check-state" data-state="PASS">{{status(c.result)}}</span>
+       </ng-container>
+      </div>
+     </details>
+    </section>
+    <aside class="decision-panel">
+     <h3>{{t('Service decision','قرار الاستكمال')}}</h3>
+     <div class="decision-result" [class.allowed]="r.status==='READY'">
+      <strong>{{r.status==='READY'?
+       t('Requirements satisfied','استيفاء المتطلبات'):
+       t('Application is blocked safely','إيقاف الاستكمال لحين استيفاء المتطلبات')}}</strong>
+      <p>{{r.status==='READY'?
+       t('The application backend revalidates eligibility when an application starts and before payment.',
+        'يعيد الخادم فحص الأهلية عند بدء الطلب وقبل السداد.'):
+       t('No payment, application or issuance is created while required evidence is missing, pending or held.',
+        'لا يُنشأ طلب أو سداد أو إصدار في حالة نقص متطلب أو انتظار التحقق أو وجود إيقاف.')}}</p>
+     </div>
+     <div class="identity-note" *ngIf="existingSdb as book">
+      <small>{{t('EXISTING BOOK DETECTED','تم التعرف على سجل سابق')}}</small>
+      <strong>{{t('Automatic journey: RENEWAL','تم اختيار مسار التجديد تلقائيًا')}}</strong>
+      <b>{{book.number}}</b><span>SID {{book.sid}}</span>
+     </div>
+     <div class="identity-note" *ngIf="!existingSdb">
+      <small>{{t('NO EXISTING BOOK','لا يوجد سجل سابق')}}</small>
+      <strong>{{t('Automatic journey: FIRST ISSUE','تم اختيار مسار الإصدار الأول تلقائيًا')}}</strong>
+     </div>
+     <a *ngIf="canContinue" class="cta proceed"
+       [routerLink]="['/moei/seafarers/sdb',eligibleProfileId]"
+       data-testid="sdb-case-continue">
+      {{t('Continue SDB application','استكمال طلب سجل البحار')}} ←
+     </a>
+     <button *ngIf="!canContinue" type="button" disabled class="cta proceed">
+      {{t('Continue unavailable','لا يمكن الاستكمال حاليًا')}}
+     </button>
+     <p class="security-footnote">{{t(
+      'Only source authorities may release an academy/company hold. AI suggestions are not official approvals.',
+      'رفع إيقاف الأكاديمية أو الشركة من اختصاص الجهة، ولا تُعد توصيات AI موافقات رسمية.')}}</p>
+     <a class="secondary aside-link" routerLink="/moei/seafarers/services">
+      {{t('Choose another scenario','اختيار حالة أخرى')}}</a>
+    </aside>
+   </div>
+  </ng-container>
+ </main>
+</div>

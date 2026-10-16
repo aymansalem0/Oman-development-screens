@@ -23,13 +23,21 @@
         <p>
           {{
             t(
-              "One connected profile. Clear requirements. A simpler SDB journey.",
-              "ملف مترابط، ومتطلبات واضحة، ورحلة أسهل للحصول على سجل البحار."
+              view === 'readiness'
+                ? "This dashboard is built and continuously refreshed from SDB pre-application requirement settings and an Agentic AI readiness engine that evaluates each seafarer’s current evidence."
+                : "One connected profile. Clear requirements. A simpler SDB journey.",
+              view === 'readiness'
+                ? "يتم بناء لوحة البيانات وتحديثها وفق إعدادات جاهزية البحار للتقديم ومحرك Agentic AI الذي يحسب مدى جاهزية كل بحار من أدلته ومتطلباته الحالية."
+                : "ملف مترابط، ومتطلبات واضحة، ورحلة أسهل للحصول على سجل البحار."
             )
           }}
         </p>
       </div>
       <div class="heading-actions">
+        <a *ngIf="view==='readiness' && data?.actor?.operations" class="quiet"
+          routerLink="/moei/seafarers/settings/readiness" data-testid="sdb-readiness-settings-link">
+          ⚙ {{t('Readiness Settings','إعدادات الجاهزية')}}
+        </a>
         <a class="quiet" routerLink="/moei/seafarers/notifications"
           >♧ {{ t("Notifications", "الإشعارات") }}
           <b *ngIf="unread">{{ unread }}</b></a
@@ -66,6 +74,17 @@
         >{{ t("Printing & Delivery", "الطباعة والتسليم") }}</a
       >
     </nav>
+    <section *ngIf="view==='readiness'" class="agent-readiness-strip"
+      data-testid="sdb-agentic-readiness-dashboard">
+      <span class="agent-icon">✦</span>
+      <div>
+        <strong>{{t('Agentic AI-Driven Readiness Dashboard','لوحة جاهزية البحارة المدعومة بـ Agentic AI')}}</strong>
+        <p>{{t('Each profile is classified as first issuance or renewal, assessed against configured requirements and source evidence, and recalculated on changes. Uncertain documents are routed for AI triage and human review.',
+        'يحدد المحرك الإصدار الأول أو التجديد لكل ملف، ويحسب الجاهزية من المتطلبات المهيأة وأدلة الجهات، ويعيد الحساب عند التغيير. المستندات غير المؤكدة تُحال لانتظار مراجعة AI ثم مراجعة بشرية.')}}</p>
+        <small>{{t('POC: explainable rules, not a live AI model','POC: قواعد قابلة للتفسير وليست نموذج AI فعليًا')}}
+          · {{t('Configuration','إصدار الإعدادات')}} {{data?.readinessConfigurationVersion||'—'}}</small>
+      </div>
+    </section>
     <div class="sandbox-note">
       <span class="sandbox-dot"></span
       >{{

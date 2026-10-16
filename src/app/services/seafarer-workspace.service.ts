@@ -1,6 +1,34 @@
 import { Injectable } from "@angular/core";
 import { HttpClient } from "@angular/common/http";
 
+
+export type SdbInputMode='INTEGRATION'|'PLATFORM_ENTRY'|'ATTACHMENT';
+export type SdbServiceScope='BOTH'|'FIRST_ISSUE'|'RENEWAL';
+export interface SdbRequirement{
+ id:string;title:string;titleAr:string;source:string;
+ inputMode:SdbInputMode;scope:SdbServiceScope;active:boolean;
+ mandatory:boolean;core:boolean;reviewUncertain:boolean;order:number;
+}
+export interface SdbReadinessSettings{
+ version:number;baselinePolicyVersion:string;updatedAt:string|null;
+ updatedBy:string|null;requirements:SdbRequirement[];
+ engine:{type:string;mode:string;modelInvoked:false;
+  documentAiProvider:'NOT_CONNECTED';attachmentBytesStored:false;
+  baselineEnforced:true};
+}
+export interface SdbDocumentReview{
+ id:string;profileId:string;requirementId:string;
+ filename:string;mimeType:string;size:number;sha256:string;
+ reference:string;submittedAt:string;
+ reviewStatus:'AI_TRIAGE_QUEUED'|'PENDING_HUMAN_REVIEW'|'HUMAN_VERIFIED'|'REJECTED';
+ aiModelInvoked:false;aiDecision:null;confidence:null;
+ humanDecision:string|null;reviewedBy:string|null;reviewedAt:string|null;note:string;
+ seafarerName?:string;service?:string;
+}
+export interface SdbReviewQueue{
+ mode:string;aiProvider:'NOT_CONNECTED';aiModelInvoked:false;
+ queued:SdbDocumentReview[];reviewed:SdbDocumentReview[];
+}
 export interface SdbCheck {
   key: string;
   label: string;
@@ -9,6 +37,7 @@ export interface SdbCheck {
   reason: string;
   expiryDate: string | null;
   reference: string | null;
+  inputMode?:SdbInputMode;configurable?:boolean;policyRequirementId?:string;
 }
 export interface SdbCertificate {
   id: string;
@@ -124,6 +153,7 @@ export interface SdbProfile {
     policyVersion: string;
   };
   applications: SdbApplication[];
+  documents?:SdbDocumentReview[];
 }
 export interface SdbServiceScenario {
  id:string;title:string;titleAr:string;situation:string;situationAr:string;
@@ -156,6 +186,9 @@ export interface SdbNotification {
 }
 export interface SdbDashboard {
   mode: string;
+  readinessConfigurationVersion?:number;
+  readinessEngine?:{type:string;mode:string;aiModelInvoked:false;
+    documentAiProvider:'NOT_CONNECTED';baselineEnforced:true};
   actor: {
     key: string;
     operations: boolean;
@@ -199,6 +232,36 @@ export class SeafarerWorkspaceService {
   }
   demoScenarios() {
     return this.http.get<SdbServiceScenariosResponse>(this.root + "/demo-scenarios");
+  }
+  demoScenario(id:string){
+    return this.http.get<{mode:string;scenario:SdbServiceScenario}>(
+      this.root+'/demo-scenarios/'+encodeURIComponent(id));
+  }
+  publicRequirements(){
+    return this.http.get<{version:number;requirements:SdbRequirement[]}>(
+      this.root+'/readiness-requirements');
+  }
+  readinessSettings(){
+    return this.http.get<SdbReadinessSettings>(this.root+'/readiness-settings');
+  }
+  saveRequirement(item:SdbRequirement){
+    return this.http.post<SdbReadinessSettings>(
+      this.root+'/readiness-settings/requirements',item);
+  }
+  documentQueue(){
+    return this.http.get<SdbReviewQueue>(this.root+'/document-review-queue');
+  }
+  uploadEvidenceMetadata(profileId:string,requirementId:string,data:{
+    filename:string;mimeType:string;size:number;sha256:string
+  }){
+    return this.http.post<{document:SdbDocumentReview;readiness:SdbProfile['readiness']}>(
+      this.root+'/profiles/'+encodeURIComponent(profileId)+
+      '/requirements/'+encodeURIComponent(requirementId)+'/evidence',data);
+  }
+  reviewEvidence(id:string,decision:'HUMAN_VERIFIED'|'REJECTED',reason:string){
+    return this.http.post<{document:SdbDocumentReview;readiness:SdbProfile['readiness']}>(
+      this.root+'/document-reviews/'+encodeURIComponent(id)+'/decision',
+      {decision,reason});
   }
   start(profileId: string, scope: string) {
     return this.http.post<SdbApplication>(

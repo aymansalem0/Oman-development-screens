@@ -2,6 +2,8 @@
 import { existsSync, readFileSync } from "node:fs";
 import { randomUUID, createHash } from "node:crypto";
 import { atomicJsonWrite } from "./atomic-json-store.mjs";
+import {initialSdbSettings,validateSdbRequirement,computedSdbReadiness,
+ stageSdbDocument,decideSdbDocument} from './seafarer-readiness-settings.mjs';
 
 export class SdbError extends Error {
   constructor(code, status = 422) {
@@ -445,6 +447,10 @@ export class SeafarerWorkspace {
             sequence: 0,
           };
     }
+    // Existing schemaVersion=1 records remain backward compatible.
+    // Settings and review evidence are additive fields, never a reset.
+    this.state.readinessSettings ||= initialSdbSettings(this.policy);
+    for(const p of this.state.profiles)p.documents ||= [];
     this.monitor();
   }
   transaction(fn) {
@@ -458,6 +464,102 @@ export class SeafarerWorkspace {
       throw error;
     }
   }
+
+  /** Configurable POC overlays can only add blockers, never remove baseline checks. */
+  evaluate(profile){
+    return computedSdbReadiness(profile,this.clock(),this.policy,
+      this.state.readinessSettings);
+  }
+  readinessConfiguration(actor){
+    this.assertOperations(actor);
+    return {...copy(this.state.readinessSettings),
+      engine:{type:'CONFIG_DRIVEN_AGENTIC_AI_READINESS_POC',
+       mode:'EXPLAINABLE_RULE_ENGINE',modelInvoked:false,
+       documentAiProvider:'NOT_CONNECTED',attachmentBytesStored:false,
+       baselineEnforced:true}};
+  }
+  saveRequirement(actor,input){
+    this.assertOperations(actor);
+    const current=this.state.readinessSettings;
+    const req=validateSdbRequirement(input,current.requirements);
+    return this.transaction(()=>{
+      const settings=this.state.readinessSettings;
+      const index=settings.requirements.findIndex(r=>r.id===req.id);
+      if(index<0){
+        if(settings.requirements.length>=60)fail('SDB_SETTING_LIMIT_REACHED',409);
+        settings.requirements.push(req);
+      }else{
+        const existing=settings.requirements[index];
+        if(existing.core){
+          // Settings never suppress, remap or weaken a legal/source check.
+          if(req.source!==existing.source||req.scope!==existing.scope)
+            fail('SDB_CORE_SOURCE_IMMUTABLE',409);
+        }
+        settings.requirements[index]=req;
+      }
+      settings.version++;
+      settings.updatedAt=iso(this.clock());
+      settings.updatedBy=actor.key;
+      this.audit(null,'READINESS_SETTINGS_UPDATED',actor.key,
+        req.id+'; config version '+settings.version);
+      for(const p of this.state.profiles)this.refreshProfile(p);
+      return this.readinessConfiguration(actor);
+    });
+  }
+  submitEvidence(actor,id,requirementId,metadata){
+    const p=this.profile(id);
+    // Unlike general customer workflow actions, personal evidence uploads
+    // cannot be submitted by an employer bound to the same company.
+    if(actor?.seafarerId!==p.id)
+      fail('SDB_APPLICANT_BINDING_REQUIRED',403);
+    const req=this.state.readinessSettings.requirements.find(r=>r.id===requirementId);
+    if(!req)fail('SDB_SETTING_NOT_FOUND',404);
+    return this.transaction(()=>{
+      const item=stageSdbDocument(p,req,metadata,this.clock());
+      p.documents ||= [];
+      p.documents.push(item);
+      p.version++;
+      p.lastUpdated=iso(this.clock());
+      this.audit(p.id,'DOCUMENT_AI_TRIAGE_QUEUED',actor.key,
+        req.id+'; reference '+item.reference+'; no model invoked');
+      this.notify(p,'DOCUMENT_REVIEW','Evidence awaiting review',
+        'Evidence metadata was received. Automated AI triage is queued but not connected; human verification is required.',
+        'doc-review:'+item.id);
+      this.refreshProfile(p);
+      return {document:copy(item),readiness:this.evaluate(p)};
+    });
+  }
+  documentReviewQueue(actor){
+    this.assertOperations(actor);
+    const docs=this.state.profiles.flatMap(p=>(p.documents||[]).map(d=>({
+      ...copy(d),seafarerName:p.name,service:p.existingSdb?'RENEWAL':'FIRST_ISSUE'
+    })));
+    return {mode:'CONTRACT_SANDBOX',aiProvider:'NOT_CONNECTED',
+      aiModelInvoked:false,
+      queued:docs.filter(d=>d.reviewStatus==='AI_TRIAGE_QUEUED'),
+      reviewed:docs.filter(d=>d.reviewStatus!=='AI_TRIAGE_QUEUED').slice(-100)};
+  }
+  reviewEvidence(actor,documentId,decision,reason){
+    this.assertOperations(actor);
+    const p=this.state.profiles.find(p=>(p.documents||[]).some(d=>d.id===documentId));
+    if(!p)fail('SDB_DOCUMENT_NOT_FOUND',404);
+    return this.transaction(()=>{
+      const index=p.documents.findIndex(d=>d.id===documentId);
+      const reviewed=decideSdbDocument(actor.key,p.documents[index],
+        decision,reason,this.clock());
+      p.documents[index]=reviewed;
+      p.version++;
+      p.lastUpdated=iso(this.clock());
+      this.audit(p.id,'DOCUMENT_HUMAN_'+decision,actor.key,
+        reviewed.requirementId+'; reference '+reviewed.reference);
+      this.notify(p,'DOCUMENT_REVIEW','Evidence review completed',
+        reviewed.requirementId+': '+decision,
+        'doc-reviewed:'+reviewed.id+':'+decision);
+      this.refreshProfile(p);
+      return {document:copy(reviewed),readiness:this.evaluate(p)};
+    });
+  }
+
   actor(identity) {
     if (!identity) fail("SDB_LOGIN_REQUIRED", 401);
     const binding =
@@ -498,7 +600,7 @@ export class SeafarerWorkspace {
   view(p) {
     return {
       ...copy(p),
-      readiness: evaluateReadiness(p, this.clock(), this.policy),
+      readiness: this.evaluate(p),
       applications: copy(
         this.state.applications.filter((a) => a.profileId === p.id),
       ),
@@ -531,7 +633,7 @@ export class SeafarerWorkspace {
     });
   }
   refreshProfile(p) {
-    const r = evaluateReadiness(p, this.clock(), this.policy);
+    const r = this.evaluate(p);
     const fingerprint = fp({
       status: r.status,
       checks: r.checks.map((c) => [
@@ -619,6 +721,12 @@ export class SeafarerWorkspace {
     return {
       mode: "CONTRACT_SANDBOX",
       policy: this.policy,
+      readinessConfigurationVersion:this.state.readinessSettings.version,
+      readinessEngine:{
+        type:'CONFIG_DRIVEN_AGENTIC_AI_READINESS_POC',
+        mode:'EXPLAINABLE_RULE_ENGINE',aiModelInvoked:false,
+        documentAiProvider:'NOT_CONNECTED',baselineEnforced:true
+      },
       fees: this.fees,
       actor,
       profiles,
@@ -907,7 +1015,7 @@ export class SeafarerWorkspace {
     });
   }
   requireReady(p) {
-    const r = evaluateReadiness(p, this.clock(), this.policy);
+    const r = this.evaluate(p);
     if (r.status !== "READY") fail("SDB_READINESS_CHANGED", 409);
     return r;
   }
