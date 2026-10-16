@@ -7,7 +7,7 @@
  * transactional store + object storage + AV/DLP for uploaded evidence.
  */
 import {randomUUID,createHash} from 'node:crypto';
-import {readFileSync,writeFileSync,existsSync,mkdirSync,renameSync} from 'node:fs';
+import {readFileSync,writeFileSync,existsSync,mkdirSync,renameSync,unlinkSync} from 'node:fs';
 import {dirname,join} from 'node:path';
 import {SiChecklistError} from './si-checklist-library.mjs';
 
@@ -20,6 +20,41 @@ const caseId=v=>typeof v==='string'&&/^[a-f0-9-]{36}$/i.test(v);
 const sha=v=>createHash('sha256').update(v).digest('hex');
 const MAX_IMAGE=2*1024*1024;
 const IMAGE_TYPES={'image/jpeg':'.jpg','image/png':'.png','image/webp':'.webp'};
+const EVIDENCE_TYPES={...IMAGE_TYPES,'application/pdf':'.pdf'};
+const VALID_UUID=/^[a-f0-9-]{36}$/i;
+function evidenceLocation(root,caseKey,reference){
+ if(!VALID_UUID.test(caseKey)||!VALID_UUID.test(reference.id)||
+   !Object.hasOwn(EVIDENCE_TYPES,reference.mimeType))
+  failure('SI_CHECKLIST_EVIDENCE_REFERENCE_INVALID',422);
+ return join(root,caseKey,reference.id+EVIDENCE_TYPES[reference.mimeType]);
+}
+export function parseQuestionAttachment(upload){
+ if(!upload||typeof upload!=='object'||Array.isArray(upload)||
+   !Object.hasOwn(EVIDENCE_TYPES,upload.mimeType))
+  failure('SI_CHECKLIST_EVIDENCE_FORMAT_INVALID');
+ const filename=String(upload.filename||'').trim();
+ if(!filename||filename.length>135||/[\\/\\\x00-\\\x1f]/.test(filename))
+  failure('SI_CHECKLIST_EVIDENCE_FILENAME_INVALID');
+ if(upload.mimeType!=='application/pdf'){
+  const parsed=parseImage(upload);
+  return {...parsed,filename};
+ }
+ if(typeof upload.base64!=='string'||
+   upload.base64.length>Math.ceil(MAX_IMAGE*4/3)+8||
+   !/^[A-Za-z0-9+/]+={0,2}$/.test(upload.base64))
+  failure('SI_CHECKLIST_EVIDENCE_FORMAT_INVALID');
+ const bytes=Buffer.from(upload.base64,'base64');
+ if(!bytes.length||bytes.length>MAX_IMAGE)
+  failure('SI_CHECKLIST_EVIDENCE_TOO_LARGE',413);
+ if(bytes.subarray(0,5).toString('utf8')!=='%PDF-')
+  failure('SI_CHECKLIST_EVIDENCE_FORMAT_INVALID');
+ return {bytes,type:'application/pdf',extension:'.pdf',
+  hash:sha(bytes),filename};
+}
+function findAdvisoryQuestion(entry,itemId){
+ return (entry.aiSuggestedQuestions||[]).find(q=>q.id===itemId)||null;
+}
+
 const VALID_LEVELS=['TEMPLATE','GROUP','ITEM'];
 const answerKeys=['BOOLEAN','NOTE','EXPIRY_DATE','DATE','NUMBER','TEXT'];
 const stamp=(file,data)=>{
@@ -92,8 +127,13 @@ export function validateAIResult(raw,entry,scope){
      r.rationale.length>1800||!Number.isFinite(r.confidence)||
      r.confidence<0||r.confidence>1)
    failure('SI_CHECKLIST_AI_REASON_INVALID',502);
-  return {itemId:r.itemId,proposedAnswers:validateAnswers(found.item,r.answers||{}),
+  const instruction=(typeof r.suggestedInstruction==='string'?r.suggestedInstruction:
+    typeof r.inspectionInstruction==='string'?r.inspectionInstruction:'').trim();
+  return {itemId:r.itemId,proposedAnswers:validateAnswers(found.item,
+   r.answers||r.proposedAnswers||{}),
    rationale:r.rationale.trim(),confidence:r.confidence,
+   suggestedInstruction:instruction.length>=8&&instruction.length<=1600?
+    instruction:null,
    dataGaps:Array.isArray(r.dataGaps)?r.dataGaps.filter(x=>typeof x==='string')
     .slice(0,12).map(x=>x.slice(0,170)):[]};
  });
@@ -119,10 +159,11 @@ export class SiChecklistField{
  constructor({library,targeting,
    file=process.env.SI_CHECKLIST_CASES_PATH||'/data/si-checklist-case-answers.json',
    imageDirectory=process.env.SI_CHECKLIST_EVIDENCE_PATH||'/data/si-checklist-evidence',
-   airiaSuggest=null,getSetting=()=>10}={}){
+   airiaSuggest=null,airiaQuestionSuggest=null,getSetting=()=>10}={}){
   if(!library||!targeting)throw Error('SI_CHECKLIST_FIELD_CONFIGURATION_INVALID');
   this.library=library;this.targeting=targeting;this.file=file;
   this.imageDirectory=imageDirectory;this.airiaSuggest=airiaSuggest;
+  this.airiaQuestionSuggest=airiaQuestionSuggest;
   this.getSetting=getSetting;
   this.active=new Set();
  }
@@ -176,7 +217,8 @@ export class SiChecklistField{
    updatedAt:now(),updatedBy:actor,
    vessel:ctx.resolved.vessel,inspectionReasons:ctx.inspectionCase.inspectionReasons||[],
    applicabilityWarnings:ctx.resolved.warnings,
-   templates,proposals:[],audit:[{at:now(),action:'INITIALIZED',actor,
+   templates,proposals:[],evidenceFiles:[],aiSuggestedQuestions:[],
+   aiQuestionRuns:0,audit:[{at:now(),action:'INITIALIZED',actor,
     templateRevisions:templates.map(t=>[t.templateId,t.revision])}]};
   state.cases[idValue]=entry;await this.save(state);return copy(entry);
  }
@@ -205,7 +247,7 @@ export class SiChecklistField{
   await this.save(state);return copy(entry);
  }
  async suggest(idValue,{level='ITEM',templateId,groupId,itemId,
-   text,image,actor,confirmCost}={}){
+   text,image,evidenceId,actor,confirmCost}={}){
   if(!safe(actor,120)||confirmCost!==true||
    !VALID_LEVELS.includes(level)||!safe(text||'',2500)&&!image)
    failure('SI_CHECKLIST_AI_CONFIRMATION_REQUIRED');
@@ -240,7 +282,20 @@ export class SiChecklistField{
     failure('SI_CHECKLIST_TEMPLATE_AI_NOT_ENABLED',409);
    scope={level,templateId,instructions:[template.ai.instructions].filter(Boolean)};
   }
-  const parsed=parseImage(image);
+  let attached=null;
+  if(scope.level==='ITEM'&&typeof evidenceId==='string'){
+    attached=(entry.evidenceFiles||[]).find(file=>
+      file.id===evidenceId&&file.itemId===scope.itemId);
+    if(!attached||!Object.hasOwn(IMAGE_TYPES,attached.mimeType))
+      failure('SI_CHECKLIST_AI_IMAGE_NOT_LINKED_TO_QUESTION',409);
+  }
+  const attachedPath=attached?evidenceLocation(this.imageDirectory,idValue,attached):null;
+  const attachmentBytes=attached?readFileSync(attachedPath):null;
+  if(attached&&sha(attachmentBytes)!==attached.sha256)
+    failure('SI_CHECKLIST_EVIDENCE_INTEGRITY_FAILED',409);
+  const attachedImage=attached?{mimeType:attached.mimeType,
+    base64:attachmentBytes.toString('base64')}:null;
+  const parsed=parseImage(image||attachedImage);
   const selected=entry.templates.filter(t=>t.templateId===scope.templateId)
     .flatMap(t=>t.groups.filter(g=>!scope.groupId||g.instanceId===scope.groupId)
       .flatMap(g=>g.items.filter(item=>!scope.itemId||item.instanceId===scope.itemId)
@@ -256,8 +311,9 @@ export class SiChecklistField{
     inspectionReasons:entry.inspectionReasons,
     level,scope,items:selected,
     operatorInput:safe(text||'',2500)||'',
-    image:parsed?{mimeType:parsed.type,base64:image.base64,sha256:parsed.hash}:null,
-    instructions:'Analyze supplied information only. Propose typed values matching the provided fields. Do not invent vessel certificates, law, missing images, or regulatory compliance. Respond with JSON recommendations[] containing itemId, answers object, rationale, confidence 0..1, dataGaps[]. Inspector approval required.'
+    image:parsed?{mimeType:parsed.type,
+     base64:(image||attachedImage).base64,sha256:parsed.hash}:null,
+    instructions:'Analyze only supplied text/images for each requested item. Respond as a JSON object with recommendations[] including itemId, typed answers, rationale, confidence 0..1, suggestedInstruction (practical inspection steps and evidence checks for inspector), and dataGaps[]. If the image is unclear or cannot establish compliance, leave answers empty, state uncertainty and explain what to inspect next. Do not invent vessel facts, statutory requirements, defects or compliance. Never make regulatory decisions. Inspector acceptance/edit/rejection required.'
    });
    const validated=validateAIResult(raw,entry,scope);
    const state=await this.read(idValue),current=state.cases[idValue];
@@ -268,12 +324,17 @@ export class SiChecklistField{
     status:'PENDING_HUMAN_REVIEW',provider:'AIRIA',
     ...validated,reviews:[]};
    if(parsed){
-    const imageId=id(),dir=join(this.imageDirectory,idValue);
-    mkdirSync(dir,{recursive:true,mode:0o700});
-    const filepath=join(dir,imageId+parsed.extension);
-    writeFileSync(filepath,parsed.bytes,{mode:0o600,flag:'wx'});
-    proposal.imageEvidenceRef={id:imageId,mimeType:parsed.type,
-      sha256:parsed.hash,byteLength:parsed.bytes.length};
+    if(attached){
+      proposal.imageEvidenceRef={id:attached.id,mimeType:attached.mimeType,
+       sha256:attached.sha256,byteLength:attached.byteLength};
+    }else{
+      const imageId=id(),dir=join(this.imageDirectory,idValue);
+      mkdirSync(dir,{recursive:true,mode:0o700});
+      const filepath=join(dir,imageId+parsed.extension);
+      writeFileSync(filepath,parsed.bytes,{mode:0o600,flag:'wx'});
+      proposal.imageEvidenceRef={id:imageId,mimeType:parsed.type,
+       sha256:parsed.hash,byteLength:parsed.bytes.length};
+    }
    }
    current.proposals.push(proposal);
    current.version++;current.updatedAt=now();current.updatedBy=actor;
