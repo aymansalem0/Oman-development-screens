@@ -1,5 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { SeafarerWorkspace, SdbError } from "./seafarer-workspace.mjs";
+import {sdbServiceScenarios} from "./seafarer-sdb-service-scenarios.mjs";
 const root = "/api/seafarers/v1";
 const reject = (code, status) => {
   throw new SdbError(code, status);
@@ -124,6 +125,18 @@ export function createSeafarerHandler({
           preview,
           url.searchParams.get("as") === "COMPANY",
         );
+      if (req.method === "GET" && path === root + "/demo-scenarios") {
+        // Scenarios are read-only POC identities available to operators only.
+        // Never expose a different applicant to a public seafarer session.
+        if (!actor.operations) reject("SDB_OPERATIONS_REQUIRED", 403);
+        send(res, 200, {
+          mode: "CONTRACT_SANDBOX",
+          officialData: false,
+          modelInvoked: false,
+          scenarios: sdbServiceScenarios(Date.now(), s.policy),
+        });
+        return true;
+      }
       if (req.method === "GET" && path === root + "/dashboard") {
         send(res, 200, s.dashboard(actor));
         return true;

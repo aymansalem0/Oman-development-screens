@@ -42,16 +42,42 @@ const fs = require("node:fs");
   await route("readiness");
   await page.locator(".candidate-row").first().waitFor();
   assert.equal(await page.locator(".candidate-row").count(), 7);
+  // The internal readiness workbench is independent of the customer service.
+  await route("services");
+  await page.locator('[data-testid="sdb-start-service"]').click();
+  await page.locator('[data-testid^="scenario-"]').first().waitFor();
+  assert.equal(await page.locator('[data-testid^="scenario-"]').count(), 8);
+  await page.locator('[data-testid="scenario-CADET_MISSING_MEDICAL"]').click();
+  assert.equal(await page.locator('[data-testid^="sdb-proceed-"]').count(), 0,
+    'a cadet without medical fitness must not enter the application');
+  await page.locator('[data-testid="scenario-RENEWAL_COMPANY_HOLD"]').click();
+  assert.equal(await page.locator('[data-testid^="sdb-proceed-"]').count(), 0,
+    'employer hold must prevent progression');
+  await page.screenshot({
+    path: out + "/sdb-eight-scenarios.png",
+    fullPage: false,
+  });
   await page.screenshot({
     path: out + "/readiness-desktop.png",
     fullPage: false,
   });
+  // Navigate away from the already-started service case picker. A hash
+  // navigation to the SAME URL retains component state in Angular.
+  await route("readiness");
   async function issue(profile, delivery) {
-    await route("services");
-    if (profile !== "SF-002") {
-      await page.locator(".preview-bar select").selectOption(profile);
-      await page.locator(".loading-state").waitFor({ state: "hidden" });
+    if (profile === "SF-004") {
+      // The company clearance was updated in the separate company workflow.
+      // Return to the customer application for that explicitly reviewed profile;
+      // changing profiles here must never bypass server-side checks.
+      await page.goto(base + "/#/moei/seafarers/sdb/" + profile);
+    } else {
+      await route("services");
+      await page.locator('[data-testid="sdb-start-service"]').click();
+      const scenario = profile === "SF-002" ? "CADET_READY" : "RENEWAL_READY";
+      await page.locator('[data-testid="scenario-' + scenario + '"]').click();
+      await page.locator('[data-testid="sdb-proceed-' + scenario + '"]').click();
     }
+    await page.locator(".service-card .primary").waitFor();
     await page.locator(".service-card .primary").click();
     await page.locator('input[name="format"]').first().waitFor();
     await page
@@ -138,6 +164,25 @@ const fs = require("node:fs");
   await page.screenshot({
     path: out + "/notifications-desktop.png",
     fullPage: false,
+  });
+  // Independently verify registered SDB-holder 360 and synthetic sea legs.
+  await page.goto(base + "/#/moei/seafarers/records");
+  await page.getByRole("heading", {name:"Registered Seafarers & Sea Service"}).waitFor();
+  await page.locator(".person-row").first().waitFor();
+  assert.ok(await page.locator(".person-row").count() >= 5);
+  // Newly issued sandbox first-issue books have no recorded sea service.
+  // Select a pre-existing experienced SDB holder with fixture voyages.
+  await page.locator(".person-row").filter({hasText:"Mariam Al Shamsi"}).click();
+  await page.getByRole("button", {name:"Sea Service History"}).click();
+  await page.locator(".leg").first().waitFor();
+  assert.ok((await page.locator(".leg-grid").first().innerText()).includes("Engine power"));
+  await page.screenshot({
+    path:out + "/seafarer-360-sea-service.png",fullPage:false
+  });
+  await page.getByRole("button", {name:"Certificates & Qualifications"}).click();
+  await page.locator("table tbody tr").first().waitFor();
+  await page.screenshot({
+    path:out + "/seafarer-360-certificates.png",fullPage:false
   });
   await route("readiness");
   await page.locator(".candidate-row").first().click();
