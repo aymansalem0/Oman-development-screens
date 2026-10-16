@@ -38,7 +38,9 @@ function safeJson(data){
   return cur;
 }
 export class SiPreparationError extends Error{
-  constructor(code,status=400){super(code);this.code=code;this.status=status;}
+  constructor(code,status=400,field=null){super(code);this.code=code;this.status=status;
+    // Validation field is an allowlisted schema path, never model text/PII.
+    this.field=field;}
 }
 export function validateA04(raw,{checkIds,evidenceIds}){
   const data=safeJson(raw);
@@ -56,10 +58,22 @@ export function validateA04(raw,{checkIds,evidenceIds}){
     throw new SiPreparationError('SI_A04_RESULT_TOO_LARGE',502);
   if(data.predictedDeficiencies!==undefined&&!Array.isArray(data.predictedDeficiencies))
     throw new SiPreparationError('SI_A04_RESPONSE_INVALID',502);
-  const focusAreas=data.focusAreas.map(f=>{
-    if(!f||typeof f.category!=='string'||!priorities.includes(f.priority)||
-      !clean(f.reason,1400))throw new SiPreparationError('SI_A04_FOCUS_INVALID',502);
-    return {category:clean(f.category,90),priority:f.priority,reason:clean(f.reason,1400),
+  const focusAreas=data.focusAreas.map((f,index)=>{
+    // Model prose may vary by requested response language, but these
+    // machine-readable enum tokens are language-neutral contract values.
+    // Whitespace/case normalisation changes formatting, NOT priority.
+    const prefix='focusAreas['+index+'].';
+    if(!f||typeof f!=='object'||Array.isArray(f))
+      throw new SiPreparationError('SI_A04_FOCUS_INVALID',502,prefix.slice(0,-1));
+    if(typeof f.category!=='string'||!clean(f.category,90))
+      throw new SiPreparationError('SI_A04_FOCUS_INVALID',502,prefix+'category');
+    const priority=typeof f.priority==='string'?
+      f.priority.trim().toUpperCase():'';
+    if(!priorities.includes(priority))
+      throw new SiPreparationError('SI_A04_FOCUS_INVALID',502,prefix+'priority');
+    if(!clean(f.reason,1400))
+      throw new SiPreparationError('SI_A04_FOCUS_INVALID',502,prefix+'reason');
+    return {category:clean(f.category,90),priority,reason:clean(f.reason,1400),
       evidenceIds:refs(f.evidenceIds,true)};
   });
   const checklistFocus=data.checklistFocus.map(f=>{
@@ -380,8 +394,18 @@ export class SiInspectionPreparation{
         const current=await this.record(id);
         if(current?.version===generating.version&&current?.correlationId===correlationId){
           const failure=e instanceof SiPreparationError?e.code:'SI_A04_PROVIDER_UNAVAILABLE';
+          const field=e instanceof SiPreparationError?e.field:null;
+          if(failure==='SI_A04_FOCUS_INVALID'){
+            // Do not print Airia output, personal data, source evidence,
+            // prompt bodies or API credentials to logs.
+            console.error('[si-a04] FOCUS_VALIDATION_FAILED '+JSON.stringify({
+              correlationId,caseId:id,field:field||'unknown',
+              provider:this.provider
+            }));
+          }
           await this.persist(id,current,{...current,version:current.version+1,
-            status:'FAILED',lastFailure:failure,dossier:null},'A04_FAILED',actor,failure);
+            status:'FAILED',lastFailure:failure,
+            lastFailureField:field||null,dossier:null},'A04_FAILED',actor,failure);
         }
         if(e instanceof SiPreparationError)throw e;
         throw new SiPreparationError('SI_A04_PROVIDER_UNAVAILABLE',502);
