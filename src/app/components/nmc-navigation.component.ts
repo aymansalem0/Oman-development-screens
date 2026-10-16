@@ -27,6 +27,7 @@ import {
 export class NmcNavigationComponent implements OnInit, OnDestroy {
   // Route changes recreate this component. The shared UI-only state preserves
   // explicit clicks within this SPA session; a browser reload closes all menus.
+  get seafarersExpanded():boolean{return this.menuState.main==='seafarers';}
   get nmcExpanded():boolean{return this.menuState.main==='nmc';}
   get smartInspectionExpanded():boolean{return this.menuState.main==='smart';}
   get settingsExpanded():boolean{return this.menuState.main==='settings';}
