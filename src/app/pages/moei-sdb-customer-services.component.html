@@ -12,7 +12,7 @@
     <p>{{t('Apply for a Seafarer’s Discharge Book, or renew your existing book, through a single guided service.',
        'تقدّم بطلب إصدار سجل بحار جديد أو تجديد سجلك الحالي من خلال خدمة إلكترونية موجهة.')}}</p>
    </div>
-   <div class="heading-links">
+   <div class="heading-links" *ngIf="data?.actor?.operations">
     <a routerLink="/moei/seafarers/readiness">{{t('Internal pre-application readiness','جاهزية ما قبل التقديم للموظفين')}} ↗</a>
     <a routerLink="/moei/seafarers/records">{{t('Registered seafarers & sea service','البحارة المسجلون والخدمة البحرية')}} ↗</a>
    </div>
