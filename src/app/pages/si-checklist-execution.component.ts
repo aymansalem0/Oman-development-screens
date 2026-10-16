@@ -8,11 +8,13 @@ import {LanguageService} from '../services/language.service';
 import {MoeiAuthService} from '../services/moei-auth.service';
 import {SiChecklistsService,ChecklistPreview,ChecklistExecution,
  CheckField,ChecklistInstanceTemplate,ChecklistInstanceGroup,
- ChecklistInstanceItem,ChecklistProposal,AiLevel
+ ChecklistInstanceItem,ChecklistProposal,AiLevel,
+ ChecklistEvidence,SuggestedInspectionQuestion
 } from '../services/si-checklists.service';
 
 type AnswerValues=Partial<Record<CheckField,any>>;
-interface ReviewScope{level:AiLevel;templateId:string;groupId?:string;itemId?:string;label:string;}
+interface ReviewScope{level:AiLevel|'AI_QUESTION';templateId?:string;
+ groupId?:string;itemId?:string;label:string;}
 interface A04Additional{title:string;reason:string;evidenceIds?:string[];recommendationOnly?:boolean;}
 interface A04Dossier{saved?:{status:string;dossier?:{
  suggestedAdditionalItems?:A04Additional[];source?:string;mock?:boolean;
@@ -269,10 +271,12 @@ export class SiChecklistExecutionComponent implements OnInit,OnDestroy{
  get a04AdditionalItems():A04Additional[]{
   return this.a04?.saved?.dossier?.suggestedAdditionalItems||[];
  }
- aiStatus:{visionConfigured:boolean}|null=null;
+ aiStatus:{visionConfigured:boolean;builderConfigured?:boolean}|null=null;
  loading=false;busy=false;error='';message='';
  answers:Record<string,AnswerValues>={};currentAi:ReviewScope|null=null;
  aiText='';fileName='';imagePayload:{mimeType:string;base64:string}|null=null;
+ selectedEvidenceId='';questionPrompt='Suggest vessel-specific optional inspection questions based only on the evidence and inspection reasons. Include practical inspection instructions.';
+ uploadingItem='';
  proposal:ChecklistProposal|null=null;reviewEdits:Record<string,string>={};
  private sub:any;
  constructor(private route:ActivatedRoute,private api:SiChecklistsService,
@@ -305,7 +309,8 @@ export class SiChecklistExecutionComponent implements OnInit,OnDestroy{
  allItems():ChecklistInstanceItem[]{
   return this.execution?.templates.flatMap(t=>t.groups.flatMap(g=>g.items))||[];
  }
- labelFor(id:string):string{return this.allItems().find(i=>i.instanceId===id)?.title||id;}
+ labelFor(id:string):string{return this.allItems().find(i=>i.instanceId===id)?.title||
+  this.execution?.aiSuggestedQuestions?.find(q=>q.id===id)?.title||id;}
  start():void{if(this.busy)return;this.busy=true;
   this.api.start(this.caseId).subscribe({next:e=>{this.busy=false;this.execution=e;this.copyAnswers();},
    error:e=>this.fail(e)});}
@@ -325,14 +330,109 @@ export class SiChecklistExecutionComponent implements OnInit,OnDestroy{
     this.message=this.t('Checklist submitted for review.','تم إرسال القائمة للمراجعة.');},
     error:e=>this.fail(e)});
  }
+ get questionEvidence():ChecklistEvidence[]{
+  return this.execution?.evidenceFiles||[];
+ }
+ evidenceFor(itemId:string):ChecklistEvidence[]{
+  return this.questionEvidence.filter(x=>x.itemId===itemId);
+ }
+ latestImage(itemId:string):ChecklistEvidence|null{
+  return [...this.evidenceFor(itemId)].reverse().find(x=>
+   ['image/png','image/jpeg','image/webp'].includes(x.mimeType))||null;
+ }
+ latestProposal(itemId:string):ChecklistProposal|null{
+  const q=this.execution?.aiSuggestedQuestions?.find(q=>q.id===itemId);
+  const proposals=q?.answerProposals||this.execution?.proposals||[];
+  return [...proposals].reverse().find(p=>
+   p.recommendations?.some(r=>r.itemId===itemId))||null;
+ }
+ latestInstruction(itemId:string):string|null{
+  const rec=this.latestProposal(itemId)?.recommendations.find(r=>r.itemId===itemId);
+  return rec?.suggestedInstruction||null;
+ }
+ latestAnswer(itemId:string){
+  return this.latestProposal(itemId)?.recommendations.find(r=>r.itemId===itemId)||null;
+ }
+ assistantForItem(itemId:string):boolean{
+  return this.currentAi?.itemId===itemId;
+ }
  openAi(level:AiLevel,template:ChecklistInstanceTemplate,
   group?:ChecklistInstanceGroup,item?:ChecklistInstanceItem):void{
   this.currentAi={level,templateId:template.templateId,groupId:group?.instanceId,
    itemId:item?.instanceId,label:item?.title||group?.title||template.title};
-  this.proposal=null;this.reviewEdits={};this.error='';
+  this.proposal=item?this.latestProposal(item.instanceId):null;
+  this.reviewEdits={};this.error='';this.aiText='';this.imagePayload=null;
+  this.selectedEvidenceId=item?this.latestImage(item.instanceId)?.id||'':'';
+  this.prepareReviewEdits();this.scrollToAssistant();
+ }
+ openSuggested(question:SuggestedInspectionQuestion):void{
+  this.currentAi={level:'AI_QUESTION',itemId:question.id,label:question.title};
+  this.selectedEvidenceId=this.latestImage(question.id)?.id||'';
+  this.proposal=this.latestProposal(question.id);
+  this.aiText='';this.imagePayload=null;this.reviewEdits={};
+  this.prepareReviewEdits();this.scrollToAssistant();
+ }
+ prepareReviewEdits():void{
+  for(const rec of this.proposal?.recommendations||[])
+   this.reviewEdits[rec.itemId]=JSON.stringify(rec.proposedAnswers,null,2);
+ }
+ scrollToAssistant():void{
+  setTimeout(()=>document.getElementById('si-item-ai-assistant')?.scrollIntoView({
+   behavior:'smooth',block:'start'
+  }),0);
  }
  closeAi():void{this.currentAi=null;this.proposal=null;this.imagePayload=null;
-  this.aiText='';this.fileName='';this.reviewEdits={};}
+  this.aiText='';this.fileName='';this.selectedEvidenceId='';this.reviewEdits={};}
+ refreshCase():void{
+  this.api.preview(this.caseId).subscribe({
+   next:p=>{this.preview=p;this.execution=p.saved;},
+   error:e=>this.fail(e)});
+ }
+ attachQuestionEvidence(event:Event,itemId:string):void{
+  const input=event.target as HTMLInputElement;
+  const file=input.files?.[0];input.value='';
+  if(!file||!this.execution||this.busy)return;
+  const permitted=['image/png','image/jpeg','image/webp','application/pdf'];
+  if(!permitted.includes(file.type)||!file.size||file.size>2*1024*1024){
+   this.error=this.t('Attach PDF/JPG/PNG/WebP up to 2MB per file.',
+    'ارفق PDF أو JPG أو PNG أو WebP بحد أقصى 2MB للملف.');
+   return;
+  }
+  this.busy=true;this.uploadingItem=itemId;this.error='';this.message='';
+  const reader=new FileReader();
+  reader.onerror=()=>{this.busy=false;this.uploadingItem='';
+   this.error=this.t('Cannot read the selected file.','تعذر قراءة المرفق.');};
+  reader.onload=()=>{
+   const data=String(reader.result||'');
+   const base64=data.slice(data.indexOf(',')+1);
+   this.api.attachEvidence(this.caseId,{itemId,
+    expectedVersion:this.execution!.version,
+    file:{filename:file.name,mimeType:file.type,base64}})
+    .subscribe({next:result=>{
+      this.busy=false;this.uploadingItem='';this.selectedEvidenceId=
+       file.type==='application/pdf'?'':result.evidence.id;
+      this.message=this.t('Evidence attached to this question; AI has not run.',
+       'تم إرفاق الدليل بهذا السؤال ولم يتم تشغيل AI.');
+      this.refreshCase();
+    },error:e=>{this.uploadingItem='';this.fail(e);}});
+  };
+  reader.readAsDataURL(file);
+ }
+ generateQuestions():void{
+  if(!this.execution||this.busy||!this.aiStatus?.builderConfigured)return;
+  if(!window.confirm(this.t(
+   'Generate new OPTIONAL AI-suggested inspection questions? This calls the configured Airia builder and may incur a charge; it does not approve or publish any checklist items.',
+   'هل تريد إنشاء أسئلة معاينة إضافية مقترحة بواسطة AI؟ سيتم استدعاء Airia وقد توجد تكلفة، ولن تُعتمد أو تُنشر أي بنود تلقائيًا.')))return;
+  this.busy=true;this.error='';
+  this.api.suggestQuestions(this.caseId,this.questionPrompt.trim()).subscribe({
+   next:r=>{this.busy=false;this.message=this.t(
+    r.questions.length+' advisory AI questions suggested (not statutory or approved).',
+    'تم اقتراح '+r.questions.length+' أسئلة استشارية بواسطة AI (غير معتمدة أو إلزامية).');
+    this.refreshCase();
+   },error:e=>this.fail(e)
+  });
+ }
+
  onImage(event:Event):void{
   const target=event.target as HTMLInputElement,file=target.files?.[0];
   this.imagePayload=null;this.fileName='';
@@ -349,19 +449,24 @@ export class SiChecklistExecutionComponent implements OnInit,OnDestroy{
   };reader.readAsDataURL(file);
  }
  askAiria():void{
-  if(!this.currentAi||(!this.aiText.trim()&&!this.imagePayload)||this.busy)return;
+  if(!this.currentAi||(!this.aiText.trim()&&!this.imagePayload&&!this.selectedEvidenceId)||this.busy)return;
   if(!window.confirm(this.t('Send selected image/text to the configured Airia pipeline? This may incur an AI usage charge.',
    'هل توافق على إرسال الصورة/النص المختار إلى Airia؟ قد يتم احتساب تكلفة AI.')))return;
   this.busy=true;this.error='';
-  this.api.aiSuggest(this.caseId,{level:this.currentAi.level,
-   templateId:this.currentAi.templateId,groupId:this.currentAi.groupId,
-   itemId:this.currentAi.itemId,text:this.aiText.trim(),
-   image:this.imagePayload||undefined,confirmCost:true})
-   .subscribe({next:r=>{this.busy=false;this.proposal=r.proposal;
-    this.reload();
-    this.reviewEdits={};
-    for(const suggestion of r.proposal.recommendations)
-     this.reviewEdits[suggestion.itemId]=JSON.stringify(suggestion.proposedAnswers,null,2);},
+  const target=this.currentAi;
+  const request=target.level==='AI_QUESTION'
+    ?this.api.suggestAdvisoryAnswer(this.caseId,{
+      questionId:target.itemId!,evidenceId:this.selectedEvidenceId||undefined,
+      text:this.aiText.trim(),confirmCost:true})
+    :this.api.aiSuggest(this.caseId,{level:target.level,
+      templateId:target.templateId,groupId:target.groupId,
+      itemId:target.itemId,text:this.aiText.trim(),
+      evidenceId:this.selectedEvidenceId||undefined,
+      image:this.imagePayload||undefined,confirmCost:true});
+  request.subscribe({next:r=>{this.busy=false;this.proposal=r.proposal;
+    this.refreshCase();this.reviewEdits={};this.prepareReviewEdits();
+    this.message=this.t('Airia returned an advisory answer and inspection instruction for inspector review.',
+      'أعاد Airia إجابة وتعليمات معاينة استشارية لمراجعتها من المفتش.');},
     error:e=>this.fail(e)});
  }
  reviewed(itemId:string):boolean{
@@ -375,14 +480,24 @@ export class SiChecklistExecutionComponent implements OnInit,OnDestroy{
    catch{this.error=this.t('Edited values must be valid JSON.','يجب أن تكون الإجابات المعدلة JSON سليمًا.');return;}
   }
   this.busy=true;this.error='';
-  this.api.review(this.caseId,{expectedVersion:this.execution.version,
-   proposalId:this.proposal.id,itemId,decision,editedAnswers,
-   reviewNote:decision==='EDIT'?'Inspector edited model recommendation':''})
-   .subscribe({next:e=>{
-    this.execution=e;this.busy=false;this.copyAnswers();
-    const saved=e.proposals.find(x=>x.id===this.proposal?.id);
+  const request=this.currentAi?.level==='AI_QUESTION'
+   ?this.api.reviewAdvisoryAnswer(this.caseId,{
+      expectedVersion:this.execution.version,questionId:itemId,
+      proposalId:this.proposal.id,decision,editedAnswers,
+      reviewNote:decision==='EDIT'?'Inspector edited advisory answer':''
+    })
+   :this.api.review(this.caseId,{expectedVersion:this.execution.version,
+      proposalId:this.proposal.id,itemId,decision,editedAnswers,
+      reviewNote:decision==='EDIT'?'Inspector edited model recommendation':''});
+  request.subscribe({next:e=>{
+    this.execution=e;this.busy=false;
+    // Do not overwrite unsaved inspector entries when recording an AI review.
+    const q=e.aiSuggestedQuestions?.find(x=>x.id===itemId);
+    const saved=q?.answerProposals?.find(x=>x.id===this.proposal?.id)||
+      e.proposals.find(x=>x.id===this.proposal?.id);
     if(saved)this.proposal=saved;
-    this.message=this.t('Inspector decision saved and audited.','تم تسجيل قرار المفتش وتدقيقه.');
+    this.message=this.t('Inspector decision saved and audited.',
+     'تم تسجيل قرار المفتش وتدقيقه.');
    },error:e=>this.fail(e)});
  }
  fail(e:any):void{
