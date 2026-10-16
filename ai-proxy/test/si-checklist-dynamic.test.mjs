@@ -181,6 +181,15 @@ test('per-question PDF and image evidence is persisted without calling AI and no
     filename:'maintenance-record.pdf',mimeType:'application/pdf',
     base64:Buffer.from('%PDF-1.7\\nPOC').toString('base64')
    }});
+  const downloaded=await x.field.downloadEvidence(uid,image.evidence.id);
+  assert.equal(downloaded.mimeType,'image/png');
+  assert.equal(downloaded.bytes.toString('base64'),png);
+  const downloadedPdf=await x.field.downloadEvidence(uid,pdf.evidence.id);
+  assert.equal(downloadedPdf.mimeType,'application/pdf');
+  assert.match(downloadedPdf.bytes.toString(),/^%PDF-/);
+  await assert.rejects(x.field.downloadEvidence(uid,
+    '99999999-9999-4999-8999-999999999999'),
+    /SI_CHECKLIST_EVIDENCE_NOT_FOUND/);
   const state=(await x.field.preview(uid)).saved;
   assert.equal(state.evidenceFiles.length,2);
   assert.equal(state.templates[0].groups[0].items[0].evidenceRefs.length,2);
