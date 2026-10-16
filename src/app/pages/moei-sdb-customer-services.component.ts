@@ -69,22 +69,29 @@ export class MoeiSdbCustomerServicesComponent implements OnInit{
   });
  }
  choose(s:SdbServiceScenario):void{
-  // Open an independent page for missing requirements; a verified READY
-  // applicant goes straight into the pre-existing guarded SDB wizard.
-  // Preview scenario status alone can never authorize an application.
-  if(this.proceedAllowed(s)){
-    void this.router.navigate(['/moei/seafarers/sdb',s.profileId]);
-  }else{
+  if(!s.canContinue||s.readiness.status!=='READY'){
     void this.router.navigate(['/moei/seafarers/services/case',s.id]);
+    return;
   }
+  // Authenticated POC operator gets a distinct, source-checked synthetic
+  // applicant; never mutates the stored source profile or a real registry.
+  // The backend rechecks configurable readiness and own-session scoping.
+  if(this.scenariosLoading)return;
+  this.scenariosLoading=true;this.error='';
+  this.api.startReadyDemoJourney(s.id).subscribe({
+   next:demo=>{
+    this.scenariosLoading=false;
+    if(demo.readiness.status!=='READY'){
+     void this.router.navigate(['/moei/seafarers/services/case',s.id]);
+     return;
+    }
+    void this.router.navigate(['/moei/seafarers/sdb',demo.profileId]);
+   },
+   error:e=>{this.scenariosLoading=false;this.error=this.errorLabel(e);}
+  });
  }
  proceedAllowed(s:SdbServiceScenario):boolean{
-  if(!s.canContinue)return false;
-  // The hypothetical POC scenario must NEVER override the live applicant
-  // gate; genuine server source readiness gets checked again at POST/payment.
-  const p=this.data?.profiles.find(p=>p.id===s.profileId);
-  return p?.readiness.status==='READY'&&
-   p.readiness.service===s.readiness.service;
+  return s.canContinue&&s.readiness.status==='READY';
  }
  get issuedProfileCount():number{
   return this.data?.profiles.filter(p=>!!p.existingSdb).length||0;
