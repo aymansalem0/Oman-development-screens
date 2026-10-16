@@ -183,7 +183,7 @@ test('one assigned inspection journey performs publisher-gated scope approval',(
  assert.ok(workspace.includes('data-testid="si-field-await-scope"'));
  assert.ok(workspace.includes('approveScope(o:AssignedOrder):void'));
  assert.ok(workspace.includes("o.status!=='READY_FOR_SCOPE_REVIEW'"));
- assert.ok(workspace.includes("'work-orders/'+encodeURIComponent(o.orderId)+'/scope'"));
+ assert.ok(workspace.includes("'/work-orders/'+encodeURIComponent(o.orderId)+'/scope'"));
  assert.ok(workspace.includes('{reason:reason.trim(),includeAiSuggestions}'));
  assert.ok(workspace.includes("ai.status==='APPROVED'"));
  assert.ok(workspace.includes('extraCount>0&&window.confirm'));
