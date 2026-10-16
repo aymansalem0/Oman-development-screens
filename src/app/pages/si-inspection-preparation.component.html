@@ -7,6 +7,9 @@
         <p>{{copy('Approved case → Evidence review → Explicit A04 → Supervisor validation','حالة معتمدة ← مراجعة الأدلة ← تشغيل A04 بعد موافقة ← اعتماد المشرف')}}</p>
       </div>
       <div class="hero-actions">
+        <a *ngIf="returnOrderId" routerLink="/moei/smart-inspection/my-work-orders"
+         [queryParams]="{orderId:returnOrderId}" data-testid="si-return-to-order">
+         {{copy('← Return to My Inspection Steps','← العودة إلى خطوات المعاينة')}}</a>
         <a routerLink="/moei/smart-inspection/candidates">{{copy("← Candidate Center","← مركز مرشحي المعاينة")}}</a>
         <a [routerLink]="['/moei/smart-inspection/lifecycle',id]">{{copy('Continue Full Inspection Cycle →','استكمال دورة المعاينة الكاملة ←')}}</a>
         <a [routerLink]="['/moei/smart-inspection/checklists',id]">
