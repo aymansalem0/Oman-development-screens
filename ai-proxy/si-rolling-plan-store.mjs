@@ -32,6 +32,7 @@ const sanitize=x=>({
     x.savedPlanRows?.filter(r=>r.planSelected).length??
     x.latest?.rows?.filter(r=>r.planSelected).length??0),
  candidateCount:new Set((x.candidateSnapshot||[]).map(c=>c.imo)).size,
+ capacityStatus:x.capacityDraft?.status||null,
  deferredCount:Object.values(x.overrides||{}).filter(d=>d.disposition==='DEFER').length
 });
 const uniqueNumber=()=>('IP-'+new Date().toISOString().slice(0,10).replaceAll('-','')+
@@ -310,6 +311,86 @@ export class SiRollingPlanStore{
  }
  saveDraft(id,expectedRevision,actor,operation){
   return this.mutate(id,expectedRevision,actor,operation,'C01_REEVALUATED');
+ }
+ /**
+  * Explicit, audited recovery after legacy C01 re-evaluation invalidated an
+  * already saved integrated Draft. Restores the last VERIFIED selection from
+  * immutable Oracle version history; never invents a new capacity proposal,
+  * books resources, creates work orders or bypasses fresh approval checks.
+  */
+ async restoreVerifiedCapacityDraft(id,expectedRevision,actor,reason,expectedSourceHash){
+  if(!ID.test(id||'')||!Number.isInteger(expectedRevision)||
+    !text(actor,160)||!text(reason,500)||reason.trim().length<8||
+    !text(expectedSourceHash,200))
+   fail('SI_DRAFT_RESTORE_INFORMATION_INVALID',422);
+  if(this.mode!=='oracle')
+   fail('SI_DRAFT_RESTORE_ORACLE_HISTORY_REQUIRED',503);
+  return this.db(async con=>{
+   try{
+    const found=await this.query(con,
+     'SELECT STATE_JSON FROM SI_PLAN_ROLLING WHERE PLAN_ID=:b_plan FOR UPDATE',
+     {b_plan:id});
+    if(!found.length)fail('SI_ROLLING_PLAN_NOT_FOUND',404);
+    const before=from(found[0].STATE_JSON);
+    if(!['DRAFT','READY_FOR_APPROVAL'].includes(before.status))
+     fail('SI_ROLLING_APPROVED_PLAN_IMMUTABLE',409);
+    if(before.revision!==expectedRevision)
+     fail('SI_ROLLING_VERSION_CONFLICT',409);
+    if(!String(before.capacityDraft?.status||'').startsWith('STALE_'))
+     fail('SI_DRAFT_RESTORE_ONLY_STALE_CAPACITY',409);
+    if(before.capacityDraft?.sourceHash!==expectedSourceHash)
+     fail('SI_DRAFT_SOURCE_CHANGED_REVIEW_REQUIRED',409);
+    const versions=await this.query(con,
+     'SELECT STATE_JSON FROM SI_PLAN_ROLLING_VERSION WHERE PLAN_ID=:b_plan ORDER BY VERSION_NO DESC',
+     {b_plan:id});
+    const verified=versions.map(v=>from(v.STATE_JSON)).find(v=>
+     v.id===id&&['DRAFT','READY_FOR_APPROVAL'].includes(v.status)&&
+     v.capacityDraft?.status==='CAPACITY_VERIFIED_DRAFT'&&
+     typeof v.capacityDraft?.proposalHash==='string'&&
+     /^[a-f0-9]{64}$/.test(v.capacityDraft.proposalHash)&&
+     Array.isArray(v.capacityDraft.selectedImos)&&v.capacityDraft.selectedImos.length>0);
+    if(!verified)fail('SI_DRAFT_NO_VERIFIED_HISTORY_TO_RESTORE',409);
+    const previousImos=before.capacityDraft.selectedImos||[];
+    const verifiedImos=verified.capacityDraft.selectedImos;
+    if(verified.selectionSourceHash!==expectedSourceHash||
+      verified.capacityDraft.sourceHash!==expectedSourceHash||
+      previousImos.length!==verifiedImos.length||
+      new Set(previousImos).size!==previousImos.length||
+      previousImos.some(imo=>!verifiedImos.includes(imo))||
+      !Array.isArray(verified.savedPlanRows)||
+      verified.savedPlanRows.filter(x=>x.planSelected).length!==verifiedImos.length||
+      verified.savedPlanRows.some(x=>x.planSelected&&!verifiedImos.includes(x.imo)))
+     fail('SI_DRAFT_RESTORE_SCOPE_OR_SOURCE_CHANGED',409);
+    const at=now(),next=clone(before);
+    for(const field of ['overrides','latest','selectionSourceHash',
+      'savedPlanRows','capacityDraft'])
+     next[field]=clone(verified[field]);
+    next.status=verified.status;
+    next.revision=before.revision+1;
+    next.updatedAt=at;next.updatedBy=actor;
+    next.audit=[...(before.audit||[]),{
+     event:'CAPACITY_VERIFIED_DRAFT_RESTORED',at,actor,reason:reason.trim(),
+     fromRevision:before.revision,restoredFromRevision:verified.revision
+    }].slice(-300);
+    const result=await con.execute(`UPDATE SI_PLAN_ROLLING
+     SET STATUS=:b_status,VERSION_NO=:b_revision,STATE_JSON=:b_state,
+       UPDATED_BY=:b_actor,UPDATED_AT=SYSTIMESTAMP
+     WHERE PLAN_ID=:b_plan AND VERSION_NO=:b_previous`,{
+     b_plan:id,b_previous:before.revision,b_status:next.status,
+     b_revision:next.revision,b_state:json(next),b_actor:actor});
+    if(result.rowsAffected!==1)fail('SI_ROLLING_VERSION_CONFLICT',409);
+    await con.execute(`INSERT INTO SI_PLAN_ROLLING_VERSION
+     (PLAN_ID,VERSION_NO,STATE_JSON,ACTOR,EVENT_CODE)
+     VALUES(:b_plan,:b_revision,:b_state,:b_actor,:b_event)`,{
+     b_plan:id,b_revision:next.revision,b_state:json(next),
+     b_actor:actor,b_event:'CAPACITY_VERIFIED_DRAFT_RESTORED'});
+    await this.audit(con,id,'CAPACITY_VERIFIED_DRAFT_RESTORED',actor,{
+     fromRevision:before.revision,restoredFromRevision:verified.revision,
+     selectedCount:verifiedImos.length,reason:reason.trim()});
+    await con.commit();
+    return clone(next);
+   }catch(e){await con.rollback();throw e;}
+  });
  }
  cancel(id,expectedRevision,actor,reason){
   if(!text(reason,500)||reason.trim().length<8)
