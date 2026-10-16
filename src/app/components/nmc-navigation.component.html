@@ -48,7 +48,7 @@
           <span class="nav-icon">▦</span>
           <span class="nav-label">{{copy('Registered Seafarers & Sea Service','البحارة المسجلون والخدمة البحرية')}}</span>
         </a>
-        <a class="nav-link" routerLink="/moei/seafarers/settings/readiness"
+        <a *ngIf="auth.isAdmin" class="nav-link" routerLink="/moei/seafarers/settings/readiness"
            [class.active]="currentPath==='/moei/seafarers/settings/readiness'"
            [attr.aria-current]="currentPath==='/moei/seafarers/settings/readiness'?'page':null">
           <span class="nav-icon">⚙</span>
