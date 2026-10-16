@@ -366,6 +366,7 @@ export class SiMyWorkOrdersComponent implements OnInit{
  loading=false;busy=false;loadingDossier=false;error='';message='';
  private readonly api='/api/si/v1/maritime-scheduling/';
  private cache:Record<string,Dossier>={};
+ private dossierRequestId=0;
  constructor(private readonly http:HttpClient,private readonly router:Router,
   public readonly lang:LanguageService){}
  t(en:string,ar:string):string{return this.lang.pick(en,ar);}
@@ -399,7 +400,7 @@ export class SiMyWorkOrdersComponent implements OnInit{
   };
   const known=labels[key];if(known)return this.t(known[0],known[1]);
   return key.replace(/([a-z])([A-Z])/g,'$1 $2').replaceAll('_',' ')
-   .replace(/\\b[a-z]/g,x=>x.toUpperCase());
+   .replace(/\b[a-z]/g,x=>x.toUpperCase());
  }
  private readable(value:unknown,depth=0):string{
   if(value===null||value===undefined||value==='')return '—';
@@ -450,29 +451,40 @@ export class SiMyWorkOrdersComponent implements OnInit{
   return ['ISSUED','PREPARING','PREPARATION_NEEDS_REVIEW'].includes(o.status);
  }
  load():void{
+  if(this.loading)return;
   this.loading=true;this.error='';
+  const previousOrderId=this.selected?.orderId||null;
   this.http.get<{orders:AssignedOrder[];me:{session:string;inspectorPocId:string|null}}>(
     this.api+'my-work-orders').subscribe({
-   next:r=>{this.loading=false;this.orders=r.orders||[];this.me=r.me||null;
-    if(this.selected){
-     const next=this.orders.find(x=>x.orderId===this.selected?.orderId);
-     if(next)this.selected=next;else{this.selected=null;this.dossier=null;}
-    }},
+   next:r=>{
+    this.loading=false;this.orders=r.orders||[];this.me=r.me||null;
+    // Refresh also refreshes the selected dossier rather than continuing
+    // to display a cached pre-activation or pre-supervisor snapshot.
+    this.dossierRequestId++;this.cache={};this.dossier=null;
+    this.selected=null;this.loadingDossier=false;
+    const previous=previousOrderId?this.orders.find(x=>x.orderId===previousOrderId):null;
+    if(previous)this.select(previous);
+   },
    error:e=>{this.loading=false;this.error=e?.error?.error||'SI_ORDERS_UNAVAILABLE';}
   });
  }
  select(o:AssignedOrder):void{
   if(this.selected?.orderId===o.orderId&&(this.dossier||this.loadingDossier))return;
+  const requestId=++this.dossierRequestId;
   this.selected=o;this.error='';this.dossier=this.cache[o.orderId]||null;
-  if(this.dossier)return;
+  if(this.dossier){this.loadingDossier=false;return;}
   this.loadingDossier=true;
   this.http.get<Dossier>(this.api+'my-work-orders/'+o.orderId+'/dossier').subscribe({
-   next:d=>{this.cache[o.orderId]=d;
-    if(this.selected?.orderId===o.orderId)this.dossier=d;
-    this.loadingDossier=false;},
-   error:e=>{this.loadingDossier=false;
-    if(this.selected?.orderId===o.orderId)this.error=e?.error?.error||
-      'SI_DOSSIER_UNAVAILABLE';}
+   next:d=>{
+    this.cache[o.orderId]=d;
+    if(requestId!==this.dossierRequestId)return;
+    this.dossier=d;this.loadingDossier=false;
+   },
+   error:e=>{
+    if(requestId!==this.dossierRequestId)return;
+    this.loadingDossier=false;
+    this.error=e?.error?.error||'SI_DOSSIER_UNAVAILABLE';
+   }
   });
  }
  activate(o:AssignedOrder):void{
