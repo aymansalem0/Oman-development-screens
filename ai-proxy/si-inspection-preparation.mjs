@@ -22,6 +22,45 @@ const name=x=>typeof x==='string'&&x.trim().length>0&&x.trim().length<=120?x.tri
 const clean=(x,n=1000)=>typeof x==='string'?x.trim().slice(0,n):'';
 const priorities=['CRITICAL','HIGH','WATCH','NORMAL','PRIORITY','ROUTINE'];
 const focusTypes=['NMC_FOCUS','PRIORITY','VERIFY','REVIEW','ADDITIONAL'];
+/**
+ * POC only: place output-contract guidance INSIDE the existing A04 userInput
+ * JSON sent to Airia. The configured Airia agent may ignore added keys, so
+ * this never replaces the strict server-side validateA04 safety boundary.
+ * This is a request hint, NOT a change to the v3.1/v2.0 wire envelope.
+ */
+export function a04PocOutputGuidance({baseChecklistItemIds,evidenceManifestRefs}){
+  const checklistIds=[...new Set(baseChecklistItemIds)];
+  const evidenceIds=[...new Set(evidenceManifestRefs)];
+  return {
+    mode:'POC_IN_REQUEST_OUTPUT_GUIDANCE',
+    responseFormat:'ONE_JSON_OBJECT_NO_MARKDOWN',
+    instructions:[
+      'Return ONE JSON object with focusAreas, checklistFocus, suggestedAdditionalItems and agentConfidence. Do not wrap in markdown. The Airia transport may wrap the object in result.',
+      'focusAreas[].category and focusAreas[].reason MUST be non-empty strings.',
+      'focusAreas[].priority MUST be exactly one of the allowedPriorityValues. Do NOT return MEDIUM; select a permitted value based on the supplied evidence, without guessing or upgrading severity.',
+      'focusAreas[].evidenceIds MUST contain at least one exact ID from allowedEvidenceIds. Do not invent IDs.',
+      'checklistFocus[].existingItemId MUST be from allowedChecklistItemIds.',
+      'checklistFocus[].focus MUST be EXACTLY one allowedChecklistFocusValue: it is a machine-readable enum, NOT natural-language instructions.',
+      'Put natural-language inspection suggestions in checklistFocus[].reason and valid evidence references in checklistFocus[].reasonEvidenceIds. Do NOT put instructions in focus.',
+      'Never provide suggestedSeverityIfFailed or assign regulatory deficiency severity. Potential deficiencies are hypotheses only, never confirmed findings.',
+      'Provide suggestedAdditionalItems as an array (empty if none), optional predictedDeficiencies as hypotheses, optional missingEvidence as an array, and agentConfidence as a number between 0 and 1.',
+      'Advisory focus only: do not add, change or remove mandatory checklist items, official vessel risk, approved inspection scope, legal findings or bookings. Human inspector review is required.'
+    ],
+    allowedPriorityValues:[...priorities],
+    allowedChecklistFocusValues:[...focusTypes],
+    allowedChecklistItemIds:checklistIds,
+    allowedEvidenceIds:evidenceIds,
+    requiredShape:{
+      focusAreas:[{category:'string',priority:'allowedPriorityValues',
+        reason:'non-empty string',evidenceIds:['allowedEvidenceIds']}],
+      checklistFocus:[{existingItemId:'allowedChecklistItemIds',
+        focus:'allowedChecklistFocusValues',reason:'inspection explanation',
+        reasonEvidenceIds:['allowedEvidenceIds']}],
+      suggestedAdditionalItems:[],
+      agentConfidence:'number between 0 and 1'
+    }
+  };
+}
 function safeJson(data){
   let cur=data;
   for(let n=0;n<7;n++){
@@ -382,7 +421,14 @@ export class SiInspectionPreparation{
           sourceInspectionObjectives:context.sourceInspectionObjectives},
         inspectionRegimes:context.targetRegimes,
         provenance:context.provenance,
-        officialScoringRequested:false,requestedOutputs:['FOCUS_OVERLAY','MISSING_EVIDENCE']};
+        officialScoringRequested:false,requestedOutputs:['FOCUS_OVERLAY','MISSING_EVIDENCE'],
+        // Airia v3.1 transport already stringifies this whole input as userInput.
+        // Instructions travel with each explicit POC A04 request, no agent
+        // configuration update, schema-version bump, or extra API call.
+        outputGuidance:a04PocOutputGuidance({
+          baseChecklistItemIds:context.baseChecklistItemIds,
+          evidenceManifestRefs:context.evidenceManifestRefs
+        })};
       try{
         const raw=await this.executeA04(input);
         const cleanResult=validateA04(raw,{checkIds:context.baseChecklistItemIds,
