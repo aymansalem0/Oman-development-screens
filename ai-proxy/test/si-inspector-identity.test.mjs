@@ -17,3 +17,12 @@ test('MOCK delegation is a separate publisher-only server authorization, not an 
  assert.equal(resolveAssignedInspector('supervisor@example.org',assigned,
    '{"supervisor@example.org":"SOME-OTHER-INS"}'),null);
 });
+
+test('admin-provisioned employee mapping authorizes ONLY the canonical assigned inspector',()=>{
+ const actor='operator@example.org';
+ const valid=resolveAssignedInspector(actor,assigned,'{}','ERP-INS-007');
+ assert.deepEqual(valid,{id:'ERP-INS-007',name:'Field Engineer 7',
+  source:'ADMIN_VERIFIED_GOOGLE_INSPECTOR_MAPPING'});
+ assert.equal(resolveAssignedInspector(actor,assigned,'{}','ERP-INS-008'),null);
+ assert.equal(resolveAssignedInspector('',assigned,'{}','ERP-INS-007'),null);
+});
