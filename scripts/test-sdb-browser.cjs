@@ -42,15 +42,36 @@ const fs = require("node:fs");
   await route("readiness");
   await page.locator(".candidate-row").first().waitFor();
   assert.equal(await page.locator(".candidate-row").count(), 7);
+  // The internal readiness workbench is independent of the customer service.
+  await route("services");
+  await page.locator('[data-testid="sdb-start-service"]').click();
+  await page.locator('[data-testid^="scenario-"]').first().waitFor();
+  assert.equal(await page.locator('[data-testid^="scenario-"]').count(), 8);
+  await page.locator('[data-testid="scenario-CADET_MISSING_MEDICAL"]').click();
+  assert.equal(await page.locator('[data-testid^="sdb-proceed-"]').count(), 0,
+    'a cadet without medical fitness must not enter the application');
+  await page.locator('[data-testid="scenario-RENEWAL_COMPANY_HOLD"]').click();
+  assert.equal(await page.locator('[data-testid^="sdb-proceed-"]').count(), 0,
+    'employer hold must prevent progression');
+  await page.screenshot({
+    path: out + "/sdb-eight-scenarios.png",
+    fullPage: false,
+  });
   await page.screenshot({
     path: out + "/readiness-desktop.png",
     fullPage: false,
   });
   async function issue(profile, delivery) {
     await route("services");
-    if (profile !== "SF-002") {
-      await page.locator(".preview-bar select").selectOption(profile);
-      await page.locator(".loading-state").waitFor({ state: "hidden" });
+    await page.locator('[data-testid="sdb-start-service"]').click();
+    if (profile === "SF-002" || profile === "SF-003") {
+      const scenario = profile === "SF-002" ? "CADET_READY" : "RENEWAL_READY";
+      await page.locator('[data-testid="scenario-" + scenario + ""]').click();
+      await page.locator('[data-testid="sdb-proceed-" + scenario + ""]').click();
+    } else {
+      // Company HOLD was explicitly cleared in the company workflow.
+      // The operator may now inspect that same authorised SDB sandbox case.
+      await page.goto(base + "/#/moei/seafarers/sdb/" + profile);
     }
     await page.locator(".service-card .primary").click();
     await page.locator('input[name="format"]').first().waitFor();
