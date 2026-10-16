@@ -47,14 +47,27 @@ const fs = require("node:fs");
   await page.locator('[data-testid="sdb-start-service"]').click();
   await page.locator('[data-testid^="scenario-"]').first().waitFor();
   assert.equal(await page.locator('[data-testid^="scenario-"]').count(), 8);
-  await page.locator('[data-testid="scenario-CADET_MISSING_MEDICAL"]').click();
-  assert.equal(await page.locator('[data-testid^="sdb-proceed-"]').count(), 0,
-    'a cadet without medical fitness must not enter the application');
-  await page.locator('[data-testid="scenario-RENEWAL_COMPANY_HOLD"]').click();
-  assert.equal(await page.locator('[data-testid^="sdb-proceed-"]').count(), 0,
-    'employer hold must prevent progression');
   await page.screenshot({
     path: out + "/sdb-eight-scenarios.png",
+    fullPage: false,
+  });
+  await page.locator('[data-testid="scenario-CADET_MISSING_MEDICAL"]').click();
+  await page.locator('[data-check="MEDICAL"]').first().waitFor();
+  assert.equal(await page.locator('[data-testid="sdb-case-continue"]').count(), 0,
+    'a cadet without medical fitness must not enter the application');
+  assert.ok((await page.locator(".agent-flow").innerText()).includes("Agentic AI"));
+  await page.screenshot({
+    path: out + "/sdb-missing-medical-requirements.png",
+    fullPage: false,
+  });
+  await route("services");
+  await page.locator('[data-testid="sdb-start-service"]').click();
+  await page.locator('[data-testid="scenario-RENEWAL_COMPANY_HOLD"]').click();
+  await page.locator('[data-check="CLEARANCE-COMPANY"]').first().waitFor();
+  assert.equal(await page.locator('[data-testid="sdb-case-continue"]').count(), 0,
+    'employer hold must prevent progression');
+  await page.screenshot({
+    path: out + "/sdb-company-hold-requirements.png",
     fullPage: false,
   });
   await page.screenshot({
@@ -75,7 +88,8 @@ const fs = require("node:fs");
       await page.locator('[data-testid="sdb-start-service"]').click();
       const scenario = profile === "SF-002" ? "CADET_READY" : "RENEWAL_READY";
       await page.locator('[data-testid="scenario-' + scenario + '"]').click();
-      await page.locator('[data-testid="sdb-proceed-' + scenario + '"]').click();
+      // A READY applicant now goes directly into the existing SDB wizard.
+      await page.locator(".service-card .primary").waitFor();
     }
     await page.locator(".service-card .primary").waitFor();
     await page.locator(".service-card .primary").click();
@@ -183,6 +197,14 @@ const fs = require("node:fs");
   await page.locator("table tbody tr").first().waitFor();
   await page.screenshot({
     path:out + "/seafarer-360-certificates.png",fullPage:false
+  });
+  // Settings are an independent admin-only screen, not a public applicant step.
+  await page.goto(base + "/#/moei/seafarers/settings/readiness");
+  await page.locator('[data-requirement="MEDICAL"]').waitFor();
+  await page.locator('[data-requirement="COP-PST"]').waitFor();
+  await page.locator('[data-testid="add-sdb-requirement"]').waitFor();
+  await page.screenshot({
+    path:out + "/sdb-readiness-settings.png",fullPage:false
   });
   await route("readiness");
   await page.locator(".candidate-row").first().click();
