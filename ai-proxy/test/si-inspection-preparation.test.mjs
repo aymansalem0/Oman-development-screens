@@ -396,4 +396,7 @@ test('potential deficiencies stay strict hypotheses and never silently gain lega
   evidenceManifestRefs:fixture.evidenceIds});
  assert.ok(guidance.instructions.some(i=>i.includes('hypothesisOnly: true')));
  assert.ok(guidance.instructions.some(i=>i.includes('predictedDeficiencies: []')));
+ assert.equal(guidance.optionalPredictedDeficienciesItemShape.hypothesisOnly,true);
+ assert.deepEqual(guidance.noPredictedDeficienciesResponse,{predictedDeficiencies:[]});
+ assert.deepEqual(guidance.allowedChecklistItemIds,SI_BASE_CHECKLIST);
 });
