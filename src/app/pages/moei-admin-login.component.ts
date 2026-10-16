@@ -32,12 +32,13 @@ export class MoeiAdminLoginComponent implements OnInit{
        'خدمة تسجيل الدخول غير متاحة حالياً.');}
    });
  }
- googleSignIn():void{if(!this.busy&&this.googleConfigured)this.auth.googleSignIn();}
+ get returnTo():string{const value=this.route.snapshot.queryParamMap.get('returnTo')||'';return ['/moei/seafarers/services','/moei/seafarers/company','/moei/seafarers/readiness','/moei/seafarers/notifications','/moei/seafarers/fulfilment'].includes(value)?value:'';}
+ googleSignIn():void{if(!this.busy&&this.googleConfigured)this.auth.googleSignIn(this.returnTo);}
  submit():void{
   if(this.busy||this.mode!=='local'||!this.username.trim()||!this.password)return;
   this.busy=true;this.error='';
   this.auth.login(this.username.trim(),this.password).subscribe({
-   next:()=>{this.busy=false;this.password='';void this.router.navigate(['/moei/nmc']);},
+   next:()=>{this.busy=false;this.password='';if(this.returnTo)void this.router.navigateByUrl(this.returnTo);else void this.router.navigate(['/moei/nmc']);},
    error:()=>{this.busy=false;this.password='';
      this.error=this.copy('Username or password is incorrect.','اسم المستخدم أو كلمة المرور غير صحيحة.');
    }
