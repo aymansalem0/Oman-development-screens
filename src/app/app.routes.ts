@@ -13,6 +13,8 @@ const rawRoutes: Routes = [
   { path: 'moei/seafarers', redirectTo: 'moei/seafarers/services', pathMatch: 'full' },
   { path: 'moei/seafarers/readiness', data:{view:'readiness'}, loadComponent: () => import('./pages/moei-seafarer-readiness.component').then(m => m.MoeiSeafarerReadinessComponent) },
   { path: 'moei/seafarers/services', loadComponent: () => import('./pages/moei-sdb-customer-services.component').then(m => m.MoeiSdbCustomerServicesComponent) },
+  { path: 'moei/seafarers/services/case/:scenarioId', loadComponent: () => import('./pages/moei-sdb-case-detail.component').then(m => m.MoeiSdbCaseDetailComponent) },
+  { path: 'moei/seafarers/settings/readiness', loadComponent: () => import('./pages/moei-sdb-readiness-settings.component').then(m => m.MoeiSdbReadinessSettingsComponent) },
   { path: 'moei/seafarers/records', loadComponent: () => import('./pages/moei-seafarer-records.component').then(m => m.MoeiSeafarerRecordsComponent) },
   { path: 'moei/seafarers/company', data:{view:'company'}, loadComponent: () => import('./pages/moei-seafarer-readiness.component').then(m => m.MoeiSeafarerReadinessComponent) },
   { path: 'moei/seafarers/notifications', data:{view:'notifications'}, loadComponent: () => import('./pages/moei-seafarer-readiness.component').then(m => m.MoeiSeafarerReadinessComponent) },
