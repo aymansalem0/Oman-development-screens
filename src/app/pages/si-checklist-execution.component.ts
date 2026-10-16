@@ -161,10 +161,11 @@ interface A04Dossier{saved?:{status:string;dossier?:{
           (change)="attachQuestionEvidence($event,q.id)"/>
         </label>
         <div class="evidence-chips">
-         <span *ngFor="let attachment of evidenceFor(q.id)">
-          📎 {{attachment.filename}} · {{attachment.mimeType==='application/pdf'?'PDF':'PHOTO'}}
+         <a *ngFor="let attachment of evidenceFor(q.id)"
+          [href]="evidenceDownloadUrl(attachment.id)" target="_blank" rel="noopener noreferrer">
+          📎 {{attachment.filename}} ↧ {{attachment.mimeType==='application/pdf'?'PDF':'PHOTO'}}
           · {{t('Unverified','غير متحقق منه')}}
-         </span>
+         </a>
         </div>
         <small>{{t('Images can be analysed only when the configured Airia Vision pipeline supports the attachment. PDF stays evidence for inspector review; upload itself never runs AI.',
          'يحلل Airia الصور فقط إذا دعم المسار المرفق. يظل PDF دليلًا لمراجعة المفتش؛ رفع المرفق لا يشغّل AI.')}}</small>
@@ -244,10 +245,11 @@ interface A04Dossier{saved?:{status:string;dossier?:{
            (change)="attachQuestionEvidence($event,item.instanceId)"/>
          </label>
          <div class="evidence-chips">
-          <span *ngFor="let attachment of evidenceFor(item.instanceId)">
-           📎 {{attachment.filename}} · {{attachment.mimeType==='application/pdf'?'PDF':'PHOTO'}}
+          <a *ngFor="let attachment of evidenceFor(item.instanceId)"
+           [href]="evidenceDownloadUrl(attachment.id)" target="_blank" rel="noopener noreferrer">
+           📎 {{attachment.filename}} ↧ {{attachment.mimeType==='application/pdf'?'PDF':'PHOTO'}}
            · {{t('Unverified','غير متحقق منه')}}
-          </span>
+          </a>
          </div>
          <small>{{t('Files belong to this question only; uploading does not invoke Airia.',
           'المرفق مرتبط بهذا السؤال فقط، ورفعه لا يستدعي Airia.')}}</small>
@@ -434,8 +436,10 @@ interface A04Dossier{saved?:{status:string;dossier?:{
  .question-evidence input{padding:8px;background:#fbfefe;max-width:100%}
  .question-evidence small{font-size:10px;color:#79919b;line-height:1.8}
  .evidence-chips{display:flex;flex-wrap:wrap;gap:7px}
- .evidence-chips span{font-size:10px;color:#287883;background:#eaf6f8;
-  border:1px solid #cce6e8;border-radius:7px;padding:8px}
+ .evidence-chips a{font-size:10px;color:#287883;background:#eaf6f8;
+  border:1px solid #cce6e8;border-radius:7px;padding:8px;text-decoration:none;
+  display:inline-flex;align-items:center;gap:5px}
+ .evidence-chips a:hover{background:#d9f1f4;text-decoration:underline}
  .question-ai-guidance,.ai-instruction-block{background:#fff;border:1px solid #e5dff3;
   padding:13px;border-radius:9px;font-size:11px}
  .question-ai-guidance b,.ai-instruction-block b,.ai-answer-inline b{
@@ -541,6 +545,10 @@ export class SiChecklistExecutionComponent implements OnInit,OnDestroy{
  }
  evidenceFor(itemId:string):ChecklistEvidence[]{
   return this.questionEvidence.filter(x=>x.itemId===itemId);
+ }
+ evidenceDownloadUrl(evidenceId:string):string{
+  return '/api/si/v1/checklists/cases/'+encodeURIComponent(this.caseId)+
+    '/evidence/'+encodeURIComponent(evidenceId);
  }
  latestImage(itemId:string):ChecklistEvidence|null{
   return [...this.evidenceFor(itemId)].reverse().find(x=>
