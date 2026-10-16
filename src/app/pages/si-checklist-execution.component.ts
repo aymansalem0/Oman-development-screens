@@ -654,6 +654,8 @@ export class SiChecklistExecutionComponent implements OnInit,OnDestroy{
   const target=event.target as HTMLInputElement,file=target.files?.[0];
   this.imagePayload=null;this.fileName='';
   if(!file)return;
+  // Exactly one image is sent to Airia: new inline photo OR persisted evidence.
+  this.selectedEvidenceId='';
   if(!['image/png','image/jpeg','image/webp'].includes(file.type)||file.size>2*1024*1024){
    this.error=this.t('Use JPG, PNG or WebP (max 2MB).','استخدم JPG أو PNG أو WebP بحد أقصى 2MB.');
    return;
