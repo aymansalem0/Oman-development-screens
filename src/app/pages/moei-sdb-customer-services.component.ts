@@ -69,27 +69,35 @@ export class MoeiSdbCustomerServicesComponent implements OnInit{
   });
  }
  choose(s:SdbServiceScenario):void{
-  // Open an independent page for missing requirements; a verified READY
-  // applicant goes straight into the pre-existing guarded SDB wizard.
-  // Preview scenario status alone can never authorize an application.
-  if(this.proceedAllowed(s)){
-    // Explicit selection starts the existing guarded SDB wizard in the POC.
-    // The applicant/source check still runs on the backend before creating
-    // a DRAFT, and no payment/issuance is executed automatically.
-    void this.router.navigate(['/moei/seafarers/sdb',s.profileId],{
-      queryParams:{startReady:'1',scenario:s.id}
-    });
-  }else{
-    void this.router.navigate(['/moei/seafarers/services/case',s.id]);
+  if(!s.canContinue||s.readiness.status!=='READY'){
+   void this.router.navigate(['/moei/seafarers/services/case',s.id]);
+   return;
   }
+  // The card is advisory; the authenticated server rechecks every currently
+  // configured requirement, then creates/reuses an operator-owned sandbox
+  // applicant. Never apply against the unbound source fixture.
+  if(this.scenariosLoading)return;
+  this.scenariosLoading=true;this.error='';
+  this.api.startReadyDemoJourney(s.id).subscribe({
+   next:demo=>{
+    this.scenariosLoading=false;
+    if(demo.readiness.status!=='READY'){
+     void this.router.navigate(['/moei/seafarers/services/case',s.id]);
+     return;
+    }
+    // Auto-start the existing guarded DRAFT wizard for BOTH issue/renewal.
+    // Payment and official approval are not performed automatically.
+    void this.router.navigate(['/moei/seafarers/sdb',demo.profileId],{
+     queryParams:{startReady:'1',scenario:s.id}
+    });
+   },
+   error:e=>{
+    this.scenariosLoading=false;this.error=this.errorLabel(e);
+   }
+  });
  }
  proceedAllowed(s:SdbServiceScenario):boolean{
-  if(!s.canContinue)return false;
-  // The hypothetical POC scenario must NEVER override the live applicant
-  // gate; genuine server source readiness gets checked again at POST/payment.
-  const p=this.data?.profiles.find(p=>p.id===s.profileId);
-  return p?.readiness.status==='READY'&&
-   p.readiness.service===s.readiness.service;
+  return s.canContinue&&s.readiness.status==='READY';
  }
  get issuedProfileCount():number{
   return this.data?.profiles.filter(p=>!!p.existingSdb).length||0;
