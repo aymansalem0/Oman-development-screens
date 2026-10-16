@@ -63,8 +63,8 @@ import {SiPreparationCaseSummary,SiPreparationService} from '../services/si-prep
                   <td><a class="open" [routerLink]="['/moei/smart-inspection/preparation',c.id]">
                     {{copy('Open Preparation →','فتح التحضير ←')}}
                   </a>
-                  <a class="open" [routerLink]="['/moei/smart-inspection/lifecycle',c.id]">
-                    {{copy('Full Cycle →','دورة المعاينة ←')}}
+                  <a class="open" routerLink="/moei/smart-inspection/my-work-orders">
+                    {{copy('My Inspection Journey →','رحلة المعاينة الموحدة ←')}}
                   </a></td>
                 </tr>
               </tbody>
