@@ -1197,10 +1197,18 @@ const server = createServer(async (req, res) => {
         // Both case read and every mutation (including chargeable Airia
         // requests) require the current signed-in inspector's work order.
         // Unmapped ADMIN remains a separate supervisor review capability.
-        await authorizeChecklistCase({identity:actor,caseId:id,
+        const grant=await authorizeChecklistCase({identity:actor,caseId:id,
           googleUsers,scheduleOrders:siScheduleOrders,mutation:req.method!=='GET'});
-        if(req.method==='GET'&&!operation)
-          return respond(res,200,await siChecklistField.preview(id));
+        if(req.method==='GET'&&!operation){
+          const preview=await siChecklistField.preview(id);
+          // Self-explanatory field controls for linked VIEWER inspectors.
+          // Actual POST authorization is independently rechecked above.
+          return respond(res,200,{...preview,fieldAccess:{
+            role:grant.kind,canMutate:grant.kind==='SUPERVISOR'||
+              grant.inspectionStatus==='FIELD_STARTED',
+            inspectionStatus:grant.inspectionStatus||null
+          }});
+        }
         if(req.method==='POST'&&operation==='start')
           return respond(res,201,await siChecklistField.start(id,user));
         const payload=await requestJson(req,3300000);
