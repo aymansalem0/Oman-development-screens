@@ -1,6 +1,6 @@
 import {Injectable} from '@angular/core';
 
-export type MainMaritimeGroup='nmc'|'smart'|'settings';
+export type MainMaritimeGroup='nmc'|'smart'|'settings'|'seafarers';
 export type SettingsMaritimeGroup='nmc'|'inspection';
 export type MaritimeDashboardGroup='nmc'|'smart'|'settings';
 

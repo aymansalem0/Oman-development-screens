@@ -24,6 +24,7 @@ import {NmcMinistryLogoComponent} from './nmc-ministry-logo.component';
           <h1>{{pick('MOEI Maritime Unified Platform','المنصة البحرية الموحدة لوزارة الطاقة والبنية التحتية')}}</h1>
           <p>{{area==='nmc'
             ?pick('Operational picture · Maritime situational awareness','الصورة التشغيلية · الوعي بالموقف البحري')
+            :area==='seafarers'?pick('Seafarer Management · Connected SDB Services','إدارة البحارة · خدمات سجل البحار المتكاملة')
             :pick('Smart Inspection · Integrated maritime services','المعاينة الذكية · الخدمات البحرية المتكاملة')}}</p>
         </div>
       </div>
@@ -37,7 +38,7 @@ import {NmcMinistryLogoComponent} from './nmc-ministry-logo.component';
       </div>
       <ng-template #siContext>
         <div class="maritime-status">
-          <span class="maritime-context">{{pick('SMART INSPECTION · POC','المعاينة الذكية · نموذج تجريبي')}}</span>
+          <span class="maritime-context">{{area==='seafarers'?pick('SEAFARER SERVICES · POC','خدمات البحارة · نموذج تجريبي'):pick('SMART INSPECTION · POC','المعاينة الذكية · نموذج تجريبي')}}</span>
           <small>{{pick('Same platform · Same business identity','منصة واحدة · هوية مؤسسية موحدة')}}</small>
         </div>
       </ng-template>
@@ -47,15 +48,15 @@ import {NmcMinistryLogoComponent} from './nmc-ministry-logo.component';
             [attr.title]="pick('Switch to Arabic','Switch to English')">
           <span aria-hidden="true">🌐</span> {{lang.isArabic?'English':'العربية'}}
         </button>
-        <a routerLink="/moei/nmc/alerts" class="maritime-alerts"
+        <a [routerLink]="area==='seafarers'?'/moei/seafarers/notifications':'/moei/nmc/alerts'" class="maritime-alerts"
            [attr.aria-label]="pick('Alerts & Notifications','التنبيهات والإشعارات')"
            [attr.title]="pick('Alerts & Notifications','التنبيهات والإشعارات')">
           <span aria-hidden="true">♢</span><b *ngIf="unreadAlerts>0">{{unreadAlerts}}</b>
         </a>
         <div class="maritime-officer">
           <span class="maritime-avatar" aria-hidden="true">NO</span>
-          <span><strong>{{pick('NMC Officer','ضابط المركز البحري الوطني')}}</strong>
-          <small>{{pick('Duty Operations','العمليات المناوبة')}}</small></span>
+          <span><strong>{{area==='seafarers'?pick('Seafarer Services','خدمات البحارة'):pick('NMC Officer','ضابط المركز البحري الوطني')}}</strong>
+          <small>{{area==='seafarers'?pick('Connected SDB journey','رحلة سجل البحار المتكاملة'):pick('Duty Operations','العمليات المناوبة')}}</small></span>
         </div>
       </div>
     </header>
@@ -63,7 +64,7 @@ import {NmcMinistryLogoComponent} from './nmc-ministry-logo.component';
   styleUrl:'./nmc-platform-chrome.component.css'
 })
 export class NmcPlatformHeaderComponent{
-  @Input() area:'nmc'|'smart-inspection'='smart-inspection';
+  @Input() area:'nmc'|'smart-inspection'|'seafarers'='smart-inspection';
   @Input() feedLive=true;
   @Input() clock='';
   @Input() unreadAlerts=0;

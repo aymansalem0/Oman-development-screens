@@ -39,7 +39,9 @@ export class MoeiGoogleSso{
     const now=this.clock();
     for(const [key,entry] of this.pending)if(now-entry.createdAt>600000)this.pending.delete(key);
     const state=b64(randomBytes(32)),nonce=b64(randomBytes(32)),verifier=b64(randomBytes(48));
-    this.pending.set(state,{nonce,verifier,createdAt:now});
+    const requestedReturn=new URL(req.url||'/', 'http://localhost').searchParams.get('returnTo');
+    const returnTo=['/moei/seafarers/services','/moei/seafarers/company','/moei/seafarers/readiness','/moei/seafarers/notifications','/moei/seafarers/fulfilment'].includes(requestedReturn)?requestedReturn:null;
+    this.pending.set(state,{nonce,verifier,createdAt:now,returnTo});
     const url=new URL(googleAuthorize);
     for(const [k,v] of Object.entries({
       client_id:this.clientId,redirect_uri:this.redirectUri,response_type:'code',
@@ -65,7 +67,8 @@ export class MoeiGoogleSso{
       if(!result.ok)throw Error('Google token exchange rejected');
       tokenResponse=await result.json();
     }catch{throw new MoeiAuthError('MOEI_GOOGLE_TOKEN_EXCHANGE_FAILED',401);}
-    return this.verifyIdToken(tokenResponse?.id_token,stored.nonce);
+    const identity=await this.verifyIdToken(tokenResponse?.id_token,stored.nonce);
+    return stored.returnTo?{...identity,returnTo:stored.returnTo}:identity;
   }
   async verifyIdToken(token,nonce){
     try{

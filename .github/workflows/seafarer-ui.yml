@@ -1,0 +1,44 @@
+name: Seafarer SDB browser journey
+on:
+  push:
+    branches: ['feature/moei-seafarers-*', 'integration/moei-seafarers-*']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: seafarer-ui-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  browser-journey:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install Angular and browser test client
+        run: |
+          npm install --no-audit --no-fund
+          npm install --no-save --package-lock=false playwright@1.62.1
+      - name: Build Angular
+        run: npm run build
+      - name: Check customer, company, fulfilment and Arabic mobile journeys
+        run: |
+          set -eu
+          export BROWSER_EXECUTABLE="$(command -v google-chrome)"
+          node scripts/sdb-preview-server.mjs > /tmp/sdb-preview.log 2>&1 &
+          preview_pid=$!
+          trap 'kill "$preview_pid" 2>/dev/null || true' EXIT
+          for n in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:4175/ >/dev/null; then break; fi
+            sleep 1
+          done
+          node scripts/test-sdb-browser.cjs
+      - name: Preserve browser QA screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: seafarer-sdb-browser-qa
+          path: tmp/sdb-qa/
+          if-no-files-found: ignore

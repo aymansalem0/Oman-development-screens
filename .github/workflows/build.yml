@@ -2,7 +2,7 @@ name: Angular Build
 
 on:
   push:
-    branches: [main, 'feature/nmc-*', 'feature/si-*', 'feature/moei-*']
+    branches: [main, 'feature/nmc-*', 'feature/si-*', 'feature/moei-*', 'integration/moei-seafarers-*']
   workflow_dispatch:
   pull_request:
     branches: [main, feature/smart-inspection-poc, 'feature/nmc-*', 'feature/si-*', 'feature/moei-*']
@@ -60,6 +60,9 @@ jobs:
 
       - name: SI-09 management read-model regression
         run: node --test ai-proxy/test/si-management-report.test.mjs
+
+      - name: Seafarer readiness, company clearance, source webhooks and SDB journey
+        run: node --test ai-proxy/test/seafarer-workspace.test.mjs ai-proxy/test/seafarer-http.test.mjs
 
       - name: Build
         run: npm run build

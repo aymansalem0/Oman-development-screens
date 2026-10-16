@@ -7,6 +7,13 @@ services:
       dockerfile: ai-proxy/Dockerfile
     environment:
       PORT: "3000"
+      # Isolated seafarer contract sandbox. No writes to NMC/SI/Oracle.
+      SDB_ENABLED: ${SDB_ENABLED:-true}
+      SDB_STORE_PATH: /data/sdb-readiness-sandbox.json
+      SDB_SSO_BINDINGS_JSON: ${SDB_SSO_BINDINGS_JSON:-}
+      SDB_ACADEMY_WEBHOOK_SECRET: ${SDB_ACADEMY_WEBHOOK_SECRET:-}
+      SDB_MARASI_WEBHOOK_SECRET: ${SDB_MARASI_WEBHOOK_SECRET:-}
+      SDB_MOI_ICP_WEBHOOK_SECRET: ${SDB_MOI_ICP_WEBHOOK_SECRET:-}
       AIRIA_MENA_KEY: ${AIRIA_MENA_KEY:-}
       MOEI_AI_VAULT_MASTER_KEY: ${MOEI_AI_VAULT_MASTER_KEY:-}
       AIRIA_BASE_URL: ${AIRIA_BASE_URL:-https://api.mena.airia.ai}
