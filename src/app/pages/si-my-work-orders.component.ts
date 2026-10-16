@@ -19,7 +19,8 @@ interface Dossier{
   identity:{imo:string;vesselName:string|null;flag:string|null;
    vesselType:string|null;regimes?:string[];caseId?:string|null};
   assignments:{inspectorName:string|null;portName:string|null;
-   startLocal:string|null;status:string;liveErpBookingConfirmed:boolean}|null;
+   startLocal:string|null;endLocal?:string|null;status:string;crossPort?:boolean;
+   liveErpBookingConfirmed:boolean}|null;
   referrals:{allSourceReasons:unknown[];objectives?:unknown[];
    inspectionScopes?:unknown[];distinctSourceCount?:number};
   risk:{score:number;level:string;status:string}|null;
@@ -50,7 +51,7 @@ interface Dossier{
      'حسابك المسجل هو الذي يحدد السفن المسندة إليك. قف على سفينة أو اخترها لعرض الدوسيه الكامل والأدلة قبل التنفيذ.')}}</p>
    </div>
    <div class="header-actions">
-    <button type="button" (click)="load()" [disabled]="busy">{{t('Refresh Assignments','تحديث أوامر التكليف')}}</button>
+    <button type="button" (click)="load()" [disabled]="busy||loading">{{t('Refresh Assignments','تحديث أوامر التكليف')}}</button>
     <a routerLink="/moei/smart-inspection/scheduling">{{t('Scheduling','الجدولة')}}</a>
    </div>
   </header>
@@ -59,9 +60,9 @@ interface Dossier{
   <section class="overview">
    <div><small>{{t('Assigned to me','مسندة إليّ')}}</small><strong>{{orders.length}}</strong></div>
    <div><small>{{t('Ready for execution','جاهزة للتنفيذ')}}</small><strong>{{statusCount('READY_FOR_FIELD')}}</strong></div>
+   <div><small>{{t('Awaiting preparation','بانتظار التجهيز')}}</small><strong>{{preparationCount}}</strong></div>
+   <div><small>{{t('Awaiting supervisor','بانتظار اعتماد المشرف')}}</small><strong>{{statusCount('READY_FOR_SCOPE_REVIEW')}}</strong></div>
    <div><small>{{t('Field in progress','قيد المعاينة')}}</small><strong>{{statusCount('FIELD_STARTED')}}</strong></div>
-   <div><small>{{t('Awaiting preparation','بانتظار التجهيز')}}</small>
-    <strong>{{orders.length-statusCount('READY_FOR_FIELD')-statusCount('FIELD_STARTED')}}</strong></div>
   </section>
   <p class="poc" *ngIf="me?.inspectorPocId">
    <b>{{t('Your POC engineer identity','هويتك التجريبية كمهندس')}}</b>:
@@ -75,7 +76,6 @@ interface Dossier{
     <button type="button" class="vessel"
      *ngFor="let o of orders;let i=index"
      [class.active]="selected?.orderId===o.orderId"
-     (mouseenter)="select(o)" (focus)="select(o)"
      (click)="select(o)">
       <span class="vessel-icon">🚢</span>
       <span class="vessel-body">
@@ -100,7 +100,7 @@ interface Dossier{
      </div><span class="meta">{{o.mode==='POC_MOCK'?'POC · DEMO ERP':'ERP · EXCEL POC'}}</span></div>
      <div class="buttons">
       <button *ngIf="canActivate(o)" type="button" (click)="activate(o)"
-       [disabled]="busy">{{t('Prepare Work Order & AI Dossier','تجهيز أمر التكليف ودوسيه AI')}}</button>
+       [disabled]="busy">{{t('Prepare Inspection Dossier & Checklist','تجهيز ملف المعاينة والقائمة')}}</button>
       <button *ngIf="o.status==='READY_FOR_FIELD'" type="button" (click)="execute(o)"
        [disabled]="busy">{{t('Execute Work Order','تنفيذ أمر التكليف')}}</button>
       <button *ngIf="o.status==='FIELD_STARTED'" type="button" (click)="continue(o)">
@@ -109,15 +109,27 @@ interface Dossier{
        [routerLink]="['/moei/smart-inspection/scheduling/plan',o.planId]">
         {{t('Supervisor: Approve Scope','المشرف: اعتماد نطاق المعاينة')}}</a>
       <a *ngIf="o.caseId" [routerLink]="['/moei/smart-inspection/preparation',o.caseId]">
-       {{t('Review A04 Dossier','مراجعة دوسيه A04')}}</a>
-      <a *ngIf="o.caseId" [routerLink]="['/moei/smart-inspection/checklists',o.caseId]">
+       {{t('Preparation & Optional A04','تجهيز المعاينة وA04 الاختياري')}}</a>
+      <a *ngIf="o.caseId&&o.checklistStatus==='MANDATORY_PUBLISHED_TEMPLATE_SNAPSHOT'"
+       [routerLink]="['/moei/smart-inspection/checklists',o.caseId]">
        {{t('Published Checklist Details','تفاصيل القائمة المنشورة')}}</a>
      </div>
      <p *ngIf="loadingDossier" class="status">{{t('Opening full vessel dossier…','جارٍ فتح ملف السفينة الكامل…')}}</p>
      <ng-container *ngIf="dossier as d">
       <div class="warning" *ngIf="!d.caseId">
-       {{t('Source dossier before activation: no approved SI case, pinned checklist or AI A04 preparation has been created yet.',
-         'دوسيه المصادر قبل تفعيل أمر التكليف: لم تُنشأ حالة المعاينة أو القائمة المثبتة أو تجهيز A04 حتى الآن.')}}</div>
+       {{t('Work order issued, but inspection preparation has not started. No inspection case or mandatory checklist snapshot exists yet. Optional A04 analysis is a separate, explicitly confirmed step.',
+         'صدر أمر التكليف لكن تجهيز المعاينة لم يبدأ. لم تُنشأ حالة المعاينة أو لقطة القائمة الإلزامية بعد. تحليل A04 اختياري ويتطلب تأكيدًا مستقلًا.')}}</div>
+      <div class="process-guide" role="status">
+       <strong>{{t('Next business step','الخطوة التالية')}}</strong>
+       <p *ngIf="canActivate(o)">{{t('Prepare the source dossier and mandatory checklist first. No AI call will be made by this button.',
+        'جهّز ملف المصادر والقائمة الإلزامية أولًا. هذا الزر لا يستدعي الذكاء الاصطناعي.')}}</p>
+       <p *ngIf="o.status==='READY_FOR_SCOPE_REVIEW'">{{t('Preparation is complete. A supervisor must review and approve the inspection scope before field execution.',
+        'اكتمل التجهيز. يجب أن يراجع المشرف نطاق المعاينة ويعتمده قبل التنفيذ الميداني.')}}</p>
+       <p *ngIf="o.status==='READY_FOR_FIELD'">{{t('Scope approved. The assigned inspector can begin the field inspection.',
+        'تم اعتماد النطاق. يمكن للمفتش المسند إليه بدء المعاينة الميدانية.')}}</p>
+       <p *ngIf="o.status==='FIELD_STARTED'">{{t('Field inspection is in progress. Continue the guided checklist and record evidence.',
+        'المعاينة الميدانية جارية. استكمل القائمة الإرشادية وسجل الأدلة.')}}</p>
+      </div>
       <div class="dossier-grid">
        <div class="fact"><small>{{t('Flag','العلم')}}</small><b>{{d.sections.identity.flag||'—'}}</b></div>
        <div class="fact"><small>{{t('Vessel Type','نوع السفينة')}}</small><b>{{d.sections.identity.vesselType||'—'}}</b></div>
@@ -127,35 +139,148 @@ interface Dossier{
          <b>{{d.sections.aiAnalysis.status}}</b></div>
       </div>
       <div class="evidence">
-       <details open><summary>{{t('Inspection assignment and scope','التكليف ونطاق المعاينة')}}</summary>
-        <p>{{o.assignment.inspectorName}} · {{o.assignment.portName}}</p>
-        <pre>{{d.sections.assignments|json}}</pre></details>
-       <details open><summary>{{t('Why this vessel was selected','أسباب اختيار السفينة للمعاينة')}}
-        ({{d.sections.referrals.allSourceReasons.length}})</summary>
-        <pre>{{d.sections.referrals|json}}</pre></details>
-       <details><summary>{{t('Certificates and validity','الشهادات وصلاحيتها')}}
-        ({{d.sections.sourceEvidence.certificates.length}})</summary>
-        <pre>{{d.sections.sourceEvidence.certificates|json}}</pre></details>
-       <details><summary>{{t('Historical inspections','المعاينات السابقة')}}
-        ({{d.sections.sourceEvidence.inspectionHistory.length}})</summary>
-        <pre>{{d.sections.sourceEvidence.inspectionHistory|json}}</pre></details>
-       <details><summary>{{t('Open deficiencies / findings','الملاحظات السابقة المفتوحة')}}
-        ({{d.sections.sourceEvidence.openDeficiencies.length}})</summary>
-        <pre>{{d.sections.sourceEvidence.openDeficiencies|json}}</pre></details>
-       <details><summary>{{t('Document manifest & evidence','المستندات ومراجع الأدلة')}}
-        ({{d.sections.sourceEvidence.documents.length}})</summary>
-        <pre>{{d.sections.sourceEvidence|json}}</pre></details>
-       <details><summary>{{t('Saved vessel movement & tracking','حركة السفينة والتتبع')}}</summary>
-        <pre>{{d.sections.sourceEvidence.tracking|json}}</pre></details>
-       <details><summary>{{t('Main checklist and A04 suggested checks','القائمة الرئيسية ومقترحات A04')}}</summary>
-        <p>{{t('Published checklist snapshot','لقطة القائمة المنشورة')}}:
-          {{d.sections.inspectionChecklist.publishedTemplateSnapshotPresent?'✓':'—'}}</p>
-        <pre>{{d.sections.inspectionChecklist|json}}</pre>
-        <pre>{{d.sections.aiAnalysis.modelDraft|json}}</pre></details>
-       <details *ngIf="d.missingEvidence.length"><summary>
-        {{t('Missing / unverified source data','بيانات ناقصة أو غير موثقة')}}
-        ({{d.missingEvidence.length}})</summary>
-        <p>{{d.missingEvidence.join(' · ')}}</p></details>
+       <details open>
+        <summary>{{t('Inspection assignment and scope','التكليف ونطاق المعاينة')}}</summary>
+        <div class="record-grid">
+         <div class="record-field"><small>{{t('Inspector','المفتش')}}</small>
+          <strong>{{d.sections.assignments?.inspectorName||o.assignment.inspectorName}}</strong></div>
+         <div class="record-field"><small>{{t('Port','الميناء')}}</small>
+          <strong>{{d.sections.assignments?.portName||o.assignment.portName}}</strong></div>
+         <div class="record-field"><small>{{t('Scheduled visit','موعد الزيارة')}}</small>
+          <strong>{{d.sections.assignments?.startLocal||o.assignment.startLocal||o.assignment.startUtc}}</strong></div>
+         <div class="record-field"><small>{{t('End of visit','نهاية الزيارة')}}</small>
+          <strong>{{d.sections.assignments?.endLocal||'—'}}</strong></div>
+         <div class="record-field"><small>{{t('Work order','حالة أمر التكليف')}}</small>
+          <strong>{{statusLabel(o.status)}}</strong></div>
+         <div class="record-field"><small>{{t('Live ERP booking','حجز ERP فعلي')}}</small>
+          <strong>{{d.sections.assignments?.liveErpBookingConfirmed?
+            t('Confirmed by source','مؤكد من المصدر'):t('Not confirmed','غير مؤكد')}}</strong></div>
+        </div>
+       </details>
+       <details open>
+        <summary>{{t('Why this vessel was selected','أسباب اختيار السفينة للمعاينة')}}
+         ({{d.sections.referrals.allSourceReasons.length}})</summary>
+        <p class="empty" *ngIf="!d.sections.referrals.allSourceReasons.length">
+         {{t('No source referral reasons were included in this dossier.',
+          'لا توجد أسباب إحالة مسجلة في ملف المصادر هذا.')}}</p>
+        <article class="record-item" *ngFor="let item of d.sections.referrals.allSourceReasons">
+         <div class="record-row" *ngFor="let field of recordFields(item)">
+          <span>{{field.label}}</span><strong>{{field.value}}</strong></div>
+        </article>
+        <ng-container *ngIf="d.sections.referrals.objectives?.length">
+         <h4>{{t('Inspection objectives','أهداف المعاينة')}}</h4>
+         <article class="record-item" *ngFor="let item of d.sections.referrals.objectives">
+          <div class="record-row" *ngFor="let field of recordFields(item)">
+           <span>{{field.label}}</span><strong>{{field.value}}</strong></div>
+         </article>
+        </ng-container>
+       </details>
+       <details>
+        <summary>{{t('Certificates and validity','الشهادات وصلاحيتها')}}
+         ({{d.sections.sourceEvidence.certificates.length}})</summary>
+        <p class="empty" *ngIf="!d.sections.sourceEvidence.certificates.length">
+         {{t('No certificates are available in the saved source bundle.',
+          'لا توجد شهادات متاحة ضمن حزمة المصادر المحفوظة.')}}</p>
+        <article class="record-item" *ngFor="let item of d.sections.sourceEvidence.certificates">
+         <div class="record-row" *ngFor="let field of recordFields(item)">
+          <span>{{field.label}}</span><strong>{{field.value}}</strong></div>
+        </article>
+       </details>
+       <details>
+        <summary>{{t('Historical inspections','المعاينات السابقة')}}
+         ({{d.sections.sourceEvidence.inspectionHistory.length}})</summary>
+        <p class="empty" *ngIf="!d.sections.sourceEvidence.inspectionHistory.length">
+         {{t('No inspection history was supplied in this source bundle.',
+          'لم يُقدّم سجل معاينات سابقة في حزمة المصادر هذه.')}}</p>
+        <article class="record-item" *ngFor="let item of d.sections.sourceEvidence.inspectionHistory">
+         <div class="record-row" *ngFor="let field of recordFields(item)">
+          <span>{{field.label}}</span><strong>{{field.value}}</strong></div>
+        </article>
+       </details>
+       <details>
+        <summary>{{t('Open deficiencies / findings','الملاحظات السابقة المفتوحة')}}
+         ({{d.sections.sourceEvidence.openDeficiencies.length}})</summary>
+        <p class="empty" *ngIf="!d.sections.sourceEvidence.openDeficiencies.length">
+         {{t('No open findings were supplied in this source bundle.',
+          'لم تُقدّم ملاحظات مفتوحة في حزمة المصادر هذه.')}}</p>
+        <article class="record-item" *ngFor="let item of d.sections.sourceEvidence.openDeficiencies">
+         <div class="record-row" *ngFor="let field of recordFields(item)">
+          <span>{{field.label}}</span><strong>{{field.value}}</strong></div>
+        </article>
+       </details>
+       <details>
+        <summary>{{t('Documents and evidence references','المستندات ومراجع الأدلة')}}
+         ({{d.sections.sourceEvidence.documents.length}})</summary>
+        <p class="empty" *ngIf="!d.sections.sourceEvidence.documents.length">
+         {{t('No human-reviewed external documents are currently linked.',
+          'لا توجد مستندات خارجية تمت مراجعتها بشريًا ومرتبطة حاليًا.')}}</p>
+        <article class="record-item" *ngFor="let item of d.sections.sourceEvidence.documents">
+         <div class="record-row" *ngFor="let field of recordFields(item)">
+          <span>{{field.label}}</span><strong>{{field.value}}</strong></div>
+        </article>
+        <h4>{{t('Evidence references','مراجع الأدلة')}}</h4>
+        <p class="empty" *ngIf="!d.sections.sourceEvidence.evidenceManifestRefs.length">
+         {{t('No evidence references available.','لا تتوفر مراجع أدلة.')}}</p>
+        <div class="evidence-tags">
+         <span *ngFor="let ref of d.sections.sourceEvidence.evidenceManifestRefs">{{ref}}</span>
+        </div>
+        <p class="source-note">{{d.sections.sourceEvidence.externalDocumentsVerified?
+         t('External document verification recorded','تم توثيق مراجعة المستندات الخارجية'):
+         t('External document authenticity not verified','لم يتم توثيق صحة المستندات الخارجية')}}</p>
+       </details>
+       <details>
+        <summary>{{t('Saved vessel movement & tracking','حركة السفينة والتتبع')}}</summary>
+        <div class="record-item" *ngIf="d.sections.sourceEvidence.tracking;else noTracking">
+         <div class="record-row" *ngFor="let field of recordFields(d.sections.sourceEvidence.tracking)">
+          <span>{{field.label}}</span><strong>{{field.value}}</strong></div>
+        </div>
+        <ng-template #noTracking><p class="empty">
+         {{t('No verified movement or tracking record is available in this dossier.',
+          'لا يوجد سجل حركة أو تتبع موثق متاح في هذا الملف.')}}</p></ng-template>
+       </details>
+       <details>
+        <summary>{{t('Mandatory checklist and optional A04','القائمة الإلزامية وA04 الاختياري')}}</summary>
+        <div class="record-grid">
+         <div class="record-field"><small>{{t('Published checklist snapshot','لقطة القائمة المنشورة')}}</small>
+          <strong>{{d.sections.inspectionChecklist.publishedTemplateSnapshotPresent?
+           t('Available','متاحة'):t('Not prepared','لم تُجهّز')}}</strong></div>
+         <div class="record-field"><small>{{t('Checklist status','حالة القائمة')}}</small>
+          <strong>{{d.sections.inspectionChecklist.checklistStatus||'—'}}</strong></div>
+         <div class="record-field"><small>{{t('A04 analysis','تحليل A04')}}</small>
+          <strong>{{d.sections.aiAnalysis.status}}</strong></div>
+        </div>
+        <p class="source-note">{{t('AI suggestions never replace mandatory inspection items or become findings without inspector verification.',
+         'مقترحات الذكاء الاصطناعي لا تستبدل البنود الإلزامية ولا تصبح ملاحظات مؤكدة دون تحقق المفتش.')}}</p>
+        <h4>{{t('Mandatory checklist references','مراجع القائمة الإلزامية')}}</h4>
+        <p class="empty" *ngIf="!d.sections.inspectionChecklist.mandatoryBaseItemIds.length">
+         {{t('Mandatory checklist will appear after preparation.',
+          'ستظهر القائمة الإلزامية بعد التجهيز.')}}</p>
+        <div class="evidence-tags">
+         <span *ngFor="let ref of d.sections.inspectionChecklist.mandatoryBaseItemIds">{{ref}}</span>
+        </div>
+        <ng-container *ngIf="d.sections.aiAnalysis.modelDraft as ai">
+         <h4>{{t('A04 suggested focus areas','مجالات التركيز المقترحة من A04')}}</h4>
+         <p class="empty" *ngIf="!ai.focusAreas.length">
+          {{t('No optional A04 focus areas.','لا توجد مجالات تركيز مقترحة.')}}</p>
+         <article class="record-item" *ngFor="let item of ai.focusAreas">
+          <div class="record-row" *ngFor="let field of recordFields(item)">
+           <span>{{field.label}}</span><strong>{{field.value}}</strong></div>
+         </article>
+         <h4>{{t('A04 recommended checklist additions — review status above',
+           'إضافات القائمة المقترحة من A04 — حالة المراجعة موضحة بالأعلى')}}</h4>
+         <p class="empty" *ngIf="!ai.suggestedAdditionalItems.length">
+          {{t('No optional checklist additions.','لا توجد إضافات مقترحة.')}}</p>
+         <article class="record-item" *ngFor="let item of ai.suggestedAdditionalItems">
+          <div class="record-row" *ngFor="let field of recordFields(item)">
+           <span>{{field.label}}</span><strong>{{field.value}}</strong></div>
+         </article>
+        </ng-container>
+       </details>
+       <details *ngIf="d.missingEvidence.length">
+        <summary>{{t('Missing / unverified source data','بيانات ناقصة أو غير موثقة')}}
+         ({{d.missingEvidence.length}})</summary>
+        <p class="source-note" *ngFor="let gap of d.missingEvidence">{{missingEvidenceLabel(gap)}}</p>
+       </details>
       </div>
      </ng-container>
     </ng-container>
@@ -177,7 +302,7 @@ interface Dossier{
  button,.buttons a,.header-actions a{border:1px solid #bddadd;background:#eaf7f7;color:#096c75;
   border-radius:8px;padding:10px 12px;text-decoration:none;cursor:pointer;font-weight:700;font-size:12px}
  button:disabled{opacity:.5;cursor:not-allowed}.buttons button{background:#077e76;color:#fff}
- .overview{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:15px}
+ .overview{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin-bottom:15px}
  .overview div{padding:14px;background:#fff;border:1px solid #d8e8ed;border-radius:12px}
  .overview small,.overview strong{display:block}.overview small{color:#8197a3;font-size:11px}
  .overview strong{font-size:27px;color:#116575;margin-top:7px}
@@ -185,6 +310,9 @@ interface Dossier{
   font-size:12px;color:#17685f}.poc code{font-size:11px}
  .danger{background:#ffeded;color:#a03939;border-color:#e9b7b7}.good{background:#eaf9f0;color:#226e4c}
  .warning{background:#fff7e9;color:#805b26;border-color:#ead6ac}
+ .process-guide{margin:12px 0;padding:12px 15px;border-radius:10px;
+  background:#ecf7f7;border:1px solid #c7e4e3;font-size:12px;color:#1b5b63}
+ .process-guide strong{display:block;font-size:12px}.process-guide p{margin:6px 0 0;line-height:1.6}
  .workspace{display:grid;grid-template-columns:370px minmax(0,1fr);align-items:start;gap:17px}
  .assignments,.dossier{background:#fff;border:1px solid #d8e8ed;border-radius:14px;padding:16px}
  .assignments h2{font-size:17px;margin:2px 0 14px}
@@ -205,13 +333,30 @@ interface Dossier{
  details{border:1px solid #dae8ed;border-radius:10px;margin:9px 0;padding:11px 14px}
  summary{font-size:12px;font-weight:800;color:#216b79;cursor:pointer}
  details p{font-size:12px;color:#6b8392}
- pre{white-space:pre-wrap;overflow:auto;max-height:280px;overflow-wrap:anywhere;
-  background:#f6fafb;padding:10px;font-size:11px;color:#526a77;border-radius:7px}
+ .record-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:10px}
+ .record-field{padding:11px 12px;border-radius:8px;background:#f4f9fa;min-width:0}
+ .record-field small,.record-field strong{display:block;overflow-wrap:anywhere}
+ .record-field small{font-size:11px;color:#6c8998;margin-bottom:6px}
+ .record-field strong{font-size:12px;color:#255a6a}
+ .record-item{background:#f7fbfc;border:1px solid #e2edf0;border-radius:9px;
+  padding:10px 13px;margin:8px 0}
+ .record-row{display:grid;grid-template-columns:minmax(110px,170px) minmax(0,1fr);
+  align-items:start;gap:12px;padding:6px 0;border-bottom:1px solid #e9eff2}
+ .record-row:last-child{border-bottom:none}
+ .record-row span{font-size:11px;color:#708999}
+ .record-row strong{font-size:12px;overflow-wrap:anywhere;font-weight:600;color:#245668}
+ .evidence h4{font-size:12px;color:#286b75;margin:16px 0 8px}
+ .evidence-tags{display:flex;gap:7px;flex-wrap:wrap;margin:8px 0 12px}
+ .evidence-tags span{font-size:11px;overflow-wrap:anywhere;padding:5px 8px;
+  border-radius:7px;border:1px solid #c9e2e7;background:#edf7f9;color:#246977}
+ .source-note{font-size:11px;line-height:1.7;overflow-wrap:anywhere;color:#637f8c}
+ @media(max-width:600px){.record-grid{grid-template-columns:1fr}
+  .record-row{grid-template-columns:1fr;gap:2px}}
  .empty{font-size:12px;color:#637f8c;line-height:1.8}
  .placeholder{text-align:center;margin:75px auto;color:#7291a0;max-width:400px}
  .placeholder span{font-size:45px}.placeholder h2{font-size:19px;color:#28536a}
  .placeholder p{font-size:12px;line-height:1.8}
- @media(max-width:1180px){.workspace{grid-template-columns:300px 1fr}.dossier-grid{grid-template-columns:repeat(2,1fr)}}
+ @media(max-width:1180px){.workspace{grid-template-columns:300px 1fr}.dossier-grid{grid-template-columns:repeat(2,1fr)}.overview{grid-template-columns:repeat(3,minmax(0,1fr))}}
  @media(max-width:980px){.main{margin:0;padding:13px}.workspace{grid-template-columns:1fr}
   .overview{grid-template-columns:repeat(2,1fr)}.hero{flex-wrap:wrap}}
  `]
@@ -222,11 +367,79 @@ export class SiMyWorkOrdersComponent implements OnInit{
  loading=false;busy=false;loadingDossier=false;error='';message='';
  private readonly api='/api/si/v1/maritime-scheduling/';
  private cache:Record<string,Dossier>={};
+ private dossierRequestId=0;
  constructor(private readonly http:HttpClient,private readonly router:Router,
   public readonly lang:LanguageService){}
  t(en:string,ar:string):string{return this.lang.pick(en,ar);}
  ngOnInit():void{this.load();}
  statusCount(s:string):number{return this.orders.filter(x=>x.status===s).length;}
+
+ recordFields(record:unknown):Array<{label:string;value:string}>{
+  if(record===null||record===undefined)return [];
+  if(Array.isArray(record))return record.map((v,i)=>({
+   label:this.t('Item '+(i+1),'بند '+(i+1)),value:this.readable(v)}));
+  if(typeof record!=='object')return [{
+   label:this.t('Value','القيمة'),value:this.readable(record)}];
+  return Object.entries(record as Record<string,unknown>)
+   .filter(([,value])=>value!==null&&value!==undefined)
+   .map(([key,value])=>({label:this.fieldLabel(key),value:this.readable(value)}));
+ }
+ private fieldLabel(key:string):string{
+  const labels:Record<string,[string,string]>={
+   sourceType:['Source','المصدر'],sourceReference:['Source reference','مرجع المصدر'],
+   inspectionRegime:['Inspection type','نوع المعاينة'],
+   narrative:['Inspection reason','سبب المعاينة'],
+   evidenceIds:['Evidence IDs','معرفات الأدلة'],
+   sourceApproval:['Source approval','اعتماد المصدر'],
+   eventKey:['Source event key','معرف حدث المصدر'],
+   documentType:['Document type','نوع المستند'],reviewStatus:['Review status','حالة المراجعة'],
+   startLocal:['Start (UAE)','البداية (الإمارات)'],
+   endLocal:['End (UAE)','النهاية (الإمارات)'],
+   status:['Status','الحالة'],description:['Description','الوصف'],
+   id:['Record ID','معرف السجل'],imo:['IMO','رقم IMO'],
+   departureAt:['Departure','المغادرة'],arrivalAt:['Arrival','الوصول']
+  };
+  const known=labels[key];if(known)return this.t(known[0],known[1]);
+  return key.replace(/([a-z])([A-Z])/g,'$1 $2').replaceAll('_',' ')
+   .replace(/\b[a-z]/g,x=>x.toUpperCase());
+ }
+ private readable(value:unknown,depth=0):string{
+  if(value===null||value===undefined||value==='')return '—';
+  if(typeof value==='boolean')return value?this.t('Yes','نعم'):this.t('No','لا');
+  if(typeof value==='string'||typeof value==='number')return String(value);
+  if(depth>3)return this.t('Nested source detail','بيانات مصدر متداخلة');
+  if(Array.isArray(value))return value.length?
+   value.map(item=>this.readable(item,depth+1)).join(' · '):'—';
+  if(typeof value==='object'){
+   const fields=Object.entries(value as Record<string,unknown>)
+    .filter(([,v])=>v!==null&&v!==undefined);
+   return fields.length?fields.map(([k,v])=>
+    this.fieldLabel(k)+': '+this.readable(v,depth+1)).join(' · '):'—';
+  }
+  return '—';
+ }
+ missingEvidenceLabel(code:string):string{
+  const descriptions:Record<string,[string,string]>={
+   INSPECTION_CASE_NOT_ACTIVATED:['Inspection case not prepared','لم يتم تجهيز حالة المعاينة'],
+   PREPARATION_AND_PINNED_CHECKLIST_NOT_CREATED:['Mandatory checklist not prepared','لم يتم تجهيز القائمة الإلزامية'],
+   A04_ADVISORY_NOT_YET_PREPARED:['Optional A04 analysis not requested','لم يُطلب تحليل A04 الاختياري'],
+   NO_CERTIFICATE_RECORDS_IN_SOURCE_BUNDLE:['No certificates in saved sources','لا توجد شهادات في المصادر المحفوظة'],
+   NO_HISTORICAL_INSPECTIONS_IN_SOURCE_BUNDLE:['No historical inspections in saved sources','لا توجد معاينات سابقة في المصادر'],
+   NO_HUMAN_REVIEWED_EXTERNAL_DOCUMENTS:['No externally reviewed documents','لا توجد مستندات تمت مراجعتها بشريًا'],
+   EXTERNAL_DOCUMENT_AUTHENTICITY_NOT_VERIFIED:['External documents not verified','لم يتم التحقق من صحة المستندات الخارجية'],
+   PUBLISHED_CHECKLIST_TEMPLATE_NOT_VERIFIED:['Published mandatory checklist not yet verified','لم يتم التحقق من القائمة الإلزامية المنشورة'],
+   A04_AI_NOT_GENERATED_OR_NOT_ALLOWED:['A04 not generated or unavailable','لم يتم إنشاء تحليل A04 أو أنه غير متاح'],
+   A04_AI_SUPERVISOR_REVIEW_PENDING:['A04 needs supervisor review','تحليل A04 يحتاج مراجعة المشرف'],
+   DOSSIER_SOURCE_SNAPSHOT_STALE:['Source dossier requires refresh','ملف المصادر يحتاج تحديثًا'],
+   CURRENT_SAVED_NMC_RISK_NOT_AVAILABLE:['Saved vessel risk unavailable','مخاطر السفينة المحفوظة غير متاحة']
+  };
+  const pair=descriptions[code];return pair?this.t(pair[0],pair[1]):
+   code.replaceAll('_',' ').toLowerCase();
+ }
+
+ get preparationCount():number{
+  return this.orders.filter(x=>['ISSUED','PREPARING','PREPARATION_NEEDS_REVIEW'].includes(x.status)).length;
+ }
  statusLabel(status:string):string{
   return ({ISSUED:this.t('Issued','صدر الأمر'),
    PREPARING:this.t('Preparing','جارٍ التجهيز'),
@@ -239,43 +452,54 @@ export class SiMyWorkOrdersComponent implements OnInit{
   return ['ISSUED','PREPARING','PREPARATION_NEEDS_REVIEW'].includes(o.status);
  }
  load():void{
+  if(this.loading)return;
   this.loading=true;this.error='';
+  const previousOrderId=this.selected?.orderId||null;
   this.http.get<{orders:AssignedOrder[];me:{session:string;inspectorPocId:string|null}}>(
     this.api+'my-work-orders').subscribe({
-   next:r=>{this.loading=false;this.orders=r.orders||[];this.me=r.me||null;
-    if(this.selected){
-     const next=this.orders.find(x=>x.orderId===this.selected?.orderId);
-     if(next)this.selected=next;else{this.selected=null;this.dossier=null;}
-    }},
+   next:r=>{
+    this.loading=false;this.orders=r.orders||[];this.me=r.me||null;
+    // Refresh also refreshes the selected dossier rather than continuing
+    // to display a cached pre-activation or pre-supervisor snapshot.
+    this.dossierRequestId++;this.cache={};this.dossier=null;
+    this.selected=null;this.loadingDossier=false;
+    const previous=previousOrderId?this.orders.find(x=>x.orderId===previousOrderId):null;
+    if(previous)this.select(previous);
+   },
    error:e=>{this.loading=false;this.error=e?.error?.error||'SI_ORDERS_UNAVAILABLE';}
   });
  }
  select(o:AssignedOrder):void{
   if(this.selected?.orderId===o.orderId&&(this.dossier||this.loadingDossier))return;
+  const requestId=++this.dossierRequestId;
   this.selected=o;this.error='';this.dossier=this.cache[o.orderId]||null;
-  if(this.dossier)return;
+  if(this.dossier){this.loadingDossier=false;return;}
   this.loadingDossier=true;
   this.http.get<Dossier>(this.api+'my-work-orders/'+o.orderId+'/dossier').subscribe({
-   next:d=>{this.cache[o.orderId]=d;
-    if(this.selected?.orderId===o.orderId)this.dossier=d;
-    this.loadingDossier=false;},
-   error:e=>{this.loadingDossier=false;
-    if(this.selected?.orderId===o.orderId)this.error=e?.error?.error||
-      'SI_DOSSIER_UNAVAILABLE';}
+   next:d=>{
+    this.cache[o.orderId]=d;
+    if(requestId!==this.dossierRequestId)return;
+    this.dossier=d;this.loadingDossier=false;
+   },
+   error:e=>{
+    if(requestId!==this.dossierRequestId)return;
+    this.loadingDossier=false;
+    this.error=e?.error?.error||'SI_DOSSIER_UNAVAILABLE';
+   }
   });
  }
  activate(o:AssignedOrder):void{
   if(this.busy||!this.canActivate(o)||!window.confirm(this.t(
-   'Activate your assigned order: create/link an official-free SI case, pin the mandatory checklist and request A04 analysis if the source has verified risk and evidence? Supervisor approval remains separate.',
-   'تفعيل أمر التكليف الخاص بك: إنشاء/ربط حالة معاينة POC وتجهيز القائمة الإلزامية وتشغيل A04 إن توفرت المخاطر والأدلة؟ يظل اعتماد النطاق من اختصاص المشرف.')))return;
+   'Prepare this assigned inspection: create/link its POC case and pin the mandatory published checklist? This action makes NO A04 AI call. Optional A04 can be requested later on the Preparation page with separate consent; supervisor scope approval remains required.',
+   'هل تريد تجهيز المعاينة المسندة إليك بإنشاء/ربط حالة POC وتثبيت القائمة الإلزامية المنشورة؟ لن يستدعي هذا الإجراء A04. يمكن طلب A04 لاحقًا من شاشة التجهيز بموافقة مستقلة، ويظل اعتماد النطاق من اختصاص المشرف.')))return;
   this.busy=true;this.error='';
   this.http.post<{order:AssignedOrder}>(
    this.api+'plans/'+o.planId+'/work-orders/'+o.orderId+'/activate',
-   {generateAi:true,confirmAiCost:true}
+   {generateAi:false,confirmAiCost:false}
   ).subscribe({
    next:r=>{this.busy=false;const updated=this.replaceOrder(r.order);
-    this.message=this.t('Dossier and mandatory checklist prepared. Supervisor must review A04 and approve scope before field start.',
-      'تم تجهيز الدوسيه والقائمة الإلزامية؛ يلزم مراجعة A04 واعتماد النطاق من المشرف قبل بدء التنفيذ.');
+    this.message=this.t('Inspection dossier and mandatory checklist prepared. A04 remains optional. Supervisor approval of the scope is required before field start.',
+      'تم تجهيز ملف المعاينة والقائمة الإلزامية، وA04 يظل اختياريًا. يلزم اعتماد نطاق المعاينة من المشرف قبل التنفيذ.');
     if(updated)this.loadDossierFresh(updated);},
    error:e=>{this.busy=false;this.error=e?.error?.error||'SI_ORDER_PREPARATION_FAILED';}
   });

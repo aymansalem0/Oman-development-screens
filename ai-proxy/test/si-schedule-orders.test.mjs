@@ -147,6 +147,38 @@ test('activate work order creates case, mandatory checklist, optional A04 draft 
   assert.equal((await x.orders.byPlan(x.p.id)).orders[0].status,'FIELD_STARTED');
  }finally{x.done();}
 });
+test('prepare checklist without requesting optional paid A04 from inspector work-order action',async()=>{
+ const x=workspace();try{
+  const approved=await x.approve(),orderId=approved.orders[0].id;
+  const prepared=await x.orders.activate({planId:x.p.id,orderId,
+   actor:'supervisor@moei',generateAi:false,confirmAiCost:false});
+  assert.equal(prepared.status,'READY_FOR_SCOPE_REVIEW');
+  assert.equal(prepared.aiStatus,'NOT_REQUESTED');
+  assert.equal(prepared.checklistStatus,'MANDATORY_PUBLISHED_TEMPLATE_SNAPSHOT');
+  assert.equal(x.calls.ai,0);
+  assert.equal(x.calls.caseCreates,1);
+  assert.equal(x.calls.checklistCreates,1);
+ }finally{x.done();}
+});
+test('retry of an interrupted A04 preparation does not call the paid provider twice',async()=>{
+ const x=workspace();try{
+  const approved=await x.approve(),orderId=approved.orders[0].id;
+  x.orders.preparation.generate=async()=>{
+   x.calls.ai++;
+   const e=new Error('simulated upstream failure');e.code='SI_A04_PROVIDER_UNAVAILABLE';
+   throw e;
+  };
+  const first=await x.orders.activate({planId:x.p.id,orderId,
+   actor:'supervisor@moei',generateAi:true,confirmAiCost:true});
+  assert.equal(first.aiStatus,'A04_FAILED_MANUAL_REVIEW_REQUIRED');
+  assert.equal(x.calls.ai,1);
+  const second=await x.orders.activate({planId:x.p.id,orderId,
+   actor:'supervisor@moei',generateAi:true,confirmAiCost:true});
+  assert.equal(second.aiStatus,'A04_PREVIOUS_REQUEST_RECONCILIATION_REQUIRED');
+  assert.equal(x.calls.ai,1,'an A04 source response requires reconciliation, not retry');
+  assert.equal(x.calls.caseCreates,1);
+ }finally{x.done();}
+});
 test('missing published mandatory checklist blocks activation safely without creating another case',async()=>{
  const x=workspace({mandatory:false});try{
   const schedule=await x.approve(),id=schedule.orders[0].id;

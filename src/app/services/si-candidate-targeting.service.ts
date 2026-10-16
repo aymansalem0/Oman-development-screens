@@ -223,7 +223,7 @@ export interface SiRollingPlan{
  revision:number;createdAt:string;createdBy:string;updatedAt:string;
  updatedBy:string;approvedAt:string|null;approvedBy:string|null;
  approvedBatchId:string|null;vesselCount:number;
- candidateCount?:number;deferredCount?:number;
+ candidateCount?:number;deferredCount?:number;capacityStatus?:string|null;
 }
 export interface SiC01DataReadiness{
  schemaVersion:'SI_C01_READINESS_V1';
@@ -329,7 +329,15 @@ export class SiCandidateTargetingService{
       included:number;externalCalls:0;inspectionCasesChanged:0}>(
       this.api+'/inspection-plans/'+encodeURIComponent(id)+'/selection-bulk',input);
   }
-  cancelRollingPlan(id:string,expectedRevision:number,reason:string):Observable<SiRollingPlan>{
+  restoreVerifiedCapacityDraft(id:string,expectedRevision:number,reason:string):
+   Observable<{status:string;planId:string;revision:number;selectedVessels:number;
+    requiresFreshCapacityReview:true;workOrdersIssued:0}>{
+  return this.http.post<{status:string;planId:string;revision:number;selectedVessels:number;
+   requiresFreshCapacityReview:true;workOrdersIssued:0}>(
+   this.api+'/inspection-plans/'+encodeURIComponent(id)+'/restore-verified',
+   {expectedRevision,reason,confirmRestore:true});
+ }
+ cancelRollingPlan(id:string,expectedRevision:number,reason:string):Observable<SiRollingPlan>{
     return this.http.post<SiRollingPlan>(this.api+'/inspection-plans/'+
       encodeURIComponent(id)+'/cancel',{expectedRevision,reason});
   }

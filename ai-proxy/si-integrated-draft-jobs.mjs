@@ -13,6 +13,8 @@ const hash=x=>createHash('sha256').update(JSON.stringify(x)).digest('hex');
 const cleanCode=x=>typeof x==='string'&&/^[A-Z][A-Z0-9_]{2,110}$/.test(x)?
  x:'SI_DRAFT_INTERNAL_PROCESSING_ERROR';
 const positiveInt=x=>Number.isInteger(x)&&x>0?x:null;
+// Only safe aggregate counts go to client diagnostics, never Airia response text.
+const providerRowCount=x=>Number.isInteger(x)&&x>=0&&x<=500?x:null;
 export class SiIntegratedDraftJobs{
  constructor({ttlMs=45*60*1000,maxJobs=60,clock=Date.now,logger=console}={}){
   this.ttlMs=ttlMs;this.maxJobs=maxJobs;this.clock=clock;this.logger=logger;
@@ -39,7 +41,9 @@ export class SiIntegratedDraftJobs{
      ...(job.failure.reasonCode?{reasonCode:job.failure.reasonCode}:{}),
      ...(job.failure.failureCounts?{failureCounts:job.failure.failureCounts}:{}),
      ...(job.failure.batchIndex?{batchIndex:job.failure.batchIndex}:{}),
-     ...(job.failure.batchCount?{batchCount:job.failure.batchCount}:{})}:{})};
+     ...(job.failure.batchCount?{batchCount:job.failure.batchCount}:{}),
+     ...(job.failure.expectedCount!==null?{expectedCount:job.failure.expectedCount}:{}),
+     ...(job.failure.returnedCount!==null?{returnedCount:job.failure.returnedCount}:{})}:{})};
  }
  start({actor,metadata,sourceHash,expectedBatches,
    totalWorkflows=0,totalVessels=0,execute}){
@@ -99,7 +103,9 @@ export class SiIntegratedDraftJobs{
     job.failure={error:code,reasonCode:cleanCode(e?.diagnosticCode),
      failureCounts:counts&&Object.keys(counts).length?counts:null,
      batchIndex:positiveInt(e?.batchIndex),
-     batchCount:positiveInt(e?.batchCount)};
+     batchCount:positiveInt(e?.batchCount),
+     expectedCount:providerRowCount(e?.expectedCount),
+     returnedCount:providerRowCount(e?.returnedCount)};
     if(job.failure.reasonCode==='SI_DRAFT_INTERNAL_PROCESSING_ERROR')
      job.failure.reasonCode=null;
     job.status='FAILED';job.phase='FAILED_NO_DRAFT_SAVED';

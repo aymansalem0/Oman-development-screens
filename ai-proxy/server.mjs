@@ -1271,7 +1271,7 @@ const server = createServer(async (req, res) => {
           identity?.email||identity?.username||'ADMIN',
           {candidates:source.candidates,sourceHash:source.snapshotHash}));
       }
-      const rollingPath=/^\/api\/si\/v1\/inspection-plans\/([a-f0-9-]{36})(?:\/(cancel|selection|selection-bulk))?$/.exec(path);
+      const rollingPath=/^\/api\/si\/v1\/inspection-plans\/([a-f0-9-]{36})(?:\/(cancel|selection|selection-bulk|restore-verified))?$/.exec(path);
       if(rollingPath){
         if(req.method==='GET'&&!rollingPath[2]){
           dashboards.assertRole(req,'EDITOR');
@@ -1294,6 +1294,26 @@ const server = createServer(async (req, res) => {
             ...input,planId:rollingPath[1],
             actor:identity?.email||identity?.username||'ADMIN'
           }));
+        }
+        if(req.method==='POST'&&rollingPath[2]==='restore-verified'){
+          dashboards.assertRole(req,'PUBLISHER');
+          const body=await requestJson(req,4096);
+          if(body.confirmRestore!==true)
+            return respond(res,422,{error:'SI_DRAFT_RESTORE_CONFIRMATION_REQUIRED'});
+          const identity=moeiAuth.require(req,{mutate:true});
+          const actor=identity.email||identity.username;
+          if(!actor)return respond(res,403,{error:'SI_INTEGRATED_OPERATOR_REQUIRED'});
+          // Only the *same current source snapshot* may resurrect an audited
+          // previously verified Draft. Future approval still rechecks ERP.
+          const source=await siCandidateAgent.source();
+          const restored=await siRollingPlans.restoreVerifiedCapacityDraft(
+            rollingPath[1],body.expectedRevision,actor,body.reason,
+            source.snapshotHash);
+          return respond(res,200,{
+            status:'VERIFIED_DRAFT_SELECTION_RESTORED_NOT_APPROVED',
+            planId:restored.id,revision:restored.revision,
+            selectedVessels:restored.capacityDraft.selectedImos.length,
+            requiresFreshCapacityReview:true,workOrdersIssued:0});
         }
         if(req.method==='POST'&&rollingPath[2]==='cancel'){
           dashboards.assertRole(req,'PUBLISHER');
