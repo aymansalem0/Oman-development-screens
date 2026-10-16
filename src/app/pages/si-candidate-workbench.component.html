@@ -464,7 +464,7 @@
       <div class="si-compact-credentials">
         <span class="si-admin-user">✓ Admin · {{copy('Authenticated session','جلسة موحدة')}}</span>
         <button type="button" *ngIf="canEditDraftSelection" class="primary" (click)="generateInspectionPlan()"
-                [disabled]="planBusy||loading||!plan||!activePlanEditable"
+                [disabled]="planBusy||loading||!plan||!canEditDraftSelection"
                 [attr.aria-busy]="planAiPhase!=='idle'">
           <span *ngIf="planAiPhase!=='idle'" class="si-analysis-spinner" aria-hidden="true"></span>
           {{planAiPhase==='analyzing'?copy('AI analysing priority…','AI يحلل الأولويات…'):
@@ -756,7 +756,7 @@
                       {{copy('Not Applicable','غير منطبق')}}</button>
                   </div>
                   <button type="button"
-                    *ngIf="plan?.agentRunId&&planRow(v)?.editable&&planRow(v)?.planSelected"
+                    *ngIf="canEditDraftSelection&&plan?.agentRunId&&planRow(v)?.editable&&planRow(v)?.planSelected"
                     (click)="openPlanEdit(v,true,true)"
                     [disabled]="planBusy">{{copy('Change Rank via C01','تغيير الأولوية عبر C01')}}</button>
                   <small *ngIf="!planRow(v)?.editable">
