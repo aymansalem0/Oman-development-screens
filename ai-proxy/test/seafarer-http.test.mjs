@@ -400,3 +400,88 @@ test('admin settings and public evidence contract enforce role, source checks, C
  assert.equal(workspace.state.readinessSettings.version,2);
  assert.equal(workspace.state.profiles.find(p=>p.id==='SF-002').documents.length,1);
 });
+
+
+test("READY scenario POST provisions isolated first-issue/renewal applicants and enters guarded DRAFT without bypass",async t=>{
+  const {request,workspace}=await fixture(t);
+  const originalProfiles=JSON.stringify(workspace.state.profiles);
+  const listing=await request("/demo-scenarios");
+  assert.equal(listing.status,200);
+  assert.deepEqual(listing.data.scenarios.filter(x=>x.readiness.status==="READY")
+   .map(x=>x.id).sort(),["CADET_READY","RENEWAL_READY"]);
+
+  const selfDenied=await request("/demo-scenarios/ready-journey",{
+   as:"self",method:"POST",body:{scenarioId:"CADET_READY"}
+  });
+  assert.equal(selfDenied.status,403);
+  const blocked=await request("/demo-scenarios/ready-journey",{
+   method:"POST",body:{scenarioId:"RENEWAL_COMPANY_HOLD"}
+  });
+  assert.equal(blocked.status,422);
+
+  const ids=[];
+  for(const scenarioId of ["CADET_READY","RENEWAL_READY"]){
+   const started=await request("/demo-scenarios/ready-journey",{
+    method:"POST",body:{scenarioId}
+   });
+   assert.equal(started.status,201);
+   assert.equal(started.data.mode,"ISOLATED_POC_DEMO");
+   assert.equal(started.data.readiness.status,"READY");
+   const profileId=started.data.profileId;
+   assert.ok(profileId.startsWith("SF-POC-"));
+   ids.push(profileId);
+   const unbound=await request("/profiles/"+profileId+"/applications",{
+    method:"POST",body:{}
+   });
+   assert.equal(unbound.status,403);
+   const preview=encodeURIComponent(profileId);
+   const customer=await request("/dashboard?preview="+preview);
+   assert.equal(customer.status,200);
+   assert.deepEqual(customer.data.profiles.map(p=>p.id),[profileId]);
+   assert.equal(customer.data.profiles[0].readiness.status,"READY");
+   const draft=await request("/profiles/"+profileId+"/applications?preview="+preview,{
+    method:"POST",body:{}
+   });
+   assert.equal(draft.status,200);
+   assert.equal(draft.data.status,"DRAFT");
+   assert.equal(draft.data.service,
+    scenarioId==="CADET_READY"?"FIRST_ISSUE":"RENEWAL");
+   const again=await request("/profiles/"+profileId+"/applications?preview="+preview,{
+    method:"POST",body:{}
+   });
+   assert.equal(again.data.id,draft.data.id);
+   const reused=await request("/demo-scenarios/ready-journey",{
+    method:"POST",body:{scenarioId}
+   });
+   assert.equal(reused.data.profileId,profileId);
+   assert.equal(reused.data.alreadyProvisioned,true);
+   assert.equal(workspace.state.applications.filter(a=>a.profileId===profileId).length,1);
+   assert.equal(workspace.state.applications.find(a=>a.profileId===profileId).payment,null);
+  }
+  assert.equal(new Set(ids).size,2);
+  assert.equal(workspace.state.profiles.length,9);
+  assert.equal(JSON.stringify(workspace.state.profiles.slice(0,7)),originalProfiles);
+  const outsider={operations:true,key:"unrelated-admin@example.test"};
+  assert.throws(()=>workspace.get(outsider,ids[0]),
+    e=>e.code==="SDB_DEMO_JOURNEY_NOT_OWNED");
+  assert.throws(()=>workspace.previewActor(outsider,ids[0]),
+    e=>e.code==="SDB_DEMO_JOURNEY_NOT_OWNED");
+});
+
+test("READY demo honours newly configured required attachment and does not provision when blocked",async t=>{
+ const {request,workspace}=await fixture(t);
+ const version=workspace.state.readinessSettings.version;
+ workspace.saveRequirement({operations:true,key:"admin@example.test"},{
+  id:"EXTRA_DOCUMENT_READY_TEST",title:"Additional approved documentation",
+  titleAr:"مستند إضافي معتمد",source:"ACADEMY",inputMode:"ATTACHMENT",
+  scope:"BOTH",core:false,active:true,mandatory:true,
+  reviewUncertain:true,order:40
+ });
+ assert.equal(workspace.state.readinessSettings.version,version+1);
+ const result=await request("/demo-scenarios/ready-journey",{
+  method:"POST",body:{scenarioId:"CADET_READY"}
+ });
+ assert.equal(result.status,409);
+ assert.equal(result.data.error,"SDB_READINESS_CHANGED");
+ assert.equal(workspace.state.profiles.some(p=>p.demoJourney),false);
+});

@@ -91,6 +91,8 @@ const fs = require("node:fs");
       // READY selection now auto-enters the guarded DRAFT stage once.
       // The backend, not the scenario card, validates eligibility.
       await page.locator('input[name="format"]').first().waitFor();
+      assert.ok(page.url().includes('/#/moei/seafarers/sdb/SF-POC-'),
+        'READY scenario must use its isolated POC applicant, not the source fixture');
     }
     if (profile === "SF-004") {
       await page.locator(".service-card .primary").waitFor();
