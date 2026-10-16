@@ -445,6 +445,9 @@ const siScheduleOrders=new SiScheduleOrders({
    if(user?.inspectorId)return user.inspectorId===assignment?.inspectorId?
      {id:user.inspectorId,name:assignment.inspectorName||user.inspectorId,
       serverProvisioned:true,erpSource:'APPROVED_EXISTING_INSPECTOR'}:null;
+   // An unmapped Google login has no assigned field work orders. Legacy
+   // synthetic IDs remain available only to explicitly enabled local POC mode.
+   if(moeiAuthMode==='google'||user)return null;
    return matchesAssignedInspector(actor,assignment,mode);
  }
 });
