@@ -264,15 +264,13 @@ export class SiRollingPlanStore{
    if(!allowed(p))fail('SI_ROLLING_APPROVED_PLAN_IMMUTABLE',409);
    if(p.revision!==expectedRevision)fail('SI_ROLLING_VERSION_CONFLICT',409);
    const next=operation(clone(p));
-   // Changes to a draft's selected vessels/C01 ranking invalidate its saved
-   // inspector capacity proposal. The former proposal remains in version
-   // history for audit but is NOT advertised as currently feasible.
-   if(p.capacityDraft){
-    next.capacityDraft={...p.capacityDraft,
-     status:'STALE_AFTER_DRAFT_EDIT_RECALCULATE_CAPACITY',
-     proposedAssignments:[],selectedOptionId:null,
-     proposalHash:null,updatedBy:actor,staleAt:now()};
-   }
+   // The integrated C01 + inspector-capacity roster is fixed at save.
+   // Older selection endpoints must fail closed, including under the Oracle
+   // FOR UPDATE lock. Cancellation is the only permitted generic mutation.
+   // Previously invalidated drafts can be explicitly restored from version
+   // history; approval still requires a fresh source/ERP capacity check.
+   if(p.capacityDraft&&event!=='CANCELLED')
+    fail('SI_INTEGRATED_DRAFT_SELECTION_LOCKED_START_NEW_PLAN',409);
    next.revision=p.revision+1;next.updatedAt=now();next.updatedBy=actor;
    // Keep the one audited officer disposition breakdown that the trusted
    // bulk mutation added. Prior event history cannot be rewritten by it.
