@@ -7,7 +7,7 @@
  * transactional store + object storage + AV/DLP for uploaded evidence.
  */
 import {randomUUID,createHash} from 'node:crypto';
-import {readFileSync,writeFileSync,existsSync,mkdirSync,renameSync} from 'node:fs';
+import {readFileSync,writeFileSync,existsSync,mkdirSync,renameSync,unlinkSync} from 'node:fs';
 import {dirname,join} from 'node:path';
 import {SiChecklistError} from './si-checklist-library.mjs';
 
@@ -20,6 +20,43 @@ const caseId=v=>typeof v==='string'&&/^[a-f0-9-]{36}$/i.test(v);
 const sha=v=>createHash('sha256').update(v).digest('hex');
 const MAX_IMAGE=2*1024*1024;
 const IMAGE_TYPES={'image/jpeg':'.jpg','image/png':'.png','image/webp':'.webp'};
+const EVIDENCE_TYPES={...IMAGE_TYPES,'application/pdf':'.pdf'};
+const VALID_UUID=/^[a-f0-9-]{36}$/i;
+function evidenceLocation(root,caseKey,reference){
+ if(!VALID_UUID.test(caseKey)||!VALID_UUID.test(reference.id)||
+   !Object.hasOwn(EVIDENCE_TYPES,reference.mimeType))
+  failure('SI_CHECKLIST_EVIDENCE_REFERENCE_INVALID',422);
+ return join(root,caseKey,reference.id+EVIDENCE_TYPES[reference.mimeType]);
+}
+export function parseQuestionAttachment(upload){
+ if(!upload||typeof upload!=='object'||Array.isArray(upload)||
+   !Object.hasOwn(EVIDENCE_TYPES,upload.mimeType))
+  failure('SI_CHECKLIST_EVIDENCE_FORMAT_INVALID');
+ const filename=String(upload.filename||'').trim();
+ if(!filename||filename.length>135||
+   filename.includes('/')||filename.includes('\\')||
+   [...filename].some(ch=>ch.charCodeAt(0)<32))
+  failure('SI_CHECKLIST_EVIDENCE_FILENAME_INVALID');
+ if(upload.mimeType!=='application/pdf'){
+  const parsed=parseImage(upload);
+  return {...parsed,filename};
+ }
+ if(typeof upload.base64!=='string'||
+   upload.base64.length>Math.ceil(MAX_IMAGE*4/3)+8||
+   !/^[A-Za-z0-9+/]+={0,2}$/.test(upload.base64))
+  failure('SI_CHECKLIST_EVIDENCE_FORMAT_INVALID');
+ const bytes=Buffer.from(upload.base64,'base64');
+ if(!bytes.length||bytes.length>MAX_IMAGE)
+  failure('SI_CHECKLIST_EVIDENCE_TOO_LARGE',413);
+ if(bytes.subarray(0,5).toString('utf8')!=='%PDF-')
+  failure('SI_CHECKLIST_EVIDENCE_FORMAT_INVALID');
+ return {bytes,type:'application/pdf',extension:'.pdf',
+  hash:sha(bytes),filename};
+}
+function findAdvisoryQuestion(entry,itemId){
+ return (entry.aiSuggestedQuestions||[]).find(q=>q.id===itemId)||null;
+}
+
 const VALID_LEVELS=['TEMPLATE','GROUP','ITEM'];
 const answerKeys=['BOOLEAN','NOTE','EXPIRY_DATE','DATE','NUMBER','TEXT'];
 const stamp=(file,data)=>{
@@ -92,8 +129,13 @@ export function validateAIResult(raw,entry,scope){
      r.rationale.length>1800||!Number.isFinite(r.confidence)||
      r.confidence<0||r.confidence>1)
    failure('SI_CHECKLIST_AI_REASON_INVALID',502);
-  return {itemId:r.itemId,proposedAnswers:validateAnswers(found.item,r.answers||{}),
+  const instruction=(typeof r.suggestedInstruction==='string'?r.suggestedInstruction:
+    typeof r.inspectionInstruction==='string'?r.inspectionInstruction:'').trim();
+  return {itemId:r.itemId,proposedAnswers:validateAnswers(found.item,
+   r.answers||r.proposedAnswers||{}),
    rationale:r.rationale.trim(),confidence:r.confidence,
+   suggestedInstruction:instruction.length>=8&&instruction.length<=1600?
+    instruction:null,
    dataGaps:Array.isArray(r.dataGaps)?r.dataGaps.filter(x=>typeof x==='string')
     .slice(0,12).map(x=>x.slice(0,170)):[]};
  });
@@ -119,10 +161,13 @@ export class SiChecklistField{
  constructor({library,targeting,
    file=process.env.SI_CHECKLIST_CASES_PATH||'/data/si-checklist-case-answers.json',
    imageDirectory=process.env.SI_CHECKLIST_EVIDENCE_PATH||'/data/si-checklist-evidence',
-   airiaSuggest=null,getSetting=()=>10}={}){
+   airiaSuggest=null,airiaQuestionSuggest=null,getA04Suggestions=null,
+   getSetting=()=>10}={}){
   if(!library||!targeting)throw Error('SI_CHECKLIST_FIELD_CONFIGURATION_INVALID');
   this.library=library;this.targeting=targeting;this.file=file;
   this.imageDirectory=imageDirectory;this.airiaSuggest=airiaSuggest;
+  this.airiaQuestionSuggest=airiaQuestionSuggest;
+  this.getA04Suggestions=getA04Suggestions;
   this.getSetting=getSetting;
   this.active=new Set();
  }
@@ -176,7 +221,8 @@ export class SiChecklistField{
    updatedAt:now(),updatedBy:actor,
    vessel:ctx.resolved.vessel,inspectionReasons:ctx.inspectionCase.inspectionReasons||[],
    applicabilityWarnings:ctx.resolved.warnings,
-   templates,proposals:[],audit:[{at:now(),action:'INITIALIZED',actor,
+   templates,proposals:[],evidenceFiles:[],aiSuggestedQuestions:[],
+   aiQuestionRuns:0,audit:[{at:now(),action:'INITIALIZED',actor,
     templateRevisions:templates.map(t=>[t.templateId,t.revision])}]};
   state.cases[idValue]=entry;await this.save(state);return copy(entry);
  }
@@ -205,10 +251,11 @@ export class SiChecklistField{
   await this.save(state);return copy(entry);
  }
  async suggest(idValue,{level='ITEM',templateId,groupId,itemId,
-   text,image,actor,confirmCost}={}){
+   text,image,evidenceId,actor,confirmCost}={}){
   if(!safe(actor,120)||confirmCost!==true||
-   !VALID_LEVELS.includes(level)||!safe(text||'',2500)&&!image)
+   !VALID_LEVELS.includes(level)||(!safe(text||'',2500)&&!image&&!evidenceId))
    failure('SI_CHECKLIST_AI_CONFIRMATION_REQUIRED');
+  if(image&&evidenceId)failure('SI_CHECKLIST_AI_MULTIPLE_IMAGES_NOT_ALLOWED',422);
   if(!this.airiaSuggest)failure('SI_CHECKLIST_AIRIA_NOT_CONFIGURED',503);
   await this.context(idValue);
   if(this.active.has(idValue))failure('SI_CHECKLIST_AI_BUSY',409);
@@ -240,7 +287,20 @@ export class SiChecklistField{
     failure('SI_CHECKLIST_TEMPLATE_AI_NOT_ENABLED',409);
    scope={level,templateId,instructions:[template.ai.instructions].filter(Boolean)};
   }
-  const parsed=parseImage(image);
+  let attached=null;
+  if(scope.level==='ITEM'&&typeof evidenceId==='string'){
+    attached=(entry.evidenceFiles||[]).find(file=>
+      file.id===evidenceId&&file.itemId===scope.itemId);
+    if(!attached||!Object.hasOwn(IMAGE_TYPES,attached.mimeType))
+      failure('SI_CHECKLIST_AI_IMAGE_NOT_LINKED_TO_QUESTION',409);
+  }
+  const attachedPath=attached?evidenceLocation(this.imageDirectory,idValue,attached):null;
+  const attachmentBytes=attached?readFileSync(attachedPath):null;
+  if(attached&&sha(attachmentBytes)!==attached.sha256)
+    failure('SI_CHECKLIST_EVIDENCE_INTEGRITY_FAILED',409);
+  const attachedImage=attached?{mimeType:attached.mimeType,
+    base64:attachmentBytes.toString('base64')}:null;
+  const parsed=parseImage(image||attachedImage);
   const selected=entry.templates.filter(t=>t.templateId===scope.templateId)
     .flatMap(t=>t.groups.filter(g=>!scope.groupId||g.instanceId===scope.groupId)
       .flatMap(g=>g.items.filter(item=>!scope.itemId||item.instanceId===scope.itemId)
@@ -256,8 +316,9 @@ export class SiChecklistField{
     inspectionReasons:entry.inspectionReasons,
     level,scope,items:selected,
     operatorInput:safe(text||'',2500)||'',
-    image:parsed?{mimeType:parsed.type,base64:image.base64,sha256:parsed.hash}:null,
-    instructions:'Analyze supplied information only. Propose typed values matching the provided fields. Do not invent vessel certificates, law, missing images, or regulatory compliance. Respond with JSON recommendations[] containing itemId, answers object, rationale, confidence 0..1, dataGaps[]. Inspector approval required.'
+    image:parsed?{mimeType:parsed.type,
+     base64:(image||attachedImage).base64,sha256:parsed.hash}:null,
+    instructions:'Analyze only supplied text/images for each requested item. Respond as a JSON object with recommendations[] including itemId, typed answers, rationale, confidence 0..1, suggestedInstruction (practical inspection steps and evidence checks for inspector), and dataGaps[]. If the image is unclear or cannot establish compliance, leave answers empty, state uncertainty and explain what to inspect next. Do not invent vessel facts, statutory requirements, defects or compliance. Never make regulatory decisions. Inspector acceptance/edit/rejection required.'
    });
    const validated=validateAIResult(raw,entry,scope);
    const state=await this.read(idValue),current=state.cases[idValue];
@@ -268,12 +329,17 @@ export class SiChecklistField{
     status:'PENDING_HUMAN_REVIEW',provider:'AIRIA',
     ...validated,reviews:[]};
    if(parsed){
-    const imageId=id(),dir=join(this.imageDirectory,idValue);
-    mkdirSync(dir,{recursive:true,mode:0o700});
-    const filepath=join(dir,imageId+parsed.extension);
-    writeFileSync(filepath,parsed.bytes,{mode:0o600,flag:'wx'});
-    proposal.imageEvidenceRef={id:imageId,mimeType:parsed.type,
-      sha256:parsed.hash,byteLength:parsed.bytes.length};
+    if(attached){
+      proposal.imageEvidenceRef={id:attached.id,mimeType:attached.mimeType,
+       sha256:attached.sha256,byteLength:attached.byteLength};
+    }else{
+      const imageId=id(),dir=join(this.imageDirectory,idValue);
+      mkdirSync(dir,{recursive:true,mode:0o700});
+      const filepath=join(dir,imageId+parsed.extension);
+      writeFileSync(filepath,parsed.bytes,{mode:0o600,flag:'wx'});
+      proposal.imageEvidenceRef={id:imageId,mimeType:parsed.type,
+       sha256:parsed.hash,byteLength:parsed.bytes.length};
+    }
    }
    current.proposals.push(proposal);
    current.version++;current.updatedAt=now();current.updatedBy=actor;
@@ -317,6 +383,309 @@ export class SiChecklistField{
   entry.audit.push({at:now(),actor,action:'AI_SUGGESTION_'+decision,
     proposalId,itemId,edited:decision==='EDIT'});
   await this.save(state);return copy(entry);
+ }
+
+ /**
+  * A single item/question may own multiple private image/PDF evidence files.
+  * This explicit upload NEVER calls AI or marks the case compliant.
+  */
+ async attachEvidence(idValue,{itemId,expectedVersion,file,actor}={}){
+  if(!safe(actor,120)||!safe(itemId,220)||!Number.isInteger(expectedVersion))
+   failure('SI_CHECKLIST_EVIDENCE_INPUT_INVALID');
+  await this.context(idValue);
+  if(this.active.has(idValue))failure('SI_CHECKLIST_AI_BUSY',409);
+  const state=await this.read(idValue),entry=state.cases[idValue];
+  if(!entry)failure('SI_CHECKLIST_NOT_INITIALIZED',409);
+  if(entry.status!=='IN_PROGRESS')failure('SI_CHECKLIST_ALREADY_SUBMITTED',409);
+  if(entry.version!==expectedVersion)failure('SI_CHECKLIST_VERSION_CONFLICT',409);
+  const real=resolveItem(entry,itemId)?.item;
+  const advisory=findAdvisoryQuestion(entry,itemId);
+  if(!real&&!advisory)failure('SI_CHECKLIST_ITEM_NOT_FOUND',404);
+  const uploads=(entry.evidenceFiles||[]).filter(e=>e.itemId===itemId);
+  if(uploads.length>=8)failure('SI_CHECKLIST_ITEM_EVIDENCE_LIMIT',409);
+  const parsed=parseQuestionAttachment(file);
+  const evidence={id:id(),itemId,mimeType:parsed.type,
+   sha256:parsed.hash,byteLength:parsed.bytes.length,
+   filename:parsed.filename,uploadedBy:actor,at:now(),
+   provenance:'INSPECTOR_UPLOADED_UNVERIFIED',
+   aiAnalyzed:false,scope:real?'PUBLISHED_ITEM':'AI_ADVISORY_ITEM'};
+  const filepath=evidenceLocation(this.imageDirectory,idValue,evidence);
+  mkdirSync(dirname(filepath),{recursive:true,mode:0o700});
+  writeFileSync(filepath,parsed.bytes,{mode:0o600,flag:'wx'});
+  try{
+   entry.evidenceFiles||=[];
+   entry.evidenceFiles.push(evidence);
+   const refs=real?real.evidenceRefs||(real.evidenceRefs=[]):
+    advisory.evidenceRefs||(advisory.evidenceRefs=[]);
+   refs.push('SI-EVIDENCE:'+evidence.id);
+   entry.version++;entry.updatedAt=now();entry.updatedBy=actor;
+   entry.audit.push({at:now(),actor,action:'INSPECTOR_ATTACHED_EVIDENCE',
+    itemId,evidenceId:evidence.id,hash:evidence.sha256,mimeType:evidence.mimeType,
+    noAiInvocation:true});
+   await this.save(state);
+  }catch(error){
+   try{unlinkSync(filepath);}catch{/* no loss of an existing file */}
+   throw error;
+  }
+  return {evidence:copy(evidence),version:entry.version,
+   explanation:'PRIVATE_QUESTION_EVIDENCE_NO_AI_CALL'};
+ }
+ /**
+  * A04 suggestions are imported only from a current, supervisor-approved
+  * dossier. Not billable; import never mutates pinned published checklists.
+  */
+ async importA04Questions(idValue,{actor,expectedVersion}={}){
+  if(!safe(actor,120)||!Number.isInteger(expectedVersion))
+   failure('SI_CHECKLIST_AI_IMPORT_INVALID');
+  if(!this.getA04Suggestions)
+   failure('SI_CHECKLIST_A04_ADAPTER_NOT_CONFIGURED',503);
+  await this.context(idValue);
+  if(this.active.has(idValue))failure('SI_CHECKLIST_AI_BUSY',409);
+  const state=await this.read(idValue),entry=state.cases[idValue];
+  if(!entry||entry.version!==expectedVersion)
+   failure('SI_CHECKLIST_VERSION_CONFLICT',409);
+  if(entry.status!=='IN_PROGRESS')
+   failure('SI_CHECKLIST_ALREADY_SUBMITTED',409);
+  const dossier=await this.getA04Suggestions(idValue);
+  if(!dossier?.approved||!Array.isArray(dossier.suggestions))
+   failure('SI_CHECKLIST_A04_SCOPE_NOT_APPROVED',409);
+  if(dossier.suggestions.length>30)
+   failure('SI_CHECKLIST_A04_QUESTIONS_INVALID',502);
+  const existing=new Set((entry.aiSuggestedQuestions||[])
+   .filter(q=>q.source==='AIRIA_A04').map(q=>q.sourceHash));
+  const imports=[];
+  for(const item of dossier.suggestions){
+   const title=typeof item?.title==='string'?item.title.trim():'';
+   const reason=typeof item?.reason==='string'?item.reason.trim():'';
+   if(title.length<5||title.length>220||reason.length>1000)
+    failure('SI_CHECKLIST_A04_QUESTIONS_INVALID',502);
+   const sourceHash=sha(JSON.stringify([title,reason,item.evidenceIds||[]]));
+   if(existing.has(sourceHash))continue;
+   existing.add(sourceHash);
+   imports.push({
+    id:id(),title,description:reason,rationale:reason,
+    suggestedInstruction:null,confidence:null,
+    fields:['BOOLEAN','NOTE'],requiredFields:[],
+    evidenceRefs:[],answerProposals:[],finalAdvisory:null,
+    mandatory:false,source:'AIRIA_A04',sourceHash,
+    status:'A04_SUPERVISOR_APPROVED_ADVISORY',
+    generatedAt:now(),generatedBy:actor,
+    officialChecklistItem:false,requiresScopeApproval:false,
+    sourceEvidenceIds:Array.isArray(item.evidenceIds)?
+      item.evidenceIds.slice(0,16):[]
+   });
+  }
+  if(!imports.length)return {questions:[],version:entry.version,
+   imported:0,approvedDossierOnly:true};
+  if((entry.aiSuggestedQuestions||[]).length+imports.length>50)
+   failure('SI_CHECKLIST_AI_QUESTION_LIMIT',409);
+  entry.aiSuggestedQuestions||=[];
+  entry.aiSuggestedQuestions.push(...imports);
+  entry.version++;entry.updatedAt=now();entry.updatedBy=actor;
+  entry.audit.push({at:now(),actor,
+   action:'A04_SUPERVISOR_APPROVED_QUESTION_OVERLAY_IMPORTED',
+   questionIds:imports.map(q=>q.id)});
+  await this.save(state);
+  return {questions:copy(imports),version:entry.version,
+   imported:imports.length,approvedDossierOnly:true};
+ }
+ /**
+  * Authenticated evidence download. Never exposes the private storage path.
+  * Hash is rechecked, even if the metadata exists in Oracle/JSON.
+  */
+ async downloadEvidence(idValue,evidenceId){
+  await this.context(idValue);
+  if(!VALID_UUID.test(evidenceId))
+   failure('SI_CHECKLIST_EVIDENCE_REFERENCE_INVALID',422);
+  const saved=(await this.read(idValue)).cases[idValue];
+  if(!saved)failure('SI_CHECKLIST_NOT_INITIALIZED',404);
+  const evidence=(saved.evidenceFiles||[]).find(x=>x.id===evidenceId);
+  if(!evidence)failure('SI_CHECKLIST_EVIDENCE_NOT_FOUND',404);
+  let bytes;
+  try{bytes=readFileSync(evidenceLocation(this.imageDirectory,idValue,evidence));}
+  catch{failure('SI_CHECKLIST_EVIDENCE_NOT_AVAILABLE',503);}
+  if(!bytes.length||bytes.length!==evidence.byteLength||
+     sha(bytes)!==evidence.sha256)
+   failure('SI_CHECKLIST_EVIDENCE_INTEGRITY_FAILED',409);
+  return {bytes,mimeType:evidence.mimeType,filename:evidence.filename,
+   sha256:evidence.sha256};
+ }
+ /**
+  * On-demand optional questions generated by the configured Airia BUILDER
+  * pipeline. They remain advisory even if an inspector reviews the answer.
+  */
+ async suggestQuestions(idValue,{actor,confirmCost,operatorPrompt=''}={}){
+  if(!safe(actor,120)||confirmCost!==true||!safe(operatorPrompt,1800))
+   failure('SI_CHECKLIST_AI_CONFIRMATION_REQUIRED');
+  if(!this.airiaQuestionSuggest)
+   failure('SI_CHECKLIST_AI_QUESTION_PIPELINE_NOT_CONFIGURED',503);
+  await this.context(idValue);
+  if(this.active.has(idValue))failure('SI_CHECKLIST_AI_BUSY',409);
+  const entry=(await this.read(idValue)).cases[idValue];
+  if(!entry)failure('SI_CHECKLIST_NOT_INITIALIZED',409);
+  if(entry.status!=='IN_PROGRESS')failure('SI_CHECKLIST_ALREADY_SUBMITTED',409);
+  if((entry.aiQuestionRuns||0)>=3)
+   failure('SI_CHECKLIST_AI_QUESTION_CALL_LIMIT',429);
+  const published=entry.templates.flatMap(t=>t.groups.flatMap(g=>g.items
+   .map(i=>({title:i.title,description:i.description,mandatory:i.mandatory}))));
+  this.active.add(idValue);
+  try{
+   const raw=await this.airiaQuestionSuggest({
+    schemaVersion:'SI-CHECKLIST-ADDITIONAL-QUESTIONS-v1',caseId:idValue,
+    imo:entry.imo,vessel:entry.vessel,
+    inspectionReasons:entry.inspectionReasons,
+    existingPublishedQuestions:published.slice(0,100),
+    operatorPrompt,
+    instructions:'Suggest up to 8 additional, vessel-specific inspection questions relevant to the supplied evidence, without duplicating published checklist questions. Respond with JSON suggestedItems[] each with title, description, rationale, suggestedInstruction (practical inspection method) and optional confidence 0..1. All suggestions must be optional, advisory, non-statutory and require inspector/supervisor approval; do not invent legal requirements or facts. Never alter approved mandatory checklists.',
+    constraints:{output:'JSON suggestedItems[]',mandatory:false,
+     humanReviewRequired:true,noRegulatoryConclusion:true}
+   });
+   const items=raw?.suggestedItems;
+   if(!Array.isArray(items)||items.length>8||JSON.stringify(items).length>18000)
+    failure('SI_CHECKLIST_AI_QUESTIONS_INVALID',502);
+   const seen=new Set();
+   const questions=items.map(x=>{
+    const title=typeof x?.title==='string'?x.title.trim():'';
+    const description=typeof x?.description==='string'?x.description.trim():'';
+    const rationale=typeof x?.rationale==='string'?x.rationale.trim():'';
+    const instruction=typeof x?.suggestedInstruction==='string'?
+      x.suggestedInstruction.trim():'';
+    const confidence=x?.confidence;
+    if(title.length<10||title.length>220||description.length>1000||
+       rationale.length>1200||instruction.length>1300||
+       seen.has(title.toLowerCase())||
+       (confidence!==undefined&&(!Number.isFinite(confidence)||
+        confidence<0||confidence>1)))
+     failure('SI_CHECKLIST_AI_QUESTION_FIELDS_INVALID',502);
+    seen.add(title.toLowerCase());
+    return {id:id(),title,description,rationale,
+     suggestedInstruction:instruction||null,
+     confidence:Number.isFinite(confidence)?confidence:null,
+     fields:['BOOLEAN','NOTE'],requiredFields:[],
+     evidenceRefs:[],answerProposals:[],finalAdvisory:null,
+     mandatory:false,source:'AIRIA_BUILDER',
+     status:'AI_SUGGESTED_PENDING_INSPECTOR_REVIEW',
+     generatedAt:now(),generatedBy:actor,
+     officialChecklistItem:false,requiresScopeApproval:true};
+   });
+   const state=await this.read(idValue),current=state.cases[idValue];
+   if(!current||current.version!==entry.version)
+    failure('SI_CHECKLIST_SOURCE_CHANGED_DURING_AI',409);
+   current.aiSuggestedQuestions||=[];
+   if(current.aiSuggestedQuestions.length+questions.length>24)
+    failure('SI_CHECKLIST_AI_QUESTION_LIMIT',409);
+   current.aiSuggestedQuestions.push(...questions);
+   current.aiQuestionRuns=(current.aiQuestionRuns||0)+1;
+   current.version++;current.updatedAt=now();current.updatedBy=actor;
+   current.audit.push({at:now(),actor,action:'AI_QUESTIONS_PROPOSED_NOT_APPROVED',
+    questionIds:questions.map(q=>q.id)});
+   await this.save(state);
+   return {questions:copy(questions),version:current.version,
+    requiresInspectorReview:true,notStatutory:true};
+  }finally{this.active.delete(idValue);}
+ }
+ async suggestAdvisoryAnswer(idValue,{questionId,evidenceId,
+  text='',confirmCost,actor}={}){
+  if(!safe(actor,120)||!safe(questionId,80)||confirmCost!==true||
+     (!safe(text,2500)&&!evidenceId))
+   failure('SI_CHECKLIST_AI_CONFIRMATION_REQUIRED');
+  if(!this.airiaSuggest)failure('SI_CHECKLIST_AIRIA_NOT_CONFIGURED',503);
+  await this.context(idValue);
+  if(this.active.has(idValue))failure('SI_CHECKLIST_AI_BUSY',409);
+  const entry=(await this.read(idValue)).cases[idValue];
+  if(!entry||entry.status!=='IN_PROGRESS')
+   failure('SI_CHECKLIST_NOT_INITIALIZED',409);
+  const question=findAdvisoryQuestion(entry,questionId);
+  if(!question)failure('SI_CHECKLIST_AI_QUESTION_NOT_FOUND',404);
+  const maxCalls=Number(this.getSetting('SI_CHECKLIST_AI_MAX_CALLS_PER_CASE'))||10;
+  const count=(entry.proposals||[]).length+
+    (entry.aiSuggestedQuestions||[]).reduce((n,q)=>n+(q.answerProposals||[]).length,0);
+  if(count>=maxCalls)failure('SI_CHECKLIST_AI_CASE_CALL_LIMIT_EXCEEDED',429);
+  const attached=(entry.evidenceFiles||[]).find(e=>
+   e.id===evidenceId&&e.itemId===questionId&&Object.hasOwn(IMAGE_TYPES,e.mimeType));
+  if(evidenceId&&!attached)
+   failure('SI_CHECKLIST_AI_IMAGE_NOT_LINKED_TO_QUESTION',409);
+  const bytes=attached?readFileSync(evidenceLocation(this.imageDirectory,idValue,attached)):null;
+  if(attached&&sha(bytes)!==attached.sha256)
+   failure('SI_CHECKLIST_EVIDENCE_INTEGRITY_FAILED',409);
+  const virtualEntry={templates:[{templateId:'AI-ADVISORY',groups:[{
+   instanceId:'AI-ADVISORY-GROUP',items:[{
+    instanceId:question.id,fields:question.fields
+   }]}]}]};
+  const scope={level:'ITEM',itemId:questionId};
+  this.active.add(idValue);
+  try{
+   const raw=await this.airiaSuggest({
+    schemaVersion:'SI-CHECKLIST-REVIEW-v1',caseId:idValue,
+    imo:entry.imo,vessel:entry.vessel,
+    inspectionReasons:entry.inspectionReasons,
+    level:'ITEM',scope,
+    items:[{itemId:question.id,title:question.title,
+     description:question.description,fields:question.fields,
+     mandatory:false,currentAnswers:{},sourceReferences:[]}],
+    operatorInput:safe(text,2500)||'Analyze the linked image cautiously',
+    image:attached?{mimeType:attached.mimeType,
+     sha256:attached.sha256,base64:bytes.toString('base64')}:null,
+    instructions:'This is an AI-suggested OPTIONAL question, not part of the official or approved mandatory checklist. Analyze only supplied evidence; return JSON recommendations[] with this itemId, answers with BOOLEAN YES/NO/NA and/or NOTE, rationale, confidence, suggestedInstruction (practical inspection procedure), dataGaps. If insufficient visual evidence, leave answers empty and state uncertainty. Human inspector must review. Never create a regulatory finding or mutate official checklist.'
+   });
+   const validated=validateAIResult(raw,virtualEntry,scope);
+   if(validated.recommendations.length!==1)
+    failure('SI_CHECKLIST_AI_ITEM_INVALID',502);
+   const state=await this.read(idValue),current=state.cases[idValue];
+   if(!current||current.version!==entry.version)
+    failure('SI_CHECKLIST_SOURCE_CHANGED_DURING_AI',409);
+   const q=findAdvisoryQuestion(current,questionId);
+   const proposal={id:id(),at:now(),actor,level:'AI_QUESTION',
+    scope:{itemId:questionId},status:'PENDING_HUMAN_REVIEW',
+    provider:'AIRIA',imageEvidenceRef:attached?{
+     id:attached.id,mimeType:attached.mimeType,
+     sha256:attached.sha256,byteLength:attached.byteLength}:null,
+    inputText:safe(text,2500)||'',
+    ...validated,reviews:[]};
+   q.answerProposals||=[];q.answerProposals.push(proposal);
+   current.version++;current.updatedAt=now();current.updatedBy=actor;
+   current.audit.push({at:now(),actor,action:'AI_ADVISORY_ANSWER_NOT_APPROVED',
+    questionId,proposalId:proposal.id,evidenceId:attached?.id||null});
+   await this.save(state);
+   return {proposal:copy(proposal),version:current.version,
+    message:'AI_OPTIONAL_QUESTION_INSPECTOR_REVIEW_REQUIRED'};
+  }finally{this.active.delete(idValue);}
+ }
+ async reviewAdvisoryAnswer(idValue,{expectedVersion,questionId,proposalId,
+   decision,editedAnswers,reviewNote,actor}={}){
+  if(!safe(actor,120)||!Number.isInteger(expectedVersion)||
+   !['ACCEPT','EDIT','REJECT'].includes(decision))
+   failure('SI_CHECKLIST_AI_REVIEW_INVALID');
+  await this.context(idValue);
+  const state=await this.read(idValue),entry=state.cases[idValue];
+  if(!entry||entry.version!==expectedVersion)
+   failure('SI_CHECKLIST_VERSION_CONFLICT',409);
+  if(entry.status!=='IN_PROGRESS')
+   failure('SI_CHECKLIST_ALREADY_SUBMITTED',409);
+  const question=findAdvisoryQuestion(entry,questionId);
+  const proposal=question?.answerProposals?.find(p=>p.id===proposalId);
+  if(!question||!proposal||proposal.reviews.length)
+   failure('SI_CHECKLIST_AI_PROPOSAL_NOT_REVIEWABLE',409);
+  let answers=null;
+  if(decision==='ACCEPT')
+   answers=copy(proposal.recommendations[0].proposedAnswers);
+  if(decision==='EDIT')
+   answers=validateAnswers(question,editedAnswers||{});
+  proposal.reviews.push({at:now(),actor,itemId:question.id,
+   decision,note:safe(reviewNote||'',700)||'',answers});
+  proposal.status='REVIEW_COMPLETED';
+  if(decision!=='REJECT')question.finalAdvisory={
+   answers:copy(answers),reviewedBy:actor,reviewedAt:now(),
+   proposalId:proposal.id,inspectionInstruction:
+    proposal.recommendations[0].suggestedInstruction||null,
+   officialComplianceDecision:false
+  };
+  entry.version++;entry.updatedAt=now();entry.updatedBy=actor;
+  entry.audit.push({at:now(),actor,
+   action:'AI_OPTIONAL_QUESTION_'+decision+'_ADVISORY_ONLY',
+   questionId,proposalId});
+  await this.save(state);
+  return copy(entry);
  }
  async ensureSubmitted(idValue){
   // After case start, its pinned revision is authoritative. A later

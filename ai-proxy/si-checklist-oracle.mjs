@@ -364,6 +364,24 @@ export class OracleSiChecklistField extends SiChecklistField{
     }
    }
   }
+  // Independently uploaded question evidence is Oracle-linked as well as
+  // persisted in the pinned case snapshot; raw private files remain on /data.
+  const oldEvidenceIds=new Set((prev?.evidenceFiles||[]).map(e=>e.id));
+  for(const evidence of entry.evidenceFiles||[]){
+   if(oldEvidenceIds.has(evidence.id))continue;
+   const ext={'image/png':'.png','image/jpeg':'.jpg','image/webp':'.webp',
+     'application/pdf':'.pdf'}[evidence.mimeType];
+   if(!ext||!/^[a-f0-9-]{36}$/i.test(evidence.id))
+    throw error('SI_CHECKLIST_EVIDENCE_TYPE_INVALID',422);
+   await executeFieldWrite(con,`INSERT INTO SI_CHK_EVIDENCE
+     (EVIDENCE_ID,RUN_ID,STORAGE_REFERENCE,CONTENT_SHA256,
+      MIME_TYPE,BYTE_LENGTH,UPLOADED_BY)
+     VALUES(:id,:run,:path,:hash,:mime,:size,:actor)`,{
+    id:evidence.id,run:entry.caseId,
+    path:'SI_CHECKLIST_EVIDENCE_PATH/'+entry.caseId+'/'+evidence.id+ext,
+    hash:evidence.sha256,mime:evidence.mimeType,size:evidence.byteLength,
+    actor:evidence.uploadedBy});
+  }
   const oldProps=new Map((prev?.proposals||[]).map(p=>[p.id,p]));
   for(const proposal of entry.proposals||[]){
    const before=oldProps.get(proposal.id);
@@ -371,7 +389,9 @@ export class OracleSiChecklistField extends SiChecklistField{
    if(proposal.imageEvidenceRef){
     const e=proposal.imageEvidenceRef;
     evidenceId=e.id;
-    if(!before?.imageEvidenceRef){
+    // A previously attached per-question photo is already in SI_CHK_EVIDENCE.
+    if(!before?.imageEvidenceRef &&
+       !(entry.evidenceFiles||[]).some(file=>file.id===e.id)){
      const ext={'image/png':'.png','image/jpeg':'.jpg','image/webp':'.webp'}[e.mimeType];
      if(!ext)throw error('SI_CHECKLIST_IMAGE_TYPE_INVALID');
      await executeFieldWrite(con,`INSERT INTO SI_CHK_EVIDENCE

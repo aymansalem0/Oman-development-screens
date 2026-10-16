@@ -419,6 +419,12 @@ const siChecklistField=new (checklistStorage==='oracle'?
   ...(checklistStorage==='oracle'?{oracle:repository}:{}) ,
   library:siChecklistLibrary,targeting:siTargeting,
   airiaSuggest:input=>siChecklistAiria.call('vision',input),
+  airiaQuestionSuggest:input=>siChecklistAiria.call('builder',input),
+  getA04Suggestions:async id=>{
+    const view=await siPreparation.get(id);
+    return {approved:!view.stale&&view.saved?.status==='APPROVED',
+      suggestions:view.saved?.dossier?.suggestedAdditionalItems||[]};
+  },
   getSetting:key=>runtime.get(key)
 });
 const siLifecycle=new SiInspectionLifecycle({mode:dbMode,oracleRepository:repository,
@@ -1092,7 +1098,24 @@ const server = createServer(async (req, res) => {
             payload.expectedUpdatedAt));
         }
       }
-      const single=/^\/cases\/([a-f0-9-]{36})(?:\/(start|answers|ai\/suggest|ai\/review|submit))?$/.exec(rest);
+      const attachmentDownload=/^\/cases\/([a-f0-9-]{36})\/evidence\/([a-f0-9-]{36})$/.exec(rest);
+      if(attachmentDownload){
+        if(actor.role!=='ADMIN')
+          throw new SiChecklistError('SI_CHECKLIST_INSPECTOR_REQUIRED',403);
+        if(req.method!=='GET')return respond(res,405,{error:'METHOD_NOT_ALLOWED'});
+        const artifact=await siChecklistField.downloadEvidence(
+          attachmentDownload[1],attachmentDownload[2]);
+        res.writeHead(200,{
+          'Content-Type':artifact.mimeType,
+          'Content-Length':artifact.bytes.length,
+          'Content-Disposition':'attachment; filename="inspection-evidence"; filename*=UTF-8\'\''+
+            encodeURIComponent(artifact.filename),
+          'Cache-Control':'no-store','X-Content-Type-Options':'nosniff',
+          'Content-Security-Policy':'sandbox'
+        });
+        return res.end(artifact.bytes);
+      }
+      const single=/^\/cases\/([a-f0-9-]{36})(?:\/(start|answers|evidence|ai\/suggest|ai\/review|ai\/questions|ai\/import-a04|ai\/question-answer|ai\/question-review|submit))?$/.exec(rest);
       if(single){
         const id=single[1],operation=single[2];
         if(req.method==='GET'&&!operation)
@@ -1103,6 +1126,16 @@ const server = createServer(async (req, res) => {
         const payload=await requestJson(req,3300000);
         if(operation==='answers'&&req.method==='POST')
           return respond(res,200,await siChecklistField.saveAnswers(id,{...payload,actor:user}));
+        if(operation==='evidence'&&req.method==='POST')
+          return respond(res,201,await siChecklistField.attachEvidence(id,{...payload,actor:user}));
+        if(operation==='ai/questions'&&req.method==='POST')
+          return respond(res,200,await siChecklistField.suggestQuestions(id,{...payload,actor:user}));
+        if(operation==='ai/import-a04'&&req.method==='POST')
+          return respond(res,200,await siChecklistField.importA04Questions(id,{...payload,actor:user}));
+        if(operation==='ai/question-answer'&&req.method==='POST')
+          return respond(res,200,await siChecklistField.suggestAdvisoryAnswer(id,{...payload,actor:user}));
+        if(operation==='ai/question-review'&&req.method==='POST')
+          return respond(res,200,await siChecklistField.reviewAdvisoryAnswer(id,{...payload,actor:user}));
         if(operation==='ai/suggest'&&req.method==='POST')
           return respond(res,200,await siChecklistField.suggest(id,{...payload,actor:user}));
         if(operation==='ai/review'&&req.method==='POST')
