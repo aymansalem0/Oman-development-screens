@@ -161,7 +161,7 @@ test('Oracle dossier preparation insert and audit never use keyword bind identif
    assert.ok(names.length);
    assert.ok(names.every(x=>/^b_[a-z][a-z0-9_]*$/.test(x)));
    assert.deepEqual([...new Set(names)].sort(),Object.keys(binds).sort());
-   calls.push(sql.trim().replace(/\\s+/g,' '));
+   calls.push(sql.trim().replace(/\s+/g,' '));
    return {rowsAffected:1};
   },
   async commit(){commits++;},
