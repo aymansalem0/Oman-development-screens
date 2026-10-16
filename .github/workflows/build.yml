@@ -94,6 +94,8 @@ jobs:
         run: node --test ai-proxy/test/moei-poc-auth.test.mjs
       - name: Google SSO allowlist, PKCE and verified-token security tests
         run: node --test ai-proxy/test/moei-google-sso.test.mjs
+      - name: Google-to-ERP inspector identities, no cross-vessel access
+        run: node --test ai-proxy/test/moei-inspector-account-mapping.test.mjs
 
       - name: Oracle 018 adapter migration readiness, audit and lifecycle
         run: node --test ai-proxy/test/si-rolling-oracle.test.mjs
