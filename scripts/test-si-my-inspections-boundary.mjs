@@ -139,3 +139,35 @@ test('mandatory preparation never waits for AI hypotheses or accepts unreviewed 
  assert.ok(workspace.includes('ai.predictedDeficiencies'));
  assert.ok(workspace.includes('AI hypothesis only'));
 });
+
+test('approved A04 dossier updates Step 3 from saved authoritative vessel read model',()=>{
+ const dossier=src('ai-proxy/si-vessel-dossier.mjs');
+ assert.ok(workspace.includes('dossier?.readiness?.preparationSaved'));
+ assert.ok(workspace.includes('dossier?.readiness?.aiReviewed'));
+ assert.ok(workspace.includes('data-testid="si-step3-a04-approved"'));
+ assert.ok(workspace.includes('data-testid="si-step3-a04-summary"'));
+ assert.ok(workspace.includes('data-testid="si-refresh-journey-status"'));
+ assert.ok(workspace.includes('ai.focusAreas.length'));
+ assert.ok(workspace.includes('ai.suggestedAdditionalItems.length'));
+ assert.ok(dossier.includes("aiReviewed:record?.status==='APPROVED'"));
+ assert.ok(workspace.includes("this.api+'my-work-orders/'+o.orderId+'/dossier'"),
+  'no extra paid AI invocation to render A04 status');
+});
+
+test('Dynamic Checklist distinguishes 4 approved focus areas from zero extra questions',()=>{
+ const ui=src('src/app/pages/si-checklist-execution.component.ts');
+ assert.ok(ui.includes('data-testid="si-a04-approved-focus-overlay"'));
+ assert.ok(ui.includes('data-testid="si-a04-zero-extras"'));
+ assert.ok(ui.includes('a04FocusAreas.length'));
+ assert.ok(ui.includes('a04ChecklistFocus.length'));
+ assert.ok(ui.includes('a04AdditionalItems.length'));
+ assert.ok(ui.includes("this.a04?.saved?.status==='APPROVED'"));
+ assert.ok(ui.includes('this.a04?.stale!==true'));
+ assert.ok(ui.includes('focus.existingItemId'));
+ assert.ok(ui.includes('focus.reasonEvidenceIds'));
+ assert.ok(ui.includes('data-testid="si-field-not-started"'));
+ assert.ok(ui.includes('preview?.fieldAccess?.inspectionStatus'));
+ assert.ok(ui.includes('data-testid="si-checklist-continue-in-stepper"'));
+ assert.ok(!ui.includes('predictedDeficiencies.map(x=>x.mandatory'),
+  'AI hypothesis must not become a mandatory question');
+});
