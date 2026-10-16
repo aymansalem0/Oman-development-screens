@@ -76,10 +76,18 @@ export function validateA04(raw,{checkIds,evidenceIds}){
     return {category:clean(f.category,90),priority,reason:clean(f.reason,1400),
       evidenceIds:refs(f.evidenceIds,true)};
   });
-  const checklistFocus=data.checklistFocus.map(f=>{
-    if(!f||!allowedChecks.has(f.existingItemId)||
-      !focusTypes.includes(f.focus))throw new SiPreparationError('SI_A04_CHECKLIST_REF_INVALID',502);
-    return {existingItemId:f.existingItemId,focus:f.focus,
+  const checklistFocus=data.checklistFocus.map((f,index)=>{
+    const prefix='checklistFocus['+index+'].';
+    if(!f||typeof f!=='object'||Array.isArray(f))
+      throw new SiPreparationError('SI_A04_CHECKLIST_REF_INVALID',502,prefix.slice(0,-1));
+    if(!allowedChecks.has(f.existingItemId))
+      throw new SiPreparationError('SI_A04_CHECKLIST_REF_INVALID',502,prefix+'existingItemId');
+    // 'focus' is a controlled checklist overlay enum, NOT a free-text
+    // inspection instruction or a severity assigned by the AI model.
+    const focus=typeof f.focus==='string'?f.focus.trim().toUpperCase():'';
+    if(!focusTypes.includes(focus))
+      throw new SiPreparationError('SI_A04_CHECKLIST_REF_INVALID',502,prefix+'focus');
+    return {existingItemId:f.existingItemId,focus,
       reason:clean(f.reason,900),
       reasonEvidenceIds:refs(f.reasonEvidenceIds||[])};
   });
@@ -395,12 +403,13 @@ export class SiInspectionPreparation{
         if(current?.version===generating.version&&current?.correlationId===correlationId){
           const failure=e instanceof SiPreparationError?e.code:'SI_A04_PROVIDER_UNAVAILABLE';
           const field=e instanceof SiPreparationError?e.field:null;
-          if(failure==='SI_A04_FOCUS_INVALID'){
+          if(failure==='SI_A04_FOCUS_INVALID'||
+             failure==='SI_A04_CHECKLIST_REF_INVALID'){
             // Do not print Airia output, personal data, source evidence,
             // prompt bodies or API credentials to logs.
-            console.error('[si-a04] FOCUS_VALIDATION_FAILED '+JSON.stringify({
-              correlationId,caseId:id,field:field||'unknown',
-              provider:this.provider
+            console.error('[si-a04] RESPONSE_SCHEMA_VALIDATION_FAILED '+JSON.stringify({
+              correlationId,caseId:id,code:failure,
+              field:field||'unknown',provider:this.provider
             }));
           }
           await this.persist(id,current,{...current,version:current.version+1,
