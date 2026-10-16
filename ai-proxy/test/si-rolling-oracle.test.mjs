@@ -138,7 +138,7 @@ test('Oracle approved-plan link to newly created case uses qualified binds only'
    assert.ok(names.length,'all case-link writes must use binds');
    assert.ok(names.every(name=>/^b_[a-z][a-z0-9_]*$/.test(name)));
    assert.deepEqual([...new Set(names)].sort(),Object.keys(binds).sort());
-   writes.push(sql.replace(/\\s+/g,' ').trim());
+   writes.push(sql.replace(/\s+/g,' ').trim());
    return {rowsAffected:1};
   },
   async commit(){commits++;},
