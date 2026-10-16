@@ -66,6 +66,13 @@
     </section>
 
     <ng-container *ngIf="caseId">
+      <div *ngIf="workOrderManaged" class="limitations" data-testid="si-workorder-managed-case">
+        <strong>{{copy('Work Order is the single operational source','أمر التكليف هو مصدر الحركة الوحيد')}}</strong>
+        <p>{{copy('Prepare, approve scope and start field execution from My Inspection Journey. Use this advanced case record for audit, reports, corrections and follow-up.',
+         'يتم التحضير واعتماد النطاق وبدء المعاينة من رحلة المعاينة الموحدة. هذه الشاشة للسجل والتقارير والإجراءات التصحيحية والمتابعة.')}}</p>
+        <a routerLink="/moei/smart-inspection/my-work-orders">
+         {{copy('Open My Inspection Journey','فتح رحلة المعاينة الموحدة')}}</a>
+      </div>
       <div class="case-banner card">
         <div><small>{{copy('INSPECTION CASE ID','معرف حالة المعاينة')}}</small>
           <strong class="mono">{{caseId}}</strong>
@@ -173,7 +180,7 @@
         </div></div>
         <div class="chips"><span class="chip mandatory" *ngFor="let c of r.checks">
           {{c.id}} · {{c.mandatory?copy('Mandatory','إلزامي'):copy('Reviewed additional','إضافة معتمدة')}}</span></div>
-        <div *ngIf="stage==='PREPARATION_READY'">
+        <div *ngIf="stage==='PREPARATION_READY'&&!workOrderManaged">
           <div class="suggestions" *ngIf="view?.preparation?.dossier?.suggestedAdditionalItems?.length && canSelectScope">
             <h3>{{copy('Optional A04 suggestions','اقتراحات A04 الاختيارية')}}</h3>
             <label *ngFor="let suggestion of view?.preparation?.dossier?.suggestedAdditionalItems">
@@ -207,7 +214,7 @@
         </div>
         <a routerLink="/moei/smart-inspection/scheduling" class="action-link">
           {{copy('Open Existing ERP Scheduling →','فتح نظام الجدولة الحالي ←')}}</a>
-        <div *ngIf="stage==='SCOPE_APPROVED'" class="form-grid">
+        <div *ngIf="stage==='SCOPE_APPROVED'&&!workOrderManaged" class="form-grid">
           <label>{{copy('Inspector Name','اسم المفتش')}}<input [(ngModel)]="inspector" /></label>
           <label>{{copy('Port / Location','الميناء / الموقع')}}<input [(ngModel)]="port" /></label>
           <label>{{copy('Visit Date & Time · UAE Local','تاريخ ووقت الزيارة بتوقيت الإمارات')}}
@@ -244,7 +251,7 @@
           <p>{{copy('This legacy baseline records field checks and evidence reference IDs. Use the linked Dynamic Checklist workspace for JPG/PNG/WebP uploads and opt-in Airia suggestions; video, offline sync, voice and legally confirmed CV remain future work.',
             'تسجل القائمة الأساسية البنود ومراجع الأدلة. استخدم رابط القوائم الديناميكية لرفع صور JPG/PNG/WebP وطلب اقتراحات Airia عند تفعيله؛ الفيديو والعمل دون اتصال والصوت والتحليل المعتمد قانونيًا ليست مفعلة بعد.')}}</p>
         </div></div>
-        <button class="primary" type="button" *ngIf="stage==='ASSIGNED'"
+        <button class="primary" type="button" *ngIf="stage==='ASSIGNED'&&!workOrderManaged"
           (click)="run('START_FIELD')" [disabled]="busy">
           {{copy('Inspector · Start Field Inspection','المفتش · بدء المعاينة الميدانية')}}</button>
         <div class="table-wrap" *ngIf="stage==='IN_FIELD'||stage==='REPORT_RETURNED'">
