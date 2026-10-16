@@ -266,7 +266,8 @@ interface Dossier{
           <div class="record-row" *ngFor="let field of recordFields(item)">
            <span>{{field.label}}</span><strong>{{field.value}}</strong></div>
          </article>
-         <h4>{{t('Proposed checklist additions (not approved)','إضافات قائمة مقترحة (غير معتمدة)')}}</h4>
+         <h4>{{t('A04 recommended checklist additions — review status above',
+           'إضافات القائمة المقترحة من A04 — حالة المراجعة موضحة بالأعلى')}}</h4>
          <p class="empty" *ngIf="!ai.suggestedAdditionalItems.length">
           {{t('No optional checklist additions.','لا توجد إضافات مقترحة.')}}</p>
          <article class="record-item" *ngFor="let item of ai.suggestedAdditionalItems">
