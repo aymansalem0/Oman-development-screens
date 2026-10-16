@@ -42,15 +42,8 @@ const DEFINITIONS=Object.freeze([
   situationAr:'تم التعرف على سجل البحار القائم واستيفاء متطلبات التجديد.'}
 ]);
 
-/**
- * Read-only synthetic candidates; preparing fixtures never writes application
- * records, changes companies/academies or bypasses verified applicant binding.
- */
-export function sdbServiceScenarios(now=Date.now(),policy=SDB_POLICY,
- settings=initialSdbSettings(policy)){
- const baseline=demoState(now).profiles;
- return DEFINITIONS.map(def=>{
-  const p=structuredClone(baseline[def.base]);
+function sdbDemoProfileFromDefinition(def,baseline,now){
+ const p=structuredClone(baseline[def.base]);
   if(def.id==='CADET_MISSING_MEDICAL')p.medical=null;
   if(def.id==='CADET_ACADEMY_HOLD')p.clearances.ACADEMY={
    status:'HOLD',reason:'Academy clearance withheld pending training close-out.',
@@ -63,6 +56,26 @@ export function sdbServiceScenarios(now=Date.now(),policy=SDB_POLICY,
     reference:'DEMO-AC-RENEW-01',updatedAt:new Date(now).toISOString()
    };
   }
+  return p;
+}
+/**
+ * Internal-only POC fixture for an OPERATOR-OWNED ISOLATED journey.
+ * Caller MUST enforce operations authorization and recheck configured readiness.
+ */
+export function sdbDemoProfile(scenarioId,now=Date.now()){
+ const def=DEFINITIONS.find(x=>x.id===scenarioId);
+ if(!def)return null;
+ return sdbDemoProfileFromDefinition(def,demoState(now).profiles,now);
+}
+/**
+ * Read-only synthetic candidates; preparing fixtures never writes application
+ * records, changes companies/academies or bypasses verified applicant binding.
+ */
+export function sdbServiceScenarios(now=Date.now(),policy=SDB_POLICY,
+ settings=initialSdbSettings(policy)){
+ const baseline=demoState(now).profiles;
+ return DEFINITIONS.map(def=>{
+  const p=sdbDemoProfileFromDefinition(def,baseline,now);
   const readiness=computedSdbReadiness(p,now,policy,settings);
   const expected=def.kind==='RENEWAL'?'RENEWAL':'FIRST_ISSUE';
   if(readiness.service!==expected)
