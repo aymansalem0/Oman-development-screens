@@ -766,7 +766,7 @@ const server = createServer(async (req, res) => {
       // employee's work order below. A VIEWER may prepare/start *only* an
       // assigned order, not modify scheduling or supervisor approvals.
       const inspectorAction=req.method==='POST'&&
-        /^\/api\/si\/v1\/maritime-scheduling\/my-work-orders\/[a-f0-9-]{36}\/(activate|start)$/.test(path);
+        /^\/api\/si\/v1\/maritime-scheduling\/my-work-orders\/[a-f0-9-]{36}\/(?:activate|start|guide\/answers)$/.test(path);
       try{
         moeiAuth.require(req,{mutate:
           !inspectorAction&&!['GET','HEAD','OPTIONS'].includes(req.method)});
