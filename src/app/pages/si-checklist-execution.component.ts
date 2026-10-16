@@ -47,7 +47,7 @@ interface A04Dossier{saved?:{status:string;dossier?:{
     <div><span>{{t('Gross Tonnage (GT)','الحمولة الإجمالية GT')}}</span><strong>{{p.vessel.grossTonnage??'UNKNOWN'}}</strong></div>
     <div><span>{{t('Matched Published Templates','القوائم المنشورة المطابقة')}}</span><strong>{{p.selectedTemplates.length}}</strong></div>
    </div>
-   <section class="template ai-a04" *ngIf="a04AdditionalItems.length">
+   <section class="template ai-a04" *ngIf="preview" data-testid="si-a04-ai-questions">
     <header class="template-title">
      <div><h2>✦ {{t('SI-A04 Suggested Additional Inspection Checklist',
        'قائمة البنود الإضافية المقترحة بواسطة SI-A04')}}</h2>
@@ -58,7 +58,13 @@ interface A04Dossier{saved?:{status:string;dossier?:{
     </header>
     <p>{{t('These AI-proposed optional questions are not statutory mandatory checks. They are separate from the frozen published checklist and require supervisor dossier review and scope approval before official inclusion.',
      'هذه البنود الاختيارية مقترحات AI وليست بنودًا إلزامية تنظيمية. تبقى مستقلة عن القائمة المنشورة وتحتاج اعتماد الدوسيه ونطاق المعاينة قبل إدراجها رسميًا.')}}</p>
+    <div class="suggested-empty" *ngIf="!a04AdditionalItems.length">
+     <b>{{t('No A04-generated questions available yet.','لا توجد أسئلة مقترحة من A04 بعد.')}}</b>
+     <p>{{t('Generate an A04 dossier explicitly, then review the advisory results; AI questions are never silently invented.',
+      'يمكن إنشاء ملف A04 بشكل صريح ثم مراجعة مقترحاته؛ لا ينشئ النظام أسئلة وهمية تلقائيًا.')}}</p>
+    </div>
     <div *ngFor="let item of a04AdditionalItems" class="ai-a04-item">
+      <span class="ai-source-pill">✦ {{t('AI-SUGGESTED QUESTION · A04','سؤال مقترح بواسطة AI · A04')}}</span>
       <strong>{{item.title}}</strong><p>{{item.reason}}</p>
       <small>{{t('Evidence references','مراجع الأدلة')}}:
         {{(item.evidenceIds||[]).join(' · ')||'—'}}</small>
@@ -91,6 +97,85 @@ interface A04Dossier{saved?:{status:string;dossier?:{
        {{t('Save Answers','حفظ الإجابات')}}</button>
      </div>
     </section>
+
+    <section class="template generated-questions" data-testid="si-ai-suggested-questions">
+      <div class="template-title">
+       <div><p class="eyebrow">✦ AIRIA · OPTIONAL AI-SUGGESTED QUESTIONS</p>
+        <h2>{{t('AI-Suggested Inspection Questions','أسئلة معاينة إضافية مقترحة بواسطة AI')}}</h2>
+        <span class="badge">{{(e.aiSuggestedQuestions||[]).length}} {{t('suggested · not mandatory','مقترح · غير إلزامي')}}</span>
+        <p class="hint">{{t('These questions are AI-generated optional advice. They never modify the published mandatory checklist or official inspection scope; inspector review and supervisor approval are required.',
+         'هذه أسئلة إضافية استشارية مقترحة بواسطة AI، ولا تغير قائمة المعاينة الإلزامية أو نطاقها الرسمي؛ تلزم مراجعة المفتش واعتماد المشرف.')}}</p>
+       </div>
+       <button class="ai-btn" type="button" (click)="generateQuestions()"
+        [disabled]="busy||e.status!=='IN_PROGRESS'||!aiStatus?.builderConfigured||!auth.isAdmin"
+        data-testid="si-generate-ai-questions">
+        ✦ {{t('Generate Optional Questions with AI','إنشاء أسئلة إضافية بواسطة AI')}}</button>
+      </div>
+      <div class="question-prompt">
+       <label>{{t('AI question-generation focus (optional)','سياق مقترح لتوليد الأسئلة (اختياري)')}}
+        <textarea rows="2" maxlength="1800" [(ngModel)]="questionPrompt"
+         [disabled]="busy||e.status!=='IN_PROGRESS'"></textarea></label>
+      </div>
+      <p class="hint" *ngIf="!aiStatus?.builderConfigured">
+       {{t('The Airia Checklist Builder pipeline is not configured. No questions are generated on page load.',
+       'لم يتم تهيئة مسار Airia لإنشاء أسئلة القوائم. لا يُنشئ النظام أسئلة تلقائيًا عند فتح الشاشة.')}}</p>
+      <p class="suggested-empty" *ngIf="!(e.aiSuggestedQuestions||[]).length">
+       {{t('No runtime AI questions have been generated. Existing published inspection questions remain available below.',
+        'لم يتم إنشاء أسئلة إضافية بواسطة AI بعد. تظل أسئلة المعاينة المنشورة متاحة أدناه.')}}</p>
+      <article class="item ai-question-card" *ngFor="let q of e.aiSuggestedQuestions||[]"
+       [attr.data-ai-question]="q.id">
+       <div class="item-head">
+        <div>
+         <div class="question-provenance"><span class="ai-source-pill">✦
+          {{t('AI-SUGGESTED · ADVISORY ONLY','مقترح AI · استشاري فقط')}}</span>
+          <span class="badge">{{q.source}}</span>
+          <span class="badge">{{q.status}}</span>
+         </div>
+         <h4>{{q.title}}</h4><p>{{q.description}}</p>
+         <p class="hint">{{q.rationale}}</p>
+        </div>
+        <button class="ai-btn" type="button" (click)="openSuggested(q)"
+         [disabled]="busy||e.status!=='IN_PROGRESS'||!aiStatus?.visionConfigured||!auth.isAdmin">
+         ✦ {{t('Analyze Evidence & Suggest Answer','تحليل الدليل واقتراح إجابة')}}</button>
+       </div>
+       <div class="ai-instruction-block">
+        <b>✦ {{t('AI-Suggested Inspection Instruction','تعليمات المعاينة المقترحة بواسطة AI')}}</b>
+        <p *ngIf="latestInstruction(q.id);else originInstruction">{{latestInstruction(q.id)}}</p>
+        <ng-template #originInstruction><p *ngIf="q.suggestedInstruction">{{q.suggestedInstruction}}</p>
+         <p *ngIf="!q.suggestedInstruction" class="instruction-unavailable">
+          {{t('No AI inspection instruction has been returned for this question yet.',
+           'لم ترجع تعليمات معاينة من AI لهذا السؤال بعد.')}}</p>
+        </ng-template>
+       </div>
+       <div class="question-evidence">
+        <label>{{t('Attach evidence to this AI-suggested question (PDF / JPG / PNG / WebP)',
+         'ارفق دليلًا لهذا السؤال المقترح (PDF / JPG / PNG / WebP)')}}
+         <input type="file" accept="application/pdf,image/jpeg,image/png,image/webp"
+          [disabled]="busy||e.status!=='IN_PROGRESS'||!auth.isAdmin"
+          (change)="attachQuestionEvidence($event,q.id)"/>
+        </label>
+        <div class="evidence-chips">
+         <span *ngFor="let attachment of evidenceFor(q.id)">
+          📎 {{attachment.filename}} · {{attachment.mimeType==='application/pdf'?'PDF':'PHOTO'}}
+          · {{t('Unverified','غير متحقق منه')}}
+         </span>
+        </div>
+        <small>{{t('Images can be analysed only when the configured Airia Vision pipeline supports the attachment. PDF stays evidence for inspector review; upload itself never runs AI.',
+         'يحلل Airia الصور فقط إذا دعم المسار المرفق. يظل PDF دليلًا لمراجعة المفتش؛ رفع المرفق لا يشغّل AI.')}}</small>
+       </div>
+       <div class="ai-answer-inline" *ngIf="latestAnswer(q.id) as rec">
+        <b>✦ {{t('AI-Suggested Answer','إجابة مقترحة بواسطة AI')}}</b>
+        <p>{{rec.rationale}}</p><pre>{{rec.proposedAnswers|json}}</pre>
+        <p *ngIf="rec.dataGaps.length">⚠ {{rec.dataGaps.join(' • ')}}</p>
+        <span class="badge">{{t('Inspector review required','تتطلب مراجعة المفتش')}}</span>
+        <button class="secondary" type="button" (click)="openSuggested(q)" [disabled]="busy">
+         {{t('Inspect / Review Suggestion','فحص ومراجعة الاقتراح')}}</button>
+       </div>
+       <div class="advisory-reviewed" *ngIf="q.finalAdvisory">
+        ✓ {{t('Inspector reviewed this OPTIONAL advisory. It is not a confirmed finding or a statutory checklist item.',
+         'راجع المفتش هذا الاقتراح الاختياري، ولا يُعد مخالفة مؤكدة أو بندًا إلزاميًا.')}}</div>
+      </article>
+    </section>
     <div class="template" *ngFor="let template of e.templates">
      <header class="template-title">
       <div><h2>{{template.title}}</h2>
@@ -106,6 +191,12 @@ interface A04Dossier{saved?:{status:string;dossier?:{
         ✦ {{t('AI Group Assistant','مساعد AI للمجموعة')}}</button></header>
       <div class="item" *ngFor="let item of group.items">
        <div class="item-head"><div>
+        <div class="question-provenance">
+         <span class="published-pill">{{item.mandatory?t('PUBLISHED MANDATORY QUESTION','سؤال منشور إلزامي'):
+          t('PUBLISHED OPTIONAL QUESTION','سؤال منشور اختياري')}}</span>
+         <span *ngIf="latestAnswer(item.instanceId)" class="ai-source-pill">
+          ✦ {{t('AI ANSWER SUGGESTED','اقتراح إجابة بواسطة AI')}}</span>
+        </div>
         <h4>{{item.title}} <span *ngIf="item.mandatory" class="required">*</span></h4>
          <small>{{t('Required fields','الحقول المطلوبة')}}: {{item.requiredFields.join(', ')||'—'}}</small>
         <p *ngIf="item.description">{{item.description}}</p></div>
@@ -137,6 +228,54 @@ interface A04Dossier{saved?:{status:string;dossier?:{
          <input type="number" [(ngModel)]="answers[item.instanceId]['NUMBER']"
           [disabled]="e.status!=='IN_PROGRESS'"/></label>
        </div>
+
+       <section class="per-question-ai" [attr.data-question-tools]="item.instanceId">
+        <div class="question-evidence">
+         <label>{{t('Attach file for this question (PDF / photo, max 2MB)',
+          'إرفاق ملف لهذا السؤال (PDF أو صورة، حد أقصى 2MB)')}}
+          <input type="file" accept="application/pdf,image/jpeg,image/png,image/webp"
+           [disabled]="busy||e.status!=='IN_PROGRESS'||!auth.isAdmin"
+           (change)="attachQuestionEvidence($event,item.instanceId)"/>
+         </label>
+         <div class="evidence-chips">
+          <span *ngFor="let attachment of evidenceFor(item.instanceId)">
+           📎 {{attachment.filename}} · {{attachment.mimeType==='application/pdf'?'PDF':'PHOTO'}}
+           · {{t('Unverified','غير متحقق منه')}}
+          </span>
+         </div>
+         <small>{{t('Files belong to this question only; uploading does not invoke Airia.',
+          'المرفق مرتبط بهذا السؤال فقط، ورفعه لا يستدعي Airia.')}}</small>
+        </div>
+        <div class="question-ai-guidance">
+         <div class="guidance-title">
+          <b>✦ {{t('AI-Suggested Inspection Instruction','تعليمات المعاينة المقترحة بواسطة AI')}}</b>
+          <button type="button" class="ai-btn" (click)="openAi('ITEM',template,group,item)"
+           [disabled]="busy||e.status!=='IN_PROGRESS'||!aiStatus?.visionConfigured||!auth.isAdmin">
+           ✦ {{t('Ask AI · Analyse Photo & Suggest Answer',
+            'اسأل AI · تحليل الصورة واقتراح الإجابة')}}</button>
+         </div>
+         <p *ngIf="latestInstruction(item.instanceId) as guide;else noInstruction">{{guide}}</p>
+         <ng-template #noInstruction>
+          <p class="instruction-unavailable">{{t(
+            'No AI-generated instruction yet. Ask AI to suggest inspection steps for this question.',
+            'لم يتم إنشاء تعليمات بواسطة AI بعد؛ اطلب منه خطوات المعاينة لهذا السؤال.')}}</p>
+         </ng-template>
+         <div class="published-tip" *ngIf="item.description">
+          {{t('Published guidance (not AI)','تعليمات المنشور (ليست AI)')}}: {{item.description}}
+         </div>
+        </div>
+        <div class="ai-answer-inline" *ngIf="latestAnswer(item.instanceId) as rec">
+         <div class="guidance-title">
+          <b>✦ {{t('AI-Suggested Answer · Review Needed','إجابة مقترحة بواسطة AI · تتطلب مراجعة')}}</b>
+          <span>{{t('Confidence','الثقة')}} {{rec.confidence*100|number:'1.0-0'}}%</span>
+         </div>
+         <p>{{rec.rationale}}</p>
+         <pre>{{rec.proposedAnswers|json}}</pre>
+         <p *ngIf="rec.dataGaps.length">⚠ {{rec.dataGaps.join(' • ')}}</p>
+         <button class="secondary" type="button" (click)="openAi('ITEM',template,group,item)"
+          [disabled]="busy">{{t('Review AI Answer','مراجعة إجابة AI')}}</button>
+        </div>
+       </section>
        <div class="answer-foot">
         <span>{{item.answerStatus==='RECORDED'?t('Saved','محفوظ'):t('Not recorded yet','لم يُحفظ بعد')}}</span>
         <span *ngIf="item.evidenceRefs?.length">
@@ -153,7 +292,7 @@ interface A04Dossier{saved?:{status:string;dossier?:{
     </div>
    </ng-container>
 
-   <section class="assistant" *ngIf="currentAi as target">
+   <section class="assistant" id="si-item-ai-assistant" *ngIf="currentAi as target">
     <div class="assistant-head"><div><p class="eyebrow">AIRIA · HUMAN IN THE LOOP</p>
      <h2>✦ {{t('AI Inspection Assistant','مساعد المعاينة بالذكاء الاصطناعي')}}</h2>
      <p>{{target.label}} · {{target.level}}</p></div>
@@ -170,7 +309,17 @@ interface A04Dossier{saved?:{status:string;dossier?:{
        (change)="onImage($event)"/>
       <span *ngIf="fileName">{{fileName}}</span></label>
     </div>
-    <button class="ai-submit" (click)="askAiria()" [disabled]="busy||(!aiText.trim()&&!imagePayload)||!auth.isAdmin">
+    <div class="linked-evidence-picker" *ngIf="target.itemId && evidenceFor(target.itemId).length">
+     <label>{{t('Use attached image from this question','اختر صورة مرفقة بهذا السؤال')}}
+      <select [(ngModel)]="selectedEvidenceId">
+       <option value="">{{t('No stored image selected','بدون صورة محفوظة')}}</option>
+       <ng-container *ngFor="let file of evidenceFor(target.itemId)">
+        <option *ngIf="file.mimeType!=='application/pdf'" [value]="file.id">{{file.filename}} · {{file.id}}</option>
+       </ng-container>
+      </select>
+     </label>
+    </div>
+    <button class="ai-submit" (click)="askAiria()" [disabled]="busy||(!aiText.trim()&&!imagePayload&&!selectedEvidenceId)||!auth.isAdmin">
      ✦ {{busy?t('Requesting Airia…','جارٍ الاتصال بـAiria…'):
        t('Generate AI Recommendations','إنشاء توصيات AI')}}</button>
     <p class="hint">{{t('A model output does not automatically mark the vessel compliant or create a deficiency. Images are private evidence and AI requests may incur charges.',
