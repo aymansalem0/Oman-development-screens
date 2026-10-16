@@ -180,3 +180,31 @@ test('publisher cannot self-verify correction or approve their own submitted fie
       e=>e.code==='SI_ACTION_INDEPENDENT_VERIFICATION_REQUIRED');
   }finally{h.cleanup();}
 });
+
+test('Oracle lifecycle initialization and audit use non-reserved bind names',async()=>{
+ const h=harness();const sqls=[];let commits=0,rollbacks=0;
+ const con={
+  async execute(sql,binds){
+   const aliases=[...sql.matchAll(/:([A-Za-z_][A-Za-z_0-9]*)/g)]
+    .map(x=>x[1]);
+   assert.ok(aliases.length);
+   assert.ok(aliases.every(name=>/^b_[a-z][a-z_0-9]*$/.test(name)));
+   assert.deepEqual([...new Set(aliases)].sort(),Object.keys(binds).sort());
+   sqls.push(sql.trim().replace(/\\s+/g,' '));
+   return {rowsAffected:1};
+  },
+  async commit(){commits++;},
+  async rollback(){rollbacks++;}
+ };
+ try{
+  h.store.mode='oracle';h.store.db=async fn=>fn(con);
+  await h.store.persist(CASE,null,{
+   caseId:CASE,version:1,stage:'PREPARATION_READY',
+   audit:[{action:'INITIALIZE'}],updatedAt:new Date().toISOString()
+  },'INITIALIZE','inspector@moei.example','');
+  assert.equal(sqls.length,2);
+  assert.match(sqls[0],/^INSERT INTO SI_INSPECTION_LIFECYCLE /);
+  assert.match(sqls[1],/^INSERT INTO SI_INSPECTION_LIFECYCLE_AUDIT /);
+  assert.equal(commits,1);assert.equal(rollbacks,0);
+ }finally{h.cleanup();}
+});
