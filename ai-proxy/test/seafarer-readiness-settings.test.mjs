@@ -4,7 +4,7 @@ import {SeafarerWorkspace,SdbError,evaluateReadiness}
  from '../seafarer-workspace.mjs';
 import {initialSdbSettings,validateSdbRequirement,computedSdbReadiness,
  stageSdbDocument} from '../seafarer-readiness-settings.mjs';
-import {sdbServiceScenarios} from '../seafarer-sdb-service-scenarios.mjs';
+import {sdbServiceScenarios,sdbDemoProfile} from '../seafarer-sdb-service-scenarios.mjs';
 
 const admin={operations:true,key:'SDB_ADMIN'};
 const self={operations:false,key:'SELF',seafarerId:'SF-002',companyId:null};
@@ -140,4 +140,50 @@ test('changing a core source method to attachment creates an additional guarded 
  assert.notEqual(r.status,'READY');
  assert.equal(r.checks.find(c=>c.key==='MEDICAL').result,'FAIL');
  assert.equal(r.checks.find(c=>c.key==='REQ-MEDICAL').result,'PASS');
+});
+
+test('READY first issuance and renewal provision distinct source-verified POC applicants, and complete the existing guarded SDB process',()=>{
+ const s=store();
+ const count=s.state.profiles.length;
+ const originalSource=JSON.stringify(s.state.profiles);
+ for(const scenarioId of ['CADET_READY','RENEWAL_READY']){
+  const source=sdbDemoProfile(scenarioId,s.clock());
+  assert.ok(source);
+  const journey=s.beginReadyDemoJourney(admin,scenarioId,source);
+  assert.equal(journey.readiness.status,'READY');
+  assert.equal(journey.mode,'ISOLATED_POC_DEMO');
+  assert.ok(journey.profileId.startsWith('SF-POC-'));
+  const preview=s.previewActor(admin,journey.profileId);
+  const p=s.get(preview,journey.profileId);
+  assert.equal(p.readiness.status,'READY');
+  assert.equal(p.demoJourney.operatorKey,'SDB_ADMIN');
+  assert.equal(p.demoJourney.officialSubmission,false);
+  assert.equal(p.readiness.service,scenarioId==='CADET_READY'?'FIRST_ISSUE':'RENEWAL');
+  const app=s.startApplication(preview,journey.profileId);
+  assert.equal(app.profileId,journey.profileId);
+  assert.equal(app.status,'DRAFT');
+  const again=s.beginReadyDemoJourney(admin,scenarioId,source);
+  assert.equal(again.profileId,journey.profileId,'operator refresh never spawns duplicate applicants');
+  assert.equal(again.alreadyProvisioned,true);
+  assert.equal(s.state.applications.filter(x=>x.profileId===journey.profileId).length,1);
+  assert.throws(()=>s.previewActor({...admin,key:'OTHER_ADMIN'},journey.profileId),
+   e=>e.code==='SDB_DEMO_JOURNEY_NOT_OWNED');
+ }
+ assert.equal(s.state.profiles.length,count+2);
+ assert.equal(JSON.stringify(s.state.profiles.slice(0,count)),originalSource);
+ assert.throws(()=>s.beginReadyDemoJourney(admin,'CADET_MISSING_MEDICAL',
+  sdbDemoProfile('CADET_MISSING_MEDICAL',s.clock())),
+  e=>e.code==='SDB_READY_SCENARIO_REQUIRED');
+ assert.throws(()=>s.beginReadyDemoJourney(admin,'RENEWAL_COMPANY_HOLD',
+  sdbDemoProfile('RENEWAL_COMPANY_HOLD',s.clock())),
+  e=>e.code==='SDB_READY_SCENARIO_REQUIRED');
+});
+
+test('READY demo provisioning is blocked after configuration changes that require missing evidence',()=>{
+ const s=store();
+ s.saveRequirement(admin,requirement);
+ assert.throws(()=>s.beginReadyDemoJourney(admin,'CADET_READY',
+  sdbDemoProfile('CADET_READY',s.clock())),e=>e.code==='SDB_READINESS_CHANGED');
+ assert.equal(s.state.profiles.some(p=>p.demoJourney),false);
+ assert.equal(s.state.applications.length,0);
 });
