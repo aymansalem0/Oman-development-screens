@@ -60,7 +60,12 @@ export function a04PocOutputGuidance({baseChecklistItemIds,evidenceManifestRefs}
         reasonEvidenceIds:['allowedEvidenceIds']}],
       suggestedAdditionalItems:[],
       agentConfidence:'number between 0 and 1'
-    }
+    },
+    optionalPredictedDeficienciesItemShape:{
+      category:'non-empty string',hypothesisOnly:true,
+      evidenceIds:['allowedEvidenceIds']
+    },
+    noPredictedDeficienciesResponse:{predictedDeficiencies:[]}
   };
 }
 function safeJson(data){
