@@ -6,8 +6,8 @@ const A='a@example.test',B='b@example.test',ADMIN='supervisor@example.test';
 const CASE_A='11111111-1111-4111-8111-111111111111';
 const CASE_B='22222222-2222-4222-8222-222222222222';
 const allOrders=[
- {caseId:CASE_A,assignment:{inspectorId:'INS-007'}},
- {caseId:CASE_B,assignment:{inspectorId:'INS-008'}}
+ {caseId:CASE_A,status:'FIELD_STARTED',assignment:{inspectorId:'INS-007'}},
+ {caseId:CASE_B,status:'READY_FOR_FIELD',assignment:{inspectorId:'INS-008'}}
 ];
 function fixture(){
  const users=[
@@ -73,4 +73,15 @@ test('Client-supplied role, inspectorId or claimed email cannot grant an additio
   identity:crafted,caseId:CASE_B,googleUsers:{users:f.users},
   scheduleOrders:f.scheduleOrders
  }),/SI_CHECKLIST_CASE_NOT_ASSIGNED_TO_SESSION/);
+});
+
+test('Assigned inspector may read pre-field context but cannot upload, ask AI or submit before FIELD_STARTED',async()=>{
+ const f=fixture();
+ const ctx={identity:f.identity(B),caseId:CASE_B,googleUsers:{users:f.users},
+  scheduleOrders:f.scheduleOrders};
+ assert.equal((await authorizeChecklistCase(ctx)).kind,'ASSIGNED_INSPECTOR');
+ await assert.rejects(authorizeChecklistCase({...ctx,mutation:true}),
+   e=>e.code==='SI_CHECKLIST_FIELD_NOT_STARTED'&&e.status===409);
+ assert.equal((await authorizeChecklistCase({...ctx,identity:f.identity(A),
+   caseId:CASE_A,mutation:true})).kind,'ASSIGNED_INSPECTOR');
 });
