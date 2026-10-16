@@ -502,3 +502,69 @@ test('integrated Prepare blocks a changed approval authority for an existing sou
   assert.equal(x.calls.caseCreates,0);
  }finally{x.done();}
 });
+
+test('POC inspector can self-confirm the frozen mandatory checklist and start without separate supervisor approval',async()=>{
+ const oldFlag=process.env.SI_POC_INSPECTOR_SELF_SCOPE_ENABLED;
+ const oldMap=process.env.SI_V2_INSPECTOR_IDENTITY_MAP_JSON;
+ process.env.SI_POC_INSPECTOR_SELF_SCOPE_ENABLED='true';
+ process.env.SI_V2_INSPECTOR_IDENTITY_MAP_JSON=JSON.stringify({'inspector@moei.example':'ENG-1'});
+ const x=workspace();
+ try{
+  const saved=await x.approve(),orderId=saved.orders[0].id;
+  const mine=await x.orders.mine('inspector@moei.example');
+  assert.equal(mine.length,1);
+  assert.equal(mine[0].canSelfConfirmScope,true);
+  await x.orders.activate({planId:x.p.id,orderId,
+   actor:'inspector@moei.example',generateAi:false,confirmAiCost:false});
+  await assert.rejects(()=>x.orders.confirmPocInspectorScope({planId:x.p.id,
+   orderId,actor:'unassigned@moei.example',reason:'Inspector reviewed mandatory'}),
+   e=>e.code==='SI_WORK_ORDER_NOT_ASSIGNED_TO_SESSION');
+  const ready=await x.orders.confirmPocInspectorScope({planId:x.p.id,orderId,
+   actor:'inspector@moei.example',reason:'Inspector reviewed mandatory'});
+  assert.equal(ready.status,'READY_FOR_FIELD');
+  assert.equal(ready.scopeStatus,'POC_INSPECTOR_MANDATORY_ACKNOWLEDGED');
+  assert.equal(ready.audit.at(-1).action,'POC_INSPECTOR_SELF_CONFIRMED_MANDATORY');
+  assert.equal(x.calls.ai,0);
+  assert.equal(x.lifecycle().stage,'ASSIGNED');
+  const started=await x.orders.startField({planId:x.p.id,orderId,
+   actor:'inspector@moei.example',confirmPocDelegation:false});
+  assert.equal(started.status,'FIELD_STARTED');
+  assert.equal(started.pocDelegated,false);
+  assert.equal(started.startedByInspectorId,'ENG-1');
+  assert.equal(x.lifecycle().stage,'IN_FIELD');
+ }finally{
+  x.done();
+  if(oldFlag===undefined)delete process.env.SI_POC_INSPECTOR_SELF_SCOPE_ENABLED;
+  else process.env.SI_POC_INSPECTOR_SELF_SCOPE_ENABLED=oldFlag;
+  if(oldMap===undefined)delete process.env.SI_V2_INSPECTOR_IDENTITY_MAP_JSON;
+  else process.env.SI_V2_INSPECTOR_IDENTITY_MAP_JSON=oldMap;
+ }
+});
+
+test('POC inspector self-confirmation fails closed when disabled or outside mock assignments',async()=>{
+ const oldFlag=process.env.SI_POC_INSPECTOR_SELF_SCOPE_ENABLED;
+ const oldMap=process.env.SI_V2_INSPECTOR_IDENTITY_MAP_JSON;
+ process.env.SI_V2_INSPECTOR_IDENTITY_MAP_JSON=JSON.stringify({'inspector@moei.example':'ENG-1'});
+ const x=workspace();
+ try{
+  const saved=await x.approve(),orderId=saved.orders[0].id;
+  await x.orders.activate({planId:x.p.id,orderId,
+   actor:'inspector@moei.example',generateAi:false,confirmAiCost:false});
+  delete process.env.SI_POC_INSPECTOR_SELF_SCOPE_ENABLED;
+  assert.equal((await x.orders.mine('inspector@moei.example'))[0].canSelfConfirmScope,false);
+  await assert.rejects(()=>x.orders.confirmPocInspectorScope({
+   planId:x.p.id,orderId,actor:'inspector@moei.example',reason:'Mandatory reviewed'}),
+   e=>e.code==='SI_INSPECTOR_POC_SELF_SCOPE_NOT_ENABLED');
+  process.env.SI_POC_INSPECTOR_SELF_SCOPE_ENABLED='true';
+  await assert.rejects(()=>x.orders.approveScope({planId:x.p.id,orderId,
+   actor:'inspector@moei.example',reason:'Mandatory reviewed',
+   includeAiSuggestions:true,inspectorPocSelfConfirm:true}),
+   e=>e.code==='SI_POC_INSPECTOR_CANNOT_APPROVE_A04_ADDITIONS');
+ }finally{
+  x.done();
+  if(oldFlag===undefined)delete process.env.SI_POC_INSPECTOR_SELF_SCOPE_ENABLED;
+  else process.env.SI_POC_INSPECTOR_SELF_SCOPE_ENABLED=oldFlag;
+  if(oldMap===undefined)delete process.env.SI_V2_INSPECTOR_IDENTITY_MAP_JSON;
+  else process.env.SI_V2_INSPECTOR_IDENTITY_MAP_JSON=oldMap;
+ }
+});
