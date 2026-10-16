@@ -133,8 +133,45 @@ export function createSeafarerHandler({
           mode: "CONTRACT_SANDBOX",
           officialData: false,
           modelInvoked: false,
-          scenarios: sdbServiceScenarios(Date.now(), s.policy),
+          scenarios: sdbServiceScenarios(s.clock(), s.policy,
+            s.state.readinessSettings),
         });
+        return true;
+      }
+      const demoCase=path.match(/^\\/api\\/seafarers\\/v1\\/demo-scenarios\\/([A-Z0-9_]+)$/);
+      if(demoCase&&req.method==='GET'){
+        if(!actor.operations)reject('SDB_OPERATIONS_REQUIRED',403);
+        const selected=sdbServiceScenarios(s.clock(),s.policy,
+          s.state.readinessSettings).find(row=>row.id===demoCase[1]);
+        if(!selected)reject('SDB_SCENARIO_NOT_FOUND',404);
+        send(res,200,{mode:'CONTRACT_SANDBOX',scenario:selected});
+        return true;
+      }
+      if(req.method==='GET'&&path===root+'/readiness-settings'){
+        send(res,200,s.readinessConfiguration(actor));
+        return true;
+      }
+      if(req.method==='POST'&&path===root+'/readiness-settings/requirements'){
+        const {body}=await read(req);
+        send(res,200,s.saveRequirement(actor,body));
+        return true;
+      }
+      if(req.method==='GET'&&path===root+'/document-review-queue'){
+        send(res,200,s.documentReviewQueue(actor));
+        return true;
+      }
+      const evidence=path.match(/^\\/api\\/seafarers\\/v1\\/profiles\\/([^/]+)\\/requirements\\/([^/]+)\\/evidence$/);
+      if(evidence&&req.method==='POST'){
+        const {body}=await read(req);
+        send(res,200,s.submitEvidence(actor,decodeURIComponent(evidence[1]),
+          decodeURIComponent(evidence[2]),body));
+        return true;
+      }
+      const reviewed=path.match(/^\\/api\\/seafarers\\/v1\\/document-reviews\\/([^/]+)\\/decision$/);
+      if(reviewed&&req.method==='POST'){
+        const {body}=await read(req);
+        send(res,200,s.reviewEvidence(actor,decodeURIComponent(reviewed[1]),
+          body.decision,body.reason));
         return true;
       }
       if (req.method === "GET" && path === root + "/dashboard") {
