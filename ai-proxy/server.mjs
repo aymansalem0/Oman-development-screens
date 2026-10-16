@@ -2,6 +2,7 @@ import { createServer } from 'node:http';
 import {createSeafarerHandler} from './seafarer-http.mjs';
 import {MoeiPocAuth,MoeiAuthError} from './moei-poc-auth.mjs';
 import {SiChecklistLibrary,SiChecklistError} from './si-checklist-library.mjs';
+import {authorizeChecklistCase} from './si-checklist-case-access.mjs';
 import {SiChecklistField} from './si-checklist-field.mjs';
 import {SiChecklistAiria} from './si-checklist-airia.mjs';
 import {OracleSiChecklistLibrary,OracleSiChecklistField} from './si-checklist-oracle.mjs';
@@ -1170,9 +1171,11 @@ const server = createServer(async (req, res) => {
       }
       const attachmentDownload=/^\/cases\/([a-f0-9-]{36})\/evidence\/([a-f0-9-]{36})$/.exec(rest);
       if(attachmentDownload){
-        if(actor.role!=='ADMIN')
-          throw new SiChecklistError('SI_CHECKLIST_INSPECTOR_REQUIRED',403);
         if(req.method!=='GET')return respond(res,405,{error:'METHOD_NOT_ALLOWED'});
+        // Even a guessed evidence UUID cannot cross a Google inspector's
+        // approved case boundary. Identity comes solely from signed session.
+        await authorizeChecklistCase({identity:actor,caseId:attachmentDownload[1],
+          googleUsers,scheduleOrders:siScheduleOrders});
         const artifact=await siChecklistField.downloadEvidence(
           attachmentDownload[1],attachmentDownload[2]);
         res.writeHead(200,{
@@ -1188,9 +1191,13 @@ const server = createServer(async (req, res) => {
       const single=/^\/cases\/([a-f0-9-]{36})(?:\/(start|answers|evidence|ai\/suggest|ai\/review|ai\/questions|ai\/import-a04|ai\/question-answer|ai\/question-review|submit))?$/.exec(rest);
       if(single){
         const id=single[1],operation=single[2];
+        // Both case read and every mutation (including chargeable Airia
+        // requests) require the current signed-in inspector's work order.
+        // Unmapped ADMIN remains a separate supervisor review capability.
+        await authorizeChecklistCase({identity:actor,caseId:id,
+          googleUsers,scheduleOrders:siScheduleOrders});
         if(req.method==='GET'&&!operation)
           return respond(res,200,await siChecklistField.preview(id));
-        if(actor.role!=='ADMIN')throw new SiChecklistError('SI_CHECKLIST_INSPECTOR_REQUIRED',403);
         if(req.method==='POST'&&operation==='start')
           return respond(res,201,await siChecklistField.start(id,user));
         const payload=await requestJson(req,3300000);
