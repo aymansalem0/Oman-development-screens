@@ -66,10 +66,19 @@ export class MoeiGoogleUsers{
     this.users.push(user);this.record('ADD',key,actor);this.persist();
     return this.list().find(x=>x.email===key);
   }
-  update(email,{active,role},actor){
+  update(email,{active,role,inspectorId},actor){
     const user=this.find(email);
     if(!user)throw new MoeiUsersError('MOEI_USER_NOT_FOUND',404);
-    if(typeof active!=='boolean'&&role===undefined)throw new MoeiUsersError('MOEI_NO_CHANGES',400);
+    if(typeof active!=='boolean'&&role===undefined&&inspectorId===undefined)
+      throw new MoeiUsersError('MOEI_NO_CHANGES',400);
+    if(inspectorId!==undefined&&inspectorId!==null&&
+      (typeof inspectorId!=='string'||!inspectorId.trim()||
+       inspectorId.length>120))
+      throw new MoeiUsersError('MOEI_INSPECTOR_ID_INVALID',422);
+    if(inspectorId!==undefined&&inspectorId!==null&&
+       this.users.some(other=>other.email!==user.email&&other.active&&
+        other.inspectorId===inspectorId))
+      throw new MoeiUsersError('MOEI_INSPECTOR_ALREADY_LINKED',409);
     const nextRole=role===undefined?user.role:safeRole(role);
     const nextActive=active===undefined?user.active:active;
     if(typeof nextActive!=='boolean')throw new MoeiUsersError('MOEI_INVALID_ACTIVE',400);
@@ -77,6 +86,7 @@ export class MoeiGoogleUsers{
        this.users.filter(x=>x.active&&x.role==='ADMIN').length<=1)
       throw new MoeiUsersError('MOEI_LAST_ADMIN_REQUIRED',409);
     user.role=nextRole;user.active=nextActive;
+    if(inspectorId!==undefined)user.inspectorId=inspectorId||null;
     this.record('UPDATE',user.email,actor);this.persist();
     return this.list().find(x=>x.email===user.email);
   }
