@@ -400,7 +400,7 @@ test('Oracle integrated approval case and decision writes use qualified binds an
     assert.ok(names.every(name=>/^b_[a-z][a-z0-9_]*$/.test(name)),
      'keyword aliases like :key must not reach node-oracledb');
     assert.deepEqual([...new Set(names)].sort(),Object.keys(binds).sort());
-    statements.push(sql.trim().replace(/\\s+/g,' '));
+    statements.push(sql.trim().replace(/\s+/g,' '));
     return {rowsAffected:1};
    },
    async commit(){commits++;},
