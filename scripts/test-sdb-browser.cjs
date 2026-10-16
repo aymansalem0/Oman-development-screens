@@ -83,7 +83,7 @@ const fs = require("node:fs");
     await page
       .locator('input[name="format"][value="ELECTRONIC_PRINT"]')
       .check();
-    await page.getByRole("button", { name: /^Continue(?:\\s|$)/ }).click();
+    await page.getByRole("button", { name: /^Continue/ }).click();
     await page
       .locator('input[name="delivery"][value="' + delivery + '"]')
       .check();
