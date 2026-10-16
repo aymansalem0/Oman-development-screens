@@ -335,3 +335,68 @@ test('eight read-only case previews require an operator and never mutate SDB rec
  assert.deepEqual(workspace.state,before,
   'demo preview cannot modify applicant/issuance/hold/notification store');
 });
+
+test('admin settings and public evidence contract enforce role, source checks, CSRF and human review',async t=>{
+ const {workspace,request}=await fixture(t);
+ const config=await request('/readiness-settings');
+ assert.equal(config.status,200);
+ assert.ok(config.data.requirements.find(x=>x.id==='MEDICAL'));
+ assert.equal((await request('/readiness-settings',{as:'self'})).status,403);
+ assert.equal((await request('/document-review-queue',{as:'self'})).status,403);
+ assert.equal((await request('/demo-scenarios/CADET_MISSING_MEDICAL',{as:'self'})).status,403);
+ const demo=await request('/demo-scenarios/CADET_MISSING_MEDICAL');
+ assert.equal(demo.status,200);
+ assert.equal(demo.data.scenario.id,'CADET_MISSING_MEDICAL');
+ const req={
+  id:'ADDITIONAL_TRAINING_RECORD',title:'Additional training record',
+  titleAr:'سجل تدريب إضافي',source:'ACADEMY',inputMode:'ATTACHMENT',
+  scope:'BOTH',core:false,mandatory:true,active:true,
+  reviewUncertain:true,order:40
+ };
+ assert.equal((await request('/readiness-settings/requirements',{
+  as:'self',method:'POST',body:req
+ })).status,403);
+ assert.equal((await request('/readiness-settings/requirements',{
+  method:'POST',body:req,csrf:false
+ })).status,403);
+ const applied=await request('/readiness-settings/requirements',{
+  method:'POST',body:req
+ });
+ assert.equal(applied.status,200);
+ assert.equal(applied.data.version,2);
+ const blocked=await request('/dashboard',{as:'self'});
+ assert.equal(blocked.data.profiles[0].readiness.status,'INCOMPLETE');
+ const publicRules=await request('/readiness-requirements',{as:'self'});
+ assert.equal(publicRules.status,200);
+ assert.equal(publicRules.data.requirements.find(x=>
+  x.id==='ADDITIONAL_TRAINING_RECORD').inputMode,'ATTACHMENT');
+ const meta={filename:'training-record.pdf',mimeType:'application/pdf',
+  sha256:'f'.repeat(64),size:1068};
+ const evidencePath='/profiles/SF-002/requirements/ADDITIONAL_TRAINING_RECORD/evidence';
+ assert.equal((await request(evidencePath,{method:'POST',body:meta})).status,403);
+ const upload=await request(evidencePath,{as:'self',method:'POST',body:meta});
+ assert.equal(upload.status,200);
+ assert.equal(upload.data.document.aiModelInvoked,false);
+ assert.equal(upload.data.document.reviewStatus,'AI_TRIAGE_QUEUED');
+ assert.equal(upload.data.readiness.status,'PENDING_VERIFICATION');
+ const check=await request('/document-review-queue');
+ assert.equal(check.status,200);
+ assert.equal(check.data.queued.length,1);
+ assert.equal(check.data.aiProvider,'NOT_CONNECTED');
+ assert.equal((await request(
+  '/document-reviews/'+upload.data.document.id+'/decision',{
+    as:'self',method:'POST',body:{decision:'HUMAN_VERIFIED',reason:'test'}
+  })).status,403);
+ const verified=await request(
+  '/document-reviews/'+upload.data.document.id+'/decision',{
+   method:'POST',body:{
+    decision:'HUMAN_VERIFIED',
+    reason:'Human reviewer checked the evidence in the sandbox'
+   }
+  });
+ assert.equal(verified.status,200);
+ assert.equal(verified.data.document.reviewStatus,'HUMAN_VERIFIED');
+ assert.equal(verified.data.readiness.status,'READY');
+ assert.equal(workspace.state.readinessSettings.version,2);
+ assert.equal(workspace.state.profiles.find(p=>p.id==='SF-002').documents.length,1);
+});
