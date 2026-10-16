@@ -76,6 +76,7 @@ export class SiFullLifecycleComponent implements OnInit{
    }
   });
  }
+ get workOrderManaged():boolean{return this.view?.workOrderManaged===true;}
  get record():SiLifecycleRecord|null{return this.view?.record||null;}
  get stage():string{return this.record?.stage||'NOT_STARTED';}
  get nmcOrigin():boolean{return Boolean(this.view?.inspectionCase?.nmcReferralId);}
@@ -161,6 +162,11 @@ export class SiFullLifecycleComponent implements OnInit{
  }
  run(action:string,data:Record<string,unknown>={},supervisor=false):void{
   if(this.busy||!this.caseId)return;
+  if(this.workOrderManaged&&['APPROVE_SCOPE','ASSIGN','START_FIELD'].includes(action)){
+   this.error=this.copy('This case is managed by a Work Order. Use My Inspection Journey for approval and field start.',
+    'تدار الحالة من أمر تكليف. استخدم رحلة المعاينة الموحدة لاعتماد النطاق وبدء المعاينة.');
+   return;
+  }
   const key=supervisor?this.publisherKey:this.editorKey;
   if(!key.trim()||!this.operator.trim()){
    this.error=this.copy('Enter actor name and required role key.','أدخل اسم المسؤول ومفتاح الصلاحية.');return;
