@@ -195,6 +195,18 @@ test('one assigned inspection journey performs publisher-gated scope approval',(
  assert.ok(lifecycle.includes('Inspection Case Record & Follow-up'));
  assert.ok(lifecycle.includes('data-testid="si-case-record-return-journey"'));
  assert.ok(!preparation.includes('Continue Full Inspection Cycle'));
+ const caseUi=src('src/app/pages/si-full-lifecycle.component.ts');
+ const caseView=src('src/app/services/si-lifecycle.service.ts');
+ assert.ok(lifecycle.includes('data-testid="si-workorder-managed-case"'));
+ assert.ok(lifecycle.includes("*ngIf=\"stage==='PREPARATION_READY'&&!workOrderManaged\""));
+ assert.ok(lifecycle.includes("*ngIf=\"stage==='SCOPE_APPROVED'&&!workOrderManaged\""));
+ assert.ok(lifecycle.includes("*ngIf=\"stage==='ASSIGNED'&&!workOrderManaged\""));
+ assert.ok(caseUi.includes('get workOrderManaged():boolean'));
+ assert.ok(caseUi.includes("['APPROVE_SCOPE','ASSIGN','START_FIELD'].includes(action)"));
+ assert.ok(caseView.includes('workOrderManaged?:boolean;'));
+ assert.ok(server.includes("error:'SI_ASSIGNED_WORK_ORDER_JOURNEY_REQUIRED'"));
+ assert.ok(server.includes("s.orders.some(o=>o.caseId===id)"));
+
  assert.ok(guide.includes('data-testid="si-guided-return-journey"'));
 });
 
