@@ -165,6 +165,22 @@ const fs = require("node:fs");
     path: out + "/notifications-desktop.png",
     fullPage: false,
   });
+  // Independently verify registered SDB-holder 360 and synthetic sea legs.
+  await page.goto(base + "/#/moei/seafarers/records");
+  await page.getByRole("heading", {name:"Registered Seafarers & Sea Service"}).waitFor();
+  await page.locator(".person-row").first().waitFor();
+  assert.ok(await page.locator(".person-row").count() >= 5);
+  await page.getByRole("button", {name:"Sea Service History"}).click();
+  await page.locator(".leg").first().waitFor();
+  assert.ok((await page.locator(".leg-grid").first().innerText()).includes("Engine power"));
+  await page.screenshot({
+    path:out + "/seafarer-360-sea-service.png",fullPage:false
+  });
+  await page.getByRole("button", {name:"Certificates & Qualifications"}).click();
+  await page.locator("table tbody tr").first().waitFor();
+  await page.screenshot({
+    path:out + "/seafarer-360-certificates.png",fullPage:false
+  });
   await route("readiness");
   await page.locator(".candidate-row").first().click();
   await page.locator("details.sandbox-tools summary").click();
