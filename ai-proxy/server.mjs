@@ -420,6 +420,11 @@ const siChecklistField=new (checklistStorage==='oracle'?
   library:siChecklistLibrary,targeting:siTargeting,
   airiaSuggest:input=>siChecklistAiria.call('vision',input),
   airiaQuestionSuggest:input=>siChecklistAiria.call('builder',input),
+  getA04Suggestions:async id=>{
+    const view=await siPreparation.get(id);
+    return {approved:!view.stale&&view.saved?.status==='APPROVED',
+      suggestions:view.saved?.dossier?.suggestedAdditionalItems||[]};
+  },
   getSetting:key=>runtime.get(key)
 });
 const siLifecycle=new SiInspectionLifecycle({mode:dbMode,oracleRepository:repository,
@@ -1093,7 +1098,7 @@ const server = createServer(async (req, res) => {
             payload.expectedUpdatedAt));
         }
       }
-      const single=/^\/cases\/([a-f0-9-]{36})(?:\/(start|answers|evidence|ai\/suggest|ai\/review|ai\/questions|ai\/question-answer|ai\/question-review|submit))?$/.exec(rest);
+      const single=/^\/cases\/([a-f0-9-]{36})(?:\/(start|answers|evidence|ai\/suggest|ai\/review|ai\/questions|ai\/import-a04|ai\/question-answer|ai\/question-review|submit))?$/.exec(rest);
       if(single){
         const id=single[1],operation=single[2];
         if(req.method==='GET'&&!operation)
@@ -1108,6 +1113,8 @@ const server = createServer(async (req, res) => {
           return respond(res,201,await siChecklistField.attachEvidence(id,{...payload,actor:user}));
         if(operation==='ai/questions'&&req.method==='POST')
           return respond(res,200,await siChecklistField.suggestQuestions(id,{...payload,actor:user}));
+        if(operation==='ai/import-a04'&&req.method==='POST')
+          return respond(res,200,await siChecklistField.importA04Questions(id,{...payload,actor:user}));
         if(operation==='ai/question-answer'&&req.method==='POST')
           return respond(res,200,await siChecklistField.suggestAdvisoryAnswer(id,{...payload,actor:user}));
         if(operation==='ai/question-review'&&req.method==='POST')
