@@ -2311,9 +2311,18 @@ const server = createServer(async (req, res) => {
         /^\/api\/si\/v1\/maritime-scheduling\/my-work-orders\/[a-f0-9-]{36}\/activate$/.test(path)||
         /^\/api\/si\/v1\/maritime-scheduling\/plans\/[a-f0-9-]{36}\/work-orders\/[a-f0-9-]{36}\/activate$/.test(path);
       if(req.method==='POST'&&inspectorPreparationRoute){
-        const rawStage=String(e?.scheduleSqlStage||'UNKNOWN');
-        const stage=['WORK_ORDER_STATUS_UPDATE','WORK_ORDER_STATUS_AUDIT']
-          .includes(rawStage)?rawStage:'UNKNOWN';
+        const rawStage=String(e?.siPreparationStage||e?.scheduleSqlStage||
+          'UNKNOWN');
+        const stage=[
+          'WORK_ORDER_STATUS_UPDATE','WORK_ORDER_STATUS_AUDIT',
+          'INSPECTION_CASE_REGISTRY','APPROVED_SOURCE_REVALIDATION',
+          'CASE_LEDGER_CREATION','CASE_LEDGER_INSERT',
+          'CASE_DECISION_INSERT','WORK_ORDER_CASE_ID_SAVE',
+          'PLAN_CASE_LINK','DOSSIER_READ','DOSSIER_PREPARATION_WRITE',
+          'CHECKLIST_TEMPLATE_PREVIEW','CHECKLIST_INITIALIZATION',
+          'CHECKLIST_CASE_WRITE','LIFECYCLE_SNAPSHOT',
+          'LIFECYCLE_INITIALIZATION','WORK_ORDER_READY_SAVE'
+        ].includes(rawStage)?rawStage:'UNKNOWN';
         const oracleCode=/^ORA-[0-9]{5}$/.test(String(e?.code||''))
           ?e.code:null;
         console.error('[si-work-order] PREPARE_FAILED '+
