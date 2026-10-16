@@ -11,6 +11,7 @@ import {readFileSync,writeFileSync,renameSync,existsSync,mkdirSync} from 'node:f
 import {dirname} from 'node:path';
 import oracledb from 'oracledb';
 import {resolveAssignedInspector,matchesAssignedInspector,pocInspectorIdForActor} from './si-inspector-identity.mjs';
+import {sourceVerified} from './si-integrated-capacity-plan.mjs';
 
 const id=()=>randomUUID(),at=()=>new Date().toISOString();
 const clone=v=>structuredClone(v);
@@ -334,15 +335,21 @@ export class SiScheduleOrders{
  }
  async _freshApprovedCandidate(imo,plan){
   const dashboard=await this.targeting.dashboard();
+  // Capacity-verified integrated approvals freeze only authoritative source
+  // events. Unverified source rows are review evidence, not approved reasons.
+  // Legacy scheduling retains its existing complete-event behavior.
+  const verifiedOnly=plan.scheduleMode==='SINGLE_CAPACITY_VERIFIED_PLAN_APPROVAL';
   const candidates=dashboard.candidates.filter(c=>c.imo===imo&&
    (c.status==='PENDING_REVIEW'||c.status==='EXTERNALLY_SCHEDULED'&&
-    c.events.some(e=>e.sourceType==='NMC_CASE'&&e.approval==='APPROVED')))
+    c.events.some(e=>e.sourceType==='NMC_CASE'&&e.approval==='APPROVED'))&&
+   (!verifiedOnly||c.events.some(sourceVerified)))
    .sort((a,b)=>Number(b.events.some(e=>e.sourceType==='NMC_CASE'))-
       Number(a.events.some(e=>e.sourceType==='NMC_CASE'))||
       a.regime.localeCompare(b.regime));
   if(!candidates.length)err('SI_WORK_ORDER_SOURCE_CANDIDATE_CHANGED',409);
   const reasons=new Map();
   for(const c of candidates)for(const e of c.events){
+   if(verifiedOnly&&!sourceVerified(e))continue;
    const key=e.eventKey||[e.sourceType,e.sourceEventId,c.regime].join(':');
    if(!reasons.has(key))reasons.set(key,{
     eventKey:key,candidateKey:c.key,sourceType:e.sourceType,
@@ -355,14 +362,25 @@ export class SiScheduleOrders{
   const actual=[...reasons.values()];
   const vessel=plan.approvedVessels.find(v=>v.imo===imo);
   const approvedKeys=(vessel?.inspectionReasons||[]).map(x=>x.eventKey).sort();
+  const currentRegimes=[...new Set(candidates.map(x=>x.regime))].sort();
+  // Verify not just the event IDs, but the immutable approved evidence and
+  // source authority. Any genuinely new, revoked or modified verified source
+  // requires a supervisor-reviewed plan; never silently add statutory scope.
+  const normalized=reasons=>reasons.map(r=>({
+   ...batchReason(r),
+   evidenceIds:[...new Set(r.evidenceIds||[])].sort()
+  })).sort((a,b)=>a.eventKey.localeCompare(b.eventKey));
   if(!vessel||JSON.stringify(actual.map(x=>x.eventKey).sort())!==
       JSON.stringify(approvedKeys)||
-    JSON.stringify([...new Set(candidates.map(x=>x.regime))].sort())!==
-      JSON.stringify([...vessel.regimes].sort()))
+    JSON.stringify(currentRegimes)!==
+      JSON.stringify([...vessel.regimes].sort())||
+    (verifiedOnly&&JSON.stringify(normalized(actual))!==
+      JSON.stringify(normalized(vessel.inspectionReasons))))
    err('SI_WORK_ORDER_APPROVED_REASONS_CHANGED',409);
   return {imo,candidateKey:candidates[0].key,
    candidateKeys:candidates.map(x=>x.key),
-   regimes:vessel.regimes,inspectionReasons:actual.map(batchReason)};
+   regimes:vessel.regimes,inspectionReasons:actual.map(batchReason),
+   verifiedOnly};
  }
  async activate({planId,orderId,actor,generateAi=false,
   confirmAiCost=false}={}){
@@ -426,7 +444,8 @@ export class SiScheduleOrders{
       if(conflict)err('SI_WORK_ORDER_CASE_EXISTS_IN_ANOTHER_APPROVAL',409);
       const generated=await this.targeting.decideBatch({
        items:[item],actor:schedule.approvedBy,
-       note:schedule.approvalReason,approvedPlanId:schedule.id});
+       note:schedule.approvalReason,approvedPlanId:schedule.id,
+       verifiedOnly:item.verifiedOnly});
       caseId=generated.cases?.[0]?.id;
      }
      if(!caseId)err('SI_WORK_ORDER_CASE_CREATION_INCOMPLETE',503);
