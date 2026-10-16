@@ -16,8 +16,12 @@ type AnswerValues=Partial<Record<CheckField,any>>;
 interface ReviewScope{level:AiLevel|'AI_QUESTION';templateId?:string;
  groupId?:string;itemId?:string;label:string;}
 interface A04Additional{title:string;reason:string;evidenceIds?:string[];recommendationOnly?:boolean;}
+interface A04FocusArea{category:string;priority:string;reason:string;evidenceIds:string[];}
+interface A04ChecklistFocus{existingItemId:string;focus:string;reason:string;reasonEvidenceIds:string[];}
 interface A04Dossier{saved?:{status:string;dossier?:{
  suggestedAdditionalItems?:A04Additional[];source?:string;mock?:boolean;
+ focusAreas?:A04FocusArea[];checklistFocus?:A04ChecklistFocus[];
+ predictedDeficiencies?:{category:string;hypothesisOnly:true;evidenceIds:string[]}[];
  }|null}|null;stale?:boolean;}
 @Component({
  selector:'app-si-checklist-execution',standalone:true,
@@ -36,15 +40,24 @@ interface A04Dossier{saved?:{status:string;dossier?:{
      {{t('Inspection Lifecycle','دورة المعاينة')}}</a>
     <a routerLink="/moei/smart-inspection/settings/checklists" *ngIf="auth.isAdmin">
      {{t('Checklist Settings','إعدادات قوائم الفحص')}}</a>
+    <a *ngIf="returnOrderId" routerLink="/moei/smart-inspection/my-work-orders"
+     [queryParams]="{orderId:returnOrderId}" data-testid="si-return-to-order">
+     {{t('← Return to My Inspection Steps','← العودة إلى خطوات المعاينة')}}</a>
    </div></header>
    <p class="notice error" role="alert" *ngIf="error">{{error}}</p>
    <p class="notice good" *ngIf="message">{{message}}</p>
    <p class="notice" *ngIf="loading">{{t('Loading approved case and published checklist rules…',
     'جارٍ تحميل الحالة المعتمدة وقواعد القوائم المنشورة…')}}</p>
-   <p class="notice warning" *ngIf="preview?.fieldAccess&&!canUseField" data-testid="si-field-not-started">
-    {{t('Assigned vessel: read-only preparation. Start your scheduled field inspection from My Inspections before uploading files, requesting AI answers, or saving checklist results.',
-      'السفينة مسندة إليك للمعاينة ويمكنك عرض التحضير. ابدأ تنفيذ المعاينة من «معايناتي» قبل رفع الملفات أو طلب إجابات AI أو حفظ نتائج الفحص.')}}
-   </p>
+   <div class="notice warning" *ngIf="preview?.fieldAccess&&!canUseField" data-testid="si-field-not-started">
+    <strong>{{t('Checklist review only — field execution has not started.',
+     'القائمة للعرض والمراجعة فقط — المعاينة الميدانية لم تبدأ بعد.')}}</strong>
+    <p>{{t('A04 dossier approval does not authorize field execution. Supervisor scope approval and Execute Work Order are needed before answers, files or AI field actions become available.',
+     'اعتماد A04 لا يبدأ المعاينة. يلزم اعتماد النطاق من المشرف، ثم Execute Work Order لتفعيل الإجابات والمرفقات وإجراءات AI الميدانية.')}}</p>
+    <p>{{t('Current work order status','حالة أمر التكليف الحالية')}}: <b>{{preview?.fieldAccess?.inspectionStatus||'—'}}</b></p>
+    <a routerLink="/moei/smart-inspection/my-work-orders"
+     [queryParams]="returnOrderId?{orderId:returnOrderId}:{}" data-testid="si-checklist-continue-in-stepper">
+     {{t('Return to My Inspection Steps','العودة إلى خطوات المعاينة')}}</a>
+   </div>
    <div class="summary" *ngIf="preview as p">
     <div><span>{{t('Vessel / IMO','السفينة / IMO')}}</span><strong>{{p.vessel.name||p.imo}} · {{p.imo}}</strong></div>
     <div><span>{{t('Vessel Type','نوع السفينة')}}</span><strong>{{p.vessel.vesselType||'UNKNOWN'}}</strong></div>
@@ -52,6 +65,44 @@ interface A04Dossier{saved?:{status:string;dossier?:{
     <div><span>{{t('Matched Published Templates','القوائم المنشورة المطابقة')}}</span><strong>{{p.selectedTemplates.length}}</strong></div>
    </div>
    <section class="template ai-a04" *ngIf="preview" data-testid="si-a04-ai-questions">
+    <section *ngIf="a04Approved" class="a04-focus-overlay" data-testid="si-a04-approved-focus-overlay">
+     <div class="a04-focus-title">
+      <h2>{{t('Approved A04 Focus Overlay · Advisory Only',
+       'مجالات التركيز المعتمدة من A04 · استشارية فقط')}}</h2>
+      <span class="badge">{{t('SUPERVISOR REVIEWED','تمت مراجعة المشرف')}}</span>
+     </div>
+     <p>{{t('Source-backed focus recommendations guide the inspector on existing checks. They do not change mandatory questions, fill answers, or confirm deficiencies.',
+      'توصيات التركيز المستندة للأدلة توجه المفتش في البنود الحالية. لا تغيّر الأسئلة الإلزامية أو تملأ الإجابات أو تؤكد مخالفات.')}}</p>
+     <div class="a04-focus-stats">
+      <strong>{{a04FocusAreas.length}} {{t('focus areas','مجالات تركيز')}}</strong>
+      <strong>{{a04ChecklistFocus.length}} {{t('existing-check focus suggestions','توجيهات للبنود الحالية')}}</strong>
+      <strong>{{a04AdditionalItems.length}} {{t('optional extra questions','أسئلة إضافية اختيارية')}}</strong>
+     </div>
+     <div *ngIf="a04FocusAreas.length" class="a04-focus-grid">
+      <article *ngFor="let focus of a04FocusAreas" class="a04-focus-card">
+       <strong>{{focus.category}} · {{focus.priority}}</strong>
+       <p>{{focus.reason}}</p>
+       <small>{{t('Source evidence','مراجع الأدلة')}}: {{(focus.evidenceIds||[]).join(' · ')||'—'}}</small>
+      </article>
+     </div>
+     <details *ngIf="a04ChecklistFocus.length" class="a04-existing-focus">
+      <summary>{{t('Focus instructions for existing mandatory checklist categories',
+       'توجيهات التركيز للبنود الإلزامية الحالية')}}</summary>
+      <article *ngFor="let focus of a04ChecklistFocus" class="a04-existing-card">
+       <strong>{{focus.existingItemId}} · {{focus.focus}}</strong>
+       <p>{{focus.reason}}</p>
+       <small>{{t('Evidence references','مراجع الأدلة')}}: {{(focus.reasonEvidenceIds||[]).join(' · ')||'—'}}</small>
+      </article>
+     </details>
+     <p *ngIf="!a04AdditionalItems.length" class="a04-zero-extras" data-testid="si-a04-zero-extras">
+      {{t('The approved A04 dossier has no additional checklist questions. This is valid: mandatory checklists remain unchanged, while the focus recommendations above remain available for review.',
+       'ملف A04 المعتمد لا يتضمن أسئلة إضافية. هذا طبيعي: تظل القوائم الإلزامية كما هي، وتبقى توصيات التركيز أعلاه متاحة للمراجعة.')}}
+     </p>
+    </section>
+    <p *ngIf="a04?.saved?.status==='APPROVED'&&a04?.stale===true" class="a04-zero-extras">
+     {{t('Previously approved A04 dossier is stale against current evidence. Refresh and review before relying on its focus.',
+      'ملف A04 المعتمد سابقًا لم يعد مطابقًا للأدلة الحالية؛ حدّثه وراجعه قبل الاعتماد على توصياته.')}}
+    </p>
     <header class="template-title">
      <div><h2>✦ {{t('SI-A04 Suggested Additional Inspection Checklist',
        'قائمة البنود الإضافية المقترحة بواسطة SI-A04')}}</h2>
@@ -69,9 +120,13 @@ interface A04Dossier{saved?:{status:string;dossier?:{
     <p>{{t('These AI-proposed optional questions are not statutory mandatory checks. They are separate from the frozen published checklist and require supervisor dossier review and scope approval before official inclusion.',
      'هذه البنود الاختيارية مقترحات AI وليست بنودًا إلزامية تنظيمية. تبقى مستقلة عن القائمة المنشورة وتحتاج اعتماد الدوسيه ونطاق المعاينة قبل إدراجها رسميًا.')}}</p>
     <div class="suggested-empty" *ngIf="!a04AdditionalItems.length">
-     <b>{{t('No A04-generated questions available yet.','لا توجد أسئلة مقترحة من A04 بعد.')}}</b>
-     <p>{{t('Generate an A04 dossier explicitly, then review the advisory results; AI questions are never silently invented.',
-      'يمكن إنشاء ملف A04 بشكل صريح ثم مراجعة مقترحاته؛ لا ينشئ النظام أسئلة وهمية تلقائيًا.')}}</p>
+     <b>{{a04Approved?
+      t('A04 approved: zero extra questions; focus guidance is shown above.',
+       'A04 معتمد: لا توجد أسئلة إضافية، وتوجيهات التركيز تظهر أعلاه.'):
+      t('No A04 additional questions currently available.',
+       'لا توجد أسئلة إضافية متاحة من A04 حاليًا.')}}</b>
+     <p>{{t('Additional checklist questions are optional. Their absence never removes the mandatory published checklist.',
+      'الأسئلة الإضافية اختيارية، وعدم وجودها لا يحذف أي بند من القائمة الإلزامية المنشورة.')}}</p>
     </div>
     <div *ngFor="let item of a04AdditionalItems" class="ai-a04-item">
       <span class="ai-source-pill">✦ {{t('AI-SUGGESTED QUESTION · A04','سؤال مقترح بواسطة AI · A04')}}</span>
@@ -394,6 +449,25 @@ interface A04Dossier{saved?:{status:string;dossier?:{
  .execution-header small{display:block;color:#718895;margin-top:5px}
  .template{background:#fff;border:1px solid #d3e4e5;border-radius:13px;padding:22px;margin:18px 0}
  .ai-a04{border-color:#cbb6e4;background:#fbf9ff}
+ .a04-focus-overlay{border-bottom:1px solid #d9cdec;padding:0 0 18px;margin-bottom:18px}
+ .a04-focus-title{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+ .a04-focus-title h2{font-size:18px;color:#583a7a}
+ .a04-focus-overlay p{font-size:12px;line-height:1.75;color:#53707c}
+ .a04-focus-stats{display:flex;gap:9px;flex-wrap:wrap;margin:13px 0}
+ .a04-focus-stats strong{border-radius:7px;background:#f1eafd;padding:8px 10px;
+  color:#543879;font-size:11px}
+ .a04-focus-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+ .a04-focus-card,.a04-existing-card{background:#fff;border:1px solid #e4daf0;
+  border-radius:9px;padding:13px;overflow-wrap:anywhere}
+ .a04-focus-card strong,.a04-existing-card strong{font-size:12px;color:#503374}
+ .a04-focus-card small,.a04-existing-card small{font-size:10px;color:#69828b}
+ .a04-existing-focus{margin-top:12px;background:#fff;border:1px solid #e4daf0;
+  padding:13px;border-radius:9px}
+ .a04-existing-focus summary{cursor:pointer;font-weight:750;color:#503374;font-size:12px}
+ .a04-existing-card{margin-top:10px}
+ .a04-zero-extras{background:#f5effd;border:1px dashed #c5addf;border-radius:8px;
+  color:#654982!important;padding:12px;font-size:12px}
+ @media(max-width:750px){.a04-focus-grid{grid-template-columns:1fr}}
  .ai-a04-item{padding:10px 0;border-top:1px solid #e1d6ef}
  .ai-a04-item strong{display:block;color:#66418b}
  .ai-a04-item p{font-size:12px;margin:4px 0}
@@ -488,6 +562,15 @@ export class SiChecklistExecutionComponent implements OnInit,OnDestroy{
  get a04AdditionalItems():A04Additional[]{
   return this.a04?.saved?.dossier?.suggestedAdditionalItems||[];
  }
+ get a04Approved():boolean{
+  return this.a04?.saved?.status==='APPROVED'&&this.a04?.stale!==true;
+ }
+ get a04FocusAreas():A04FocusArea[]{
+  return this.a04Approved?this.a04?.saved?.dossier?.focusAreas||[]:[];
+ }
+ get a04ChecklistFocus():A04ChecklistFocus[]{
+  return this.a04Approved?this.a04?.saved?.dossier?.checklistFocus||[]:[];
+ }
  aiStatus:{visionConfigured:boolean;builderConfigured?:boolean}|null=null;
  loading=false;busy=false;error='';message='';
  answers:Record<string,AnswerValues>={};currentAi:ReviewScope|null=null;
@@ -499,6 +582,10 @@ export class SiChecklistExecutionComponent implements OnInit,OnDestroy{
  constructor(private route:ActivatedRoute,private api:SiChecklistsService,
   private http:HttpClient,public lang:LanguageService,public auth:MoeiAuthService){}
  t(en:string,ar:string){return this.lang.pick(en,ar);}
+ get returnOrderId():string{
+  const orderId=this.route.snapshot.queryParamMap.get('orderId')||'';
+  return /^[a-f0-9-]{36}$/i.test(orderId)?orderId:'';
+ }
  get canUseField():boolean{return this.preview?.fieldAccess?.canMutate===true;}
  ngOnInit():void{
   this.sub=this.route.paramMap.subscribe(p=>{

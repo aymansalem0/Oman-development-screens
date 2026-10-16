@@ -84,15 +84,45 @@ test('supervisor-only scope approval and schedule issuance remain unchanged',()=
   assert.ok(server.includes("dashboards.assertRole(req,supervisor?'PUBLISHER':'EDITOR')"));
 });
 
-test('assigned inspector gets prominent preparation action before field start; A04 remains admin-only',()=>{
- const prep=workspace.indexOf('class="prep-entry"');
- const execute=workspace.indexOf("{{t('Execute Work Order'");
- assert.ok(prep>0&&execute>prep,'preparation is prominent before field execution');
- assert.ok(workspace.includes("{{t('1 · Prepare Inspection'"));
+test('assigned inspection stepper follows vessel, dossier, preparation, checklist, execution',()=>{
+ const journey=workspace.indexOf('data-testid="si-assigned-inspection-stepper"');
+ assert.ok(journey>0);
+ const stages=[
+  'si-step-select-vessel','si-step-prepare-dossier','si-step-open-preparation',
+  'si-step-create-checklist','si-step-execute-order'
+ ];
+ const positions=stages.map(testId=>workspace.indexOf('data-testid="'+testId+'"'));
+ assert.ok(positions.every(x=>x>journey));
+ assert.ok(positions.every((x,i)=>i===0||x>positions[i-1]),
+  'vessel → prepare dossier → open preparation → checklist → execute');
  assert.ok(workspace.includes('(click)="activate(o)"'));
- assert.ok(workspace.includes('o.caseId&&auth.isAdmin'));
- assert.ok(workspace.includes("['/moei/smart-inspection/preparation',o.caseId]"));
- assert.ok(workspace.includes('o.caseId&&!auth.isAdmin'));
+ assert.ok(workspace.includes('data-testid="si-stepper-prepare-action"'));
+ assert.ok(workspace.includes('data-testid="si-stepper-open-preparation"'));
+ assert.ok(workspace.includes('data-testid="si-stepper-open-checklist"'));
+ assert.ok(workspace.includes('data-testid="si-stepper-execute-order"'));
+ assert.ok(workspace.includes('data-testid="si-stepper-resume-checklist"'));
+ assert.ok(workspace.includes("o.status==='READY_FOR_FIELD'"));
+ assert.ok(workspace.includes("o.status==='FIELD_STARTED'"));
+ assert.ok(workspace.includes("['/moei/smart-inspection/preparation',selected!.caseId]"));
+ assert.ok(workspace.includes('selected?.caseId && auth.isAdmin'));
+ assert.ok(workspace.includes('selected?.caseId && !auth.isAdmin'));
+ assert.ok(workspace.includes('selected?.checklistStatus===\'MANDATORY_PUBLISHED_TEMPLATE_SNAPSHOT\''));
+ assert.ok(workspace.includes('selected?.status===\'READY_FOR_FIELD\''));
+ assert.ok(workspace.includes("'/moei/smart-inspection/my-work-orders'"));
+});
+
+test('stepper returns to the assigned work order after preparation or checklist preview',()=>{
+ const preparation=src('src/app/pages/si-inspection-preparation.component.ts');
+ const preparationHtml=src('src/app/pages/si-inspection-preparation.component.html');
+ const checklist=src('src/app/pages/si-checklist-execution.component.ts');
+ assert.ok(workspace.includes('queryParams:{orderId:o.orderId}'));
+ assert.ok(workspace.includes("this.route.snapshot.queryParamMap.get('orderId')"));
+ assert.ok(preparation.includes("this.route.snapshot.queryParamMap.get('orderId')"));
+ assert.ok(preparationHtml.includes('data-testid="si-return-to-order"'));
+ assert.ok(checklist.includes('data-testid="si-return-to-order"'));
+ assert.ok(checklist.includes('returnOrderId'));
+ assert.ok(workspace.includes("this.api+'my-work-orders/'+o.orderId+'/dossier'"),
+  'read-only dossier remains session-owned');
 });
 
 test('mandatory preparation never waits for AI hypotheses or accepts unreviewed extras',()=>{
@@ -108,4 +138,36 @@ test('mandatory preparation never waits for AI hypotheses or accepts unreviewed 
  assert.ok(workspace.includes('!ai.predictedDeficiencies?.length'));
  assert.ok(workspace.includes('ai.predictedDeficiencies'));
  assert.ok(workspace.includes('AI hypothesis only'));
+});
+
+test('approved A04 dossier updates Step 3 from saved authoritative vessel read model',()=>{
+ const dossier=src('ai-proxy/si-vessel-dossier.mjs');
+ assert.ok(workspace.includes('dossier?.readiness?.preparationSaved'));
+ assert.ok(workspace.includes('dossier?.readiness?.aiReviewed'));
+ assert.ok(workspace.includes('data-testid="si-step3-a04-approved"'));
+ assert.ok(workspace.includes('data-testid="si-step3-a04-summary"'));
+ assert.ok(workspace.includes('data-testid="si-refresh-journey-status"'));
+ assert.ok(workspace.includes('ai.focusAreas.length'));
+ assert.ok(workspace.includes('ai.suggestedAdditionalItems.length'));
+ assert.ok(dossier.includes("aiReviewed:record?.status==='APPROVED'"));
+ assert.ok(workspace.includes("this.api+'my-work-orders/'+o.orderId+'/dossier'"),
+  'no extra paid AI invocation to render A04 status');
+});
+
+test('Dynamic Checklist distinguishes 4 approved focus areas from zero extra questions',()=>{
+ const ui=src('src/app/pages/si-checklist-execution.component.ts');
+ assert.ok(ui.includes('data-testid="si-a04-approved-focus-overlay"'));
+ assert.ok(ui.includes('data-testid="si-a04-zero-extras"'));
+ assert.ok(ui.includes('a04FocusAreas.length'));
+ assert.ok(ui.includes('a04ChecklistFocus.length'));
+ assert.ok(ui.includes('a04AdditionalItems.length'));
+ assert.ok(ui.includes("this.a04?.saved?.status==='APPROVED'"));
+ assert.ok(ui.includes('this.a04?.stale!==true'));
+ assert.ok(ui.includes('focus.existingItemId'));
+ assert.ok(ui.includes('focus.reasonEvidenceIds'));
+ assert.ok(ui.includes('data-testid="si-field-not-started"'));
+ assert.ok(ui.includes('preview?.fieldAccess?.inspectionStatus'));
+ assert.ok(ui.includes('data-testid="si-checklist-continue-in-stepper"'));
+ assert.ok(!ui.includes('predictedDeficiencies.map(x=>x.mandatory'),
+  'AI hypothesis must not become a mandatory question');
 });
