@@ -179,3 +179,46 @@ test('Oracle dossier preparation insert and audit never use keyword bind identif
   assert.equal(commits,1);assert.equal(rollbacks,0);
  }finally{h.cleanup();}
 });
+
+test('A04 focus accepts only harmless case/whitespace differences in advisory priority',()=>{
+ const result=validateA04({...dossier,focusAreas:[{
+  category:'SAFETY',priority:' high ',reason:'Inspection focus supported by source evidence',
+  evidenceIds:['CERT-1']
+ }]},{checkIds:SI_BASE_CHECKLIST,evidenceIds:fixture.evidenceIds});
+ assert.equal(result.focusAreas[0].priority,'HIGH');
+ assert.deepEqual(result.focusAreas[0].evidenceIds,['CERT-1']);
+ assert.equal(result.requiresInspectorReview,true);
+});
+
+test('A04 focus schema reports only safe field paths without returning untrusted model text',()=>{
+ const examples=[
+  {patch:{category:null},field:'focusAreas[0].category'},
+  {patch:{category:' '},field:'focusAreas[0].category'},
+  {patch:{priority:'MEDIUM'},field:'focusAreas[0].priority'},
+  {patch:{priority:{untrusted:'value'}},field:'focusAreas[0].priority'},
+  {patch:{reason:''},field:'focusAreas[0].reason'}
+ ];
+ for(const row of examples){
+  const value={...dossier,focusAreas:[{...dossier.focusAreas[0],...row.patch}]};
+  assert.throws(()=>validateA04(value,{
+   checkIds:SI_BASE_CHECKLIST,evidenceIds:fixture.evidenceIds
+  }),e=>e instanceof SiPreparationError&&
+   e.code==='SI_A04_FOCUS_INVALID'&&e.field===row.field);
+ }
+});
+
+test('failed A04 provider priority leaves traceable path, zero fabricated dossiers and no retry',async()=>{
+ const bad={...dossier,focusAreas:[{...dossier.focusAreas[0],priority:'MEDIUM'}]};
+ const h=harness({enabled:true,providerResponse:bad});
+ try{
+  await h.svc.prepare(caseId,{actor:'Inspector'});
+  await assert.rejects(()=>h.svc.generate(caseId,{
+   actor:'Inspector',expectedVersion:1,confirmCost:true,language:'en'
+  }),e=>e.code==='SI_A04_FOCUS_INVALID');
+  const result=await h.svc.get(caseId);
+  assert.equal(result.saved.status,'FAILED');
+  assert.equal(result.saved.lastFailureField,'focusAreas[0].priority');
+  assert.equal(result.saved.dossier,null);
+  assert.equal(h.calls(),1,'no silent second billable agent call');
+ }finally{h.cleanup();}
+});
