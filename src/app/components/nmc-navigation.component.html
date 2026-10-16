@@ -167,12 +167,12 @@
           <span class="nav-icon">▥</span>
           <span class="nav-label">{{copy('Inspection Management','إدارة المعاينات')}}</span>
         </a>
-        <a class="nav-link" routerLink="/moei/smart-inspection/lifecycle"
-           [class.active]="isInspectionLifecycle"
-           [attr.aria-current]="isInspectionLifecycle?'page':null"
-           [title]="copy('Full Inspection Lifecycle','دورة المعاينة الكاملة')">
+        <a class="nav-link" routerLink="/moei/smart-inspection/my-work-orders"
+           [class.active]="currentPath.startsWith('/moei/smart-inspection/my-work-orders')"
+           [attr.aria-current]="currentPath.startsWith('/moei/smart-inspection/my-work-orders')?'page':null"
+           [title]="copy('Single Inspection Journey','رحلة المعاينة الموحدة')">
           <span class="nav-icon">◷</span>
-          <span class="nav-label">{{copy('Full Inspection Lifecycle','دورة المعاينة الكاملة')}}</span>
+          <span class="nav-label">{{copy('My Inspection Journey','رحلة معايناتي')}}</span>
         </a>
         <a class="nav-link" routerLink="/moei/smart-inspection/preparation"
            [class.active]="isInspectionPreparation"
@@ -187,10 +187,6 @@
            [title]="copy('Electronic Scheduling','الجدولة الإلكترونية')">
           <span class="nav-icon">▦</span>
           <span class="nav-label">{{copy('Electronic Scheduling','الجدولة الإلكترونية')}}</span>
-        </a>
-        <a class="nav-link" routerLink="/moei/smart-inspection/my-work-orders"
-           [title]="copy('My Assigned Inspections','المعاينات المسندة إليّ')">
-          <span class="nav-label">{{copy('My Assigned Inspections','المعاينات المسندة إليّ')}}</span>
         </a>
         <a class="nav-link" [routerLink]="inspectionWorkbenchRoute"
            [class.active]="isInspectionWorkbench"
