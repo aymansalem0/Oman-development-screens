@@ -1,6 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { SeafarerWorkspace, SdbError } from "./seafarer-workspace.mjs";
-import {sdbServiceScenarios} from "./seafarer-sdb-service-scenarios.mjs";
+import {sdbServiceScenarios,sdbDemoProfile} from "./seafarer-sdb-service-scenarios.mjs";
 const root = "/api/seafarers/v1";
 const reject = (code, status) => {
   throw new SdbError(code, status);
@@ -145,6 +145,14 @@ export function createSeafarerHandler({
           s.state.readinessSettings).find(row=>row.id===demoCase[1]);
         if(!selected)reject('SDB_SCENARIO_NOT_FOUND',404);
         send(res,200,{mode:'CONTRACT_SANDBOX',scenario:selected});
+        return true;
+      }
+      if(req.method==='POST'&&path===root+'/demo-scenarios/ready-journey'){
+        if(!actor.operations)reject('SDB_OPERATIONS_REQUIRED',403);
+        const {body}=await read(req);
+        const profile=sdbDemoProfile(body.scenarioId,s.clock());
+        if(!profile)reject('SDB_SCENARIO_NOT_FOUND',404);
+        send(res,201,s.beginReadyDemoJourney(actor,body.scenarioId,profile));
         return true;
       }
       if(req.method==='GET'&&path===root+'/readiness-requirements'){
