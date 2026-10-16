@@ -62,7 +62,7 @@ jobs:
         run: node --test ai-proxy/test/si-management-report.test.mjs
 
       - name: Seafarer readiness, company clearance, source webhooks and SDB journey
-        run: node --test ai-proxy/test/seafarer-workspace.test.mjs ai-proxy/test/seafarer-http.test.mjs
+        run: node --test ai-proxy/test/seafarer-workspace.test.mjs ai-proxy/test/seafarer-http.test.mjs ai-proxy/test/seafarer-sdb-service-scenarios.test.mjs
 
       - name: Build
         run: npm run build

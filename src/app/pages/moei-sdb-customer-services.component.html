@@ -1,0 +1,221 @@
+<div class="sdb-shell" [attr.dir]="lang.dir">
+ <app-nmc-platform-header area="seafarers"></app-nmc-platform-header>
+ <app-nmc-navigation></app-nmc-navigation>
+ <main class="sdb-main">
+  <div class="breadcrumbs">{{t('MARITIME SERVICES','الخدمات البحرية')}} <span>›</span>
+   {{t('SEAFARER MANAGEMENT','إدارة البحارة')}} <span>›</span>
+   {{t('SEAFARER SERVICES','خدمات البحارة')}}</div>
+  <section class="page-heading">
+   <div>
+    <p class="overline">MOEI · SDB CUSTOMER JOURNEY</p>
+    <h1>{{t('Seafarer Services','خدمات البحارة')}}</h1>
+    <p>{{t('Apply for a Seafarer’s Discharge Book, or renew your existing book, through a single guided service.',
+       'تقدّم بطلب إصدار سجل بحار جديد أو تجديد سجلك الحالي من خلال خدمة إلكترونية موجهة.')}}</p>
+   </div>
+   <div class="heading-links" *ngIf="data?.actor?.operations">
+    <a routerLink="/moei/seafarers/readiness">{{t('Internal pre-application readiness','جاهزية ما قبل التقديم للموظفين')}} ↗</a>
+    <a routerLink="/moei/seafarers/records">{{t('Registered seafarers & sea service','البحارة المسجلون والخدمة البحرية')}} ↗</a>
+   </div>
+  </section>
+
+  <div class="sandbox" role="note"><b>POC · SANDBOX</b>
+   {{t('Illustrative cases and rule-based readiness explanations. No live MARASI, academy, company, UAE PASS, AI model or official SDB issuance.',
+      'حالات تجريبية وتفسير للجاهزية باستخدام قواعد موثّقة. لا توجد اتصالات تشغيلية بمراسي أو الأكاديمية أو الشركات أو الهوية الرقمية أو نموذج ذكاء اصطناعي؛ ولا يتم إصدار سجل رسمي.')}}
+  </div>
+  <p *ngIf="error" class="feedback error" role="alert">{{error}}</p>
+  <p *ngIf="loading" class="loading-state">{{t('Loading your account…','جارٍ تحميل حسابك…')}}</p>
+
+  <ng-container *ngIf="data">
+   <section class="entry" *ngIf="!showCases">
+    <div class="entry-copy">
+     <div class="entry-label">{{t('START A MARITIME SERVICE','ابدأ خدمة بحرية')}}</div>
+     <h2>{{t('Your SDB journey starts here','ابدأ رحلة سجل البحار من هنا')}}</h2>
+     <p>{{t('The platform identifies first issuance or renewal from your existing SDB, checks certificates, medical fitness and clearances, and explains what needs attention.',
+       'تتعرف المنصة على الإصدار الأول أو التجديد من وجود سجل بحار سابق، وتراجع الشهادات والكشف الطبي وعدم الممانعة مع شرح المتطلبات الناقصة.')}}</p>
+     <div class="journey-flow">
+      <div><span>01</span><b>{{t('Identify service','تحديد الخدمة')}}</b></div>
+      <div><span>02</span><b>{{t('Check readiness','حساب الجاهزية')}}</b></div>
+      <div><span>03</span><b>{{t('Submit application','تقديم الطلب')}}</b></div>
+      <div><span>04</span><b>{{t('Pay & receive SDB','السداد واستلام السجل')}}</b></div>
+     </div>
+     <button type="button" class="cta" (click)="startService()" data-testid="sdb-start-service">
+      {{t('Start Service','ابدأ الخدمة')}} <span aria-hidden="true">←</span>
+     </button>
+     <p class="footnote">{{t('In this POC, authorised operators can choose one of eight scenarios after starting.',
+       'في النموذج التجريبي يمكن للمشغّل المعتمد اختيار واحدة من ثماني حالات بعد بدء الخدمة.')}}</p>
+    </div>
+    <div class="entry-cards">
+     <div class="service-choice">
+      <span class="choice-icon">✦</span>
+      <small>{{t('SERVICE 01','الخدمة 01')}}</small>
+      <h3>{{t('Issue a New SDB','إصدار سجل بحار لأول مرة')}}</h3>
+      <p>{{t('For first-time cadets without an existing SID/SDB.', 'للمتدربين المتقدمين لأول مرة وليس لديهم سجل بحار سابق.')}}</p>
+      <span class="badge issue">{{t('FIRST ISSUE','إصدار أول')}}</span>
+     </div>
+     <div class="service-choice">
+      <span class="choice-icon navy">↻</span>
+      <small>{{t('SERVICE 02','الخدمة 02')}}</small>
+      <h3>{{t('Renew Existing SDB','تجديد سجل البحار')}}</h3>
+      <p>{{t('Existing SID and booklet are recognised; current credentials and clearances are revalidated.',
+       'يتم التعرف على رقم البحار والسجل السابق وإعادة فحص صلاحية المؤهلات وعدم الممانعة.')}}</p>
+      <span class="badge renew">{{t('RENEWAL','تجديد')}}</span>
+     </div>
+    </div>
+   </section>
+
+   <ng-container *ngIf="showCases">
+    <div class="subhead">
+     <div><p class="overline">STEP 01 · {{t('APPLICANT','مقدم الطلب')}}</p>
+      <h2>{{t('Select a test scenario','اختر حالة البحار التجريبية')}}</h2>
+      <p>{{t('Scenario selection is only a sandbox demonstration. Actual applicants see only their own authenticated profile.',
+         'اختيار الحالات للعرض التجريبي فقط؛ العميل الفعلي يرى ملفه المرتبط بحسابه دون إمكانية اختيار هوية شخص آخر.')}}</p>
+     </div>
+     <button class="secondary" type="button" (click)="showCases=false;selected=null">
+      {{t('Back to services','العودة للخدمات')}}</button>
+    </div>
+    <div *ngIf="scenariosLoading" class="loading-state">
+      {{t('Calculating readiness from source fixtures…','جارٍ حساب الجاهزية من بيانات السيناريوهات…')}}</div>
+
+    <ng-container *ngIf="data.actor.operations;else customerProfile">
+     <div class="filter-tabs" *ngIf="scenarios.length">
+      <button type="button" [class.active]="filter==='ALL'" (click)="selectFilter('ALL')">
+       {{t('All scenarios','كل الحالات')}} <b>{{scenarios.length}}</b></button>
+      <button type="button" [class.active]="filter==='FIRST_ISSUE'" (click)="selectFilter('FIRST_ISSUE')">
+       {{t('First issue · Cadets','إصدار أول · متدربون')}} <b>{{issueCount}}</b></button>
+      <button type="button" [class.active]="filter==='RENEWAL'" (click)="selectFilter('RENEWAL')">
+       {{t('Renewal · Existing SDB','التجديد · سجل قائم')}} <b>{{renewalCount}}</b></button>
+     </div>
+     <div class="cases-grid" *ngIf="scenarios.length">
+      <button class="case-card" type="button" *ngFor="let s of filteredScenarios"
+       (click)="choose(s)" [class.selected]="selected?.id===s.id"
+       [attr.aria-pressed]="selected?.id===s.id" [attr.data-testid]="'scenario-'+s.id">
+       <div class="case-top">
+        <span class="case-type" [class.renew]="isRenewal(s)">
+         {{serviceLabel(s.readiness.service)}}</span>
+        <span class="case-indicator" [attr.data-state]="s.readiness.status">
+         {{statusLabel(s.readiness.status)}}</span>
+       </div>
+       <h3>{{lang.isArabic?s.titleAr:s.title}}</h3>
+       <p>{{lang.isArabic?s.situationAr:s.situation}}</p>
+       <div class="case-person"><span class="person-icon">♙</span>
+        <span><b>{{s.person.name}}</b><small>{{s.person.rank}} · {{s.profileId}}</small></span>
+       </div>
+       <div *ngIf="s.existingSdb as old" class="sdb-existing">
+        <strong>{{t('Existing SDB detected → RENEWAL','تم العثور على سجل سابق ← تجديد')}}</strong>
+        <small>{{old.number}} · SID {{old.sid}}</small>
+       </div>
+       <div class="meter-caption"><span>{{t('Readiness','الجاهزية')}}</span>
+        <strong>{{s.readiness.percent}}%</strong></div>
+       <div class="meter"><span [style.width.%]="s.readiness.percent"></span></div>
+       <div class="case-footer">
+        <span>{{s.readiness.passed}} / {{s.readiness.total}} {{t('checks passed','متطلبات مستوفاة')}}</span>
+        <b>{{t('View case','عرض الحالة')}} ←</b>
+       </div>
+      </button>
+     </div>
+
+     <section class="selected-analysis" *ngIf="selected as current" data-testid="sdb-scenario-analysis">
+      <header class="analysis-header">
+       <div><p class="overline">{{t('READINESS ANALYSIS · CUSTOMER VIEW','تحليل الجاهزية · عرض العميل')}}</p>
+        <h2>{{current.person.name}}</h2>
+        <p>{{serviceLabel(current.readiness.service)}} · {{lang.isArabic?current.situationAr:current.situation}}</p>
+       </div>
+       <span class="percent" [attr.data-state]="current.readiness.status">{{current.readiness.percent}}%</span>
+      </header>
+      <div class="intelligence-strip">
+       <div class="intelligence-icon">✦</div>
+       <div>
+        <strong>{{t('AI readiness advisor · explainable rules POC','مساعد الجاهزية الذكي · نموذج قواعد قابل للتفسير')}}</strong>
+        <p>{{t('Readiness is calculated from source-backed checks; no AI model was called. The system distinguishes issuance from renewal by the existing SDB record.',
+         'يتم حساب الجاهزية من متطلبات مرتبطة بمصادرها دون استدعاء نموذج ذكاء اصطناعي فعلي، ويُميّز النظام الإصدار من التجديد بناءً على وجود سجل سابق.')}}</p>
+        <div class="intelligence-tags">
+         <span>{{serviceLabel(current.advisor.classifiedService)}}</span>
+         <span>{{current.advisor.evidence.length}} {{t('source checks','فحصًا للمصادر')}}</span>
+         <span>{{current.advisor.nextActions.length}} {{t('actions needed','إجراءات مطلوبة')}}</span>
+         <span>{{t('Source traceable','قابل للتتبع')}}</span>
+        </div>
+       </div>
+      </div>
+      <div class="analysis-columns">
+       <section class="requirements">
+        <div class="section-title"><h3>{{t('Verified requirements & blockers','المتطلبات وأسباب عدم الجاهزية')}}</h3>
+         <span>{{current.readiness.passed}} / {{current.readiness.total}}</span></div>
+        <div class="requirement" *ngFor="let check of current.readiness.checks">
+         <span class="check-icon" [attr.data-state]="check.result">{{check.result==='PASS'?'✓':'!'}}</span>
+         <div class="requirement-body"><b>{{checkLabel(check)}}</b>
+          <small>{{sourceLabel(check.source)}} · {{check.reference||t('No reference','بلا مرجع')}}</small>
+          <p *ngIf="check.result!=='PASS'">{{checkAction(check)}}</p>
+         </div>
+         <span class="check-state" [attr.data-state]="check.result">{{statusLabel(check.result)}}</span>
+        </div>
+       </section>
+       <section class="decision-panel">
+        <div class="section-title"><h3>{{t('Service decision','قرار إكمال الخدمة')}}</h3></div>
+        <div class="decision-result" [class.allowed]="current.canContinue">
+         <strong>{{current.canContinue?t('Eligible to apply','مؤهل للتقديم'):
+           t('Application cannot continue','لا يمكن استكمال التقديم')}}</strong>
+         <p>{{current.canContinue?
+           t('All current requirements are met. The application will recheck server-side readiness before creation, payment and issuance.',
+             'جميع المتطلبات مستوفاة. ستعيد المنصة التحقق من الجاهزية على الخادم قبل إنشاء الطلب والسداد والإصدار.'):
+           t('Resolve the outstanding items at their issuing sources. Academy/company holds cannot be overridden by the customer or AI.',
+             'يلزم استكمال المتطلبات لدى الجهات المسؤولة، ولا يستطيع العميل أو الذكاء الاصطناعي تجاوز إيقاف الأكاديمية أو الشركة.')}}</p>
+        </div>
+        <div *ngIf="current.existingSdb as book" class="identity-note">
+         <small>{{t('EXISTING SDB · DETECTED','تم التعرف على سجل بحار قائم')}}</small>
+         <b>{{book.number}}</b>
+         <span>SID {{book.sid}} · {{t('Expires','ينتهي')}} {{book.expiryDate}}</span>
+         <strong>{{t('Renewal process selected automatically','تم تحديد مسار التجديد تلقائيًا')}}</strong>
+        </div>
+        <div *ngIf="!current.existingSdb" class="identity-note">
+         <small>{{t('NO PRIOR SDB','لا يوجد سجل سابق')}}</small>
+         <strong>{{t('First-time issuance process selected','تم تحديد مسار الإصدار الأول')}}</strong>
+        </div>
+        <div *ngIf="current.advisor.nextActions.length" class="action-list">
+         <h4>{{t('Recommended next actions','الإجراءات التالية المقترحة')}}</h4>
+         <div *ngFor="let action of current.readiness.blockers">
+          <b>{{sourceLabel(action.source)}}</b><span>{{checkAction(action)}}</span>
+         </div>
+        </div>
+        <a *ngIf="proceedAllowed(current)" class="cta proceed"
+          [routerLink]="['/moei/seafarers/sdb',current.profileId]"
+          [attr.data-testid]="'sdb-proceed-'+current.id">
+          {{t('Continue SDB application','استكمال طلب سجل البحار')}} ←</a>
+        <p *ngIf="current.canContinue&&!proceedAllowed(current)" class="source-warning">
+         {{t('The actual sandbox applicant has a different current readiness. Refresh or choose another scenario; a preview cannot bypass server controls.',
+           'جاهزية ملف الطلب التجريبي الفعلي مختلفة عن السيناريو. حدّث البيانات؛ لا يمكن تجاوز ضوابط الخادم.')}}</p>
+        <button *ngIf="!current.canContinue" type="button" disabled class="cta proceed">
+         {{t('Continue blocked until requirements are met','لا يمكن الاستكمال قبل استيفاء المتطلبات')}}</button>
+       </section>
+      </div>
+     </section>
+    </ng-container>
+    <ng-template #customerProfile>
+     <section class="selected-analysis" *ngIf="myProfile as p">
+      <header class="analysis-header"><div>
+       <p class="overline">{{t('YOUR AUTHORISED PROFILE','ملفك المرتبط بحسابك')}}</p>
+       <h2>{{p.name}}</h2><p>{{serviceLabel(p.readiness.service)}}</p>
+      </div><span class="percent">{{p.readiness.percent}}%</span></header>
+      <div *ngIf="p.existingSdb as book" class="identity-note">
+       {{t('Existing SDB detected — renewal','سجل سابق موجود — تجديد')}} · {{book.number}} · SID {{book.sid}}
+      </div>
+      <div class="requirement" *ngFor="let c of p.readiness.checks">
+       <span class="check-icon" [attr.data-state]="c.result">{{c.result==='PASS'?'✓':'!'}}</span>
+       <div class="requirement-body"><b>{{checkLabel(c)}}</b>
+        <small>{{sourceLabel(c.source)}}</small>
+        <p *ngIf="c.result!=='PASS'">{{checkAction(c)}}</p></div>
+       <span class="check-state" [attr.data-state]="c.result">{{statusLabel(c.result)}}</span>
+      </div>
+      <div class="customer-actions">
+       <a *ngIf="p.readiness.status==='READY'" class="cta"
+        [routerLink]="['/moei/seafarers/sdb',p.id]">
+        {{t('Continue to SDB application','استكمال طلب سجل البحار')}} ←</a>
+       <p *ngIf="p.readiness.status!=='READY'">
+        {{t('Please resolve the source-owned blockers before applying.','يرجى استيفاء المتطلبات لدى الجهات المختصة قبل التقديم.')}}</p>
+      </div>
+     </section>
+     <p *ngIf="!myProfile" class="feedback error">{{t('No seafarer profile is bound to this login.','لا يوجد ملف بحار مرتبط بهذا الحساب.')}}</p>
+    </ng-template>
+   </ng-container>
+  </ng-container>
+ </main>
+</div>

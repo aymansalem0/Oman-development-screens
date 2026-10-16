@@ -38,8 +38,10 @@
         </button>
       </div>
     </header>
+    <!-- The applicant's SDB wizard is not the internal readiness workbench. -->
     <nav
       class="section-nav"
+      *ngIf="view !== 'services'"
       [attr.aria-label]="t('Seafarer workspace', 'إدارة البحارة')"
     >
       <a
@@ -75,7 +77,7 @@
     </div>
     <div
       class="preview-bar"
-      *ngIf="canPreview && (view === 'services' || view === 'company')"
+      *ngIf="canPreview && view === 'company'"
     >
       <span>{{
         t(
