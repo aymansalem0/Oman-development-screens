@@ -79,7 +79,13 @@ interface Dossier{
      <p>{{t('Follow these five steps for the selected vessel. The mandatory published checklist is always prepared first; AI additions are optional and require human approval.',
       'اتبع الخطوات الخمس للسفينة المختارة. تُجهّز القائمة الإلزامية المنشورة أولًا دائمًا، وإضافات AI اختيارية وتحتاج اعتمادًا بشريًا.')}}</p>
     </div>
-    <span class="journey-vessel" *ngIf="selected as o">{{o.vesselName||('IMO '+o.imo)}} · IMO {{o.imo}}</span>
+    <div class="journey-head-actions">
+     <span class="journey-vessel" *ngIf="selected as o">{{o.vesselName||('IMO '+o.imo)}} · IMO {{o.imo}}</span>
+     <button *ngIf="selected" class="journey-refresh" type="button" (click)="load()"
+      [disabled]="busy||loading" data-testid="si-refresh-journey-status">
+      {{t('Refresh Journey Status','تحديث حالة الخطوات')}}
+     </button>
+    </div>
    </header>
    <ol class="journey-track">
     <li class="journey-step" [class.complete]="!!selected" [class.current]="!selected" data-testid="si-step-select-vessel">
@@ -107,8 +113,10 @@ interface Dossier{
      </ng-container>
      <span *ngIf="!selected" class="journey-wait">{{t('Select vessel first','اختر السفينة أولًا')}}</span>
     </li>
-    <li class="journey-step" [class.ready]="!!selected?.caseId" data-testid="si-step-open-preparation">
-     <span class="journey-number">3</span>
+    <li class="journey-step" [class.ready]="!!selected?.caseId"
+     [class.complete]="dossier?.readiness?.preparationSaved===true"
+     data-testid="si-step-open-preparation">
+     <span class="journey-number">{{dossier?.readiness?.preparationSaved?'✓':'3'}}</span>
      <strong>{{t('3. Open Preparation','٣. فتح ملف التحضير')}}</strong>
      <p>{{t('Review source evidence; authorized admins may request optional A04 and approve its advisory dossier.',
       'مراجعة أدلة المصدر، ويمكن للمسؤول المخوّل تشغيل A04 اختياريًا ومراجعة توصياته.')}}</p>
@@ -119,11 +127,23 @@ interface Dossier{
      </a>
      <a *ngIf="selected?.caseId && !auth.isAdmin" class="journey-action"
       href="#vessel-evidence">{{t('Review Prepared Vessel Dossier','عرض دوسيه السفينة المجهز')}}</a>
+     <span *ngIf="dossier?.readiness?.aiReviewed===true" class="journey-done"
+      data-testid="si-step3-a04-approved">
+      {{t('A04 APPROVED · Supervisor reviewed','A04 معتمد · تمت مراجعة المشرف')}}
+     </span>
+     <span *ngIf="dossier?.readiness?.aiReviewed===true&&dossier?.sections?.aiAnalysis?.modelDraft as ai"
+      class="journey-a04-summary" data-testid="si-step3-a04-summary">
+      {{t('Focus areas','مجالات التركيز')}}: {{ai.focusAreas.length}} ·
+      {{t('Extra questions','أسئلة إضافية')}}: {{ai.suggestedAdditionalItems.length}}
+     </span>
+     <span *ngIf="dossier?.readiness?.preparationSaved===true&&dossier?.readiness?.aiReviewed!==true"
+      class="journey-done">{{t('Evidence prepared · A04 optional','تم تجهيز الأدلة · A04 اختياري')}}</span>
      <span *ngIf="!selected?.caseId" class="journey-wait">{{t('Available after dossier preparation','متاح بعد تجهيز الملف')}}</span>
     </li>
-    <li class="journey-step" [class.ready]="selected?.checklistStatus==='MANDATORY_PUBLISHED_TEMPLATE_SNAPSHOT'"
+    <li class="journey-step"
+     [class.complete]="selected?.checklistStatus==='MANDATORY_PUBLISHED_TEMPLATE_SNAPSHOT'"
      data-testid="si-step-create-checklist">
-     <span class="journey-number">4</span>
+     <span class="journey-number">{{selected?.checklistStatus==='MANDATORY_PUBLISHED_TEMPLATE_SNAPSHOT'?'✓':'4'}}</span>
      <strong>{{t('4. Create / Review Checklist','٤. إنشاء ومراجعة القائمة')}}</strong>
      <p>{{t('The mandatory checklist is created at Step 2. AI questions can supplement it only after human review, never replace it.',
       'القائمة الإلزامية تُنشأ في الخطوة ٢. أسئلة AI إضافة اختيارية بعد المراجعة البشرية ولا تستبدل الأصلية.')}}</p>
@@ -134,6 +154,10 @@ interface Dossier{
      </a>
      <span *ngIf="selected?.caseId&&selected?.checklistStatus==='MANDATORY_PUBLISHED_TEMPLATE_SNAPSHOT'"
       class="journey-done">{{t('Mandatory ready · AI optional','الإلزامية جاهزة · AI اختياري')}}</span>
+     <span *ngIf="dossier?.readiness?.aiReviewed===true" class="journey-a04-summary">
+      {{t('Approved AI focus appears as advisory guidance, not mandatory checks.',
+       'تركيز AI المعتمد يظهر كتوجيه استشاري، وليس كبنود إلزامية.')}}
+     </span>
      <span *ngIf="selected?.checklistStatus!=='MANDATORY_PUBLISHED_TEMPLATE_SNAPSHOT'"
       class="journey-wait">{{t('Requires published checklist preparation','يتطلب تجهيز القائمة المنشورة')}}</span>
     </li>
@@ -425,6 +449,10 @@ interface Dossier{
  .journey-head p{font-size:12px;color:#667f8c;line-height:1.7;margin:4px 0 15px}
  .journey-vessel{font-size:12px;font-weight:750;color:#076a64;border-radius:9px;
   background:#eaf8f5;padding:10px}
+ .journey-head-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+ .journey-refresh{border:1px solid #accfcd;color:#08736b;background:#e5f5f3;
+  border-radius:9px;padding:10px 12px;cursor:pointer;font-size:11px;font-weight:750}
+ .journey-a04-summary{font-size:11px;font-weight:750;color:#216b83;line-height:1.55}
  .journey-track{list-style:none;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));
   gap:10px;padding:0;margin:0;align-items:stretch}
  .journey-step{position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:8px;
