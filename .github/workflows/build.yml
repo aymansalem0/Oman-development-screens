@@ -2,7 +2,7 @@ name: Angular Build
 
 on:
   push:
-    branches: [main, 'feature/nmc-*', 'feature/si-*', 'feature/moei-*', 'integration/moei-seafarers-*', 'fix/moei-*']
+    branches: [main, 'feature/nmc-*', 'feature/si-*', 'feature/moei-*', 'integration/moei-seafarers-*', 'fix/moei-*', 'feat/moei-*']
   workflow_dispatch:
   pull_request:
     branches: [main, feature/smart-inspection-poc, 'feature/nmc-*', 'feature/si-*', 'feature/moei-*', 'integration/moei-seafarers-*']
