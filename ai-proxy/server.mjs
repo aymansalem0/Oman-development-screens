@@ -1,4 +1,5 @@
 import { createServer } from 'node:http';
+import {createSeafarerHandler} from './seafarer-http.mjs';
 import {MoeiPocAuth,MoeiAuthError} from './moei-poc-auth.mjs';
 import {SiChecklistLibrary,SiChecklistError} from './si-checklist-library.mjs';
 import {SiChecklistField} from './si-checklist-field.mjs';
@@ -671,7 +672,11 @@ async function prepareCaseA01Actions(caseId,version,approval={}){
           }finally{actionPlanRuns.delete(caseId);}
 }
 
+const seafarerHandler=createSeafarerHandler({auth:moeiAuth});
+
 const server = createServer(async (req, res) => {
+  // SDB is isolated behind /api/seafarers; it does not run any NMC or SI code.
+  if(await seafarerHandler(req,res))return;
   const path = new URL(req.url || '/', 'http://localhost').pathname;
   // Google SSO is the default. Local password login is an explicitly opt-in
   // migration/debug mode, never a bypass when Google SSO is enabled.
@@ -697,7 +702,7 @@ const server = createServer(async (req, res) => {
       const user=googleUsers.bind(identity.email,identity.sub); // verified Gmail only
       const issued=moeiAuth.issueSession(user);
       res.setHeader('Set-Cookie',[googleSso.cookie(req,'',0),moeiAuth.cookie(req,issued.token)]);
-      res.writeHead(302,{Location:'/#/moei/nmc','Cache-Control':'no-store'});return res.end();
+      res.writeHead(302,{Location:'/#'+(identity.returnTo||'/moei/nmc'),'Cache-Control':'no-store'});return res.end();
     }catch(error){
       reason=error.code||reason;
       res.setHeader('Set-Cookie',googleSso.cookie(req,'',0));
