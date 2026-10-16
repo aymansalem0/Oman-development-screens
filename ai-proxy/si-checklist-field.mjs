@@ -255,6 +255,7 @@ export class SiChecklistField{
   if(!safe(actor,120)||confirmCost!==true||
    !VALID_LEVELS.includes(level)||(!safe(text||'',2500)&&!image&&!evidenceId))
    failure('SI_CHECKLIST_AI_CONFIRMATION_REQUIRED');
+  if(image&&evidenceId)failure('SI_CHECKLIST_AI_MULTIPLE_IMAGES_NOT_ALLOWED',422);
   if(!this.airiaSuggest)failure('SI_CHECKLIST_AIRIA_NOT_CONFIGURED',503);
   await this.context(idValue);
   if(this.active.has(idValue))failure('SI_CHECKLIST_AI_BUSY',409);
