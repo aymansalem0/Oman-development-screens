@@ -712,9 +712,11 @@ export class SeafarerWorkspace {
     const profiles = this.state.profiles
       .filter(
         (p) =>
-          actor.operations ||
+          (!p.demoJourney||p.demoJourney.operatorKey===actor.key||
+             (actor.seafarerId===p.id&&actor.key.includes('[SANDBOX PREVIEW]'))) &&
+          (actor.operations ||
           p.id === actor.seafarerId ||
-          (actor.companyId && p.companyId === actor.companyId),
+          (actor.companyId && p.companyId === actor.companyId)),
       )
       .map((p) => this.view(p));
     const visible = new Set(profiles.map((p) => p.id));
@@ -761,9 +763,60 @@ export class SeafarerWorkspace {
     this.scope(actor, p);
     return this.view(p);
   }
+  /**
+   * Explicit READY-only sandbox fixture selection, scoped to the signed-in
+   * operations user. Existing real/sandbox profiles and applications NEVER
+   * change when the demo scenario is selected.
+   */
+  beginReadyDemoJourney(actor,scenarioId,syntheticProfile){
+    this.assertOperations(actor);
+    if(!['CADET_READY','RENEWAL_READY'].includes(scenarioId)||
+      !syntheticProfile||typeof syntheticProfile!=='object')
+      fail('SDB_READY_SCENARIO_REQUIRED',422);
+    const current=this.state.profiles.find(p=>p.demoJourney?.operatorKey===
+      actor.key&&p.demoJourney.scenarioId===scenarioId);
+    if(current){
+      const r=this.evaluate(current);
+      if(r.status!=='READY')fail('SDB_READINESS_CHANGED',409);
+      return {profileId:current.id,scenarioId,readiness:r,
+       alreadyProvisioned:true,mode:'ISOLATED_POC_DEMO'};
+    }
+    const profile=copy(syntheticProfile);
+    const originReadiness=this.evaluate(profile);
+    if(originReadiness.status!=='READY'||
+      (scenarioId==='CADET_READY'&&originReadiness.service!=='FIRST_ISSUE')||
+      (scenarioId==='RENEWAL_READY'&&originReadiness.service!=='RENEWAL'))
+      fail('SDB_READINESS_CHANGED',409);
+    return this.transaction(()=>{
+      // Cloned POC service journey must never share a national identifier,
+      // applicant ID, live work order or issued register with source fixture.
+      profile.id='SF-POC-'+randomUUID().slice(0,12);
+      profile.nationalId='SYNTHETIC-DEMO-'+randomUUID().slice(0,16);
+      profile.contact={...profile.contact,
+       email:'synthetic-applicant@example.test'};
+      profile.demoJourney={
+        scenarioId,operatorKey:actor.key,createdAt:iso(this.clock()),
+        dataClassification:'SYNTHETIC_POC_ONLY',
+        officialSubmission:false,sourceProfileId:syntheticProfile.id
+      };
+      profile.documents=[];
+      profile.version=1;
+      profile.readinessFingerprint=null;
+      this.state.profiles.push(profile);
+      this.audit(profile.id,'ISOLATED_READY_DEMO_PROVISIONED',actor.key,
+        scenarioId+'; never creates an official ministry record');
+      const readiness=this.evaluate(profile);
+      if(readiness.status!=='READY')fail('SDB_READINESS_CHANGED',409);
+      return {profileId:profile.id,scenarioId,readiness,
+       alreadyProvisioned:false,mode:'ISOLATED_POC_DEMO'};
+    });
+  }
+
   previewActor(actor, id, company = false) {
     this.assertOperations(actor);
     const p = this.profile(id);
+    if(p.demoJourney&&p.demoJourney.operatorKey!==actor.key)
+      fail('SDB_DEMO_JOURNEY_NOT_OWNED',403);
     if (company && !p.companyId) fail("SDB_COMPANY_ASSOCIATION_REQUIRED");
     return {
       ...actor,
