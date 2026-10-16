@@ -79,6 +79,11 @@ export interface SdbProfile {
   companyId: string | null;
   photoReference: string | null;
   existingSdb: { sid: string; number: string; expiryDate: string } | null;
+  academyRequired?:boolean;
+  cocRequired?:boolean;
+  endorsementRequired?:boolean;
+  coc?:{status:string;reference:string;expiryDate:string}|null;
+  endorsement?:{status:string;reference:string;expiryDate:string}|null;
   version: number;
   createdAt: string;
   lastUpdated: string;
