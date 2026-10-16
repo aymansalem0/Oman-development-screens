@@ -3,11 +3,13 @@
   <main class="lifecycle">
     <header class="hero">
       <div><small>MOEI · SMART INSPECTION · END-TO-END POC V1</small>
-        <h1>{{copy('Full Inspection Lifecycle','دورة المعاينة الكاملة')}}</h1>
-        <p>{{copy('Trace every inspection from selection through planning, field evidence, reports, corrective actions and controlled closure.',
-          'تتبّع كل معاينة من الاختيار والتخطيط إلى التنفيذ والأدلة والتقارير والإجراءات التصحيحية والإغلاق المنضبط.')}}</p>
+        <h1>{{copy('Inspection Case Record & Follow-up','سجل حالة المعاينة والمتابعة')}}</h1>
+        <p>{{copy('Advanced regulatory case ledger, audit history, reports and corrective actions. Assigned-inspector preparation, scope approval and field start are coordinated from My Inspection Journey.',
+          'سجل تنظيمي متقدم للحالة والتدقيق والتقارير والإجراءات التصحيحية. يتم تحضير المعاينات المسندة واعتماد نطاقها وبدء تنفيذها من رحلة المعاينة الموحدة.')}}</p>
       </div>
       <div class="hero-actions">
+        <a routerLink="/moei/smart-inspection/my-work-orders" data-testid="si-case-record-return-journey">
+          {{copy('← My Inspection Journey','← رحلة المعاينة الموحدة')}}</a>
         <a routerLink="/moei/smart-inspection/psc-targeting">{{copy('PSC Selection','اختيار PSC')}}</a>
         <a routerLink="/moei/smart-inspection/candidates">{{copy('Candidate Center','مركز الترشيح')}}</a>
         <a routerLink="/moei/smart-inspection/preparation">{{copy('Preparation / A04','التحضير / A04')}}</a>
@@ -78,9 +80,9 @@
 
       <section class="card">
         <div class="section-title"><div><small>END-TO-END MAP</small>
-          <h2>{{copy('11 Business Stages · One Traceable Journey','١١ مرحلة أعمال · رحلة واحدة قابلة للتتبع')}}</h2>
-          <p>{{copy('Detailed 17-step scenario is mapped in the V1 design document. Cards below connect the existing modules and new execution ledger.',
-            'السيناريو التفصيلي المكون من ١٧ خطوة موضح في وثيقة V1، والبطاقات أدناه تربط الوحدات الحالية بسجل التنفيذ الجديد.')}}</p>
+          <h2>{{copy('Regulatory Lifecycle Reference · 11 Stages','مرجع دورة الحالة التنظيمية · ١١ مرحلة')}}</h2>
+          <p>{{copy('Reference map and audit view; not an alternative operational stepper for assigned inspectors. Use My Inspection Journey to prepare, approve work-order scope and start field execution.',
+            'خريطة مرجعية وسجل تدقيق، وليست Stepper بديلة للمفتش. استخدم رحلة المعاينة الموحدة للتحضير واعتماد نطاق أمر التكليف وبدء التنفيذ.')}}</p>
         </div></div>
         <div class="step-grid">
           <div class="step" *ngFor="let step of steps">
