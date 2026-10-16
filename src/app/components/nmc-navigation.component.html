@@ -23,6 +23,15 @@
   </div>
   <nav [attr.aria-label]="copy('Main maritime navigation', 'القائمة الرئيسية للخدمات البحرية')">
     <section class="nav-section">
+      <div class="nav-group"><span class="nav-icon">⚓</span><span class="nav-label">{{copy('Seafarer Management','إدارة البحارة')}}</span></div>
+      <div class="nav-children">
+        <a class="nav-link" routerLink="/moei/seafarers/readiness" [class.active]="currentPath==='/moei/seafarers/readiness'"><span class="nav-icon">◫</span><span class="nav-label">{{copy('Pre Application Readiness','جاهزية ما قبل التقديم')}}</span></a>
+        <a class="nav-link" routerLink="/moei/seafarers/services" [class.active]="currentPath==='/moei/seafarers/services'"><span class="nav-icon">▤</span><span class="nav-label">{{copy('Seafarer Services','خدمات البحارة')}}</span></a>
+        <a class="nav-link" routerLink="/moei/seafarers/company" [class.active]="currentPath==='/moei/seafarers/company'"><span class="nav-icon">▣</span><span class="nav-label">{{copy('Company No Objection','عدم ممانعة الشركات')}}</span></a>
+      </div>
+    </section>
+
+    <section class="nav-section">
       <button class="nav-group" type="button" (click)="toggleMain('nmc')"
               [attr.aria-expanded]="nmcExpanded" aria-controls="nmc-main-submenu">
         <span class="nav-icon">◉</span>
