@@ -17,6 +17,12 @@ export function normalizeGoogleEmail(value){
     throw new MoeiUsersError('MOEI_INVALID_EMAIL',400);
   return email;
 }
+const safeInspectorId=value=>{
+ if(value===null||value==='')return null;
+ if(typeof value!=='string'||!/^[A-Za-z0-9_-]{2,120}$/.test(value))
+  throw new MoeiUsersError('MOEI_INSPECTOR_ID_INVALID',422);
+ return value;
+};
 const safeRole=value=>{
   if(!['ADMIN','VIEWER'].includes(value))throw new MoeiUsersError('MOEI_INVALID_ROLE',400);
   return value;
@@ -41,7 +47,10 @@ export class MoeiGoogleUsers{
     writeFileSync(temp,JSON.stringify({version:1,users:this.users,audit:this.audit.slice(-500)},null,2),{mode:0o600});
     renameSync(temp,this.path);
   }
-  list(){return this.users.map(({googleSub,...user})=>({...user,linkedGoogleAccount:Boolean(googleSub)})).sort((a,b)=>a.email.localeCompare(b.email));}
+  list(){return this.users.map(({googleSub,...user})=>({...user,
+    inspectorId:user.inspectorId||null,
+    linkedGoogleAccount:Boolean(googleSub)}))
+    .sort((a,b)=>a.email.localeCompare(b.email));}
   find(email){return this.users.find(x=>x.email===normalizeGoogleEmail(email));}
   allowed(email,sub){
     const user=this.find(email);
@@ -62,14 +71,21 @@ export class MoeiGoogleUsers{
     const key=normalizeGoogleEmail(email);
     const selectedRole=safeRole(role);
     if(this.users.some(x=>x.email===key))throw new MoeiUsersError('MOEI_USER_ALREADY_EXISTS',409);
-    const user={email:key,role:selectedRole,active:true,googleSub:null,addedAt:new Date().toISOString(),addedBy:actor};
+    const user={email:key,role:selectedRole,active:true,googleSub:null,
+      inspectorId:null,addedAt:new Date().toISOString(),addedBy:actor};
     this.users.push(user);this.record('ADD',key,actor);this.persist();
     return this.list().find(x=>x.email===key);
   }
-  update(email,{active,role},actor){
+  update(email,{active,role,inspectorId},actor){
     const user=this.find(email);
     if(!user)throw new MoeiUsersError('MOEI_USER_NOT_FOUND',404);
-    if(typeof active!=='boolean'&&role===undefined)throw new MoeiUsersError('MOEI_NO_CHANGES',400);
+    if(typeof active!=='boolean'&&role===undefined&&inspectorId===undefined)
+      throw new MoeiUsersError('MOEI_NO_CHANGES',400);
+    const nextInspectorId=inspectorId===undefined?(user.inspectorId||null):
+      safeInspectorId(inspectorId);
+    if(nextInspectorId&&this.users.some(x=>
+      x.email!==user.email&&x.active&&x.inspectorId===nextInspectorId))
+      throw new MoeiUsersError('MOEI_INSPECTOR_ALREADY_LINKED',409);
     const nextRole=role===undefined?user.role:safeRole(role);
     const nextActive=active===undefined?user.active:active;
     if(typeof nextActive!=='boolean')throw new MoeiUsersError('MOEI_INVALID_ACTIVE',400);
@@ -77,6 +93,7 @@ export class MoeiGoogleUsers{
        this.users.filter(x=>x.active&&x.role==='ADMIN').length<=1)
       throw new MoeiUsersError('MOEI_LAST_ADMIN_REQUIRED',409);
     user.role=nextRole;user.active=nextActive;
+    user.inspectorId=nextInspectorId;
     this.record('UPDATE',user.email,actor);this.persist();
     return this.list().find(x=>x.email===user.email);
   }
