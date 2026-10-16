@@ -22,6 +22,45 @@ const name=x=>typeof x==='string'&&x.trim().length>0&&x.trim().length<=120?x.tri
 const clean=(x,n=1000)=>typeof x==='string'?x.trim().slice(0,n):'';
 const priorities=['CRITICAL','HIGH','WATCH','NORMAL','PRIORITY','ROUTINE'];
 const focusTypes=['NMC_FOCUS','PRIORITY','VERIFY','REVIEW','ADDITIONAL'];
+/**
+ * POC only: place output-contract guidance INSIDE the existing A04 userInput
+ * JSON sent to Airia. The configured Airia agent may ignore added keys, so
+ * this never replaces the strict server-side validateA04 safety boundary.
+ * This is a request hint, NOT a change to the v3.1/v2.0 wire envelope.
+ */
+export function a04PocOutputGuidance({baseChecklistItemIds,evidenceManifestRefs}){
+  const checklistIds=[...new Set(baseChecklistItemIds)];
+  const evidenceIds=[...new Set(evidenceManifestRefs)];
+  return {
+    mode:'POC_IN_REQUEST_OUTPUT_GUIDANCE',
+    responseFormat:'ONE_JSON_OBJECT_NO_MARKDOWN',
+    instructions:[
+      'Return ONE JSON object with focusAreas, checklistFocus, suggestedAdditionalItems and agentConfidence. Do not wrap in markdown. The Airia transport may wrap the object in result.',
+      'focusAreas[].category and focusAreas[].reason MUST be non-empty strings.',
+      'focusAreas[].priority MUST be exactly one of the allowedPriorityValues. Do NOT return MEDIUM; select a permitted value based on the supplied evidence, without guessing or upgrading severity.',
+      'focusAreas[].evidenceIds MUST contain at least one exact ID from allowedEvidenceIds. Do not invent IDs.',
+      'checklistFocus[].existingItemId MUST be from allowedChecklistItemIds.',
+      'checklistFocus[].focus MUST be EXACTLY one allowedChecklistFocusValue: it is a machine-readable enum, NOT natural-language instructions.',
+      'Put natural-language inspection suggestions in checklistFocus[].reason and valid evidence references in checklistFocus[].reasonEvidenceIds. Do NOT put instructions in focus.',
+      'Never provide suggestedSeverityIfFailed or assign regulatory deficiency severity. Potential deficiencies are hypotheses only, never confirmed findings.',
+      'Provide suggestedAdditionalItems as an array (empty if none), optional predictedDeficiencies as hypotheses, optional missingEvidence as an array, and agentConfidence as a number between 0 and 1.',
+      'Advisory focus only: do not add, change or remove mandatory checklist items, official vessel risk, approved inspection scope, legal findings or bookings. Human inspector review is required.'
+    ],
+    allowedPriorityValues:[...priorities],
+    allowedChecklistFocusValues:[...focusTypes],
+    allowedChecklistItemIds:checklistIds,
+    allowedEvidenceIds:evidenceIds,
+    requiredShape:{
+      focusAreas:[{category:'string',priority:'allowedPriorityValues',
+        reason:'non-empty string',evidenceIds:['allowedEvidenceIds']}],
+      checklistFocus:[{existingItemId:'allowedChecklistItemIds',
+        focus:'allowedChecklistFocusValues',reason:'inspection explanation',
+        reasonEvidenceIds:['allowedEvidenceIds']}],
+      suggestedAdditionalItems:[],
+      agentConfidence:'number between 0 and 1'
+    }
+  };
+}
 function safeJson(data){
   let cur=data;
   for(let n=0;n<7;n++){
@@ -38,7 +77,9 @@ function safeJson(data){
   return cur;
 }
 export class SiPreparationError extends Error{
-  constructor(code,status=400){super(code);this.code=code;this.status=status;}
+  constructor(code,status=400,field=null){super(code);this.code=code;this.status=status;
+    // Validation field is an allowlisted schema path, never model text/PII.
+    this.field=field;}
 }
 export function validateA04(raw,{checkIds,evidenceIds}){
   const data=safeJson(raw);
@@ -56,16 +97,36 @@ export function validateA04(raw,{checkIds,evidenceIds}){
     throw new SiPreparationError('SI_A04_RESULT_TOO_LARGE',502);
   if(data.predictedDeficiencies!==undefined&&!Array.isArray(data.predictedDeficiencies))
     throw new SiPreparationError('SI_A04_RESPONSE_INVALID',502);
-  const focusAreas=data.focusAreas.map(f=>{
-    if(!f||typeof f.category!=='string'||!priorities.includes(f.priority)||
-      !clean(f.reason,1400))throw new SiPreparationError('SI_A04_FOCUS_INVALID',502);
-    return {category:clean(f.category,90),priority:f.priority,reason:clean(f.reason,1400),
+  const focusAreas=data.focusAreas.map((f,index)=>{
+    // Model prose may vary by requested response language, but these
+    // machine-readable enum tokens are language-neutral contract values.
+    // Whitespace/case normalisation changes formatting, NOT priority.
+    const prefix='focusAreas['+index+'].';
+    if(!f||typeof f!=='object'||Array.isArray(f))
+      throw new SiPreparationError('SI_A04_FOCUS_INVALID',502,prefix.slice(0,-1));
+    if(typeof f.category!=='string'||!clean(f.category,90))
+      throw new SiPreparationError('SI_A04_FOCUS_INVALID',502,prefix+'category');
+    const priority=typeof f.priority==='string'?
+      f.priority.trim().toUpperCase():'';
+    if(!priorities.includes(priority))
+      throw new SiPreparationError('SI_A04_FOCUS_INVALID',502,prefix+'priority');
+    if(!clean(f.reason,1400))
+      throw new SiPreparationError('SI_A04_FOCUS_INVALID',502,prefix+'reason');
+    return {category:clean(f.category,90),priority,reason:clean(f.reason,1400),
       evidenceIds:refs(f.evidenceIds,true)};
   });
-  const checklistFocus=data.checklistFocus.map(f=>{
-    if(!f||!allowedChecks.has(f.existingItemId)||
-      !focusTypes.includes(f.focus))throw new SiPreparationError('SI_A04_CHECKLIST_REF_INVALID',502);
-    return {existingItemId:f.existingItemId,focus:f.focus,
+  const checklistFocus=data.checklistFocus.map((f,index)=>{
+    const prefix='checklistFocus['+index+'].';
+    if(!f||typeof f!=='object'||Array.isArray(f))
+      throw new SiPreparationError('SI_A04_CHECKLIST_REF_INVALID',502,prefix.slice(0,-1));
+    if(!allowedChecks.has(f.existingItemId))
+      throw new SiPreparationError('SI_A04_CHECKLIST_REF_INVALID',502,prefix+'existingItemId');
+    // 'focus' is a controlled checklist overlay enum, NOT a free-text
+    // inspection instruction or a severity assigned by the AI model.
+    const focus=typeof f.focus==='string'?f.focus.trim().toUpperCase():'';
+    if(!focusTypes.includes(focus))
+      throw new SiPreparationError('SI_A04_CHECKLIST_REF_INVALID',502,prefix+'focus');
+    return {existingItemId:f.existingItemId,focus,
       reason:clean(f.reason,900),
       reasonEvidenceIds:refs(f.reasonEvidenceIds||[])};
   });
@@ -360,7 +421,14 @@ export class SiInspectionPreparation{
           sourceInspectionObjectives:context.sourceInspectionObjectives},
         inspectionRegimes:context.targetRegimes,
         provenance:context.provenance,
-        officialScoringRequested:false,requestedOutputs:['FOCUS_OVERLAY','MISSING_EVIDENCE']};
+        officialScoringRequested:false,requestedOutputs:['FOCUS_OVERLAY','MISSING_EVIDENCE'],
+        // Airia v3.1 transport already stringifies this whole input as userInput.
+        // Instructions travel with each explicit POC A04 request, no agent
+        // configuration update, schema-version bump, or extra API call.
+        outputGuidance:a04PocOutputGuidance({
+          baseChecklistItemIds:context.baseChecklistItemIds,
+          evidenceManifestRefs:context.evidenceManifestRefs
+        })};
       try{
         const raw=await this.executeA04(input);
         const cleanResult=validateA04(raw,{checkIds:context.baseChecklistItemIds,
@@ -380,8 +448,19 @@ export class SiInspectionPreparation{
         const current=await this.record(id);
         if(current?.version===generating.version&&current?.correlationId===correlationId){
           const failure=e instanceof SiPreparationError?e.code:'SI_A04_PROVIDER_UNAVAILABLE';
+          const field=e instanceof SiPreparationError?e.field:null;
+          if(failure==='SI_A04_FOCUS_INVALID'||
+             failure==='SI_A04_CHECKLIST_REF_INVALID'){
+            // Do not print Airia output, personal data, source evidence,
+            // prompt bodies or API credentials to logs.
+            console.error('[si-a04] RESPONSE_SCHEMA_VALIDATION_FAILED '+JSON.stringify({
+              correlationId,caseId:id,code:failure,
+              field:field||'unknown',provider:this.provider
+            }));
+          }
           await this.persist(id,current,{...current,version:current.version+1,
-            status:'FAILED',lastFailure:failure,dossier:null},'A04_FAILED',actor,failure);
+            status:'FAILED',lastFailure:failure,
+            lastFailureField:field||null,dossier:null},'A04_FAILED',actor,failure);
         }
         if(e instanceof SiPreparationError)throw e;
         throw new SiPreparationError('SI_A04_PROVIDER_UNAVAILABLE',502);

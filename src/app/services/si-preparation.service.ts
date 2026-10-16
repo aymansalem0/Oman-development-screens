@@ -40,6 +40,7 @@ export interface SiPreparedRecord{
   caseId:string;version:number;status:SiPrepStatus;sourceHash:string;
   context:SiPreparationContext;preparedAt:string;preparedBy:string;
   dossier:SiDossier|null;lastFailure:string|null;
+  lastFailureField?:string|null;
   review:{decision:string;actor:string;reason:string;at:string}|null;
 }
 export interface SiPreparationView{
