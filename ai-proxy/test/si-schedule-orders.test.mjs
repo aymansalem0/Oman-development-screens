@@ -349,3 +349,67 @@ test('Oracle 019 write failure keeps precise work-order SQL stage for outer atom
     'shared outer transaction is responsible for rollback and commit');
  }finally{x.done();}
 });
+
+test('Oracle Prepare status and audit updates use valid non-reserved bind names',async()=>{
+ const x=workspace(),calls=[];let commits=0,rollbacks=0;
+ const order={id:uuid(21),version:1,status:'PREPARING',
+  caseId:null,error:null,audit:[]};
+ const schedule={id:uuid(22)};
+ const connection={
+  async execute(sql,binds={}){
+   assert.match(sql,/^(UPDATE SI_SCHED_WORK_ORDER|INSERT INTO SI_SCHED_ORDER_AUDIT)/);
+   const names=[...sql.matchAll(/:([A-Za-z_][A-Za-z_0-9]*)/g)]
+    .map(match=>match[1]);
+   assert.ok(names.length>0);
+   assert.ok(names.every(name=>/^b_[a-z][a-z_0-9]*$/.test(name)),
+    'reserved bind words such as BEFORE / EVENT / STATUS must not be used');
+   assert.deepEqual([...new Set(names)].sort(),Object.keys(binds).sort());
+   calls.push({sql,binds});
+   return {rowsAffected:1};
+  },
+  async commit(){commits++;},
+  async rollback(){rollbacks++;}
+ };
+ try{
+  x.orders.mode='oracle';
+  x.orders.db=async fn=>fn(connection);
+  const updated=await x.orders.saveOrder(schedule,order,'ORDER_PREPARATION_STARTED',
+   'assigned-inspector@moei.example');
+  assert.equal(updated.version,2);
+  assert.equal(updated.status,'PREPARING');
+  assert.equal(calls.length,2);
+  assert.equal(calls[0].binds.b_expected_version,1);
+  assert.equal(calls[0].binds.b_order_id,order.id);
+  assert.equal(calls[1].binds.b_event_code,'ORDER_PREPARATION_STARTED');
+  assert.equal(commits,1);
+  assert.equal(rollbacks,0);
+ }finally{x.done();}
+});
+
+test('Oracle work-order audit failure retains safe failure stage and rolls back',async()=>{
+ const x=workspace();let commits=0,rollbacks=0;
+ const connection={
+  async execute(sql){
+   if(sql.startsWith('INSERT INTO SI_SCHED_ORDER_AUDIT')){
+    const failure=new Error('Sensitive details must not be surfaced to UI');
+    failure.code='ORA-01745';failure.errorNum=1745;
+    throw failure;
+   }
+   return {rowsAffected:1};
+  },
+  async commit(){commits++;},
+  async rollback(){rollbacks++;}
+ };
+ try{
+  x.orders.mode='oracle';
+  x.orders.db=async fn=>fn(connection);
+  await assert.rejects(
+   x.orders.saveOrder({id:uuid(22)},{
+    id:uuid(21),version:1,status:'PREPARING',
+    caseId:null,error:null,audit:[]
+   },'ORDER_PREPARATION_STARTED','assigned-inspector@moei.example'),
+   e=>e.code==='ORA-01745'&&e.scheduleSqlStage==='WORK_ORDER_STATUS_AUDIT');
+  assert.equal(commits,0);
+  assert.equal(rollbacks,1);
+ }finally{x.done();}
+});
