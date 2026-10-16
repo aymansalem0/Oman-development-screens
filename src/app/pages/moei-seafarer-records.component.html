@@ -1,0 +1,168 @@
+<div class="registry-shell" [attr.dir]="lang.dir">
+ <app-nmc-platform-header area="seafarers"></app-nmc-platform-header>
+ <app-nmc-navigation></app-nmc-navigation>
+ <main class="registry-main">
+  <div class="breadcrumbs">{{t('SEAFARER MANAGEMENT','إدارة البحارة')}} <span>›</span>
+   {{t('REGISTERED SEAFARERS','البحارة المسجلون')}}</div>
+  <header class="page-heading">
+   <div><p class="overline">MOEI · SEAFARER 360°</p>
+    <h1>{{t('Registered Seafarers & Sea Service','البحارة المسجلون وسجل الخدمة البحرية')}}</h1>
+    <p>{{t('Individual SDB identity, certificates, ranks served and service duration by ship, vessel type, tonnage, engine and power.',
+       'ملف البحار وسجل الشهادات والوظائف التي شغلها ومدد الخدمة على كل سفينة حسب نوعها وحمولتها ومحركها وقوته.')}}</p></div>
+   <div class="header-actions"><a routerLink="/moei/seafarers/services">{{t('SDB Customer Services','خدمات طلبات سجل البحار')}} ↗</a>
+    <button type="button" (click)="refresh()">{{t('Refresh','تحديث')}}</button></div>
+  </header>
+  <div class="sandbox"><b>POC · SANDBOX</b>
+   {{t('SDB-holder identities and certificate snapshots are sourced from the access-controlled SDB sandbox. Sea-service entries, ships and engine details are synthetic examples, NOT verified official seafarer records or evidence of sea time.',
+    'هويات حاملي سجل البحار وشهاداتهم من خدمة SDB التجريبية الخاضعة لصلاحيات الدخول. بيانات الرحلات والسفن والمحركات وخدمة البحر أمثلة افتراضية وليست سجلات رسمية أو دليلًا معتمدًا على أيام الخدمة البحرية.')}}
+  </div>
+  <p *ngIf="loading" class="loading-state">{{t('Loading seafarer records…','جارٍ تحميل بيانات البحارة…')}}</p>
+  <p *ngIf="error" class="error">{{error}}</p>
+  <ng-container *ngIf="data as d">
+   <section class="kpis">
+    <div><span class="icon">♙</span><small>{{t('Existing SDB holders','حاملو سجل بحار قائم')}}</small><strong>{{holders.length}}</strong>
+     <p>{{t('SDB detected from stored identity','من السجلات التجريبية المتاحة')}}</p></div>
+    <div><span class="icon green">⚓</span><small>{{t('Illustrative sea-service legs','فترات خدمة بحرية توضيحية')}}</small>
+     <strong>{{totalVoyages}}</strong><p>{{t('For selected seafarer','للبحار المختار')}}</p></div>
+    <div><span class="icon blue">▤</span><small>{{t('Sea service days · demo','أيام خدمة البحر · تجريبي')}}</small>
+     <strong>{{totalDays | number}}</strong><p>{{t('From sign-on and sign-off dates','من تواريخ الصعود والنزول')}}</p></div>
+    <div><span class="icon gold">✦</span><small>{{t('Qualifications on record','المؤهلات المسجلة')}}</small>
+     <strong>{{qualifications.length}}</strong><p>{{t('For selected seafarer','للبحار المختار')}}</p></div>
+   </section>
+   <div class="workspace">
+    <section class="roster panel">
+     <div class="panel-head"><h2>{{t('Seafarer Directory','دليل البحارة')}}</h2><span>{{filtered.length}}</span></div>
+     <div class="filters"><input type="search" [(ngModel)]="query"
+       [placeholder]="t('Name, SID, SDB or rank','البحث بالاسم أو SID أو الوظيفة')"
+       [attr.aria-label]="t('Search seafarers','بحث البحارة')"/>
+      <select [(ngModel)]="typeFilter"
+       [attr.aria-label]="t('Vessel type','نوع السفينة')">
+       <option value="ALL">{{t('All vessel types','جميع أنواع السفن')}}</option>
+       <option *ngFor="let ty of types" [value]="ty">{{ty}}</option>
+      </select></div>
+     <button type="button" class="person-row" *ngFor="let p of filtered"
+       [class.active]="selectedId===p.id" (click)="select(p)"
+       [attr.aria-pressed]="selectedId===p.id">
+      <span class="person-icon">{{p.name.slice(0,1)}}</span>
+      <span class="person-data"><b>{{p.name}}</b>
+       <small>{{p.rank}} · {{p.id}}</small>
+       <small *ngIf="p.existingSdb">SID {{p.existingSdb.sid}}</small>
+       <span class="pill renew">{{t('SDB HOLDER','صاحب سجل بحار')}}</span></span>
+      <span class="arrow">›</span>
+     </button>
+     <p *ngIf="!filtered.length" class="empty">{{t('No matching SDB holders.','لا يوجد حاملو سجلات مطابقون.')}}</p>
+    </section>
+
+    <section class="profile" *ngIf="selected as p">
+     <article class="panel profile-head">
+      <div class="profile-top"><div class="avatar">{{p.name.slice(0,1)}}</div>
+       <div><p class="overline">{{t('REGISTERED SDB HOLDER · 360°','ملف حامل سجل البحار')}}</p>
+        <h2>{{p.name}}</h2>
+        <p>{{p.rank}} · {{p.nationality}} · {{p.id}}</p></div>
+       <div class="pill success">{{t('Existing SDB detected','سجل بحار قائم')}}</div>
+      </div>
+      <div class="profile-details">
+       <div><small>{{t('Seafarer ID (SID)','رقم البحار SID')}}</small><b>{{p.existingSdb?.sid||'—'}}</b></div>
+       <div><small>{{t('SDB Booklet Number','رقم سجل البحار')}}</small><b>{{p.existingSdb?.number||'—'}}</b></div>
+       <div><small>{{t('Book expiry','انتهاء السجل')}}</small><b>{{p.existingSdb?.expiryDate||'—'}}</b></div>
+       <div><small>{{t('Recognised roles served','الوظائف التي شغلها')}}</small><b>{{roles.length?roles.join(' · '):'—'}}</b></div>
+      </div>
+     </article>
+     <nav class="tabs" [attr.aria-label]="t('Seafarer records sections','أقسام ملف البحار')">
+      <button (click)="view='OVERVIEW'" [class.active]="view==='OVERVIEW'">{{t('Profile & Analytics','الملف والمؤشرات')}}</button>
+      <button (click)="view='SEA_SERVICE'" [class.active]="view==='SEA_SERVICE'">{{t('Sea Service History','سجل الخدمة البحرية')}}</button>
+      <button (click)="view='QUALIFICATIONS'" [class.active]="view==='QUALIFICATIONS'">{{t('Certificates & Qualifications','الشهادات والمؤهلات')}}</button>
+     </nav>
+     <ng-container *ngIf="view==='OVERVIEW'">
+      <div class="analytics">
+       <div class="panel analytic">
+        <h3>{{t('Sea time by position','مدد الخدمة حسب الوظيفة')}}</h3>
+        <p>{{t('Days are aggregated for each rank actually served on board.','تجميع الأيام لكل وظيفة شغلها البحار فعليًا وفق بيانات المثال.')}}</p>
+        <div *ngFor="let group of aggregatesByRank" class="bar-row">
+         <div><b>{{group.label}}</b><small>{{group.voyages}} {{t('voyages','رحلات')}} · {{group.ships}} {{t('ships','سفن')}}</small></div>
+         <strong>{{group.days}} {{t('days','يوم')}}</strong>
+         <div class="bar"><span [style.width.%]="totalDays?group.days*100/totalDays:0"></span></div>
+        </div>
+        <p class="empty" *ngIf="!aggregatesByRank.length">{{t('No sea-service example entries.','لا توجد فترات خدمة بحرية تجريبية.')}}</p>
+       </div>
+       <div class="panel analytic">
+        <h3>{{t('Sea time by vessel type','مدد الخدمة حسب نوع السفينة')}}</h3>
+        <p>{{t('Compare qualifying history across vessel classes.','مقارنة مدد الخدمة المسجلة عبر أنواع السفن.')}}</p>
+        <div *ngFor="let group of aggregatesByType" class="bar-row">
+         <div><b>{{group.label}}</b><small>{{group.ships}} {{t('vessels','سفن')}}</small></div>
+         <strong>{{group.days}} {{t('days','يوم')}}</strong>
+         <div class="bar blue"><span [style.width.%]="totalDays?group.days*100/totalDays:0"></span></div>
+        </div>
+        <p *ngIf="!aggregatesByType.length" class="empty">{{t('No vessel-type data.','لا توجد بيانات أنواع سفن.')}}</p>
+       </div>
+      </div>
+      <article class="panel summary-card">
+       <div><h3>{{t('Sea-service summary','ملخص الخدمة البحرية')}}</h3>
+        <p>{{formatDays(totalDays)}} · {{distinctShips}} {{t('distinct vessels','سفن مختلفة')}}</p></div>
+       <button class="primary" type="button" (click)="view='SEA_SERVICE'">
+        {{t('View detailed voyages','عرض تفاصيل فترات الخدمة')}} ←</button>
+      </article>
+     </ng-container>
+
+     <ng-container *ngIf="view==='SEA_SERVICE'">
+      <article class="panel">
+       <div class="panel-head"><div><h3>{{t('Service by ship, rank and engine','الخدمة حسب السفينة والوظيفة والمحرك')}}</h3>
+        <p>{{t('Source reference, sign-on/off and engineering particulars shown for every service period.',
+         'مرجع الخدمة وتواريخ الصعود والنزول والخصائص الفنية لكل فترة عمل على سفينة.')}}</p></div>
+        <span>{{legs.length}} {{t('entries','فترات')}}</span></div>
+       <div class="leg" *ngFor="let leg of legs">
+        <div class="leg-heading"><div><span class="vessel-icon">⚓</span>
+         <div><h4>{{leg.vessel}}</h4><small>IMO {{leg.imo}} · {{leg.flag}}</small></div></div>
+         <span class="pill navy">{{leg.rank}} · {{leg.department}}</span></div>
+        <div class="leg-grid">
+         <div><small>{{t('Vessel type','نوع السفينة')}}</small><b>{{leg.vesselType}}</b></div>
+         <div><small>{{t('Gross tonnage (GT)','الحمولة الإجمالية GT')}}</small><b>{{leg.grossTonnage | number}}</b></div>
+         <div><small>{{t('Deadweight (DWT)','الحمولة الساكنة DWT')}}</small><b>{{leg.deadweight | number}} t</b></div>
+         <div><small>{{t('Main engine type','نوع المحرك الرئيسي')}}</small><b>{{leg.mainEngine}}</b></div>
+         <div><small>{{t('Engines','عدد المحركات')}}</small><b>{{leg.engineCount}}</b></div>
+         <div><small>{{t('Engine power','قدرة المحرك')}}</small><b>{{leg.enginePowerKw | number}} kW</b></div>
+         <div><small>{{t('Sign-on','تاريخ الصعود')}}</small><b>{{leg.signOn}}</b></div>
+         <div><small>{{t('Sign-off','تاريخ النزول')}}</small><b>{{leg.signOff}}</b></div>
+         <div><small>{{t('Sea-service duration','مدة الخدمة البحرية')}}</small><b>{{days(leg)}} {{t('days','يوم')}}</b></div>
+         <div><small>{{t('Employer','جهة التشغيل')}}</small><b>{{leg.company}}</b></div>
+        </div>
+        <footer><span>{{t('Evidence reference','مرجع المستند')}}: {{leg.sourceReference}}</span>
+         <span class="pill warning">{{t('POC · Not verified','تجريبي · غير معتمد')}}</span></footer>
+       </div>
+       <p *ngIf="!legs.length" class="empty">{{t('No service history in the demo for this holder.','لا يوجد سجل خدمة بحرية تجريبي لهذا البحار.')}}</p>
+      </article>
+     </ng-container>
+
+     <ng-container *ngIf="view==='QUALIFICATIONS'">
+      <article class="panel">
+       <div class="panel-head"><div>
+        <h3>{{t('Certificates held by this seafarer','الشهادات التي يمتلكها البحار')}}</h3>
+        <p>{{t('Credential type, validity, issuer reference and expiry are source-linked in the SDB sandbox.',
+         'نوع الشهادة وصلاحيتها ومرجع المصدر وتاريخ انتهائها وفق السجلات التجريبية.')}}</p></div>
+        <span>{{qualifications.length}}</span></div>
+       <div class="table-wrap"><table>
+        <thead><tr>
+         <th>{{t('Certificate','الشهادة')}}</th><th>{{t('Status','الحالة')}}</th>
+         <th>{{t('Issued','الإصدار')}}</th><th>{{t('Expires','الانتهاء')}}</th>
+         <th>{{t('Reference','المرجع')}}</th></tr></thead>
+        <tbody><tr *ngFor="let c of qualifications">
+         <td><b>{{c.type}}</b><small>{{c.title}}</small></td>
+         <td><span class="pill" [class.success]="isCertificateCurrent(c)"
+          [class.warning]="!isCertificateCurrent(c)">
+          {{isCertificateCurrent(c)?t('Valid','سارية'):t('Action required','تحتاج مراجعة')}}</span></td>
+         <td>{{c.issueDate||'—'}}</td><td>{{c.expiryDate}}</td><td>{{c.reference}}</td>
+        </tr></tbody>
+       </table></div>
+      </article>
+      <article class="panel qualification-notes">
+       <h3>{{t('Positions held vs. qualifications','الوظائف التي شغلها البحار وعلاقتها بالمؤهلات')}}</h3>
+       <div class="role-list"><span *ngFor="let role of roles">{{role}}</span></div>
+       <p>{{t('Positions are taken from the illustrative sea-service legs, not a decision that the seafarer is legally eligible to serve at each rank. CoC, endorsements and ship-specific requirements still need regulatory verification.',
+        'الوظائف معروضة من سجلات الخدمة التجريبية، ولا تعني حكمًا بأهلية شغل كل وظيفة قانونيًا. يلزم التحقق من شهادات الكفاءة والاعتمادات ومتطلبات كل نوع سفينة لدى الجهات المختصة.')}}</p>
+      </article>
+     </ng-container>
+    </section>
+   </div>
+  </ng-container>
+ </main>
+</div>
