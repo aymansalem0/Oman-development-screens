@@ -762,7 +762,17 @@ const server = createServer(async (req, res) => {
     const publicHealth=['/api/ai/health','/api/ai/psc/health',
       '/api/ai/nmc/incidents/health'];
     if(!publicHealth.includes(path)){
-      try{moeiAuth.require(req,{mutate:!['GET','HEAD','OPTIONS'].includes(req.method)});}
+      // Inspector POST operations are independently scoped to the signed-in
+      // employee's work order below. A VIEWER may prepare/start *only* an
+      // assigned order, not modify scheduling or supervisor approvals.
+      const inspectorAction=req.method==='POST'&&
+        /^\/api\/si\/v1\/maritime-scheduling\/my-work-orders\/[a-f0-9-]{36}\/(activate|start)$/.test(path);
+      try{
+        moeiAuth.require(req,{mutate:
+          !inspectorAction&&!['GET','HEAD','OPTIONS'].includes(req.method)});
+        if(inspectorAction&&req.headers['x-moei-csrf']!=='1')
+          throw new MoeiAuthError('MOEI_CSRF_REQUIRED',403);
+      }
       catch(e){return respond(res,e.status||401,{error:e.code||'MOEI_LOGIN_REQUIRED'});}
     }
   }
