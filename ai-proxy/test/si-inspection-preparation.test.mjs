@@ -222,3 +222,70 @@ test('failed A04 provider priority leaves traceable path, zero fabricated dossie
   assert.equal(h.calls(),1,'no silent second billable agent call');
  }finally{h.cleanup();}
 });
+
+test('actual Airia envelope reveals MEDIUM priority and narrative checklist focus as separate schema errors',()=>{
+ const source={
+  responseType:'CREATE_DOSSIER',dossierId:'DOSSIER-INS-POC-001',
+  focusAreas:[{
+   category:'FIRE_SAFETY',priority:'CRITICAL',
+   reason:'Review open fire safety evidence.',evidenceIds:['DEF-1','INS-1']
+  },{
+   category:'CERTIFICATES',priority:'HIGH',
+   reason:'Verify statutory certificates.',evidenceIds:['CERT-1']
+  },{
+   category:'PREVIOUS_INSPECTION_FOLLOW_UP',priority:'MEDIUM',
+   reason:'Follow up earlier PSC inspection.',evidenceIds:['INS-1']
+  }],
+  checklistFocus:[{
+   existingItemId:'fire-safety',
+   focus:'Verify closure of open deficiency and fire systems.',
+   suggestedSeverityIfFailed:'CRITICAL'
+  }],
+  suggestedAdditionalItems:[],agentConfidence:0.7
+ };
+ const wrap=data=>({'$type':'string',result:JSON.stringify(data),
+  isGuardrailBlock:false,report:null});
+ const args={checkIds:SI_BASE_CHECKLIST,evidenceIds:fixture.evidenceIds};
+ assert.throws(()=>validateA04(wrap(source),args),
+  e=>e.code==='SI_A04_FOCUS_INVALID'&&
+   e.field==='focusAreas[2].priority');
+ const allowedPriority={...source,focusAreas:[
+  ...source.focusAreas.slice(0,2),{...source.focusAreas[2],priority:'WATCH'}
+ ]};
+ assert.throws(()=>validateA04(wrap(allowedPriority),args),
+  e=>e.code==='SI_A04_CHECKLIST_REF_INVALID'&&
+   e.field==='checklistFocus[0].focus');
+ const compliant={...allowedPriority,checklistFocus:[{
+  existingItemId:'fire-safety',focus:'VERIFY',
+  reason:'Verify closure of open fire safety deficiency.',
+  reasonEvidenceIds:['DEF-1']
+ }]};
+ const ok=validateA04(wrap(compliant),args);
+ assert.equal(ok.focusAreas[2].priority,'WATCH');
+ assert.equal(ok.checklistFocus[0].focus,'VERIFY');
+ assert.equal(ok.checklistFocus[0].reasonEvidenceIds[0],'DEF-1');
+ assert.ok(!Object.hasOwn(ok.checklistFocus[0],'suggestedSeverityIfFailed'));
+ assert.equal(ok.source,'AIRIA_A04_UNVERIFIED_ADVISORY');
+ assert.equal(ok.requiresInspectorReview,true);
+});
+
+test('checklist Focus paths are diagnosable while unknown free-text remains rejected',()=>{
+ const checks=[
+  {value:'Propose extra checklist items',field:'checklistFocus[0].focus'},
+  {value:'MEDIUM',field:'checklistFocus[0].focus'}
+ ];
+ for(const {value,field} of checks){
+  const payload={...dossier,checklistFocus:[{
+   existingItemId:'fire-safety',focus:value,
+   reason:'text only',reasonEvidenceIds:['CERT-1']
+  }]};
+  assert.throws(()=>validateA04(payload,{
+   checkIds:SI_BASE_CHECKLIST,evidenceIds:fixture.evidenceIds
+  }),e=>e.code==='SI_A04_CHECKLIST_REF_INVALID'&&e.field===field);
+ }
+ const compliant=validateA04({...dossier,checklistFocus:[{
+  existingItemId:'fire-safety',focus:' verify ',reason:'Review old case.',
+  reasonEvidenceIds:['INS-1']
+ }]},{checkIds:SI_BASE_CHECKLIST,evidenceIds:fixture.evidenceIds});
+ assert.equal(compliant.checklistFocus[0].focus,'VERIFY');
+});
