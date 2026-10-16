@@ -118,3 +118,26 @@ test('eight demo scenarios are recalculated from updated configuration version',
   b=>b.key==='REQ-EXTRA_SEAFARER_EVIDENCE')));
  assert.ok(rows.every(x=>x.advisor.modelInvoked===false));
 });
+
+test('changing a core source method to attachment creates an additional guarded review check, never replaces MARASI verification',()=>{
+ const s=store();const baseline=s.get(self,'SF-002').readiness;
+ assert.equal(baseline.status,'READY');
+ const settings=s.readinessConfiguration(admin);
+ const medical=settings.requirements.find(r=>r.id==='MEDICAL');
+ const updated=s.saveRequirement(admin,{...medical,inputMode:'ATTACHMENT'});
+ assert.equal(updated.version,2);
+ let r=s.get(self,'SF-002').readiness;
+ assert.equal(r.checks.find(c=>c.key==='MEDICAL').result,'PASS');
+ assert.equal(r.checks.find(c=>c.key==='REQ-MEDICAL').result,'FAIL');
+ assert.equal(r.status,'INCOMPLETE');
+ const staged=s.submitEvidence(self,'SF-002','MEDICAL',validMetadata);
+ assert.equal(staged.readiness.status,'PENDING_VERIFICATION');
+ const verified=s.reviewEvidence(admin,staged.document.id,'HUMAN_VERIFIED',
+  'Clinician source remains separately authoritative');
+ assert.equal(verified.readiness.status,'READY');
+ s.profile('SF-002').medical=null;
+ r=s.get(self,'SF-002').readiness;
+ assert.notEqual(r.status,'READY');
+ assert.equal(r.checks.find(c=>c.key==='MEDICAL').result,'FAIL');
+ assert.equal(r.checks.find(c=>c.key==='REQ-MEDICAL').result,'PASS');
+});
