@@ -352,3 +352,46 @@ test('A04 advisory import demands source-approved overlay, is idempotent and nev
   assert.equal((await x.field.preview(uid)).saved.aiSuggestedQuestions.length,1);
  }finally{x.done();}
 });
+
+
+test('Airia Vision adapter emits exactly one question-bound multipart photo, keeps typed answer and AI instruction advisory',async()=>{
+ const key='test-only-airia-key';
+ let uploads=0;
+ const provider=new SiChecklistAiria({
+  enabled:true,apiKey:key,
+  visionPipelineId:'11111111-1111-4111-8111-111111111119',
+  transport:async(url,options)=>{
+   uploads++;
+   assert.match(url,/\/v1\/PipelineExecution\/Multipart\/11111111-1111-4111-8111-111111111119$/);
+   assert.equal(options.headers['X-API-KEY'],key);
+   assert.equal(options.headers['Content-Type'],undefined,'multipart boundary created by FormData');
+   assert.equal(options.body.constructor.name,'FormData');
+   const metadata=JSON.parse(options.body.get('userInput'));
+   assert.equal(metadata.caseId,uid);
+   assert.equal(metadata.items.length,1);
+   assert.equal(metadata.items[0].itemId,'Q-ONLY');
+   assert.equal(metadata.image.sha256,'a'.repeat(64));
+   assert.equal(metadata.image.base64,undefined,'image bytes must travel in file field only');
+   const attached=options.body.get('file');
+   assert.equal(attached.type,'image/png');
+   assert.equal(attached.size,8);
+   return {ok:true,json:async()=>({response:JSON.stringify({
+    recommendations:[{
+      itemId:'Q-ONLY',answers:{BOOLEAN:'NO',NOTE:'Review this observation'},
+      confidence:0.62,rationale:'Photo suggests a possible issue; not regulatory proof.',
+      suggestedInstruction:'Inspect this equipment aboard and compare original certification.',
+      dataGaps:['Certificate source not confirmed']
+    }]
+   })})};
+  }
+ });
+ const result=await provider.call('vision',{
+  schemaVersion:'SI-CHECKLIST-REVIEW-v1',caseId:uid,
+  items:[{itemId:'Q-ONLY',title:'Auxiliary safety check',mandatory:false}],
+  image:{mimeType:'image/png',sha256:'a'.repeat(64),base64:'iVBORw0KGgo='}
+ });
+ assert.equal(uploads,1);
+ assert.equal(result.recommendations[0].answers.BOOLEAN,'NO');
+ assert.match(result.recommendations[0].suggestedInstruction,/Inspect this equipment/);
+ assert.ok(result.recommendations[0].dataGaps.length);
+});

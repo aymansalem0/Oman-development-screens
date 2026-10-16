@@ -99,6 +99,8 @@ export interface ChecklistPreview{
  warnings:{templateId:string;title:string;missing:string[]}[];
  saved:ChecklistExecution|null;immutableLegacyBaseline:true;
  requiresInspectorReview:true;
+ fieldAccess?:{role:'SUPERVISOR'|'ASSIGNED_INSPECTOR';canMutate:boolean;
+  inspectionStatus:string|null};
 }
 @Injectable({providedIn:'root'})
 export class SiChecklistsService{

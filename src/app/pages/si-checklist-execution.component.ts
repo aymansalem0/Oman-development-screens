@@ -41,6 +41,10 @@ interface A04Dossier{saved?:{status:string;dossier?:{
    <p class="notice good" *ngIf="message">{{message}}</p>
    <p class="notice" *ngIf="loading">{{t('Loading approved case and published checklist rules…',
     'جارٍ تحميل الحالة المعتمدة وقواعد القوائم المنشورة…')}}</p>
+   <p class="notice warning" *ngIf="preview?.fieldAccess&&!canUseField" data-testid="si-field-not-started">
+    {{t('Assigned vessel: read-only preparation. Start your scheduled field inspection from My Inspections before uploading files, requesting AI answers, or saving checklist results.',
+      'السفينة مسندة إليك للمعاينة ويمكنك عرض التحضير. ابدأ تنفيذ المعاينة من «معايناتي» قبل رفع الملفات أو طلب إجابات AI أو حفظ نتائج الفحص.')}}
+   </p>
    <div class="summary" *ngIf="preview as p">
     <div><span>{{t('Vessel / IMO','السفينة / IMO')}}</span><strong>{{p.vessel.name||p.imo}} · {{p.imo}}</strong></div>
     <div><span>{{t('Vessel Type','نوع السفينة')}}</span><strong>{{p.vessel.vesselType||'UNKNOWN'}}</strong></div>
@@ -55,7 +59,7 @@ interface A04Dossier{saved?:{status:string;dossier?:{
       <span class="badge">{{a04?.saved?.status||'DRAFT_REVIEW'}}</span></div>
      <div class="actions">
       <button class="secondary" type="button" *ngIf="a04?.saved?.status==='APPROVED'&&a04AdditionalItems.length&&execution"
-       [disabled]="busy||execution?.status!=='IN_PROGRESS'||!auth.isAdmin"
+       [disabled]="busy||!canUseField||execution?.status!=='IN_PROGRESS'"
        (click)="importA04()" data-testid="si-import-a04-questions">
        ✦ {{t('Import Approved A04 Questions (No AI Call)','إضافة أسئلة A04 المعتمدة (بدون تشغيل AI)')}}</button>
       <a [routerLink]="['/moei/smart-inspection/preparation',caseId]">
@@ -89,7 +93,7 @@ interface A04Dossier{saved?:{status:string;dossier?:{
      <p>{{t('All matching published checklists are added together. Their exact revisions are frozen for this case and cannot be changed by later settings updates.',
       'تُضاف جميع القوائم المنشورة المطابقة معًا، وتُثبَّت أرقام إصداراتها للحالة حتى لو تغيرت الإعدادات لاحقًا.')}}</p>
     </div>
-    <button (click)="start()" [disabled]="busy||!auth.isAdmin">
+    <button (click)="start()" [disabled]="busy||!canUseField">
      {{t('Start Dynamic Checklist','بدء القائمة الديناميكية')}}</button>
    </div>
    <ng-container *ngIf="execution as e">
@@ -99,7 +103,7 @@ interface A04Dossier{saved?:{status:string;dossier?:{
      <div class="actions">
       <button class="secondary" (click)="reload()" [disabled]="busy">
        {{t('Refresh','تحديث')}}</button>
-      <button (click)="save()" [disabled]="busy||e.status!=='IN_PROGRESS'||!auth.isAdmin">
+      <button (click)="save()" [disabled]="busy||!canUseField||e.status!=='IN_PROGRESS'">
        {{t('Save Answers','حفظ الإجابات')}}</button>
      </div>
     </section>
@@ -113,14 +117,14 @@ interface A04Dossier{saved?:{status:string;dossier?:{
          'هذه أسئلة إضافية استشارية مقترحة بواسطة AI، ولا تغير قائمة المعاينة الإلزامية أو نطاقها الرسمي؛ تلزم مراجعة المفتش واعتماد المشرف.')}}</p>
        </div>
        <button class="ai-btn" type="button" (click)="generateQuestions()"
-        [disabled]="busy||e.status!=='IN_PROGRESS'||!aiStatus?.builderConfigured||!auth.isAdmin"
+        [disabled]="busy||!canUseField||e.status!=='IN_PROGRESS'||!aiStatus?.builderConfigured"
         data-testid="si-generate-ai-questions">
         ✦ {{t('Generate Optional Questions with AI','إنشاء أسئلة إضافية بواسطة AI')}}</button>
       </div>
       <div class="question-prompt">
        <label>{{t('AI question-generation focus (optional)','سياق مقترح لتوليد الأسئلة (اختياري)')}}
         <textarea rows="2" maxlength="1800" [(ngModel)]="questionPrompt"
-         [disabled]="busy||e.status!=='IN_PROGRESS'"></textarea></label>
+         [disabled]="busy||!canUseField||e.status!=='IN_PROGRESS'"></textarea></label>
       </div>
       <p class="hint" *ngIf="!aiStatus?.builderConfigured">
        {{t('The Airia Checklist Builder pipeline is not configured. No questions are generated on page load.',
@@ -141,7 +145,7 @@ interface A04Dossier{saved?:{status:string;dossier?:{
          <p class="hint">{{q.rationale}}</p>
         </div>
         <button class="ai-btn" type="button" (click)="openSuggested(q)"
-         [disabled]="busy||e.status!=='IN_PROGRESS'||!aiStatus?.visionConfigured||!auth.isAdmin">
+         [disabled]="busy||!canUseField||e.status!=='IN_PROGRESS'||!aiStatus?.visionConfigured">
          ✦ {{t('Analyze Evidence & Suggest Answer','تحليل الدليل واقتراح إجابة')}}</button>
        </div>
        <div class="ai-instruction-block">
@@ -157,7 +161,7 @@ interface A04Dossier{saved?:{status:string;dossier?:{
         <label>{{t('Attach evidence to this AI-suggested question (PDF / JPG / PNG / WebP)',
          'ارفق دليلًا لهذا السؤال المقترح (PDF / JPG / PNG / WebP)')}}
          <input type="file" accept="application/pdf,image/jpeg,image/png,image/webp"
-          [disabled]="busy||e.status!=='IN_PROGRESS'||!auth.isAdmin"
+          [disabled]="busy||!canUseField||e.status!=='IN_PROGRESS'"
           (change)="attachQuestionEvidence($event,q.id)"/>
         </label>
         <div class="evidence-chips">
@@ -175,7 +179,7 @@ interface A04Dossier{saved?:{status:string;dossier?:{
         <p>{{rec.rationale}}</p><pre>{{rec.proposedAnswers|json}}</pre>
         <p *ngIf="rec.dataGaps.length">⚠ {{rec.dataGaps.join(' • ')}}</p>
         <span class="badge">{{t('Inspector review required','تتطلب مراجعة المفتش')}}</span>
-        <button class="secondary" type="button" (click)="openSuggested(q)" [disabled]="busy">
+        <button class="secondary" type="button" (click)="openSuggested(q)" [disabled]="busy||!canUseField">
          {{t('Inspect / Review Suggestion','فحص ومراجعة الاقتراح')}}</button>
        </div>
        <div class="advisory-reviewed" *ngIf="q.finalAdvisory">
@@ -188,13 +192,13 @@ interface A04Dossier{saved?:{status:string;dossier?:{
       <div><h2>{{template.title}}</h2>
        <span class="badge">{{t('Published revision','الإصدار المنشور')}} v{{template.revision}}</span>
        <span class="badge">{{template.mandatory?t('Mandatory','إلزامي'):t('Additional','إضافية')}}</span></div>
-      <button class="ai-btn" (click)="openAi('TEMPLATE',template)" [disabled]="busy||!aiStatus?.visionConfigured||!auth.isAdmin">
+      <button class="ai-btn" (click)="openAi('TEMPLATE',template)" [disabled]="busy||!canUseField||!aiStatus?.visionConfigured">
        ✦ {{t('AI Assistant · Complete Checklist','مساعد AI · القائمة بالكامل')}}</button>
      </header>
      <article class="group" *ngFor="let group of template.groups">
       <header class="group-head"><h3>{{group.title}}</h3>
        <button class="ai-btn" (click)="openAi('GROUP',template,group)"
-        [disabled]="busy||!aiStatus?.visionConfigured||!auth.isAdmin">
+        [disabled]="busy||!canUseField||!aiStatus?.visionConfigured">
         ✦ {{t('AI Group Assistant','مساعد AI للمجموعة')}}</button></header>
       <div class="item" *ngFor="let item of group.items">
        <div class="item-head"><div>
@@ -208,12 +212,12 @@ interface A04Dossier{saved?:{status:string;dossier?:{
          <small>{{t('Required fields','الحقول المطلوبة')}}: {{item.requiredFields.join(', ')||'—'}}</small>
         <p *ngIf="item.description">{{item.description}}</p></div>
         <button class="ai-btn" (click)="openAi('ITEM',template,group,item)"
-          [disabled]="busy||!aiStatus?.visionConfigured||!auth.isAdmin">
+          [disabled]="busy||!canUseField||!aiStatus?.visionConfigured">
          ✦ {{t('Ask AI','اسأل AI')}}</button></div>
        <div class="answers">
         <label *ngIf="item.fields.includes('BOOLEAN')">{{t('Result','الإجابة')}}
          <select [(ngModel)]="answers[item.instanceId]['BOOLEAN']"
-          [disabled]="e.status!=='IN_PROGRESS'">
+          [disabled]="!canUseField||e.status!=='IN_PROGRESS'">
           <option [ngValue]="undefined">{{t('Not answered','لم يُجب')}}</option>
           <option value="YES">{{t('Yes / Compliant','نعم / مستوفٍ')}}</option>
           <option value="NO">{{t('No / Needs Review','لا / يحتاج مراجعة')}}</option>
@@ -221,19 +225,19 @@ interface A04Dossier{saved?:{status:string;dossier?:{
          </select></label>
         <label *ngIf="item.fields.includes('NOTE')">{{t('Observation / Notes','الملاحظات')}}
          <textarea rows="2" maxlength="2500" [(ngModel)]="answers[item.instanceId]['NOTE']"
-          [disabled]="e.status!=='IN_PROGRESS'"></textarea></label>
+          [disabled]="!canUseField||e.status!=='IN_PROGRESS'"></textarea></label>
         <label *ngIf="item.fields.includes('EXPIRY_DATE')">{{t('Expiry Date','تاريخ الانتهاء')}}
          <input type="date" [(ngModel)]="answers[item.instanceId]['EXPIRY_DATE']"
-          [disabled]="e.status!=='IN_PROGRESS'"/></label>
+          [disabled]="!canUseField||e.status!=='IN_PROGRESS'"/></label>
         <label *ngIf="item.fields.includes('DATE')">{{t('Date','التاريخ')}}
          <input type="date" [(ngModel)]="answers[item.instanceId]['DATE']"
-          [disabled]="e.status!=='IN_PROGRESS'"/></label>
+          [disabled]="!canUseField||e.status!=='IN_PROGRESS'"/></label>
         <label *ngIf="item.fields.includes('TEXT')">{{t('Text','نص')}}
          <textarea rows="2" [(ngModel)]="answers[item.instanceId]['TEXT']"
-          [disabled]="e.status!=='IN_PROGRESS'"></textarea></label>
+          [disabled]="!canUseField||e.status!=='IN_PROGRESS'"></textarea></label>
         <label *ngIf="item.fields.includes('NUMBER')">{{t('Number','رقم')}}
          <input type="number" [(ngModel)]="answers[item.instanceId]['NUMBER']"
-          [disabled]="e.status!=='IN_PROGRESS'"/></label>
+          [disabled]="!canUseField||e.status!=='IN_PROGRESS'"/></label>
        </div>
 
        <section class="per-question-ai" [attr.data-question-tools]="item.instanceId">
@@ -241,7 +245,7 @@ interface A04Dossier{saved?:{status:string;dossier?:{
          <label>{{t('Attach file for this question (PDF / photo, max 2MB)',
           'إرفاق ملف لهذا السؤال (PDF أو صورة، حد أقصى 2MB)')}}
           <input type="file" accept="application/pdf,image/jpeg,image/png,image/webp"
-           [disabled]="busy||e.status!=='IN_PROGRESS'||!auth.isAdmin"
+           [disabled]="busy||!canUseField||e.status!=='IN_PROGRESS'"
            (change)="attachQuestionEvidence($event,item.instanceId)"/>
          </label>
          <div class="evidence-chips">
@@ -258,7 +262,7 @@ interface A04Dossier{saved?:{status:string;dossier?:{
          <div class="guidance-title">
           <b>✦ {{t('AI-Suggested Inspection Instruction','تعليمات المعاينة المقترحة بواسطة AI')}}</b>
           <button type="button" class="ai-btn" (click)="openAi('ITEM',template,group,item)"
-           [disabled]="busy||e.status!=='IN_PROGRESS'||!aiStatus?.visionConfigured||!auth.isAdmin">
+           [disabled]="busy||!canUseField||e.status!=='IN_PROGRESS'||!aiStatus?.visionConfigured">
            ✦ {{t('Ask AI · Analyse Photo & Suggest Answer',
             'اسأل AI · تحليل الصورة واقتراح الإجابة')}}</button>
          </div>
@@ -295,7 +299,7 @@ interface A04Dossier{saved?:{status:string;dossier?:{
     <div class="submit-bar">
      <span>{{t('Save answers, then submit all mandatory dynamic checklists for supervisor review.',
        'احفظ الإجابات ثم أرسل جميع القوائم الديناميكية الإلزامية لمراجعة المشرف.')}}</span>
-     <button (click)="submit()" [disabled]="busy||e.status!=='IN_PROGRESS'||!auth.isAdmin">
+     <button (click)="submit()" [disabled]="busy||!canUseField||e.status!=='IN_PROGRESS'">
       {{t('Submit All Completed Checklists','إرسال قوائم المعاينة المكتملة')}}</button>
     </div>
    </ng-container>
@@ -330,7 +334,7 @@ interface A04Dossier{saved?:{status:string;dossier?:{
       </select>
      </label>
     </div>
-    <button class="ai-submit" (click)="askAiria()" [disabled]="busy||(!aiText.trim()&&!imagePayload&&!selectedEvidenceId)||!auth.isAdmin">
+    <button class="ai-submit" (click)="askAiria()" [disabled]="busy||!canUseField||(!aiText.trim()&&!imagePayload&&!selectedEvidenceId)">
      ✦ {{busy?t('Requesting Airia…','جارٍ الاتصال بـAiria…'):
        t('Generate AI Recommendations','إنشاء توصيات AI')}}</button>
     <p class="hint">{{t('A model output does not automatically mark the vessel compliant or create a deficiency. Images are private evidence and AI requests may incur charges.',
@@ -347,11 +351,11 @@ interface A04Dossier{saved?:{status:string;dossier?:{
        <label>{{t('Edit proposed answer (JSON object)','تعديل الإجابة المقترحة (JSON)')}}
         <textarea [(ngModel)]="reviewEdits[rec.itemId]" rows="2"></textarea></label>
        <div class="actions">
-        <button (click)="review(rec.itemId,'ACCEPT')" [disabled]="busy||reviewed(rec.itemId)">
+        <button (click)="review(rec.itemId,'ACCEPT')" [disabled]="busy||!canUseField||reviewed(rec.itemId)">
          {{t('Accept AI Suggestion','الموافقة على اقتراح AI')}}</button>
-        <button class="secondary" (click)="review(rec.itemId,'EDIT')" [disabled]="busy||reviewed(rec.itemId)">
+        <button class="secondary" (click)="review(rec.itemId,'EDIT')" [disabled]="busy||!canUseField||reviewed(rec.itemId)">
          {{t('Accept with Modifications','الموافقة بعد التعديل')}}</button>
-        <button class="reject" (click)="review(rec.itemId,'REJECT')" [disabled]="busy||reviewed(rec.itemId)">
+        <button class="reject" (click)="review(rec.itemId,'REJECT')" [disabled]="busy||!canUseField||reviewed(rec.itemId)">
          {{t('Reject Suggestion','رفض الاقتراح')}}</button>
        </div>
        <small *ngIf="reviewed(rec.itemId)">{{t('Reviewed and audited','تمت المراجعة والتسجيل')}}</small>
@@ -495,6 +499,7 @@ export class SiChecklistExecutionComponent implements OnInit,OnDestroy{
  constructor(private route:ActivatedRoute,private api:SiChecklistsService,
   private http:HttpClient,public lang:LanguageService,public auth:MoeiAuthService){}
  t(en:string,ar:string){return this.lang.pick(en,ar);}
+ get canUseField():boolean{return this.preview?.fieldAccess?.canMutate===true;}
  ngOnInit():void{
   this.sub=this.route.paramMap.subscribe(p=>{
    this.caseId=p.get('caseId')||'';this.reload();
@@ -695,8 +700,13 @@ export class SiChecklistExecutionComponent implements OnInit,OnDestroy{
       image:this.imagePayload||undefined,confirmCost:true});
   request.subscribe({next:r=>{this.busy=false;this.proposal=r.proposal;
     this.refreshCase();this.reviewEdits={};this.prepareReviewEdits();
-    this.message=this.t('Airia returned an advisory answer and inspection instruction for inspector review.',
-      'أعاد Airia إجابة وتعليمات معاينة استشارية لمراجعتها من المفتش.');},
+    const withInstruction=Boolean(r.proposal?.recommendations?.some(
+      (rec: {suggestedInstruction?:string|null})=>rec.suggestedInstruction?.trim()));
+    this.message=withInstruction
+      ?this.t('AI returned an advisory answer and suggested inspection instruction. Inspector review is required.',
+        'أعاد AI إجابة وتعليمات معاينة مقترحة، وتلزم مراجعة المفتش.')
+      :this.t('AI returned an advisory answer without inspection instructions. Inspector review is required.',
+        'أعاد AI إجابة مقترحة دون تعليمات معاينة؛ وتلزم مراجعة المفتش.');},
     error:e=>this.fail(e)});
  }
  reviewed(itemId:string):boolean{
