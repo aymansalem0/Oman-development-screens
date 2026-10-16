@@ -76,6 +76,10 @@ services:
       # A04 may incur paid AI requests. It NEVER runs on page load.
       # Explicitly opt in after API contract acceptance and source evidence review.
       SI_A04_ENABLED: ${SI_A04_ENABLED:-false}
+      # Explicit opt-in for POC_MOCK only: assigned inspector can acknowledge
+      # the pinned mandatory scope and start guided field work. This is NOT
+      # regulatory/supervisor approval; official assignments stay gated.
+      SI_POC_INSPECTOR_SELF_SCOPE_ENABLED: ${SI_POC_INSPECTOR_SELF_SCOPE_ENABLED:-false}
       SI_P01_ENABLED: ${SI_P01_ENABLED:-false}
       AIRIA_SI_P01_PIPELINE_ID: ${AIRIA_SI_P01_PIPELINE_ID:-}
       SI_PREPARATION_STORE_PATH: /data/si-preparations.json
