@@ -88,11 +88,14 @@ const fs = require("node:fs");
       await page.locator('[data-testid="sdb-start-service"]').click();
       const scenario = profile === "SF-002" ? "CADET_READY" : "RENEWAL_READY";
       await page.locator('[data-testid="scenario-' + scenario + '"]').click();
-      // A READY applicant now goes directly into the existing SDB wizard.
-      await page.locator(".service-card .primary").waitFor();
+      // READY selection now auto-enters the guarded DRAFT stage once.
+      // The backend, not the scenario card, validates eligibility.
+      await page.locator('input[name="format"]').first().waitFor();
     }
-    await page.locator(".service-card .primary").waitFor();
-    await page.locator(".service-card .primary").click();
+    if (profile === "SF-004") {
+      await page.locator(".service-card .primary").waitFor();
+      await page.locator(".service-card .primary").click();
+    }
     await page.locator('input[name="format"]').first().waitFor();
     await page
       .locator('input[name="format"][value="ELECTRONIC_PRINT"]')
