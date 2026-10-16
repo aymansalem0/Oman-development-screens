@@ -54,7 +54,7 @@ import {assembleSiVesselDossier,assemblePendingWorkOrderDossier} from './si-vess
 import {projectGuidedInspection,findGuidedStep,
  buildA04FocusedFieldRequest,projectA04FocusedFieldAdvice
 } from './si-guided-inspection.mjs';
-import {pocInspectorIdForActor} from './si-inspector-identity.mjs';
+import {pocInspectorIdForActor,setManagedInspectorBindingLookup} from './si-inspector-identity.mjs';
 import {suggestCapacityExceptionActions} from './si-capacity-exception-alternatives.mjs';
 import { SiInspectionLifecycle, SiLifecycleError } from './si-inspection-lifecycle.mjs';
 import {SiScheduleOrders,SiWorkOrderError} from './si-schedule-orders.mjs';
@@ -255,6 +255,17 @@ async function incidentCaseView(){
 // Independent POC scheduling workspace; ONLY confirmed existing NMC referrals
 // are written through the established Oracle-backed case API.
 const siErp=new ErpWorkforceStore();
+/** Source of truth for account-to-inspector binding is the persisted Google
+ * allowlist; the candidate inspector ID must be present in CURRENT active ERP
+ * workforce snapshot. A stale workforce mapping cannot reveal any work order.
+ */
+const activeErpInspectors=()=>siErp.snapshot?.data?.Inspectors?.filter(row=>{
+ const active=String(row.active||'').trim().toUpperCase();
+ return ['YES','Y','TRUE','1','ACTIVE'].includes(active);
+})||[];
+googleUsers.setInspectorValidator(id=>activeErpInspectors()
+  .some(row=>row.inspector_id===id));
+setManagedInspectorBindingLookup(email=>googleUsers.assignedInspector(email));
 const siScheduling=new SiElectronicScheduler({erp:siErp,cases});
 // Incident severity is separate from A02 vessel-risk. Only fresh, officer-
 // reviewed, still-active NMC incident assessments are eligible for SI ordering.
@@ -745,6 +756,22 @@ const server = createServer(async (req, res) => {
   }
   // Deliberately not under /api/ai: these paths also need session, ADMIN,
   // CSRF and persisted, audited allowlist changes.
+  if(path==='/api/moei/admin/inspectors'&&req.method==='GET'){
+    try{
+      const actor=moeiAuth.require(req);
+      if(actor.role!=='ADMIN')throw new MoeiAuthError('MOEI_ADMIN_REQUIRED',403);
+      if(!siErp.snapshot)return respond(res,503,{error:'SI_ERP_WORKFORCE_NOT_IMPORTED'});
+      const inspectorRows=activeErpInspectors().map(row=>({
+        inspectorId:row.inspector_id,displayName:row.display_name,
+        erpEmployeeId:row.erp_employee_id,homePortId:row.home_port_id,
+        role:row.role,
+        boundAccount:googleUsers.list().find(u=>u.active&&
+          u.role==='INSPECTOR'&&u.inspectorId===row.inspector_id)?.email||null
+      }));
+      return respond(res,200,{status:'ok',source:'ACTIVE_IMPORTED_ERP_WORKFORCE',
+        snapshotId:siErp.snapshot.snapshotId,inspectors:inspectorRows});
+    }catch(e){return respond(res,e.status||503,{error:e.code||'MOEI_ERP_INSPECTORS_UNAVAILABLE'});}
+  }
   if(path==='/api/moei/admin/users'&&(req.method==='GET'||req.method==='POST')){
     try{
       const actor=moeiAuth.require(req,{mutate:req.method==='POST'});
@@ -1779,8 +1806,10 @@ const server = createServer(async (req, res) => {
         const actor=identity.email||identity.username;
         return respond(res,200,{status:'ok',orders:await siScheduleOrders.mine(actor),
           me:{session:actor,inspectorPocId:pocInspectorIdForActor(actor),
-            demoOnly:true,
-            officialErpIdentityRequiresServerMapping:true}});
+            assignedErpInspectorId:googleUsers.assignedInspector(actor),
+            demoOnly:!googleUsers.assignedInspector(actor),
+            officialErpIdentityRequiresServerMapping:
+              !googleUsers.assignedInspector(actor)}});
       }
       // Inspector workspace: all reads and writes are bound to the
       // authenticated session's assigned order, never a client-supplied IMO
