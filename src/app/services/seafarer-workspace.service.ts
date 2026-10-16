@@ -237,6 +237,10 @@ export class SeafarerWorkspaceService {
     return this.http.get<{mode:string;scenario:SdbServiceScenario}>(
       this.root+'/demo-scenarios/'+encodeURIComponent(id));
   }
+  publicRequirements(){
+    return this.http.get<{version:number;requirements:SdbRequirement[]}>(
+      this.root+'/readiness-requirements');
+  }
   readinessSettings(){
     return this.http.get<SdbReadinessSettings>(this.root+'/readiness-settings');
   }
