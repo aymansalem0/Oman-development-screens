@@ -312,11 +312,14 @@ interface A04Dossier{saved?:{status:string;dossier?:{
       <textarea [(ngModel)]="aiText" rows="4"
        [placeholder]="t('Describe the finding or ask AI to analyze the evidence.',
          'صف الملاحظة أو اطلب تحليل الدليل.')"></textarea></label>
-     <label>{{t('Attach Image (JPG / PNG / WebP, max 2 MB)','ارفق صورة (JPG / PNG / WebP، بحد أقصى 2MB)')}}
+     <label *ngIf="target.level!=='AI_QUESTION'">{{t('Attach Image (JPG / PNG / WebP, max 2 MB)','ارفق صورة (JPG / PNG / WebP، بحد أقصى 2MB)')}}
       <input type="file" accept="image/jpeg,image/png,image/webp"
        (change)="onImage($event)"/>
       <span *ngIf="fileName">{{fileName}}</span></label>
     </div>
+    <p class="hint" *ngIf="target.level==='AI_QUESTION'">
+     {{t('For AI-generated optional questions, first attach your photo directly to that question above, then select it here before requesting image analysis. No photo is transmitted until you confirm the chargeable Airia call.',
+      'للأسئلة الإضافية المقترحة بواسطة AI، ارفع الصورة إلى السؤال نفسه بالأعلى أولًا ثم اخترها هنا للتحليل. لا تُرسل أي صورة إلى Airia إلا بعد موافقتك على الاستدعاء المدفوع.')}}</p>
     <div class="linked-evidence-picker" *ngIf="target.itemId && evidenceFor(target.itemId).length">
      <label>{{t('Use attached image from this question','اختر صورة مرفقة بهذا السؤال')}}
       <select [(ngModel)]="selectedEvidenceId">
