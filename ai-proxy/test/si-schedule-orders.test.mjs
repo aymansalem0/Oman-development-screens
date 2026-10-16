@@ -292,3 +292,28 @@ test('Oracle 019 supervisor approval uses valid bind names and matching bind obj
   assert.equal(writes[0].binds.b_mode_code,'POC_MOCK');
  }finally{x.done();}
 });
+
+test('Oracle 019 write failure keeps precise work-order SQL stage for outer atomic rollback',async()=>{
+ const x=workspace();
+ let commitCount=0;
+ const connection={
+  async execute(sql,binds={}){
+   if(sql.startsWith('INSERT INTO SI_SCHED_WORK_ORDER')){
+    assert.equal(binds.b_inspector_id,'ENG-1');
+    const failure=new Error('Do not return inspector private data');
+    failure.code='ORA-01745';failure.errorNum=1745;
+    throw failure;
+   }
+   return {rows:[],rowsAffected:1};
+  },
+  async commit(){commitCount++;}
+ };
+ try{
+  x.orders.mode='oracle';
+  await assert.rejects(()=>x.approve({connection}),e=>
+    e.code==='ORA-01745'&&
+    e.scheduleSqlStage==='WORK_ORDER_INSERT');
+  assert.equal(commitCount,0,
+    'shared outer transaction is responsible for rollback and commit');
+ }finally{x.done();}
+});
