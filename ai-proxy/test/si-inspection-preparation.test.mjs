@@ -355,3 +355,48 @@ test('request instructions never override server-side validation when a model re
   assert.equal(record.saved.dossier,null);
  }finally{h.cleanup();}
 });
+
+test('A04 accepts empty or omitted potential deficiencies without dropping mandatory checklist',async()=>{
+ const args={checkIds:SI_BASE_CHECKLIST,evidenceIds:fixture.evidenceIds};
+ for(const response of [
+  {...dossier,predictedDeficiencies:[]},
+  Object.fromEntries(Object.entries(dossier).filter(([k])=>k!=='predictedDeficiencies'))
+ ]){
+  const validated=validateA04(response,args);
+  assert.deepEqual(validated.predictedDeficiencies,[]);
+  assert.equal(validated.requiresInspectorReview,true);
+  const h=harness({enabled:true,providerResponse:response});
+  try{
+   const prepared=await h.svc.prepare(caseId,{actor:'Inspector'});
+   const result=await h.svc.generate(caseId,{actor:'Inspector',
+    expectedVersion:prepared.saved.version,confirmCost:true});
+   assert.equal(result.saved.status,'DRAFT_REVIEW');
+   assert.deepEqual(result.saved.context.baseChecklistItemIds,SI_BASE_CHECKLIST);
+   assert.deepEqual(result.saved.dossier.predictedDeficiencies,[]);
+   assert.equal(result.saved.dossier.requiresInspectorReview,true);
+   assert.equal(h.calls(),1);
+  }finally{h.cleanup();}
+ }
+});
+
+test('potential deficiencies stay strict hypotheses and never silently gain legal status',()=>{
+ const args={checkIds:SI_BASE_CHECKLIST,evidenceIds:fixture.evidenceIds};
+ const sample={category:'FIRE_SAFETY',evidenceIds:['DEF-1']};
+ for(const entry of [sample,{...sample,hypothesisOnly:false},
+  {...sample,hypothesisOnly:'true'}]){
+  assert.throws(()=>validateA04({...dossier,predictedDeficiencies:[entry]},args),
+   e=>e.code==='SI_A04_PREDICTION_NOT_ADVISORY'&&
+     e.field==='predictedDeficiencies[0].hypothesisOnly');
+ }
+ const approved=validateA04({...dossier,
+  predictedDeficiencies:[{...sample,hypothesisOnly:true}]},args);
+ assert.deepEqual(approved.predictedDeficiencies,[{...sample,hypothesisOnly:true}]);
+ assert.equal(approved.requiresInspectorReview,true);
+ const guidance=a04PocOutputGuidance({baseChecklistItemIds:SI_BASE_CHECKLIST,
+  evidenceManifestRefs:fixture.evidenceIds});
+ assert.ok(guidance.instructions.some(i=>i.includes('hypothesisOnly: true')));
+ assert.ok(guidance.instructions.some(i=>i.includes('predictedDeficiencies: []')));
+ assert.equal(guidance.optionalPredictedDeficienciesItemShape.hypothesisOnly,true);
+ assert.deepEqual(guidance.noPredictedDeficienciesResponse,{predictedDeficiencies:[]});
+ assert.deepEqual(guidance.allowedChecklistItemIds,SI_BASE_CHECKLIST);
+});

@@ -89,8 +89,14 @@ export class SiInspectionPreparationComponent implements OnInit{
       code==='SI_VESSEL_BUNDLE_MISSING'?
       this.copy('Approved case found, but its source vessel evidence bundle is unavailable.',
         'الحالة المعتمدة موجودة لكن حزمة أدلة السفينة المصدر غير متاحة.'):
-      this.copy('Unable to load approved case evidence. Please verify the SI preparation API and Oracle migration 010.',
-        'تعذر تحميل أدلة حالة المعاينة. راجع خدمة التحضير وترحيل Oracle رقم 010.');
+      code==='SI_A04_PREDICTION_NOT_ADVISORY'?
+      this.copy('Airia A04 returned a potential deficiency without the required advisory-only fields. The proposal was rejected; the mandatory checklist is unchanged.',
+       'أرجع Airia A04 مخالفة محتملة دون الحقول الاستشارية المطلوبة. تم رفض الاقتراح وتظل القائمة الإلزامية دون تغيير.'):
+      code?.startsWith('SI_A04_')?
+      this.copy('A04 response validation failed: '+code+'. No inspection findings were recorded.',
+       'فشل التحقق من استجابة A04: '+code+'. لم يتم تسجيل مخالفات معاينة.'):
+      this.copy('Unable to load or update inspection preparation. Check the request status and API error; Oracle migration 010 is not necessarily missing.',
+        'تعذر تحميل أو تحديث تحضير المعاينة. راجع حالة الطلب والخطأ الفعلي؛ ليس بالضرورة أن ترحيل Oracle رقم 010 ناقص.');
     this.busy=false;this.loading=false;
     if(err?.status===401)this.error='Your login session expired.';
   }

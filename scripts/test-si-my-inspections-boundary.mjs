@@ -83,3 +83,29 @@ test('supervisor-only scope approval and schedule issuance remain unchanged',()=
   assert.ok(server.includes("const supervisor=operation==='approve'||orderAction==='scope'"));
   assert.ok(server.includes("dashboards.assertRole(req,supervisor?'PUBLISHER':'EDITOR')"));
 });
+
+test('assigned inspector gets prominent preparation action before field start; A04 remains admin-only',()=>{
+ const prep=workspace.indexOf('class="prep-entry"');
+ const execute=workspace.indexOf("{{t('Execute Work Order'");
+ assert.ok(prep>0&&execute>prep,'preparation is prominent before field execution');
+ assert.ok(workspace.includes("{{t('1 · Prepare Inspection'"));
+ assert.ok(workspace.includes('(click)="activate(o)"'));
+ assert.ok(workspace.includes('o.caseId&&auth.isAdmin'));
+ assert.ok(workspace.includes("['/moei/smart-inspection/preparation',o.caseId]"));
+ assert.ok(workspace.includes('o.caseId&&!auth.isAdmin'));
+});
+
+test('mandatory preparation never waits for AI hypotheses or accepts unreviewed extras',()=>{
+ const scheduling=src('ai-proxy/si-schedule-orders.mjs');
+ const start=scheduling.indexOf('async activate({');
+ const end=scheduling.indexOf('async approveScope({',start);
+ assert.ok(start>0&&end>start);
+ const activation=scheduling.slice(start,end);
+ assert.ok(activation.includes("await this.checklists.start(caseId,actor)"));
+ assert.ok(activation.includes("action:'INITIALIZE'"));
+ assert.ok(activation.indexOf('await this.checklists.start(caseId,actor)')<
+  activation.indexOf('if(generateAi&&prepared.saved.status'));
+ assert.ok(workspace.includes('!ai.predictedDeficiencies?.length'));
+ assert.ok(workspace.includes('ai.predictedDeficiencies'));
+ assert.ok(workspace.includes('AI hypothesis only'));
+});
