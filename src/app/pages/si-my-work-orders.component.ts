@@ -19,7 +19,8 @@ interface Dossier{
   identity:{imo:string;vesselName:string|null;flag:string|null;
    vesselType:string|null;regimes?:string[];caseId?:string|null};
   assignments:{inspectorName:string|null;portName:string|null;
-   startLocal:string|null;status:string;liveErpBookingConfirmed:boolean}|null;
+   startLocal:string|null;endLocal?:string|null;status:string;crossPort?:boolean;
+   liveErpBookingConfirmed:boolean}|null;
   referrals:{allSourceReasons:unknown[];objectives?:unknown[];
    inspectionScopes?:unknown[];distinctSourceCount?:number};
   risk:{score:number;level:string;status:string}|null;
@@ -50,7 +51,7 @@ interface Dossier{
      'حسابك المسجل هو الذي يحدد السفن المسندة إليك. قف على سفينة أو اخترها لعرض الدوسيه الكامل والأدلة قبل التنفيذ.')}}</p>
    </div>
    <div class="header-actions">
-    <button type="button" (click)="load()" [disabled]="busy">{{t('Refresh Assignments','تحديث أوامر التكليف')}}</button>
+    <button type="button" (click)="load()" [disabled]="busy||loading">{{t('Refresh Assignments','تحديث أوامر التكليف')}}</button>
     <a routerLink="/moei/smart-inspection/scheduling">{{t('Scheduling','الجدولة')}}</a>
    </div>
   </header>
@@ -59,9 +60,9 @@ interface Dossier{
   <section class="overview">
    <div><small>{{t('Assigned to me','مسندة إليّ')}}</small><strong>{{orders.length}}</strong></div>
    <div><small>{{t('Ready for execution','جاهزة للتنفيذ')}}</small><strong>{{statusCount('READY_FOR_FIELD')}}</strong></div>
+   <div><small>{{t('Awaiting preparation','بانتظار التجهيز')}}</small><strong>{{preparationCount}}</strong></div>
+   <div><small>{{t('Awaiting supervisor','بانتظار اعتماد المشرف')}}</small><strong>{{statusCount('READY_FOR_SCOPE_REVIEW')}}</strong></div>
    <div><small>{{t('Field in progress','قيد المعاينة')}}</small><strong>{{statusCount('FIELD_STARTED')}}</strong></div>
-   <div><small>{{t('Awaiting preparation','بانتظار التجهيز')}}</small>
-    <strong>{{orders.length-statusCount('READY_FOR_FIELD')-statusCount('FIELD_STARTED')}}</strong></div>
   </section>
   <p class="poc" *ngIf="me?.inspectorPocId">
    <b>{{t('Your POC engineer identity','هويتك التجريبية كمهندس')}}</b>:
@@ -75,7 +76,6 @@ interface Dossier{
     <button type="button" class="vessel"
      *ngFor="let o of orders;let i=index"
      [class.active]="selected?.orderId===o.orderId"
-     (mouseenter)="select(o)" (focus)="select(o)"
      (click)="select(o)">
       <span class="vessel-icon">🚢</span>
       <span class="vessel-body">
@@ -100,7 +100,7 @@ interface Dossier{
      </div><span class="meta">{{o.mode==='POC_MOCK'?'POC · DEMO ERP':'ERP · EXCEL POC'}}</span></div>
      <div class="buttons">
       <button *ngIf="canActivate(o)" type="button" (click)="activate(o)"
-       [disabled]="busy">{{t('Prepare Work Order & AI Dossier','تجهيز أمر التكليف ودوسيه AI')}}</button>
+       [disabled]="busy">{{t('Prepare Inspection Dossier & Checklist','تجهيز ملف المعاينة والقائمة')}}</button>
       <button *ngIf="o.status==='READY_FOR_FIELD'" type="button" (click)="execute(o)"
        [disabled]="busy">{{t('Execute Work Order','تنفيذ أمر التكليف')}}</button>
       <button *ngIf="o.status==='FIELD_STARTED'" type="button" (click)="continue(o)">
@@ -109,15 +109,27 @@ interface Dossier{
        [routerLink]="['/moei/smart-inspection/scheduling/plan',o.planId]">
         {{t('Supervisor: Approve Scope','المشرف: اعتماد نطاق المعاينة')}}</a>
       <a *ngIf="o.caseId" [routerLink]="['/moei/smart-inspection/preparation',o.caseId]">
-       {{t('Review A04 Dossier','مراجعة دوسيه A04')}}</a>
-      <a *ngIf="o.caseId" [routerLink]="['/moei/smart-inspection/checklists',o.caseId]">
+       {{t('Preparation & Optional A04','تجهيز المعاينة وA04 الاختياري')}}</a>
+      <a *ngIf="o.caseId&&o.checklistStatus==='MANDATORY_PUBLISHED_TEMPLATE_SNAPSHOT'"
+       [routerLink]="['/moei/smart-inspection/checklists',o.caseId]">
        {{t('Published Checklist Details','تفاصيل القائمة المنشورة')}}</a>
      </div>
      <p *ngIf="loadingDossier" class="status">{{t('Opening full vessel dossier…','جارٍ فتح ملف السفينة الكامل…')}}</p>
      <ng-container *ngIf="dossier as d">
       <div class="warning" *ngIf="!d.caseId">
-       {{t('Source dossier before activation: no approved SI case, pinned checklist or AI A04 preparation has been created yet.',
-         'دوسيه المصادر قبل تفعيل أمر التكليف: لم تُنشأ حالة المعاينة أو القائمة المثبتة أو تجهيز A04 حتى الآن.')}}</div>
+       {{t('Work order issued, but inspection preparation has not started. No inspection case or mandatory checklist snapshot exists yet. Optional A04 analysis is a separate, explicitly confirmed step.',
+         'صدر أمر التكليف لكن تجهيز المعاينة لم يبدأ. لم تُنشأ حالة المعاينة أو لقطة القائمة الإلزامية بعد. تحليل A04 اختياري ويتطلب تأكيدًا مستقلًا.')}}</div>
+      <div class="process-guide" role="status">
+       <strong>{{t('Next business step','الخطوة التالية')}}</strong>
+       <p *ngIf="canActivate(o)">{{t('Prepare the source dossier and mandatory checklist first. No AI call will be made by this button.',
+        'جهّز ملف المصادر والقائمة الإلزامية أولًا. هذا الزر لا يستدعي الذكاء الاصطناعي.')}}</p>
+       <p *ngIf="o.status==='READY_FOR_SCOPE_REVIEW'">{{t('Preparation is complete. A supervisor must review and approve the inspection scope before field execution.',
+        'اكتمل التجهيز. يجب أن يراجع المشرف نطاق المعاينة ويعتمده قبل التنفيذ الميداني.')}}</p>
+       <p *ngIf="o.status==='READY_FOR_FIELD'">{{t('Scope approved. The assigned inspector can begin the field inspection.',
+        'تم اعتماد النطاق. يمكن للمفتش المسند إليه بدء المعاينة الميدانية.')}}</p>
+       <p *ngIf="o.status==='FIELD_STARTED'">{{t('Field inspection is in progress. Continue the guided checklist and record evidence.',
+        'المعاينة الميدانية جارية. استكمل القائمة الإرشادية وسجل الأدلة.')}}</p>
+      </div>
       <div class="dossier-grid">
        <div class="fact"><small>{{t('Flag','العلم')}}</small><b>{{d.sections.identity.flag||'—'}}</b></div>
        <div class="fact"><small>{{t('Vessel Type','نوع السفينة')}}</small><b>{{d.sections.identity.vesselType||'—'}}</b></div>
@@ -177,7 +189,7 @@ interface Dossier{
  button,.buttons a,.header-actions a{border:1px solid #bddadd;background:#eaf7f7;color:#096c75;
   border-radius:8px;padding:10px 12px;text-decoration:none;cursor:pointer;font-weight:700;font-size:12px}
  button:disabled{opacity:.5;cursor:not-allowed}.buttons button{background:#077e76;color:#fff}
- .overview{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:15px}
+ .overview{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin-bottom:15px}
  .overview div{padding:14px;background:#fff;border:1px solid #d8e8ed;border-radius:12px}
  .overview small,.overview strong{display:block}.overview small{color:#8197a3;font-size:11px}
  .overview strong{font-size:27px;color:#116575;margin-top:7px}
@@ -185,6 +197,9 @@ interface Dossier{
   font-size:12px;color:#17685f}.poc code{font-size:11px}
  .danger{background:#ffeded;color:#a03939;border-color:#e9b7b7}.good{background:#eaf9f0;color:#226e4c}
  .warning{background:#fff7e9;color:#805b26;border-color:#ead6ac}
+ .process-guide{margin:12px 0;padding:12px 15px;border-radius:10px;
+  background:#ecf7f7;border:1px solid #c7e4e3;font-size:12px;color:#1b5b63}
+ .process-guide strong{display:block;font-size:12px}.process-guide p{margin:6px 0 0;line-height:1.6}
  .workspace{display:grid;grid-template-columns:370px minmax(0,1fr);align-items:start;gap:17px}
  .assignments,.dossier{background:#fff;border:1px solid #d8e8ed;border-radius:14px;padding:16px}
  .assignments h2{font-size:17px;margin:2px 0 14px}
@@ -211,7 +226,7 @@ interface Dossier{
  .placeholder{text-align:center;margin:75px auto;color:#7291a0;max-width:400px}
  .placeholder span{font-size:45px}.placeholder h2{font-size:19px;color:#28536a}
  .placeholder p{font-size:12px;line-height:1.8}
- @media(max-width:1180px){.workspace{grid-template-columns:300px 1fr}.dossier-grid{grid-template-columns:repeat(2,1fr)}}
+ @media(max-width:1180px){.workspace{grid-template-columns:300px 1fr}.dossier-grid{grid-template-columns:repeat(2,1fr)}.overview{grid-template-columns:repeat(3,minmax(0,1fr))}}
  @media(max-width:980px){.main{margin:0;padding:13px}.workspace{grid-template-columns:1fr}
   .overview{grid-template-columns:repeat(2,1fr)}.hero{flex-wrap:wrap}}
  `]
@@ -227,6 +242,9 @@ export class SiMyWorkOrdersComponent implements OnInit{
  t(en:string,ar:string):string{return this.lang.pick(en,ar);}
  ngOnInit():void{this.load();}
  statusCount(s:string):number{return this.orders.filter(x=>x.status===s).length;}
+ get preparationCount():number{
+  return this.orders.filter(x=>['ISSUED','PREPARING','PREPARATION_NEEDS_REVIEW'].includes(x.status)).length;
+ }
  statusLabel(status:string):string{
   return ({ISSUED:this.t('Issued','صدر الأمر'),
    PREPARING:this.t('Preparing','جارٍ التجهيز'),
@@ -266,16 +284,16 @@ export class SiMyWorkOrdersComponent implements OnInit{
  }
  activate(o:AssignedOrder):void{
   if(this.busy||!this.canActivate(o)||!window.confirm(this.t(
-   'Activate your assigned order: create/link an official-free SI case, pin the mandatory checklist and request A04 analysis if the source has verified risk and evidence? Supervisor approval remains separate.',
-   'تفعيل أمر التكليف الخاص بك: إنشاء/ربط حالة معاينة POC وتجهيز القائمة الإلزامية وتشغيل A04 إن توفرت المخاطر والأدلة؟ يظل اعتماد النطاق من اختصاص المشرف.')))return;
+   'Prepare this assigned inspection: create/link its POC case and pin the mandatory published checklist? This action makes NO A04 AI call. Optional A04 can be requested later on the Preparation page with separate consent; supervisor scope approval remains required.',
+   'هل تريد تجهيز المعاينة المسندة إليك بإنشاء/ربط حالة POC وتثبيت القائمة الإلزامية المنشورة؟ لن يستدعي هذا الإجراء A04. يمكن طلب A04 لاحقًا من شاشة التجهيز بموافقة مستقلة، ويظل اعتماد النطاق من اختصاص المشرف.')))return;
   this.busy=true;this.error='';
   this.http.post<{order:AssignedOrder}>(
    this.api+'plans/'+o.planId+'/work-orders/'+o.orderId+'/activate',
-   {generateAi:true,confirmAiCost:true}
+   {generateAi:false,confirmAiCost:false}
   ).subscribe({
    next:r=>{this.busy=false;const updated=this.replaceOrder(r.order);
-    this.message=this.t('Dossier and mandatory checklist prepared. Supervisor must review A04 and approve scope before field start.',
-      'تم تجهيز الدوسيه والقائمة الإلزامية؛ يلزم مراجعة A04 واعتماد النطاق من المشرف قبل بدء التنفيذ.');
+    this.message=this.t('Inspection dossier and mandatory checklist prepared. A04 remains optional. Supervisor approval of the scope is required before field start.',
+      'تم تجهيز ملف المعاينة والقائمة الإلزامية، وA04 يظل اختياريًا. يلزم اعتماد نطاق المعاينة من المشرف قبل التنفيذ.');
     if(updated)this.loadDossierFresh(updated);},
    error:e=>{this.busy=false;this.error=e?.error?.error||'SI_ORDER_PREPARATION_FAILED';}
   });
