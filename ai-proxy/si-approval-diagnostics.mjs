@@ -10,6 +10,9 @@ const knownStages=new Set([
  'APPROVED_SOURCE_REASON_WRITE','PLAN_APPROVAL_AUDIT',
  'SCHEDULE_WORK_ORDER_WRITE','ORACLE_COMMIT'
 ]);
+const knownScheduleSqlStages=new Set([
+ 'SCHEDULE_HEADER_INSERT','WORK_ORDER_INSERT','SCHEDULE_AUDIT_INSERT'
+]);
 export function classifySiApprovalFailure(error){
  const stage=knownStages.has(error?.approvalStage)?
   error.approvalStage:'PREAPPROVAL_OR_DEPENDENCY';
@@ -32,6 +35,9 @@ export function classifySiApprovalFailure(error){
   stage,
   failureType:kind,
   ...(oracleCode?{oracleCode}:{}),
+  ...(stage==='SCHEDULE_WORK_ORDER_WRITE'&&
+    knownScheduleSqlStages.has(error?.scheduleSqlStage)?
+    {scheduleSqlStage:error.scheduleSqlStage}:{}),
   status:kind==='ORACLE_TRANSIENT'?503:500
  };
 }
