@@ -2214,7 +2214,12 @@ const server = createServer(async (req, res) => {
         const id=lifecyclePath[1],suffix=lifecyclePath[2];
         if(req.method==='GET'&&!suffix){
           dashboards.assertRole(req,'EDITOR');
-          return respond(res,200,await siLifecycle.snapshot(id));
+          const snapshot=await siLifecycle.snapshot(id);
+          // Read-only derived classification from canonical scheduling orders.
+          // Legacy/unassigned cases keep their independent lifecycle operations.
+          const schedules=siScheduleOrders.ready?await siScheduleOrders.all():[];
+          const workOrderManaged=schedules.some(s=>s.orders.some(o=>o.caseId===id));
+          return respond(res,200,{...snapshot,workOrderManaged});
         }
         if(req.method==='GET'&&suffix==='history'){
           dashboards.assertRole(req,'EDITOR');
@@ -2225,6 +2230,17 @@ const server = createServer(async (req, res) => {
           const controlled=new Set(['APPROVE_SCOPE','APPROVE_REPORT','RETURN_REPORT',
             'ISSUE_ACTIONS','VERIFY_ACTION','RECORD_FOLLOW_UP','CLOSE']);
           dashboards.assertRole(req,controlled.has(body.action)?'PUBLISHER':'EDITOR');
+          // No parallel regulatory activation path for cases owned by a saved
+          // inspector Work Order. The Work Order API applies lifecycle actions
+          // internally, then updates the canonical order state atomically per
+          // its existing audited sequence.
+          if(['APPROVE_SCOPE','ASSIGN','START_FIELD'].includes(body.action) &&
+             siScheduleOrders.ready){
+            const schedules=await siScheduleOrders.all();
+            if(schedules.some(s=>s.orders.some(o=>o.caseId===id)))
+              return respond(res,409,{error:'SI_ASSIGNED_WORK_ORDER_JOURNEY_REQUIRED',
+                journeyRoute:'/moei/smart-inspection/my-work-orders'});
+          }
           return respond(res,200,await siLifecycle.apply(id,body));
         }
         return respond(res,405,{error:'METHOD_NOT_ALLOWED'});
