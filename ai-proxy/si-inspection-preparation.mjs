@@ -134,9 +134,14 @@ export function validateA04(raw,{checkIds,evidenceIds}){
   });
   if(new Set(checklistFocus.map(f=>f.existingItemId)).size!==checklistFocus.length)
     throw new SiPreparationError('SI_A04_DUPLICATE_CHECKLIST_ITEM',502);
-  const predicted=(data.predictedDeficiencies||[]).map(f=>{
-    if(!f||f.hypothesisOnly!==true||!clean(f.category,90))
-      throw new SiPreparationError('SI_A04_PREDICTION_NOT_ADVISORY',502);
+  const predicted=(data.predictedDeficiencies||[]).map((f,index)=>{
+    const field='predictedDeficiencies['+index+']';
+    if(!f||typeof f!=='object'||Array.isArray(f))
+      throw new SiPreparationError('SI_A04_PREDICTION_NOT_ADVISORY',502,field);
+    if(!clean(f.category,90))
+      throw new SiPreparationError('SI_A04_PREDICTION_NOT_ADVISORY',502,field+'.category');
+    if(f.hypothesisOnly!==true)
+      throw new SiPreparationError('SI_A04_PREDICTION_NOT_ADVISORY',502,field+'.hypothesisOnly');
     return {category:clean(f.category,90),hypothesisOnly:true,evidenceIds:refs(f.evidenceIds,true)};
   });
   const additional=(data.suggestedAdditionalItems||[]).map(i=>{
@@ -452,7 +457,8 @@ export class SiInspectionPreparation{
           const failure=e instanceof SiPreparationError?e.code:'SI_A04_PROVIDER_UNAVAILABLE';
           const field=e instanceof SiPreparationError?e.field:null;
           if(failure==='SI_A04_FOCUS_INVALID'||
-             failure==='SI_A04_CHECKLIST_REF_INVALID'){
+             failure==='SI_A04_CHECKLIST_REF_INVALID'||
+             failure==='SI_A04_PREDICTION_NOT_ADVISORY'){
             // Do not print Airia output, personal data, source evidence,
             // prompt bodies or API credentials to logs.
             console.error('[si-a04] RESPONSE_SCHEMA_VALIDATION_FAILED '+JSON.stringify({
