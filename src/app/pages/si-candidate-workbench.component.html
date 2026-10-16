@@ -10,7 +10,6 @@
       </div>
       <div class="hero-actions">
         <a routerLink="/moei/smart-inspection/management">{{copy('Inspection Management','إدارة المعاينات')}}</a>
-        <a routerLink="/moei/smart-inspection/psc-targeting">{{copy('PSC Pool','قائمة PSC')}}</a>
         <button type="button" (click)="refresh()" [disabled]="loading||busy||planBusy">
           {{copy('↻ Refresh','↻ تحديث')}}</button>
       </div>
@@ -292,6 +291,10 @@
          <h3>{{p.title}}</h3>
          <p>{{p.startsOn}} → {{p.endsOn}} · {{p.vesselCount}} {{copy('selected','مختارة')}} / {{p.candidateCount||0}} {{copy('candidates','مرشحة')}} <span *ngIf="p.deferredCount"> · {{p.deferredCount}} {{copy('deferred','مؤجلة')}}</span></p>
          <p>{{copy('Version','إصدار')}} {{p.revision}}</p>
+         <p *ngIf="p.capacityStatus?.startsWith('STALE_')" class="notice error" role="status">
+          {{copy('Capacity verification became stale after a later selection change. Approval is blocked until the reviewed selection is restored and inspector capacity is checked again.',
+            'فقد حساب الطاقة صلاحيته بعد تغيير لاحق في اختيار السفن. الاعتماد متوقف حتى استعادة الاختيار الموثق وإعادة فحص طاقة المهندسين.')}}
+         </p>
          <div class="si-rolling-actions">
           <button type="button" (click)="openRollingPlan(p)" [disabled]="planBusy">
            {{p.status==='DRAFT'||p.status==='READY_FOR_APPROVAL'?
@@ -301,6 +304,10 @@
              [routerLink]="['/moei/smart-inspection/plan/create',p.id]"
              [queryParams]="{stage:'capacity'}">
            {{copy('Check Capacity & Approval →','فحص الطاقة والاعتماد ←')}}</a>
+          <button type="button"
+             *ngIf="(p.status==='DRAFT'||p.status==='READY_FOR_APPROVAL') && p.capacityStatus?.startsWith('STALE_')"
+             (click)="restoreVerifiedDraft(p)" [disabled]="planningBusy||planBusy">
+           {{copy('Restore Verified Draft Selection','استعادة اختيار السفن المتحقق منه')}}</button>
           <button type="button" *ngIf="p.status==='DRAFT'||p.status==='READY_FOR_APPROVAL'"
              (click)="cancelRollingPlan(p)" [disabled]="planningBusy">
            {{copy('Cancel Draft','إلغاء المسودة')}}</button>
@@ -458,7 +465,7 @@
         <span class="si-admin-user">✓ Admin · {{copy('Authenticated session','جلسة موحدة')}}</span>
         <button type="button" (click)="loadInspectionPlan()" [disabled]="planBusy||loading">
           {{copy('Load Plan','تحميل الخطة')}}</button>
-        <button type="button" class="primary" (click)="generateInspectionPlan()"
+        <button type="button" *ngIf="canEditDraftSelection" class="primary" (click)="generateInspectionPlan()"
                 [disabled]="planBusy||loading||!plan||!activePlanEditable"
                 [attr.aria-busy]="planAiPhase!=='idle'">
           <span *ngIf="planAiPhase!=='idle'" class="si-analysis-spinner" aria-hidden="true"></span>
@@ -467,6 +474,10 @@
             plan?.agentRunId?copy('Re-run AI Selection & Priority','إعادة حساب اختيار وترتيب AI'):
             copy('Generate AI Selection & Priority','إنشاء اختيار وترتيب AI')}}
         </button>
+        <span class="si-rolling-note" *ngIf="plan?.capacityDraft">
+          {{copy('C01 selection and inspector capacity were already calculated and saved with this integrated Draft. Re-running C01 here would replace the approved-for-review vessel scope. Use the saved plan capacity check; for a different selection create a new plan.',
+            'تم حساب اختيار C01 وطاقة المهندسين بالفعل عند حفظ هذه المسودة المتكاملة. إعادة تشغيل C01 هنا ستغيّر السفن التي تمت مراجعتها. استخدم فحص طاقة الخطة المحفوظة؛ ولتغيير الاختيار أنشئ خطة جديدة.')}}
+        </span>
         <span class="si-zero-ai">{{plan?.provider==='AIRIA'?
           copy('AIRIA: explicit confirmed analysis','Airia: تحليل يبدأ بتأكيد المستخدم'):
           copy('MOCK: 0 Airia calls','MOCK: بدون اتصال Airia')}}</span>
@@ -538,12 +549,10 @@
         <h2>{{copy('Check Capacity & Approve Plan','فحص الطاقة التشغيلية واعتماد الخطة')}}</h2>
         <p>{{copy('Before approval, verify source-selected vessels, qualified inspector availability and feasible visit slots. A C01 recommendation alone never approves a plan.',
           'قبل الاعتماد، تحقق من السفن المختارة ومتاحية المهندسين المؤهلين ومواعيد الزيارات الممكنة. توصية C01 وحدها لا تعتمد الخطة.')}}</p>
-        <a *ngIf="activePlanEditable"
-           class="si-plan-wizard-button"
-           [routerLink]="['/moei/smart-inspection/plan/create',activePlanId]"
-           [queryParams]="{stage:'capacity'}">
-          {{copy('Review Capacity & Plan Approval →','مراجعة الطاقة التشغيلية واعتماد الخطة ←')}}
-        </a>
+        <p class="si-rolling-note" *ngIf="activePlanEditable">
+          {{copy('Use “Check Capacity & Approval” on the selected plan card above. This is the single entry point; there is no second approval action on the candidate grid.',
+            'استخدم «فحص الطاقة والاعتماد» من بطاقة الخطة بالأعلى. هذه هي نقطة الدخول الوحيدة، ولا يوجد زر اعتماد مكرر في جدول المرشحين.')}}
+        </p>
         <span class="si-rolling-note" *ngIf="activePlanEditable&&!approvalReady">
           {{copy('The capacity preview is available in the draft workflow. Final approval remains blocked until source, published C01 policy (if required), and qualified workforce constraints pass.',
             'فحص الطاقة متاح للمسودة. يظل الاعتماد النهائي موقوفًا حتى استيفاء الأدلة وسياسة C01 المنشورة عند لزومها وتحقق تأهيل المهندسين وتوافرهم.')}}</span>
@@ -572,7 +581,7 @@
         </select>
       </div>
 
-      <section class="si-bulk-toolbar" *ngIf="activePlanEditable&&plan&&!plan.readOnlyHistorical"
+      <section class="si-bulk-toolbar" *ngIf="canEditDraftSelection&&plan&&!plan.readOnlyHistorical"
         [attr.aria-label]="copy('Bulk vessel planning actions','إجراءات التخطيط الجماعية للسفن')">
         <div class="si-bulk-tools">
           <div class="si-bulk-description">
@@ -728,7 +737,7 @@
                     <span *ngIf="planRow(v)?.reviewDue">· {{copy('Review due','مطلوب إعادة المراجعة')}}</span></small>
                 </td>
                 <td class="si-row-actions">
-                  <div *ngIf="activePlanEditable&&plan&&planRow(v)?.editable"
+                  <div *ngIf="canEditDraftSelection&&plan&&planRow(v)?.editable"
                     class="si-rolling-actions">
                     <button type="button" *ngIf="!planRow(v)?.planSelected"
                       (click)="openManualDecision(v,'INCLUDE')"
