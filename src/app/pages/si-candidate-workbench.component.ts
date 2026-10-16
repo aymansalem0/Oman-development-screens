@@ -101,6 +101,12 @@ export class SiCandidateWorkbenchComponent implements OnInit,OnDestroy{
   get activePlanEditable():boolean{
     return !!this.activePlan&&['DRAFT','READY_FOR_APPROVAL'].includes(this.activePlan.status);
   }
+  // New integrated plans already include source-validated C01 and a frozen
+  // capacity roster. The legacy selector must not rewrite those decisions.
+  get canEditDraftSelection():boolean{
+    return this.activePlanEditable&&!this.activePlan?.capacityStatus&&
+      !this.plan?.capacityDraft;
+  }
   private localDate():string{
     const date=new Date(),two=(n:number)=>String(n).padStart(2,'0');
     return [date.getFullYear(),two(date.getMonth()+1),two(date.getDate())].join('-');
@@ -434,6 +440,35 @@ export class SiCandidateWorkbenchComponent implements OnInit,OnDestroy{
     });
   }
 
+  restoreVerifiedDraft(p:SiRollingPlan):void{
+    if(this.planningBusy||!['DRAFT','READY_FOR_APPROVAL'].includes(p.status)||
+       !String(p.capacityStatus||'').startsWith('STALE_'))return;
+    const reason=window.prompt(this.copy(
+      'Restore the last capacity-verified vessel selection for '+p.number+
+       '? Later C01/selection changes will be reverted. Enter an audit reason (8+ characters):',
+      'استعادة اختيار السفن الأخير الذي تم التحقق من طاقته للخطة '+p.number+
+       '؟ ستُلغى تعديلات الاختيار اللاحقة. أدخل سببًا للتدقيق (8 أحرف على الأقل):'));
+    if(!reason||reason.trim().length<8)return;
+    if(!window.confirm(this.copy(
+      'Restore the previously verified Draft selection (NOT approval)? The current plan version remains in Oracle history. Inspector capacity must be checked again before approval.',
+      'استعادة قائمة السفن المعتمدة سابقًا للطاقة دون اعتماد الخطة؟ سيظل الإصدار الحالي محفوظًا في سجل Oracle، ويجب مراجعة الطاقة مرة أخرى قبل الاعتماد.')))return;
+    this.planningBusy=true;this.planningError='';
+    this.api.restoreVerifiedCapacityDraft(p.id,p.revision,reason.trim()).subscribe({
+      next:()=>{
+        this.planningBusy=false;this.activePlanId=p.id;
+        this.plan=null;this.clearBulkSelection();
+        this.loadRollingPlans();this.loadInspectionPlan();
+        this.planNotice=this.copy(
+          'Verified vessel selection restored. Recheck inspector capacity before approval; no work orders were issued.',
+          'تمت استعادة اختيار السفن المتحقق منه. راجع طاقة المهندسين قبل الاعتماد؛ لم تُصدر أوامر تكليف.');
+      },
+      error:e=>{
+        this.planningBusy=false;this.planningError=e?.error?.error||
+          'SI_DRAFT_CAPACITY_RESTORE_FAILED';
+      }
+    });
+  }
+
   planBusy=false;planError='';planNotice='';
   // The API is synchronous per call; never pretend that intermediate AI steps
   // or a percentage are known. Indeterminate status remains truthful.
@@ -484,7 +519,7 @@ export class SiCandidateWorkbenchComponent implements OnInit,OnDestroy{
   }
   get aiSelectedCount():number|null{return this.plan?.aiRecommendedVessels??null;}
   get planSelectedCount():number|null{return this.plan?.selectedForPlan??null;}
-  get providerLabel():string{return this.plan?.provider||'NOT LOADED';}
+  get providerLabel():string{return this.plan?.provider||'SELECT A PLAN';}
   get approvalReady():boolean{
     return !!this.activePlanId&&this.activePlan?.status==='READY_FOR_APPROVAL'&&
       !!this.plan?.selectedForPlan&&!this.plan.stale&&
@@ -504,7 +539,7 @@ export class SiCandidateWorkbenchComponent implements OnInit,OnDestroy{
     return !!rows.length&&rows.every(v=>this.bulkSelectedImos.has(v.imo));
   }
   bulkEligible(v:SiVesselCandidate):boolean{
-    return this.activePlanEditable&&!!this.plan&&!this.plan.stale&&
+    return this.canEditDraftSelection&&!!this.plan&&!this.plan.stale&&
       !!this.planRow(v)?.editable&&v.pendingWorkflows>0&&!this.planBusy&&
       this.auth.isAdmin;
   }
@@ -526,7 +561,7 @@ export class SiCandidateWorkbenchComponent implements OnInit,OnDestroy{
     this.bulkReason='';this.bulkReviewAfter='';
   }
   startBulkAction(action:'NOT_SELECTED'|'DEFER'):void{
-    if(!this.bulkSelectedCount||!this.activePlanEditable||!this.plan||
+    if(!this.bulkSelectedCount||!this.canEditDraftSelection||!this.plan||
        this.plan.stale||this.planBusy||!this.auth.isAdmin)return;
     this.bulkAction=action;this.bulkReason='';
     this.bulkReviewAfter=this.localDate();this.planError='';
@@ -534,7 +569,7 @@ export class SiCandidateWorkbenchComponent implements OnInit,OnDestroy{
   }
   saveBulkAction():void{
     if(!this.bulkAction||!this.plan||!this.activePlanId||
-       !this.activePlanEditable||this.plan.stale||this.planBusy||
+       !this.canEditDraftSelection||this.plan.stale||this.planBusy||
        !this.auth.isAdmin)return;
     const ids=[...this.bulkSelectedImos].sort();
     const available=new Set((this.dashboard?.vesselCandidates||[])
@@ -587,7 +622,7 @@ export class SiCandidateWorkbenchComponent implements OnInit,OnDestroy{
   openManualDecision(v:SiVesselCandidate,
     action:'INCLUDE'|'NOT_SELECTED'|'DEFER'|'NOT_APPLICABLE'):void{
     const row=this.planRow(v);
-    if(!this.activePlanEditable||!this.activePlanId||!this.plan||!row?.editable||
+    if(!this.canEditDraftSelection||!this.activePlanId||!this.plan||!row?.editable||
        this.planBusy||!this.auth.isAdmin)return;
     if(action==='INCLUDE'&&this.vesselOutsidePlan(v)){
       this.planError=this.vesselPlanPeriodMessage(v);this.manualEditingImo='';
@@ -605,7 +640,7 @@ export class SiCandidateWorkbenchComponent implements OnInit,OnDestroy{
     this.manualEditingImo='';this.manualReason='';this.manualReviewAfter='';
   }
   saveManualDecision():void{
-    if(!this.manualEditingImo||!this.activePlanEditable||!this.activePlanId||
+    if(!this.manualEditingImo||!this.canEditDraftSelection||!this.activePlanId||
        !this.plan||this.planBusy||!this.auth.isAdmin)return;
     if(this.manualReason.trim().length<8){
       this.planError=this.copy('Provide an auditable reason of at least eight characters.',
@@ -662,7 +697,7 @@ export class SiCandidateWorkbenchComponent implements OnInit,OnDestroy{
     this.planBusy=true;this.planError='';
     this.api.inspectionPlan(this.editorKey.trim(),this.activePlanId).subscribe({
       next:x=>{this.plan=x;this.planBusy=false;
-        if(x.stale||x.readOnlyHistorical||!this.activePlanEditable){
+        if(x.stale||x.readOnlyHistorical||!this.canEditDraftSelection){
           this.clearBulkSelection();
         }else{
           const allowed=new Set(x.rows.filter(r=>r.editable).map(r=>r.imo));
@@ -682,14 +717,14 @@ export class SiCandidateWorkbenchComponent implements OnInit,OnDestroy{
     });
   }
   generateInspectionPlan():void{
-    if(this.planBusy||!this.activePlanEditable||!this.plan||!this.editorKey.trim()||!this.reviewer.trim()){
+    if(this.planBusy||!this.canEditDraftSelection||!this.plan||!this.editorKey.trim()||!this.reviewer.trim()){
       this.planError=this.copy('Load plan and enter Operator Name and Editor Key before running C01.',
        'اعرض الخطة وأدخل اسم الموظف ومفتاح المحرر قبل تشغيل C01.');return;
     }
     this.submitPlanReevaluation(null);
   }
   openPlanEdit(v:SiVesselCandidate,selection:boolean,changePriority=false):void{
-    if(!this.activePlanEditable||!this.plan?.agentRunId||!this.planRow(v)?.editable){
+    if(!this.canEditDraftSelection||!this.plan?.agentRunId||!this.planRow(v)?.editable){
       this.planError=this.copy('Run initial C01 selection and choose a pending candidate first.',
         'شغّل توصية C01 الأولية واختر سفينة مرشحة بانتظار المراجعة.');return;
     }
@@ -699,7 +734,7 @@ export class SiCandidateWorkbenchComponent implements OnInit,OnDestroy{
   }
   cancelPlanEdit():void{this.planEditingImo='';this.planReason='';this.planRequestedRank=null;}
   savePlanEdit():void{
-    if(!this.activePlanEditable||!this.plan||!this.planEditingImo||this.planBusy)return;
+    if(!this.canEditDraftSelection||!this.plan||!this.planEditingImo||this.planBusy)return;
     if(this.planReason.trim().length<8){
       this.planError=this.copy('Enter an auditable reason with at least 8 characters.',
         'اكتب سبباً واضحاً لا يقل عن 8 أحرف.');return;
@@ -718,7 +753,7 @@ export class SiCandidateWorkbenchComponent implements OnInit,OnDestroy{
   private submitPlanReevaluation(change:{
     imo:string;selected:boolean;requestedRank:number|null;reason:string
   }|null):void{
-    if(!this.activePlanId||!this.activePlanEditable||!this.plan||!this.editorKey.trim()||!this.reviewer.trim())return;
+    if(!this.activePlanId||!this.canEditDraftSelection||!this.plan||!this.editorKey.trim()||!this.reviewer.trim())return;
     const mock=this.plan.provider==='MOCK';
     const calls=Math.max(1,Math.ceil((this.plan?.dataReadiness?.eligibleWorkflows||0)/
       (mock?100:25)));
