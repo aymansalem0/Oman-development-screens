@@ -72,8 +72,8 @@ export class MoeiGoogleUsers{
     if(typeof active!=='boolean'&&role===undefined&&inspectorId===undefined)
       throw new MoeiUsersError('MOEI_NO_CHANGES',400);
     if(inspectorId!==undefined&&inspectorId!==null&&
-      (typeof inspectorId!=='string'||!inspectorId.trim()||
-       inspectorId.length>120))
+      (typeof inspectorId!=='string'||
+       !/^[A-Za-z0-9][A-Za-z0-9_.:-]{0,119}$/.test(inspectorId)))
       throw new MoeiUsersError('MOEI_INSPECTOR_ID_INVALID',422);
     if(inspectorId!==undefined&&inspectorId!==null&&
        this.users.some(other=>other.email!==user.email&&other.active&&
