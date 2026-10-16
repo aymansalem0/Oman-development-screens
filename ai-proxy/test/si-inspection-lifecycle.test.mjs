@@ -190,7 +190,7 @@ test('Oracle lifecycle initialization and audit use non-reserved bind names',asy
    assert.ok(aliases.length);
    assert.ok(aliases.every(name=>/^b_[a-z][a-z_0-9]*$/.test(name)));
    assert.deepEqual([...new Set(aliases)].sort(),Object.keys(binds).sort());
-   sqls.push(sql.trim().replace(/\\s+/g,' '));
+   sqls.push(sql.trim().replace(/\s+/g,' '));
    return {rowsAffected:1};
   },
   async commit(){commits++;},
