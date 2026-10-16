@@ -44,6 +44,8 @@ export function a04PocOutputGuidance({baseChecklistItemIds,evidenceManifestRefs}
       'Put natural-language inspection suggestions in checklistFocus[].reason and valid evidence references in checklistFocus[].reasonEvidenceIds. Do NOT put instructions in focus.',
       'Never provide suggestedSeverityIfFailed or assign regulatory deficiency severity. Potential deficiencies are hypotheses only, never confirmed findings.',
       'Provide suggestedAdditionalItems as an array (empty if none), optional predictedDeficiencies as hypotheses, optional missingEvidence as an array, and agentConfidence as a number between 0 and 1.',
+      'For predictedDeficiencies, include only evidence-backed hypotheses; each entry must include category, hypothesisOnly: true as a JSON boolean, and nonempty evidenceIds selected from allowedEvidenceIds.',
+      'If no source-supported hypotheses exist, return predictedDeficiencies: []. The mandatory checklist is always independent of AI results.',
       'Advisory focus only: do not add, change or remove mandatory checklist items, official vessel risk, approved inspection scope, legal findings or bookings. Human inspector review is required.'
     ],
     allowedPriorityValues:[...priorities],
