@@ -75,8 +75,12 @@ export function computedSdbReadiness(profile,now=Date.now(),policy=SDB_POLICY,
  const own=profile.documents||[];
  const extra=[];
  for(const req of settings.requirements){
-  if(!req.active||req.core||!req.mandatory||(
+  if(!req.active||!req.mandatory||(
     req.scope!=='BOTH'&&req.scope!==base.service))continue;
+  // A core requirement changed to ATTACHMENT adds a second, stricter
+  // document-evidence gate; it NEVER replaces the authoritative source check.
+  if(req.core&&(req.inputMode!=='ATTACHMENT'||
+     !base.checks.some(c=>c.key===req.id)))continue;
   let result='PENDING',reason='Verification from the configured provider is pending';
   let reference=null;
   if(req.inputMode==='ATTACHMENT'){
