@@ -49,13 +49,16 @@ const batchReason=r=>({
 });
 export class SiScheduleOrders{
  constructor({mode='json',oracleRepository=null,rolling,targeting,preparation,
-  checklists,lifecycle,cases,file=process.env.SI_SCHEDULE_ORDERS_PATH||
+  checklists,lifecycle,cases,
+  resolveInspectorIdentity=matchesAssignedInspector,
+  file=process.env.SI_SCHEDULE_ORDERS_PATH||
    '/data/si-schedule-work-orders.json'}={}){
   if(!rolling||!targeting||!preparation||!checklists||!lifecycle||!cases)
    throw Error('SI_SCHEDULE_ORDERS_CONFIGURATION_REQUIRED');
   Object.assign(this,{mode,oracle:oracleRepository,rolling,targeting,preparation,
    checklists,lifecycle,cases,file});
   this.ready=mode==='json';this.processing=new Set();this.approving=false;
+  this.resolveInspectorIdentity=resolveInspectorIdentity;
  }
  async db(fn){
   if(!this.oracle?.pool)err('SI_SCHED_ORACLE_POOL_UNAVAILABLE',503);
@@ -123,7 +126,7 @@ export class SiScheduleOrders{
   if(!label(actor,160))err('SI_WORK_ORDER_AUTHENTICATED_INSPECTOR_REQUIRED',403);
   const schedules=await this.all();
   return schedules.flatMap(schedule=>schedule.orders
-   .filter(order=>Boolean(matchesAssignedInspector(actor,order.assignment,schedule.mode)))
+   .filter(order=>Boolean(this.resolveInspectorIdentity(actor,order.assignment,schedule.mode)))
    .map(order=>({
     planId:schedule.planId,scheduleId:schedule.id,orderId:order.id,
     imo:order.imo,
@@ -145,7 +148,7 @@ export class SiScheduleOrders{
    for(const schedule of schedules){
      const order=schedule.orders.find(x=>x.id===orderId);
      if(!order)continue;
-     if(!matchesAssignedInspector(actor,order.assignment,schedule.mode))
+     if(!this.resolveInspectorIdentity(actor,order.assignment,schedule.mode))
        err('SI_WORK_ORDER_NOT_ASSIGNED_TO_SESSION',403);
      return {schedule,order};
    }
@@ -592,7 +595,7 @@ export class SiScheduleOrders{
   const delegated=confirmPocDelegation===true&&schedule.mode==='POC_MOCK';
   if(confirmPocDelegation&&!delegated)
    err('SI_POC_DELEGATION_ONLY_FOR_MOCK_SCHEDULE',403);
-  const engineer=matchesAssignedInspector(actor,order.assignment,schedule.mode);
+  const engineer=this.resolveInspectorIdentity(actor,order.assignment,schedule.mode);
   if(!delegated&&!engineer)
    err('SI_WORK_ORDER_ONLY_ASSIGNED_INSPECTOR_CAN_START',403);
   if(order.status==='FIELD_STARTED')return order;
