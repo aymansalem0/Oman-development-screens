@@ -508,7 +508,10 @@ export class SeafarerWorkspace {
   }
   submitEvidence(actor,id,requirementId,metadata){
     const p=this.profile(id);
-    this.customerScope(actor,p);
+    // Unlike general customer workflow actions, personal evidence uploads
+    // cannot be submitted by an employer bound to the same company.
+    if(actor?.seafarerId!==p.id)
+      fail('SDB_APPLICANT_BINDING_REQUIRED',403);
     const req=this.state.readinessSettings.requirements.find(r=>r.id===requirementId);
     if(!req)fail('SDB_SETTING_NOT_FOUND',404);
     return this.transaction(()=>{
