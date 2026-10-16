@@ -43,7 +43,7 @@ test('custom document requirement immediately changes live readiness without byp
  assert.equal(p.readiness.blockers.find(c=>c.key==='REQ-EXTRA_SEAFARER_EVIDENCE').result,'FAIL');
  assert.equal(p.readiness.policyVersion.endsWith('CONFIG-2'),true);
  assert.throws(()=>s.requireReady(s.profile('SF-002')),
-  e=>e.code==='SDB_NOT_READY');
+  e=>e.code==='SDB_READINESS_CHANGED');
  assert.ok(p.readiness.engine.agenticFlow.includes('ROUTE_UNCERTAIN_DOCUMENTS'));
  assert.equal(p.readiness.engine.aiModelInvoked,false);
 });
