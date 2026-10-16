@@ -11,7 +11,9 @@
          [queryParams]="{orderId:returnOrderId}" data-testid="si-return-to-order">
          {{copy('← Return to My Inspection Steps','← العودة إلى خطوات المعاينة')}}</a>
         <a routerLink="/moei/smart-inspection/candidates">{{copy("← Candidate Center","← مركز مرشحي المعاينة")}}</a>
-        <a [routerLink]="['/moei/smart-inspection/lifecycle',id]">{{copy('Continue Full Inspection Cycle →','استكمال دورة المعاينة الكاملة ←')}}</a>
+        <a routerLink="/moei/smart-inspection/my-work-orders"
+         [queryParams]="returnOrderId?{orderId:returnOrderId}:{}">
+          {{copy('My Inspection Journey →','رحلة المعاينة الموحدة ←')}}</a>
         <a [routerLink]="['/moei/smart-inspection/checklists',id]">
           {{copy('Dynamic Checklists & AI Assistant','قوائم المعاينة الديناميكية ومساعد AI')}}
         </a>
