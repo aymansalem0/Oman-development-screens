@@ -716,8 +716,10 @@ export class SiMyWorkOrdersComponent implements OnInit{
     this.load();
    },
    error:e=>{
-    this.busy=false;this.error=e?.error?.error||'SI_SCOPE_APPROVAL_FAILED';
-    this.load();
+    this.busy=false;
+    this.error=e?.error?.error||'SI_SCOPE_APPROVAL_FAILED';
+    // Keep the server error visible so an actual publisher/Oracle mismatch
+    // can be diagnosed. The explicit Refresh action reloads the order.
    }
   });
  }
