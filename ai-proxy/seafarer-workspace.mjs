@@ -582,7 +582,17 @@ export class SeafarerWorkspace {
       fail("SDB_PROFILE_NOT_FOUND", 404)
     );
   }
+  assertDemoOwnership(actor, p) {
+    if (!p.demoJourney) return;
+    const owner = p.demoJourney.operatorKey;
+    const operator = actor?.operations === true && actor.key === owner;
+    const preview = actor?.seafarerId === p.id &&
+      actor.key === owner + " [SANDBOX PREVIEW]";
+    if (!operator && !preview)
+      fail("SDB_DEMO_JOURNEY_NOT_OWNED", 403);
+  }
   scope(actor, p) {
+    this.assertDemoOwnership(actor, p);
     if (
       !actor?.operations &&
       actor?.seafarerId !== p.id &&
@@ -591,6 +601,7 @@ export class SeafarerWorkspace {
       fail("SDB_PROFILE_FORBIDDEN", 403);
   }
   customerScope(actor, p) {
+    this.assertDemoOwnership(actor, p);
     if (
       actor?.seafarerId !== p.id &&
       !(actor?.companyId && actor.companyId === p.companyId)
