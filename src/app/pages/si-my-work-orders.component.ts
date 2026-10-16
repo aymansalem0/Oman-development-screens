@@ -10,7 +10,7 @@ interface AssignedOrder{
  planId:string;scheduleId:string;orderId:string;imo:string;vesselName?:string;
  status:string;caseId:string|null;checklistStatus:string;
  aiStatus:string;scopeStatus:string;mode:'POC_MOCK'|'ERP_EXCEL_POC';
- isMyPocEngineer?:boolean;
+ isMyPocEngineer?:boolean;canSelfConfirmScope?:boolean;
  assignment:{inspectorName:string;inspectorId:string;
   portName:string;startLocal:string;startUtc:string;locationName:string};
 }
@@ -63,7 +63,7 @@ interface Dossier{
    <div><small>{{t('Assigned to me','مسندة إليّ')}}</small><strong>{{orders.length}}</strong></div>
    <div><small>{{t('Ready for execution','جاهزة للتنفيذ')}}</small><strong>{{statusCount('READY_FOR_FIELD')}}</strong></div>
    <div><small>{{t('Awaiting preparation','بانتظار التجهيز')}}</small><strong>{{preparationCount}}</strong></div>
-   <div><small>{{t('Awaiting supervisor','بانتظار اعتماد المشرف')}}</small><strong>{{statusCount('READY_FOR_SCOPE_REVIEW')}}</strong></div>
+   <div><small>{{t('Awaiting field readiness','بانتظار جاهزية التنفيذ')}}</small><strong>{{statusCount('READY_FOR_SCOPE_REVIEW')}}</strong></div>
    <div><small>{{t('Field in progress','قيد المعاينة')}}</small><strong>{{statusCount('FIELD_STARTED')}}</strong></div>
   </section>
   <p class="poc" *ngIf="me?.inspectorPocId">
@@ -74,10 +74,10 @@ interface Dossier{
   <section class="inspection-journey" aria-label="My inspection progress" data-testid="si-assigned-inspection-stepper">
    <header class="journey-head">
     <div>
-     <small>SMART INSPECTION · ONE WORK ORDER JOURNEY</small>
-     <h2>{{t('My Inspection Journey · One Workflow','رحلة المعاينة · مسار عمل واحد')}}</h2>
-     <p>{{t('Follow the six controlled steps for the selected vessel. A04 advice approval and inspection scope approval are different decisions. The mandatory published checklist is always prepared first; AI additions are optional and require human approval.',
-      'اتبع الخطوات الست للسفينة المختارة. اعتماد توصيات A04 مختلف عن اعتماد نطاق المعاينة. تُجهّز القائمة الإلزامية المنشورة أولًا دائمًا، وإضافات AI اختيارية وتحتاج اعتمادًا بشريًا.')}}</p>
+     <small>SMART INSPECTION · INSPECTOR GUIDED JOURNEY</small>
+     <h2>{{t('My Inspection Journey · 5 Steps','رحلة المفتش · خمس خطوات')}}</h2>
+     <p>{{t('Start with an assigned vessel, prepare the mandatory dossier, review optional AI focus and the checklist, then execute. POC demo inspector acknowledgement is separate from formal regulatory approval.',
+      'اختر السفينة، جهّز ملف المعاينة، راجع AI والقائمة الإلزامية، ثم ابدأ التنفيذ. تأكيد المفتش التجريبي لا يُعد اعتمادًا تنظيميًا رسميًا.')}}</p>
     </div>
     <div class="journey-head-actions">
      <span class="journey-vessel" *ngIf="selected as o">{{o.vesselName||('IMO '+o.imo)}} · IMO {{o.imo}}</span>
@@ -163,36 +163,19 @@ interface Dossier{
      <span *ngIf="selected?.checklistStatus!=='MANDATORY_PUBLISHED_TEMPLATE_SNAPSHOT'"
       class="journey-wait">{{t('Requires published checklist preparation','يتطلب تجهيز القائمة المنشورة')}}</span>
     </li>
-    <li class="journey-step" [class.current]="selected?.status==='READY_FOR_SCOPE_REVIEW'"
-     [class.complete]="selected?.status==='READY_FOR_FIELD'||selected?.status==='FIELD_STARTED'"
-     data-testid="si-step-supervisor-scope">
-     <span class="journey-number">{{selected?.status==='READY_FOR_FIELD'||selected?.status==='FIELD_STARTED'?'✓':'5'}}</span>
-     <strong>{{t('5. Supervisor · Approve Inspection Scope','٥. المشرف · اعتماد نطاق المعاينة')}}</strong>
-     <p>{{t('An explicit, separate regulatory approval for the pinned mandatory checklist and optionally reviewed A04 additions. It is NOT the same as A04 advisory approval.',
-      'اعتماد تنظيمي مستقل للقائمة الإلزامية وأي إضافات A04 معتمدة. هذا ليس اعتماد التوصيات الاستشارية A04.')}}</p>
-     <ng-container *ngIf="selected as o">
-      <button *ngIf="o.status==='READY_FOR_SCOPE_REVIEW'&&auth.isAdmin"
-       type="button" class="journey-action primary" (click)="approveScope(o)"
-       [disabled]="busy||loadingDossier||!dossier" data-testid="si-stepper-approve-scope">
-       {{t('Supervisor · Approve Scope','المشرف · اعتماد النطاق')}}
-      </button>
-      <span *ngIf="o.status==='READY_FOR_SCOPE_REVIEW'&&!auth.isAdmin"
-       class="journey-wait" data-testid="si-stepper-await-supervisor">
-       {{t('Awaiting publisher-authorized supervisor','بانتظار المشرف المخوّل (Publisher)')}}</span>
-      <span *ngIf="o.status==='READY_FOR_FIELD'||o.status==='FIELD_STARTED'"
-       class="journey-done" data-testid="si-stepper-scope-approved">
-       {{t('Inspection scope approved','تم اعتماد نطاق المعاينة')}}</span>
-      <span *ngIf="canActivate(o)" class="journey-wait">
-       {{t('Complete case preparation first','أكمل التجهيز أولًا')}}</span>
-     </ng-container>
-    </li>
-    <li class="journey-step" [class.current]="selected?.status==='READY_FOR_FIELD'"
+    <li class="journey-step" [class.current]="selected?.status==='READY_FOR_SCOPE_REVIEW'||selected?.status==='READY_FOR_FIELD'"
      [class.complete]="selected?.status==='FIELD_STARTED'" data-testid="si-step-execute-order">
-     <span class="journey-number">{{selected?.status==='FIELD_STARTED'?'✓':'6'}}</span>
-     <strong>{{t('6. Execute Work Order · Fill Checklist','٦. تنفيذ أمر التكليف وتعبئة القائمة')}}</strong>
-     <p>{{t('Only after Step 5: the assigned inspector starts the field inspection and records checklist answers and evidence.',
-      'بعد اعتماد الخطوة الخامسة فقط، يبدأ المفتش المعاينة ويُسجل الإجابات والأدلة.')}}</p>
+     <span class="journey-number">{{selected?.status==='FIELD_STARTED'?'✓':'5'}}</span>
+     <strong>{{t('5. Execute Work Order · Fill Checklist','٥. تنفيذ أمر التكليف وتعبئة القائمة')}}</strong>
+     <p>{{t('In POC demo, the assigned inspector confirms the pinned mandatory scope, then starts field execution. No separate supervisor approval, no paid AI call and no change to the mandatory checklist.',
+      'في تجربة POC، يؤكد المفتش المسند القائمة الإلزامية المثبتة ثم يبدأ المعاينة مباشرة، من غير اعتماد مشرف منفصل أو استدعاء AI أو تعديل للقائمة.')}}</p>
      <ng-container *ngIf="selected as o">
+      <button *ngIf="o.status==='READY_FOR_SCOPE_REVIEW'&&o.canSelfConfirmScope"
+       type="button" class="journey-action primary"
+       (click)="executePoc(o)" [disabled]="busy||loadingDossier||!dossier"
+       data-testid="si-stepper-execute-poc">
+       {{t('Execute Work Order · Confirm & Start (POC)','تنفيذ أمر التكليف · تأكيد وبدء (POC)')}}
+      </button>
       <button *ngIf="o.status==='READY_FOR_FIELD'" type="button" class="journey-action primary"
        (click)="execute(o)" [disabled]="busy" data-testid="si-stepper-execute-order">
        {{t('Execute Work Order → Fill Checklist','تنفيذ أمر التكليف ← تعبئة القائمة')}}
@@ -201,11 +184,20 @@ interface Dossier{
        (click)="continue(o)" [disabled]="busy" data-testid="si-stepper-resume-checklist">
        {{t('Continue Filling Checklist','استكمال تعبئة القائمة')}}
       </button>
-      <span *ngIf="o.status==='READY_FOR_SCOPE_REVIEW'" class="journey-wait" data-testid="si-field-await-scope">
-       {{t('Waiting for Step 5 supervisor approval','بانتظار اعتماد المشرف في الخطوة الخامسة')}}</span>
+      <span *ngIf="o.status==='READY_FOR_SCOPE_REVIEW'&&!o.canSelfConfirmScope"
+       class="journey-wait" data-testid="si-formal-scope-gate">
+       {{t('Formal work order: scope must be authorized under official policy. Inspector self-confirmation is enabled only for POC mock assignments.',
+        'هذا تكليف رسمي يتطلب اعتماد النطاق وفق الصلاحيات. تأكيد المفتش الذاتي متاح فقط للتكليفات التجريبية POC.')}}
+      </span>
+      <span *ngIf="o.scopeStatus==='POC_INSPECTOR_MANDATORY_ACKNOWLEDGED'" class="journey-done"
+       data-testid="si-poc-inspector-scope-audit">
+       {{t('POC Inspector Scope Acknowledged · Not Regulatory Approval',
+        'تأكيد المفتش التجريبي مسجل · ليس اعتمادًا تنظيميًا')}}
+      </span>
       <span *ngIf="canActivate(o)" class="journey-wait">
-       {{t('Prepare mandatory checklist first','جهّز القائمة الإلزامية أولًا')}}</span>
+       {{t('Prepare the dossier first','جهّز ملف المعاينة أولًا')}}</span>
      </ng-container>
+     <span *ngIf="!selected" class="journey-wait">{{t('Select your vessel first','اختر السفينة أولًا')}}</span>
     </li>
    </ol>
   </section>
@@ -667,64 +659,43 @@ export class SiMyWorkOrdersComponent implements OnInit{
  }
  activate(o:AssignedOrder):void{
   if(this.busy||!this.canActivate(o)||!window.confirm(this.t(
-   'Prepare this assigned inspection: create/link its POC case and pin the mandatory published checklist? This action makes NO A04 AI call. Optional A04 can be requested later on the Preparation page with separate consent; supervisor scope approval remains required.',
-   'هل تريد تجهيز المعاينة المسندة إليك بإنشاء/ربط حالة POC وتثبيت القائمة الإلزامية المنشورة؟ لن يستدعي هذا الإجراء A04. يمكن طلب A04 لاحقًا من شاشة التجهيز بموافقة مستقلة، ويظل اعتماد النطاق من اختصاص المشرف.')))return;
+   'Prepare this assigned inspection: create/link its POC case and pin the mandatory published checklist? This action makes NO A04 AI call. Optional A04 can be requested later on the Preparation page with separate consent; formal scope policies remain for non-POC orders.',
+   'هل تريد تجهيز المعاينة المسندة إليك بإنشاء/ربط حالة POC وتثبيت القائمة الإلزامية المنشورة؟ لن يستدعي هذا الإجراء A04. يمكن طلب A04 لاحقًا من شاشة التجهيز بموافقة مستقلة، ويظل الاعتماد التنظيمي الرسمي منفصلًا عن تجربة POC.')))return;
   this.busy=true;this.error='';
   this.http.post<{order:AssignedOrder}>(
    this.api+'my-work-orders/'+o.orderId+'/activate',
    {generateAi:false,confirmAiCost:false}
   ).subscribe({
    next:r=>{this.busy=false;const updated=this.replaceOrder(r.order);
-    this.message=this.t('Inspection dossier and mandatory checklist prepared. A04 remains optional. Supervisor approval of the scope is required before field start.',
-      'تم تجهيز ملف المعاينة والقائمة الإلزامية، وA04 يظل اختياريًا. يلزم اعتماد نطاق المعاينة من المشرف قبل التنفيذ.');
+    this.message=this.t('Inspection dossier and mandatory checklist prepared. A04 remains optional. The POC inspector can confirm mandatory scope and execute in Step 5; formal approvals remain distinct.',
+      'تم تجهيز ملف المعاينة والقائمة الإلزامية، وA04 يظل اختياريًا. يمكن للمفتش في وضع POC تأكيد القائمة وبدء المعاينة بالخطوة الخامسة، دون اعتماد تنظيمي رسمي.');
     if(updated)this.loadDossierFresh(updated);},
    error:e=>{this.busy=false;this.error=e?.error?.error||'SI_ORDER_PREPARATION_FAILED';}
   });
  }
- approveScope(o:AssignedOrder):void{
-  // The existing server-side publisher-gated Work Order scope endpoint is
-  // authoritative. It approves/assigns the linked lifecycle and updates
-  // the same canonical order that gates inspector field execution.
-  if(this.busy||!this.auth.isAdmin||o.status!=='READY_FOR_SCOPE_REVIEW'||
+ executePoc(o:AssignedOrder):void{
+  if(this.busy||o.status!=='READY_FOR_SCOPE_REVIEW'||!o.canSelfConfirmScope||
     !o.caseId||!this.dossier||this.dossier.caseId!==o.caseId)return;
-  const reason=window.prompt(this.t(
-   'Supervisor: enter an audit reason (at least 8 characters) for INSPECTION SCOPE approval. This is separate from the A04 advisory review.',
-   'المشرف: أدخل سببًا موثقًا (٨ أحرف على الأقل) لاعتماد نطاق المعاينة، وهو مستقل عن مراجعة توصيات A04.'));
-  if(reason===null)return;
-  if(reason.trim().length<8){
-   this.error=this.t('Scope approval requires an eight-character reason.',
-    'اعتماد النطاق يتطلب سببًا من ثمانية أحرف على الأقل.');return;
-  }
-  const ai=this.dossier.sections.aiAnalysis;
-  const extraCount=ai.status==='APPROVED'?
-    (ai.modelDraft?.suggestedAdditionalItems?.length||0):0;
-  const includeAiSuggestions=extraCount>0&&window.confirm(this.t(
-   'Include '+extraCount+' supervisor-reviewed A04 OPTIONAL questions? Cancel means approve mandatory checks only.',
-   'هل تضم '+extraCount+' أسئلة إضافية اختيارية معتمدة من A04؟ إلغاء يعني اعتماد القائمة الإلزامية فقط.'));
   if(!window.confirm(this.t(
-    'Confirm formal inspection scope approval? No AI call will occur.',
-    'هل تؤكد اعتماد نطاق المعاينة رسميًا؟ لن يحدث أي استدعاء AI.')))return;
+   'POC DEMO ONLY: confirm the fixed MANDATORY inspection checklist and start under your assigned inspector identity? This is not supervisor/regulatory approval. Approved A04 focus remains advisory and no optional AI checklist items are imported.',
+   'تجربة POC فقط: هل تؤكد القائمة الإلزامية المثبتة وتبدأ المعاينة بهوية المفتش المسند؟ هذا ليس اعتمادًا تنظيميًا أو اعتماد مشرف، وتظل توصيات A04 استشارية ولا تُضاف بنود AI تلقائيًا.')))return;
   this.busy=true;this.error='';this.message='';
-  this.http.post<{order:AssignedOrder}>(this.api+'plans/'+
-   encodeURIComponent(o.planId)+'/work-orders/'+encodeURIComponent(o.orderId)+'/scope',
-   {reason:reason.trim(),includeAiSuggestions}).subscribe({
+  this.http.post<{order:AssignedOrder}>(
+   this.api+'my-work-orders/'+encodeURIComponent(o.orderId)+'/self-confirm-scope',
+   {reason:'Assigned inspector reviewed mandatory checklist for POC demo'}
+  ).subscribe({
    next:r=>{
     this.busy=false;
-    this.replaceOrder(r.order);
-    this.message=this.t('Inspection scope approved. The assigned inspector can now Execute Work Order.',
-      'تم اعتماد نطاق المعاينة؛ يمكن للمفتش المكلف الآن تنفيذ أمر التكليف.');
-    this.load();
+    const updated=this.replaceOrder(r.order);
+    if(!updated){this.error='SI_ORDER_REFRESH_REQUIRED';return;}
+    this.execute(updated,true);
    },
-   error:e=>{
-    this.busy=false;
-    this.error=e?.error?.error||'SI_SCOPE_APPROVAL_FAILED';
-    // Keep the server error visible so an actual publisher/Oracle mismatch
-    // can be diagnosed. The explicit Refresh action reloads the order.
-   }
+   error:e=>{this.busy=false;this.error=e?.error?.error||'SI_POC_SCOPE_CONFIRMATION_FAILED';}
   });
  }
- execute(o:AssignedOrder):void{
-  if(this.busy||o.status!=='READY_FOR_FIELD'||!window.confirm(this.t(
+ execute(o:AssignedOrder,confirmed=false):void{
+  if(this.busy||o.status!=='READY_FOR_FIELD')return;
+  if(!confirmed&&!window.confirm(this.t(
    'Start this assigned inspection under your signed-in engineer identity?',
    'بدء تنفيذ أمر التكليف بهويتك المرتبطة بالمهندس المسند إليه؟')))return;
   this.busy=true;this.error='';
