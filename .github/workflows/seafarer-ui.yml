@@ -1,7 +1,7 @@
 name: Seafarer SDB browser journey
 on:
   push:
-    branches: ['feature/moei-seafarers-*', 'integration/moei-seafarers-*']
+    branches: ['feature/moei-seafarers-*', 'feature/moei-sdb-*', 'integration/moei-seafarers-*']
   workflow_dispatch:
 permissions:
   contents: read
