@@ -378,3 +378,90 @@ test('integrated case creation rejects unverified reasons smuggled into approved
   assert.equal((await w.subject.inspectionCaseRegistry()).cases.length,0);
  }finally{w.cleanup();}
 });
+
+test('Oracle integrated approval case and decision writes use qualified binds and one commit',async()=>{
+ const w=workspace();
+ try{
+  await w.subject.receiveEvent(source());
+  const c=(await w.subject.dashboard()).candidates[0],e=c.events[0];
+  const reason={eventKey:e.eventKey,candidateKey:c.key,
+   sourceType:e.sourceType,sourceEventId:e.sourceEventId,
+   sourceReference:e.sourceReference,inspectionRegime:c.regime,
+   sourceApproval:e.approval,reason:e.contextNote||null,
+   evidenceIds:[...new Set(e.evidenceIds||[])],
+   sourceProvenance:e.provenance||null};
+  let commits=0,rollbacks=0;
+  const statements=[];
+  const con={
+   async execute(sql,binds={}){
+    const names=[...sql.matchAll(/:([A-Za-z_][A-Za-z_0-9]*)/g)]
+     .map(match=>match[1]);
+    assert.ok(names.length>0,'Oracle case writes require bound parameters');
+    assert.ok(names.every(name=>/^b_[a-z][a-z0-9_]*$/.test(name)),
+     'keyword aliases like :key must not reach node-oracledb');
+    assert.deepEqual([...new Set(names)].sort(),Object.keys(binds).sort());
+    statements.push(sql.trim().replace(/\\s+/g,' '));
+    return {rowsAffected:1};
+   },
+   async commit(){commits++;},
+   async rollback(){rollbacks++;}
+  };
+  const frozen=await w.subject.dashboard();
+  w.subject.mode='oracle';
+  w.subject.dashboard=async()=>frozen;
+  w.subject.inspectionCaseRegistry=async()=>({cases:[],events:[]});
+  w.subject._db=async fn=>fn(con);
+  const approved=await w.subject.decideBatch({
+   items:[{imo:c.imo,candidateKey:c.key,candidateKeys:[c.key],
+    inspectionReasons:[reason]}],
+   actor:'Supervisor',note:'Human verified approved source with audit',
+   approvedPlanId:'00000001-0000-4000-8000-000000000000',
+   verifiedOnly:true
+  });
+  assert.equal(approved.cases.length,1);
+  assert.equal(statements.length,2);
+  assert.match(statements[0],/^INSERT INTO SI_INSPECTION_CASE/);
+  assert.match(statements[1],/^INSERT INTO SI_CANDIDATE_DECISION/);
+  assert.equal(commits,1);
+  assert.equal(rollbacks,0);
+ }finally{w.cleanup();}
+});
+
+test('Oracle case insert reports safe stage and rolls back without creating decision',async()=>{
+ const w=workspace();
+ try{
+  await w.subject.receiveEvent(source());
+  const c=(await w.subject.dashboard()).candidates[0],e=c.events[0];
+  const reason={eventKey:e.eventKey,candidateKey:c.key,
+   sourceType:e.sourceType,sourceEventId:e.sourceEventId,
+   sourceReference:e.sourceReference,inspectionRegime:c.regime,
+   sourceApproval:e.approval,reason:e.contextNote||null,
+   evidenceIds:[...new Set(e.evidenceIds||[])],
+   sourceProvenance:e.provenance||null};
+  const frozen=await w.subject.dashboard();
+  let commits=0,rollbacks=0;
+  w.subject.mode='oracle';
+  w.subject.dashboard=async()=>frozen;
+  w.subject.inspectionCaseRegistry=async()=>({cases:[],events:[]});
+  w.subject._db=async fn=>fn({
+   async execute(){
+    const e=new Error('Private Oracle SQL details');
+    e.code='ORA-01745';e.errorNum=1745;throw e;
+   },
+   async commit(){commits++;},
+   async rollback(){rollbacks++;}
+  });
+  await assert.rejects(
+   w.subject.decideBatch({
+    items:[{imo:c.imo,candidateKey:c.key,candidateKeys:[c.key],
+     inspectionReasons:[reason]}],
+    actor:'Supervisor',note:'Human verified approved source with audit',
+    approvedPlanId:'00000001-0000-4000-8000-000000000000',
+    verifiedOnly:true
+   }),
+   e=>e.code==='ORA-01745'&&e.siPreparationStage==='CASE_LEDGER_INSERT'
+  );
+  assert.equal(commits,0);
+  assert.equal(rollbacks,1);
+ }finally{w.cleanup();}
+});
