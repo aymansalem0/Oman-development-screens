@@ -89,7 +89,7 @@ test('assigned inspection stepper follows vessel, dossier, preparation, checklis
  assert.ok(journey>0);
  const stages=[
   'si-step-select-vessel','si-step-prepare-dossier','si-step-open-preparation',
-  'si-step-create-checklist','si-step-execute-order'
+  'si-step-create-checklist','si-step-supervisor-scope','si-step-execute-order'
  ];
  const positions=stages.map(testId=>workspace.indexOf('data-testid="'+testId+'"'));
  assert.ok(positions.every(x=>x>journey));
@@ -170,4 +170,58 @@ test('Dynamic Checklist distinguishes 4 approved focus areas from zero extra que
  assert.ok(ui.includes('data-testid="si-checklist-continue-in-stepper"'));
  assert.ok(!ui.includes('predictedDeficiencies.map(x=>x.mandatory'),
   'AI hypothesis must not become a mandatory question');
+});
+
+test('one assigned inspection journey performs publisher-gated scope approval',()=>{
+ const nav=src('src/app/components/nmc-navigation.component.html');
+ const lifecycle=src('src/app/pages/si-full-lifecycle.component.html');
+ const preparation=src('src/app/pages/si-inspection-preparation.component.html');
+ const guide=src('src/app/pages/si-guided-inspection.component.ts');
+ assert.ok(workspace.includes('data-testid="si-step-supervisor-scope"'));
+ assert.ok(workspace.includes('data-testid="si-stepper-approve-scope"'));
+ assert.ok(workspace.includes('data-testid="si-stepper-scope-approved"'));
+ assert.ok(workspace.includes('data-testid="si-field-await-scope"'));
+ assert.ok(workspace.includes('approveScope(o:AssignedOrder):void'));
+ assert.ok(workspace.includes("o.status!=='READY_FOR_SCOPE_REVIEW'"));
+ assert.ok(workspace.includes("'/work-orders/'+encodeURIComponent(o.orderId)+'/scope'"));
+ assert.ok(workspace.includes('{reason:reason.trim(),includeAiSuggestions}'));
+ assert.ok(workspace.includes("ai.status==='APPROVED'"));
+ assert.ok(workspace.includes('extraCount>0&&window.confirm'));
+ assert.ok(server.includes("dashboards.assertRole(req,supervisor?'PUBLISHER':'EDITOR')"));
+ assert.ok(server.includes('await siScheduleOrders.approveScope({'));
+ assert.ok(server.includes('includeAiSuggestions:data.includeAiSuggestions===true'));
+ assert.ok(nav.includes("copy('My Inspection Journey','رحلة معايناتي')"));
+ assert.ok(!nav.includes('routerLink="/moei/smart-inspection/lifecycle"'));
+ assert.ok(lifecycle.includes('Inspection Case Record & Follow-up'));
+ assert.ok(lifecycle.includes('data-testid="si-case-record-return-journey"'));
+ assert.ok(!preparation.includes('Continue Full Inspection Cycle'));
+ const caseUi=src('src/app/pages/si-full-lifecycle.component.ts');
+ const caseView=src('src/app/services/si-lifecycle.service.ts');
+ assert.ok(lifecycle.includes('data-testid="si-workorder-managed-case"'));
+ assert.ok(lifecycle.includes("*ngIf=\"stage==='PREPARATION_READY'&&!workOrderManaged\""));
+ assert.ok(lifecycle.includes("*ngIf=\"stage==='SCOPE_APPROVED'&&!workOrderManaged\""));
+ assert.ok(lifecycle.includes("*ngIf=\"stage==='ASSIGNED'&&!workOrderManaged\""));
+ assert.ok(caseUi.includes('get workOrderManaged():boolean'));
+ assert.ok(caseUi.includes("['APPROVE_SCOPE','ASSIGN','START_FIELD'].includes(action)"));
+ assert.ok(caseView.includes('workOrderManaged?:boolean;'));
+ assert.ok(server.includes("error:'SI_ASSIGNED_WORK_ORDER_JOURNEY_REQUIRED'"));
+ assert.ok(server.includes("s.orders.some(o=>o.caseId===id)"));
+
+ assert.ok(guide.includes('data-testid="si-guided-return-journey"'));
+});
+
+test('A04 approval does not itself unlock field execution',()=>{
+ const workOrderService=src('ai-proxy/si-schedule-orders.mjs');
+ const approveBlock=workOrderService.slice(
+  workOrderService.indexOf('async approveScope({'),
+  workOrderService.indexOf('async startField({'));
+ assert.ok(approveBlock.includes("order.status='READY_FOR_FIELD'"));
+ assert.ok(approveBlock.includes("if(includeAiSuggestions&&prep.saved?.status!=='APPROVED')"));
+ assert.ok(approveBlock.includes("action:'APPROVE_SCOPE'"));
+ assert.ok(approveBlock.includes("action:'ASSIGN'"));
+ const startBlock=workOrderService.slice(workOrderService.indexOf('async startField({'));
+ assert.ok(startBlock.includes("order.status!=='READY_FOR_FIELD'"));
+ assert.ok(startBlock.includes("order.status='FIELD_STARTED'"));
+ assert.ok(workspace.includes("o.status==='READY_FOR_FIELD'"));
+ assert.ok(workspace.includes("o.status==='FIELD_STARTED'"));
 });

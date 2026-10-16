@@ -74,10 +74,10 @@ interface Dossier{
   <section class="inspection-journey" aria-label="My inspection progress" data-testid="si-assigned-inspection-stepper">
    <header class="journey-head">
     <div>
-     <small>SMART INSPECTION · WORK ORDER STEPPER</small>
-     <h2>{{t('My Inspection Journey','خطوات تنفيذ المعاينة')}}</h2>
-     <p>{{t('Follow these five steps for the selected vessel. The mandatory published checklist is always prepared first; AI additions are optional and require human approval.',
-      'اتبع الخطوات الخمس للسفينة المختارة. تُجهّز القائمة الإلزامية المنشورة أولًا دائمًا، وإضافات AI اختيارية وتحتاج اعتمادًا بشريًا.')}}</p>
+     <small>SMART INSPECTION · ONE WORK ORDER JOURNEY</small>
+     <h2>{{t('My Inspection Journey · One Workflow','رحلة المعاينة · مسار عمل واحد')}}</h2>
+     <p>{{t('Follow the six controlled steps for the selected vessel. A04 advice approval and inspection scope approval are different decisions. The mandatory published checklist is always prepared first; AI additions are optional and require human approval.',
+      'اتبع الخطوات الست للسفينة المختارة. اعتماد توصيات A04 مختلف عن اعتماد نطاق المعاينة. تُجهّز القائمة الإلزامية المنشورة أولًا دائمًا، وإضافات AI اختيارية وتحتاج اعتمادًا بشريًا.')}}</p>
     </div>
     <div class="journey-head-actions">
      <span class="journey-vessel" *ngIf="selected as o">{{o.vesselName||('IMO '+o.imo)}} · IMO {{o.imo}}</span>
@@ -117,9 +117,9 @@ interface Dossier{
      [class.complete]="dossier?.readiness?.preparationSaved===true"
      data-testid="si-step-open-preparation">
      <span class="journey-number">{{dossier?.readiness?.preparationSaved?'✓':'3'}}</span>
-     <strong>{{t('3. Open Preparation','٣. فتح ملف التحضير')}}</strong>
-     <p>{{t('Review source evidence; authorized admins may request optional A04 and approve its advisory dossier.',
-      'مراجعة أدلة المصدر، ويمكن للمسؤول المخوّل تشغيل A04 اختياريًا ومراجعة توصياته.')}}</p>
+     <strong>{{t('3. Review Preparation & Optional A04','٣. مراجعة التحضير وA04 الاختياري')}}</strong>
+     <p>{{t('Review saved source evidence and optional A04 advice. A04 APPROVED does not authorize field execution; regulatory approval is Step 5.',
+      'راجع أدلة المصدر وتوصيات A04 الاختيارية. اعتماد A04 لا يبدأ المعاينة؛ اعتماد النطاق بالخطوة الخامسة.')}}</p>
      <a *ngIf="selected?.caseId && auth.isAdmin" class="journey-action"
       [routerLink]="['/moei/smart-inspection/preparation',selected!.caseId]"
       [queryParams]="{orderId:selected!.orderId}" data-testid="si-stepper-open-preparation">
@@ -146,7 +146,7 @@ interface Dossier{
      [class.complete]="selected?.checklistStatus==='MANDATORY_PUBLISHED_TEMPLATE_SNAPSHOT'"
      data-testid="si-step-create-checklist">
      <span class="journey-number">{{selected?.checklistStatus==='MANDATORY_PUBLISHED_TEMPLATE_SNAPSHOT'?'✓':'4'}}</span>
-     <strong>{{t('4. Create / Review Checklist','٤. إنشاء ومراجعة القائمة')}}</strong>
+     <strong>{{t('4. Review Checklist','٤. مراجعة القائمة')}}</strong>
      <p>{{t('The mandatory checklist is created at Step 2. AI questions can supplement it only after human review, never replace it.',
       'القائمة الإلزامية تُنشأ في الخطوة ٢. أسئلة AI إضافة اختيارية بعد المراجعة البشرية ولا تستبدل الأصلية.')}}</p>
      <a *ngIf="selected?.caseId&&selected?.checklistStatus==='MANDATORY_PUBLISHED_TEMPLATE_SNAPSHOT'"
@@ -163,30 +163,49 @@ interface Dossier{
      <span *ngIf="selected?.checklistStatus!=='MANDATORY_PUBLISHED_TEMPLATE_SNAPSHOT'"
       class="journey-wait">{{t('Requires published checklist preparation','يتطلب تجهيز القائمة المنشورة')}}</span>
     </li>
+    <li class="journey-step" [class.current]="selected?.status==='READY_FOR_SCOPE_REVIEW'"
+     [class.complete]="selected?.status==='READY_FOR_FIELD'||selected?.status==='FIELD_STARTED'"
+     data-testid="si-step-supervisor-scope">
+     <span class="journey-number">{{selected?.status==='READY_FOR_FIELD'||selected?.status==='FIELD_STARTED'?'✓':'5'}}</span>
+     <strong>{{t('5. Supervisor · Approve Inspection Scope','٥. المشرف · اعتماد نطاق المعاينة')}}</strong>
+     <p>{{t('An explicit, separate regulatory approval for the pinned mandatory checklist and optionally reviewed A04 additions. It is NOT the same as A04 advisory approval.',
+      'اعتماد تنظيمي مستقل للقائمة الإلزامية وأي إضافات A04 معتمدة. هذا ليس اعتماد التوصيات الاستشارية A04.')}}</p>
+     <ng-container *ngIf="selected as o">
+      <button *ngIf="o.status==='READY_FOR_SCOPE_REVIEW'&&auth.isAdmin"
+       type="button" class="journey-action primary" (click)="approveScope(o)"
+       [disabled]="busy||loadingDossier||!dossier" data-testid="si-stepper-approve-scope">
+       {{t('Supervisor · Approve Scope','المشرف · اعتماد النطاق')}}
+      </button>
+      <span *ngIf="o.status==='READY_FOR_SCOPE_REVIEW'&&!auth.isAdmin"
+       class="journey-wait" data-testid="si-stepper-await-supervisor">
+       {{t('Awaiting publisher-authorized supervisor','بانتظار المشرف المخوّل (Publisher)')}}</span>
+      <span *ngIf="o.status==='READY_FOR_FIELD'||o.status==='FIELD_STARTED'"
+       class="journey-done" data-testid="si-stepper-scope-approved">
+       {{t('Inspection scope approved','تم اعتماد نطاق المعاينة')}}</span>
+      <span *ngIf="canActivate(o)" class="journey-wait">
+       {{t('Complete case preparation first','أكمل التجهيز أولًا')}}</span>
+     </ng-container>
+    </li>
     <li class="journey-step" [class.current]="selected?.status==='READY_FOR_FIELD'"
      [class.complete]="selected?.status==='FIELD_STARTED'" data-testid="si-step-execute-order">
-     <span class="journey-number">{{selected?.status==='FIELD_STARTED'?'✓':'5'}}</span>
-     <strong>{{t('5. Execute Work Order','٥. تنفيذ أمر التكليف')}}</strong>
-     <p>{{t('After supervisor scope approval, open the guided screen and fill in the mandatory checklist and approved optional questions.',
-      'بعد اعتماد المشرف للنطاق، افتح شاشة التنفيذ لملء القائمة الإلزامية والأسئلة الاختيارية المعتمدة.')}}</p>
+     <span class="journey-number">{{selected?.status==='FIELD_STARTED'?'✓':'6'}}</span>
+     <strong>{{t('6. Execute Work Order · Fill Checklist','٦. تنفيذ أمر التكليف وتعبئة القائمة')}}</strong>
+     <p>{{t('Only after Step 5: the assigned inspector starts the field inspection and records checklist answers and evidence.',
+      'بعد اعتماد الخطوة الخامسة فقط، يبدأ المفتش المعاينة ويُسجل الإجابات والأدلة.')}}</p>
      <ng-container *ngIf="selected as o">
       <button *ngIf="o.status==='READY_FOR_FIELD'" type="button" class="journey-action primary"
        (click)="execute(o)" [disabled]="busy" data-testid="si-stepper-execute-order">
-       {{t('Execute Work Order → Fill Checklist','Execute Work Order ← تعبئة القائمة')}}
+       {{t('Execute Work Order → Fill Checklist','تنفيذ أمر التكليف ← تعبئة القائمة')}}
       </button>
       <button *ngIf="o.status==='FIELD_STARTED'" type="button" class="journey-action primary"
        (click)="continue(o)" [disabled]="busy" data-testid="si-stepper-resume-checklist">
        {{t('Continue Filling Checklist','استكمال تعبئة القائمة')}}
       </button>
-      <a *ngIf="o.status==='READY_FOR_SCOPE_REVIEW'&&auth.isAdmin" class="journey-action"
-       [routerLink]="['/moei/smart-inspection/scheduling/plan',o.planId]">
-       {{t('Supervisor: Approve Scope','المشرف: اعتماد النطاق')}}
-      </a>
-      <span *ngIf="o.status==='READY_FOR_SCOPE_REVIEW'&&!auth.isAdmin" class="journey-wait">
-       {{t('Waiting for supervisor scope approval','في انتظار اعتماد المشرف للنطاق')}}</span>
-      <span *ngIf="canActivate(o)" class="journey-wait">{{t('Complete preparation first','استكمل التجهيز أولًا')}}</span>
+      <span *ngIf="o.status==='READY_FOR_SCOPE_REVIEW'" class="journey-wait" data-testid="si-field-await-scope">
+       {{t('Waiting for Step 5 supervisor approval','بانتظار اعتماد المشرف في الخطوة الخامسة')}}</span>
+      <span *ngIf="canActivate(o)" class="journey-wait">
+       {{t('Prepare mandatory checklist first','جهّز القائمة الإلزامية أولًا')}}</span>
      </ng-container>
-     <span *ngIf="!selected" class="journey-wait">{{t('Not available yet','غير متاح حاليًا')}}</span>
     </li>
    </ol>
   </section>
@@ -418,7 +437,7 @@ interface Dossier{
  button,.buttons a,.header-actions a{border:1px solid #bddadd;background:#eaf7f7;color:#096c75;
   border-radius:8px;padding:10px 12px;text-decoration:none;cursor:pointer;font-weight:700;font-size:12px}
  button:disabled{opacity:.5;cursor:not-allowed}.buttons button{background:#077e76;color:#fff}
- .overview{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin-bottom:15px}
+ .overview{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-bottom:15px}
  .overview div{padding:14px;background:#fff;border:1px solid #d8e8ed;border-radius:12px}
  .overview small,.overview strong{display:block}.overview small{color:#8197a3;font-size:11px}
  .overview strong{font-size:27px;color:#116575;margin-top:7px}
@@ -660,6 +679,48 @@ export class SiMyWorkOrdersComponent implements OnInit{
       'تم تجهيز ملف المعاينة والقائمة الإلزامية، وA04 يظل اختياريًا. يلزم اعتماد نطاق المعاينة من المشرف قبل التنفيذ.');
     if(updated)this.loadDossierFresh(updated);},
    error:e=>{this.busy=false;this.error=e?.error?.error||'SI_ORDER_PREPARATION_FAILED';}
+  });
+ }
+ approveScope(o:AssignedOrder):void{
+  // The existing server-side publisher-gated Work Order scope endpoint is
+  // authoritative. It approves/assigns the linked lifecycle and updates
+  // the same canonical order that gates inspector field execution.
+  if(this.busy||!this.auth.isAdmin||o.status!=='READY_FOR_SCOPE_REVIEW'||
+    !o.caseId||!this.dossier||this.dossier.caseId!==o.caseId)return;
+  const reason=window.prompt(this.t(
+   'Supervisor: enter an audit reason (at least 8 characters) for INSPECTION SCOPE approval. This is separate from the A04 advisory review.',
+   'المشرف: أدخل سببًا موثقًا (٨ أحرف على الأقل) لاعتماد نطاق المعاينة، وهو مستقل عن مراجعة توصيات A04.'));
+  if(reason===null)return;
+  if(reason.trim().length<8){
+   this.error=this.t('Scope approval requires an eight-character reason.',
+    'اعتماد النطاق يتطلب سببًا من ثمانية أحرف على الأقل.');return;
+  }
+  const ai=this.dossier.sections.aiAnalysis;
+  const extraCount=ai.status==='APPROVED'?
+    (ai.modelDraft?.suggestedAdditionalItems?.length||0):0;
+  const includeAiSuggestions=extraCount>0&&window.confirm(this.t(
+   'Include '+extraCount+' supervisor-reviewed A04 OPTIONAL questions? Cancel means approve mandatory checks only.',
+   'هل تضم '+extraCount+' أسئلة إضافية اختيارية معتمدة من A04؟ إلغاء يعني اعتماد القائمة الإلزامية فقط.'));
+  if(!window.confirm(this.t(
+    'Confirm formal inspection scope approval? No AI call will occur.',
+    'هل تؤكد اعتماد نطاق المعاينة رسميًا؟ لن يحدث أي استدعاء AI.')))return;
+  this.busy=true;this.error='';this.message='';
+  this.http.post<{order:AssignedOrder}>(this.api+'plans/'+
+   encodeURIComponent(o.planId)+'/work-orders/'+encodeURIComponent(o.orderId)+'/scope',
+   {reason:reason.trim(),includeAiSuggestions}).subscribe({
+   next:r=>{
+    this.busy=false;
+    this.replaceOrder(r.order);
+    this.message=this.t('Inspection scope approved. The assigned inspector can now Execute Work Order.',
+      'تم اعتماد نطاق المعاينة؛ يمكن للمفتش المكلف الآن تنفيذ أمر التكليف.');
+    this.load();
+   },
+   error:e=>{
+    this.busy=false;
+    this.error=e?.error?.error||'SI_SCOPE_APPROVAL_FAILED';
+    // Keep the server error visible so an actual publisher/Oracle mismatch
+    // can be diagnosed. The explicit Refresh action reloads the order.
+   }
   });
  }
  execute(o:AssignedOrder):void{

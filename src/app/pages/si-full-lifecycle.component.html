@@ -3,11 +3,13 @@
   <main class="lifecycle">
     <header class="hero">
       <div><small>MOEI · SMART INSPECTION · END-TO-END POC V1</small>
-        <h1>{{copy('Full Inspection Lifecycle','دورة المعاينة الكاملة')}}</h1>
-        <p>{{copy('Trace every inspection from selection through planning, field evidence, reports, corrective actions and controlled closure.',
-          'تتبّع كل معاينة من الاختيار والتخطيط إلى التنفيذ والأدلة والتقارير والإجراءات التصحيحية والإغلاق المنضبط.')}}</p>
+        <h1>{{copy('Inspection Case Record & Follow-up','سجل حالة المعاينة والمتابعة')}}</h1>
+        <p>{{copy('Advanced regulatory case ledger, audit history, reports and corrective actions. Assigned-inspector preparation, scope approval and field start are coordinated from My Inspection Journey.',
+          'سجل تنظيمي متقدم للحالة والتدقيق والتقارير والإجراءات التصحيحية. يتم تحضير المعاينات المسندة واعتماد نطاقها وبدء تنفيذها من رحلة المعاينة الموحدة.')}}</p>
       </div>
       <div class="hero-actions">
+        <a routerLink="/moei/smart-inspection/my-work-orders" data-testid="si-case-record-return-journey">
+          {{copy('← My Inspection Journey','← رحلة المعاينة الموحدة')}}</a>
         <a routerLink="/moei/smart-inspection/psc-targeting">{{copy('PSC Selection','اختيار PSC')}}</a>
         <a routerLink="/moei/smart-inspection/candidates">{{copy('Candidate Center','مركز الترشيح')}}</a>
         <a routerLink="/moei/smart-inspection/preparation">{{copy('Preparation / A04','التحضير / A04')}}</a>
@@ -64,6 +66,13 @@
     </section>
 
     <ng-container *ngIf="caseId">
+      <div *ngIf="workOrderManaged" class="limitations" data-testid="si-workorder-managed-case">
+        <strong>{{copy('Work Order is the single operational source','أمر التكليف هو مصدر الحركة الوحيد')}}</strong>
+        <p>{{copy('Prepare, approve scope and start field execution from My Inspection Journey. Use this advanced case record for audit, reports, corrections and follow-up.',
+         'يتم التحضير واعتماد النطاق وبدء المعاينة من رحلة المعاينة الموحدة. هذه الشاشة للسجل والتقارير والإجراءات التصحيحية والمتابعة.')}}</p>
+        <a routerLink="/moei/smart-inspection/my-work-orders">
+         {{copy('Open My Inspection Journey','فتح رحلة المعاينة الموحدة')}}</a>
+      </div>
       <div class="case-banner card">
         <div><small>{{copy('INSPECTION CASE ID','معرف حالة المعاينة')}}</small>
           <strong class="mono">{{caseId}}</strong>
@@ -78,9 +87,9 @@
 
       <section class="card">
         <div class="section-title"><div><small>END-TO-END MAP</small>
-          <h2>{{copy('11 Business Stages · One Traceable Journey','١١ مرحلة أعمال · رحلة واحدة قابلة للتتبع')}}</h2>
-          <p>{{copy('Detailed 17-step scenario is mapped in the V1 design document. Cards below connect the existing modules and new execution ledger.',
-            'السيناريو التفصيلي المكون من ١٧ خطوة موضح في وثيقة V1، والبطاقات أدناه تربط الوحدات الحالية بسجل التنفيذ الجديد.')}}</p>
+          <h2>{{copy('Regulatory Lifecycle Reference · 11 Stages','مرجع دورة الحالة التنظيمية · ١١ مرحلة')}}</h2>
+          <p>{{copy('Reference map and audit view; not an alternative operational stepper for assigned inspectors. Use My Inspection Journey to prepare, approve work-order scope and start field execution.',
+            'خريطة مرجعية وسجل تدقيق، وليست Stepper بديلة للمفتش. استخدم رحلة المعاينة الموحدة للتحضير واعتماد نطاق أمر التكليف وبدء التنفيذ.')}}</p>
         </div></div>
         <div class="step-grid">
           <div class="step" *ngFor="let step of steps">
@@ -171,7 +180,7 @@
         </div></div>
         <div class="chips"><span class="chip mandatory" *ngFor="let c of r.checks">
           {{c.id}} · {{c.mandatory?copy('Mandatory','إلزامي'):copy('Reviewed additional','إضافة معتمدة')}}</span></div>
-        <div *ngIf="stage==='PREPARATION_READY'">
+        <div *ngIf="stage==='PREPARATION_READY'&&!workOrderManaged">
           <div class="suggestions" *ngIf="view?.preparation?.dossier?.suggestedAdditionalItems?.length && canSelectScope">
             <h3>{{copy('Optional A04 suggestions','اقتراحات A04 الاختيارية')}}</h3>
             <label *ngFor="let suggestion of view?.preparation?.dossier?.suggestedAdditionalItems">
@@ -205,7 +214,7 @@
         </div>
         <a routerLink="/moei/smart-inspection/scheduling" class="action-link">
           {{copy('Open Existing ERP Scheduling →','فتح نظام الجدولة الحالي ←')}}</a>
-        <div *ngIf="stage==='SCOPE_APPROVED'" class="form-grid">
+        <div *ngIf="stage==='SCOPE_APPROVED'&&!workOrderManaged" class="form-grid">
           <label>{{copy('Inspector Name','اسم المفتش')}}<input [(ngModel)]="inspector" /></label>
           <label>{{copy('Port / Location','الميناء / الموقع')}}<input [(ngModel)]="port" /></label>
           <label>{{copy('Visit Date & Time · UAE Local','تاريخ ووقت الزيارة بتوقيت الإمارات')}}
@@ -242,7 +251,7 @@
           <p>{{copy('This legacy baseline records field checks and evidence reference IDs. Use the linked Dynamic Checklist workspace for JPG/PNG/WebP uploads and opt-in Airia suggestions; video, offline sync, voice and legally confirmed CV remain future work.',
             'تسجل القائمة الأساسية البنود ومراجع الأدلة. استخدم رابط القوائم الديناميكية لرفع صور JPG/PNG/WebP وطلب اقتراحات Airia عند تفعيله؛ الفيديو والعمل دون اتصال والصوت والتحليل المعتمد قانونيًا ليست مفعلة بعد.')}}</p>
         </div></div>
-        <button class="primary" type="button" *ngIf="stage==='ASSIGNED'"
+        <button class="primary" type="button" *ngIf="stage==='ASSIGNED'&&!workOrderManaged"
           (click)="run('START_FIELD')" [disabled]="busy">
           {{copy('Inspector · Start Field Inspection','المفتش · بدء المعاينة الميدانية')}}</button>
         <div class="table-wrap" *ngIf="stage==='IN_FIELD'||stage==='REPORT_RETURNED'">

@@ -64,7 +64,7 @@ import {SiPreparationCaseSummary,SiPreparationService} from '../services/si-prep
                     {{copy('Open Preparation →','فتح التحضير ←')}}
                   </a>
                   <a class="open" [routerLink]="['/moei/smart-inspection/lifecycle',c.id]">
-                    {{copy('Full Cycle →','دورة المعاينة ←')}}
+                    {{copy('Case Record (Advanced) →','سجل الحالة التنظيمي (متقدم) ←')}}
                   </a></td>
                 </tr>
               </tbody>

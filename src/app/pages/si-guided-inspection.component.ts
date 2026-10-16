@@ -48,9 +48,9 @@ interface FieldAiAdvice{
       'مسار واحد للأسئلة من قوائم الفحص الإلزامية المثبتة وإضافات A04 المعتمدة. الإجابات للمفتش المسند، وAI يوجه التنفيذ ولا يصدر نتائج تلقائية.')}}</p>
    </div>
    <nav class="toplinks">
-    <a routerLink="/moei/smart-inspection/my-work-orders">{{t('My Work Orders','أوامر التشغيل الخاصة بي')}}</a>
-    <a *ngIf="guide" [routerLink]="['/moei/smart-inspection/lifecycle',guide.caseId]">
-     {{t('Inspection Lifecycle','دورة المعاينة')}}</a>
+    <a routerLink="/moei/smart-inspection/my-work-orders" [queryParams]="{orderId:orderId}"
+     data-testid="si-guided-return-journey">
+     {{t('← My Inspection Journey','← رحلة المعاينة الموحدة')}}</a>
    </nav>
   </header>
   <p *ngIf="busy&& !guide" class="status">{{t('Loading the pinned inspection scope…','جارٍ تحميل نطاق المعاينة المثبت…')}}</p>

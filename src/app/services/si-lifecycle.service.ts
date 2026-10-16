@@ -56,6 +56,7 @@ export interface SiLifecycleView{
   preparation:{status:string;version:number;stale:boolean;baseChecklistIds:string[];
     dossier:{focusAreas:unknown[];suggestedAdditionalItems:{title:string;reason:string}[]}|null;
     provenance:string;externalDocumentsVerified:boolean};
+  workOrderManaged?:boolean;
   record:SiLifecycleRecord|null;stages:SiLifecycleStage[];
   readyForInitialization:boolean;limitations:string[];
 }
