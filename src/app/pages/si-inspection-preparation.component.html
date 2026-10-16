@@ -267,7 +267,19 @@
           copy('AIRIA MODE: model call may be billable. Explicit confirmation and current evidence are required.',
                'وضع Airia: قد يترتب عليه تكلفة ويحتاج تأكيداً صريحاً وأدلة حالية.')}}</p>
         <div *ngIf="d.saved?.status==='GENERATING'" class="notice">{{copy("A04 request started and locked. Refresh later; do not retry blindly.","بدأ طلب A04 وتم قفله. حدّث لاحقًا ولا تعاود الإرسال دون التحقق.")}}</div>
-        <div *ngIf="d.saved?.status==='FAILED'" class="notice error">{{copy('A04 validation or provider failed','فشل التحقق من A04 أو الاتصال بالمزوّد')}}: {{d.saved?.lastFailure}}. {{copy('No dossier was fabricated. Explicit retry required.','لم يتم اختلاق ملف أو بيانات، ويلزم إعادة طلب صريحة.')}}</div>
+        <div *ngIf="d.saved?.status==='FAILED'" class="notice error">
+          {{copy('A04 validation or provider failed','فشل التحقق من A04 أو الاتصال بالمزوّد')}}:
+          <strong>{{d.saved?.lastFailure}}</strong>.
+          <span *ngIf="d.saved?.lastFailureField">
+            {{copy('Invalid output field','الحقل غير المطابق في استجابة الوكيل')}}:
+            <strong>{{d.saved?.lastFailureField}}</strong>.
+          </span>
+          <span *ngIf="d.saved?.lastFailure==='SI_A04_FOCUS_INVALID'">
+            {{copy('The AI response did not match the approved Focus Area contract. Priority must be one of CRITICAL, HIGH, WATCH, NORMAL, PRIORITY, or ROUTINE. Check the Airia A04 output before any paid retry.',
+              'استجابة الوكيل لا تطابق عقد مجالات التركيز المعتمد. قيم الأولوية المسموحة: CRITICAL أو HIGH أو WATCH أو NORMAL أو PRIORITY أو ROUTINE. راجع ناتج وكيل Airia A04 قبل أي إعادة محاولة مدفوعة.')}}
+          </span>
+          {{copy('No dossier was fabricated; a new call requires explicit confirmation.','لم يتم اختلاق ملف، وأي استدعاء جديد يحتاج موافقة صريحة.')}}
+        </div>
       </section>
 
       <section class="panel" *ngIf="d.saved?.dossier as ai">
