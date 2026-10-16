@@ -1098,6 +1098,23 @@ const server = createServer(async (req, res) => {
             payload.expectedUpdatedAt));
         }
       }
+      const attachmentDownload=/^\/cases\/([a-f0-9-]{36})\/evidence\/([a-f0-9-]{36})$/.exec(rest);
+      if(attachmentDownload){
+        if(actor.role!=='ADMIN')
+          throw new SiChecklistError('SI_CHECKLIST_INSPECTOR_REQUIRED',403);
+        if(req.method!=='GET')return respond(res,405,{error:'METHOD_NOT_ALLOWED'});
+        const artifact=await siChecklistField.downloadEvidence(
+          attachmentDownload[1],attachmentDownload[2]);
+        res.writeHead(200,{
+          'Content-Type':artifact.mimeType,
+          'Content-Length':artifact.bytes.length,
+          'Content-Disposition':'attachment; filename="inspection-evidence"; filename*=UTF-8\'\''+
+            encodeURIComponent(artifact.filename),
+          'Cache-Control':'no-store','X-Content-Type-Options':'nosniff',
+          'Content-Security-Policy':'sandbox'
+        });
+        return res.end(artifact.bytes);
+      }
       const single=/^\/cases\/([a-f0-9-]{36})(?:\/(start|answers|evidence|ai\/suggest|ai\/review|ai\/questions|ai\/import-a04|ai\/question-answer|ai\/question-review|submit))?$/.exec(rest);
       if(single){
         const id=single[1],operation=single[2];
