@@ -255,7 +255,8 @@ export class SiCandidateWorkbenchComponent implements OnInit,OnDestroy{
       this.planningError=this.draftIssue({
         error:{error:data.error||'SI_DRAFT_JOB_FAILED',
           reasonCode:data.reasonCode,failureCounts:data.failureCounts,
-          batchIndex:data.batchIndex,batchCount:data.batchCount}});
+          batchIndex:data.batchIndex,batchCount:data.batchCount,
+          expectedCount:data.expectedCount,returnedCount:data.returnedCount}});
       this.newDraftNotice=''; // The actionable provider-contract failure appears in red above.
       return;
     }
