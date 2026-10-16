@@ -61,6 +61,9 @@ const fs = require("node:fs");
     path: out + "/readiness-desktop.png",
     fullPage: false,
   });
+  // Navigate away from the already-started service case picker. A hash
+  // navigation to the SAME URL retains component state in Angular.
+  await route("readiness");
   async function issue(profile, delivery) {
     if (profile === "SF-004") {
       // The company clearance was updated in the separate company workflow.
