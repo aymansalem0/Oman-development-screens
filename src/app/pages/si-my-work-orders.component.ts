@@ -494,7 +494,7 @@ export class SiMyWorkOrdersComponent implements OnInit{
    'هل تريد تجهيز المعاينة المسندة إليك بإنشاء/ربط حالة POC وتثبيت القائمة الإلزامية المنشورة؟ لن يستدعي هذا الإجراء A04. يمكن طلب A04 لاحقًا من شاشة التجهيز بموافقة مستقلة، ويظل اعتماد النطاق من اختصاص المشرف.')))return;
   this.busy=true;this.error='';
   this.http.post<{order:AssignedOrder}>(
-   this.api+'plans/'+o.planId+'/work-orders/'+o.orderId+'/activate',
+   this.api+'my-work-orders/'+o.orderId+'/activate',
    {generateAi:false,confirmAiCost:false}
   ).subscribe({
    next:r=>{this.busy=false;const updated=this.replaceOrder(r.order);
@@ -510,7 +510,7 @@ export class SiMyWorkOrdersComponent implements OnInit{
    'بدء تنفيذ أمر التكليف بهويتك المرتبطة بالمهندس المسند إليه؟')))return;
   this.busy=true;this.error='';
   this.http.post<{order:AssignedOrder}>(
-   this.api+'plans/'+o.planId+'/work-orders/'+o.orderId+'/start',
+   this.api+'my-work-orders/'+o.orderId+'/start',
    {confirmPocDelegation:false}
   ).subscribe({
    next:r=>{this.busy=false;this.replaceOrder(r.order);
