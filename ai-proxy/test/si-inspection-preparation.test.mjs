@@ -152,3 +152,30 @@ test('provider failure leaves central FAILED record and no fake success dossier'
     assert.equal((await h.svc.get(caseId)).saved.status,'FAILED');
   }finally{h.cleanup();}
 });
+
+test('Oracle dossier preparation insert and audit never use keyword bind identifiers',async()=>{
+ const h=harness(),calls=[];let commits=0,rollbacks=0;
+ const con={
+  async execute(sql,binds){
+   const names=[...sql.matchAll(/:([A-Za-z_][A-Za-z_0-9]*)/g)].map(x=>x[1]);
+   assert.ok(names.length);
+   assert.ok(names.every(x=>/^b_[a-z][a-z0-9_]*$/.test(x)));
+   assert.deepEqual([...new Set(names)].sort(),Object.keys(binds).sort());
+   calls.push(sql.trim().replace(/\s+/g,' '));
+   return {rowsAffected:1};
+  },
+  async commit(){commits++;},
+  async rollback(){rollbacks++;}
+ };
+ try{
+  h.svc.mode='oracle';h.svc.db=async fn=>fn(con);
+  await h.svc.persist(caseId,null,{
+   caseId,version:1,status:'PREPARED',sourceHash:'TEST',
+   context:{},preparedBy:'inspector@moei.example',audit:[]
+  },'PREPARED','inspector@moei.example','Create approved-case preparation');
+  assert.deepEqual(calls.map(x=>x.match(/^(INSERT INTO [A-Z_]+)/)[1]),[
+   'INSERT INTO SI_PREPARATION_DOSSIER','INSERT INTO SI_PREPARATION_AUDIT'
+  ]);
+  assert.equal(commits,1);assert.equal(rollbacks,0);
+ }finally{h.cleanup();}
+});

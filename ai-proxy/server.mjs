@@ -762,7 +762,17 @@ const server = createServer(async (req, res) => {
     const publicHealth=['/api/ai/health','/api/ai/psc/health',
       '/api/ai/nmc/incidents/health'];
     if(!publicHealth.includes(path)){
-      try{moeiAuth.require(req,{mutate:!['GET','HEAD','OPTIONS'].includes(req.method)});}
+      // Inspector POST operations are independently scoped to the signed-in
+      // employee's work order below. A VIEWER may prepare/start *only* an
+      // assigned order, not modify scheduling or supervisor approvals.
+      const inspectorAction=req.method==='POST'&&
+        /^\/api\/si\/v1\/maritime-scheduling\/my-work-orders\/[a-f0-9-]{36}\/(?:activate|start|guide\/answers)$/.test(path);
+      try{
+        moeiAuth.require(req,{mutate:
+          !inspectorAction&&!['GET','HEAD','OPTIONS'].includes(req.method)});
+        if(inspectorAction&&req.headers['x-moei-csrf']!=='1')
+          throw new MoeiAuthError('MOEI_CSRF_REQUIRED',403);
+      }
       catch(e){return respond(res,e.status||401,{error:e.code||'MOEI_LOGIN_REQUIRED'});}
     }
   }
@@ -1730,7 +1740,8 @@ const server = createServer(async (req, res) => {
       if(path==='/api/si/v1/maritime-scheduling/my-work-orders'&&req.method==='GET'){
         if(!siScheduleOrders.ready)
           return respond(res,503,{error:'SI_SCHED_MIGRATION_019_REQUIRED'});
-        dashboards.assertRole(req,'EDITOR');
+        // Assignment-scoped read: a VIEWER inspector must not need a
+        // dashboard editor secret or broad supervisor privileges.
         const identity=moeiAuth.require(req);
         const actor=identity.email||identity.username;
         return respond(res,200,{status:'ok',orders:await siScheduleOrders.mine(actor),
@@ -1741,14 +1752,36 @@ const server = createServer(async (req, res) => {
       // Inspector workspace: all reads and writes are bound to the
       // authenticated session's assigned order, never a client-supplied IMO
       // or inspector ID. No unrelated vessel dossiers are exposed.
-      const myOrder=/^\/api\/si\/v1\/maritime-scheduling\/my-work-orders\/([a-f0-9-]{36})(?:\/(dossier|guide)(?:\/(answers|ai))?)?$/.exec(path);
+      const myOrder=/^\/api\/si\/v1\/maritime-scheduling\/my-work-orders\/([a-f0-9-]{36})(?:\/(dossier|guide|activate|start)(?:\/(answers|ai))?)?$/.exec(path);
       if(myOrder){
-        dashboards.assertRole(req,'EDITOR');
-        const session=moeiAuth.require(req,{mutate:req.method==='POST'});
+        // Both ADMIN and VIEWER inspectors are allowed here; every order
+        // is independently checked against the authenticated session.
+        // Do not use the dashboard editor/publisher key as inspector IAM.
+        const session=moeiAuth.require(req);
+        if(req.method==='POST'&&req.headers['x-moei-csrf']!=='1')
+          throw new MoeiAuthError('MOEI_CSRF_REQUIRED',403);
         const actor=session.email||session.username;
         const orderId=myOrder[1],area=myOrder[2],task=myOrder[3];
         if(!siScheduleOrders.ready)
           return respond(res,503,{error:'SI_SCHED_MIGRATION_019_REQUIRED'});
+        // Inspector-only mutations are deliberately separated from the
+        // supervisor /plans/:id/work-orders/:id/{scope,activate,start} API.
+        // Never trust a plan ID, employee ID or delegation flag in the body.
+        if(!task&&req.method==='POST'&&(area==='activate'||area==='start')){
+          const {schedule}=await siScheduleOrders.mineOrder(actor,orderId);
+          const body=await requestJson(req,4096);
+          if(body.confirmPocDelegation===true||body.generateAi===true||
+             body.confirmAiCost===true)
+            return respond(res,403,{error:'SI_INSPECTOR_SUPERVISOR_OR_PAID_AI_ACTION_DENIED'});
+          const order=area==='activate'
+            ?await siScheduleOrders.activate({
+              planId:schedule.planId,orderId,actor,
+              generateAi:false,confirmAiCost:false})
+            :await siScheduleOrders.startField({
+              planId:schedule.planId,orderId,actor,
+              confirmPocDelegation:false});
+          return respond(res,200,{status:'ok',order});
+        }
         if(area==='dossier'&&!task&&req.method==='GET'){
           const {schedule,order}=await siScheduleOrders.mineOrder(actor,orderId);
           if(order.caseId){
@@ -2270,6 +2303,32 @@ const server = createServer(async (req, res) => {
         }));
         const {status,...details}=diagnostic;
         return respond(res,status,details);
+      }
+      // An untyped Oracle/runtime error during the inspector Prepare action
+      // is NOT a targeting failure. Report an opaque, operation-specific
+      // diagnostic without exposing SQL, binds, personal records or secrets.
+      const inspectorPreparationRoute=
+        /^\/api\/si\/v1\/maritime-scheduling\/my-work-orders\/[a-f0-9-]{36}\/activate$/.test(path)||
+        /^\/api\/si\/v1\/maritime-scheduling\/plans\/[a-f0-9-]{36}\/work-orders\/[a-f0-9-]{36}\/activate$/.test(path);
+      if(req.method==='POST'&&inspectorPreparationRoute){
+        const rawStage=String(e?.siPreparationStage||e?.scheduleSqlStage||
+          'UNKNOWN');
+        const stage=[
+          'WORK_ORDER_STATUS_UPDATE','WORK_ORDER_STATUS_AUDIT',
+          'INSPECTION_CASE_REGISTRY','APPROVED_SOURCE_REVALIDATION',
+          'CASE_LEDGER_CREATION','CASE_LEDGER_INSERT',
+          'CASE_DECISION_INSERT','WORK_ORDER_CASE_ID_SAVE',
+          'PLAN_CASE_LINK','DOSSIER_READ','DOSSIER_PREPARATION_WRITE',
+          'CHECKLIST_TEMPLATE_PREVIEW','CHECKLIST_INITIALIZATION',
+          'CHECKLIST_CASE_WRITE','LIFECYCLE_SNAPSHOT',
+          'LIFECYCLE_INITIALIZATION','WORK_ORDER_READY_SAVE'
+        ].includes(rawStage)?rawStage:'UNKNOWN';
+        const oracleCode=/^ORA-[0-9]{5}$/.test(String(e?.code||''))
+          ?e.code:null;
+        console.error('[si-work-order] PREPARE_FAILED '+
+          JSON.stringify({stage,oracleCode:oracleCode||'NONE'}));
+        return respond(res,503,{error:'SI_WORK_ORDER_PREPARATION_UNAVAILABLE',
+          stage,oracleCode});
       }
       const rollingRoute=path==='/api/si/v1/inspection-plans'||
         path.startsWith('/api/si/v1/inspection-plans/');

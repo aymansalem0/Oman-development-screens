@@ -68,7 +68,10 @@ test('rolling inspection plan contains no port selector or port payload',()=>{
  assert.doesNotMatch(svc,/port\?:string;notes\?:string/);
 });
 test('one official supervisor approval covers the plan, not each vessel row',()=>{
- assert.match(html,/\[routerLink\]="\['\/moei\/smart-inspection\/plan\/create',activePlanId\]"/);
+ // Capacity-first navigation now originates from each saved plan card,
+ // not a removed activePlanId link in the old single-plan banner.
+ assert.match(html,/\[routerLink\]="\['\/moei\/smart-inspection\/plan\/create',p\.id\]"/);
+ assert.match(html,/\[queryParams\]="\{stage:'capacity'\}"/);
  assert.match(html,/si-rolling-management/);
  assert.match(html,/\(click\)="generateIntegratedDraft\(\)"/);
  assert.match(html,/\(click\)="saveIntegratedDraft\(\)"/);

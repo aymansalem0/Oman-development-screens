@@ -157,20 +157,25 @@ export class SiInspectionPreparation{
       try{
         if(previous){
           const result=await con.execute(`UPDATE SI_PREPARATION_DOSSIER
-            SET VERSION_NO=:newVersion,DOC_JSON=:doc,UPDATED_AT=SYSTIMESTAMP
-            WHERE CASE_ID=:id AND VERSION_NO=:expected`,{
-            id,newVersion:next.version,doc:clob(next),expected:previous.version});
+            SET VERSION_NO=:b_new_version,DOC_JSON=:b_doc_json,
+            UPDATED_AT=SYSTIMESTAMP
+            WHERE CASE_ID=:b_case_id AND VERSION_NO=:b_expected_version`,{
+            b_case_id:id,b_new_version:next.version,b_doc_json:clob(next),
+            b_expected_version:previous.version});
           if(result.rowsAffected!==1)
             throw new SiPreparationError('SI_PREPARATION_VERSION_CONFLICT',409);
         }else{
           await con.execute(`INSERT INTO SI_PREPARATION_DOSSIER
-            (CASE_ID,VERSION_NO,DOC_JSON) VALUES (:id,:version,:doc)`,
-            {id,version:next.version,doc:clob(next)});
+            (CASE_ID,VERSION_NO,DOC_JSON)
+            VALUES (:b_case_id,:b_version_no,:b_doc_json)`,{
+            b_case_id:id,b_version_no:next.version,b_doc_json:clob(next)});
         }
         await con.execute(`INSERT INTO SI_PREPARATION_AUDIT
           (AUDIT_ID,CASE_ID,VERSION_NO,ACTION_NAME,ACTOR,REASON)
-          VALUES (:uid,:id,:version,:action,:actor,:reason)`,
-          {uid:randomUUID(),id,version:next.version,action,actor,reason:clean(reason,500)});
+          VALUES (:b_audit_id,:b_case_id,:b_version_no,:b_action_name,
+            :b_actor,:b_reason)`,{
+          b_audit_id:randomUUID(),b_case_id:id,b_version_no:next.version,
+          b_action_name:action,b_actor:actor,b_reason:clean(reason,500)});
         await con.commit();return next;
       }catch(e){
         await con.rollback();

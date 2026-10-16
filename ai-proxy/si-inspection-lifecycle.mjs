@@ -94,20 +94,25 @@ export class SiInspectionLifecycle{
       try{
         if(before){
           const r=await con.execute(`UPDATE SI_INSPECTION_LIFECYCLE
-            SET VERSION_NO=:v,DOC_JSON=:doc,UPDATED_AT=SYSTIMESTAMP
-            WHERE CASE_ID=:id AND VERSION_NO=:expected`,
-            {v:after.version,doc:jsonClob(after),id,expected:before.version});
+            SET VERSION_NO=:b_version_no,DOC_JSON=:b_doc_json,
+            UPDATED_AT=SYSTIMESTAMP
+            WHERE CASE_ID=:b_case_id AND VERSION_NO=:b_expected_version`,{
+            b_version_no:after.version,b_doc_json:jsonClob(after),
+            b_case_id:id,b_expected_version:before.version});
           if(r.rowsAffected!==1)fails('SI_LIFECYCLE_VERSION_CONFLICT',409);
         }else{
           await con.execute(`INSERT INTO SI_INSPECTION_LIFECYCLE
-            (CASE_ID,VERSION_NO,DOC_JSON) VALUES (:id,:v,:doc)`,
-            {id,v:after.version,doc:jsonClob(after)});
+            (CASE_ID,VERSION_NO,DOC_JSON)
+            VALUES (:b_case_id,:b_version_no,:b_doc_json)`,{
+            b_case_id:id,b_version_no:after.version,b_doc_json:jsonClob(after)});
         }
         await con.execute(`INSERT INTO SI_INSPECTION_LIFECYCLE_AUDIT
           (AUDIT_ID,CASE_ID,VERSION_NO,ACTION_NAME,ACTOR,REASON,STATE_JSON)
-          VALUES (:id,:caseId,:v,:action,:actor,:reason,:state)`,
-          {id:randomUUID(),caseId:id,v:after.version,action,actor,
-            reason:str(reason,500),state:jsonClob(after)});
+          VALUES (:b_audit_id,:b_case_id,:b_version_no,:b_action_name,
+            :b_actor,:b_reason,:b_state_json)`,{
+           b_audit_id:randomUUID(),b_case_id:id,b_version_no:after.version,
+           b_action_name:action,b_actor:actor,b_reason:str(reason,500),
+           b_state_json:jsonClob(after)});
         await con.commit();
       }catch(e){
         await con.rollback();

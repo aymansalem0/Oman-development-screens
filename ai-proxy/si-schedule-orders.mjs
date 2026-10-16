@@ -11,6 +11,7 @@ import {readFileSync,writeFileSync,renameSync,existsSync,mkdirSync} from 'node:f
 import {dirname} from 'node:path';
 import oracledb from 'oracledb';
 import {resolveAssignedInspector,matchesAssignedInspector,pocInspectorIdForActor} from './si-inspector-identity.mjs';
+import {sourceVerified} from './si-integrated-capacity-plan.mjs';
 
 const id=()=>randomUUID(),at=()=>new Date().toISOString();
 const clone=v=>structuredClone(v);
@@ -306,32 +307,49 @@ export class SiScheduleOrders{
   }
   await this.db(async con=>{
    try{
-    const r=await con.execute('UPDATE SI_SCHED_WORK_ORDER SET '+
-     'STATUS_CODE=:status,CASE_ID=:caseId,VERSION_NO=:v,DOC_JSON=:data,'+
-     'UPDATED_AT=SYSTIMESTAMP WHERE ORDER_ID=:id AND VERSION_NO=:before',{
-      id:order.id,status:order.status,caseId:order.caseId,v:order.version,
-      data:doc(order),before:order.version-1});
+    // Oracle bind names here must follow the same safe convention as
+    // schedule approval writes. :before / :event / :schedule can raise
+    // ORA-01745 and previously prevented the first Prepare transition.
+    const r=await executeApprovalWrite(con,'WORK_ORDER_STATUS_UPDATE',
+     'UPDATE SI_SCHED_WORK_ORDER SET '+
+     'STATUS_CODE=:b_status_code,CASE_ID=:b_case_id,'+
+     'VERSION_NO=:b_version_no,DOC_JSON=:b_order_doc,'+
+     'UPDATED_AT=SYSTIMESTAMP WHERE ORDER_ID=:b_order_id '+
+     'AND VERSION_NO=:b_expected_version',{
+      b_order_id:order.id,b_status_code:order.status,
+      b_case_id:order.caseId,b_version_no:order.version,
+      b_order_doc:doc(order),b_expected_version:order.version-1});
     if(r.rowsAffected!==1)err('SI_WORK_ORDER_VERSION_CONFLICT',409);
-    await con.execute('INSERT INTO SI_SCHED_ORDER_AUDIT '+
+    await executeApprovalWrite(con,'WORK_ORDER_STATUS_AUDIT',
+     'INSERT INTO SI_SCHED_ORDER_AUDIT '+
      '(AUDIT_ID,SCHEDULE_ID,ORDER_ID,EVENT_CODE,ACTOR,DETAILS_JSON) '+
-     'VALUES(:audit,:schedule,:orderId,:event,:actor,:details)',{
-      audit:id(),schedule:schedule.id,orderId:order.id,event,actor,
-      details:doc({status:order.status,caseId:order.caseId,error:order.error})});
+     'VALUES(:b_audit_id,:b_schedule_id,:b_order_id,'+
+     ':b_event_code,:b_actor,:b_audit_doc)',{
+      b_audit_id:id(),b_schedule_id:schedule.id,b_order_id:order.id,
+      b_event_code:event,b_actor:actor,
+      b_audit_doc:doc({status:order.status,caseId:order.caseId,
+        error:order.error})});
     await con.commit();
    }catch(e){await con.rollback();throw e;}
   });return clone(order);
  }
  async _freshApprovedCandidate(imo,plan){
   const dashboard=await this.targeting.dashboard();
+  // Capacity-verified integrated approvals freeze only authoritative source
+  // events. Unverified source rows are review evidence, not approved reasons.
+  // Legacy scheduling retains its existing complete-event behavior.
+  const verifiedOnly=plan.scheduleMode==='SINGLE_CAPACITY_VERIFIED_PLAN_APPROVAL';
   const candidates=dashboard.candidates.filter(c=>c.imo===imo&&
    (c.status==='PENDING_REVIEW'||c.status==='EXTERNALLY_SCHEDULED'&&
-    c.events.some(e=>e.sourceType==='NMC_CASE'&&e.approval==='APPROVED')))
+    c.events.some(e=>e.sourceType==='NMC_CASE'&&e.approval==='APPROVED'))&&
+   (!verifiedOnly||c.events.some(sourceVerified)))
    .sort((a,b)=>Number(b.events.some(e=>e.sourceType==='NMC_CASE'))-
       Number(a.events.some(e=>e.sourceType==='NMC_CASE'))||
       a.regime.localeCompare(b.regime));
   if(!candidates.length)err('SI_WORK_ORDER_SOURCE_CANDIDATE_CHANGED',409);
   const reasons=new Map();
   for(const c of candidates)for(const e of c.events){
+   if(verifiedOnly&&!sourceVerified(e))continue;
    const key=e.eventKey||[e.sourceType,e.sourceEventId,c.regime].join(':');
    if(!reasons.has(key))reasons.set(key,{
     eventKey:key,candidateKey:c.key,sourceType:e.sourceType,
@@ -344,14 +362,25 @@ export class SiScheduleOrders{
   const actual=[...reasons.values()];
   const vessel=plan.approvedVessels.find(v=>v.imo===imo);
   const approvedKeys=(vessel?.inspectionReasons||[]).map(x=>x.eventKey).sort();
+  const currentRegimes=[...new Set(candidates.map(x=>x.regime))].sort();
+  // Verify not just the event IDs, but the immutable approved evidence and
+  // source authority. Any genuinely new, revoked or modified verified source
+  // requires a supervisor-reviewed plan; never silently add statutory scope.
+  const normalized=reasons=>reasons.map(r=>({
+   ...batchReason(r),
+   evidenceIds:[...new Set(r.evidenceIds||[])].sort()
+  })).sort((a,b)=>a.eventKey.localeCompare(b.eventKey));
   if(!vessel||JSON.stringify(actual.map(x=>x.eventKey).sort())!==
       JSON.stringify(approvedKeys)||
-    JSON.stringify([...new Set(candidates.map(x=>x.regime))].sort())!==
-      JSON.stringify([...vessel.regimes].sort()))
+    JSON.stringify(currentRegimes)!==
+      JSON.stringify([...vessel.regimes].sort())||
+    (verifiedOnly&&JSON.stringify(normalized(actual))!==
+      JSON.stringify(normalized(vessel.inspectionReasons))))
    err('SI_WORK_ORDER_APPROVED_REASONS_CHANGED',409);
   return {imo,candidateKey:candidates[0].key,
    candidateKeys:candidates.map(x=>x.key),
-   regimes:vessel.regimes,inspectionReasons:actual.map(batchReason)};
+   regimes:vessel.regimes,inspectionReasons:actual.map(batchReason),
+   verifiedOnly};
  }
  async activate({planId,orderId,actor,generateAi=false,
   confirmAiCost=false}={}){
@@ -401,6 +430,7 @@ export class SiScheduleOrders{
    };
    if(order.status!=='READY_FOR_SCOPE_REVIEW')
     await set('PREPARING','ORDER_PREPARATION_STARTED');
+   let stage='INSPECTION_CASE_REGISTRY';
    try{
     let caseId=order.caseId;
     if(!caseId){
@@ -409,25 +439,32 @@ export class SiScheduleOrders{
        c.approvedPlanId===schedule.id);
      if(prior)caseId=prior.id;
      else{
+      stage='APPROVED_SOURCE_REVALIDATION';
       const item=await this._freshApprovedCandidate(order.imo,plan);
       const conflict=registry.cases.find(c=>c.imo===order.imo&&
        item.candidateKeys.some(k=>[c.candidateKey,...(c.candidateKeys||[])].includes(k)));
       if(conflict)err('SI_WORK_ORDER_CASE_EXISTS_IN_ANOTHER_APPROVAL',409);
+      stage='CASE_LEDGER_CREATION';
       const generated=await this.targeting.decideBatch({
        items:[item],actor:schedule.approvedBy,
-       note:schedule.approvalReason,approvedPlanId:schedule.id});
+       note:schedule.approvalReason,approvedPlanId:schedule.id,
+       verifiedOnly:item.verifiedOnly});
       caseId=generated.cases?.[0]?.id;
      }
      if(!caseId)err('SI_WORK_ORDER_CASE_CREATION_INCOMPLETE',503);
      order.caseId=caseId;
+     stage='WORK_ORDER_CASE_ID_SAVE';
      await set('PREPARING','INSPECTION_CASE_LINKED');
     }
     // Recoverable linkage to the approved rolling plan is required for
     // close-if-all-closed and preserves the frozen source evidence.
+    stage='PLAN_CASE_LINK';
     await this.rolling.attachScheduledCase(planId,order.imo,caseId,
      actor,schedule.id);
+    stage='DOSSIER_READ';
     let prepared=await this.preparation.get(caseId);
     if(!prepared.saved){
+     stage='DOSSIER_PREPARATION_WRITE';
      await this.preparation.prepare(caseId,{actor,expectedVersion:0});
      prepared=await this.preparation.get(caseId);
     }
@@ -435,15 +472,21 @@ export class SiScheduleOrders{
      err('SI_WORK_ORDER_DOSSIER_REVIEW_REQUIRED',409);
     // Mandatory, published checklist template revision is immutable in each
     // inspection case. Never replace it with AI-suggested content.
+    stage='CHECKLIST_TEMPLATE_PREVIEW';
     const overview=await this.checklists.preview(caseId);
     if(!overview.selectedTemplates.some(t=>t.mandatory&&t.itemCount>0))
      err('SI_WORK_ORDER_PUBLISH_MANDATORY_CHECKLIST_FIRST',409);
+    stage='CHECKLIST_INITIALIZATION';
     await this.checklists.start(caseId,actor);
     order.checklistStatus='MANDATORY_PUBLISHED_TEMPLATE_SNAPSHOT';
+    stage='LIFECYCLE_SNAPSHOT';
     const view=await this.lifecycle.snapshot(caseId);
     if(!view.record)
-     await this.lifecycle.apply(caseId,{
-      action:'INITIALIZE',expectedVersion:0,actor,data:{}});
+     {
+      stage='LIFECYCLE_INITIALIZATION';
+      await this.lifecycle.apply(caseId,{
+       action:'INITIALIZE',expectedVersion:0,actor,data:{}});
+     }
     order.aiStatus=prepared.saved.status==='APPROVED'?
      'A04_ADDITIONS_APPROVED_BY_REVIEWER':
      prepared.saved.status==='DRAFT_REVIEW'?'A04_DRAFT_REVIEW_PENDING':
@@ -479,9 +522,13 @@ export class SiScheduleOrders{
      }
     }
     order.status='READY_FOR_SCOPE_REVIEW';order.error=null;
+    stage='WORK_ORDER_READY_SAVE';
     await this.saveOrder(schedule,order,'MANDATORY_CHECKLIST_READY',actor);
     return clone(order);
    }catch(e){
+    // Only fixed server-side operation codes, never SQL, secrets, or IDs.
+    if(e&&typeof e==='object'&&!e.siPreparationStage)
+     e.siPreparationStage=stage;
     order.status='PREPARATION_NEEDS_REVIEW';
     order.error=e.code||'SI_WORK_ORDER_PREPARATION_FAILED';
     await this.saveOrder(schedule,order,'PREPARATION_NEEDS_REVIEW',actor);

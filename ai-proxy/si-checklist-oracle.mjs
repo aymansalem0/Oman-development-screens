@@ -17,6 +17,32 @@ const rows=async(con,sql,binds={})=>(await con.execute(sql,binds,{
  fetchInfo:{DRAFT_JSON:{type:oracledb.STRING},SNAPSHOT_JSON:{type:oracledb.STRING}}
 })).rows;
 const error=(code,status=503)=>new SiChecklistError(code,status);
+// Oracle rejects several unqualified bind identifiers (ORA-01745).
+// Normalize ONLY case-run persistence writes; all SQL stays parameterized.
+export function qualifyChecklistCaseBinds(sql,binds){
+ const entries=Object.entries(binds||{});
+ const qualifiedSql=sql.replace(/:([A-Za-z_][A-Za-z_0-9]*)/g,(token,name)=>
+   Object.hasOwn(binds,name)?':b_'+name:token);
+ const qualifiedBinds=Object.fromEntries(entries.map(([name,value])=>
+   ['b_'+name,value]));
+ const placeholders=[...qualifiedSql.matchAll(/:([A-Za-z_][A-Za-z_0-9]*)/g)]
+  .map(x=>x[1]);
+ if(placeholders.some(name=>!/^b_[a-zA-Z_][a-zA-Z_0-9]*$/.test(name)||
+    !Object.hasOwn(qualifiedBinds,name))||
+   Object.keys(qualifiedBinds).some(name=>!placeholders.includes(name)))
+  throw error('SI_CHECKLIST_ORACLE_BIND_MISMATCH');
+ return {sql:qualifiedSql,binds:qualifiedBinds};
+}
+async function executeFieldWrite(con,sql,binds){
+ const safe=qualifyChecklistCaseBinds(sql,binds);
+ try{return await con.execute(safe.sql,safe.binds);}
+ catch(e){
+  if(e&&typeof e==='object'&&!e.siPreparationStage)
+   e.siPreparationStage='CHECKLIST_CASE_WRITE';
+  throw e;
+ }
+}
+
 const parse=x=>typeof x==='string'?JSON.parse(x):x;
 const uuidFor=(...parts)=>{
  const x=createHash('sha256').update(JSON.stringify(parts)).digest('hex');
@@ -284,7 +310,7 @@ export class OracleSiChecklistField extends SiChecklistField{
    const prev=stored.length?parse(stored[0].SNAPSHOT_JSON):null;
    if(!prev){
     if(!initial(entry))throw error('SI_CHECKLIST_NOT_INITIALIZED',409);
-    await con.execute(`INSERT INTO SI_CHK_CASE_RUN
+    await executeFieldWrite(con,`INSERT INTO SI_CHK_CASE_RUN
      (RUN_ID,CASE_ID,STATUS,SNAPSHOT_JSON,VERSION_NO,STARTED_BY)
      VALUES(:id,:caseId,:status,:snapshot,:version,:actor)`,{
       id:entry.caseId,caseId:entry.caseId,status:entry.status,
@@ -292,7 +318,7 @@ export class OracleSiChecklistField extends SiChecklistField{
    }else{
     if(Number(stored[0].VERSION_NO)!==entry.version-1)
      throw error('SI_CHECKLIST_VERSION_CONFLICT',409);
-    const update=await con.execute(`UPDATE SI_CHK_CASE_RUN SET
+    const update=await executeFieldWrite(con,`UPDATE SI_CHK_CASE_RUN SET
      STATUS=:status,SNAPSHOT_JSON=:snapshot,VERSION_NO=:version,
      SUBMITTED_BY=:submittedBy,SUBMITTED_AT=CASE WHEN :submitted IS NULL
        THEN SUBMITTED_AT ELSE SYSTIMESTAMP END
@@ -322,13 +348,13 @@ export class OracleSiChecklistField extends SiChecklistField{
        answer:json(it.answers||{}),status:it.answerStatus,
        actor:it.answeredBy||null};
      if(!prev){
-      await con.execute(`INSERT INTO SI_CHK_CASE_ITEM
+      await executeFieldWrite(con,`INSERT INTO SI_CHK_CASE_ITEM
        (INSTANCE_ID,RUN_ID,ITEM_ID,ANSWERS_JSON,STATUS,ANSWERED_BY,ANSWERED_AT)
        VALUES(:instance,:run,:item,:answer,:status,:actor,
         CASE WHEN :actor2 IS NULL THEN NULL ELSE SYSTIMESTAMP END)`,
       {...binds,actor2:binds.actor});
      }else{
-      await con.execute(`UPDATE SI_CHK_CASE_ITEM SET
+      await executeFieldWrite(con,`UPDATE SI_CHK_CASE_ITEM SET
         ANSWERS_JSON=:answer,STATUS=:status,ANSWERED_BY=:actor,
         ANSWERED_AT=CASE WHEN :actor2 IS NULL THEN NULL ELSE SYSTIMESTAMP END
         WHERE INSTANCE_ID=:instance AND RUN_ID=:run`,{
@@ -348,7 +374,7 @@ export class OracleSiChecklistField extends SiChecklistField{
     if(!before?.imageEvidenceRef){
      const ext={'image/png':'.png','image/jpeg':'.jpg','image/webp':'.webp'}[e.mimeType];
      if(!ext)throw error('SI_CHECKLIST_IMAGE_TYPE_INVALID');
-     await con.execute(`INSERT INTO SI_CHK_EVIDENCE
+     await executeFieldWrite(con,`INSERT INTO SI_CHK_EVIDENCE
        (EVIDENCE_ID,RUN_ID,STORAGE_REFERENCE,CONTENT_SHA256,
         MIME_TYPE,BYTE_LENGTH,UPLOADED_BY)
        VALUES(:id,:run,:path,:hash,:mime,:size,:actor)`,{
@@ -358,7 +384,7 @@ export class OracleSiChecklistField extends SiChecklistField{
     }
    }
    if(!before){
-    await con.execute(`INSERT INTO SI_CHK_AI_PROPOSAL
+    await executeFieldWrite(con,`INSERT INTO SI_CHK_AI_PROPOSAL
      (PROPOSAL_ID,RUN_ID,SCOPE_LEVEL,SCOPE_REFERENCE,INPUT_TEXT,
       EVIDENCE_ID,RESULT_JSON,REVIEW_STATUS,REQUESTED_BY)
      VALUES(:id,:run,:level,:scope,:input,:evidence,:result,:status,:actor)`,{
@@ -371,11 +397,11 @@ export class OracleSiChecklistField extends SiChecklistField{
       input:proposal.inputText||null,evidence:evidenceId,
       result:json(proposal),status:proposal.status,actor:proposal.actor});
    }else if(before.status!==proposal.status){
-    await con.execute(`UPDATE SI_CHK_AI_PROPOSAL SET REVIEW_STATUS=:status
+    await executeFieldWrite(con,`UPDATE SI_CHK_AI_PROPOSAL SET REVIEW_STATUS=:status
       WHERE PROPOSAL_ID=:id`,{status:proposal.status,id:proposal.id});
    }
    for(const review of proposal.reviews?.slice(before?.reviews?.length||0)||[]){
-    await con.execute(`INSERT INTO SI_CHK_AI_REVIEW
+    await executeFieldWrite(con,`INSERT INTO SI_CHK_AI_REVIEW
       (REVIEW_ID,PROPOSAL_ID,INSTANCE_ID,DECISION,FINAL_ANSWERS_JSON,
        REVIEW_NOTE,REVIEWED_BY)
       VALUES(:id,:proposal,:item,:decision,:answers,:note,:actor)`,{
@@ -386,7 +412,7 @@ export class OracleSiChecklistField extends SiChecklistField{
    }
   }
   for(const audit of entry.audit.slice(oldAudits)){
-   await con.execute(`INSERT INTO SI_CHK_AUDIT
+   await executeFieldWrite(con,`INSERT INTO SI_CHK_AUDIT
     (AUDIT_ID,RUN_ID,EVENT_TYPE,ACTOR,DETAILS_JSON)
     VALUES(:id,:run,:event,:actor,:doc)`,{
     id:auditId(),run:entry.caseId,event:audit.action,

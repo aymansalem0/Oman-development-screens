@@ -349,3 +349,156 @@ test('Oracle 019 write failure keeps precise work-order SQL stage for outer atom
     'shared outer transaction is responsible for rollback and commit');
  }finally{x.done();}
 });
+
+test('Oracle Prepare status and audit updates use valid non-reserved bind names',async()=>{
+ const x=workspace(),calls=[];let commits=0,rollbacks=0;
+ const order={id:uuid(21),version:1,status:'PREPARING',
+  caseId:null,error:null,audit:[]};
+ const schedule={id:uuid(22)};
+ const connection={
+  async execute(sql,binds={}){
+   assert.match(sql,/^(UPDATE SI_SCHED_WORK_ORDER|INSERT INTO SI_SCHED_ORDER_AUDIT)/);
+   const names=[...sql.matchAll(/:([A-Za-z_][A-Za-z_0-9]*)/g)]
+    .map(match=>match[1]);
+   assert.ok(names.length>0);
+   assert.ok(names.every(name=>/^b_[a-z][a-z_0-9]*$/.test(name)),
+    'reserved bind words such as BEFORE / EVENT / STATUS must not be used');
+   assert.deepEqual([...new Set(names)].sort(),Object.keys(binds).sort());
+   calls.push({sql,binds});
+   return {rowsAffected:1};
+  },
+  async commit(){commits++;},
+  async rollback(){rollbacks++;}
+ };
+ try{
+  x.orders.mode='oracle';
+  x.orders.db=async fn=>fn(connection);
+  const updated=await x.orders.saveOrder(schedule,order,'ORDER_PREPARATION_STARTED',
+   'assigned-inspector@moei.example');
+  assert.equal(updated.version,2);
+  assert.equal(updated.status,'PREPARING');
+  assert.equal(calls.length,2);
+  assert.equal(calls[0].binds.b_expected_version,1);
+  assert.equal(calls[0].binds.b_order_id,order.id);
+  assert.equal(calls[1].binds.b_event_code,'ORDER_PREPARATION_STARTED');
+  assert.equal(commits,1);
+  assert.equal(rollbacks,0);
+ }finally{x.done();}
+});
+
+test('Oracle work-order audit failure retains safe failure stage and rolls back',async()=>{
+ const x=workspace();let commits=0,rollbacks=0;
+ const connection={
+  async execute(sql){
+   if(sql.startsWith('INSERT INTO SI_SCHED_ORDER_AUDIT')){
+    const failure=new Error('Sensitive details must not be surfaced to UI');
+    failure.code='ORA-01745';failure.errorNum=1745;
+    throw failure;
+   }
+   return {rowsAffected:1};
+  },
+  async commit(){commits++;},
+  async rollback(){rollbacks++;}
+ };
+ try{
+  x.orders.mode='oracle';
+  x.orders.db=async fn=>fn(connection);
+  await assert.rejects(
+   x.orders.saveOrder({id:uuid(22)},{
+    id:uuid(21),version:1,status:'PREPARING',
+    caseId:null,error:null,audit:[]
+   },'ORDER_PREPARATION_STARTED','assigned-inspector@moei.example'),
+   e=>e.code==='ORA-01745'&&e.scheduleSqlStage==='WORK_ORDER_STATUS_AUDIT');
+  assert.equal(commits,0);
+  assert.equal(rollbacks,1);
+ }finally{x.done();}
+});
+
+test('integrated verified-source preparation excludes unverified review evidence without changing approved reasons',async()=>{
+ const x=workspace();
+ try{
+  x.p.scheduleMode='SINGLE_CAPACITY_VERIFIED_PLAN_APPROVAL';
+  const originalDashboard=x.orders.targeting.dashboard;
+  x.orders.targeting.dashboard=async()=>{
+   const current=await originalDashboard();
+   current.candidates[0].events.push({
+    sourceType:'PSC_PORT_CALL',sourceEventId:'PSC-UNVERIFIED',
+    eventKey:'PSC-EVENT-UNVERIFIED',sourceReference:'PSC-UNVERIFIED',
+    approval:'UNVERIFIED',contextNote:'For review only',
+    evidenceIds:['UNVERIFIED-EVIDENCE'],provenance:'POC_SIMULATOR'
+   });
+   current.candidates.push({
+    imo:'9400643',key:'CK-UNVERIFIED',regime:'UAE_SERVICE_INSPECTION',
+    status:'PENDING_REVIEW',events:[{
+     sourceType:'SERVICE_REQUEST',sourceEventId:'SR-UNVERIFIED',
+     eventKey:'SR-EVENT-UNVERIFIED',sourceReference:'SR-UNVERIFIED',
+     approval:'UNVERIFIED',evidenceIds:[],provenance:'POC_SIMULATOR'
+    }]
+   });
+   return current;
+  };
+  const originalDecide=x.orders.targeting.decideBatch;
+  x.orders.targeting.decideBatch=async args=>{
+   assert.equal(args.verifiedOnly,true);
+   assert.deepEqual(args.items[0].candidateKeys,['CK-1']);
+   assert.deepEqual(args.items[0].regimes,['PORT_STATE_CONTROL']);
+   assert.deepEqual(args.items[0].inspectionReasons,reasons);
+   return originalDecide(args);
+  };
+  const saved=await x.approve(),orderId=saved.orders[0].id;
+  const prepared=await x.orders.activate({planId:x.p.id,orderId,
+   actor:'inspector@moei.example'});
+  assert.equal(prepared.status,'READY_FOR_SCOPE_REVIEW');
+  assert.equal(x.calls.caseCreates,1);
+  assert.equal(x.calls.checklistCreates,1);
+  assert.equal(prepared.aiStatus,'NOT_REQUESTED');
+  assert.equal((await x.orders.byPlan(x.p.id)).orders[0].status,
+   'READY_FOR_SCOPE_REVIEW');
+ }finally{x.done();}
+});
+
+test('integrated Prepare blocks newly verified reasons until supervisor re-approves source scope',async()=>{
+ const x=workspace();
+ try{
+  x.p.scheduleMode='SINGLE_CAPACITY_VERIFIED_PLAN_APPROVAL';
+  const originalDashboard=x.orders.targeting.dashboard;
+  x.orders.targeting.dashboard=async()=>{
+   const current=await originalDashboard();
+   current.candidates[0].events.push({
+    sourceType:'PSC_PORT_CALL',sourceEventId:'PSC-NEW',
+    eventKey:'PSC-EVENT-NEW',sourceReference:'PSC-NEW',
+    approval:'SOURCE_FINAL',contextNote:null,
+    evidenceIds:['NEW-EVIDENCE'],provenance:null
+   });
+   return current;
+  };
+  const saved=await x.approve(),orderId=saved.orders[0].id;
+  await assert.rejects(
+   x.orders.activate({planId:x.p.id,orderId,actor:'inspector@moei.example'}),
+   e=>e.code==='SI_WORK_ORDER_APPROVED_REASONS_CHANGED'&&e.status===409
+  );
+  assert.equal(x.calls.caseCreates,0);
+  const persisted=(await x.orders.byPlan(x.p.id)).orders[0];
+  assert.equal(persisted.status,'PREPARATION_NEEDS_REVIEW');
+  assert.equal(persisted.error,'SI_WORK_ORDER_APPROVED_REASONS_CHANGED');
+ }finally{x.done();}
+});
+
+test('integrated Prepare blocks a changed approval authority for an existing source',async()=>{
+ const x=workspace();
+ try{
+  x.p.scheduleMode='SINGLE_CAPACITY_VERIFIED_PLAN_APPROVAL';
+  const originalDashboard=x.orders.targeting.dashboard;
+  x.orders.targeting.dashboard=async()=>{
+   const current=await originalDashboard();
+   current.candidates[0].events[0].approval='SOURCE_REVIEWED';
+   return current;
+  };
+  const saved=await x.approve(),orderId=saved.orders[0].id;
+  await assert.rejects(
+   x.orders.activate({planId:x.p.id,orderId,actor:'inspector@moei.example'}),
+   e=>e.code==='SI_WORK_ORDER_APPROVED_REASONS_CHANGED'
+  );
+  assert.equal(x.calls.caseCreates,0);
+ }finally{x.done();}
+});

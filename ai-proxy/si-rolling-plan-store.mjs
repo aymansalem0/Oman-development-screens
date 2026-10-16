@@ -253,8 +253,9 @@ export class SiRollingPlanStore{
  async audit(con,id,event,actor,details){
   await con.execute(`INSERT INTO SI_PLAN_ROLLING_AUDIT
     (AUDIT_ID,PLAN_ID,EVENT_CODE,ACTOR,DETAILS_JSON)
-    VALUES(:id,:rollingId,:eventCode,:actor,:details)`,{
-     id:randomUUID(),rollingId:id,eventCode:event,actor,details:json(details)});
+    VALUES(:b_audit_id,:b_plan_id,:b_event_code,:b_actor,:b_details_json)`,{
+     b_audit_id:randomUUID(),b_plan_id:id,b_event_code:event,
+     b_actor:actor,b_details_json:json(details)});
  }
  async mutate(id,expectedRevision,actor,operation,event='UPDATED'){
   if(!Number.isInteger(expectedRevision)||!text(actor,160))
@@ -694,23 +695,28 @@ export class SiRollingPlanStore{
   return this.db(async con=>{
    try{
     const found=await this.query(con,
-     'SELECT STATE_JSON FROM SI_PLAN_ROLLING WHERE PLAN_ID=:id FOR UPDATE',
-     {id:planId});
+     'SELECT STATE_JSON FROM SI_PLAN_ROLLING WHERE PLAN_ID=:b_plan_id FOR UPDATE',
+     {b_plan_id:planId});
     if(!found.length)fail('SI_ROLLING_PLAN_NOT_FOUND',404);
     const value=link(from(found[0].STATE_JSON));
     if(value.unchanged){await con.rollback();return value.next;}
     const next=value.next;
     const updated=await con.execute(
-     'UPDATE SI_PLAN_ROLLING_VESSEL SET CASE_ID=:caseId WHERE PLAN_ID=:id '+
-     'AND IMO=:imo AND CASE_ID IS NULL',{caseId,id:planId,imo});
+     'UPDATE SI_PLAN_ROLLING_VESSEL SET CASE_ID=:b_case_id '+
+     'WHERE PLAN_ID=:b_plan_id AND IMO=:b_imo AND CASE_ID IS NULL',{
+      b_case_id:caseId,b_plan_id:planId,b_imo:imo});
     if(updated.rowsAffected!==1)fail('SI_ROLLING_CASE_LINK_CONFLICT',409);
-    await con.execute('UPDATE SI_PLAN_ROLLING SET VERSION_NO=:version, '+
-     'STATE_JSON=:state,UPDATED_BY=:actor,UPDATED_AT=SYSTIMESTAMP '+
-     'WHERE PLAN_ID=:id',{id:planId,version:next.revision,state:json(next),actor});
+    await con.execute('UPDATE SI_PLAN_ROLLING SET VERSION_NO=:b_version_no, '+
+     'STATE_JSON=:b_state_json,UPDATED_BY=:b_actor,UPDATED_AT=SYSTIMESTAMP '+
+     'WHERE PLAN_ID=:b_plan_id',{
+      b_plan_id:planId,b_version_no:next.revision,
+      b_state_json:json(next),b_actor:actor});
     await con.execute('INSERT INTO SI_PLAN_ROLLING_VERSION '+
      "(PLAN_ID,VERSION_NO,STATE_JSON,ACTOR,EVENT_CODE) "+
-     "VALUES(:id,:version,:state,:actor,'WORK_ORDER_CASE_LINKED')",{
-      id:planId,version:next.revision,state:json(next),actor});
+     "VALUES(:b_plan_id,:b_version_no,:b_state_json,:b_actor,"+
+     "'WORK_ORDER_CASE_LINKED')",{
+      b_plan_id:planId,b_version_no:next.revision,
+      b_state_json:json(next),b_actor:actor});
     await this.audit(con,planId,'WORK_ORDER_CASE_LINKED',actor,
      {imo,caseId,scheduleId});
     await con.commit();return next;

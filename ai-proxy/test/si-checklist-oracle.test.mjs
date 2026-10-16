@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import {mkdtempSync,writeFileSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
-import {OracleSiChecklistLibrary,OracleSiChecklistField,caseItemOracleId} from '../si-checklist-oracle.mjs';
+import {OracleSiChecklistLibrary,OracleSiChecklistField,caseItemOracleId,
+ qualifyChecklistCaseBinds} from '../si-checklist-oracle.mjs';
 const uuid='11111111-1111-4111-8111-111111111111';
 const clone=x=>structuredClone(x);
 class MemoryOracle{
@@ -62,13 +63,15 @@ class MockConnection{
    return obj(entry?[{SNAPSHOT_JSON:JSON.stringify(entry)}]:[]);
   }
   if(c.startsWith('INSERT INTO SI_CHK_CASE_RUN')){
-   const e=JSON.parse(b.snapshot.val);this.db.cases.set(e.caseId,e);
+   const e=JSON.parse((b.b_snapshot||b.snapshot).val);this.db.cases.set(e.caseId,e);
    return {rowsAffected:1};
   }
   if(c.startsWith('UPDATE SI_CHK_CASE_RUN')){
-   const existing=this.db.cases.get(b.id);
-   if(!existing||existing.version!==b.previous)return {rowsAffected:0};
-   this.db.cases.set(b.id,JSON.parse(b.snapshot.val));return {rowsAffected:1};
+   const id=b.b_id||b.id,previous=b.b_previous??b.previous;
+   const existing=this.db.cases.get(id);
+   if(!existing||existing.version!==previous)return {rowsAffected:0};
+   this.db.cases.set(id,JSON.parse((b.b_snapshot||b.snapshot).val));
+   return {rowsAffected:1};
   }
   if(c.startsWith('SELECT CASE_ID FROM SI_INSPECTION_CASE'))return obj([{CASE_ID:uuid}]);
   if(c.startsWith('SELECT'))throw new Error('MOCK_UNEXPECTED_SELECT '+c.slice(0,100));
@@ -223,4 +226,43 @@ test('Publish draft uses Oracle-safe named binds for all normalized checklist re
   assert.equal(x.db.revisions.get(draft.id+':1').title,'POC Safe Bind Publish');
   assert.equal((await x.library.get(draft.id)).revision,1);
  }finally{x.done();}
+});
+
+test('Oracle mandatory case initialization binds are fully qualified and never use reserved words',async()=>{
+ const x=rig();try{
+  await x.library.initialize();await x.field.initialize();
+  const draft=await x.library.create(t('Safe initial case checklist'),'admin');
+  await x.library.publish(draft.id,'admin',draft.updatedAt);
+  await x.field.start(uuid,'inspector');
+  const tables=['SI_CHK_CASE_RUN','SI_CHK_CASE_ITEM','SI_CHK_AUDIT'];
+  for(const table of tables){
+   // Library template-publish audits share SI_CHK_AUDIT, but only the
+   // inspector's CASE RUN audits are in scope for this regression.
+   const writes=x.db.log.filter(w=>w.sql.startsWith('INSERT INTO '+table+' ')&&
+    (table!=='SI_CHK_AUDIT'||w.sql.includes('(AUDIT_ID,RUN_ID,')));
+   assert.ok(writes.length>0,'expected '+table+' initialization');
+   for(const w of writes){
+    const used=[...w.sql.matchAll(/:([A-Z_][A-Z_0-9]*)/g)].map(m=>m[1]);
+    assert.ok(used.length>0);
+    assert.ok(used.every(name=>/^B_[A-Z_][A-Z_0-9]*$/.test(name)),
+     'case writes must not use reserved Oracle host identifiers');
+    assert.deepEqual([...new Set(used)].sort(),
+      Object.keys(w.binds).map(x=>x.toUpperCase()).sort());
+   }
+  }
+ }finally{x.done();}
+});
+
+test('qualified case-write SQL rejects mismatched bind objects before reaching Oracle',()=>{
+ const ok=qualifyChecklistCaseBinds(
+  'INSERT INTO SI_CHK_AUDIT(AUDIT_ID,RUN_ID) VALUES(:id,:run)',{
+   id:'A',run:'B'
+  });
+ assert.equal(ok.sql,
+  'INSERT INTO SI_CHK_AUDIT(AUDIT_ID,RUN_ID) VALUES(:b_id,:b_run)');
+ assert.deepEqual(ok.binds,{b_id:'A',b_run:'B'});
+ assert.throws(
+  ()=>qualifyChecklistCaseBinds('SELECT :id,:missing FROM DUAL',{id:'A'}),
+  /SI_CHECKLIST_ORACLE_BIND_MISMATCH/
+ );
 });
