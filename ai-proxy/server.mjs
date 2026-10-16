@@ -1730,7 +1730,8 @@ const server = createServer(async (req, res) => {
       if(path==='/api/si/v1/maritime-scheduling/my-work-orders'&&req.method==='GET'){
         if(!siScheduleOrders.ready)
           return respond(res,503,{error:'SI_SCHED_MIGRATION_019_REQUIRED'});
-        dashboards.assertRole(req,'EDITOR');
+        // Assignment-scoped read: a VIEWER inspector must not need a
+        // dashboard editor secret or broad supervisor privileges.
         const identity=moeiAuth.require(req);
         const actor=identity.email||identity.username;
         return respond(res,200,{status:'ok',orders:await siScheduleOrders.mine(actor),
@@ -1741,14 +1742,36 @@ const server = createServer(async (req, res) => {
       // Inspector workspace: all reads and writes are bound to the
       // authenticated session's assigned order, never a client-supplied IMO
       // or inspector ID. No unrelated vessel dossiers are exposed.
-      const myOrder=/^\/api\/si\/v1\/maritime-scheduling\/my-work-orders\/([a-f0-9-]{36})(?:\/(dossier|guide)(?:\/(answers|ai))?)?$/.exec(path);
+      const myOrder=/^\/api\/si\/v1\/maritime-scheduling\/my-work-orders\/([a-f0-9-]{36})(?:\/(dossier|guide|activate|start)(?:\/(answers|ai))?)?$/.exec(path);
       if(myOrder){
-        dashboards.assertRole(req,'EDITOR');
-        const session=moeiAuth.require(req,{mutate:req.method==='POST'});
+        // Both ADMIN and VIEWER inspectors are allowed here; every order
+        // is independently checked against the authenticated session.
+        // Do not use the dashboard editor/publisher key as inspector IAM.
+        const session=moeiAuth.require(req);
+        if(req.method==='POST'&&req.headers['x-moei-csrf']!=='1')
+          throw new MoeiAuthError('MOEI_CSRF_REQUIRED',403);
         const actor=session.email||session.username;
         const orderId=myOrder[1],area=myOrder[2],task=myOrder[3];
         if(!siScheduleOrders.ready)
           return respond(res,503,{error:'SI_SCHED_MIGRATION_019_REQUIRED'});
+        // Inspector-only mutations are deliberately separated from the
+        // supervisor /plans/:id/work-orders/:id/{scope,activate,start} API.
+        // Never trust a plan ID, employee ID or delegation flag in the body.
+        if(!task&&req.method==='POST'&&(area==='activate'||area==='start')){
+          const {schedule}=await siScheduleOrders.mineOrder(actor,orderId);
+          const body=await requestJson(req,4096);
+          if(body.confirmPocDelegation===true||body.generateAi===true||
+             body.confirmAiCost===true)
+            return respond(res,403,{error:'SI_INSPECTOR_SUPERVISOR_OR_PAID_AI_ACTION_DENIED'});
+          const order=area==='activate'
+            ?await siScheduleOrders.activate({
+              planId:schedule.planId,orderId,actor,
+              generateAi:false,confirmAiCost:false})
+            :await siScheduleOrders.startField({
+              planId:schedule.planId,orderId,actor,
+              confirmPocDelegation:false});
+          return respond(res,200,{status:'ok',order});
+        }
         if(area==='dossier'&&!task&&req.method==='GET'){
           const {schedule,order}=await siScheduleOrders.mineOrder(actor,orderId);
           if(order.caseId){
