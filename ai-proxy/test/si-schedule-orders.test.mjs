@@ -413,3 +413,92 @@ test('Oracle work-order audit failure retains safe failure stage and rolls back'
   assert.equal(rollbacks,1);
  }finally{x.done();}
 });
+
+test('integrated verified-source preparation excludes unverified review evidence without changing approved reasons',async()=>{
+ const x=workspace();
+ try{
+  x.p.scheduleMode='SINGLE_CAPACITY_VERIFIED_PLAN_APPROVAL';
+  const originalDashboard=x.orders.targeting.dashboard;
+  x.orders.targeting.dashboard=async()=>{
+   const current=await originalDashboard();
+   current.candidates[0].events.push({
+    sourceType:'PSC_PORT_CALL',sourceEventId:'PSC-UNVERIFIED',
+    eventKey:'PSC-EVENT-UNVERIFIED',sourceReference:'PSC-UNVERIFIED',
+    approval:'UNVERIFIED',contextNote:'For review only',
+    evidenceIds:['UNVERIFIED-EVIDENCE'],provenance:'POC_SIMULATOR'
+   });
+   current.candidates.push({
+    imo:'9400643',key:'CK-UNVERIFIED',regime:'UAE_SERVICE_INSPECTION',
+    status:'PENDING_REVIEW',events:[{
+     sourceType:'SERVICE_REQUEST',sourceEventId:'SR-UNVERIFIED',
+     eventKey:'SR-EVENT-UNVERIFIED',sourceReference:'SR-UNVERIFIED',
+     approval:'UNVERIFIED',evidenceIds:[],provenance:'POC_SIMULATOR'
+    }]
+   });
+   return current;
+  };
+  const originalDecide=x.orders.targeting.decideBatch;
+  x.orders.targeting.decideBatch=async args=>{
+   assert.equal(args.verifiedOnly,true);
+   assert.deepEqual(args.items[0].candidateKeys,['CK-1']);
+   assert.deepEqual(args.items[0].regimes,['PORT_STATE_CONTROL']);
+   assert.deepEqual(args.items[0].inspectionReasons,reasons);
+   return originalDecide(args);
+  };
+  const saved=await x.approve(),orderId=saved.orders[0].id;
+  const prepared=await x.orders.activate({planId:x.p.id,orderId,
+   actor:'inspector@moei.example'});
+  assert.equal(prepared.status,'READY_FOR_SCOPE_REVIEW');
+  assert.equal(x.calls.caseCreates,1);
+  assert.equal(x.calls.checklistCreates,1);
+  assert.equal(prepared.aiStatus,'NOT_REQUESTED');
+  assert.equal((await x.orders.byPlan(x.p.id)).orders[0].status,
+   'READY_FOR_SCOPE_REVIEW');
+ }finally{x.done();}
+});
+
+test('integrated Prepare blocks newly verified reasons until supervisor re-approves source scope',async()=>{
+ const x=workspace();
+ try{
+  x.p.scheduleMode='SINGLE_CAPACITY_VERIFIED_PLAN_APPROVAL';
+  const originalDashboard=x.orders.targeting.dashboard;
+  x.orders.targeting.dashboard=async()=>{
+   const current=await originalDashboard();
+   current.candidates[0].events.push({
+    sourceType:'PSC_PORT_CALL',sourceEventId:'PSC-NEW',
+    eventKey:'PSC-EVENT-NEW',sourceReference:'PSC-NEW',
+    approval:'SOURCE_FINAL',contextNote:null,
+    evidenceIds:['NEW-EVIDENCE'],provenance:null
+   });
+   return current;
+  };
+  const saved=await x.approve(),orderId=saved.orders[0].id;
+  await assert.rejects(
+   x.orders.activate({planId:x.p.id,orderId,actor:'inspector@moei.example'}),
+   e=>e.code==='SI_WORK_ORDER_APPROVED_REASONS_CHANGED'&&e.status===409
+  );
+  assert.equal(x.calls.caseCreates,0);
+  const persisted=(await x.orders.byPlan(x.p.id)).orders[0];
+  assert.equal(persisted.status,'PREPARATION_NEEDS_REVIEW');
+  assert.equal(persisted.error,'SI_WORK_ORDER_APPROVED_REASONS_CHANGED');
+ }finally{x.done();}
+});
+
+test('integrated Prepare blocks a changed approval authority for an existing source',async()=>{
+ const x=workspace();
+ try{
+  x.p.scheduleMode='SINGLE_CAPACITY_VERIFIED_PLAN_APPROVAL';
+  const originalDashboard=x.orders.targeting.dashboard;
+  x.orders.targeting.dashboard=async()=>{
+   const current=await originalDashboard();
+   current.candidates[0].events[0].approval='SOURCE_REVIEWED';
+   return current;
+  };
+  const saved=await x.approve(),orderId=saved.orders[0].id;
+  await assert.rejects(
+   x.orders.activate({planId:x.p.id,orderId,actor:'inspector@moei.example'}),
+   e=>e.code==='SI_WORK_ORDER_APPROVED_REASONS_CHANGED'
+  );
+  assert.equal(x.calls.caseCreates,0);
+ }finally{x.done();}
+});
