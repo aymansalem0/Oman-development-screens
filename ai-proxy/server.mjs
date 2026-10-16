@@ -2304,6 +2304,23 @@ const server = createServer(async (req, res) => {
         const {status,...details}=diagnostic;
         return respond(res,status,details);
       }
+      // An untyped Oracle/runtime error during the inspector Prepare action
+      // is NOT a targeting failure. Report an opaque, operation-specific
+      // diagnostic without exposing SQL, binds, personal records or secrets.
+      const inspectorPreparationRoute=
+        /^\/api\/si\/v1\/maritime-scheduling\/my-work-orders\/[a-f0-9-]{36}\/activate$/.test(path)||
+        /^\/api\/si\/v1\/maritime-scheduling\/plans\/[a-f0-9-]{36}\/work-orders\/[a-f0-9-]{36}\/activate$/.test(path);
+      if(req.method==='POST'&&inspectorPreparationRoute){
+        const rawStage=String(e?.scheduleSqlStage||'UNKNOWN');
+        const stage=['WORK_ORDER_STATUS_UPDATE','WORK_ORDER_STATUS_AUDIT']
+          .includes(rawStage)?rawStage:'UNKNOWN';
+        const oracleCode=/^ORA-[0-9]{5}$/.test(String(e?.code||''))
+          ?e.code:null;
+        console.error('[si-work-order] PREPARE_FAILED '+
+          JSON.stringify({stage,oracleCode:oracleCode||'NONE'}));
+        return respond(res,503,{error:'SI_WORK_ORDER_PREPARATION_UNAVAILABLE',
+          stage,oracleCode});
+      }
       const rollingRoute=path==='/api/si/v1/inspection-plans'||
         path.startsWith('/api/si/v1/inspection-plans/');
       // These two modules share the SI router but have different Oracle
