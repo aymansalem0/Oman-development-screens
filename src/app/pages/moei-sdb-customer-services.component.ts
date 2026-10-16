@@ -73,7 +73,12 @@ export class MoeiSdbCustomerServicesComponent implements OnInit{
   // applicant goes straight into the pre-existing guarded SDB wizard.
   // Preview scenario status alone can never authorize an application.
   if(this.proceedAllowed(s)){
-    void this.router.navigate(['/moei/seafarers/sdb',s.profileId]);
+    // Explicit selection starts the existing guarded SDB wizard in the POC.
+    // The applicant/source check still runs on the backend before creating
+    // a DRAFT, and no payment/issuance is executed automatically.
+    void this.router.navigate(['/moei/seafarers/sdb',s.profileId],{
+      queryParams:{startReady:'1',scenario:s.id}
+    });
   }else{
     void this.router.navigate(['/moei/seafarers/services/case',s.id]);
   }
