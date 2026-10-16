@@ -53,8 +53,14 @@ interface A04Dossier{saved?:{status:string;dossier?:{
        'قائمة البنود الإضافية المقترحة بواسطة SI-A04')}}</h2>
       <span class="badge">{{a04?.saved?.dossier?.mock?'POC MOCK':'AIRIA ADVISORY'}}</span>
       <span class="badge">{{a04?.saved?.status||'DRAFT_REVIEW'}}</span></div>
-     <a [routerLink]="['/moei/smart-inspection/preparation',caseId]">
+     <div class="actions">
+      <button class="secondary" type="button" *ngIf="a04?.saved?.status==='APPROVED'&&a04AdditionalItems.length&&execution"
+       [disabled]="busy||execution?.status!=='IN_PROGRESS'||!auth.isAdmin"
+       (click)="importA04()" data-testid="si-import-a04-questions">
+       ✦ {{t('Import Approved A04 Questions (No AI Call)','إضافة أسئلة A04 المعتمدة (بدون تشغيل AI)')}}</button>
+      <a [routerLink]="['/moei/smart-inspection/preparation',caseId]">
        {{t('Review & Approve A04 Dossier','مراجعة واعتماد ملف A04')}}</a>
+     </div>
     </header>
     <p>{{t('These AI-proposed optional questions are not statutory mandatory checks. They are separate from the frozen published checklist and require supervisor dossier review and scope approval before official inclusion.',
      'هذه البنود الاختيارية مقترحات AI وليست بنودًا إلزامية تنظيمية. تبقى مستقلة عن القائمة المنشورة وتحتاج اعتماد الدوسيه ونطاق المعاينة قبل إدراجها رسميًا.')}}</p>
@@ -566,6 +572,17 @@ export class SiChecklistExecutionComponent implements OnInit,OnDestroy{
     },error:e=>{this.uploadingItem='';this.fail(e);}});
   };
   reader.readAsDataURL(file);
+ }
+ importA04():void{
+  if(!this.execution||this.busy||this.a04?.saved?.status!=='APPROVED')return;
+  this.busy=true;this.error='';
+  this.api.importA04Questions(this.caseId,this.execution.version).subscribe({
+   next:r=>{this.busy=false;this.message=this.t(
+    r.imported+' reviewed A04 advisory questions made available in the field checklist.',
+    'تم إتاحة '+r.imported+' سؤال استشاري من A04 بعد مراجعة المشرف.');
+    this.refreshCase();
+   },error:e=>this.fail(e)
+  });
  }
  generateQuestions():void{
   if(!this.execution||this.busy||!this.aiStatus?.builderConfigured)return;
