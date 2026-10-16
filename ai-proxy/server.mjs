@@ -2240,7 +2240,8 @@ const server = createServer(async (req, res) => {
         console.error('[si-approval] FAILED '+JSON.stringify({
           stage:diagnostic.stage,
           failureType:diagnostic.failureType,
-          oracleCode:diagnostic.oracleCode||'NONE'
+          oracleCode:diagnostic.oracleCode||'NONE',
+          scheduleSqlStage:diagnostic.scheduleSqlStage||'NONE'
         }));
         const {status,...details}=diagnostic;
         return respond(res,status,details);
