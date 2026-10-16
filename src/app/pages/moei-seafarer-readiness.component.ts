@@ -45,6 +45,10 @@ export class MoeiSeafarerReadinessComponent implements OnInit, OnDestroy {
   error = "";
   notice = "";
   previewId = "";
+  // One-shot intent from an explicitly chosen READY POC scenario.
+  // No payment or issuance is triggered by selecting a scenario.
+  autoStartReady = false;
+  autoStartAttempted = false;
   canPreview = false;
   demoDirectory: SdbProfile[] = [];
   step = 0;
@@ -84,6 +88,9 @@ export class MoeiSeafarerReadinessComponent implements OnInit, OnDestroy {
   ngOnInit() {
     this.view = this.route.snapshot.data["view"] || "readiness";
     this.selectedId = this.route.snapshot.paramMap.get("profileId") || "";
+    this.autoStartReady = this.view === "services" &&
+      this.route.snapshot.queryParamMap.get("startReady") === "1" &&
+      !!this.selectedId;
     this.load();
     this.subscriptions.add(
       interval(30000).subscribe(() => {
@@ -258,6 +265,21 @@ export class MoeiSeafarerReadinessComponent implements OnInit, OnDestroy {
           if (this.view === "services" && !this.app && p) {
             const a = p.applications[p.applications.length - 1];
             if (a) this.restore(a);
+          }
+          // A READY scenario selected by an operator goes straight into the
+          // existing SDB draft wizard, not a second readiness dead-end.
+          // Re-check genuine profile readiness; non-READY profiles cannot
+          // bypass source/medical/academy/company holds.
+          if (this.autoStartReady && !this.autoStartAttempted && p) {
+            this.autoStartAttempted = true;
+            if (p.readiness.status === "READY" && !this.app) {
+              this.begin(); // backend also revalidates source readiness
+            } else if (p.readiness.status !== "READY") {
+              this.error = this.t(
+                "Source readiness changed. Resolve the requirements before applying.",
+                "تغيرت جاهزية البحار لدى المصدر. يجب استكمال المتطلبات قبل التقديم."
+              );
+            }
           }
         },
         error: (e) => {
