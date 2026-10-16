@@ -433,8 +433,39 @@ const siLifecycle=new SiInspectionLifecycle({mode:dbMode,oracleRepository:reposi
 const siScheduleOrders=new SiScheduleOrders({
  mode:dbMode,oracleRepository:repository,rolling:siRollingPlans,
  targeting:siTargeting,preparation:siPreparation,
- checklists:siChecklistField,lifecycle:siLifecycle,cases
+ checklists:siChecklistField,lifecycle:siLifecycle,cases,
+ inspectorMapping:email=>{
+  if(typeof email!=='string'||!email.includes('@'))return null;
+  try{const account=googleUsers.find(email);
+   return account?.active?account.inspectorId||null:null;
+  }catch{return null;}
+ }
 });
+/** Existing personnel and scheduled assignments only; no arbitrary
+ * session-to-workforce mapping or staff records invented in the browser. */
+async function selectableApprovedInspectors(){
+ const map=new Map();
+ const registered=siErp.snapshot?.data?.Inspectors||[];
+ for(const record of registered){
+  if(!['Y',true,'TRUE','ACTIVE'].includes(record.active))continue;
+  const id=String(record.inspector_id||'').trim();
+  if(!id)continue;
+  map.set(id,{id,name:record.display_name||id,
+   source:'ERP_WORKFORCE',active:true});
+ }
+ if(siScheduleOrders.ready){
+  const schedules=await siScheduleOrders.all();
+  for(const schedule of schedules)for(const order of schedule.orders||[]){
+   const id=order.assignment?.inspectorId;
+   if(!id)continue;
+   if(!map.has(id))map.set(id,{id,name:order.assignment?.inspectorName||id,
+     source:schedule.mode==='POC_MOCK'?'POC_APPROVED_SCHEDULE':'APPROVED_SCHEDULE',
+     active:true,hasAssignedOrders:true});
+   else map.get(id).hasAssignedOrders=true;
+  }
+ }
+ return [...map.values()].sort((a,b)=>a.name.localeCompare(b.name));
+}
 /** Server-only assignment guard reused by every inspector-facing route. */
 async function assignedGuidedView(sessionActor,orderId){
  const {schedule,order}=await siScheduleOrders.mineOrder(sessionActor,orderId);
@@ -754,12 +785,26 @@ const server = createServer(async (req, res) => {
       return respond(res,201,{user:googleUsers.add(data,actor.email||actor.username)});
     }catch(e){return respond(res,e.status||400,{error:e.code||'MOEI_USERS_REQUEST_FAILED'});}
   }
+  if(path==='/api/moei/admin/inspectors'&&req.method==='GET'){
+    try{
+      const actor=moeiAuth.require(req);
+      if(actor.role!=='ADMIN')throw new MoeiAuthError('MOEI_ADMIN_REQUIRED',403);
+      return respond(res,200,{inspectors:await selectableApprovedInspectors()});
+    }catch(e){
+      return respond(res,e.status||503,{error:e.code||'MOEI_INSPECTOR_DIRECTORY_UNAVAILABLE'});
+    }
+  }
   if(path.startsWith('/api/moei/admin/users/')&&req.method==='PATCH'){
     try{
       const actor=moeiAuth.require(req,{mutate:true});
       if(actor.role!=='ADMIN')throw new MoeiAuthError('MOEI_ADMIN_REQUIRED',403);
       const email=decodeURIComponent(path.slice('/api/moei/admin/users/'.length));
       const data=await requestJson(req,2048);
+      if(Object.hasOwn(data,'inspectorId')&&data.inspectorId!==null){
+       const roster=await selectableApprovedInspectors();
+       if(!roster.some(x=>x.id===data.inspectorId))
+        return respond(res,422,{error:'MOEI_INSPECTOR_NOT_IN_ACTIVE_ROSTER'});
+      }
       return respond(res,200,{user:googleUsers.update(email,data,actor.email||actor.username)});
     }catch(e){return respond(res,e.status||400,{error:e.code||'MOEI_USERS_REQUEST_FAILED'});}
   }

@@ -94,3 +94,24 @@ test('Google OIDC requires state cookie, PKCE and signed issuer/audience/nonce/v
  await assert.rejects(oidc.callback(request(tampered.cookie.split(';')[0]),
    {state:state2,code:'second-code'}),/MOEI_GOOGLE_ID_TOKEN_INVALID/);
 });
+
+test('approved Google users persist unique ERP inspector association without changing access role',()=>{
+ const f=fixture();
+ try{
+  const email='inspector.test@gmail.com',other='other.inspector@gmail.com';
+  f.users.add({email,role:'VIEWER'},BOOTSTRAP_EMAIL);
+  f.users.add({email:other,role:'ADMIN'},BOOTSTRAP_EMAIL);
+  f.users.update(email,{inspectorId:'ERP-INS-007'},BOOTSTRAP_EMAIL);
+  assert.equal(f.users.list().find(x=>x.email===email).inspectorId,'ERP-INS-007');
+  assert.equal(f.users.find(email).role,'VIEWER');
+  assert.throws(()=>f.users.update(other,{inspectorId:'ERP-INS-007'},BOOTSTRAP_EMAIL),
+   e=>e.code==='MOEI_INSPECTOR_ALREADY_LINKED');
+  const reopened=new MoeiGoogleUsers({path:f.users.path});
+  assert.equal(reopened.find(email).inspectorId,'ERP-INS-007');
+  reopened.update(email,{inspectorId:null},BOOTSTRAP_EMAIL);
+  reopened.update(other,{inspectorId:'ERP-INS-007'},BOOTSTRAP_EMAIL);
+  assert.equal(reopened.find(other).inspectorId,'ERP-INS-007');
+  assert.throws(()=>reopened.update(email,{inspectorId:'* INJECTED'},BOOTSTRAP_EMAIL),
+   e=>e.code==='MOEI_INSPECTOR_ID_INVALID'||e.code==='MOEI_INSPECTOR_ALREADY_LINKED');
+ }finally{f.done();}
+});

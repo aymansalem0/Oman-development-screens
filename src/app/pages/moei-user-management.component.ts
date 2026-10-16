@@ -3,12 +3,14 @@ import {HttpClient,HttpErrorResponse} from '@angular/common/http';
 import {Component,OnInit} from '@angular/core';
 import {FormsModule} from '@angular/forms';
 import {RouterLink} from '@angular/router';
+import {forkJoin} from 'rxjs';
 import {LanguageService} from '../services/language.service';
 import {MoeiAuthService} from '../services/moei-auth.service';
 
+interface ExistingInspector{id:string;name:string;source:string;hasAssignedOrders?:boolean}
 interface AllowedUser{
  email:string;role:'ADMIN'|'VIEWER';active:boolean;linkedGoogleAccount:boolean;
- addedAt?:string;addedBy?:string
+ inspectorId?:string|null;addedAt?:string;addedBy?:string
 }
 @Component({
  selector:'app-moei-user-management',
@@ -46,13 +48,29 @@ interface AllowedUser{
        {{copy('Refresh','تحديث')}}</button></div>
     <div class="table-scroll">
      <table><thead><tr><th>{{copy('Google email','البريد الإلكتروني')}}</th>
-      <th>{{copy('Role','الصلاحية')}}</th><th>{{copy('Status','الحالة')}}</th>
+      <th>{{copy('Role','الصلاحية')}}</th><th>{{copy('Inspector / ERP employee','المفتش المرتبط')}}</th><th>{{copy('Status','الحالة')}}</th>
       <th>{{copy('Actions','الإجراءات')}}</th></tr></thead>
       <tbody><tr *ngFor="let user of users">
        <td><strong>{{user.email}}</strong><small>{{user.linkedGoogleAccount?
         copy('Google identity linked','تم الربط بحساب Google'):
         copy('Not signed in yet','لم يسجل الدخول بعد')}}</small></td>
        <td><span class="badge">{{user.role}}</span></td>
+       <td class="inspector-map">
+        <select [attr.aria-label]="copy('Inspector for','المفتش لحساب')+' '+user.email"
+         [(ngModel)]="inspectorDraft[user.email]" [disabled]="busy||!user.active"
+         [attr.data-user-inspector]="user.email">
+         <option value="">{{copy('Not assigned','غير مرتبط بمفتش')}}</option>
+         <option *ngFor="let emp of inspectors" [value]="emp.id">
+          {{emp.name}} · {{emp.id}}{{emp.hasAssignedOrders?' ✓':''}}
+         </option>
+        </select>
+        <button class="secondary" type="button" (click)="saveInspector(user)"
+         [disabled]="busy||!user.active||inspectorDraft[user.email]===(user.inspectorId||'')">
+         {{copy('Save Inspector','حفظ المفتش')}}</button>
+        <small>{{user.inspectorId?
+         copy('Mapped to existing inspector ID','مرتبط بمفتش موجود')+' '+user.inspectorId:
+         copy('No employee association','لا يوجد ربط بموظف')}}</small>
+       </td>
        <td><span [class.inactive]="!user.active">{{user.active?
          copy('Active','نشط'):copy('Disabled','موقوف')}}</span></td>
        <td><button type="button" class="secondary" [disabled]="busy"
@@ -65,7 +83,11 @@ interface AllowedUser{
        </td>
       </tr></tbody>
      </table></div>
-    <p class="note">{{copy('Changes are saved on the server. Disabling a user invalidates their active session.',
+    <p class="note">{{copy('An inspector association is separate from ADMIN/VIEWER permission. Assign a real inspector from the current approved ERP roster or schedule; My Inspections shows only that employee’s work orders. Changing the mapping takes effect on refresh without changing the approved inspection plan.',
+      'ربط المفتش مستقل عن صلاحية ADMIN أو VIEWER. اختر مفتشًا فعليًا من كشف القوى العاملة أو الخطة المعتمدة، وستظهر له في «معايناتي» السفن المسندة لذلك المفتش فقط دون تغيير الخطة المعتمدة.')}}</p>
+    <p class="note" *ngIf="!inspectors.length">{{copy('No existing inspector roster is available. Import ERP inspectors or approve a schedule first; no placeholder inspectors are generated.',
+     'لا يوجد كشف مفتشين متاح. استورد مفتشي ERP أو اعتمد خطة أولًا؛ لن ننشئ مفتشين افتراضيين.')}}</p>
+        <p class="note">{{copy('Changes are saved on the server. Disabling a user invalidates their active session.',
        'يتم حفظ التغييرات على الخادم. إيقاف المستخدم ينهي صلاحيته للدخول فوراً.')}}</p>
    </section>
   </ng-container>
@@ -93,20 +115,29 @@ interface AllowedUser{
  .badge{background:#eaf5f2;border-radius:7px;padding:6px 10px}
  .inactive{color:#bd453b}.alert{background:#fff0ef;color:#ae382d;padding:13px;border-radius:9px}
  .success{background:#e2f6eb;color:#0c6c42;padding:13px;border-radius:9px}
- .note{font-size:12px;color:#647c89}
+ .note{font-size:12px;color:#647c89;line-height:1.8}
+ .inspector-map select{max-width:240px;min-width:195px;font-size:11px}
+ .inspector-map .secondary{font-size:11px;white-space:nowrap}
  @media(max-width:600px){.users-wrap{padding:14px}header{display:block}}
  `]
 })
 export class MoeiUserManagementComponent implements OnInit{
- users:AllowedUser[]=[];newEmail='';newRole:'ADMIN'|'VIEWER'='VIEWER';
+ users:AllowedUser[]=[];inspectors:ExistingInspector[]=[];
+ inspectorDraft:Record<string,string>={};newEmail='';newRole:'ADMIN'|'VIEWER'='VIEWER';
  busy=false;error='';success='';
  constructor(private http:HttpClient,public auth:MoeiAuthService,public lang:LanguageService){}
  copy(en:string,ar:string):string{return this.lang.pick(en,ar);}
  ngOnInit():void{this.auth.check().subscribe(ok=>{if(ok&&this.auth.isAdmin)this.refresh();});}
  refresh():void{
   this.busy=true;this.error='';
-  this.http.get<{users:AllowedUser[]}>('/api/moei/admin/users').subscribe({
-   next:r=>{this.users=r.users;this.busy=false;},
+  forkJoin({
+    users:this.http.get<{users:AllowedUser[]}>('/api/moei/admin/users'),
+    roster:this.http.get<{inspectors:ExistingInspector[]}>('/api/moei/admin/inspectors')
+  }).subscribe({
+   next:r=>{this.users=r.users.users;this.inspectors=r.roster.inspectors;
+     this.inspectorDraft=Object.fromEntries(this.users.map(u=>[
+       u.email,u.inspectorId||''
+     ]));this.busy=false;},
    error:e=>this.failed(e)
   });
  }
@@ -123,11 +154,22 @@ export class MoeiUserManagementComponent implements OnInit{
   if(this.busy)return;
   this.update(user,{active:!user.active});
  }
+ saveInspector(user:AllowedUser):void{
+  if(this.busy)return;
+  const requested=this.inspectorDraft[user.email]||null;
+  // The administrator selects ONLY current roster values. The backend
+  // validates again and prevents one employee linked to two active users.
+  if(requested&&!this.inspectors.some(e=>e.id===requested)){
+   this.error=this.copy('Select an existing inspector from the approved roster.',
+     'اختر مفتشًا موجودًا ضمن الكشف المعتمد.');return;
+  }
+  this.update(user,{inspectorId:requested});
+ }
  changeRole(user:AllowedUser):void{
   if(this.busy)return;
   this.update(user,{role:user.role==='ADMIN'?'VIEWER':'ADMIN'});
  }
- private update(user:AllowedUser,changes:{active?:boolean;role?:'ADMIN'|'VIEWER'}):void{
+ private update(user:AllowedUser,changes:{active?:boolean;role?:'ADMIN'|'VIEWER';inspectorId?:string|null}):void{
   this.busy=true;this.error='';this.success='';
   this.http.patch('/api/moei/admin/users/'+encodeURIComponent(user.email),changes).subscribe({
    next:()=>{this.success=this.copy('Account updated.','تم تعديل الحساب.');this.refresh();},
@@ -140,6 +182,12 @@ export class MoeiUserManagementComponent implements OnInit{
   this.error=code==='MOEI_LAST_ADMIN_REQUIRED'?
    this.copy('At least one active administrator is required.',
      'يجب الاحتفاظ بحساب مدير واحد نشط على الأقل.'):
+   code==='MOEI_INSPECTOR_ALREADY_LINKED'?
+   this.copy('This employee is already linked to another approved active user.',
+    'هذا المفتش مرتبط بالفعل بحساب آخر نشط.'):
+   code==='MOEI_INSPECTOR_NOT_IN_ACTIVE_ROSTER'?
+   this.copy('Inspector not present in the approved ERP/schedule roster.',
+    'المفتش غير موجود في كشف المفتشين أو الخطة المعتمدة.'):
    code==='MOEI_USER_ALREADY_EXISTS'?
    this.copy('Account already exists. Enable it instead.','الحساب موجود بالفعل، يمكنك تفعيله.'):
    this.copy('Unable to save. Check permissions, email and server connection.',

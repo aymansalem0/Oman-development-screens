@@ -3,10 +3,14 @@
  * from the MOEI session identity to a verified ERP inspector ID.
  * Client-supplied actor or supervisor name is never an authorization source.
  */
-export function resolveAssignedInspector(actor, assignment, raw=process.env.SI_V2_INSPECTOR_IDENTITY_MAP_JSON||'{}'){
+export function resolveAssignedInspector(actor, assignment,
+ raw=process.env.SI_V2_INSPECTOR_IDENTITY_MAP_JSON||'{}',persistedInspectorId=null){
  const email=typeof actor==='string'?actor.trim().toLowerCase():'';
  const id=typeof assignment?.inspectorId==='string'?assignment.inspectorId.trim():'';
  if(!email||!id)return null;
+ if(typeof persistedInspectorId==='string'&&persistedInspectorId===id)
+  return {id,name:assignment.inspectorName||id,
+   source:'ADMIN_VERIFIED_GOOGLE_INSPECTOR_MAPPING'};
  let mappings;
  try{mappings=JSON.parse(raw);}
  catch{return null;}
@@ -27,8 +31,9 @@ export function pocInspectorIdForActor(actor){
  if(!value||value.length>160)return null;
  return 'POC-MY-'+createHash('sha256').update(value).digest('hex').slice(0,16).toUpperCase();
 }
-export function matchesAssignedInspector(actor,assignment,mode){
- const official=resolveAssignedInspector(actor,assignment);
+export function matchesAssignedInspector(actor,assignment,mode,persistedInspectorId=null){
+ const official=resolveAssignedInspector(actor,assignment,
+   process.env.SI_V2_INSPECTOR_IDENTITY_MAP_JSON||'{}',persistedInspectorId);
  if(official)return official;
  if(mode!=='POC_MOCK'||!assignment?.inspectorId)return null;
  const generated=pocInspectorIdForActor(actor);

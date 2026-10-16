@@ -233,6 +233,11 @@ export class SeafarerWorkspaceService {
   demoScenarios() {
     return this.http.get<SdbServiceScenariosResponse>(this.root + "/demo-scenarios");
   }
+  startReadyDemoJourney(scenarioId:string){
+    return this.http.post<{profileId:string;scenarioId:string;mode:'ISOLATED_POC_DEMO';
+      alreadyProvisioned:boolean;readiness:SdbProfile['readiness']}>(
+      this.root+'/demo-scenarios/ready-journey',{scenarioId});
+  }
   demoScenario(id:string){
     return this.http.get<{mode:string;scenario:SdbServiceScenario}>(
       this.root+'/demo-scenarios/'+encodeURIComponent(id));
