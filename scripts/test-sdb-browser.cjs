@@ -170,6 +170,9 @@ const fs = require("node:fs");
   await page.getByRole("heading", {name:"Registered Seafarers & Sea Service"}).waitFor();
   await page.locator(".person-row").first().waitFor();
   assert.ok(await page.locator(".person-row").count() >= 5);
+  // Newly issued sandbox first-issue books have no recorded sea service.
+  // Select a pre-existing experienced SDB holder with fixture voyages.
+  await page.locator(".person-row").filter({hasText:"Mariam Al Shamsi"}).click();
   await page.getByRole("button", {name:"Sea Service History"}).click();
   await page.locator(".leg").first().waitFor();
   assert.ok((await page.locator(".leg-grid").first().innerText()).includes("Engine power"));
