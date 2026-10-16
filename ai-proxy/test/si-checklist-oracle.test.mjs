@@ -236,7 +236,10 @@ test('Oracle mandatory case initialization binds are fully qualified and never u
   await x.field.start(uuid,'inspector');
   const tables=['SI_CHK_CASE_RUN','SI_CHK_CASE_ITEM','SI_CHK_AUDIT'];
   for(const table of tables){
-   const writes=x.db.log.filter(w=>w.sql.startsWith('INSERT INTO '+table+' '));
+   // Library template-publish audits share SI_CHK_AUDIT, but only the
+   // inspector's CASE RUN audits are in scope for this regression.
+   const writes=x.db.log.filter(w=>w.sql.startsWith('INSERT INTO '+table+' ')&&
+    (table!=='SI_CHK_AUDIT'||w.sql.includes('(AUDIT_ID,RUN_ID,')));
    assert.ok(writes.length>0,'expected '+table+' initialization');
    for(const w of writes){
     const used=[...w.sql.matchAll(/:([A-Z_][A-Z_0-9]*)/g)].map(m=>m[1]);
