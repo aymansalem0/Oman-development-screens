@@ -1,7 +1,7 @@
 import {CommonModule} from '@angular/common';
 import {Component,OnInit} from '@angular/core';
 import {HttpClient} from '@angular/common/http';
-import {Router,RouterLink} from '@angular/router';
+import {ActivatedRoute,Router,RouterLink} from '@angular/router';
 import {NmcNavigationComponent} from '../components/nmc-navigation.component';
 import {LanguageService} from '../services/language.service';
 import {MoeiAuthService} from '../services/moei-auth.service';
@@ -71,6 +71,99 @@ interface Dossier{
    <code>{{me?.inspectorPocId}}</code> ·
    {{t('Added only to synthetic scheduling when POC demo mode is used. Official ERP access still requires the authorised identity map.',
     'تدخل ضمن المهندسين التجريبيين عند تشغيل الجدولة بوضع POC فقط؛ الإسناد الرسمي يتطلب ربط حسابك برقم المفتش في ERP.')}}</p>
+  <section class="inspection-journey" aria-label="My inspection progress" data-testid="si-assigned-inspection-stepper">
+   <header class="journey-head">
+    <div>
+     <small>SMART INSPECTION · WORK ORDER STEPPER</small>
+     <h2>{{t('My Inspection Journey','خطوات تنفيذ المعاينة')}}</h2>
+     <p>{{t('Follow these five steps for the selected vessel. The mandatory published checklist is always prepared first; AI additions are optional and require human approval.',
+      'اتبع الخطوات الخمس للسفينة المختارة. تُجهّز القائمة الإلزامية المنشورة أولًا دائمًا، وإضافات AI اختيارية وتحتاج اعتمادًا بشريًا.')}}</p>
+    </div>
+    <span class="journey-vessel" *ngIf="selected as o">{{o.vesselName||('IMO '+o.imo)}} · IMO {{o.imo}}</span>
+   </header>
+   <ol class="journey-track">
+    <li class="journey-step" [class.complete]="!!selected" [class.current]="!selected" data-testid="si-step-select-vessel">
+     <span class="journey-number">{{selected?'✓':'1'}}</span>
+     <strong>{{t('1. Select Vessel','١. اختيار السفينة')}}</strong>
+     <p>{{t('Choose one of your assigned vessels from the list below.','اختر سفينة من قائمة المعاينات المسندة إليك أدناه.')}}</p>
+     <span class="journey-done" *ngIf="selected">{{t('Vessel selected','تم اختيار السفينة')}}</span>
+     <span class="journey-wait" *ngIf="!selected">{{t('Select a vessel to start','اختر سفينة للبدء')}}</span>
+    </li>
+    <li class="journey-step" [class.complete]="selected?.checklistStatus==='MANDATORY_PUBLISHED_TEMPLATE_SNAPSHOT'"
+     [class.current]="selected && canActivate(selected)" data-testid="si-step-prepare-dossier">
+     <span class="journey-number">{{selected?.checklistStatus==='MANDATORY_PUBLISHED_TEMPLATE_SNAPSHOT'?'✓':'2'}}</span>
+     <strong>{{t('2. Prepare Inspection Dossier','٢. تجهيز ملف المعاينة')}}</strong>
+     <p>{{t('Prepare evidence and pin the mandatory published checklist. No AI request.',
+      'تجهيز الأدلة وتثبيت القائمة الإلزامية المنشورة، من غير تشغيل AI.')}}</p>
+     <ng-container *ngIf="selected as o">
+      <button *ngIf="canActivate(o)" type="button" class="journey-action primary"
+       (click)="activate(o)" [disabled]="busy||loading" data-testid="si-stepper-prepare-action">
+       {{t('Prepare Inspection Dossier','Prepare Inspection Dossier · تجهيز الملف')}}
+      </button>
+      <span *ngIf="!canActivate(o)&&o.checklistStatus==='MANDATORY_PUBLISHED_TEMPLATE_SNAPSHOT'"
+       class="journey-done">{{t('Mandatory checklist pinned','تم تثبيت القائمة الإلزامية')}}</span>
+      <span *ngIf="!canActivate(o)&&o.checklistStatus!=='MANDATORY_PUBLISHED_TEMPLATE_SNAPSHOT'"
+       class="journey-wait">{{t('Preparation requires review','التجهيز يحتاج مراجعة')}}</span>
+     </ng-container>
+     <span *ngIf="!selected" class="journey-wait">{{t('Select vessel first','اختر السفينة أولًا')}}</span>
+    </li>
+    <li class="journey-step" [class.ready]="!!selected?.caseId" data-testid="si-step-open-preparation">
+     <span class="journey-number">3</span>
+     <strong>{{t('3. Open Preparation','٣. فتح ملف التحضير')}}</strong>
+     <p>{{t('Review source evidence; authorized admins may request optional A04 and approve its advisory dossier.',
+      'مراجعة أدلة المصدر، ويمكن للمسؤول المخوّل تشغيل A04 اختياريًا ومراجعة توصياته.')}}</p>
+     <a *ngIf="selected?.caseId && auth.isAdmin" class="journey-action"
+      [routerLink]="['/moei/smart-inspection/preparation',selected!.caseId]"
+      [queryParams]="{orderId:selected!.orderId}" data-testid="si-stepper-open-preparation">
+      {{t('Open Preparation','فتح Preparation')}}
+     </a>
+     <a *ngIf="selected?.caseId && !auth.isAdmin" class="journey-action"
+      href="#vessel-evidence">{{t('Review Prepared Vessel Dossier','عرض دوسيه السفينة المجهز')}}</a>
+     <span *ngIf="!selected?.caseId" class="journey-wait">{{t('Available after dossier preparation','متاح بعد تجهيز الملف')}}</span>
+    </li>
+    <li class="journey-step" [class.ready]="selected?.checklistStatus==='MANDATORY_PUBLISHED_TEMPLATE_SNAPSHOT'"
+     data-testid="si-step-create-checklist">
+     <span class="journey-number">4</span>
+     <strong>{{t('4. Create / Review Checklist','٤. إنشاء ومراجعة القائمة')}}</strong>
+     <p>{{t('The mandatory checklist is created at Step 2. AI questions can supplement it only after human review, never replace it.',
+      'القائمة الإلزامية تُنشأ في الخطوة ٢. أسئلة AI إضافة اختيارية بعد المراجعة البشرية ولا تستبدل الأصلية.')}}</p>
+     <a *ngIf="selected?.caseId&&selected?.checklistStatus==='MANDATORY_PUBLISHED_TEMPLATE_SNAPSHOT'"
+      class="journey-action" [routerLink]="['/moei/smart-inspection/checklists',selected!.caseId]"
+      [queryParams]="{orderId:selected!.orderId}" data-testid="si-stepper-open-checklist">
+      {{t('Open Mandatory & Optional AI Checklist','فتح القائمة الإلزامية وإضافات AI')}}
+     </a>
+     <span *ngIf="selected?.caseId&&selected?.checklistStatus==='MANDATORY_PUBLISHED_TEMPLATE_SNAPSHOT'"
+      class="journey-done">{{t('Mandatory ready · AI optional','الإلزامية جاهزة · AI اختياري')}}</span>
+     <span *ngIf="selected?.checklistStatus!=='MANDATORY_PUBLISHED_TEMPLATE_SNAPSHOT'"
+      class="journey-wait">{{t('Requires published checklist preparation','يتطلب تجهيز القائمة المنشورة')}}</span>
+    </li>
+    <li class="journey-step" [class.current]="selected?.status==='READY_FOR_FIELD'"
+     [class.complete]="selected?.status==='FIELD_STARTED'" data-testid="si-step-execute-order">
+     <span class="journey-number">{{selected?.status==='FIELD_STARTED'?'✓':'5'}}</span>
+     <strong>{{t('5. Execute Work Order','٥. تنفيذ أمر التكليف')}}</strong>
+     <p>{{t('After supervisor scope approval, open the guided screen and fill in the mandatory checklist and approved optional questions.',
+      'بعد اعتماد المشرف للنطاق، افتح شاشة التنفيذ لملء القائمة الإلزامية والأسئلة الاختيارية المعتمدة.')}}</p>
+     <ng-container *ngIf="selected as o">
+      <button *ngIf="o.status==='READY_FOR_FIELD'" type="button" class="journey-action primary"
+       (click)="execute(o)" [disabled]="busy" data-testid="si-stepper-execute-order">
+       {{t('Execute Work Order → Fill Checklist','Execute Work Order ← تعبئة القائمة')}}
+      </button>
+      <button *ngIf="o.status==='FIELD_STARTED'" type="button" class="journey-action primary"
+       (click)="continue(o)" [disabled]="busy" data-testid="si-stepper-resume-checklist">
+       {{t('Continue Filling Checklist','استكمال تعبئة القائمة')}}
+      </button>
+      <a *ngIf="o.status==='READY_FOR_SCOPE_REVIEW'&&auth.isAdmin" class="journey-action"
+       [routerLink]="['/moei/smart-inspection/scheduling/plan',o.planId]">
+       {{t('Supervisor: Approve Scope','المشرف: اعتماد النطاق')}}
+      </a>
+      <span *ngIf="o.status==='READY_FOR_SCOPE_REVIEW'&&!auth.isAdmin" class="journey-wait">
+       {{t('Waiting for supervisor scope approval','في انتظار اعتماد المشرف للنطاق')}}</span>
+      <span *ngIf="canActivate(o)" class="journey-wait">{{t('Complete preparation first','استكمل التجهيز أولًا')}}</span>
+     </ng-container>
+     <span *ngIf="!selected" class="journey-wait">{{t('Not available yet','غير متاح حاليًا')}}</span>
+    </li>
+   </ol>
+  </section>
   <div class="workspace">
    <section class="assignments" aria-label="My assigned vessels">
     <h2>{{t('My Assigned Vessels','السفن المكلف بمعاينتها')}}</h2>
@@ -92,7 +185,7 @@ interface Dossier{
      {{t('No approved work orders match your signed-in inspector ID yet. For this POC, use scheduling Demo Mode so your account appears as a synthetic qualified engineer, and issue a new approved work-order plan.',
       'لا توجد أوامر تكليف معتمدة مرتبطة بحسابك بعد. في الـPOC اختر Demo Mode عند توزيع المهندسين ثم اعتمد الجدولة؛ سيظهر حسابك كمهندس تجريبي لتوزيع الأوامر الجديدة.')}}</p>
    </section>
-   <section class="dossier">
+   <section class="dossier" id="vessel-evidence">
     <ng-container *ngIf="selected as o;else intro">
      <div class="dossier-top"><div>
       <small>{{t('SELECTED VESSEL · EVIDENCE DOSSIER','دوسيه السفينة المختارة')}}</small>
@@ -100,42 +193,6 @@ interface Dossier{
       <p>IMO {{o.imo}} · {{o.assignment.portName}} · {{o.assignment.startLocal||o.assignment.startUtc}}</p>
       <span class="status-pill">{{statusLabel(o.status)}}</span>
      </div><span class="meta">{{o.mode==='POC_MOCK'?'POC · DEMO ERP':'ERP · EXCEL POC'}}</span></div>
-     <section class="prep-entry" aria-label="Inspection preparation actions">
-      <div class="prep-entry-text">
-       <small>{{t('INSPECTION PREPARATION · STEP 1','تجهيز المعاينة · الخطوة الأولى')}}</small>
-       <strong>{{canActivate(o)?
-        t('Prepare mandatory checklist and vessel evidence','تجهيز القائمة الإلزامية وأدلة السفينة'):
-        t('Mandatory checklist and case preparation','القائمة الإلزامية وتجهيز ملف المعاينة')}}</strong>
-       <p>{{t('The original mandatory checklist is prepared independently of AI. A04 suggestions remain optional hypotheses requiring human review.',
-        'يتم تجهيز القائمة الإلزامية الأصلية دون الاعتماد على AI، وتظل مقترحات A04 احتمالات اختيارية تتطلب مراجعة بشرية.')}}</p>
-      </div>
-      <div class="prep-entry-actions">
-       <button *ngIf="canActivate(o)" class="prep-primary" type="button"
-        (click)="activate(o)" [disabled]="busy">
-        {{t('1 · Prepare Inspection','١ · تجهيز المعاينة')}}
-       </button>
-       <a *ngIf="o.caseId&&auth.isAdmin" class="prep-primary"
-        [routerLink]="['/moei/smart-inspection/preparation',o.caseId]">
-        {{t('Open Preparation & A04 AI','فتح التجهيز وتحليل A04')}}
-       </a>
-       <span *ngIf="o.caseId&&!auth.isAdmin" class="prep-supervisor">
-        {{t('A04 requires an authorized admin. Your assigned vessel dossier is available below.',
-         'تحليل A04 يتطلب مسؤولًا مخوّلًا، ودوسيه السفينة المسندة متاح أدناه.')}}
-       </span>
-      </div>
-     </section>
-     <div class="buttons">
-      <button *ngIf="o.status==='READY_FOR_FIELD'" type="button" (click)="execute(o)"
-       [disabled]="busy">{{t('Execute Work Order','تنفيذ أمر التكليف')}}</button>
-      <button *ngIf="o.status==='FIELD_STARTED'" type="button" (click)="continue(o)">
-       {{t('Continue Guided Inspection','استكمال خطوات المعاينة')}}</button>
-      <a *ngIf="o.status==='READY_FOR_SCOPE_REVIEW'"
-       [routerLink]="['/moei/smart-inspection/scheduling/plan',o.planId]">
-        {{t('Supervisor: Approve Scope','المشرف: اعتماد نطاق المعاينة')}}</a>
-      <a *ngIf="o.caseId&&o.checklistStatus==='MANDATORY_PUBLISHED_TEMPLATE_SNAPSHOT'"
-       [routerLink]="['/moei/smart-inspection/checklists',o.caseId]">
-       {{t('Published Checklist Details','تفاصيل القائمة المنشورة')}}</a>
-     </div>
      <p *ngIf="loadingDossier" class="status">{{t('Opening full vessel dossier…','جارٍ فتح ملف السفينة الكامل…')}}</p>
      <ng-container *ngIf="dossier as d">
       <div class="warning" *ngIf="!d.caseId">
@@ -360,18 +417,39 @@ interface Dossier{
  .dossier-top small{font-size:11px;color:#118b82;font-weight:700}.dossier-top h2{font-size:21px;margin:8px 0}
  .dossier-top p{font-size:12px;color:#7193a0}.meta{font-size:11px;color:#849da5}
  .status-pill{font-size:11px;background:#eaf6ed;border-radius:12px;padding:5px 9px;color:#2b7653}
- .prep-entry{display:flex;align-items:center;justify-content:space-between;gap:18px;
-  flex-wrap:wrap;padding:20px;margin:18px 0 12px;border-radius:12px;
-  border:2px solid #0c827a;background:#f0fbfa}
- .prep-entry-text{flex:1;min-width:230px}.prep-entry-text small{color:#077e76;font-weight:800;font-size:11px}
- .prep-entry-text strong{display:block;margin:7px 0;font-size:16px;color:#124c57}
- .prep-entry-text p{margin:0;line-height:1.6;color:#567783;font-size:12px}
- .prep-entry-actions{display:flex;flex-direction:column;gap:8px;min-width:210px}
- .prep-entry-actions .prep-primary{display:block;text-align:center;padding:13px 17px;
-  color:white;background:#087c75;border:1px solid #087c75;
-  border-radius:9px;font-size:13px;font-weight:800;text-decoration:none}
- .prep-entry-actions button:disabled{opacity:.5;cursor:not-allowed}
- .prep-supervisor{color:#647a85;font-size:11px;line-height:1.6;max-width:290px}
+ .inspection-journey{background:#fff;border:1px solid #cfe3e8;border-radius:16px;
+  padding:19px 20px;margin:14px 0 17px;box-shadow:0 7px 20px #123a5009}
+ .journey-head{display:flex;align-items:center;justify-content:space-between;gap:13px;flex-wrap:wrap}
+ .journey-head small{color:#087e76;font-size:10px;font-weight:850;letter-spacing:1px}
+ .journey-head h2{font-size:21px;margin:6px 0;color:#153e54}
+ .journey-head p{font-size:12px;color:#667f8c;line-height:1.7;margin:4px 0 15px}
+ .journey-vessel{font-size:12px;font-weight:750;color:#076a64;border-radius:9px;
+  background:#eaf8f5;padding:10px}
+ .journey-track{list-style:none;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));
+  gap:10px;padding:0;margin:0;align-items:stretch}
+ .journey-step{position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:8px;
+  min-width:0;background:#f6f9fb;border:1px solid #dbe7eb;border-radius:12px;padding:13px}
+ .journey-step.current{border-color:#067e74;background:#ebfbf8;box-shadow:0 0 0 1px #067e7440}
+ .journey-step.complete{border-color:#93c9ac;background:#f2faf5}
+ .journey-step.ready{border-color:#a5d7d2;background:#f3fbfa}
+ .journey-number{display:inline-flex;justify-content:center;align-items:center;
+  width:28px;height:28px;flex:0 0 28px;border-radius:50%;background:#dce9ef;color:#1d6373;
+  font-size:13px;font-weight:900}
+ .journey-step.current .journey-number{color:#fff;background:#087e76}
+ .journey-step.complete .journey-number{color:#fff;background:#28865e}
+ .journey-step strong{color:#1a495a;font-size:12px}
+ .journey-step p{font-size:11px;color:#688390;line-height:1.65;margin:0;flex:1}
+ .journey-action{display:block;text-align:center;align-self:stretch;color:#08736b;
+  background:#e5f5f3;border:1px solid #9acfc9;border-radius:9px;
+  padding:10px 8px;text-decoration:none;font-size:11px;font-weight:850;
+  cursor:pointer;line-height:1.5;overflow-wrap:anywhere}
+ .journey-action.primary{background:#087e76;color:#fff;border-color:#087e76}
+ .journey-action:disabled{opacity:.5;cursor:not-allowed}
+ .journey-wait,.journey-done{font-size:10px;color:#708793;line-height:1.5}
+ .journey-done{color:#227e60;font-weight:750}
+ @media(max-width:1250px){.journey-track{grid-template-columns:repeat(3,minmax(0,1fr))}}
+ @media(max-width:790px){.journey-track{grid-template-columns:repeat(2,minmax(0,1fr))}}
+ @media(max-width:510px){.journey-track{grid-template-columns:1fr}}
  .buttons{margin:18px 0}.dossier-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:15px 0}
  .fact{background:#f3f9fa;padding:13px;border-radius:10px}.fact small,.fact b{display:block}
  .fact small{font-size:10px;color:#7899a2}.fact b{font-size:12px;margin-top:7px;color:#17566d}
@@ -414,6 +492,7 @@ export class SiMyWorkOrdersComponent implements OnInit{
  private cache:Record<string,Dossier>={};
  private dossierRequestId=0;
  constructor(private readonly http:HttpClient,private readonly router:Router,
+  private readonly route:ActivatedRoute,
   public readonly lang:LanguageService,public readonly auth:MoeiAuthService){}
  t(en:string,ar:string):string{return this.lang.pick(en,ar);}
  ngOnInit():void{this.load();}
@@ -499,7 +578,8 @@ export class SiMyWorkOrdersComponent implements OnInit{
  load():void{
   if(this.loading)return;
   this.loading=true;this.error='';
-  const previousOrderId=this.selected?.orderId||null;
+  const previousOrderId=this.selected?.orderId||
+   this.route.snapshot.queryParamMap.get('orderId')||null;
   this.http.get<{orders:AssignedOrder[];me:{session:string;inspectorPocId:string|null}}>(
     this.api+'my-work-orders').subscribe({
    next:r=>{
@@ -518,6 +598,9 @@ export class SiMyWorkOrdersComponent implements OnInit{
   if(this.selected?.orderId===o.orderId&&(this.dossier||this.loadingDossier))return;
   const requestId=++this.dossierRequestId;
   this.selected=o;this.error='';this.dossier=this.cache[o.orderId]||null;
+  if(this.route.snapshot.queryParamMap.get('orderId')!==o.orderId)
+   void this.router.navigate([],{relativeTo:this.route,
+    queryParams:{orderId:o.orderId},queryParamsHandling:'merge',replaceUrl:true});
   if(this.dossier){this.loadingDossier=false;return;}
   this.loadingDossier=true;
   this.http.get<Dossier>(this.api+'my-work-orders/'+o.orderId+'/dossier').subscribe({
