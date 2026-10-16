@@ -1198,7 +1198,7 @@ const server = createServer(async (req, res) => {
         // requests) require the current signed-in inspector's work order.
         // Unmapped ADMIN remains a separate supervisor review capability.
         await authorizeChecklistCase({identity:actor,caseId:id,
-          googleUsers,scheduleOrders:siScheduleOrders});
+          googleUsers,scheduleOrders:siScheduleOrders,mutation:req.method!=='GET'});
         if(req.method==='GET'&&!operation)
           return respond(res,200,await siChecklistField.preview(id));
         if(req.method==='POST'&&operation==='start')
