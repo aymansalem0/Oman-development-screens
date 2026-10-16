@@ -158,3 +158,188 @@ test('image parser rejects mislabeled or oversize data',()=>{
   /SI_CHECKLIST_IMAGE_FORMAT_INVALID/);
  assert.equal(parseImage(null),null);
 });
+
+test('per-question PDF and image evidence is persisted without calling AI and no official answer changes',async()=>{
+ const x=make();
+ try{
+  const t=x.library.create(template('Safety evidence','Tanker',0,50000),'admin');
+  x.library.publish(t.id,'admin',t.updatedAt);
+  const session=await x.field.start(uid,'inspector');
+  const item=session.templates[0].groups[0].items[0];
+  let calls=0;
+  x.field.airiaSuggest=async()=>{calls++;return {recommendations:[]};};
+  const png='iVBORw0KGgo=';
+  const image=await x.field.attachEvidence(uid,{itemId:item.instanceId,
+   expectedVersion:session.version,actor:'inspector',file:{
+    filename:'equipment-photo.png',mimeType:'image/png',base64:png
+   }});
+  assert.equal(image.evidence.mimeType,'image/png');
+  assert.equal(image.evidence.aiAnalyzed,false);
+  assert.equal(calls,0);
+  const pdf=await x.field.attachEvidence(uid,{itemId:item.instanceId,
+   expectedVersion:image.version,actor:'inspector',file:{
+    filename:'maintenance-record.pdf',mimeType:'application/pdf',
+    base64:Buffer.from('%PDF-1.7\\nPOC').toString('base64')
+   }});
+  const state=(await x.field.preview(uid)).saved;
+  assert.equal(state.evidenceFiles.length,2);
+  assert.equal(state.templates[0].groups[0].items[0].evidenceRefs.length,2);
+  assert.deepEqual(state.templates[0].groups[0].items[0].answers,{});
+  assert.equal(calls,0,'GET and file upload are zero-cost');
+  await assert.rejects(x.field.attachEvidence(uid,{itemId:item.instanceId,
+    expectedVersion:session.version,actor:'inspector',
+    file:{filename:'stale.png',mimeType:'image/png',base64:png}}),
+   /SI_CHECKLIST_VERSION_CONFLICT/);
+  await assert.rejects(x.field.attachEvidence(uid,{itemId:item.instanceId,
+    expectedVersion:pdf.version,actor:'inspector',
+    file:{filename:'fake.pdf',mimeType:'application/pdf',base64:png}}),
+   /SI_CHECKLIST_EVIDENCE_FORMAT_INVALID/);
+  assert.equal((await x.field.preview(uid)).saved.evidenceFiles.length,2);
+ }finally{x.done();}
+});
+
+test('Airia analyses only the photo linked to the question, returns optional instruction and waits for human review',async()=>{
+ const x=make();
+ try{
+  const draft=x.library.create(template('Visual Safety','Tanker',0,50000),'admin');
+  x.library.publish(draft.id,'admin',draft.updatedAt);
+  const entry=await x.field.start(uid,'inspector');
+  const item=entry.templates[0].groups[0].items[0];
+  const photo=await x.field.attachEvidence(uid,{itemId:item.instanceId,
+   expectedVersion:entry.version,actor:'inspector',file:{
+    filename:'certificate.png',mimeType:'image/png',base64:'iVBORw0KGgo='
+   }});
+  let calls=0;
+  x.field.airiaSuggest=async input=>{
+   calls++;
+   assert.equal(input.level,'ITEM');
+   assert.equal(input.items.length,1);
+   assert.equal(input.image.mimeType,'image/png');
+   assert.equal(input.image.sha256,photo.evidence.sha256);
+   assert.equal(input.image.base64,'iVBORw0KGgo=');
+   assert.match(input.instructions,/suggestedInstruction/);
+   return {result:JSON.stringify({recommendations:[{
+    itemId:item.instanceId,answers:{BOOLEAN:'NO',NOTE:'Text appears blurred'},
+    rationale:'The photographed certificate is too blurred for reliable verification.',
+    suggestedInstruction:'Inspect the original statutory certificate and cross-check the expiry date with the issuing source.',
+    confidence:.47,dataGaps:['Original certificate is not readable']
+   }]})};
+  };
+  const result=await x.field.suggest(uid,{level:'ITEM',itemId:item.instanceId,
+   evidenceId:photo.evidence.id,actor:'inspector',confirmCost:true});
+  assert.equal(calls,1);
+  assert.equal(result.proposal.imageEvidenceRef.id,photo.evidence.id);
+  assert.match(result.proposal.recommendations[0].suggestedInstruction,/original statutory certificate/);
+  assert.equal((await x.field.preview(uid)).saved.templates[0].groups[0].items[0].answerStatus,'PENDING');
+  assert.equal((await x.field.preview(uid)).saved.evidenceFiles.length,1);
+  await assert.rejects(x.field.suggest(uid,{level:'ITEM',itemId:item.instanceId,
+   evidenceId:'99999999-9999-4999-8999-999999999999',
+   actor:'inspector',confirmCost:true}),
+   /SI_CHECKLIST_AI_IMAGE_NOT_LINKED_TO_QUESTION/);
+  assert.equal(calls,1,'Invalid evidence never incurs a model call');
+  const accepted=await x.field.review(uid,{expectedVersion:result.version,
+   proposalId:result.proposal.id,itemId:item.instanceId,
+   decision:'REJECT',actor:'inspector'});
+  assert.deepEqual(accepted.templates[0].groups[0].items[0].answers,{});
+  assert.equal(accepted.proposals[0].reviews[0].decision,'REJECT');
+ }finally{x.done();}
+});
+
+test('Airia builder generates isolated optional questions, each with evidence, photo-based suggested answer and instruction',async()=>{
+ const x=make();
+ try{
+  const t=x.library.create(template('Frozen baseline','Tanker',0,50000),'admin');
+  x.library.publish(t.id,'admin',t.updatedAt);
+  const session=await x.field.start(uid,'inspector');
+  const original=JSON.stringify(session.templates);
+  let builderCalls=0,visionCalls=0;
+  x.field.airiaQuestionSuggest=async input=>{
+   builderCalls++;
+   assert.equal(input.caseId,uid);
+   assert.equal(input.constraints.mandatory,false);
+   return {suggestedItems:[{
+    title:'Verify auxiliary fire-control station readiness',
+    description:'Inspect readiness during the planned site visit.',
+    rationale:'The optional review may improve fire equipment coverage.',
+    suggestedInstruction:'Inspect the station safely and collect photographic evidence.',
+    confidence:0.79
+   }]};
+  };
+  const suggested=await x.field.suggestQuestions(uid,{
+   actor:'inspector',confirmCost:true,operatorPrompt:'Suggest a fire station check'
+  });
+  assert.equal(builderCalls,1);
+  assert.equal(suggested.questions.length,1);
+  assert.equal(suggested.questions[0].mandatory,false);
+  assert.equal(suggested.questions[0].officialChecklistItem,false);
+  assert.equal((await x.field.preview(uid)).saved.templates.length,1);
+  assert.equal(JSON.stringify((await x.field.preview(uid)).saved.templates),original);
+  const q=suggested.questions[0];
+  const photo=await x.field.attachEvidence(uid,{actor:'inspector',
+   itemId:q.id,expectedVersion:suggested.version,file:{
+    filename:'station.png',mimeType:'image/png',base64:'iVBORw0KGgo='
+   }});
+  x.field.airiaSuggest=async input=>{
+   visionCalls++;
+   assert.equal(input.items[0].itemId,q.id);
+   assert.equal(input.image.sha256,photo.evidence.sha256);
+   return {recommendations:[{
+    itemId:q.id,
+    answers:{BOOLEAN:'NO',NOTE:'Possible obstruction; verify physically'},
+    rationale:'The attached photo appears to show an obstruction; image is not proof.',
+    suggestedInstruction:'Inspect access and fire suppression controls in person and record actual conditions.',
+    confidence:0.53,dataGaps:['Unclear field of view']
+   }]};
+  };
+  const advisory=await x.field.suggestAdvisoryAnswer(uid,{
+   questionId:q.id,evidenceId:photo.evidence.id,
+   text:'Inspect only shown evidence',actor:'inspector',confirmCost:true
+  });
+  assert.equal(visionCalls,1);
+  assert.equal(advisory.proposal.recommendations[0].proposedAnswers.BOOLEAN,'NO');
+  assert.match(advisory.proposal.recommendations[0].suggestedInstruction,/in person/);
+  const before=(await x.field.preview(uid)).saved;
+  assert.equal(before.aiSuggestedQuestions[0].finalAdvisory,null);
+  assert.equal(JSON.stringify(before.templates),original);
+  const reviewed=await x.field.reviewAdvisoryAnswer(uid,{
+   expectedVersion:advisory.version,questionId:q.id,proposalId:advisory.proposal.id,
+   decision:'EDIT',editedAnswers:{BOOLEAN:'NA',NOTE:'Photo not conclusive'},
+   reviewNote:'Actual onboard evidence required',actor:'inspector'
+  });
+  assert.equal(reviewed.aiSuggestedQuestions[0].finalAdvisory.answers.BOOLEAN,'NA');
+  assert.equal(reviewed.aiSuggestedQuestions[0].finalAdvisory.officialComplianceDecision,false);
+  assert.equal(JSON.stringify(reviewed.templates),original);
+  assert.equal(reviewed.status,'IN_PROGRESS');
+ }finally{x.done();}
+});
+
+test('A04 advisory import demands source-approved overlay, is idempotent and never calls a model',async()=>{
+ const x=make();
+ try{
+  const t=x.library.create(template('Published','Tanker',0,50000),'admin');
+  x.library.publish(t.id,'admin',t.updatedAt);
+  const session=await x.field.start(uid,'inspector');
+  x.field.getA04Suggestions=async()=>({approved:false,suggestions:[{
+    title:'A04 extra safety question',reason:'Review evidence in field'
+   }]});
+  await assert.rejects(x.field.importA04Questions(uid,{
+   expectedVersion:session.version,actor:'inspector'
+  }),/SI_CHECKLIST_A04_SCOPE_NOT_APPROVED/);
+  x.field.getA04Suggestions=async()=>({approved:true,suggestions:[{
+    title:'A04 extra safety question',reason:'Verify recorded safety references',
+    evidenceIds:['SI-CASE-001']
+   }]});
+  const imported=await x.field.importA04Questions(uid,{
+   expectedVersion:session.version,actor:'inspector'
+  });
+  assert.equal(imported.imported,1);
+  assert.equal(imported.questions[0].source,'AIRIA_A04');
+  assert.equal(imported.questions[0].officialChecklistItem,false);
+  const repeated=await x.field.importA04Questions(uid,{
+   expectedVersion:imported.version,actor:'inspector'
+  });
+  assert.equal(repeated.imported,0);
+  assert.equal(repeated.version,imported.version);
+  assert.equal((await x.field.preview(uid)).saved.aiSuggestedQuestions.length,1);
+ }finally{x.done();}
+});
