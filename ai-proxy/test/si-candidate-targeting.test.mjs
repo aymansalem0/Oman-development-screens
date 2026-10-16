@@ -310,3 +310,71 @@ test('SI-C01 rules reject unapproved source overrides, forged signals and bad co
   assert.equal((await w.subject.policy()).version,1);
  }finally{w.cleanup();}
 });
+
+test('integrated source case creation freezes verified triggers and does not authorize unverified reviews',async()=>{
+ const w=workspace();
+ try{
+  await w.subject.receiveEvent(source());
+  await w.subject.receiveEvent(source({
+   sourceEventId:'SR-UNVERIFIED',sourceReference:'SVC-UNVERIFIED',
+   sourceApprovalStatus:'UNVERIFIED'
+  }));
+  const candidate=(await w.subject.dashboard()).candidates[0];
+  assert.equal(candidate.events.length,2);
+  const verified=candidate.events.find(e=>e.approval==='SOURCE_REVIEWED');
+  assert.ok(verified);
+  const accepted={
+   eventKey:verified.eventKey,candidateKey:candidate.key,
+   sourceType:verified.sourceType,sourceEventId:verified.sourceEventId,
+   sourceReference:verified.sourceReference,
+   inspectionRegime:candidate.regime,sourceApproval:verified.approval,
+   reason:verified.contextNote||null,
+   evidenceIds:[...new Set(verified.evidenceIds||[])],
+   sourceProvenance:verified.provenance||null
+  };
+  const approved=await w.subject.decideBatch({
+   items:[{
+    imo:candidate.imo,candidateKey:candidate.key,
+    candidateKeys:[candidate.key],inspectionReasons:[accepted]
+   }],
+   actor:'Supervisor',note:'Verified source evidence reviewed and approved',
+   approvedPlanId:'00000001-0000-4000-8000-000000000000',
+   verifiedOnly:true
+  });
+  assert.equal(approved.cases.length,1);
+  assert.equal(approved.cases[0].inspectionReasons.length,1);
+  assert.deepEqual(approved.cases[0].sourceEventKeys,[verified.eventKey]);
+  assert.equal(approved.cases[0].inspectionReasons[0].sourceApproval,
+   'SOURCE_REVIEWED');
+  assert.ok(!approved.cases[0].sourceEventKeys.includes(
+   candidate.events.find(e=>e.approval==='UNVERIFIED').eventKey));
+ }finally{w.cleanup();}
+});
+
+test('integrated case creation rejects unverified reasons smuggled into approved input',async()=>{
+ const w=workspace();
+ try{
+  await w.subject.receiveEvent(source({sourceApprovalStatus:'UNVERIFIED'}));
+  const candidate=(await w.subject.dashboard()).candidates[0];
+  const unverified=candidate.events[0];
+  const forged={
+   eventKey:unverified.eventKey,candidateKey:candidate.key,
+   sourceType:unverified.sourceType,sourceEventId:unverified.sourceEventId,
+   sourceReference:unverified.sourceReference,
+   inspectionRegime:candidate.regime,sourceApproval:unverified.approval,
+   reason:unverified.contextNote||null,evidenceIds:[],
+   sourceProvenance:unverified.provenance||null
+  };
+  await assert.rejects(
+   w.subject.decideBatch({
+    items:[{imo:candidate.imo,candidateKey:candidate.key,
+     candidateKeys:[candidate.key],inspectionReasons:[forged]}],
+    actor:'Supervisor',note:'Attempt to authorize review-only source',
+    approvedPlanId:'00000001-0000-4000-8000-000000000000',
+    verifiedOnly:true
+   }),
+   e=>e.code==='SI_BULK_CANDIDATE_CHANGED'
+  );
+  assert.equal((await w.subject.inspectionCaseRegistry()).cases.length,0);
+ }finally{w.cleanup();}
+});
