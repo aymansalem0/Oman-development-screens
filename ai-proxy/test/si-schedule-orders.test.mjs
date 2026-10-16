@@ -568,3 +568,28 @@ test('POC inspector self-confirmation fails closed when disabled or outside mock
   else process.env.SI_V2_INSPECTOR_IDENTITY_MAP_JSON=oldMap;
  }
 });
+
+test('inspector mock acknowledgement never applies to non-mock schedules',async()=>{
+ const oldFlag=process.env.SI_POC_INSPECTOR_SELF_SCOPE_ENABLED;
+ const oldMap=process.env.SI_V2_INSPECTOR_IDENTITY_MAP_JSON;
+ process.env.SI_POC_INSPECTOR_SELF_SCOPE_ENABLED='true';
+ process.env.SI_V2_INSPECTOR_IDENTITY_MAP_JSON=JSON.stringify({'inspector@moei.example':'ENG-1'});
+ const x=workspace();
+ try{
+  const approved=await x.approve({demoMode:false}),orderId=approved.orders[0].id;
+  assert.notEqual(approved.mode,'POC_MOCK');
+  const roster=await x.orders.mine('inspector@moei.example');
+  assert.equal(roster.length,1);
+  assert.equal(roster[0].canSelfConfirmScope,false);
+  await assert.rejects(()=>x.orders.confirmPocInspectorScope({
+   planId:x.p.id,orderId,actor:'inspector@moei.example',
+   reason:'Inspect mandatory checks'}),
+   e=>e.code==='SI_INSPECTOR_POC_SELF_SCOPE_NOT_ENABLED');
+ }finally{
+  x.done();
+  if(oldFlag===undefined)delete process.env.SI_POC_INSPECTOR_SELF_SCOPE_ENABLED;
+  else process.env.SI_POC_INSPECTOR_SELF_SCOPE_ENABLED=oldFlag;
+  if(oldMap===undefined)delete process.env.SI_V2_INSPECTOR_IDENTITY_MAP_JSON;
+  else process.env.SI_V2_INSPECTOR_IDENTITY_MAP_JSON=oldMap;
+ }
+});
