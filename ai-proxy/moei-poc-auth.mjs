@@ -33,7 +33,7 @@ export class MoeiPocAuth {
     (https?'Secure; ':'')+'Max-Age='+age;
  }
  issueSession(identity){
-  if(!['ADMIN','VIEWER'].includes(identity?.role))throw new MoeiAuthError('MOEI_ROLE_INVALID',403);
+  if(!['ADMIN','VIEWER','INSPECTOR'].includes(identity?.role))throw new MoeiAuthError('MOEI_ROLE_INVALID',403);
   const now=this.clock();
   const token=randomBytes(32).toString('base64url'),key=sha256(token).toString('hex');
   const user={username:identity.username,role:identity.role};
