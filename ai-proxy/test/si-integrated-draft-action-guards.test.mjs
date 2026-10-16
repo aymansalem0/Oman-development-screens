@@ -69,6 +69,17 @@ test('legacy rerank cannot mutate a saved integrated Draft or call provider',asy
  assert.equal(calls,0,'provider, source and scheduling must not be invoked');
 });
 
+test('direct Oracle mutations cannot bypass frozen integrated Draft scope',async()=>{
+ const x=setup(verified());
+ await assert.rejects(x.store.mutate(ID,0,'officer',p=>{
+  p.savedPlanRows=[{imo:IMO2,planSelected:true}];return p;
+ },'C01_REEVALUATED'),e=>
+  e.code==='SI_INTEGRATED_DRAFT_SELECTION_LOCKED_START_NEW_PLAN');
+ assert.equal(x.counters.commits,0);
+ assert.equal(x.counters.writes.length,0);
+ assert.equal(x.counters.rollbacks,1);
+});
+
 test('restore only the verified Oracle roster, preserve old revision in audit and commit once',async()=>{
  const x=setup();
  const restored=await restore(x);
