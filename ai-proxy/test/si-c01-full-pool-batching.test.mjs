@@ -70,3 +70,36 @@ test('any failed group blocks a partial C01 plan; no automatic retry or unchecke
  assert.ok(x.getCalls()<=5);
  assert.ok(x.getMax()<=2);
 });
+
+test('Airia returning one unrelated candidateKey for a 25-item batch fails closed with precise counts',async()=>{
+ const source=createSource(50);
+ let providerCalls=0;
+ const agent=new SiCandidateAgent({
+  targeting:{dashboard:async()=>({})},provider:'airia',
+  executeAgent:async payload=>{
+   providerCalls++;
+   if(payload.requestMeta.batchIndex===2)
+    return {recommendations:[{
+     candidateKey:'NOT_PRESENT_IN_ANY_C01_BATCH',
+     recommendation:'MANUAL_REVIEW',confidence:0.7,
+     reason:'The provider returned a mismatched candidate identifier.',
+     evidenceRefs:[],dataGaps:[]
+    }]};
+   return {recommendations:payload.candidates.map(c=>({
+    candidateKey:c.candidateKey,recommendation:'MANUAL_REVIEW',confidence:0.7,
+    reason:'Source-backed candidate awaits supervisor review.',
+    evidenceRefs:[c.allowedEvidence[0]],dataGaps:[]
+   }))};
+  }
+ });
+ agent.source=async()=>source;
+ await assert.rejects(agent.run({
+  actor:'MOEI Operator',confirmRun:true,
+  expectedSnapshotHash:source.snapshotHash,confirmBatchCount:2
+ }),e=>e.code==='SI_C01_NO_VERIFIED_RECOMMENDATIONS'&&
+   e.batchIndex===2&&e.batchCount===2&&
+   e.expectedCount===25&&e.returnedCount===1&&
+   e.failureCounts.CANDIDATE_KEY_NOT_IN_REQUEST===1&&
+   e.failureCounts.CANDIDATES_WITHOUT_OUTPUT===25);
+ assert.equal(providerCalls,2,'never retry a paid provider response automatically');
+});
