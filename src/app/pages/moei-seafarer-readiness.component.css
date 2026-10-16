@@ -2105,3 +2105,15 @@ details summary {
     margin: 0;
   }
 }
+
+/* Configurable Agentic AI readiness dashboard explainability header. */
+.agent-readiness-strip{display:flex;align-items:flex-start;gap:14px;margin:14px 0 19px;
+ padding:15px 18px;border:1px solid #c9e2ec;background:linear-gradient(112deg,#edf8fc,#effaf6);
+ border-radius:12px;color:#3d6e88}
+.agent-readiness-strip .agent-icon{display:grid;place-items:center;background:#d9e9f6;
+ border-radius:10px;width:42px;height:42px;flex:none;font-size:24px;color:#3f7aaf}
+.agent-readiness-strip strong{font-size:13px;color:#2e657f}
+.agent-readiness-strip p{font-size:11px;line-height:1.8;color:#698da1;margin:6px 0}
+.agent-readiness-strip small{font-size:10px;color:#3f8d82;font-weight:700}
+@media(max-width:650px){.agent-readiness-strip{padding:13px;gap:9px}
+.agent-readiness-strip .agent-icon{width:31px;height:31px;font-size:18px}}
