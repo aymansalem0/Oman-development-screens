@@ -430,6 +430,7 @@ export class SiScheduleOrders{
    };
    if(order.status!=='READY_FOR_SCOPE_REVIEW')
     await set('PREPARING','ORDER_PREPARATION_STARTED');
+   let stage='INSPECTION_CASE_REGISTRY';
    try{
     let caseId=order.caseId;
     if(!caseId){
@@ -438,10 +439,12 @@ export class SiScheduleOrders{
        c.approvedPlanId===schedule.id);
      if(prior)caseId=prior.id;
      else{
+      stage='APPROVED_SOURCE_REVALIDATION';
       const item=await this._freshApprovedCandidate(order.imo,plan);
       const conflict=registry.cases.find(c=>c.imo===order.imo&&
        item.candidateKeys.some(k=>[c.candidateKey,...(c.candidateKeys||[])].includes(k)));
       if(conflict)err('SI_WORK_ORDER_CASE_EXISTS_IN_ANOTHER_APPROVAL',409);
+      stage='CASE_LEDGER_CREATION';
       const generated=await this.targeting.decideBatch({
        items:[item],actor:schedule.approvedBy,
        note:schedule.approvalReason,approvedPlanId:schedule.id,
@@ -450,14 +453,18 @@ export class SiScheduleOrders{
      }
      if(!caseId)err('SI_WORK_ORDER_CASE_CREATION_INCOMPLETE',503);
      order.caseId=caseId;
+     stage='WORK_ORDER_CASE_ID_SAVE';
      await set('PREPARING','INSPECTION_CASE_LINKED');
     }
     // Recoverable linkage to the approved rolling plan is required for
     // close-if-all-closed and preserves the frozen source evidence.
+    stage='PLAN_CASE_LINK';
     await this.rolling.attachScheduledCase(planId,order.imo,caseId,
      actor,schedule.id);
+    stage='DOSSIER_READ';
     let prepared=await this.preparation.get(caseId);
     if(!prepared.saved){
+     stage='DOSSIER_PREPARATION_WRITE';
      await this.preparation.prepare(caseId,{actor,expectedVersion:0});
      prepared=await this.preparation.get(caseId);
     }
@@ -465,15 +472,21 @@ export class SiScheduleOrders{
      err('SI_WORK_ORDER_DOSSIER_REVIEW_REQUIRED',409);
     // Mandatory, published checklist template revision is immutable in each
     // inspection case. Never replace it with AI-suggested content.
+    stage='CHECKLIST_TEMPLATE_PREVIEW';
     const overview=await this.checklists.preview(caseId);
     if(!overview.selectedTemplates.some(t=>t.mandatory&&t.itemCount>0))
      err('SI_WORK_ORDER_PUBLISH_MANDATORY_CHECKLIST_FIRST',409);
+    stage='CHECKLIST_INITIALIZATION';
     await this.checklists.start(caseId,actor);
     order.checklistStatus='MANDATORY_PUBLISHED_TEMPLATE_SNAPSHOT';
+    stage='LIFECYCLE_SNAPSHOT';
     const view=await this.lifecycle.snapshot(caseId);
     if(!view.record)
-     await this.lifecycle.apply(caseId,{
-      action:'INITIALIZE',expectedVersion:0,actor,data:{}});
+     {
+      stage='LIFECYCLE_INITIALIZATION';
+      await this.lifecycle.apply(caseId,{
+       action:'INITIALIZE',expectedVersion:0,actor,data:{}});
+     }
     order.aiStatus=prepared.saved.status==='APPROVED'?
      'A04_ADDITIONS_APPROVED_BY_REVIEWER':
      prepared.saved.status==='DRAFT_REVIEW'?'A04_DRAFT_REVIEW_PENDING':
@@ -509,9 +522,13 @@ export class SiScheduleOrders{
      }
     }
     order.status='READY_FOR_SCOPE_REVIEW';order.error=null;
+    stage='WORK_ORDER_READY_SAVE';
     await this.saveOrder(schedule,order,'MANDATORY_CHECKLIST_READY',actor);
     return clone(order);
    }catch(e){
+    // Only fixed server-side operation codes, never SQL, secrets, or IDs.
+    if(e&&typeof e==='object'&&!e.siPreparationStage)
+     e.siPreparationStage=stage;
     order.status='PREPARATION_NEEDS_REVIEW';
     order.error=e.code||'SI_WORK_ORDER_PREPARATION_FAILED';
     await this.saveOrder(schedule,order,'PREPARATION_NEEDS_REVIEW',actor);
