@@ -11,7 +11,8 @@ const prep=read('ai-proxy/si-inspection-preparation.mjs');
 const detail=read('src/app/pages/si-inspection-preparation.component.html');
 const server=read('ai-proxy/server.mjs');
 test('candidate screen navigates to the capacity-first integrated plan stepper',()=>{
- assert.match(grid,/\[routerLink\]="\['\/moei\/smart-inspection\/plan\/create',activePlanId\]"/);
+ assert.match(grid,/\[routerLink\]="\['\/moei\/smart-inspection\/plan\/create',p\.id\]"/);
+ assert.match(grid,/\[queryParams\]="\{stage:'capacity'\}"/);
  assert.match(routes,/path: 'moei\/smart-inspection\/plan\/create\/:planId'/);
  assert.match(routes,/path: 'moei\/smart-inspection\/plan\/create'/);
  assert.doesNotMatch(grid,/<app-si-bulk-approval-panel/);
