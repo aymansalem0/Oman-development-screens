@@ -6,6 +6,7 @@ import {SiChecklistField} from './si-checklist-field.mjs';
 import {SiChecklistAiria} from './si-checklist-airia.mjs';
 import {OracleSiChecklistLibrary,OracleSiChecklistField} from './si-checklist-oracle.mjs';
 import {MoeiGoogleUsers,MoeiUsersError} from './moei-google-users.mjs';
+import {matchesAssignedInspector} from './si-inspector-identity.mjs';
 import {MoeiGoogleSso} from './moei-google-sso.mjs';
 import { getPscVessel, getPscHealth } from './psc-reader.mjs';
 import { FleetAssessmentManager } from './fleet-ai.mjs';
@@ -433,7 +434,18 @@ const siLifecycle=new SiInspectionLifecycle({mode:dbMode,oracleRepository:reposi
 const siScheduleOrders=new SiScheduleOrders({
  mode:dbMode,oracleRepository:repository,rolling:siRollingPlans,
  targeting:siTargeting,preparation:siPreparation,
- checklists:siChecklistField,lifecycle:siLifecycle,cases
+ checklists:siChecklistField,lifecycle:siLifecycle,cases,
+ resolveInspectorIdentity:(actor,assignment,mode)=>{
+   // A configured, active Google-account-to-inspector link overrides the
+   // legacy POC deterministic engineer mapping and static env fallback.
+   // No client-provided inspector ID or ADMIN role can grant vessel access.
+   const user=googleUsers.users.find(u=>
+     u.email===String(actor||'').trim().toLowerCase()&&u.active);
+   if(user?.inspectorId)return user.inspectorId===assignment?.inspectorId?
+     {id:user.inspectorId,name:assignment.inspectorName||user.inspectorId,
+      serverProvisioned:true,erpSource:'APPROVED_EXISTING_INSPECTOR'}:null;
+   return matchesAssignedInspector(actor,assignment,mode);
+ }
 });
 /** Server-only assignment guard reused by every inspector-facing route. */
 async function assignedGuidedView(sessionActor,orderId){
@@ -754,12 +766,70 @@ const server = createServer(async (req, res) => {
       return respond(res,201,{user:googleUsers.add(data,actor.email||actor.username)});
     }catch(e){return respond(res,e.status||400,{error:e.code||'MOEI_USERS_REQUEST_FAILED'});}
   }
+  if(path==='/api/moei/admin/inspectors'&&req.method==='GET'){
+    try{
+      const actor=moeiAuth.require(req);
+      if(actor.role!=='ADMIN')throw new MoeiAuthError('MOEI_ADMIN_REQUIRED',403);
+      // Data comes ONLY from an imported ERP snapshot or previously approved
+      // work orders. No invented engineers or automatic reassignment.
+      const known=new Map();
+      for(const inspector of siErp.snapshot?.data?.Inspectors||[]){
+        if(!inspector.inspector_id||String(inspector.active).toLowerCase()==='false'||
+           String(inspector.active)==='0')continue;
+        known.set(inspector.inspector_id,{
+          id:inspector.inspector_id,name:inspector.display_name||
+            inspector.inspector_id,
+          source:'ERP_WORKFORCE_POC_IMPORT',
+          active:true,existingOrderCount:0
+        });
+      }
+      if(siScheduleOrders.ready){
+        const schedules=await siScheduleOrders.all();
+        for(const schedule of schedules)for(const order of schedule.orders||[]){
+          const a=order.assignment;
+          if(!a?.inspectorId)continue;
+          const row=known.get(a.inspectorId)||{
+            id:a.inspectorId,name:a.inspectorName||a.inspectorId,
+            source:'APPROVED_WORK_ORDER',active:true,existingOrderCount:0
+          };
+          row.existingOrderCount++;
+          known.set(row.id,row);
+        }
+      }
+      const assigned=new Map(googleUsers.users.filter(u=>u.active&&u.inspectorId)
+        .map(u=>[u.inspectorId,u.email]));
+      const inspectors=[...known.values()].sort((a,b)=>
+       a.name.localeCompare(b.name)).map(i=>({
+        ...i,linkedAccount:assigned.get(i.id)||null
+       }));
+      return respond(res,200,{
+        source:'EXISTING_ERP_OR_APPROVED_SCHEDULE_ONLY',
+        inspectors,unmappedUsers:googleUsers.users.filter(u=>u.active&&
+          !u.inspectorId).length,
+        mappingRequiresExplicitAdminSelection:true
+      });
+    }catch(e){return respond(res,e.status||503,{
+      error:e.code||'MOEI_INSPECTOR_ROSTER_UNAVAILABLE'});}
+  }
   if(path.startsWith('/api/moei/admin/users/')&&req.method==='PATCH'){
     try{
       const actor=moeiAuth.require(req,{mutate:true});
       if(actor.role!=='ADMIN')throw new MoeiAuthError('MOEI_ADMIN_REQUIRED',403);
       const email=decodeURIComponent(path.slice('/api/moei/admin/users/'.length));
       const data=await requestJson(req,2048);
+      if(Object.hasOwn(data,'inspectorId')&&data.inspectorId!==null&&
+         data.inspectorId!==''){
+        const roster=new Set((siErp.snapshot?.data?.Inspectors||[])
+          .filter(r=>!['false','0'].includes(String(r.active).toLowerCase()))
+          .map(r=>r.inspector_id));
+        if(siScheduleOrders.ready){
+          for(const schedule of await siScheduleOrders.all())
+            for(const order of schedule.orders||[])
+              if(order.assignment?.inspectorId)roster.add(order.assignment.inspectorId);
+        }
+        if(!roster.has(data.inspectorId))
+          throw new MoeiUsersError('MOEI_INSPECTOR_NOT_IN_EXISTING_ROSTER',422);
+      }
       return respond(res,200,{user:googleUsers.update(email,data,actor.email||actor.username)});
     }catch(e){return respond(res,e.status||400,{error:e.code||'MOEI_USERS_REQUEST_FAILED'});}
   }
