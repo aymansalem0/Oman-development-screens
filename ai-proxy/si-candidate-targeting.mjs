@@ -900,14 +900,28 @@ export class SiCandidateTargeting{
       try{
         for(let i=0;i<cases.length;i++){
           const c=cases[i],d=decisions[i];
-          await con.execute(`INSERT INTO SI_INSPECTION_CASE
-            (CASE_ID,CANDIDATE_KEY,IMO,DOC_JSON)
-            VALUES (:id,:key,:imo,:doc)`,{
-            id:c.id,key:c.candidateKey,imo:c.imo,doc:clob(c)});
-          await con.execute(`INSERT INTO SI_CANDIDATE_DECISION
-            (DECISION_ID,CANDIDATE_KEY,IMO,DOC_JSON)
-            VALUES (:id,:key,:imo,:doc)`,{
-            id:d.id,key:d.candidateKey,imo:d.imo,doc:clob(d)});
+          // Oracle keyword bind names (especially :key) can fail with
+          // ORA-01745. Namespace every bind in the two atomic case writes.
+          try{
+            await con.execute(`INSERT INTO SI_INSPECTION_CASE
+              (CASE_ID,CANDIDATE_KEY,IMO,DOC_JSON)
+              VALUES (:b_case_id,:b_candidate_key,:b_imo,:b_case_doc)`,{
+              b_case_id:c.id,b_candidate_key:c.candidateKey,
+              b_imo:c.imo,b_case_doc:clob(c)});
+          }catch(e){
+            if(e&&typeof e==='object')e.siPreparationStage='CASE_LEDGER_INSERT';
+            throw e;
+          }
+          try{
+            await con.execute(`INSERT INTO SI_CANDIDATE_DECISION
+              (DECISION_ID,CANDIDATE_KEY,IMO,DOC_JSON)
+              VALUES (:b_decision_id,:b_candidate_key,:b_imo,:b_decision_doc)`,{
+              b_decision_id:d.id,b_candidate_key:d.candidateKey,
+              b_imo:d.imo,b_decision_doc:clob(d)});
+          }catch(e){
+            if(e&&typeof e==='object')e.siPreparationStage='CASE_DECISION_INSERT';
+            throw e;
+          }
         }
         await con.commit();
       }catch(e){
