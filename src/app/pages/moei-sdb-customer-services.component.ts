@@ -1,6 +1,6 @@
 import {CommonModule} from '@angular/common';
 import {Component,OnInit} from '@angular/core';
-import {RouterLink} from '@angular/router';
+import {Router,RouterLink} from '@angular/router';
 import {NmcNavigationComponent} from '../components/nmc-navigation.component';
 import {NmcPlatformHeaderComponent} from '../components/nmc-platform-chrome.component';
 import {LanguageService} from '../services/language.service';
@@ -26,7 +26,8 @@ export class MoeiSdbCustomerServicesComponent implements OnInit{
  selected:SdbServiceScenario|null=null;
  loading=true;scenariosLoading=false;showCases=false;error='';
  filter:'ALL'|'FIRST_ISSUE'|'RENEWAL'='ALL';
- constructor(private api:SeafarerWorkspaceService,public lang:LanguageService){}
+ constructor(private api:SeafarerWorkspaceService,public lang:LanguageService,
+ private router:Router){}
  ngOnInit():void{this.load();}
  t(en:string,ar:string):string{return this.lang.pick(en,ar);}
  load():void{
@@ -56,7 +57,11 @@ export class MoeiSdbCustomerServicesComponent implements OnInit{
  }
  startService():void{
   this.showCases=true;this.selected=null;
-  if(!this.data?.actor.operations||this.scenarios.length)return;
+  if(!this.data?.actor.operations){
+    void this.router.navigate(['/moei/seafarers/services/case','self']);
+    return;
+  }
+  if(this.scenarios.length)return;
   this.scenariosLoading=true;this.error='';
   this.api.demoScenarios().subscribe({
    next:d=>{this.scenarios=d.scenarios;this.scenariosLoading=false;},
@@ -64,7 +69,14 @@ export class MoeiSdbCustomerServicesComponent implements OnInit{
   });
  }
  choose(s:SdbServiceScenario):void{
-  this.selected=s;
+  // Open an independent page for missing requirements; a verified READY
+  // applicant goes straight into the pre-existing guarded SDB wizard.
+  // Preview scenario status alone can never authorize an application.
+  if(this.proceedAllowed(s)){
+    void this.router.navigate(['/moei/seafarers/sdb',s.profileId]);
+  }else{
+    void this.router.navigate(['/moei/seafarers/services/case',s.id]);
+  }
  }
  proceedAllowed(s:SdbServiceScenario):boolean{
   if(!s.canContinue)return false;
