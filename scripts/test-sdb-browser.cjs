@@ -74,8 +74,8 @@ const fs = require("node:fs");
       await route("services");
       await page.locator('[data-testid="sdb-start-service"]').click();
       const scenario = profile === "SF-002" ? "CADET_READY" : "RENEWAL_READY";
-      await page.locator('[data-testid="scenario-" + scenario + ""]').click();
-      await page.locator('[data-testid="sdb-proceed-" + scenario + ""]').click();
+      await page.locator('[data-testid="scenario-' + scenario + '"]').click();
+      await page.locator('[data-testid="sdb-proceed-' + scenario + '"]').click();
     }
     await page.locator(".service-card .primary").waitFor();
     await page.locator(".service-card .primary").click();
