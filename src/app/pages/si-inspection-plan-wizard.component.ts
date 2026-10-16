@@ -280,6 +280,11 @@ interface CapacityPreview{
       {{capacityBusy?copy('Loading verified data…','تحميل البيانات…'):
        copy('01 · Load Candidates & Workforce','١ · تحميل السفن والطاقة التشغيلية')}}</button>
      <p class="notice error" *ngIf="capacityError" role="alert">{{capacityError}}</p>
+     <p class="notice error" *ngIf="capacityRequiresRestore" role="alert">
+      {{copy('This saved Draft was changed after its original C01 and inspector-capacity review. For safety, approval is blocked. Go back to Candidate Center, use “Restore Verified Draft Selection” on this plan, then recheck capacity. No plan is deleted or approved automatically.',
+        'تغيّر اختيار السفن بعد تحقق C01 وطاقة المهندسين الأصلي. الاعتماد متوقف لحماية الخطة. ارجع إلى مركز المرشحين واختر «استعادة اختيار السفن المتحقق منه» من بطاقة الخطة، ثم أعد فحص الطاقة. لن تُحذف أو تُعتمد أي خطة تلقائيًا.')}}
+      <a routerLink="/moei/smart-inspection/candidates">{{copy('Open Candidate Center →','فتح مركز المرشحين ←')}}</a>
+     </p>
      <p class="notice" *ngIf="capacityRequiresC01">
       {{copy('Published C01 selection policy requires verified recommendations before capacity matching. Run C01 in Candidate Center, then return here.',
         'سياسة C01 المنشورة تشترط توصيات موثقة قبل حساب الطاقة. شغّل C01 في مركز المرشحين ثم عُد هنا.')}}
@@ -744,7 +749,7 @@ export class SiInspectionPlanWizardComponent implements OnInit,OnDestroy{
  }
  capacityDemoMode=true;capacityBusy=false;capacityAiBusy=false;
  capacityContext:CapacityContext|null=null;capacityPreview:CapacityPreview|null=null;
- capacityRequiresC01=false;private capacityEntryFromCandidates=false;
+ capacityRequiresC01=false;capacityRequiresRestore=false;private capacityEntryFromCandidates=false;
  capacityProposal:CapacitySchedule|null=null;capacityAiOptionId='';
  capacityError='';capacityAiMessage='';
  step=1;preview:SiBulkPreview|null=null;planId:string|null=null;
@@ -939,7 +944,8 @@ export class SiInspectionPlanWizardComponent implements OnInit,OnDestroy{
  }
  loadCapacityContext():void{
   if(!this.planId||this.capacityBusy||this.returnedFromScheduling)return;
-  this.capacityBusy=true;this.capacityError='';this.capacityRequiresC01=false;this.error='';
+  this.capacityBusy=true;this.capacityError='';this.capacityRequiresC01=false;
+  this.capacityRequiresRestore=false;this.error='';
   const params=new HttpParams()
    .set('psc',String(this.planningWeights[0].value))
    .set('uae',String(this.planningWeights[1].value))
@@ -956,6 +962,7 @@ export class SiInspectionPlanWizardComponent implements OnInit,OnDestroy{
    error:e=>{this.capacityBusy=false;
     this.capacityEntryFromCandidates=false;
     this.capacityRequiresC01=e?.error?.error==='SI_C01_CONFIGURED_SELECTION_REQUIRED_RUN_AI';
+    this.capacityRequiresRestore=e?.error?.error==='SI_DRAFT_CAPACITY_STALE_RECALCULATE_REQUIRED';
     this.capacityError=e?.error?.error||
      this.copy('Unable to load verified capacity context.',
       'تعذر تحميل بيانات الطاقة التشغيلية الموثقة.');}
