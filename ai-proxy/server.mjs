@@ -1873,7 +1873,7 @@ const server = createServer(async (req, res) => {
       // Inspector workspace: all reads and writes are bound to the
       // authenticated session's assigned order, never a client-supplied IMO
       // or inspector ID. No unrelated vessel dossiers are exposed.
-      const myOrder=/^\/api\/si\/v1\/maritime-scheduling\/my-work-orders\/([a-f0-9-]{36})(?:\/(dossier|guide|activate|start)(?:\/(answers|ai))?)?$/.exec(path);
+      const myOrder=/^\/api\/si\/v1\/maritime-scheduling\/my-work-orders\/([a-f0-9-]{36})(?:\/(dossier|guide|activate|start|self-confirm-scope)(?:\/(answers|ai))?)?$/.exec(path);
       if(myOrder){
         // Both ADMIN and VIEWER inspectors are allowed here; every order
         // is independently checked against the authenticated session.
@@ -1887,17 +1887,24 @@ const server = createServer(async (req, res) => {
           return respond(res,503,{error:'SI_SCHED_MIGRATION_019_REQUIRED'});
         // Inspector-only mutations are deliberately separated from the
         // supervisor /plans/:id/work-orders/:id/{scope,activate,start} API.
+        // POC self-confirm scope is narrowly permitted for assigned mock
+        // engineers ONLY when the server's explicit demo switch is enabled.
         // Never trust a plan ID, employee ID or delegation flag in the body.
-        if(!task&&req.method==='POST'&&(area==='activate'||area==='start')){
+        if(!task&&req.method==='POST'&&
+           (area==='activate'||area==='start'||area==='self-confirm-scope')){
           const {schedule}=await siScheduleOrders.mineOrder(actor,orderId);
           const body=await requestJson(req,4096);
           if(body.confirmPocDelegation===true||body.generateAi===true||
-             body.confirmAiCost===true)
+             body.confirmAiCost===true||body.includeAiSuggestions===true||
+             body.inspectorId!==undefined||body.planId!==undefined)
             return respond(res,403,{error:'SI_INSPECTOR_SUPERVISOR_OR_PAID_AI_ACTION_DENIED'});
           const order=area==='activate'
             ?await siScheduleOrders.activate({
               planId:schedule.planId,orderId,actor,
               generateAi:false,confirmAiCost:false})
+            :area==='self-confirm-scope'
+            ?await siScheduleOrders.confirmPocInspectorScope({
+              planId:schedule.planId,orderId,actor,reason:body.reason})
             :await siScheduleOrders.startField({
               planId:schedule.planId,orderId,actor,
               confirmPocDelegation:false});
