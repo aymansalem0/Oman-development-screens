@@ -247,6 +247,10 @@ export class SiInspectionPlan{
   const state=await this.rolling.get(planId);
   if(!['DRAFT','READY_FOR_APPROVAL'].includes(state.status))
    throw new SiCandidateAgentError('SI_ROLLING_APPROVED_PLAN_IMMUTABLE',409);
+   // An integrated Draft's C01/inspector-capacity roster is frozen at save.
+   // The legacy C01 editor cannot invalidate it behind the supervisor.
+   if(state.capacityDraft)
+    throw new SiCandidateAgentError('SI_INTEGRATED_DRAFT_SELECTION_LOCKED_START_NEW_PLAN',409);
   const [source,dashboard]=await Promise.all([this.agent.source(),this.targeting.dashboard()]);
   if(source.snapshotHash!==expectedSourceHash||state.revision!==expectedRevision)
    throw new SiCandidateAgentError('SI_PLAN_CHANGED_REFRESH_REQUIRED',409);
@@ -309,6 +313,10 @@ export class SiInspectionPlan{
   const state=await this.rolling.get(planId);
   if(!['DRAFT','READY_FOR_APPROVAL'].includes(state.status))
    throw new SiCandidateAgentError('SI_ROLLING_APPROVED_PLAN_IMMUTABLE',409);
+   // An integrated Draft's C01/inspector-capacity roster is frozen at save.
+   // The legacy C01 editor cannot invalidate it behind the supervisor.
+   if(state.capacityDraft)
+    throw new SiCandidateAgentError('SI_INTEGRATED_DRAFT_SELECTION_LOCKED_START_NEW_PLAN',409);
   const [source,dashboard]=await Promise.all([
    this.agent.source(),this.targeting.dashboard()
   ]);
@@ -363,6 +371,10 @@ export class SiInspectionPlan{
    if(!state)throw new SiCandidateAgentError('SI_ROLLING_PLAN_NOT_FOUND',404);
    if(cycleId&&!['DRAFT','READY_FOR_APPROVAL'].includes(state.status))
     throw new SiCandidateAgentError('SI_ROLLING_APPROVED_PLAN_IMMUTABLE',409);
+   // An integrated Draft's C01/inspector-capacity roster is frozen at save.
+   // The legacy C01 editor cannot invalidate it behind the supervisor.
+   if(state.capacityDraft)
+    throw new SiCandidateAgentError('SI_INTEGRATED_DRAFT_SELECTION_LOCKED_START_NEW_PLAN',409);
    const source=await this.agent.source();
    if(input.expectedSourceHash!==source.snapshotHash||
       input.expectedRevision!==state.revision)
