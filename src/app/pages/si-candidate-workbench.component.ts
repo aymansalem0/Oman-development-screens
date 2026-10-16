@@ -61,7 +61,7 @@ interface IntegratedDraftJob {
  totalWorkflows:number;processedWorkflows:number;totalVessels:number;
  preview?:DraftIntegratedPreview;error?:string;
  reasonCode?:string;failureCounts?:Record<string,number>;
- batchIndex?:number;batchCount?:number;
+ batchIndex?:number;batchCount?:number;expectedCount?:number;returnedCount?:number;
 }
 const INTEGRATED_DRAFT_JOB_KEY='moei-si-integrated-draft-job-v1';
 type SourceFilter='ALL'|'NMC_CASE'|'SERVICE_REQUEST'|'PSC_PORT_CALL';
@@ -164,6 +164,32 @@ export class SiCandidateWorkbenchComponent implements OnInit,OnDestroy{
     }
     if(code==='SI_C01_BATCH_COUNT_CONFIRMATION_REQUIRED'&&
       Number.isInteger(count)&&count>0)this.newDraftExpectedBatches=count;
+    if(code==='SI_C01_NO_VERIFIED_RECOMMENDATIONS'){
+      const detail=e?.error||{};
+      const expected=Number.isInteger(detail.expectedCount)?detail.expectedCount:null;
+      const returned=Number.isInteger(detail.returnedCount)?detail.returnedCount:null;
+      const index=Number.isInteger(detail.batchIndex)?detail.batchIndex:null;
+      const total=Number.isInteger(detail.batchCount)?detail.batchCount:null;
+      const counts=detail.failureCounts||{};
+      const foreign=Number(counts.CANDIDATE_KEY_NOT_IN_REQUEST)||0;
+      const missing=Number(counts.CANDIDATES_WITHOUT_OUTPUT)||0;
+      const scope=index&&total?this.copy('Batch '+index+'/'+total,'الدفعة '+index+'/'+total):'C01';
+      const coverage=expected!==null&&returned!==null?
+        this.copy('Expected '+expected+' candidate results, received '+returned+'. ',
+          'المطلوب '+expected+' نتيجة للمرشحين، والمستلم '+returned+'. '):'';
+      const unknown=foreign?this.copy(
+        foreign+' result(s) referenced a candidateKey not included in this batch. ',
+        foreign+' نتيجة تشير إلى candidateKey غير موجود ضمن هذه الدفعة. '):'';
+      const omitted=missing?this.copy(
+        missing+' requested candidate(s) had no matching output. ',
+        missing+' مرشحًا مطلوبًا لم تصله نتيجة مطابقة. '):'';
+      return scope+' · '+this.copy(
+        'Airia SI-C01 did not return verifiable recommendations. ',
+        'Airia SI-C01 لم يرجع توصيات قابلة للتحقق. ')+
+        coverage+unknown+omitted+this.copy(
+        'No Draft was saved or approved. Check the SI-C01 Airia pipeline input/output mapping: return one recommendation per exact candidateKey supplied in userInput.candidates, including every candidate in THIS batch. Do not repeat paid analysis until the provider response contract is fixed.',
+        'لم تُحفظ أو تُعتمد أي مسودة. راجع ربط مدخلات ومخرجات مسار Airia SI-C01: يجب إرجاع توصية لكل candidateKey مطابق لما أُرسل داخل userInput.candidates لهذه الدفعة فقط. لا تعِد تشغيل التحليل المدفوع قبل إصلاح استجابة المزود.');
+    }
     const reasons=Object.entries(e?.error?.failureCounts||{})
       .filter(([,n])=>typeof n==='number'&&n>0)
       .map(([key,n])=>key+' ('+n+')').slice(0,3).join(', ');
@@ -230,9 +256,7 @@ export class SiCandidateWorkbenchComponent implements OnInit,OnDestroy{
         error:{error:data.error||'SI_DRAFT_JOB_FAILED',
           reasonCode:data.reasonCode,failureCounts:data.failureCounts,
           batchIndex:data.batchIndex,batchCount:data.batchCount}});
-      this.newDraftNotice=this.copy(
-        'This run is finished. Review the failed batch and logs before requesting another analysis.',
-        'انتهى التشغيل؛ راجع الدفعة الفاشلة والسجلات قبل طلب تحليل جديد.');
+      this.newDraftNotice=''; // The actionable provider-contract failure appears in red above.
       return;
     }
     this.newDraftBusy=true;
