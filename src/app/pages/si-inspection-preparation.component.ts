@@ -33,6 +33,10 @@ export class SiInspectionPreparationComponent implements OnInit{
   };
   constructor(private route:ActivatedRoute,private api:SiPreparationService,public readonly lang:LanguageService){}
   copy(en:string,ar:string):string{return this.lang.pick(en,ar);}
+  get returnOrderId():string{
+    const orderId=this.route.snapshot.queryParamMap.get('orderId')||'';
+    return /^[a-f0-9-]{36}$/i.test(orderId)?orderId:'';
+  }
   ngOnInit():void{
     // GET is read-only and never calls Airia. No extra key prompt after SSO.
     // Handle navigation between approved cases without displaying stale evidence.
