@@ -137,7 +137,19 @@ const fs = require("node:fs");
     );
   }
   await issue("SF-002", "POST");
+  const previouslyIssuedUrl=page.url();
   await page.screenshot({ path: out + "/esdb-desktop.png", fullPage: false });
+  // Regression: starting the same service again must open a new DRAFT and
+  // the first actionable wizard step, not restore the previously ISSUED card.
+  await route("services");
+  await page.locator('[data-testid="sdb-start-service"]').click();
+  await page.locator('[data-testid="scenario-CADET_READY"]').click();
+  await page.locator('input[name="format"]').first().waitFor();
+  assert.notEqual(page.url(),previouslyIssuedUrl);
+  assert.equal(await page.locator(".digital-sdb").count(),0);
+  assert.equal(await page.locator(".stepper li.current").count(),1);
+  assert.ok((await page.locator(".stepper li.current").innerText()).includes("SDB format"));
+  await page.screenshot({path:out+"/sdb-new-application-stepper.png",fullPage:false});
   await route("company");
   await page.locator(".preview-bar select").selectOption("SF-004");
   await page.locator(".loading-state").waitFor({ state: "hidden" });
@@ -191,7 +203,7 @@ const fs = require("node:fs");
   assert.ok(await page.locator(".person-row").count() >= 5);
   // Newly issued sandbox first-issue books have no recorded sea service.
   // Select a pre-existing experienced SDB holder with fixture voyages.
-  await page.locator(".person-row").filter({hasText:"Mariam Al Shamsi"}).click();
+  await page.locator(".person-row").filter({hasText:"SF-003"}).click();
   await page.getByRole("button", {name:"Sea Service History"}).click();
   await page.locator(".leg").first().waitFor();
   assert.ok((await page.locator(".leg-grid").first().innerText()).includes("Engine power"));
@@ -213,6 +225,7 @@ const fs = require("node:fs");
   });
   await route("readiness");
   await page.locator(".candidate-row").first().click();
+  const candidatesBeforeNewEvent=await page.locator(".candidate-row").count();
   await page.locator("details.sandbox-tools summary").click();
   await page
     .getByRole("button", {
@@ -221,7 +234,8 @@ const fs = require("node:fs");
     })
     .click();
   await page.waitForFunction(
-    () => document.querySelectorAll(".candidate-row").length === 8,
+    (previous) => document.querySelectorAll(".candidate-row").length > previous,
+    candidatesBeforeNewEvent,
   );
   await ctx.request.get(base + "/api/seafarers/v1/dashboard");
   await page.setViewportSize({ width: 390, height: 844 });

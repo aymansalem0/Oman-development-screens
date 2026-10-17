@@ -485,3 +485,53 @@ test("READY demo honours newly configured required attachment and does not provi
  assert.equal(result.data.error,"SDB_READINESS_CHANGED");
  assert.equal(workspace.state.profiles.some(p=>p.demoJourney),false);
 });
+
+test("Start Service newJourney always creates a clean sandbox stepper without reopening issued eSDB",async t=>{
+ const {request,workspace}=await fixture(t);
+ const first=await request("/demo-scenarios/ready-journey",{
+  method:"POST",body:{scenarioId:"CADET_READY",newJourney:true}
+ });
+ assert.equal(first.status,201);
+ assert.equal(first.data.alreadyProvisioned,false);
+ const oldId=first.data.profileId;
+ const oldPreview=encodeURIComponent(oldId);
+ const firstDraft=await request("/profiles/"+oldId+"/applications?preview="+oldPreview,{
+  method:"POST",body:{}
+ });
+ assert.equal(firstDraft.status,200);
+ // Simulate a previously completed sandbox request: starting the *service*
+ // must not jump back to its final issued step or modify its record.
+ const previous=workspace.state.applications.find(a=>a.id===firstDraft.data.id);
+ previous.status="ISSUED";
+ const oldSnapshot=JSON.stringify(previous);
+ const second=await request("/demo-scenarios/ready-journey",{
+  method:"POST",body:{scenarioId:"CADET_READY",newJourney:true}
+ });
+ assert.equal(second.status,201);
+ assert.equal(second.data.alreadyProvisioned,false);
+ assert.notEqual(second.data.profileId,oldId);
+ assert.equal(JSON.stringify(previous),oldSnapshot);
+ const latest=await request("/dashboard?preview="+encodeURIComponent(second.data.profileId));
+ assert.equal(latest.status,200);
+ assert.equal(latest.data.profiles[0].applications.length,0);
+ const newDraft=await request("/profiles/"+second.data.profileId+
+  "/applications?preview="+encodeURIComponent(second.data.profileId),{
+   method:"POST",body:{}
+  });
+ assert.equal(newDraft.status,200);
+ assert.equal(newDraft.data.status,"DRAFT");
+ assert.notEqual(newDraft.data.id,previous.id);
+ const legacy=await request("/demo-scenarios/ready-journey",{
+  method:"POST",body:{scenarioId:"CADET_READY"}
+ });
+ assert.equal(legacy.status,201);
+ assert.equal(legacy.data.alreadyProvisioned,true);
+ const blocked=await request("/demo-scenarios/ready-journey",{
+  as:"self",method:"POST",body:{scenarioId:"CADET_READY",newJourney:true}
+ });
+ assert.equal(blocked.status,403);
+ const invalid=await request("/demo-scenarios/ready-journey",{
+  method:"POST",body:{scenarioId:"CADET_READY",newJourney:"true"}
+ });
+ assert.equal(invalid.status,422);
+});

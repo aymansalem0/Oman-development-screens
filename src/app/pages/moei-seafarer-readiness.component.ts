@@ -268,7 +268,8 @@ export class MoeiSeafarerReadinessComponent implements OnInit, OnDestroy {
             const a = p.applications.find((a) => a.id === this.app?.id);
             if (a) this.app = a;
           }
-          if (this.view === "services" && !this.app && p) {
+          // Start Service must not auto-restore a historical issued application.
+          if (this.view === "services" && !this.app && p && !this.autoStartReady) {
             const a = p.applications[p.applications.length - 1];
             if (a) this.restore(a);
           }

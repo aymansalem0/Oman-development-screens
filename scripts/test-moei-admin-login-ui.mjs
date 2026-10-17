@@ -54,3 +54,25 @@ test('key-popups were retired in shared NMC business services',()=>{
   assert.doesNotMatch(read(p),/window\.prompt\(/,p);
  }
 });
+
+test('login loads a bundled maritime background without referencing missing photo assets',()=>{
+ const css=read('src/app/pages/moei-admin-login.component.css');
+ const bg=read('public/branding/moei-login-maritime.svg');
+ assert.match(css,/background-image:url\('\/branding\/moei-login-maritime\.svg'\)/);
+ assert.doesNotMatch(css,/moei-login-maritime\.avif/);
+ assert.match(bg,/<svg xmlns="http:\/\/www\.w3\.org\/2000\/svg"/);
+});
+test('SDB Start Service chooses a fresh sandbox journey; explicit deep links can resume previous applications',()=>{
+ const entry=read('src/app/pages/moei-sdb-customer-services.component.ts');
+ const html=read('src/app/pages/moei-sdb-customer-services.component.html');
+ const api=read('src/app/services/seafarer-workspace.service.ts');
+ const wizard=read('src/app/pages/moei-seafarer-readiness.component.ts');
+ const server=read('ai-proxy/seafarer-http.mjs');
+ const workspace=read('ai-proxy/seafarer-workspace.mjs');
+ assert.match(api,/\{scenarioId,newJourney:true\}/);
+ assert.match(server,/newJourney:body\.newJourney===true/);
+ assert.match(workspace,/if\(current&&!newJourney\)/);
+ assert.match(wizard,/!this\.autoStartReady\)/);
+ assert.match(entry,/queryParams:\{startReady:'1',scenario:s\.id\}/);
+ assert.match(html,/\(click\)="choose\(current\)"/);
+});

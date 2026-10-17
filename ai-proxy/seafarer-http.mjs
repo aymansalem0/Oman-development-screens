@@ -152,7 +152,10 @@ export function createSeafarerHandler({
         const {body}=await read(req);
         const profile=sdbDemoProfile(body.scenarioId,s.clock());
         if(!profile)reject('SDB_SCENARIO_NOT_FOUND',404);
-        send(res,201,s.beginReadyDemoJourney(actor,body.scenarioId,profile));
+        if(body.newJourney!==undefined&&body.newJourney!==true)
+          reject('SDB_NEW_JOURNEY_FLAG_INVALID',422);
+        send(res,201,s.beginReadyDemoJourney(actor,body.scenarioId,profile,
+          {newJourney:body.newJourney===true}));
         return true;
       }
       if(req.method==='GET'&&path===root+'/readiness-requirements'){

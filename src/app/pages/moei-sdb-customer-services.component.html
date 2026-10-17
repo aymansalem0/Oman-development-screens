@@ -177,10 +177,10 @@
           <b>{{sourceLabel(action.source)}}</b><span>{{checkAction(action)}}</span>
          </div>
         </div>
-        <a *ngIf="proceedAllowed(current)" class="cta proceed"
-          [routerLink]="['/moei/seafarers/sdb',current.profileId]"
+        <button *ngIf="proceedAllowed(current)" type="button" class="cta proceed"
+          [disabled]="scenariosLoading" (click)="choose(current)"
           [attr.data-testid]="'sdb-proceed-'+current.id">
-          {{t('Continue SDB application','استكمال طلب سجل البحار')}} ←</a>
+          {{t('Start new SDB application','بدء طلب سجل بحار جديد')}} ←</button>
         <p *ngIf="current.canContinue&&!proceedAllowed(current)" class="source-warning">
          {{t('The actual sandbox applicant has a different current readiness. Refresh or choose another scenario; a preview cannot bypass server controls.',
            'جاهزية ملف الطلب التجريبي الفعلي مختلفة عن السيناريو. حدّث البيانات؛ لا يمكن تجاوز ضوابط الخادم.')}}</p>
