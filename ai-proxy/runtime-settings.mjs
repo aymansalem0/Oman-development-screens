@@ -119,7 +119,7 @@ export function validateAiriaUrl(v){
 export function validateAiriaConsoleTemplate(value){
   if(value==='')return '';
   if(typeof value!=='string'||value.length>1200||
-     (value.match(/\\{pipelineId\\}/g)||[]).length!==1)
+     (value.match(/\{pipelineId\}/g)||[]).length!==1)
     throw new RuntimeSettingsError('AIRIA_CONSOLE_URL_TEMPLATE_INVALID');
   let url;
   try{url=new URL(value.replace('{pipelineId}','00000000-0000-0000-0000-000000000000'));}
