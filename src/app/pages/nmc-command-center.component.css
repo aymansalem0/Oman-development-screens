@@ -1439,3 +1439,7 @@ a.big-risk{display:flex;flex-direction:column;align-items:center;justify-content
 @media(max-width:680px){.nmc-si-referrals{padding:13px 12px;margin:12px 0}
  .nmc-si-referrals-grid{grid-template-columns:1fr}
  .nmc-si-referrals-header h3{font-size:15px}}
+
+.nmc-si-referral-factor-summary{padding:8px 9px;border-top:1px solid #d6e9e8;display:grid;gap:4px}
+.nmc-si-referral-factor-summary strong{font-size:10px;color:#14666e}
+.nmc-si-referral-factor-summary small{font-size:10px;color:#406879;overflow-wrap:anywhere}
