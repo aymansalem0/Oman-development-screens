@@ -136,7 +136,8 @@ export class SiPostInspectionRisk{
   const requiresAi=!row.result;
   if(requiresAi&&confirmCost!==true)
    throw new SiPostInspectionRiskError('SI_RISK_RETRY_AI_COST_CONFIRMATION_REQUIRED',422);
-  row.status='QUEUED';row.updatedAt=stamp();this.persist();
+  row.status='QUEUED';row.errorCode=null;row.errorDetails=null;
+  row.updatedAt=stamp();this.persist();
   queueMicrotask(()=>void this.process(eventId));
   return clone(row);
  }
@@ -228,14 +229,25 @@ export class SiPostInspectionRisk{
     factorChanges:result.factorChanges,
     findingFactorAttribution:result.findingFactorAttribution||[]
    });
-   row.status='COMPLETED';row.errorCode=null;row.updatedAt=stamp();
+   row.status='COMPLETED';row.errorCode=null;row.errorDetails=null;
+   row.updatedAt=stamp();
    this.persist();
   }catch(e){
    row.status=row.result?'RISK_SAVED_NMC_SYNC_FAILED':'FAILED';
-   row.errorCode=safeCode(e);row.updatedAt=stamp();this.persist();
+   row.errorCode=safeCode(e);
+   const details=e?.details;
+   row.errorDetails=details&&
+     ['movement','inspection','certificate','dataQuality','history']
+       .includes(details.factor)&&['A01','A02'].includes(details.agent)&&
+     Number.isInteger(details.unknownCount)&&
+     Number.isInteger(details.citedCount)?{
+      factor:details.factor,agent:details.agent,
+      unknownCount:details.unknownCount,citedCount:details.citedCount
+     }:null;
+   row.updatedAt=stamp();this.persist();
    console.error('[si-risk-reassess] FAILED '+JSON.stringify({
      caseId:row.caseId,eventId:row.eventId,status:row.status,
-     errorCode:row.errorCode}));
+     errorCode:row.errorCode,errorDetails:row.errorDetails}));
   }finally{this.active.delete(eventId);}
  }
 }
