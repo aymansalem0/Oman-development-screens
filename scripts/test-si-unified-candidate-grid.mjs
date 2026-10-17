@@ -163,3 +163,22 @@ test('vessel inclusion and removal controls align in trailing row column in LTR 
  assert.match(html,/\(click\)="toggleDraftVesselForScheduling\(row\)"/);
  assert.match(html,/\(click\)="toggleDraftAlternative\(choice,true\)"/);
 });
+
+test('C01 is checked by default only when a new plan starts, and still requires manual execution confirmation',()=>{
+ assert.match(ts,/newDraftDemoMode=true;newDraftAiConsent=true;/);
+ const start=ts.indexOf('openCreatePlan():void{');
+ const end=ts.indexOf('refreshDraftScope():void{',start);
+ assert.ok(start>=0&&end>start);
+ assert.ok(ts.slice(start,end).includes('this.newDraftAiConsent=true;'));
+ const refresh=ts.slice(end,ts.indexOf('draftParametersChanged():void{',end));
+ assert.ok(!refresh.includes('this.newDraftAiConsent=false'),
+   'loading source policy should not uncheck the default or override manual opt out');
+ assert.match(html,/\[\(ngModel\)\]="newDraftAiConsent"/);
+ assert.match(ts,/this\.newDraftBusy\|\|!this\.newDraftAiConsent/);
+ const action=ts.slice(ts.indexOf('generateIntegratedDraft():void{'),
+   ts.indexOf('capacityBlockerText(',ts.indexOf('generateIntegratedDraft():void{')));
+ assert.ok(action.includes('window.confirm('),
+   'C01 job must not be started solely by the prechecked UI option');
+ assert.ok(action.includes('confirmAi:true,confirmCost:true'),
+   'AI job requires the explicit confirmation on Generate');
+});
