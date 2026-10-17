@@ -66,6 +66,7 @@ import {suggestCapacityExceptionActions} from './si-capacity-exception-alternati
 import { SiInspectionLifecycle, SiLifecycleError } from './si-inspection-lifecycle.mjs';
 import {syncSiClosureToNmc,SiNmcClosureSyncError} from './si-nmc-closure-sync.mjs';
 import {buildSiSupervisorFullReport} from './si-supervisor-report.mjs';
+import {syncSiSupervisorReviewToNmc,SiNmcReviewSyncError} from './si-nmc-review-sync.mjs';
 import {SiScheduleOrders,SiWorkOrderError} from './si-schedule-orders.mjs';
 import {runSiPocAdvisor,siFutureAdvisorCoverage,SiPocAdvisorError} from './si-poc-workflow-advisors.mjs';
 import {runSiAiriaAdvisor} from './si-airia-workflow-advisors.mjs';
@@ -2507,15 +2508,41 @@ const server = createServer(async (req, res) => {
           if(req.headers['x-moei-csrf']!=='1')
             throw new MoeiAuthError('MOEI_CSRF_REQUIRED',403);
           const body=await requestJson(req,4096);
-          if(!['APPROVE_REPORT','RETURN_REPORT','CLOSE'].includes(body.action))
+          if(!['APPROVE_REPORT','RETURN_REPORT','CLOSE','ISSUE_ACTIONS']
+            .includes(body.action))
             return respond(res,422,{error:'SI_SUPERVISOR_ACTION_UNSUPPORTED'});
           const actor=identity.email||identity.username;
-          return respond(res,200,await siLifecycle.apply(id,{
+          const result=await siLifecycle.apply(id,{
             action:body.action,expectedVersion:body.expectedVersion,actor,
-            data:{reason:body.reason}
-          }));
+            data:{reason:body.reason,...(body.action==='ISSUE_ACTIONS'?
+              {actions:body.actions}: {})}
+          });
+          if(['APPROVE_REPORT','RETURN_REPORT'].includes(body.action)){
+            try{
+              const view=await siLifecycle.snapshot(id);
+              result.nmcSync=await syncSiSupervisorReviewToNmc({
+                caseId:id,inspectionCase:view.inspectionCase,
+                record:view.record,cases
+              });
+            }catch(error){
+              result.nmcSync={status:'RETRY_REQUIRED',
+                error:error?.code||'SI_NMC_REPORT_NOTIFICATION_FAILED'};
+            }
+          }
+          return respond(res,200,result);
         }
         return respond(res,405,{error:'METHOD_NOT_ALLOWED'});
+      }
+      const retryReviewNmc=/^\/api\/si\/v1\/supervisor\/cases\/([a-f0-9-]{36})\/sync-nmc-review$/.exec(path);
+      if(retryReviewNmc&&req.method==='POST'){
+        moeiAuth.require(req);dashboards.assertRole(req,'PUBLISHER');
+        if(req.headers['x-moei-csrf']!=='1')
+          throw new MoeiAuthError('MOEI_CSRF_REQUIRED',403);
+        const view=await siLifecycle.snapshot(retryReviewNmc[1]);
+        return respond(res,200,await syncSiSupervisorReviewToNmc({
+          caseId:retryReviewNmc[1],inspectionCase:view.inspectionCase,
+          record:view.record,cases
+        }));
       }
       // Unified inspection cycle: read-only timeline, explicit human-gated state changes.
       // GET never initiates an AI call or writes a case.
@@ -2796,7 +2823,7 @@ const server = createServer(async (req, res) => {
         return respond(res,409,{error:e.code,
          periodEligibility:e.periodEligibility||null});
       if(e instanceof SiError||e instanceof SiPocAdvisorError||e instanceof SiRollingPlanError||e instanceof SiIntegratedPlanError||e instanceof SiDraftCreationError||e instanceof SiDraftJobError||
-       e instanceof SiBulkApprovalError||e instanceof SiCandidateAgentError||e instanceof SiNmcClosureSyncError||e instanceof SiLifecycleError||e instanceof SiSelectionError||e instanceof SiPriorityError||e instanceof SiPreparationError||e instanceof SiWorkOrderError||e instanceof SiTargetingError||e instanceof MoeiAuthError||e instanceof DashboardError)
+       e instanceof SiBulkApprovalError||e instanceof SiCandidateAgentError||e instanceof SiNmcReviewSyncError||e instanceof SiNmcClosureSyncError||e instanceof SiLifecycleError||e instanceof SiSelectionError||e instanceof SiPriorityError||e instanceof SiPreparationError||e instanceof SiWorkOrderError||e instanceof SiTargetingError||e instanceof MoeiAuthError||e instanceof DashboardError)
         return respond(res,e.status,{error:e.code});
       if(Number.isInteger(e?.status)&&e.status>=400&&e.status<500)
         return respond(res,e.status,{error:'SI_REQUEST_INVALID'});
