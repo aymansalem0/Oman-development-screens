@@ -248,7 +248,10 @@ async function incidentCaseView(){
   let persisted=[];
   try{persisted=await cases.list();}
   catch{ /* case store unavailable must not hide source incident records */ }
-  return {...feed,incidents:feed.incidents.filter(x=>AIRIA_DEMO_99_IMOS.has(x.imo)).map(incident=>{
+  // Show every valid source incident in the NMC incident queue. The 99-vessel
+  // demo allowlist restricts cross-domain case creation/AI context, NOT
+  // visibility of reports in the source Incident_Registry.
+  return {...feed,incidents:feed.incidents.map(incident=>{
     const linked=persisted.find(row=>
       (row.incidentEvents||[]).some(ev=>ev.incidentId===incident.incidentId&&
         ev.descriptionHash===incident.descriptionHash));
