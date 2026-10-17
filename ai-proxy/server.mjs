@@ -3101,7 +3101,15 @@ const server = createServer(async (req, res) => {
           status:'ok',policyVersion:DECISION_POLICY_VERSION,
           pocOnly:true,decisions:catalogueSummaries()
         });
-        if(!first)return respond(res,200,{status:'ok',cases:(await cases.list()).filter(c=>AIRIA_DEMO_99_IMOS.has(c.imo))});
+        if(!first)return respond(res,200,{status:'ok',cases:(await cases.list()).filter(c=>
+          AIRIA_DEMO_99_IMOS.has(c.imo)||
+          // Approved inspector reports have a real central case and must not
+          // disappear from the Command Center simply because the vessel is
+          // outside the synthetic 99-vessel map cohort.
+          (Array.isArray(c.siInspectionSources)&&
+           c.siInspectionSources.some(x=>x.source==='SI_APPROVED_REPORT'&&
+             /^[a-f0-9-]{36}$/i.test(x.inspectionId)&&
+             /^[a-f0-9-]{36}$/i.test(x.reportId))))});
         if(first==='by-imo'&&/^\d{7}$/.test(action)&&!second){
           const item=await cases.byImo(action);
           return respond(res,200,{status:'ok',case:item});
