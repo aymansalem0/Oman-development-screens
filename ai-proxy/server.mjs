@@ -67,6 +67,7 @@ import { SiInspectionLifecycle, SiLifecycleError } from './si-inspection-lifecyc
 import {syncSiClosureToNmc,SiNmcClosureSyncError} from './si-nmc-closure-sync.mjs';
 import {buildSiSupervisorFullReport} from './si-supervisor-report.mjs';
 import {syncSiSupervisorReviewToNmc,SiNmcReviewSyncError} from './si-nmc-review-sync.mjs';
+import {SiPostInspectionRisk,SiPostInspectionRiskError} from './si-post-inspection-risk.mjs';
 import {SiRegulatoryDrafts,SiRegulatoryDraftError} from './si-supervisor-regulatory-drafts.mjs';
 import {SiScheduleOrders,SiWorkOrderError} from './si-schedule-orders.mjs';
 import {runSiPocAdvisor,siFutureAdvisorCoverage,SiPocAdvisorError} from './si-poc-workflow-advisors.mjs';
@@ -619,6 +620,32 @@ const scheduler=new FleetAutoScheduler({fleet,getPscVessel,
   intervalMs:runtime.get('NMC_FLEET_REFRESH_SECONDS')*1000,
   maxVessels:runtime.get('NMC_FLEET_AUTO_MAX_VESSELS'),
   retryFailed:runtime.get('NMC_FLEET_AUTO_RETRY_FAILED')});
+// Persistent, event-triggered and never browser-triggered. No paid fleet
+// startup batch is needed for an approved inspector report to initiate A01/A02.
+const siRiskReassessor=new SiPostInspectionRisk({
+ fleet,caseWorkspace:cases,riskPolicy,
+ getView:id=>siLifecycle.snapshot(id),
+ getBundle:imo=>scheduler.bundles.find(v=>v.imo===imo)||null,
+ getRiskConfig:()=>riskPolicy.active(),
+ aiAvailable:()=>Boolean(getAiriaKey())&&agentAllowed('a01')&&
+   agentAllowed('a02')&&Boolean(pipelines.a01)&&Boolean(pipelines.a02)
+});
+function enqueueSupervisorRiskReassessment({caseId,view,nmcSync}={}){
+ if(view?.record?.report?.status!=='APPROVED'||!nmcSync?.nmcCaseId||
+    !['RECORDED','ALREADY_RECORDED'].includes(nmcSync.status))
+   return {status:'NOT_QUEUED',reason:'NMC_FORWARD_NOT_CONFIRMED'};
+ try{
+   return siRiskReassessor.enqueue({
+    caseId,imo:view.inspectionCase.imo,reportId:view.record.report.id,
+    nmcCaseId:nmcSync.nmcCaseId
+   });
+ }catch(error){
+   const code=error instanceof SiPostInspectionRiskError?
+     error.code:'SI_RISK_QUEUE_UNAVAILABLE';
+   console.error('[si-risk-reassess] QUEUE_FAILED '+code);
+   return {status:'QUEUE_FAILED',errorCode:code};
+ }
+}
 function applyRuntimeSettings(){
   siAiProvider=runtime.get('SI_AI_PROVIDER');
   siPriority.provider=siAiProvider;
@@ -2559,8 +2586,12 @@ const server = createServer(async (req, res) => {
               const view=await siLifecycle.snapshot(id);
               result.nmcSync=await syncSiSupervisorReviewToNmc({
                 caseId:id,inspectionCase:view.inspectionCase,
-                record:view.record,cases
+                record:view.record,cases,
+                forwardToNmc:body.action==='APPROVE_REPORT'&&body.forwardToNmc===true
               });
+              if(body.action==='APPROVE_REPORT')
+                result.riskReassessment=enqueueSupervisorRiskReassessment({
+                  caseId:id,view,nmcSync:result.nmcSync});
             }catch(error){
               result.nmcSync={status:'RETRY_REQUIRED',
                 error:error?.code||'SI_NMC_REPORT_NOTIFICATION_FAILED'};
@@ -2576,10 +2607,38 @@ const server = createServer(async (req, res) => {
         if(req.headers['x-moei-csrf']!=='1')
           throw new MoeiAuthError('MOEI_CSRF_REQUIRED',403);
         const view=await siLifecycle.snapshot(retryReviewNmc[1]);
-        return respond(res,200,await syncSiSupervisorReviewToNmc({
+        const forwarded=await syncSiSupervisorReviewToNmc({
           caseId:retryReviewNmc[1],inspectionCase:view.inspectionCase,
-          record:view.record,cases
-        }));
+          record:view.record,cases,forwardToNmc:view.record?.report?.status==='APPROVED'
+        });
+        return respond(res,200,{...forwarded,
+          riskReassessment:enqueueSupervisorRiskReassessment({
+            caseId:retryReviewNmc[1],view,nmcSync:forwarded})});
+      }
+      const supervisorRiskStatus=
+        /^\/api\/si\/v1\/supervisor\/cases\/([a-f0-9-]{36})\/reassessment(?:\/(retry))?$/.exec(path);
+      if(supervisorRiskStatus){
+        moeiAuth.require(req);dashboards.assertRole(req,'PUBLISHER');
+        const caseId=supervisorRiskStatus[1],action=supervisorRiskStatus[2];
+        if(req.method==='GET'&&!action)
+          return respond(res,200,{status:'ok',
+            jobs:siRiskReassessor.status(caseId)});
+        if(req.method==='POST'&&action==='retry'){
+          if(req.headers['x-moei-csrf']!=='1')
+            throw new MoeiAuthError('MOEI_CSRF_REQUIRED',403);
+          const input=await requestJson(req,1024);
+          const last=siRiskReassessor.status(caseId)[0];
+          if(!last)return respond(res,404,{error:'SI_RISK_EVENT_NOT_FOUND'});
+          try{return respond(res,200,{status:'ok',
+            job:await siRiskReassessor.retry(last.eventId,{
+              confirmCost:input.confirmCost===true})});}
+          catch(error){
+            if(error instanceof SiPostInspectionRiskError)
+              return respond(res,error.status,{error:error.code});
+            return respond(res,503,{error:'SI_RISK_RETRY_UNAVAILABLE'});
+          }
+        }
+        return respond(res,405,{error:'METHOD_NOT_ALLOWED'});
       }
       // Unified inspection cycle: read-only timeline, explicit human-gated state changes.
       // GET never initiates an AI call or writes a case.
