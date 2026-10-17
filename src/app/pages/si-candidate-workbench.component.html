@@ -418,8 +418,13 @@
       <article><small>{{copy('APPROVED INSPECTION CASES','المعاينات المعتمدة')}}</small><strong>{{d.summary.inspectionsCreated}}</strong><span>{{copy('Approved by authorised officers','معتمدة من الموظفين المخولين')}}</span></article>
     </section>
 
-    <section *ngIf="plan?.selectionProposal as a" class="si-panel" aria-label="AI configured vessel selection result">
-      <h2>{{copy('SI-C01 · Configured AI Vessel Selection Proposal','SI-C01 · نتيجة اختيار السفن بالقواعد المنشورة')}}</h2>
+    <section *ngIf="plan?.selectionProposal as a" class="si-panel si-c01-result" aria-label="AI configured vessel selection result">
+      <details class="si-c01-result-details" data-testid="si-c01-proposal-details">
+       <summary class="si-c01-result-summary" data-testid="si-c01-proposal-toggle">
+        <strong>{{copy('SI-C01 · Configured AI Vessel Selection Proposal','SI-C01 · نتيجة اختيار السفن بالقواعد المنشورة')}}</strong>
+        <span class="si-c01-result-hint">{{copy('Show / hide details','عرض / إخفاء التفاصيل')}}</span>
+       </summary>
+       <div class="si-c01-result-body">
       <p>{{copy('AI recommendations were validated against source eligibility and the published independent quotas. This is a proposed selection ONLY; no plan has been authorised and no inspection case has been created.',
         'تم التحقق من توصيات AI مقابل أهلية المصادر والنسب المستقلة المنشورة. هذه قائمة اختيار مقترحة فقط ولم تُعتمد المعاينة أو تنشأ حالات تنفيذ.')}}</p>
       <div class="si-ai-selection-stats">
@@ -444,6 +449,8 @@
         <small>{{copy('Evidence IDs','مراجع الأدلة')}}: {{r.evidenceRefs.join(' · ')||'—'}}</small>
       </div>
       <p *ngIf="a.aiRecommendedButQuotaExcluded.length">{{copy('AI recommendations beyond published quotas (not selected):','توصيات AI خارج السقف المنشور (غير مختارة):')}} {{a.aiRecommendedButQuotaExcluded.join(', ')}}</p>
+       </div>
+      </details>
     </section>
 
     <section class="si-panel si-unified-queue">
