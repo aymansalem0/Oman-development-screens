@@ -137,7 +137,19 @@ const fs = require("node:fs");
     );
   }
   await issue("SF-002", "POST");
+  const previouslyIssuedUrl=page.url();
   await page.screenshot({ path: out + "/esdb-desktop.png", fullPage: false });
+  // Regression: starting the same service again must open a new DRAFT and
+  // the first actionable wizard step, not restore the previously ISSUED card.
+  await route("services");
+  await page.locator('[data-testid="sdb-start-service"]').click();
+  await page.locator('[data-testid="scenario-CADET_READY"]').click();
+  await page.locator('input[name="format"]').first().waitFor();
+  assert.notEqual(page.url(),previouslyIssuedUrl);
+  assert.equal(await page.locator(".digital-sdb").count(),0);
+  assert.equal(await page.locator(".stepper li.current").count(),1);
+  assert.ok((await page.locator(".stepper li.current").innerText()).includes("SDB format"));
+  await page.screenshot({path:out+"/sdb-new-application-stepper.png",fullPage:false});
   await route("company");
   await page.locator(".preview-bar select").selectOption("SF-004");
   await page.locator(".loading-state").waitFor({ state: "hidden" });
