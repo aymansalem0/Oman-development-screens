@@ -102,6 +102,6 @@ export class SiLifecycleService{
   }):Observable<{status:string;record:SiLifecycleRecord}>{
     return this.http.post<{status:string;record:SiLifecycleRecord}>(
       this.url+'/'+encodeURIComponent(caseId)+'/actions',body,
-      {headers:this.headers(key)});
+      {headers:this.headers(key).set('X-Moei-Csrf','1')});
   }
 }
