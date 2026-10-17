@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {mkdtempSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
-import {SiScheduleOrders} from '../si-schedule-orders.mjs';
+import {SiScheduleOrders,lifecycleLocalStart} from '../si-schedule-orders.mjs';
 
 const uuid=n=>String(n).padStart(8,'0')+'-0000-4000-8000-000000000000';
 const slot=(imo,inspector='ENG-1',start='2026-10-20T06:00:00.000Z')=>{
@@ -11,7 +11,7 @@ const slot=(imo,inspector='ENG-1',start='2026-10-20T06:00:00.000Z')=>{
  return {imo,inspectorId:inspector,inspectorName:'POC Inspector 1',
   portId:'JEA',portName:'Jebel Ali',startUtc:start,
   endUtc:new Date(at+2*3600000).toISOString(),
-  startLocal:'2026-10-20T10:00',endLocal:'2026-10-20T12:00',
+  startLocal:'2026-10-20 10:00',endLocal:'2026-10-20 12:00',
   locationName:'POC Berth 01',optionId:'ERP-OPT-1'};
 };
 const reasons=[{eventKey:'PSC-EVENT-01',candidateKey:'CK-1',
@@ -526,6 +526,8 @@ test('POC inspector can self-confirm the frozen mandatory checklist and start wi
   assert.equal(ready.audit.at(-1).action,'POC_INSPECTOR_SELF_CONFIRMED_MANDATORY');
   assert.equal(x.calls.ai,0);
   assert.equal(x.lifecycle().stage,'ASSIGNED');
+  assert.equal(x.lifecycle().assignment.startLocal,'2026-10-20T10:00',
+   'Real scheduler UAE-local clock should satisfy lifecycle ASSIGN validation');
   const started=await x.orders.startField({planId:x.p.id,orderId,
    actor:'inspector@moei.example',confirmPocDelegation:false});
   assert.equal(started.status,'FIELD_STARTED');
@@ -591,5 +593,15 @@ test('inspector mock acknowledgement never applies to non-mock schedules',async(
   else process.env.SI_POC_INSPECTOR_SELF_SCOPE_ENABLED=oldFlag;
   if(oldMap===undefined)delete process.env.SI_V2_INSPECTOR_IDENTITY_MAP_JSON;
   else process.env.SI_V2_INSPECTOR_IDENTITY_MAP_JSON=oldMap;
+ }
+});
+
+test('lifecycle ASSIGN canonicalization preserves actual UAE-local minute without inventing slots',()=>{
+ assert.equal(lifecycleLocalStart('2026-10-20 10:00'),'2026-10-20T10:00');
+ assert.equal(lifecycleLocalStart('2026-10-20T10:00'),'2026-10-20T10:00');
+ for(const invalid of ['2026-02-30 10:00','2026-10-20 25:00',
+   '2026-10-20T10:00Z','2026-10-20T10:00+04:00','']){
+  assert.throws(()=>lifecycleLocalStart(invalid),
+   e=>e.code==='SI_ASSIGNMENT_SCHEDULE_START_INVALID'&&e.status===422);
  }
 });
