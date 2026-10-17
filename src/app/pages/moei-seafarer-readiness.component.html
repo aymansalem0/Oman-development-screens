@@ -1166,13 +1166,24 @@
               </div>
               <div class="digital-layout">
                 <article class="digital-sdb">
-                  <header><span>⚓ MOEI</span><b>eSDB</b></header>
+                  <header>
+                    <span class="esdb-ministry-brand">
+                      <img
+                        [src]="lang.isArabic ? '/branding/uae-moei-ar.png' : '/branding/uae-moei-en.png'"
+                        [alt]="t('UAE Ministry of Energy and Infrastructure','وزارة الطاقة والبنية التحتية')"
+                        width="196" height="43" decoding="async">
+                    </span>
+                    <b>eSDB</b>
+                  </header>
+                  <div class="esdb-specimen-mark">{{t('SAMPLE · NOT OFFICIAL','عينة تجريبية · غير رسمية')}}</div>
                   <small>UNITED ARAB EMIRATES</small>
                   <h3>SEAMAN’S DISCHARGE BOOK</h3>
                   <div class="digital-identity">
-                    <span class="digital-photo">{{
-                      initials(digital.name)
-                    }}</span>
+                    <span class="digital-photo" data-testid="sdb-sample-portrait">
+                      <img src="/branding/esdb-sample-emirati-portrait.svg"
+                           [alt]="t('Fictional Emirati attire illustration, sample only','صورة رمزية توضيحية للزي الإماراتي، عينة فقط')"
+                           width="78" height="94" decoding="async">
+                    </span>
                     <div>
                       <small>SEAFARER NAME</small
                       ><strong>{{ digital.name }}</strong
@@ -1208,6 +1219,7 @@
                     </div>
                   </div>
                   <p class="esdb-qr-error" role="alert" *ngIf="issuedQrError">{{issuedQrError}}</p>
+                  <p class="esdb-qr-error" role="alert" *ngIf="issuedCardError">{{issuedCardError}}</p>
                   <footer>SPECIMEN · SANDBOX · NOT AN OFFICIAL DOCUMENT</footer>
                 </article>
                 <aside class="issued-summary">
