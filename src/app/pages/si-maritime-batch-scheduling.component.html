@@ -3,14 +3,19 @@
  <main class="marine-main">
   <header class="marine-hero">
    <small>MOEI · SMART INSPECTION · V2 MARITIME SCHEDULING</small>
-   <h1>{{copy('Comprehensive Electronic Inspection Scheduling','الجدولة الإلكترونية الشاملة للمعاينات')}}</h1>
-   <p>{{copy('Approved Inspection Plan → ERP engineer availability → verified feasible scheduling alternatives → SI-S01 AI ranking → supervisor review.',
-     'خطة المعاينات المعتمدة ← إتاحة مهندسي ERP ← بدائل جدولة صالحة ← ترتيب SI-S01 بالذكاء الاصطناعي ← مراجعة واعتماد المسؤول.')}}</p>
+   <h1>{{approvedSchedule?
+     copy('Issued Inspection Work Orders · Read-Only','أوامر تكليف المعاينات الصادرة · عرض فقط'):
+     copy('Comprehensive Electronic Inspection Scheduling','الجدولة الإلكترونية الشاملة للمعاينات')}}</h1>
+   <p>{{approvedSchedule?
+     copy('Assignments have been issued. Continue all inspector activities from My Inspection Journey.','صدرت أوامر التكليف؛ استكمل جميع إجراءات المفتش من رحلة المعاينة الموحدة.'):
+     copy('Approved plan → ERP feasibility → review assignments → issue work orders. AI comparison is optional.',
+      'خطة معتمدة ← التحقق من إتاحة ERP ← مراجعة التوزيع ← إصدار أوامر التكليف. مقارنة AI اختيارية.')}}</p>
    <a routerLink="/moei/smart-inspection/scheduling">{{copy('← Approved Plans','← الخطط المعتمدة')}}</a>
   </header>
   <div class="marine-error" *ngIf="error" role="alert">{{error}}</div>
   <div class="marine-notice" *ngIf="notice" role="status">{{notice}}</div>
   <div class="marine-notice" *ngIf="loading">{{copy('Loading approved plan and workforce…','تحميل الخطة المعتمدة والمهندسين…')}}</div>
+  <p *ngIf="!scheduleStatusLoaded" class="marine-notice" role="status">{{copy('Checking issued orders before enabling schedule editing…','جارٍ التحقق من أوامر التكليف قبل إتاحة تحرير الجدولة…')}}</p>
   <ng-container *ngIf="context as ctx">
    <div *ngIf="ctx.demoMode" class="marine-demo-banner" role="status">
     <strong>{{copy('POC DEMO · SYNTHETIC SCHEDULING DATA',
@@ -32,9 +37,9 @@
    </section>
    <section class="marine-kpis">
     <div><span>{{copy('Approved vessels','السفن المعتمدة')}}</span><strong>{{ctx.approvedVessels}}</strong></div>
-    <div><span>{{copy('Proposed slots','المواعيد المقترحة')}}</span><strong>{{proposal?.summary?.proposed??'—'}}</strong></div>
+    <div><span>{{copy('Assigned slots','المواعيد المسندة')}}</span><strong>{{approvedSchedule?.orders?.length??proposal?.summary?.proposed??'—'}}</strong></div>
     <div><span>{{copy('Unscheduled','غير المجدولة')}}</span><strong>{{proposal?.summary?.unscheduled??'—'}}</strong></div>
-    <div><span>{{copy('Cases / bookings created','الحالات والحجوزات')}}</span><strong>0 / 0</strong></div>
+    <div><span>{{copy('Work orders issued','أوامر التكليف الصادرة')}}</span><strong>{{approvedSchedule?.orders?.length??0}}</strong></div>
    </section>
    <section class="marine-panel" *ngIf="scheduleStatusLoaded&&!approvedSchedule">
     <h2>{{copy('Vessels from the approved inspection plan · visit inputs','السفن الناتجة عن خطة المعاينات المعتمدة · بيانات الزيارة')}}</h2>
@@ -339,11 +344,12 @@
        {{workOrdersError}}</p>
     <div class="marine-title-line">
       <div>
-        <h2>{{copy('03 · Approve Schedule & Issue Inspector Work Orders',
-          '٠٣ · اعتماد الجدولة وإصدار أوامر تكليف المهندسين')}}</h2>
-        <p class="marine-note">{{copy(
-         'An authorized supervisor approves the entire source-verified schedule once. Each vessel receives its own traceable assignment order. This POC does not book live ERP resources.',
-         'يعتمد المسؤول المخوّل الجدول بالكامل مرة واحدة ثم يصدر أمر تكليف مستقل لكل سفينة. لا يتم حجز موارد ERP الفعلية في هذا الـPOC.')}}</p>
+        <h2>{{approvedSchedule?
+          copy('03 · Issued Work Orders · Read-Only','٠٣ · أوامر التكليف الصادرة · عرض فقط'):
+          copy('03 · Review Schedule & Issue Inspector Work Orders','٠٣ · مراجعة الجدولة وإصدار أوامر التكليف')}}</h2>
+        <p class="marine-note">{{approvedSchedule?
+         copy('Approved assignment register only. Continue preparation and field execution from My Inspection Journey.','سجل أوامر التكليف المعتمدة للعرض فقط. استكمل التحضير والتنفيذ من رحلة المفتش الموحدة.'):
+         copy('Review feasibility, then issue one traceable work order per vessel. No live ERP booking is created.','راجع إمكانية التنفيذ ثم أصدر أمر تكليف مستقل لكل سفينة؛ دون إنشاء حجز ERP فعلي.')}}</p>
       </div>
       <button *ngIf="!approvedSchedule" type="button" [disabled]="!canApproveSchedule" (click)="approveSchedule()"
        class="si-schedule-approve">
@@ -355,7 +361,7 @@
     <p *ngIf="proposal && proposal.summary.unscheduled>0" class="marine-preview-warning">
       {{copy('Schedule approval requires an assignment for EVERY selected vessel. Correct the unscheduled rows and recalculate.',
         'اعتماد الجدولة يتطلب توزيع مهندس وموعد لكل سفينة معتمدة. استكمل السفن غير المجدولة ثم أعد الحساب.')}}</p>
-    <p *ngIf="!approvedSchedule && !proposal" class="marine-note">
+    <p *ngIf="!approvedSchedule && !proposal && scheduleStatusLoaded" class="marine-note">
       {{copy('Calculate the schedule or run SI-S01 first. The supervisor approval action will appear when all selected vessels can be assigned.',
        'احسب الجدولة أو شغّل SI-S01 أولًا. سيتاح الاعتماد بعد إمكانية توزيع جميع سفن الخطة.')}}</p>
     <ng-container *ngIf="approvedSchedule as schedule">
@@ -369,7 +375,7 @@
           <th>{{copy('Assigned engineer','المهندس المكلف')}}</th>
           <th>{{copy('Port / Date','الميناء / الموعد')}}</th>
           <th>{{copy('Checklist & AI','القوائم و AI')}}</th>
-          <th>{{copy('Status & action','الحالة والإجراء')}}</th>
+          <th>{{copy('Saved status','الحالة المحفوظة')}}</th>
         </tr></thead>
         <tbody><tr *ngFor="let order of schedule.orders">
           <td><strong>IMO {{order.imo}}</strong>
