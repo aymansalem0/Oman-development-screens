@@ -138,6 +138,13 @@ export interface NmcCaseA01SourcePreview {
   caseLevel:string|null;latestLevel:string|null;
   sourceAssessedAt:string|null;latestAssessedAt:string|null;
 }
+export interface NmcSiPostInspectionRiskStatus{
+  status:'ok';caseId:string;source:'SI_APPROVED_INSPECTION'|'NOT_SI_APPROVED_INSPECTION';
+  reportId:string|null;
+  jobStatus:string;
+  job:{status:string;aiExecutionStatus:string|null;errorCode:string|null;
+    updatedAt:string|null;riskSaved:boolean;assessmentId:string|null}|null;
+}
 interface CaseResponse{
   status:'ok';case:NmcCentralCase|null;
   aiActionPlanStatus?:'READY'|'FAILED';
@@ -202,6 +209,11 @@ export class NmcCasesService {
   actionPlanSourcePreview(id:string):Observable<NmcCaseA01SourcePreview>{
     return this.http.get<NmcCaseA01SourcePreview>(
       this.path(id)+'/action-plan-source');
+  }
+  /** Read-only: never queues A01/A02 or retries potentially billable calls. */
+  siPostInspectionRiskStatus(caseId:string):Observable<NmcSiPostInspectionRiskStatus>{
+    return this.http.get<NmcSiPostInspectionRiskStatus>(
+      this.path(caseId)+'/post-inspection-risk-status');
   }
   generateActionPlan(current:NmcCentralCase,acknowledgeHistoricalAssessment=false,
     reviewedLatestAssessmentId?:string|null):Observable<CaseResponse>{
