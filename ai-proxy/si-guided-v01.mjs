@@ -63,14 +63,14 @@ export function validateGuidedV01Reply(raw,{caseId,media}){
  const ctx={state:{caseId},media,allowedEvidence:new Set([media.evidenceId])};
  const result=validateSiAiriaReply('SI-V01',raw,ctx);
  const advice=result.advice?.[0];
- if(!advice||advice.requiresHumanReview!==true||!
-    advice.evidenceRefs.includes(media.evidenceId))
+ if(!advice||advice.requiresHumanReview!==true||
+    !advice.explanation?.trim()||!advice.evidenceRefs.includes(media.evidenceId))
   fail('SI_V01_AIRIA_CONTRACT_INVALID',502);
  return {status:'AI_PHOTO_ADVISORY_ONLY',provider:'AIRIA_SI_V01',
   reviewedEvidence:media.evidenceId,
-  recommendations:[{rationale:label(advice.explanation,1800),
-    instruction:'Inspector: verify each observable fact on board; document missing proof.',
-    dataGaps:['Independent inspector confirmation required'],
+  recommendations:[{rationale:'Unverified photo observation linked to inspector evidence',
+    instruction:label(advice.explanation,1600),
+    dataGaps:['Independent inspector verification required before any compliance finding'],
     confidence:null}],
   officialCompliance:false,inspectorReviewRequired:true,
   findingCreated:false,requiresSupervisorReview:true};
