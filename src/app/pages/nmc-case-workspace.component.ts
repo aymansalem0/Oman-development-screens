@@ -238,7 +238,8 @@ export class NmcCaseWorkspaceComponent implements OnInit {
   }
 
   get riskLevelLabel(): string {
-    const level = this.centralCase?.sourceLevel||this.riskEngine.levelForScore(this.currentRisk);
+    const level = this.centralCase?.operationalRisk?.level||
+      this.centralCase?.sourceLevel||this.riskEngine.levelForScore(this.currentRisk);
     const labels: Record<string,string> = {
       Critical: this.copy('Critical', 'حرج'),
       High: this.copy('High', 'مرتفع'),
@@ -249,7 +250,8 @@ export class NmcCaseWorkspaceComponent implements OnInit {
   }
 
   get riskClass(): string {
-    return (this.centralCase?.sourceLevel||this.riskEngine.levelForScore(this.currentRisk)).toLowerCase();
+    return (this.centralCase?.operationalRisk?.level||
+      this.centralCase?.sourceLevel||this.riskEngine.levelForScore(this.currentRisk)).toLowerCase();
   }
 
   get completedTasks(): number {
@@ -310,11 +312,15 @@ export class NmcCaseWorkspaceComponent implements OnInit {
   // Immutable source assessment carried by the case. Human task/inspection completion
   // must never fabricate an updated risk score or subtract fixed points.
   get currentRisk(): number {
-    return this.centralCase?.sourceScore ?? this.vessel.risk;
+    return this.centralCase?.operationalRisk?.score ??
+      this.centralCase?.sourceScore ?? this.vessel.risk;
   }
 
   get riskReassessmentPending(): boolean {
-    return !!this.centralCase?.inspectionOutcome;
+    return !!this.centralCase&&
+      (!!this.centralCase.inspectionOutcome||
+       (this.centralCase.siInspectionSources||[]).length>0)&&
+      !this.centralCase.operationalRisk;
   }
 
   get nextAction(): string {
