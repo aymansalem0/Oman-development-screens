@@ -38,7 +38,8 @@ test('command center shows actual NMC case cards with both SI-origin and NMC-ori
  assert.match(nmc,/c.siInspectionSources/);
  assert.match(nmc,/c.inspectionReviewHistory/);
  assert.match(nmc,/x.decision==='APPROVED'/);
- assert.match(nmc,/c.operationalRisk\|\|null/);
+ assert.match(nmc,/c.operationalRisk\?\.sourceReportId===latest\?\.reportId/);
+ assert.match(nmc,/c.operationalRisk:null/);
  assert.match(nmc,/this.casesService.list\(\).subscribe/);
  assert.match(html,/data-testid="nmc-si-forwarded-cases"/);
  assert.match(html,/data-testid="nmc-si-forwarded-case-card"/);
