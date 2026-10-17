@@ -118,6 +118,16 @@ export function auditAiGovernanceGrouping(descriptors:ReadonlyArray<{key:string}
             <div><h2>{{groupLabel(group)}}</h2>
               <p>{{groupDescription(group)}}</p>
               <small class="group-count">{{byGroup(group).length}} {{tr('settings','إعدادات')}}</small></div>
+            <ng-container *ngIf="pipelineSettingForGroup(group) as agentPipeline">
+              <button class="restore airia-agent-header-link" type="button"
+                (click)="$event.preventDefault();$event.stopPropagation();openAiriaExternal(agentPipeline)"
+                [disabled]="!airiaConsoleUrl(agentPipeline)"
+                [title]="airiaConsoleUrl(agentPipeline)?
+                 tr('Open this Agent in Airia','فتح هذا الوكيل على Airia'):
+                 tr('Configure and publish Airia Console URL first','اضبط وانشر رابط واجهة Airia أولًا')">
+                Airia ↗
+              </button>
+            </ng-container>
             <span class="agent-chevron" aria-hidden="true">⌄</span>
           </summary>
           <div class="settings-grid">
@@ -318,6 +328,7 @@ export function auditAiGovernanceGrouping(descriptors:ReadonlyArray<{key:string}
     .runtime-info{background:#eaf6f4;border-inline-start:4px solid #0e9a90;padding:18px;border-radius:11px;margin:19px 0}
     .runtime-info strong{font-size:12px}.runtime-info p{line-height:1.8;font-size:11px;margin:7px 0 0;color:#4b7078}
     .airia-link-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+    .airia-agent-header-link{font-size:11px;margin-inline-start:auto;white-space:nowrap;min-width:68px;flex-shrink:0}
     .airia-console-note{display:block;flex-basis:100%;font-size:10px;line-height:1.5;color:#527789;overflow-wrap:anywhere}
     .airia-link-actions button:disabled{opacity:.55;cursor:not-allowed}
     .airia-embed-panel{position:fixed;inset:18px;z-index:9999;overflow:auto;
@@ -459,6 +470,10 @@ export class NmcRuntimeSettingsComponent implements OnInit{
       'platform-connectivity':'عنوان Airia والمهلة المشتركة؛ المفتاح محفوظ بصورة آمنة'
     };
     return section?this.tr(section.desc,arabic[g]||section.desc):'';
+  }
+  pipelineSettingForGroup(group:string):string|null{
+    const section=AI_GOVERNANCE_SECTIONS.find(x=>x.id===group);
+    return section?.keys.find(k=>k.startsWith('AIRIA_')&&k.endsWith('_PIPELINE_ID'))||null;
   }
   /** Only allow Airia HTTPS console hosts. The link is navigation, not an API call.
    * Use published backend configuration to prevent unreviewed draft links.
