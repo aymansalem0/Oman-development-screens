@@ -76,3 +76,12 @@ Verify:
 ### QA requirements before merge/deployment
 
 Run Angular build, Docker image build, Seafarer HTTP/workspace tests, navigation regression, NMC / Smart Inspection regression, and a browser journey. The existence of committed test scripts and GitHub workflows is **not proof** that CI passed. Review actual run results first. Do not restart an unfinished paid C01 job; do not call live providers from a demo run.
+
+
+## eSDB SAMPLE QR link (17 October update)
+
+- Newly rendered, issued **sandbox** eSDB QR images now contain an actual absolute URL in the **same origin as the page where the card was opened**, in the form `https://<reachable-host>/#/esdb/verify/VERIFY-SANDBOX-xxxxxxxx?number=SDB-SANDBOX-xxxxxxxx-x`. The exported SAMPLE eSDB card embeds the same QR and includes a clickable link.
+- The QR opens a **public, read-only POC specimen lookup page**, not a government credential-verification service. The lookup uses both the verification reference and simulated SDB number and returns only specimen flags, sample number, issued/expiry dates. It never returns the person's name, SID, national ID, address, contact, payment details, photo, company, or applicant profile.
+- The new public API is `GET /api/seafarers/v1/public/esdb/verify?reference=...&number=...`; a mismatched/unknown pair returns 404. Authentication remains mandatory on all other SDB customer/profile/application endpoints.
+- **For a phone scan**, first deploy/open the eSDB from an HTTPS origin reachable by that phone and regenerate or reload the card. A QR generated while viewing `http://localhost:4200` points to the computer's localhost and **will not work from another device**. Old QR image exports containing `MOEI-eSDB-POC\nSDB:` are not magically converted and must be regenerated after deploying the change.
+- The original `/data/sdb-readiness-sandbox.json` store remains authoritative for issued sandbox records. No real MARASI, MOEI national registry, official verification, Oracle migration or payment/credential validity claim is introduced.
