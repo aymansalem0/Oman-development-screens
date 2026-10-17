@@ -1531,6 +1531,9 @@ details summary {
 .esdb-qr-info strong{font-size:12px;letter-spacing:.3px;color:#fff}
 .esdb-qr-info span{font-size:10px;overflow-wrap:anywhere;color:#f5ffff}
 .esdb-qr-info small{font-size:9px;line-height:1.65;color:#d7e6e7}
+.esdb-qr-verify-link{color:#fff;position:relative;font-size:11px;font-weight:800;text-underline-offset:3px;overflow-wrap:anywhere}
+.esdb-qr-verify-link:focus-visible{outline:2px solid #fff;outline-offset:4px;border-radius:3px}
+.esdb-qr-local-warning{color:#ffe0a1!important}
 .esdb-qr-error{position:relative;z-index:1;color:#ffe0a3;font-size:11px}
 @media(max-width:600px){.esdb-qr{flex-direction:column;align-items:flex-start}}
 .digital-sdb footer {
