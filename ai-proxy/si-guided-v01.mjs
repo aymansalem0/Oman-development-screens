@@ -40,37 +40,29 @@ export function loadGuidedV01Image({caseId,step,evidence,evidenceRoot='/data/si-
    checklistVersion:published?String(step.members.find(m=>m.kind==='PUBLISHED'&&m.id===evidence.itemId)?.revision||''):'',
    observation:label(step.note||'',500),baseCheckMandatory:step.mandatory===true};
 }
+/**
+ * Match the partner SI-V01 P1 contract used by buildSiAiriaRequest.
+ * Extra outputGuidance, schemaVersion, requestedOutputs and constraints
+ * were never verified as accepted by the strict Airia V01 pipeline.
+ * This function intentionally sends ONLY known contract input fields;
+ * output review remains server-enforced by validateGuidedV01Reply.
+ */
 export function buildGuidedV01Input({caseId,imo,step,media,caseVersion}){
  if(!uuid.test(caseId||'')||!/^[0-9]{7}$/.test(imo||'')||
    !step||media?.caseId!==caseId||!uuid.test(media.evidenceId||''))
   fail('SI_V01_FIELD_CONTEXT_INVALID',422);
  return {
-  requestMeta:{correlationId:'SI-V01-'+randomUUID(),schemaVersion:'SI-V01-POC-1.0',
-    requestedAt:new Date().toISOString(),source:'ASSIGNED_INSPECTOR_EXPLICIT_PHOTO_REVIEW'},
+  requestMeta:{correlationId:'SI-V01-'+randomUUID(),
+    actor:'MOEI_ASSIGNED_INSPECTOR',language:'en',mode:'ADVISORY_ONLY'},
   inspectionCaseId:caseId,caseVersion:Number.isInteger(caseVersion)?caseVersion:0,imo,
   checklistItemId:media.checklistItemId,checklistVersion:media.checklistVersion||null,
   evidence:{evidenceId:media.evidenceId,mimeType:media.mimeType,sha256:media.sha256,
-    scanStatus:'LOCAL_INSPECTOR_IMAGE_HASH_VERIFIED',captureTimeUtc:null},
-  inspectorObservation:media.observation||'',
-  context:{baseCheckMandatory:media.baseCheckMandatory,
-    question:label(step.title,220),instructions:label(step.systemAction,1200)},
-  requestedOutputs:['CANDIDATE_VISUAL_OBSERVATIONS','VISIBLE_FACTS','LIMITATIONS'],
-  outputGuidance:{
-    format:'SINGLE_JSON_OBJECT_NO_MARKDOWN',
-    requiredFields:['officialFindingCreated','requiresInspectorConfirmation',
-      'inspectionCaseId','evidenceId','checklistItemId','confidence','candidateFinding'],
-    requiredValues:{officialFindingCreated:false,requiresInspectorConfirmation:true,
-      inspectionCaseId:caseId,evidenceId:media.evidenceId,
-      checklistItemId:media.checklistItemId},
-    candidateFinding:{reason:'observed photo facts only',
-      visibleFacts:['specific visible details'],limitations:['uncertainty or missing proof']},
-    confidenceRange:'0.0 to 1.0',
-    noFabricatedComplianceResult:true
-  },
-  constraints:{officialFindingCreated:false,requiresInspectorConfirmation:true,
-    noAutoComplianceDecision:true}
+    scanStatus:'CHECKLIST_VERIFIED_LOCAL_POC',captureTimeUtc:null},
+  inspectorObservation:label(media.observation||'',500),
+  context:{baseCheckMandatory:media.baseCheckMandatory===true}
  };
 }
+
 export function validateGuidedV01Reply(raw,{caseId,media}){
  const ctx={state:{caseId},media,allowedEvidence:new Set([media.evidenceId])};
  const result=validateSiAiriaReply('SI-V01',raw,ctx);

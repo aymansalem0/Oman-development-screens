@@ -466,6 +466,17 @@ export class SiGuidedInspectionComponent implements OnInit{
         this.error=this.t(
           'Image AI is not configured. Review AI Settings: '+(parts||'checklist vision contract'),
           'تحليل الصورة بالذكاء الاصطناعي غير مهيأ. راجع إعدادات AI: '+(parts||'عقد تحليل الصور'));
+      }else if(e?.error?.error==='SI_V01_MULTIPART_REQUEST_REJECTED'){
+        const rejection=e?.error?.rejection||{};
+        const fields=Array.isArray(rejection.validationFields)?
+          rejection.validationFields.filter((f:unknown)=>typeof f==='string').slice(0,5).join(', '):'';
+        const category=typeof rejection.category==='string'?rejection.category:'UNCLASSIFIED';
+        const suffix=fields?(' · '+fields):(' · '+category);
+        this.error=this.t(
+          'Airia rejected the photo request (HTTP 400)'+suffix+
+          '. The image was not analyzed; share only the correlation ID and rejection category with support.',
+          'رفضت Airia طلب تحليل الصورة (HTTP 400)'+suffix+
+          '. لم تُحلّل الصورة؛ شارك رقم تتبع الطلب وتصنيف الخطأ فقط مع الدعم.');
       }else if(e?.error?.error==='SI_V01_UPSTREAM_PROVIDER_UNAVAILABLE'||
                 e?.error?.error==='SI_V01_UPSTREAM_TIMEOUT'){
         this.error=this.t('SI-V01 photo request failed. Verify the Airia pipeline contract and proxy logs.',

@@ -60,7 +60,7 @@ import {projectGuidedInspection,findGuidedStep,guidedFinalAssessment,
 import {pocInspectorIdForActor} from './si-inspector-identity.mjs';
 import {saveGuidedEvidence,listGuidedEvidence,readGuidedImage} from './si-guided-evidence.mjs';
 import {loadGuidedV01Image,buildGuidedV01Input,validateGuidedV01Reply} from './si-guided-v01.mjs';
-import {classifySiV01Failure} from './si-v01-provider-diagnostics.mjs';
+import {classifySiV01Failure,summarizeSiV01Rejection} from './si-v01-provider-diagnostics.mjs';
 import {suggestCapacityExceptionActions} from './si-capacity-exception-alternatives.mjs';
 import { SiInspectionLifecycle, SiLifecycleError } from './si-inspection-lifecycle.mjs';
 import {SiScheduleOrders,SiWorkOrderError} from './si-schedule-orders.mjs';
@@ -409,7 +409,25 @@ async function callSiVisionAiria(request,media){
     method:'POST',headers:{'X-API-KEY':getAiriaKey(),'User-Agent':'moei-si-v01/1.0'},
     body:form,signal:AbortSignal.timeout(airiaTimeout())
   });
-  if(!upstream.ok)throw new Error('AIRIA_V01_HTTP_'+upstream.status);
+  if(!upstream.ok){
+    // Airia's JSON problem body may reveal the *field* rejected by the
+    // multipart validator. Retain ONLY safe diagnostic categories and
+    // known field names, never the raw body or provider-supplied messages.
+    let diagnostic={category:'UNCLASSIFIED',validationFields:[],
+      responseShape:'UNKNOWN',media:'other'};
+    try{
+      const length=Number(upstream.headers.get('content-length')||'0');
+      // Keep the maximum body read bounded and never log the original text.
+      if(!length||length<=16384){
+        const raw=(await upstream.text()).slice(0,16384);
+        diagnostic=summarizeSiV01Rejection(upstream.status,raw,
+          upstream.headers.get('content-type')||'');
+      }
+    }catch{/* upstream body is not reliable; keep a generic failure */}
+    const error=new Error('AIRIA_V01_HTTP_'+upstream.status);
+    error.safeDiagnostic=diagnostic;
+    throw error;
+  }
   // A provider success status is not proof of JSON. Never expose the raw body.
   try{return await upstream.json();}
   catch{throw new Error('AIRIA_V01_RESPONSE_INVALID_JSON');}
@@ -2043,10 +2061,12 @@ const server = createServer(async (req, res) => {
                 console.error('[si-v01] GUIDED_VISION_UPSTREAM_FAILED '+JSON.stringify({
                   code:failure.error,caseId:current.order.caseId,
                   correlationId:request.requestMeta.correlationId,
-                  ...(failure.upstreamStatus?{upstreamStatus:failure.upstreamStatus}:{})
+                  ...(failure.upstreamStatus?{upstreamStatus:failure.upstreamStatus}:{}),
+                  ...(error.safeDiagnostic?{rejection:error.safeDiagnostic}:{})
                 }));
                 return respond(res,failure.status,{error:failure.error,
-                  correlationId:request.requestMeta.correlationId});
+                  correlationId:request.requestMeta.correlationId,
+                  ...(error.safeDiagnostic?{rejection:error.safeDiagnostic}:{})});
               }
               try{
                 return respond(res,200,validateGuidedV01Reply(upstream,{

@@ -24,9 +24,20 @@ test('SI-V01 accepts only case-owned, hash-checked published photo and builds ty
   assert.equal(media.checklistVersion,'3');
   const request=buildGuidedV01Input({caseId,imo:'9400631',step,media,caseVersion:2});
   assert.equal(request.evidence.evidenceId,imageId);
-  assert.equal(request.constraints.officialFindingCreated,false);
-  assert.equal(request.constraints.requiresInspectorConfirmation,true);
-  assert.ok(!('base64' in request));
+  assert.equal(request.requestMeta.mode,'ADVISORY_ONLY');
+  assert.equal(request.evidence.scanStatus,'CHECKLIST_VERIFIED_LOCAL_POC');
+  assert.equal(request.context.baseCheckMandatory,true);
+  assert.deepEqual(Object.keys(request).sort(),[
+    'requestMeta','inspectionCaseId','caseVersion','imo','checklistItemId',
+    'checklistVersion','evidence','inspectorObservation','context'].sort());
+  assert.deepEqual(Object.keys(request.requestMeta).sort(),
+    ['correlationId','actor','language','mode'].sort());
+  for(const unsupported of ['constraints','outputGuidance','requestedOutputs',
+      'base64','schemaVersion','image']){
+    assert.equal(Object.hasOwn(request,unsupported),false);
+  }
+  assert.equal(request.inspectorObservation,'');
+  assert.equal(request.evidence.evidenceId,imageId);
   assert.throws(()=>loadGuidedV01Image({caseId,step,
    evidence:{...evidence,sha256:'0'.repeat(64)},evidenceRoot:dir}),
    /SI_V01_IMAGE_INTEGRITY_FAILED/);
