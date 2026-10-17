@@ -28,7 +28,7 @@ export interface SiLifecycleRecord {
   findings:{id:string;checkId:string;title:string;severity:string;description:string;
     evidenceRefs:string[];status:string}[];
   report:{id:string;status:string;source:string;summary:string;aiGenerated:false;
-    submittedBy:string;findingsCount:number;criticalCount:number;majorCount:number;
+    submittedBy:string;checksCompleted?:number;findingsCount:number;criticalCount:number;majorCount:number;
     supervisor:string|null;approvedAt?:string;returnReason?:string}|null;
   actions:SiCorrection[];
   followUps:{id:string;mode:string;result:string;note:string;inspector:string;
