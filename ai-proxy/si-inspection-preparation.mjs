@@ -495,7 +495,8 @@ export class SiInspectionPreparation{
           const failure=e instanceof SiPreparationError?e.code:upstream.code;
           if(upstream)console.error('[si-a04] UPSTREAM_FAILURE '+JSON.stringify({
             correlationId,caseId:id,category:upstream.code,
-            ...(upstream.upstreamStatus?{upstreamStatus:upstream.upstreamStatus}:{})
+            ...(upstream.upstreamStatus?{upstreamStatus:upstream.upstreamStatus}:{}),
+            ...(upstream.transportReason?{transportReason:upstream.transportReason}:{})
           }));
           const field=e instanceof SiPreparationError?e.field:null;
           if(failure==='SI_A04_FOCUS_INVALID'||
