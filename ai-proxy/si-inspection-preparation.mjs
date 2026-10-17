@@ -491,7 +491,12 @@ export class SiInspectionPreparation{
       }catch(e){
         const current=await this.record(id);
         if(current?.version===generating.version&&current?.correlationId===correlationId){
-          const failure=e instanceof SiPreparationError?e.code:'SI_A04_PROVIDER_UNAVAILABLE';
+          const upstream=e instanceof SiPreparationError?null:classifyA04ProviderFailure(e);
+          const failure=e instanceof SiPreparationError?e.code:upstream.code;
+          if(upstream)console.error('[si-a04] UPSTREAM_FAILURE '+JSON.stringify({
+            correlationId,caseId:id,category:upstream.code,
+            ...(upstream.upstreamStatus?{upstreamStatus:upstream.upstreamStatus}:{})
+          }));
           const field=e instanceof SiPreparationError?e.field:null;
           if(failure==='SI_A04_FOCUS_INVALID'||
              failure==='SI_A04_CHECKLIST_REF_INVALID'||
