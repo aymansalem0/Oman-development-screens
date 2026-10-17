@@ -12,6 +12,7 @@ import {catalogFromNmcSource} from './psc-fixtures.mjs';
 import {AIRIA_DEMO_99_IMOS} from './airia-demo-cohort.mjs';
 import {evaluateDataQuality} from './data-quality.mjs';
 import {documentEvidenceChecks,documentIntegritySignal} from './document-risk-evidence.mjs';
+import {canonicalizeApprovedFindingReferences} from './si-risk-factor-attribution.mjs';
 
 const baseTs=readFileSync(new URL('./nmc-vessel-catalog.ts',import.meta.url),'utf8');
 const extraTs=readFileSync(new URL('./nmc-expanded-vessel-catalog.ts',import.meta.url),'utf8');
@@ -424,7 +425,18 @@ export class FleetAssessmentManager {
       this.executeAgent('a01',{...base,requestedSignals:AGENT_FACTORS.a01}),
       this.executeAgent('a02',{...base,requestedSignals:AGENT_FACTORS.a02})
     ]);
-    const validated=verifyFleetSignals(a01,a02,ids,psc.evidenceIds,psc.inspections.length>0);
+    // Only for a supervisor-approved SI report: map unique, exact aliases
+    // already stored in the inspector record (checkId/findingId/evidenceRef)
+    // to the corresponding authorized SI-FINDING ID. The five-factor source
+    // verifier STILL rejects every arbitrary model-generated evidence ID.
+    const canonicalA01=Array.isArray(v.siFindingsForAttribution)?
+      canonicalizeApprovedFindingReferences(
+        unpack(a01),v.siFindingsForAttribution,ids):a01;
+    const canonicalA02=Array.isArray(v.siFindingsForAttribution)?
+      canonicalizeApprovedFindingReferences(
+        unpack(a02),v.siFindingsForAttribution,ids):a02;
+    const validated=verifyFleetSignals(
+      canonicalA01,canonicalA02,ids,psc.evidenceIds,psc.inspections.length>0);
     // Do not score the same documentary discrepancy twice inside risk.
     // A02 may use approved/provisional A03 evidence for certificate compliance,
     // but its dataQuality severity must cite OTHER structured/PSC gaps.
