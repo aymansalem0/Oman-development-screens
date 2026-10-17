@@ -127,3 +127,69 @@ test('persist fact-based new risk and defect attribution without creating a fake
   assert.equal(same.operationalRisk.score,54,'idempotent event must not overwrite risk');
  }finally{rmSync(temp,{recursive:true,force:true});}
 });
+
+test('A01/A02 receive exact SI evidence allowlist and a valid 5-factor AI reply scores without inventing IDs',async()=>{
+ const {FleetAssessmentManager}=await import('../fleet-ai.mjs');
+ const augmented=approvedInspectionBundle(bundle,view);
+ const allowed=new Set(augmented.evidenceIds);
+ const ids=augmented.siFindingsForAttribution.map(x=>x.evidenceId);
+ const pscId='PSC-SIM-9400368-01';
+ const seen=[];
+ const fleet=new FleetAssessmentManager({
+  executeAgent:async (agent,input)=>{
+   seen.push(agent);
+   const contract=input.inlineContext.evidenceReferenceContract;
+   assert.equal(contract.mode,'EXACT_PROVIDED_IDENTIFIERS_ONLY');
+   assert.deepEqual(contract.allowedFindingIds,ids);
+   assert.ok(contract.allowedEvidenceIds.includes(pscId));
+   assert.ok([...allowed].every(x=>contract.allowedEvidenceIds.includes(x)));
+   assert.equal(input.contextMode,'INLINE');
+   assert.equal(input.subject.imo,imo);
+   assert.equal(input.officialScoringRequested,false);
+   return {signals:(agent==='a01'?['movement','history']:
+     ['inspection','certificate','dataQuality']).map(factor=>({
+       factor,sourceAgent:agent.toUpperCase(),status:'AVAILABLE',
+       severity:{movement:33,history:42,inspection:75,
+         certificate:70,dataQuality:35}[factor],
+       confidence:0.83,reason:'Cited exact provided evidence IDs',
+       evidenceIds:[pscId,'VES-'+imo,
+         ...(factor==='inspection'?[ids[0]]:[]),
+         ...(factor==='certificate'?[ids[1]]:[])]
+   }))};
+  },
+  getPscVessel:async value=>({
+    imo:value,authoritative:false,dataNature:'SYNTHETIC_NOT_RIYADH_MOU',
+    sourceSystem:'NMC_POC_EXTERNAL_PSC_SIMULATED',
+    sourceMode:'LOCAL_FIXTURE_SNAPSHOT',coverage:'SIMULATED_RECORDS',
+    retrievedAt:'2026-10-18T10:00:00Z',pdfContentAvailable:false,
+    inspections:[{inspectionId:pscId}],deficiencies:[],detentions:[],
+    evidenceIds:[pscId],summary:{inspections:1,deficiencies:0,
+      openDeficiencies:0,detentions:0}
+  })
+ });
+ const cfg={version:'NMC-2026',weights:{movement:25,inspection:28,
+   certificate:20,dataQuality:14,history:13},
+   thresholds:{watch:45,high:65,critical:85},mode:'weighted'};
+ const assessed=await fleet.assess(augmented,cfg);
+ assert.equal(assessed.signals.length,5);
+ assert.ok(Number.isFinite(assessed.score));
+ assert.ok(['Normal','Watch','High','Critical'].includes(assessed.level));
+ assert.deepEqual(seen,['a01','a02']);
+ const attribution=verifiedFindingFactorAttribution(
+   augmented.siFindingsForAttribution,assessed.signals);
+ assert.deepEqual(attribution[0].linkedFactors.map(x=>x.factor),['inspection']);
+ assert.deepEqual(attribution[1].linkedFactors.map(x=>x.factor),['certificate']);
+});
+test('unrecognized model-created evidence ID identifies exact factor and agent while preserving strict rejection',async()=>{
+ const {verifyFleetSignals}=await import('../fleet-ai.mjs');
+ const sig=signals({
+   inspection:['AI-INVENTED-NOT-SUPPLIED'],
+   certificate:['VES-'+imo]
+ });
+ const a01={signals:sig.filter(s=>s.sourceAgent==='A01')};
+ const a02={signals:sig.filter(s=>s.sourceAgent==='A02')};
+ assert.throws(()=>verifyFleetSignals(a01,a02,['VES-'+imo],[],false),
+   e=>e?.message==='FLEET_AI_UNVERIFIED_EVIDENCE_ID'&&
+     e.details?.factor==='inspection'&&e.details?.agent==='A02'&&
+     e.details?.unknownCount===1&&e.details?.citedCount===2);
+});
