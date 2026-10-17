@@ -68,6 +68,15 @@ export const SETTINGS_DESCRIPTORS=Object.freeze([
   {key:'AIRIA_CONSOLE_PIPELINE_URL_TEMPLATE',type:'ui-template',group:'connectivity',description:'Airia management UI URL template; place {pipelineId} in the URL. Opens browser only, never invokes API.'},
   {key:'AIRIA_BASE_URL',type:'url',group:'connectivity',description:'Allowlisted HTTPS Airia MENA API endpoint (no secrets)'}
 ]);
+// Business policy for enabled production-supported AI agents. A control that
+// says enabled is NOT permission to fabricate output or bypass source review.
+const ALWAYS_ON_AGENT_KEYS=new Set([
+ 'NMC_A01_ENABLED','NMC_A02_ENABLED','NMC_A03_ENABLED','SI_A04_ENABLED',
+ 'SI_C01_ENABLED','NMC_DQ01_ENABLED','SI_S01_ENABLED','SI_V01_ENABLED',
+ 'SI_R01_ENABLED','SI_X01_ENABLED','NMC_DASHBOARD_AI_FOCUS_ENABLED',
+ 'NMC_DASHBOARD_AI_DESIGN_ENABLED'
+]);
+const alwaysOn=env=>env.MOEI_AI_ALWAYS_ON==='true';
 const allowed=Object.fromEntries(SETTINGS_DESCRIPTORS.map(d=>[d.key,d]));
 const DEFAULTS={
   NMC_A01_ENABLED:true,NMC_A02_ENABLED:true,
@@ -177,7 +186,7 @@ function envConfig(env){
 export class RuntimeSettings{
   constructor({env=process.env,file=process.env.NMC_RUNTIME_SETTINGS_STORE_PATH||
     '/data/nmc-runtime-settings.json',onChange=()=>{}}={}){
-    this.file=file;this.env=envConfig(env);this.onChange=onChange;
+    this.file=file;this.rawEnv=env;this.env=envConfig(env);this.onChange=onChange;
     this.version=0;this.overrides={};this.updatedAt=null;this.updatedBy=null;this.history=[];
   }
   load(){
@@ -198,7 +207,9 @@ export class RuntimeSettings{
   }
   get(key){
     if(!Object.hasOwn(allowed,key))throw new RuntimeSettingsError('RUNTIME_SETTING_UNKNOWN');
-    if(key==='SI_P01_ENABLED')return false; // old persisted true is historical only
+    if(key==='SI_P01_ENABLED')return false; // retired agent cannot be used
+    if(alwaysOn(this.rawEnv)&&ALWAYS_ON_AGENT_KEYS.has(key))return true;
+    if(alwaysOn(this.rawEnv)&&key==='SI_AI_PROVIDER')return 'airia';
     return this.overrides[key]??this.env[key];
   }
   publicView(){
@@ -206,10 +217,13 @@ export class RuntimeSettings{
       SETTINGS_DESCRIPTORS.map(d=>[d.key,this.get(d.key)])),
       defaults:this.env,descriptors:SETTINGS_DESCRIPTORS,
       sources:Object.fromEntries(SETTINGS_DESCRIPTORS.map(d=>[d.key,
+        alwaysOn(this.rawEnv)&&(ALWAYS_ON_AGENT_KEYS.has(d.key)||
+          d.key==='SI_AI_PROVIDER')?'POLICY_ALWAYS_ON':
         Object.hasOwn(this.overrides,d.key)?'RUNTIME_OVERRIDE':'ENV_DEFAULT'])),
       updatedAt:this.updatedAt,updatedBy:this.updatedBy,
       history:this.history.map(x=>({...x})).reverse(),
       secretsExposed:false,
+      aiAlwaysOnPolicy:alwaysOn(this.rawEnv),
       note:'Runtime overrides are persisted outside .env; edits do NOT change OS environment or Docker Compose variables.'};
   }
   async publish({expectedVersion,values,actor,reason,confirmCost}={}){
@@ -226,6 +240,10 @@ export class RuntimeSettings{
     }
     if(next.SI_P01_ENABLED===true)
       throw new RuntimeSettingsError('SI_P01_OUT_OF_CURRENT_POC_SCOPE',409);
+    if(alwaysOn(this.rawEnv)&&
+      ([...ALWAYS_ON_AGENT_KEYS].some(k=>next[k]!==true)||
+       next.SI_AI_PROVIDER!=='airia'))
+      throw new RuntimeSettingsError('AI_ALWAYS_ON_POLICY_CANNOT_DISABLE_AGENTS',409);
     const enablingCost=SETTINGS_DESCRIPTORS.filter(d=>d.cost&&!this.get(d.key)&&next[d.key]);
     const urlChanged=this.get('AIRIA_BASE_URL')!==next.AIRIA_BASE_URL;
     const aiChanged=next.SI_AI_PROVIDER==='airia'&&
