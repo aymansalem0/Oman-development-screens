@@ -2119,7 +2119,8 @@ const server = createServer(async (req, res) => {
                 instruction:String(x.suggestedInstruction||'').slice(0,1200),
                 dataGaps:Array.isArray(x.dataGaps)?x.dataGaps.slice(0,8):[],
                 confidence:Number.isFinite(Number(x.confidence))?Number(x.confidence):null
-              })),officialCompliance:false,inspectorReviewRequired:true});
+              })),officialCompliance:false,inspectorReviewRequired:true,
+              findingCreated:false,requiresSupervisorReview:true});
           }
           if(task==='finish'&&req.method==='POST'){
             if(current.order.status!=='FIELD_STARTED'||

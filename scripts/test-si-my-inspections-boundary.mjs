@@ -316,3 +316,28 @@ test('issued sandbox SDB uses platform MOEI logo and visibly fictional sample po
  assert.ok(!html.includes('<header><span>⚓ MOEI'));
  assert.ok(!html.includes('initials(digital.name)'));
 });
+
+
+test('inspector photo AI attaches a distinct advisory/error to each evidence ID, not the whole step',()=>{
+ const start=guide.indexOf('analyzeImage(step:FieldStep,file:StepEvidence):void');
+ const end=guide.indexOf('finishInspection():void',start);
+ assert.ok(start>=0&&end>start);
+ const method=guide.slice(start,end);
+ assert.match(guide,/imageReviewKey\(stepId:string,evidenceId:string\):string/);
+ assert.match(guide,/return stepId\+':'\+evidenceId/);
+ assert.match(guide,/imageReviews\[imageReviewKey\(step\.stepId,file\.id\)\]/);
+ assert.match(guide,/imageReviewErrors\[imageReviewKey\(step\.stepId,file\.id\)\]/);
+ assert.match(guide,/data-testid="si-guided-image-advice"/);
+ assert.match(guide,/\[attr\.data-evidence-id\]="file\.id"/);
+ assert.match(method,/r\.reviewedEvidence!==file\.id/);
+ assert.match(method,/r\.findingCreated!==false/);
+ assert.match(method,/r\.inspectorReviewRequired!==true/);
+ assert.match(method,/this\.imageReviews\[key\]=r/);
+ assert.match(method,/delete this\.imageReviews\[key\]/);
+ assert.match(method,/delete this\.imageReviewErrors\[key\]/);
+ assert.doesNotMatch(guide,/imageReviews\[step\.stepId\]/);
+ assert.match(method,/this\.error='';/);
+ const fallback=server.slice(server.indexOf("if(task==='ai-evidence'"));
+ assert.match(fallback,/reviewedEvidence:evidence\.id/);
+ assert.match(fallback,/findingCreated:false,requiresSupervisorReview:true/);
+});

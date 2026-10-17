@@ -19,7 +19,12 @@ interface FieldStep{
 }
 interface StepEvidence{id:string;filename:string;mimeType:string;reference:string;byteLength:number;}
 interface FinalAssessment{outcome:string;total:number;recorded:number;incomplete:{stepId:string;title:string}[];open:{stepId:string;title:string;severity:string}[];notApplicable:number;canSubmit:boolean;}
-interface ImageReview{recommendations:{rationale:string;instruction:string;dataGaps:string[]}[];}
+interface ImageReview{
+ status:'AI_PHOTO_ADVISORY_ONLY';provider:'AIRIA_SI_V01'|string;
+ reviewedEvidence:string;officialCompliance:false;
+ inspectorReviewRequired:true;findingCreated:false;
+ recommendations:{rationale:string;instruction:string;dataGaps:string[]}[];
+}
 interface FieldGuide{
  evidenceByStep:Record<string,StepEvidence[]>;finalAssessment:FinalAssessment;
  status:string;orderId:string;planId:string;caseId:string;
@@ -147,20 +152,38 @@ interface FieldAiAdvice{
       <label class="file-upload">{{uploadBusy?t('Uploading…','جارٍ الرفع…'):t('＋ Attach Photo / Document','＋ رفع صورة / مستند')}}
        <input type="file" data-testid="si-guided-file" accept="image/png,image/jpeg,application/pdf"
         (change)="uploadEvidence($event)" [disabled]="!canSave||busy||uploadBusy"></label>
-      <ul class="files"><li *ngFor="let file of selectedEvidence">
-       📎 {{file.filename}}
-       <button type="button" *ngIf="file.mimeType.startsWith('image/')"
-        data-testid="si-guided-analyze-image" (click)="analyzeImage(step,file)"
-        [disabled]="!canSave||busy||aiBusy||uploadBusy">
-        {{t('Analyze Image with AI','تحليل الصورة بالذكاء الاصطناعي')}}</button>
-       <small *ngIf="file.mimeType==='application/pdf'">{{t('PDF saved; visual AI only supports images.','تم حفظ PDF؛ التحليل البصري للصور فقط.')}}</small>
-      </li></ul>
-      <article *ngIf="imageReviews[step.stepId] as review" class="advice">
-       <b>{{t('AI suggestions — inspector verification required','توصيات AI — يجب أن يتحقق المفتش')}}</b>
-       <p *ngFor="let result of review.recommendations">
-        {{result.instruction||result.rationale}}
-        <small>{{result.dataGaps.join(' · ')}}</small></p>
-      </article>
+      <ul class="files">
+       <li *ngFor="let file of selectedEvidence" class="image-review-item">
+        <div class="image-file-actions">
+         <span>📎 {{file.filename}}</span>
+         <button type="button" *ngIf="file.mimeType.startsWith('image/')"
+          data-testid="si-guided-analyze-image" (click)="analyzeImage(step,file)"
+          [disabled]="!canSave||busy||aiBusy||uploadBusy">
+          {{imageLoadingKey===imageReviewKey(step.stepId,file.id)?
+           t('Analyzing this image…','جارٍ تحليل هذه الصورة…'):
+           t('Analyze Image with AI','تحليل الصورة بالذكاء الاصطناعي')}}</button>
+         <small *ngIf="file.mimeType==='application/pdf'">
+          {{t('PDF saved; visual AI only supports images.','تم حفظ PDF؛ التحليل البصري للصور فقط.')}}</small>
+        </div>
+        <p class="image-review-error" role="alert"
+           *ngIf="imageReviewErrors[imageReviewKey(step.stepId,file.id)] as photoError">
+          {{t('AI analysis failed for this image','فشل تحليل هذه الصورة')}}: {{photoError}}
+        </p>
+        <article *ngIf="imageReviews[imageReviewKey(step.stepId,file.id)] as review"
+           class="advice image-review-result"
+           [attr.data-evidence-id]="file.id"
+           data-testid="si-guided-image-advice">
+         <b>{{t('AI suggestions for','توصيات AI للصورة')}} {{file.filename}} —
+            {{t('inspector verification required','تتطلب تحقق المفتش')}}</b>
+         <small>{{t('Source image','الصورة المصدر')}}: {{review.reviewedEvidence}}
+          · {{t('Advisory only — no official finding created',
+            'استشاري فقط — لم يتم إنشاء مخالفة رسمية')}}</small>
+         <p *ngFor="let result of review.recommendations">
+          {{result.instruction||result.rationale}}
+          <small>{{result.dataGaps.join(' · ')}}</small></p>
+        </article>
+       </li>
+      </ul>
      </section>
      <form (ngSubmit)="save()" class="answer">
       <h3>4 · {{t('Your own inspection observations','سجل نتيجة معاينتك بنفسك')}}</h3>
@@ -276,6 +299,11 @@ interface FieldAiAdvice{
  .file-upload{position:relative;display:inline-block;background:#087e7b;color:white;
   font-size:12px;font-weight:800;padding:12px;border-radius:8px;cursor:pointer}
  .file-upload input{position:absolute;opacity:0;width:1px;height:1px;pointer-events:none}
+ .image-review-item{display:block!important}
+ .image-file-actions{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+ .image-review-result{width:100%;margin:12px 0 4px}
+ .image-review-error{width:100%;padding:10px;border:1px solid #e8beb8;
+  color:#a23e38;background:#fff5f3;border-radius:8px;font-size:11px;overflow-wrap:anywhere}
  .files{padding:0;list-style:none;font-size:12px}.files li{padding:9px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;border-bottom:1px solid #dce9ee}
  .closeout{background:#fff;border:1px solid #dce8ed;border-radius:16px;padding:24px;margin-top:20px}
  .closeout p{font-size:12px}.final-numbers{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:15px 0}
@@ -313,6 +341,11 @@ export class SiGuidedInspectionComponent implements OnInit{
  answers:Partial<Record<FieldKind,string|number>>={};
  severity='MINOR';naReason='';busy=false;aiBusy=false;uploadBusy=false;error='';message='';
  inspectorSummary='';imageReviews:Record<string,ImageReview>={};
+ imageReviewErrors:Record<string,string>={};imageLoadingKey:string|null=null;
+ /** The same checklist step may have several photos; never reuse one photo's answer for another. */
+ imageReviewKey(stepId:string,evidenceId:string):string{
+  return stepId+':'+evidenceId;
+ }
  aiResults:Record<string,FieldAiAdvice>={};
  private readonly api='/api/si/v1/maritime-scheduling/my-work-orders/';
  constructor(private readonly http:HttpClient,private readonly route:ActivatedRoute,
@@ -444,11 +477,30 @@ export class SiGuidedInspectionComponent implements OnInit{
   if(!this.canSave||this.aiBusy||!file.mimeType.startsWith('image/'))return;
   if(!window.confirm(this.t('Send photo to Airia AI? A charge may apply. AI is advisory only.',
      'تأكيد إرسال الصورة إلى Airia AI؟ قد توجد تكلفة. النتيجة استشارية فقط.')))return;
-  this.aiBusy=true;this.error='';
+  const key=this.imageReviewKey(step.stepId,file.id);
+  this.aiBusy=true;this.imageLoadingKey=key;this.error='';this.message='';
+  delete this.imageReviewErrors[key];
+  delete this.imageReviews[key]; // A failed retry must not leave a stale success.
   this.http.post<ImageReview>(this.api+encodeURIComponent(this.orderId)+
    '/guide/ai-evidence',{stepId:step.stepId,evidenceId:file.id,confirmCost:true})
-   .subscribe({next:r=>{this.aiBusy=false;this.imageReviews[step.stepId]=r;},
-     error:e=>{this.aiBusy=false;
+   .subscribe({next:r=>{
+       this.aiBusy=false;this.imageLoadingKey=null;
+       if(r.status!=='AI_PHOTO_ADVISORY_ONLY'||r.reviewedEvidence!==file.id||
+          r.findingCreated!==false||r.inspectorReviewRequired!==true){
+         this.error=this.t(
+           'AI response does not match the selected image. No observation was accepted.',
+           'استجابة AI لا تطابق الصورة المختارة. لم تُقبل أي ملاحظة.');
+         this.imageReviewErrors[key]=this.error;
+         return;
+       }
+       this.imageReviews[key]=r;
+       delete this.imageReviewErrors[key];
+       this.error='';
+       this.message=this.t(
+         'Image analysis completed for '+file.filename+'. Verify findings yourself before saving the inspection.',
+         'تم تحليل صورة '+file.filename+'. راجع الملاحظات بنفسك قبل تسجيل نتيجة المعاينة.');
+     },
+     error:e=>{this.aiBusy=false;this.imageLoadingKey=null;
       if(e?.error?.error==='SI_CHECKLIST_VISION_AI_NOT_CONFIGURED_OR_NOT_CONFIRMED'){
         const missing=e?.error?.missing||{};
         const alternative=e?.error?.alternateV01;
@@ -456,6 +508,8 @@ export class SiGuidedInspectionComponent implements OnInit{
           this.error=this.t(
             'SI-V01 is mapped. Enable SI_V01_ENABLED in AI Settings to analyze this photo; Checklist Vision is a separate contract.',
             'تم ربط SI-V01. فعّل SI_V01_ENABLED من إعدادات AI لتحليل الصورة؛ Checklist Vision لها عقد مختلف.');
+          this.imageReviewErrors[key]=this.error;
+          this.error='';
           return;
         }
         const parts=[
@@ -493,6 +547,8 @@ export class SiGuidedInspectionComponent implements OnInit{
         this.error=this.t('SI-V01 photo request failed. Verify the Airia pipeline contract and proxy logs.',
           'فشل استدعاء SI-V01 لتحليل الصورة. تحقق من عقد الاستجابة وسجلات AI Proxy.');
       }else this.error=e?.error?.error||'SI_AI_PHOTO_UNAVAILABLE';
+      this.imageReviewErrors[key]=this.error;
+      this.error=''; // The failure belongs to this photo, not the entire inspection.
      }});
  }
  finishInspection():void{
