@@ -19,7 +19,12 @@ interface FieldStep{
 }
 interface StepEvidence{id:string;filename:string;mimeType:string;reference:string;byteLength:number;}
 interface FinalAssessment{outcome:string;total:number;recorded:number;incomplete:{stepId:string;title:string}[];open:{stepId:string;title:string;severity:string}[];notApplicable:number;canSubmit:boolean;}
-interface ImageReview{recommendations:{rationale:string;instruction:string;dataGaps:string[]}[];}
+interface ImageReview{
+ status:'AI_PHOTO_ADVISORY_ONLY';provider:'AIRIA_SI_V01'|string;
+ reviewedEvidence:string;officialCompliance:false;
+ inspectorReviewRequired:true;findingCreated:false;
+ recommendations:{rationale:string;instruction:string;dataGaps:string[]}[];
+}
 interface FieldGuide{
  evidenceByStep:Record<string,StepEvidence[]>;finalAssessment:FinalAssessment;
  status:string;orderId:string;planId:string;caseId:string;
@@ -313,6 +318,11 @@ export class SiGuidedInspectionComponent implements OnInit{
  answers:Partial<Record<FieldKind,string|number>>={};
  severity='MINOR';naReason='';busy=false;aiBusy=false;uploadBusy=false;error='';message='';
  inspectorSummary='';imageReviews:Record<string,ImageReview>={};
+ imageReviewErrors:Record<string,string>={};imageLoadingKey:string|null=null;
+ /** The same checklist step may have several photos; never reuse one photo's answer for another. */
+ imageReviewKey(stepId:string,evidenceId:string):string{
+  return stepId+':'+evidenceId;
+ }
  aiResults:Record<string,FieldAiAdvice>={};
  private readonly api='/api/si/v1/maritime-scheduling/my-work-orders/';
  constructor(private readonly http:HttpClient,private readonly route:ActivatedRoute,
@@ -444,11 +454,30 @@ export class SiGuidedInspectionComponent implements OnInit{
   if(!this.canSave||this.aiBusy||!file.mimeType.startsWith('image/'))return;
   if(!window.confirm(this.t('Send photo to Airia AI? A charge may apply. AI is advisory only.',
      'تأكيد إرسال الصورة إلى Airia AI؟ قد توجد تكلفة. النتيجة استشارية فقط.')))return;
-  this.aiBusy=true;this.error='';
+  const key=this.imageReviewKey(step.stepId,file.id);
+  this.aiBusy=true;this.imageLoadingKey=key;this.error='';
+  delete this.imageReviewErrors[key];
+  delete this.imageReviews[key]; // A failed retry must not leave a stale success.
   this.http.post<ImageReview>(this.api+encodeURIComponent(this.orderId)+
    '/guide/ai-evidence',{stepId:step.stepId,evidenceId:file.id,confirmCost:true})
-   .subscribe({next:r=>{this.aiBusy=false;this.imageReviews[step.stepId]=r;},
-     error:e=>{this.aiBusy=false;
+   .subscribe({next:r=>{
+       this.aiBusy=false;this.imageLoadingKey=null;
+       if(r.status!=='AI_PHOTO_ADVISORY_ONLY'||r.reviewedEvidence!==file.id||
+          r.findingCreated!==false||r.inspectorReviewRequired!==true){
+         this.error=this.t(
+           'AI response does not match the selected image. No observation was accepted.',
+           'استجابة AI لا تطابق الصورة المختارة. لم تُقبل أي ملاحظة.');
+         this.imageReviewErrors[key]=this.error;
+         return;
+       }
+       this.imageReviews[key]=r;
+       delete this.imageReviewErrors[key];
+       this.error='';
+       this.message=this.t(
+         'Image analysis completed for '+file.filename+'. Verify findings yourself before saving the inspection.',
+         'تم تحليل صورة '+file.filename+'. راجع الملاحظات بنفسك قبل تسجيل نتيجة المعاينة.');
+     },
+     error:e=>{this.aiBusy=false;this.imageLoadingKey=null;
       if(e?.error?.error==='SI_CHECKLIST_VISION_AI_NOT_CONFIGURED_OR_NOT_CONFIRMED'){
         const missing=e?.error?.missing||{};
         const alternative=e?.error?.alternateV01;
@@ -456,6 +485,7 @@ export class SiGuidedInspectionComponent implements OnInit{
           this.error=this.t(
             'SI-V01 is mapped. Enable SI_V01_ENABLED in AI Settings to analyze this photo; Checklist Vision is a separate contract.',
             'تم ربط SI-V01. فعّل SI_V01_ENABLED من إعدادات AI لتحليل الصورة؛ Checklist Vision لها عقد مختلف.');
+          this.imageReviewErrors[key]=this.error;
           return;
         }
         const parts=[
@@ -493,6 +523,7 @@ export class SiGuidedInspectionComponent implements OnInit{
         this.error=this.t('SI-V01 photo request failed. Verify the Airia pipeline contract and proxy logs.',
           'فشل استدعاء SI-V01 لتحليل الصورة. تحقق من عقد الاستجابة وسجلات AI Proxy.');
       }else this.error=e?.error?.error||'SI_AI_PHOTO_UNAVAILABLE';
+      this.imageReviewErrors[key]=this.error;
      }});
  }
  finishInspection():void{
