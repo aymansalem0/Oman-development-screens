@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 400" role="img" aria-labelledby="ttl desc">
+  <title id="ttl">Illustrative Emirati-attire sample portrait</title>
+  <desc id="desc">Stylized fictional avatar wearing traditional UAE menswear. SAMPLE, not a real person or identity photograph.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#e7f1ed"/>
+      <stop offset="1" stop-color="#bdd6d2"/>
+    </linearGradient>
+    <linearGradient id="cloth" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#dce6e6"/>
+    </linearGradient>
+    <linearGradient id="skin" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#cb9872"/>
+      <stop offset="1" stop-color="#ac7456"/>
+    </linearGradient>
+  </defs>
+  <rect width="320" height="400" rx="8" fill="url(#bg)"/>
+  <circle cx="160" cy="155" r="130" fill="#f8f5e9" opacity=".4"/>
+  <!-- Fictional illustration: white ghutra and kandura -->
+  <path d="M25 345q7-66 68-91l30-12h74l30 12q60 24 68 91v55H25z" fill="url(#cloth)" stroke="#b0c8ca" stroke-width="3"/>
+  <path d="M98 246l62 64 62-64-26-9h-72z" fill="#f7fbf9"/>
+  <path d="M143 253v147h34V253z" fill="#f0f5f2"/>
+  <path d="M126 236h68l-15 47h-38z" fill="url(#skin)"/>
+  <ellipse cx="160" cy="153" rx="64" ry="83" fill="url(#skin)"/>
+  <path d="M98 139q-16-54 24-82 36-25 73-7 34 16 29 73-21-24-31-42-44 20-95 58z" fill="#333b3c"/>
+  <path d="M88 166q-24-100 10-119 20-11 62-13 60 0 77 31 14 32-1 112l-22-29q0-39-15-69-39-17-79 2-11 40-11 72z" fill="#fff" stroke="#e2e9e6" stroke-width="3"/>
+  <path d="M85 94q-30 47-19 171l31-28 7-103z" fill="#f4f7f5" stroke="#d9e3df" stroke-width="3"/>
+  <path d="M233 88q33 50 21 174l-32-25-10-104z" fill="#f4f7f5" stroke="#d9e3df" stroke-width="3"/>
+  <path d="M101 85q50-43 118 0" fill="none" stroke="#1c3944" stroke-width="14" stroke-linecap="round"/>
+  <path d="M125 159q13-8 27 0M169 159q13-8 27 0" stroke="#523c32" stroke-width="5" stroke-linecap="round" fill="none"/>
+  <ellipse cx="139" cy="165" rx="3" ry="4" fill="#2c3533"/>
+  <ellipse cx="181" cy="165" rx="3" ry="4" fill="#2c3533"/>
+  <path d="M158 169l-5 26q6 5 14 1M142 218q18 12 36 0" fill="none" stroke="#905e47" stroke-width="4" stroke-linecap="round"/>
+  <!-- Always distinguish the sample from a real identity photo -->
+  <rect x="0" y="342" width="320" height="58" fill="#0d5a66" opacity=".97"/>
+  <text x="160" y="376" fill="#fff" font-family="Arial,sans-serif" font-size="29" font-weight="900" letter-spacing="4" text-anchor="middle">SAMPLE</text>
+</svg>
