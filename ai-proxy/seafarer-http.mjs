@@ -110,6 +110,19 @@ export function createSeafarerHandler({
         send(res, 200, result);
         return true;
       }
+      // Public QR landing-page lookup: sandbox specimen metadata only.
+      // No SSO session is needed to scan an issued SAMPLE card. The separate
+      // full applicant and application APIs below remain authenticated.
+      if (path === root + "/public/esdb/verify") {
+        if (req.method !== "GET") reject("SDB_METHOD_NOT_ALLOWED", 405);
+        const reference = url.searchParams.get("reference");
+        const number = url.searchParams.get("number");
+        if (url.searchParams.size !== 2 ||
+            !reference || !number)
+          reject("SDB_SPECIMEN_NOT_FOUND", 404);
+        send(res, 200, getStore().verifyEsdbSpecimen(reference, number));
+        return true;
+      }
       const identity = auth.require(req),
         s = getStore();
       let actor = s.actor(identity);
