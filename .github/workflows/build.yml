@@ -66,6 +66,8 @@ jobs:
 
       - name: Seafarer readiness, company clearance, source webhooks and SDB journey
         run: node --test ai-proxy/test/seafarer-workspace.test.mjs ai-proxy/test/seafarer-http.test.mjs ai-proxy/test/seafarer-sdb-service-scenarios.test.mjs ai-proxy/test/seafarer-readiness-settings.test.mjs
+      - name: eSDB QR URL and anonymous specimen landing-page regression
+        run: node --test scripts/test-esdb-qr-landing.mjs
 
       - name: Build
         run: npm run build
