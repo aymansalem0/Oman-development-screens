@@ -339,7 +339,7 @@ interface DraftRow{type:RegulatoryType;state:string;preparedBy:string;
          copy('Source dossier is currently unavailable.','ملف السفينة غير متاح حاليًا.')}}</p>
       </ng-template>
       <ng-template #noReport><p *ngIf="tab==='REPORT'" class="muted">
-       {{copy('No submitted inspector report yet.','لم يتم تقديم تقرير المعاينة بعد.')}}</p></ng-template><p class="muted">{{copy('No submitted inspector report yet.','لم يتم تقديم تقرير المعاينة بعد.')}}</p></ng-template>
+       {{copy('No submitted inspector report yet.','لم يتم تقديم تقرير المعاينة بعد.')}}</p></ng-template>
      </ng-container>
      <ng-template #noSelection><div class="empty">{{copy('Choose a returned inspection to review its vessel and report.','اختر معاينة لعرض بيانات السفينة وتقرير المفتش.')}}</div></ng-template>
     </section>
