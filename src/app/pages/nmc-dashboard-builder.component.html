@@ -282,27 +282,21 @@
               <p>{{suggestion.description}}</p>
               <p>{{suggestion.widgets.length}} {{copy('available widgets','مؤشرات متاحة')}} ·
                 {{suggestion.proposedMetrics.length}} {{copy('new metric specifications','مؤشرات جديدة مقترحة')}}</p>
-              <div *ngFor="let metric of suggestion.proposedMetrics" class="db-board-meta">
-                <strong>{{metric.title}}</strong>
-                <p>{{copy('Suggested source','المصدر المقترح')}}: {{metric.sourceKey}} / {{metric.sourceEntity}}</p>
-                <p>{{copy('Calculation','طريقة الحساب')}}: {{metric.method}} — {{metric.formula}}</p>
-                <small>{{copy('NOT CONNECTED · Requires data-owner verification',
-                  'غير مرتبط بالبيانات · يحتاج اعتماد الجهة المالكة')}}</small>
-              </div>
+              <p class="db-ai-preview-hint">
+                {{copy('The suggested cards are already visible in LIVE PREVIEW. Inspect them before applying the design.',
+                  'الكروت المقترحة ظاهرة الآن في المعاينة المباشرة. راجع التصميم قبل تطبيقه على المسودة.')}}
+              </p>
               <p *ngIf="suggestion.warnings.length" class="db-message">
                 {{copy('Some unsupported AI suggestions were omitted.','تم استبعاد بعض المقترحات غير المدعومة.')}}</p>
               <button type="button" class="db-primary" (click)="applyDashboardAi()">
                 {{copy('Apply to Current Draft','تطبيق على المسودة الحالية')}}</button>
+              <button type="button" class="db-outline" (click)="discardAiPreview()">
+                {{copy('Discard Suggestions','إلغاء المقترحات')}}</button>
             </div>
-            <div *ngIf="board.proposedMetrics?.length" class="db-board-meta">
-              <h4>{{copy('Unbound KPIs retained in this draft','مؤشرات جديدة تنتظر ربط البيانات')}}</h4>
-              <div *ngFor="let proposed of board.proposedMetrics">
-                <strong>{{proposed.title}}</strong>
-                <p>{{proposed.sourceKey}} → {{proposed.sourceEntity}} · {{proposed.method}}</p>
-                <p>{{proposed.formula}}</p>
-                <small>{{copy('Unverified source mapping — not displayed as live KPI.',
-                  'مصدر لم يتم اعتماده؛ لن يُعرض كمؤشر تشغيلي حقيقي.')}}</small>
-              </div>
+            <div *ngIf="board.proposedMetrics?.length&&!aiProposal" class="db-board-meta">
+              <h4>{{board.proposedMetrics?.length}} {{copy('new cards retained in this draft','كروت جديدة محفوظة في المسودة')}}</h4>
+              <p>{{copy('Edit them in Live Preview; each stays unbound until a verified metric runtime is provided.',
+                'يمكن تعديل الكروت من المعاينة المباشرة. لن تعرض بيانات حتى اعتماد وربط مصدر حساب المؤشر.')}}</p>
             </div>
           </section>
 
@@ -346,32 +340,46 @@
         <section class="db-canvas">
           <div class="db-canvas-header">
             <div><span class="db-kicker">{{viewOnly?copy('MARITIME DASHBOARD','لوحة المعلومات البحرية'):copy('LIVE PREVIEW','المعاينة المباشرة')}}</span>
-              <h3>{{board.title}}</h3>
+              <h3>{{previewTitle}}</h3>
               <small *ngIf="dashboardUsesFleet">
                 {{filtered.length}} {{copy('vessels matching selected filters','سفينة وفق الفلاتر المختارة')}}</small>
               <small *ngIf="dashboardHasDemoMetrics">
                 {{copy('Synthetic Smart Inspection indicators · May to October 2026',
                 'مؤشرات المعاينة التجريبية · مايو إلى أكتوبر 2026')}}</small>
             </div>
-            <span class="db-chip">{{board.widgets.length}} {{copy('widgets','مؤشرات')}}</span>
+            <span class="db-chip">{{previewCardsCount}} {{copy('cards','بطاقات')}}</span>
           </div>
-          <div class="db-empty" *ngIf="!board.widgets.length">
+          <div class="db-empty" *ngIf="previewCardsCount===0">
             <div class="db-empty-symbol">＋</div>
             <h3>{{copy('Your canvas is ready','مساحة التصميم جاهزة')}}</h3>
             <p>{{copy('Choose a widget from the library to get started.','اختر مؤشرًا من المكتبة للبدء.')}}</p>
           </div>
 
+          <div *ngIf="aiProposal" class="db-ai-preview-banner" role="status">
+            <div>
+              <strong>{{copy('AI card layout preview','معاينة التصميم المقترح من AI')}}</strong>
+              <p>{{aiPreviewWidgets.length}} {{copy('existing data widgets','كروت بمؤشرات معروفة')}} ·
+                {{previewProposedMetrics.length}} {{copy('new source-mapping cards','كروت لمؤشرات جديدة تحتاج الربط')}}.
+                {{copy('Existing draft is unchanged until you apply.', 'المسودة الأصلية لم تتغير بعد.')}}</p>
+            </div>
+            <div class="db-ai-preview-actions">
+              <button type="button" class="db-primary" (click)="applyDashboardAi()">
+                {{copy('Create Cards in Draft','إنشاء الكروت في المسودة')}}</button>
+              <button type="button" class="db-outline" (click)="discardAiPreview()">
+                {{copy('Cancel Preview','إلغاء المعاينة')}}</button>
+            </div>
+          </div>
           <div class="db-widgets">
-            <article class="db-widget" *ngFor="let widget of board.widgets; let i=index"
+            <article class="db-widget" *ngFor="let widget of previewWidgets; let i=index"
                   [class.db-full]="widget.span==='full'"
-                  [draggable]="!viewOnly" (dragstart)="onDragStart($event,widget.id)"
+                  [draggable]="!viewOnly&&!aiProposal" (dragstart)="onDragStart($event,widget.id)"
                   (dragover)="onDragOver($event)" (drop)="onDrop($event,widget.id)"
                   (dragend)="draggedId=null">
               <div class="db-widget-head">
-                <span class="db-drag" *ngIf="!viewOnly" [title]="copy('Drag to reorder','اسحب لإعادة الترتيب')">⠿</span>
-                <strong *ngIf="viewOnly" class="db-widget-title db-readonly-title">{{widget.title}}</strong>
-                <input *ngIf="!viewOnly" class="db-widget-title" [(ngModel)]="widget.title" (ngModelChange)="touch()" maxlength="100" [attr.aria-label]="copy('Widget title','عنوان المؤشر')"/>
-                <span class="db-widget-tools" *ngIf="!viewOnly">
+                <span class="db-drag" *ngIf="!viewOnly&&!aiProposal" [title]="copy('Drag to reorder','اسحب لإعادة الترتيب')">⠿</span>
+                <strong *ngIf="viewOnly||aiProposal" class="db-widget-title db-readonly-title">{{widget.title}}</strong>
+                <input *ngIf="!viewOnly&&!aiProposal" class="db-widget-title" [(ngModel)]="widget.title" (ngModelChange)="touch()" maxlength="100" [attr.aria-label]="copy('Widget title','عنوان المؤشر')"/>
+                <span class="db-widget-tools" *ngIf="!viewOnly&&!aiProposal">
                   <button type="button" (click)="moveWidget(widget.id,-1)" [disabled]="i===0" [title]="copy('Move up','تحريك لأعلى')">↑</button>
                   <button type="button" (click)="moveWidget(widget.id,1)" [disabled]="i===board.widgets.length-1" [title]="copy('Move down','تحريك لأسفل')">↓</button>
                   <button type="button" (click)="changeWidth(widget)" [title]="copy('Toggle widget width','تغيير عرض المؤشر')">⇔</button>
@@ -383,7 +391,7 @@
                 [title]="siMetricExplanation(widget.metric)">
                 {{copy('STATIC POC DATA · NOT OFFICIAL','بيانات افتراضية ثابتة · ليست رسمية')}}
               </div>
-              <div class="db-widget-config" *ngIf="!viewOnly">
+              <div class="db-widget-config" *ngIf="!viewOnly&&!aiProposal">
                 <label>{{copy('Indicator','المؤشر')}}
                   <select [(ngModel)]="widget.metric" (ngModelChange)="changeMetric(widget)">
                     <optgroup [label]="copy('Maritime / NMC','البيانات البحرية / NMC')">
@@ -401,7 +409,7 @@
                   </select>
                 </label>
               </div>
-              <div class="db-chart-settings" *ngIf="!viewOnly&&widget.type==='bar'">
+              <div class="db-chart-settings" *ngIf="!viewOnly&&!aiProposal&&widget.type==='bar'">
                 <label>{{copy('Chart Type','نوع الرسم البياني')}}
                   <select [(ngModel)]="widget.chartType" (ngModelChange)="configureChart(widget)">
                     <option *ngFor="let type of chartTypes" [value]="type.value">
@@ -484,6 +492,62 @@
                   <div class="db-position-label">{{copy('Geographic position overview','نظرة عامة على مواقع السفن')}}</div>
                 </div>
                 <small class="db-muted">{{copy('Position plot — select a vessel for details.','عرض مواقع السفن — اختر سفينة لعرض التفاصيل.')}}</small>
+              </div>
+            </article>
+            <article class="db-widget db-proposed-card" *ngFor="let proposed of previewProposedMetrics; let i=index"
+                     [class.db-full]="proposed.type==='table'||proposed.type==='position'"
+                     [attr.data-testid]="'dashboard-proposed-card-'+proposed.id">
+              <div class="db-widget-head">
+                <span class="db-proposed-icon">{{proposed.type==='kpi'?'▦':proposed.type==='bar'?'▥':proposed.type==='table'?'☷':'⌖'}}</span>
+                <strong *ngIf="viewOnly||aiProposal" class="db-widget-title">{{proposed.title}}</strong>
+                <input *ngIf="!viewOnly&&!aiProposal" class="db-widget-title"
+                       [(ngModel)]="proposed.title" (ngModelChange)="touch()"
+                       maxlength="100" [attr.aria-label]="copy('New metric title','عنوان المؤشر الجديد')"/>
+                <span class="db-widget-tools" *ngIf="!viewOnly&&!aiProposal">
+                  <button type="button" (click)="moveProposedMetric(proposed.id,-1)"
+                          [disabled]="i===0" [title]="copy('Move up','تحريك لأعلى')">↑</button>
+                  <button type="button" (click)="moveProposedMetric(proposed.id,1)"
+                          [disabled]="i===previewProposedMetrics.length-1"
+                          [title]="copy('Move down','تحريك لأسفل')">↓</button>
+                  <button type="button" class="db-remove" (click)="removeProposedMetric(proposed.id)"
+                          [title]="copy('Remove card','إزالة الكارت')">×</button>
+                </span>
+              </div>
+              <div class="db-proposed-status">
+                <span>{{copy('NEW METRIC · SOURCE NOT CONNECTED','مؤشر جديد · المصدر غير مربوط')}}</span>
+                <small *ngIf="proposed.sourceKey==='NMC_INCIDENTS_GOOGLE_SHEETS'">
+                  {{copy('SYNTHETIC POC · GOOGLE SHEETS','بيانات تجريبية · GOOGLE SHEETS')}}</small>
+              </div>
+              <div class="db-proposed-value" *ngIf="proposed.type==='kpi'">
+                <strong>—</strong>
+                <span>{{copy('Waiting for verified calculation','بانتظار اعتماد مصدر الحساب')}}</span>
+              </div>
+              <div class="db-proposed-placeholder" *ngIf="proposed.type==='bar'">
+                <span class="db-proposed-placeholder-symbol">▥</span>
+                <strong>{{copy('Chart ready for source mapping','الرسم جاهز لربط مصدر البيانات')}}</strong>
+                <small>{{copy('No generated or fabricated figures','لا توجد أرقام أو رسوم تخمينية')}}</small>
+              </div>
+              <div class="db-proposed-placeholder" *ngIf="proposed.type==='table'">
+                <span class="db-proposed-placeholder-symbol">☷</span>
+                <strong>{{copy('Table definition awaiting approved dataset','الجدول في انتظار مجموعة بيانات معتمدة')}}</strong>
+                <small>{{proposed.fields.join(' · ')}}</small>
+              </div>
+              <div class="db-proposed-placeholder" *ngIf="proposed.type==='position'">
+                <span class="db-proposed-placeholder-symbol">⌖</span>
+                <strong>{{copy('Map/position data not connected','بيانات المواقع غير مربوطة')}}</strong>
+              </div>
+              <div class="db-proposed-metadata">
+                <div><b>{{copy('Source','المصدر')}}:</b> {{proposed.sourceKey}} / {{proposed.sourceEntity}}</div>
+                <div><b>{{copy('Calculation','الحساب')}}:</b> {{proposed.method}} — {{proposed.formula}}</div>
+                <div *ngIf="proposed.grouping"><b>{{copy('Group by','تجميع حسب')}}:</b> {{proposed.grouping}}</div>
+                <div *ngIf="proposed.filters"><b>{{copy('Filters','الفلاتر')}}:</b> {{proposed.filters}}</div>
+              </div>
+              <div *ngIf="!viewOnly&&!aiProposal" class="db-proposed-editor">
+                <label>{{copy('Card layout','نوع الكارت')}}
+                  <select [(ngModel)]="proposed.type" (ngModelChange)="touch()">
+                    <option *ngFor="let kind of widgetKinds" [value]="kind.id">{{copy(kind.en,kind.ar)}}</option>
+                  </select>
+                </label>
               </div>
             </article>
           </div>

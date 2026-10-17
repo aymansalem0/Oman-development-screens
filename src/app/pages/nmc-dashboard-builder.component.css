@@ -94,3 +94,38 @@ app-nmc-distribution-chart{display:block;min-width:0}
  max-width:100%;line-height:1.5}
 .db-demo-table-caption{display:block;color:#866544;font-size:10px;
  padding:8px 0;line-height:1.55}
+
+/* AI-generated cards are real editable dashboard draft artefacts, never live values
+ * until a data owner approves and wires an executable metric source. */
+.db-ai-preview-banner{margin:0 0 16px;display:flex;justify-content:space-between;align-items:center;gap:15px;
+ padding:15px 17px;border:1px solid #a6ded0;background:#ebf9f4;border-radius:12px;color:#1c5d57}
+.db-ai-preview-banner strong{font-size:12px;color:#166b61}
+.db-ai-preview-banner p{font-size:11px;line-height:1.55;margin:5px 0 0;color:#538079}
+.db-ai-preview-actions{display:flex;gap:7px;flex-wrap:wrap;flex-shrink:0}
+.db-ai-preview-hint{font-weight:650;color:#267f72!important}
+.db-proposed-card{border-color:#b6ded7;background:#fdfffe}
+.db-proposed-icon{font-size:19px;color:#0e8d81;line-height:1.2}
+.db-proposed-status{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:7px;
+ margin-top:10px;font-size:10px;font-weight:800;color:#77652b}
+.db-proposed-status span{background:#fff6dc;border:1px solid #f1daa3;border-radius:7px;padding:5px 9px}
+.db-proposed-status small{font-size:9px;color:#128578}
+.db-proposed-value{margin:13px 0;min-height:123px;border:1px dashed #d6e8e7;border-radius:12px;
+ background:#f5fbf9;display:flex;align-items:center;justify-content:center;flex-direction:column}
+.db-proposed-value strong{font-size:36px;color:#749c9a;font-weight:800}
+.db-proposed-value span{font-size:11px;color:#658580;text-align:center;padding:0 8px}
+.db-proposed-placeholder{margin:13px 0;min-height:123px;border:1px dashed #b9d9d4;
+ border-radius:12px;background:#f5fbf9;display:flex;flex-direction:column;align-items:center;
+ justify-content:center;gap:5px;text-align:center;padding:13px}
+.db-proposed-placeholder-symbol{font-size:28px;color:#77ada5}
+.db-proposed-placeholder strong{font-size:11px;color:#326960}
+.db-proposed-placeholder small{font-size:10px;color:#72918c;overflow-wrap:anywhere}
+.db-proposed-metadata{display:grid;gap:6px;border-top:1px solid #e8f0ed;padding-top:12px;
+ font-size:10px;line-height:1.55;color:#53766e;overflow-wrap:anywhere}
+.db-proposed-metadata b{color:#285c56}
+.db-proposed-editor{padding-top:10px}
+.db-proposed-editor label{display:flex;align-items:center;justify-content:space-between;
+ gap:10px;font-size:10px;color:#557870}
+.db-proposed-editor select{max-width:160px;border:1px solid #d8e7e4;border-radius:8px;
+ padding:7px;font-size:10px;color:#285f57;background:#fff}
+@media(max-width:750px){.db-ai-preview-banner{flex-direction:column;align-items:stretch}
+.db-ai-preview-actions{width:100%}.db-ai-preview-actions button{flex:1;white-space:normal}}

@@ -7,7 +7,7 @@ import { LanguageService } from '../services/language.service';
 import { NmcNavigationComponent } from '../components/nmc-navigation.component';
 import {
   DASHBOARD_METRICS, DASHBOARD_MENU_PLACEMENTS, NMC_CHART_TYPES, NMC_CHART_PALETTES, NmcChartType, NmcChartPalette, DashboardMenuPlacement, DashboardDefinition, DashboardMetric, DashboardTemplateKind,
-  DashboardWidget, DashboardWidgetKind, NmcDashboardStoreService
+  DashboardWidget, DashboardWidgetKind, ProposedDashboardMetric, NmcDashboardStoreService
 } from '../services/nmc-dashboard-store.service';
 import {
   DashboardAnalyticsResponse, DashboardVessel, NmcDashboardDataService
@@ -65,6 +65,21 @@ export class NmcDashboardBuilderComponent implements OnInit,OnDestroy {
   aiBusy=false;
   aiError='';
   aiProposal:DashboardAiDesignResponse|null=null;
+  /** Temporary visual layout, not saved until the user accepts the AI design. */
+  aiPreviewWidgets:DashboardWidget[]=[];
+  get previewWidgets():DashboardWidget[]{
+    return this.aiProposal?this.aiPreviewWidgets:(this.dashboard?.widgets||[]);
+  }
+  get previewProposedMetrics():ProposedDashboardMetric[]{
+    return this.aiProposal?this.aiProposal.proposedMetrics:(this.dashboard?.proposedMetrics||[]);
+  }
+  get previewTitle():string{
+    return this.aiProposal?.title||this.dashboard?.title||'';
+  }
+  get previewCardsCount():number{
+    return this.previewWidgets.length+this.previewProposedMetrics.length;
+  }
+
   aiStatus:{enabled:boolean;pipelineConfigured:boolean;keyConfigured:boolean;
     contractVerified:boolean;incidentSource:{
       key:string;configured:boolean;transport:string;dataNature:string;
@@ -126,6 +141,7 @@ export class NmcDashboardBuilderComponent implements OnInit,OnDestroy {
       this.viewLoading=false;
       this.viewError='';
       this.dashboard=null;
+      this.aiProposal=null;this.aiPreviewWidgets=[];
       this.editing=!!id&&!this.viewOnly;
       this.dirty=false;this.saveMessage='';this.tablePage=1;
       if (this.viewOnly && id) {
@@ -549,10 +565,19 @@ export class NmcDashboardBuilderComponent implements OnInit,OnDestroy {
     if(!window.confirm(this.copy(
       'Send the dashboard request to Airia NMC Desk? An AI request may incur a charge. Nothing is published automatically.',
       'هل تريد إرسال طلب التصميم إلى Airia NMC Desk؟ قد توجد تكلفة لاستدعاء AI. لن يتم نشر أي لوحة تلقائيًا.')))return;
-    this.aiBusy=true;this.aiError='';this.aiProposal=null;
+    this.aiBusy=true;this.aiError='';this.aiProposal=null;this.aiPreviewWidgets=[];
     this.subs.add(this.workspace.aiDesign(prompt,this.dashboard.menuPlacement||'NMC_CENTER')
       .subscribe({
-        next:design=>{this.aiBusy=false;this.aiProposal=design;},
+        next:design=>{
+          this.aiBusy=false;
+          this.aiPreviewWidgets=design.widgets.map((widget,i)=>({
+            ...widget,id:'widget-ai-preview-'+i
+          }));
+          this.aiProposal=design;
+          this.aiError='';
+          // Preview cards render immediately. The existing draft is unchanged
+          // until the user explicitly applies the proposal.
+        },
         error:error=>{
           this.aiBusy=false;
           const code=error?.error?.error||'DASHBOARD_AI_DESIGN_UNAVAILABLE';
@@ -579,9 +604,30 @@ export class NmcDashboardBuilderComponent implements OnInit,OnDestroy {
       ...w,id:'widget-'+(globalThis.crypto?.randomUUID?.()||Date.now().toString(36)+'-'+i)
     }));
     board.proposedMetrics=design.proposedMetrics.map(m=>({...m}));
-    this.touch();this.aiProposal=null;
+    this.touch();this.aiProposal=null;this.aiPreviewWidgets=[];
     this.saveMessage=this.copy('Suggestions applied. Review source mapping and save the draft.',
       'تم تطبيق المقترحات. راجع مصادر البيانات ثم احفظ المسودة.');
+  }
+
+
+  removeProposedMetric(metricId:string):void{
+    if(this.viewOnly||this.aiProposal||!this.dashboard?.proposedMetrics)return;
+    this.dashboard.proposedMetrics=this.dashboard.proposedMetrics.filter(m=>m.id!==metricId);
+    this.touch();
+  }
+
+  moveProposedMetric(metricId:string,direction:-1|1):void{
+    if(this.viewOnly||this.aiProposal||!this.dashboard?.proposedMetrics)return;
+    const items=this.dashboard.proposedMetrics;
+    const from=items.findIndex(m=>m.id===metricId),to=from+direction;
+    if(from<0||to<0||to>=items.length)return;
+    [items[from],items[to]]=[items[to],items[from]];
+    this.touch();
+  }
+
+  discardAiPreview():void{
+    if(!this.aiProposal)return;
+    this.aiProposal=null;this.aiPreviewWidgets=[];
   }
 
   createFromTemplate(kind:DashboardTemplateKind):void {
