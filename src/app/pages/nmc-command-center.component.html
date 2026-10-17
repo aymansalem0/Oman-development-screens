@@ -165,6 +165,90 @@
       <p *ngIf="fleetError" class="nmc-kpi-ai-error" role="alert">{{fleetError}}</p>
     </section>
 
+    <!-- Verified, centrally saved supervisor-approved SI referrals. These
+         are cases, NOT map vessels, mock inspections or incident rows. -->
+    <section class="nmc-si-referrals panel" role="region"
+      data-testid="nmc-si-forwarded-cases"
+      [attr.aria-label]="copy('Smart Inspection cases received by NMC',
+        'حالات المعاينة الذكية المحالة إلى المركز البحري الوطني')">
+      <header class="nmc-si-referrals-header">
+        <div>
+          <span class="nmc-si-referrals-eyebrow">
+            {{copy('SMART INSPECTION → NMC · CASE INBOX',
+              'المعاينة الذكية ← المركز البحري الوطني · قائمة الحالات')}}
+          </span>
+          <h3>{{copy('Vessels forwarded from Inspections',
+            'السفن المحالة من المعاينات')}}</h3>
+          <p>{{copy('Only supervisor-approved inspection reports with a saved central NMC Case. AI risk updates require verified A01/A02 evidence; regulatory actions remain human-controlled.',
+            'تقارير معاينة معتمدة من المشرف ومرتبطة بحالات محفوظة في NMC فقط. تحديث مخاطر AI يستلزم أدلة A01/A02 معتمدة، وتبقى القرارات الرقابية بشرية.')}}</p>
+        </div>
+        <span class="nmc-si-referrals-count">
+          {{inspectionReferralError?'—':forwardedInspectionCases.length}}
+          {{copy('Cases','حالات')}}
+        </span>
+      </header>
+
+      <p *ngIf="inspectionReferralLoading" class="nmc-si-referrals-note" role="status">
+        {{copy('Loading saved inspection cases…','جارٍ تحميل حالات المعاينة المحفوظة…')}}
+      </p>
+      <p *ngIf="inspectionReferralError" class="nmc-si-referrals-error" role="alert">
+        {{copy('NMC Case source unavailable. Referral status cannot be confirmed. Refresh to retry.',
+          'مصدر حالات NMC غير متاح. لا يمكن تأكيد الإحالات؛ اضغط تحديث لإعادة المحاولة.')}}
+      </p>
+      <p *ngIf="!inspectionReferralLoading&&!inspectionReferralError&&!forwardedInspectionCases.length"
+         class="nmc-si-referrals-empty" data-testid="nmc-si-forwarded-empty">
+        {{copy('No supervisor-approved inspection report has been forwarded into a saved NMC Case yet.',
+          'لم يتم تسجيل تقرير معاينة معتمد ومحال إلى حالة محفوظة في NMC حتى الآن.')}}
+      </p>
+      <div class="nmc-si-referrals-grid" *ngIf="!inspectionReferralError&&visibleInspectionReferrals.length">
+        <article class="nmc-si-referral-card" *ngFor="let item of visibleInspectionReferrals"
+          [attr.data-nmc-case-id]="item.caseId" data-testid="nmc-si-forwarded-case-card">
+          <div class="nmc-si-referral-card-head">
+            <strong>{{item.vesselName}}</strong>
+            <span class="nmc-si-referral-status" [class.resolved]="item.status==='RESOLVED'">
+              {{item.status}}
+            </span>
+          </div>
+          <small class="nmc-si-referral-identifiers">
+            IMO {{item.imo}} · {{copy('NMC Case','حالة NMC')}} {{item.caseId.slice(0,8)}}
+          </small>
+          <p *ngIf="item.summary" class="nmc-si-referral-summary">{{item.summary}}</p>
+          <div class="nmc-si-referral-meta">
+            <span>{{copy('Inspection report','تقرير المعاينة')}}:
+              {{item.reportId||'—'}}</span>
+            <span>{{copy('Received','تاريخ الاستلام')}}:
+              {{item.forwardedAt|date:'medium'}}</span>
+          </div>
+          <div class="nmc-si-referral-risk">
+            <ng-container *ngIf="item.risk as risk; else awaitingReassessment">
+              <strong>{{copy('Post-inspection AI Risk','مخاطر AI بعد المعاينة')}}</strong>
+              <b>{{risk.score}}/100 · {{risk.level}}</b>
+              <small>{{copy('Previous risk','المخاطر السابقة')}}:
+                {{risk.previousScore??'—'}}/100
+                · {{copy('Validated evidence','الدليل المعتمد')}}: {{risk.evidenceId}}</small>
+            </ng-container>
+            <ng-template #awaitingReassessment>
+              <strong>{{copy('AI Risk Reassessment','إعادة تقييم المخاطر باستخدام AI')}}</strong>
+              <span>{{copy('No verified new risk saved yet — check the NMC case.',
+                'لم يُحفظ تقييم مخاطر جديد موثق بعد؛ راجع حالة NMC.')}}</span>
+            </ng-template>
+          </div>
+          <a class="nmc-si-referral-open"
+            [routerLink]="['/moei/nmc/vessel',item.imo,'case']">
+            {{copy('Open NMC Case','فتح حالة NMC')}} ↗
+          </a>
+        </article>
+      </div>
+      <button type="button" class="secondary-btn nmc-si-referral-more"
+        *ngIf="forwardedInspectionCases.length>6&&!inspectionReferralError"
+        (click)="showAllInspectionReferrals=!showAllInspectionReferrals"
+        [attr.aria-expanded]="showAllInspectionReferrals">
+        {{showAllInspectionReferrals?
+          copy('Show fewer cases','عرض عدد أقل'):
+          copy('Show all forwarded cases','عرض جميع الحالات المحالة')}}
+      </button>
+    </section>
+
     <section class="workspace-grid">
       <div class="map-panel panel">
         <div class="panel-header map-header">
