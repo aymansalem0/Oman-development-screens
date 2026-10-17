@@ -244,13 +244,36 @@
               [placeholder]="copy('Example: Plan inspection KPIs, overdue CAPA, and average vessel inspection duration.',
                 'مثال: مؤشرات خطط المعاينات والإجراءات التصحيحية المتأخرة ومتوسط مدة المعاينة.')"></textarea>
             <p *ngIf="aiStatus&&!aiStatus.enabled" class="db-message">
-              {{copy('AI Dashboard Design is disabled in AI Settings. Enable it to make a paid, explicit request.',
-                'تصميم اللوحات بالذكاء الاصطناعي غير مفعل. يمكن تفعيله من إعدادات AI قبل أي طلب مدفوع.')}}</p>
+              {{copy('Dashboard AI Designer is OFF. An authorized publisher must enable NMC_DASHBOARD_AI_DESIGN_ENABLED in AI Governance; agent calls remain opt-in and may incur charges.',
+                'مصمم لوحات AI متوقف. يجب على مسؤول مخوّل تفعيل NMC_DASHBOARD_AI_DESIGN_ENABLED من الحوكمة؛ كل استدعاء AI يستلزم موافقة وقد يترتب عليه تكلفة.')}}</p>
+            <p *ngIf="aiStatus&&!aiStatus.keyConfigured" class="db-message">
+              {{copy('Airia API key is not configured. Configure a server-side key before trying live AI.',
+                'مفتاح Airia غير مهيأ. يلزم إعداد المفتاح على الخادم قبل تجربة AI الفعلية.')}}</p>
+            <p *ngIf="aiStatus&&!aiStatus.pipelineConfigured" class="db-message">
+              {{copy('NMC Desk pipeline ID is missing from runtime settings.',
+                'معرّف NMC Desk Pipeline غير موجود في إعدادات التشغيل.')}}</p>
+            <p *ngIf="aiStatusError" class="db-error">{{aiStatusError}}</p>
+            <p class="db-placement-help">
+              <a routerLink="/moei/settings/ai-governance">{{copy('Open AI Settings & Governance','فتح إعدادات وحوكمة AI')}}</a>
+              · <button type="button" class="db-outline" (click)="refreshAiDesignStatus()">
+                {{copy('Refresh AI status','تحديث حالة AI')}}</button>
+            </p>
+            <p class="db-placement-help">
+              {{copy('NMC Incidents source: Google Sheets (Incident_Registry + AI_Assessments), SYNTHETIC_POC. Only the column schema is shared with AI; no incident rows are sent.',
+                'مصدر حوادث NMC: Google Sheets (Incident_Registry + AI_Assessments)، بيانات SYNTHETIC_POC. يُرسل للـAI وصف الأعمدة فقط دون صفوف الحوادث.')}}</p>
+            <p class="db-placement-help" *ngIf="aiStatus?.incidentSource as src">
+              {{src.configured?
+                copy('Incidents Sheet ID configured (read connectivity not verified in this panel).',
+                  'معرّف شيت الحوادث مُهيأ (لم يتم فحص الاتصال المباشر من هذه الشاشة).'):
+                copy('Incidents Google Sheet source is not configured on this server.',
+                  'مصدر Google Sheets للحوادث غير مهيأ على هذا الخادم.')}}</p>
+            <button type="button" class="db-outline" (click)="useIncidentsPrompt()">
+              {{copy('Use NMC Incidents example prompt','استخدم مثال مؤشرات حوادث NMC')}}</button>
             <p *ngIf="aiStatus&&!aiStatus.contractVerified" class="db-message">
               {{copy('NMC Desk JSON response contract is not yet verified; proposals require review.',
                 'لم يتم اعتماد توافق JSON مع NMC Desk بعد؛ المقترحات تتطلب المراجعة.')}}</p>
             <button type="button" class="db-primary" (click)="generateDashboardAi()"
-              [disabled]="aiBusy||!aiPrompt.trim()||aiStatus?.enabled===false">
+              [disabled]="aiBusy||!aiPrompt.trim()||aiStatus?.enabled===false||aiStatus?.keyConfigured===false||aiStatus?.pipelineConfigured===false">
               ✦ {{aiBusy?copy('Generating…','جارٍ الاقتراح…'):
                 copy('Suggest Dashboard & New Metrics','اقترح لوحة ومؤشرات جديدة')}}</button>
             <p *ngIf="aiError" class="db-error">{{aiError}}</p>
