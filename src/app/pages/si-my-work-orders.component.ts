@@ -97,8 +97,8 @@ interface Dossier{
      <span class="journey-wait" *ngIf="!selected">{{t('Select a vessel to start','اختر سفينة للبدء')}}</span>
     </li>
     <li class="journey-step" [class.complete]="selected?.checklistStatus==='MANDATORY_PUBLISHED_TEMPLATE_SNAPSHOT'"
-     [class.current]="selected && canActivate(selected)"
-     [attr.aria-current]="selected && canActivate(selected)?'step':null"
+     [class.current]="!!selected && activeJourneyStep===2"
+     [attr.aria-current]="selected && activeJourneyStep===2?'step':null"
      data-testid="si-step-prepare-dossier">
      <span class="journey-number">{{selected?.checklistStatus==='MANDATORY_PUBLISHED_TEMPLATE_SNAPSHOT'?'✓':'2'}}</span>
      <strong>{{t('2. Prepare Inspection Dossier','٢. تجهيز ملف المعاينة')}}</strong>
@@ -118,11 +118,13 @@ interface Dossier{
     </li>
     <li class="journey-step" [class.ready]="!!selected?.caseId"
      [class.complete]="dossier?.readiness?.preparationSaved===true"
+     [class.current]="!!selected && activeJourneyStep===3"
+     [attr.aria-current]="selected && activeJourneyStep===3?'step':null"
      data-testid="si-step-open-preparation">
      <span class="journey-number">{{dossier?.readiness?.preparationSaved?'✓':'3'}}</span>
      <strong>{{t('3. Review Preparation & Optional A04','٣. مراجعة التحضير وA04 الاختياري')}}</strong>
-     <p>{{t('Review saved source evidence and optional A04 advice. A04 APPROVED does not authorize field execution; regulatory approval is Step 5.',
-      'راجع أدلة المصدر وتوصيات A04 الاختيارية. اعتماد A04 لا يبدأ المعاينة؛ في تجربة POC يبدأ المفتش بنفسه من الخطوة الخامسة.')}}</p>
+     <p>{{t('Review saved source evidence and optional A04 advice. A04 APPROVED does not authorize field execution; formal scope authorization remains separate from the POC journey.',
+      'راجع أدلة المصدر وتوصيات A04 الاختيارية. اعتماد A04 لا يبدأ المعاينة، ويظل الاعتماد الرسمي للنطاق منفصلًا عن تجربة POC.')}}</p>
      <a *ngIf="selected?.caseId && auth.isAdmin" class="journey-action"
       [routerLink]="['/moei/smart-inspection/preparation',selected!.caseId]"
       [queryParams]="{orderId:selected!.orderId}" data-testid="si-stepper-open-preparation">
@@ -143,10 +145,17 @@ interface Dossier{
      </ng-container>
      <span *ngIf="dossier?.readiness?.preparationSaved===true&&dossier?.readiness?.aiReviewed!==true"
       class="journey-done">{{t('Evidence prepared · A04 optional','تم تجهيز الأدلة · A04 اختياري')}}</span>
-     <span *ngIf="!selected?.caseId" class="journey-wait">{{t('Available after dossier preparation','متاح بعد تجهيز الملف')}}</span>
+     <button *ngIf="selected?.caseId && selected?.checklistStatus==='MANDATORY_PUBLISHED_TEMPLATE_SNAPSHOT'"
+       type="button" class="journey-action" (click)="showJourneyStep(4)"
+       data-testid="si-stepper-continue-to-checklist">
+       {{t('Next: Review Checklist →','التالي: مراجعة القائمة ←')}}
+      </button>
+      <span *ngIf="!selected?.caseId" class="journey-wait">{{t('Available after dossier preparation','متاح بعد تجهيز الملف')}}</span>
     </li>
     <li class="journey-step"
      [class.complete]="selected?.checklistStatus==='MANDATORY_PUBLISHED_TEMPLATE_SNAPSHOT'"
+     [class.current]="!!selected && activeJourneyStep===4"
+     [attr.aria-current]="selected && activeJourneyStep===4?'step':null"
      data-testid="si-step-create-checklist">
      <span class="journey-number">{{selected?.checklistStatus==='MANDATORY_PUBLISHED_TEMPLATE_SNAPSHOT'?'✓':'4'}}</span>
      <strong>{{t('4. Review Checklist','٤. مراجعة القائمة')}}</strong>
@@ -163,15 +172,20 @@ interface Dossier{
       {{t('Approved AI focus appears as advisory guidance, not mandatory checks.',
        'تركيز AI المعتمد يظهر كتوجيه استشاري، وليس كبنود إلزامية.')}}
      </span>
+     <button *ngIf="selected?.caseId && selected?.checklistStatus==='MANDATORY_PUBLISHED_TEMPLATE_SNAPSHOT'"
+      type="button" class="journey-action" (click)="showJourneyStep(5)"
+      data-testid="si-stepper-continue-to-execution">
+      {{t('Next: Execute Work Order →','التالي: تنفيذ أمر التكليف ←')}}
+     </button>
      <span *ngIf="selected?.checklistStatus!=='MANDATORY_PUBLISHED_TEMPLATE_SNAPSHOT'"
       class="journey-wait">{{t('Requires published checklist preparation','يتطلب تجهيز القائمة المنشورة')}}</span>
     </li>
     <li class="journey-step"
-     [class.current]="selected?.status==='READY_FOR_SCOPE_REVIEW'||selected?.status==='READY_FOR_FIELD'||selected?.status==='FIELD_STARTED'"
-     [attr.aria-current]="selected?.status==='READY_FOR_SCOPE_REVIEW'||selected?.status==='READY_FOR_FIELD'||selected?.status==='FIELD_STARTED'?'step':null"
+     [class.current]="!!selected && activeJourneyStep===5"
+     [attr.aria-current]="selected && activeJourneyStep===5?'step':null"
      data-testid="si-step-execute-order">
      <span class="journey-number">5</span>
-     <span *ngIf="selected?.status==='READY_FOR_SCOPE_REVIEW'||selected?.status==='READY_FOR_FIELD'||selected?.status==='FIELD_STARTED'"
+     <span *ngIf="selected && activeJourneyStep===5"
        class="journey-current-label" data-testid="si-current-step-indicator">
        {{t('CURRENT STEP','الخطوة الحالية')}}
      </span>
@@ -193,7 +207,16 @@ interface Dossier{
        (click)="continue(o)" [disabled]="busy" data-testid="si-stepper-resume-checklist">
        {{t('Continue Filling Checklist','استكمال تعبئة القائمة')}}
       </button>
-      <span *ngIf="o.status==='READY_FOR_SCOPE_REVIEW'&&!o.canSelfConfirmScope"
+      <button *ngIf="o.status==='READY_FOR_SCOPE_REVIEW' && o.mode==='POC_MOCK' && !o.canSelfConfirmScope"
+        type="button" class="journey-action" disabled data-testid="si-stepper-execute-poc-disabled">
+        {{t('Execute Work Order · POC Disabled','تنفيذ أمر التكليف · وضع POC غير مفعل')}}
+       </button>
+       <span *ngIf="o.status==='READY_FOR_SCOPE_REVIEW' && o.mode==='POC_MOCK' && !o.canSelfConfirmScope"
+        class="journey-wait" data-testid="si-poc-execution-config-gate">
+        {{t('The administrator must enable SI_POC_INSPECTOR_SELF_SCOPE_ENABLED=true for a POC mock order, then refresh. Official approvals remain separate.',
+         'يجب على المسؤول تفعيل SI_POC_INSPECTOR_SELF_SCOPE_ENABLED=true لأوامر POC التجريبية ثم تحديث الحالة. تظل الاعتمادات الرسمية مستقلة.')}}
+       </span>
+       <span *ngIf="o.status==='READY_FOR_SCOPE_REVIEW' && o.mode!=='POC_MOCK'"
        class="journey-wait" data-testid="si-formal-scope-gate">
        {{t('Formal work order: scope must be authorized under official policy. Inspector self-confirmation is enabled only for POC mock assignments.',
         'هذا تكليف رسمي يتطلب اعتماد النطاق وفق الصلاحيات. تأكيد المفتش الذاتي متاح فقط للتكليفات التجريبية POC.')}}
@@ -488,6 +511,9 @@ interface Dossier{
    color:#fff;padding:4px 9px;font-weight:900;font-size:10px;letter-spacing:.45px}
  .journey-step.complete{border-color:#93c9ac;background:#f2faf5}
  .journey-step.ready{border-color:#a5d7d2;background:#f3fbfa}
+ /* A prepared dossier can also be the current review step: current wins. */
+ .journey-step.current.complete,.journey-step.current.ready{
+  border:2px solid #6940bb;background:#f3efff}
  .journey-number{display:inline-flex;justify-content:center;align-items:center;
   width:28px;height:28px;flex:0 0 28px;border-radius:50%;background:#dce9ef;color:#1d6373;
   font-size:13px;font-weight:900}
@@ -544,6 +570,7 @@ export class SiMyWorkOrdersComponent implements OnInit{
  orders:AssignedOrder[]=[];selected:AssignedOrder|null=null;
  dossier:Dossier|null=null;me:{session:string;inspectorPocId:string|null}|null=null;
  loading=false;busy=false;loadingDossier=false;error='';message='';
+ activeJourneyStep=1;
  private readonly api='/api/si/v1/maritime-scheduling/';
  private cache:Record<string,Dossier>={};
  private dossierRequestId=0;
@@ -631,11 +658,23 @@ export class SiMyWorkOrdersComponent implements OnInit{
  canActivate(o:AssignedOrder):boolean{
   return ['ISSUED','PREPARING','PREPARATION_NEEDS_REVIEW'].includes(o.status);
  }
+ private initialJourneyStep(o:AssignedOrder):number{
+  if(this.canActivate(o))return 2;
+  if(['READY_FOR_FIELD','FIELD_STARTED'].includes(o.status))return 5;
+  return 3;
+ }
+ showJourneyStep(step:4|5):void{
+  if(!this.selected?.caseId||
+    this.selected.checklistStatus!=='MANDATORY_PUBLISHED_TEMPLATE_SNAPSHOT')return;
+  this.activeJourneyStep=step;
+ }
  load():void{
   if(this.loading)return;
   this.loading=true;this.error='';
   const previousOrderId=this.selected?.orderId||
    this.route.snapshot.queryParamMap.get('orderId')||null;
+  const previousSelectedId=this.selected?.orderId;
+  const previousJourneyStep=this.activeJourneyStep;
   this.http.get<{orders:AssignedOrder[];me:{session:string;inspectorPocId:string|null}}>(
     this.api+'my-work-orders').subscribe({
    next:r=>{
@@ -645,14 +684,22 @@ export class SiMyWorkOrdersComponent implements OnInit{
     this.dossierRequestId++;this.cache={};this.dossier=null;
     this.selected=null;this.loadingDossier=false;
     const previous=previousOrderId?this.orders.find(x=>x.orderId===previousOrderId):null;
-    if(previous)this.select(previous);
+    if(previous){
+     this.select(previous);
+     // Refresh must not skip the inspector's visible dossier/checklist review.
+     if(previousSelectedId===previous.orderId &&
+        previous.status==='READY_FOR_SCOPE_REVIEW' && previousJourneyStep>=3)
+      this.activeJourneyStep=previousJourneyStep;
+    }
    },
    error:e=>{this.loading=false;this.error=e?.error?.error||'SI_ORDERS_UNAVAILABLE';}
   });
  }
  select(o:AssignedOrder):void{
   if(this.selected?.orderId===o.orderId&&(this.dossier||this.loadingDossier))return;
+  const switchingOrder=this.selected?.orderId!==o.orderId;
   const requestId=++this.dossierRequestId;
+  if(switchingOrder)this.activeJourneyStep=this.initialJourneyStep(o);
   this.selected=o;this.error='';this.dossier=this.cache[o.orderId]||null;
   if(this.route.snapshot.queryParamMap.get('orderId')!==o.orderId)
    void this.router.navigate([],{relativeTo:this.route,
@@ -682,6 +729,7 @@ export class SiMyWorkOrdersComponent implements OnInit{
    {generateAi:false,confirmAiCost:false}
   ).subscribe({
    next:r=>{this.busy=false;const updated=this.replaceOrder(r.order);
+    this.activeJourneyStep=3;
     this.message=this.t('Inspection dossier and mandatory checklist prepared. A04 remains optional. The POC inspector can confirm mandatory scope and execute in Step 5; formal approvals remain distinct.',
       'تم تجهيز ملف المعاينة والقائمة الإلزامية، وA04 يظل اختياريًا. يمكن للمفتش في وضع POC تأكيد القائمة وبدء المعاينة بالخطوة الخامسة، دون اعتماد تنظيمي رسمي.');
     if(updated)this.loadDossierFresh(updated);},

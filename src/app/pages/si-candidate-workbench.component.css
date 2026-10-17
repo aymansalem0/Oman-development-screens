@@ -493,3 +493,20 @@ button:disabled{opacity:.55;cursor:not-allowed}
 .si-auto-capacity-overflow h4{margin:0 0 9px;color:#80522d}
 .si-auto-capacity-overflow p,.si-auto-capacity-overflow div{
  margin:5px 0;color:#655b50;font-size:11px;line-height:1.7}
+
+/* Keep the lengthy saved SI-C01 proposal accessible without overwhelming the
+   candidate dashboard. Native details is closed by default and keyboard-usable. */
+.si-c01-result{padding:0;overflow:hidden}
+.si-c01-result-details{margin:0}
+.si-c01-result-summary{display:flex;align-items:center;justify-content:space-between;
+ gap:12px;flex-wrap:wrap;padding:18px 22px;cursor:pointer;list-style:none;
+ color:#12445c}
+.si-c01-result-summary::-webkit-details-marker{display:none}
+.si-c01-result-summary::marker{content:''}
+.si-c01-result-summary strong{font-size:15px;line-height:1.5}
+.si-c01-result-hint{color:#06746e;font-size:11px;font-weight:750}
+.si-c01-result-summary::after{content:'+';font-weight:850;font-size:19px;color:#06746e}
+.si-c01-result-details[open]>.si-c01-result-summary::after{content:'−'}
+.si-c01-result-summary:focus-visible{outline:3px solid #06746e;outline-offset:-4px}
+.si-c01-result-details[open]>.si-c01-result-summary{border-bottom:1px solid #d6e6ec}
+.si-c01-result-body{padding:18px 22px;overflow-wrap:anywhere}
