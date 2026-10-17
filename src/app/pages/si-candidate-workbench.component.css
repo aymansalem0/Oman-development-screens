@@ -406,6 +406,49 @@ button:disabled{opacity:.55;cursor:not-allowed}
 .si-integrated-preview{margin:18px 0;padding:17px;background:#fff;
   border:2px solid #9ed2ca;border-radius:12px}
 .si-integrated-preview h3{margin:0 0 13px;font-size:17px;color:#07594f}
+
+/* Saved integrated Draft is collapsed by default to keep the Candidate grid
+   reachable. Native details/summary supports mouse, touch and keyboard. */
+.si-saved-capacity-details{overflow:visible}
+.si-saved-capacity-summary{list-style:none;display:flex;align-items:center;
+  justify-content:space-between;gap:18px;cursor:pointer;color:#09584f}
+.si-saved-capacity-summary::-webkit-details-marker{display:none}
+.si-saved-capacity-summary::marker{content:''}
+.si-saved-capacity-summary:focus-visible{outline:3px solid #007a71;
+  outline-offset:6px;border-radius:6px}
+.si-saved-capacity-heading{display:flex;flex-direction:column;gap:7px;
+  flex:1;min-width:0}
+.si-saved-capacity-heading strong{font-size:16px;line-height:1.4;
+  color:#09584f}
+.si-saved-capacity-heading small{font-size:11px;font-weight:500;
+  line-height:1.5;color:#557584;overflow-wrap:anywhere}
+.si-saved-capacity-controls{display:flex;align-items:center;justify-content:flex-end;
+  flex-wrap:wrap;gap:10px;min-width:0;font-size:11px;font-weight:750}
+.si-saved-capacity-count{padding:7px 9px;border-radius:8px;
+  background:#edf8f6;color:#075e57;border:1px solid #c7e5df}
+.si-saved-capacity-alert{padding:7px 9px;border-radius:8px;
+  background:#fff4e3;color:#855113;border:1px solid #efd39f}
+.si-saved-capacity-open-label,.si-saved-capacity-close-label{
+  color:#07766a;white-space:nowrap}
+.si-saved-capacity-close-label{display:none}
+.si-saved-capacity-details[open] .si-saved-capacity-open-label{display:none}
+.si-saved-capacity-details[open] .si-saved-capacity-close-label{display:inline}
+.si-saved-capacity-chevron{width:9px;height:9px;flex-shrink:0;
+  border:solid #087a70;border-width:0 2px 2px 0;
+  transform:rotate(45deg);transition:transform .15s ease}
+.si-saved-capacity-details[open] .si-saved-capacity-chevron{
+  transform:rotate(225deg)}
+.si-saved-capacity-body{padding-top:15px;margin-top:14px;
+  border-top:1px solid #d2e7e3}
+@media(max-width:760px){
+  .si-saved-capacity-summary{align-items:flex-start;flex-direction:column;
+    gap:12px}
+  .si-saved-capacity-controls{justify-content:flex-start}
+}
+@media(prefers-reduced-motion:reduce){
+  .si-saved-capacity-chevron{transition:none}
+}
+
 .si-draft-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));
   gap:9px;margin:15px 0}
 .si-draft-stats>div{display:grid;gap:5px;background:#f2faf8;
