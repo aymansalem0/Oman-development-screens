@@ -150,9 +150,11 @@ export interface NmcCaseA01SourcePreview {
 }
 export interface NmcSiPostInspectionRiskStatus{
   status:'ok';caseId:string;source:'SI_APPROVED_INSPECTION'|'NOT_SI_APPROVED_INSPECTION';
-  reportId:string|null;
+  reportId:string|null;inspectionId:string|null;
   jobStatus:string;
   job:{status:string;aiExecutionStatus:string|null;errorCode:string|null;
+    errorDetails?:{factor:string;agent:'A01'|'A02';
+      unknownCount:number;citedCount:number}|null;
     updatedAt:string|null;riskSaved:boolean;assessmentId:string|null}|null;
 }
 interface CaseResponse{
@@ -224,6 +226,23 @@ export class NmcCasesService {
   siPostInspectionRiskStatus(caseId:string):Observable<NmcSiPostInspectionRiskStatus>{
     return this.http.get<NmcSiPostInspectionRiskStatus>(
       this.path(caseId)+'/post-inspection-risk-status');
+  }
+  /** Explicit paid A01/A02 retry for the exact approved SI inspection event.
+   * Backend requires PUBLISHER role, session and CSRF header, and never retries
+   * a RUNNING, QUEUED or COMPLETED job.
+   */
+  retrySiPostInspectionRisk(inspectionId:string,confirmCost:boolean):Observable<{
+    status:'ok';job:{status:string;errorCode?:string|null}
+  }>{
+    return this.http.post<{
+      status:'ok';job:{status:string;errorCode?:string|null}
+    }>('/api/si/v1/supervisor/cases/'+encodeURIComponent(inspectionId)+
+       '/reassessment/retry',{confirmCost},{
+      headers:new HttpHeaders({
+        'X-NMC-DASHBOARD-KEY':this.publisherKey,
+        'X-Moei-Csrf':'1'
+      })
+    });
   }
   generateActionPlan(current:NmcCentralCase,acknowledgeHistoricalAssessment=false,
     reviewedLatestAssessmentId?:string|null):Observable<CaseResponse>{
