@@ -5,7 +5,7 @@ import {mkdtempSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {approvedFindingEvidence,verifiedFindingFactorAttribution,
- FIVE_NMC_RISK_FACTORS} from '../si-risk-factor-attribution.mjs';
+ FIVE_NMC_RISK_FACTORS,canonicalizeApprovedFindingReferences} from '../si-risk-factor-attribution.mjs';
 import {approvedInspectionBundle} from '../si-post-inspection-risk.mjs';
 import {NmcCaseWorkspace} from '../case-workspace.mjs';
 
@@ -192,4 +192,26 @@ test('unrecognized model-created evidence ID identifies exact factor and agent w
    e=>e?.message==='FLEET_AI_UNVERIFIED_EVIDENCE_ID'&&
      e.details?.factor==='inspection'&&e.details?.agent==='A02'&&
      e.details?.unknownCount===1&&e.details?.citedCount===2);
+});
+
+test('only exact unique persisted defect identifiers and uploaded references reconcile into approved canonical IDs',()=>{
+ const approved=approvedFindingEvidence(report,findings);
+ const known=['VES-'+imo,...approved.map(x=>x.evidenceId)];
+ const response={signals:[
+   {factor:'inspection',evidenceIds:['VES-'+imo,'F-FIRE-DOOR']},
+   {factor:'certificate',evidenceIds:['CERT-UPLOAD-012']},
+   {factor:'history',evidenceIds:['AI-INVENTED-UNSUPPORTED']}
+ ]};
+ const normalized=canonicalizeApprovedFindingReferences(response,approved,known);
+ assert.deepEqual(normalized.signals[0].evidenceIds,['VES-'+imo,approved[0].evidenceId]);
+ assert.deepEqual(normalized.signals[1].evidenceIds,[approved[1].evidenceId]);
+ assert.deepEqual(normalized.signals[2].evidenceIds,['AI-INVENTED-UNSUPPORTED']);
+ assert.equal(response.signals[0].evidenceIds[1],'F-FIRE-DOOR','never mutate raw agent output');
+ // Shared uploaded evidence cannot be attributed to either defect
+ // without a unique report source; therefore it must fail the verifier.
+ const ambiguous=approved.map(x=>({...x,evidenceRefs:['SHARED-UPLOAD']}));
+ const ambiguousResult=canonicalizeApprovedFindingReferences(
+  {signals:[{factor:'inspection',evidenceIds:['SHARED-UPLOAD']}]},
+  ambiguous,known);
+ assert.deepEqual(ambiguousResult.signals[0].evidenceIds,['SHARED-UPLOAD']);
 });
