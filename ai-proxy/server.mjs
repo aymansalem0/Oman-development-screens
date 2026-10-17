@@ -2429,6 +2429,38 @@ const server = createServer(async (req, res) => {
         dashboards.assertRole(req,'EDITOR');
         return respond(res,200,await siLifecycle.managementSnapshot());
       }
+      // Explicit supervisor queue: stored inspector reports and NMC origin
+      // only. All decisions use the signed-in identity, never browser actor.
+      if(path==='/api/si/v1/supervisor/reviews'&&req.method==='GET'){
+        moeiAuth.require(req);dashboards.assertRole(req,'PUBLISHER');
+        const listed=await siLifecycle.list();
+        const reviewStages=new Set(['REPORT_PENDING_REVIEW','REPORT_APPROVED',
+          'ACTIONS_OPEN','FOLLOW_UP_PENDING','READY_TO_CLOSE','CLOSED']);
+        return respond(res,200,{status:'ok',cases:listed.cases.filter(x=>
+          reviewStages.has(x.stage)),count:listed.cases.filter(x=>
+          reviewStages.has(x.stage)).length});
+      }
+      const supervisorCase=/^\/api\/si\/v1\/supervisor\/reviews\/([a-f0-9-]{36})(?:\/(decision))?$/.exec(path);
+      if(supervisorCase){
+        const identity=moeiAuth.require(req);
+        dashboards.assertRole(req,'PUBLISHER');
+        const id=supervisorCase[1],part=supervisorCase[2];
+        if(!part&&req.method==='GET')
+          return respond(res,200,await siLifecycle.snapshot(id));
+        if(part==='decision'&&req.method==='POST'){
+          if(req.headers['x-moei-csrf']!=='1')
+            throw new MoeiAuthError('MOEI_CSRF_REQUIRED',403);
+          const body=await requestJson(req,4096);
+          if(!['APPROVE_REPORT','RETURN_REPORT','CLOSE'].includes(body.action))
+            return respond(res,422,{error:'SI_SUPERVISOR_ACTION_UNSUPPORTED'});
+          const actor=identity.email||identity.username;
+          return respond(res,200,await siLifecycle.apply(id,{
+            action:body.action,expectedVersion:body.expectedVersion,actor,
+            data:{reason:body.reason}
+          }));
+        }
+        return respond(res,405,{error:'METHOD_NOT_ALLOWED'});
+      }
       // Unified inspection cycle: read-only timeline, explicit human-gated state changes.
       // GET never initiates an AI call or writes a case.
       if(path==='/api/si/v1/lifecycle'&&req.method==='GET'){
