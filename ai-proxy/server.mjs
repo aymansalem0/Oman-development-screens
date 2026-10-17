@@ -64,6 +64,7 @@ import {classifySiV01Failure,summarizeSiV01Rejection} from './si-v01-provider-di
 import {executeGuidedV01UploadJson} from './si-v01-upload-json.mjs';
 import {suggestCapacityExceptionActions} from './si-capacity-exception-alternatives.mjs';
 import { SiInspectionLifecycle, SiLifecycleError } from './si-inspection-lifecycle.mjs';
+import {syncSiClosureToNmc,SiNmcClosureSyncError} from './si-nmc-closure-sync.mjs';
 import {SiScheduleOrders,SiWorkOrderError} from './si-schedule-orders.mjs';
 import {runSiPocAdvisor,siFutureAdvisorCoverage,SiPocAdvisorError} from './si-poc-workflow-advisors.mjs';
 import {runSiAiriaAdvisor} from './si-airia-workflow-advisors.mjs';
@@ -481,7 +482,14 @@ const siChecklistField=new (checklistStorage==='oracle'?
 });
 const siLifecycle=new SiInspectionLifecycle({mode:dbMode,oracleRepository:repository,
   targeting:siTargeting,preparation:siPreparation,cases,checklists:siChecklistField,
-  onClosed:(caseId,actor)=>siRollingPlans.completeIfAllClosed(caseId,actor,siLifecycle)});
+  onClosed:async(caseId,actor)=>{
+    try{await siRollingPlans.completeIfAllClosed(caseId,actor,siLifecycle);}
+    catch(e){console.error('[si-rolling] CLOSURE_SYNC_RETRY_REQUIRED '+
+      String(e?.code||'UNKNOWN').replace(/[^A-Z_]/gi,'').slice(0,60));}
+    const view=await siLifecycle.snapshot(caseId);
+    return syncSiClosureToNmc({caseId,inspectionCase:view.inspectionCase,
+      record:view.record,cases,actor});
+  }});
 const siScheduleOrders=new SiScheduleOrders({
  mode:dbMode,oracleRepository:repository,rolling:siRollingPlans,
  targeting:siTargeting,preparation:siPreparation,
@@ -2465,6 +2473,16 @@ const server = createServer(async (req, res) => {
         },view,{executeAgent:fleetAgentCall,executeVision:callSiVisionAiria,
           proposal,history,media,actor:req.moeiUser?.email||req.moeiUser?.username||'MOEI_OPERATOR'}));
       }
+      // Can retry downstream Case Management sync without re-closing SI.
+      const retryNmc=/^\/api\/si\/v1\/supervisor\/cases\/([a-f0-9-]{36})\/sync-nmc$/.exec(path);
+      if(retryNmc&&req.method==='POST'){
+        dashboards.assertRole(req,'PUBLISHER');
+        const view=await siLifecycle.snapshot(retryNmc[1]);
+        return respond(res,200,await syncSiClosureToNmc({
+          caseId:retryNmc[1],inspectionCase:view.inspectionCase,
+          record:view.record,cases,actor:'SI_SUPERVISOR'
+        }));
+      }
       const lifecyclePath=/^\/api\/si\/v1\/lifecycle\/([0-9a-f-]{36})(?:\/(actions|history))?$/.exec(path);
       if(lifecyclePath){
         const id=lifecyclePath[1],suffix=lifecyclePath[2];
@@ -2678,7 +2696,7 @@ const server = createServer(async (req, res) => {
         return respond(res,409,{error:e.code,
          periodEligibility:e.periodEligibility||null});
       if(e instanceof SiError||e instanceof SiPocAdvisorError||e instanceof SiRollingPlanError||e instanceof SiIntegratedPlanError||e instanceof SiDraftCreationError||e instanceof SiDraftJobError||
-       e instanceof SiBulkApprovalError||e instanceof SiCandidateAgentError||e instanceof SiLifecycleError||e instanceof SiSelectionError||e instanceof SiPriorityError||e instanceof SiPreparationError||e instanceof SiWorkOrderError||e instanceof SiTargetingError||e instanceof MoeiAuthError||e instanceof DashboardError)
+       e instanceof SiBulkApprovalError||e instanceof SiCandidateAgentError||e instanceof SiNmcClosureSyncError||e instanceof SiLifecycleError||e instanceof SiSelectionError||e instanceof SiPriorityError||e instanceof SiPreparationError||e instanceof SiWorkOrderError||e instanceof SiTargetingError||e instanceof MoeiAuthError||e instanceof DashboardError)
         return respond(res,e.status,{error:e.code});
       if(Number.isInteger(e?.status)&&e.status>=400&&e.status<500)
         return respond(res,e.status,{error:'SI_REQUEST_INVALID'});
