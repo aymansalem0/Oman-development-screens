@@ -100,7 +100,7 @@ export interface ChecklistPreview{
  saved:ChecklistExecution|null;immutableLegacyBaseline:true;
  requiresInspectorReview:true;
  fieldAccess?:{role:'SUPERVISOR'|'ASSIGNED_INSPECTOR';canMutate:boolean;
-  inspectionStatus:string|null};
+  inspectionStatus:string|null;mode:'POC_MOCK'|'ERP_EXCEL_POC'|null};
 }
 @Injectable({providedIn:'root'})
 export class SiChecklistsService{
