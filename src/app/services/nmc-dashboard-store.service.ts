@@ -149,7 +149,7 @@ export function buildAiContinuousImprovementDashboard():DashboardDefinition{
  board.title='AI Continuous Improvement';
  board.description='AI operational adoption, officer review decisions, agent usage and continuous improvement across maritime domains.';
  board.menuPlacement='NMC_CENTER';
- board.widgets=ids.map((id,index)=>{
+ board.widgets=ids.map((id,index):DashboardWidget=>{
    const metric=AI_CI_METRICS.find(m=>m.id===id);
    if(!metric)throw new Error('AI_CI_METRIC_MISSING');
    return {id:'ci-'+index,type:metric.kind,metric:id,title:metric.en,
