@@ -24,7 +24,7 @@ import {advanceOffshoreVessel} from '../data/airia-maritime-motion';
 import { LanguageService } from '../services/language.service';
 import { NmcRiskEngineService } from '../services/nmc-risk-engine.service';
 import { NmcAlertsService } from '../services/nmc-alerts.service';
-import { NmcCasesService } from '../services/nmc-cases.service';
+import { NmcCasesService, type NmcCentralCase } from '../services/nmc-cases.service';
 import {NmcIncidentsService,NmcMaritimeIncident} from '../services/nmc-incidents.service';
 import {NmcAiFocusService, NmcAiFocusResult, NmcKpiValues,
   NmcKpiMetricId} from '../services/nmc-ai-focus.service';
@@ -75,6 +75,41 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
   unreadAlertCount = 0;
   activeAlertCount: number | null = null;
   openCaseCount: number | null = null;
+  // Real centrally persisted supervisor-approved SI referral cases ONLY.
+  // Distinct NMC case IDs: never synthesize a case from a vessel or mock map.
+  inspectionReferralCases:NmcCentralCase[]=[];
+  inspectionReferralLoading=true;
+  inspectionReferralError=false;
+  showAllInspectionReferrals=false;
+  get forwardedInspectionCases(){
+    const relevant=this.inspectionReferralCases.filter(c=>
+      (c.siInspectionSources||[]).some(x=>x.source==='SI_APPROVED_REPORT')||
+      (c.inspectionReviewHistory||[]).some(x=>x.decision==='APPROVED'&&
+        x.source==='SI_HUMAN_SUPERVISOR'));
+    return relevant.map(c=>{
+      const latest=[...(c.siInspectionSources||[]).filter(x=>
+          x.source==='SI_APPROVED_REPORT').map(x=>({
+            reportId:x.reportId,inspectionId:x.inspectionId,
+            summary:x.summary,at:x.receivedAt})),
+        ...(c.inspectionReviewHistory||[]).filter(x=>
+          x.decision==='APPROVED'&&x.source==='SI_HUMAN_SUPERVISOR')
+          .map(x=>({reportId:x.reportId,inspectionId:x.inspectionId,
+            summary:x.summary,at:x.reviewedAt}))].sort((a,b)=>
+              b.at.localeCompare(a.at))[0];
+      const vessel=this.vessels.find(v=>v.imo===c.imo);
+      return {caseId:c.id,imo:c.imo,vesselName:vessel?.name||'IMO '+c.imo,
+        status:c.status,reportId:latest?.reportId||null,
+        inspectionId:latest?.inspectionId||null,
+        summary:latest?.summary||'',forwardedAt:latest?.at||c.updatedAt,
+        risk:c.operationalRisk||null};
+    }).sort((a,b)=>
+      (a.status==='RESOLVED'?1:0)-(b.status==='RESOLVED'?1:0)||
+      b.forwardedAt.localeCompare(a.forwardedAt));
+  }
+  get visibleInspectionReferrals(){
+    return this.showAllInspectionReferrals?
+      this.forwardedInspectionCases:this.forwardedInspectionCases.slice(0,6);
+  }
   incidentCount:number|null=null;
   activeIncidentCount:number|null=null;
   criticalIncidentCount:number|null=null;
@@ -459,8 +494,18 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
       }
     });
     this.casesService.list().subscribe({
-      next:response=>this.openCaseCount=response.cases.filter(c=>c.status!=='RESOLVED').length,
-      error:()=>this.openCaseCount=null
+      next:response=>{
+        this.openCaseCount=response.cases.filter(c=>c.status!=='RESOLVED').length;
+        this.inspectionReferralCases=response.cases;
+        this.inspectionReferralLoading=false;
+        this.inspectionReferralError=false;
+      },
+      error:()=>{
+        this.openCaseCount=null;
+        this.inspectionReferralCases=[];
+        this.inspectionReferralLoading=false;
+        this.inspectionReferralError=true;
+      }
     });
   }
   /** Saved Oracle-backed assessments are displayed using the ruleset that actually produced them.
