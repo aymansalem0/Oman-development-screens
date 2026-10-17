@@ -346,9 +346,7 @@
              <label>{{copy('Supervisor reason (minimum 10 characters)','سبب المشرف (10 أحرف على الأقل)')}}
                <input [(ngModel)]="add.reason" maxlength="500"
                  (ngModelChange)="draftSelectionReasonChanged()"/></label>
-             <small class="si-plan-added-indicator">
-              {{copy('Added · pending capacity recalculation',
-               'تمت الإضافة · يلزم إعادة حساب الطاقة')}}</small>
+
            </div>
          </div>
          </div>
