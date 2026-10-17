@@ -57,7 +57,7 @@ function sourceEvidence(imo,dashboard){
  */
 export function selectIntegratedPlanVessels({
  plan,inspectionPlan,dashboard,pscRiskRatePercent,uaeFlagRatePercent,
- officerAdds=[]
+ officerAdds=[],officerExclusions=[]
 }={}){
  if(!plan||!['DRAFT','READY_FOR_APPROVAL'].includes(plan.status)||
   !inspectionPlan||!dashboard)
@@ -125,6 +125,24 @@ export function selectIntegratedPlanVessels({
  // from verified Airia advice. Validate every choice against original C01
  // MANUAL_REVIEW, saved vessel evidence and independent published quotas.
  const manualSelected=[];
+ // Supervisor overrides for this unsaved draft only. Never withdraw protected
+ // source obligations or edit the national candidate/source records.
+ if(!Array.isArray(officerExclusions)||officerExclusions.length>50)
+  fail('SI_DRAFT_OFFICER_EXCLUSIONS_INVALID',422);
+ const baselineSelected=new Set([...forced,...serviceSelected,
+  ...pscSelected,...uaeSelected].map(x=>x.imo));
+ const removed=new Map();
+ for(const change of officerExclusions){
+  if(!change||typeof change.imo!=='string'||
+    !/^[0-9]{7}$/.test(change.imo)||removed.has(change.imo)||
+    typeof change.reason!=='string'||change.reason.trim().length<10||
+    change.reason.length>500)
+   fail('SI_DRAFT_OFFICER_EXCLUSION_REASON_INVALID',422);
+  const row=verified.get(change.imo);
+  if(!row||mandatory(row)||!baselineSelected.has(change.imo))
+   fail('SI_DRAFT_PROTECTED_OR_UNSELECTED_VESSEL_CANNOT_REMOVE',409);
+  removed.set(change.imo,change.reason.trim());
+ }
  if(!Array.isArray(officerAdds)||officerAdds.length>50)
   fail('SI_DRAFT_OFFICER_ALTERNATIVES_INVALID',422);
  const verifiedReasons=new Map((dashboard.candidates||[]).map(c=>[c.imo,c]));
@@ -143,6 +161,7 @@ export function selectIntegratedPlanVessels({
    !['SERVICE_REQUEST','PSC_RISK','UAE_FLAG'].includes(change.basis))
    fail('SI_DRAFT_OFFICER_ALTERNATIVE_REASON_OR_BASIS_INVALID',422);
   choices.add(change.imo);
+  if(removed.has(change.imo))fail('SI_DRAFT_CONTRADICTORY_OFFICER_ACTIONS',409);
   const row=verified.get(change.imo),keys=aiCandidateKeys.get(change.imo)||[];
   if(!ai||!row||mandatory(row)||!keys.length||
    !keys.some(k=>recommendedMap.get(k)?.recommendation==='MANUAL_REVIEW')||
@@ -151,17 +170,17 @@ export function selectIntegratedPlanVessels({
   if(change.basis==='SERVICE_REQUEST'){
    if(!row.sources?.includes('SERVICE_REQUEST')||
      ai?.serviceRequests?.cap===null||
-     serviceSelected.length+manualSelected.filter(x=>x.basis==='SERVICE_REQUEST').length
+     serviceSelected.filter(x=>!removed.has(x.imo)).length+manualSelected.filter(x=>x.basis==='SERVICE_REQUEST').length
       >=ai.serviceRequests.cap)
     fail('SI_DRAFT_SERVICE_QUOTA_EXCEEDED',409);
   }else if(change.basis==='PSC_RISK'){
    if(!row.sources?.includes('PSC_PORT_CALL')||
      !Number.isFinite(Number(row.risk?.score))||
-     pscSelected.length+manualSelected.filter(x=>x.basis==='PSC_RISK').length>=ai.pscRisk.cap)
+     pscSelected.filter(x=>!removed.has(x.imo)).length+manualSelected.filter(x=>x.basis==='PSC_RISK').length>=ai.pscRisk.cap)
     fail('SI_DRAFT_PSC_QUOTA_EXCEEDED',409);
   }else{
    if(!goodFlag(row.flag)||
-     uaeSelected.length+manualSelected.filter(x=>x.basis==='UAE_FLAG').length>=ai.uaeFlag.cap)
+     uaeSelected.filter(x=>!removed.has(x.imo)).length+manualSelected.filter(x=>x.basis==='UAE_FLAG').length>=ai.uaeFlag.cap)
     fail('SI_DRAFT_UAE_QUOTA_EXCEEDED',409);
   }
   manualSelected.push({imo:change.imo,basis:change.basis,
@@ -169,6 +188,7 @@ export function selectIntegratedPlanVessels({
  }
  const selectedImos=new Set([...forced,...serviceSelected,
    ...pscSelected,...uaeSelected,...manualSelected.map(x=>verified.get(x.imo))].map(x=>x.imo));
+ for(const imo of removed.keys())selectedImos.delete(imo);
  const maxPlan=ai?.maxPlannedVessels??null;
  if(maxPlan!==null&&selectedImos.size>maxPlan)
    fail('SI_POC_PLAN_MAX_VESSELS_EXCEEDED_OFFICER_REVIEW',409);
@@ -195,12 +215,13 @@ export function selectIntegratedPlanVessels({
   maxPlannedVessels:maxPlan,
   mandatoryOrManual:{count:forced.length,imos:forced.map(x=>x.imo)},
   officerSelectedAlternatives:manualSelected,
+  officerExclusions:[...removed].map(([imo,reason])=>({imo,reason})),
   selectedImos:roster.map(x=>x.imo),
   overlapImos:ai?.overlappingImos||pscSelected.filter(x=>
     uaeSelected.some(y=>y.imo===x.imo)).map(x=>x.imo),
   availableCandidates:rows.length,advisoryOnly:true,
    selectionMethod:ai?
-     (manualSelected.length?'VERIFIED_C01_WITH_EXPLICIT_OFFICER_ALTERNATIVES':
+     (manualSelected.length||removed.size?'VERIFIED_C01_WITH_EXPLICIT_OFFICER_OVERRIDES':
       'VERIFIED_C01_AI_WITH_PUBLISHED_QUOTAS'):
      'LEGACY_RULE_BASED_FALLBACK_NO_AI_SELECTION',
    aiAgentRunId:ai?inspectionPlan.agentRunId:null,
