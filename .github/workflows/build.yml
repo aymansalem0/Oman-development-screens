@@ -51,6 +51,8 @@ jobs:
         run: node --test scripts/test-si-guided-finish-version-conflict.mjs
       - name: Guided Inspector missing finding documentation guard
         run: node --test scripts/test-si-guided-finding-documentation.mjs
+      - name: NMC forwarded inspection cases and Incident Google source regression
+        run: node --test scripts/test-nmc-si-forwarded-cases-and-incident-config.mjs
 
       - name: MOEI single Admin login and UI regression
         run: node --test scripts/test-moei-admin-login-ui.mjs
