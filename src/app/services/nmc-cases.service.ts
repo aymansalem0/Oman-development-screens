@@ -101,6 +101,18 @@ export interface NmcCentralCase {
   createdAt:string;updatedAt:string;version:number;
   tasks:NmcCentralCaseTask[];decisions:NmcCentralDecision[];
   incidentEvents?:NmcCaseIncident[];
+  siInspectionSources?:{eventId:string;inspectionId:string;reportId:string;
+    summary:string;receivedAt:string}[];
+  operationalRisk?:{score:number;level:string;assessmentId:string;
+    previousScore:number|null;previousLevel:string|null;sourceInspectionId:string;
+    sourceReportId:string;evidenceId:string;policyVersion:string;updatedAt:string;
+    provisional:true;regulatoryDecision:false}|null;
+  postInspectionRiskHistory?:{eventId:string;inspectionId:string;reportId:string;
+    assessmentId:string;previousAssessmentId:string|null;previousScore:number|null;
+    previousLevel:string|null;newScore:number;newLevel:string;
+    policyVersion:string;evidenceId:string;factorChanges:{
+      factor:string;previous:number|null;current:number;evidenceIds:string[]}[];
+    calculatedAt:string;officialRegulatoryDecision:false}[];
   actionPlan?:NmcAiActionPlan|null;
   operationalDecision?:NmcOperationalDecision|null;
   decisionFeedback?:NmcDecisionFeedback[];
