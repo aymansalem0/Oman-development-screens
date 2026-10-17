@@ -535,3 +535,39 @@ test("Start Service newJourney always creates a clean sandbox stepper without re
  });
  assert.equal(invalid.status,422);
 });
+
+test("Public eSDB QR lookup matches only issued sandbox specimen and leaks no applicant data",async(t)=>{
+  const {workspace,request}=await fixture(t);
+  const reference="VERIFY-SANDBOX-0123abcd";
+  const number="SDB-SANDBOX-0123abcd-9";
+  workspace.state.applications.push({
+    id:"SDB-TEST-ISSUED",profileId:"SF-002",status:"ISSUED",
+    payment:{reference:"PAY-PRIVATE",amount:500},
+    digital:{number,verificationReference:reference,status:"SIMULATED",
+      name:"PRIVATE USER",sid:"SID-PRIVATE",issuedAt:"2026-10-17",
+      expiryDate:"2031-10-17"}
+  });
+  const route="/public/esdb/verify?reference="+reference+"&number="+number;
+  const success=await request(route,{as:null,csrf:false});
+  assert.equal(success.status,200);
+  assert.equal(success.data.result,"MATCHED_SANDBOX_SPECIMEN");
+  assert.equal(success.data.officialVerification,false);
+  assert.equal(success.data.specimen,true);
+  assert.equal(success.data.number,number);
+  for(const forbidden of ["name","sid","profileId","payment","nationalId",
+    "email","phone","passport","applicationId","companyId"]){
+    assert.equal(Object.hasOwn(success.data,forbidden),false,forbidden+" should not leak");
+  }
+  assert.equal((await request("/dashboard",{as:null})).status,401,
+    "public QR route does not weaken private SDB API authentication");
+  for(const mismatch of [
+    "/public/esdb/verify?reference="+reference+"&number=SDB-SANDBOX-aabbccdd-1",
+    "/public/esdb/verify?reference=VERIFY-SANDBOX-ffffffff&number="+number,
+    "/public/esdb/verify?reference=invalid&number="+number,
+    "/public/esdb/verify?reference="+reference,
+    "/public/esdb/verify?reference="+reference+"&number="+number+"&preview=SF-002"
+  ]){
+    assert.equal((await request(mismatch,{as:null,csrf:false})).status,404,mismatch);
+  }
+  assert.equal((await request(route,{as:null,method:"POST",body:{}})).status,405);
+});
