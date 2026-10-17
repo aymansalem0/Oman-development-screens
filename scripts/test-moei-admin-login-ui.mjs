@@ -55,12 +55,13 @@ test('key-popups were retired in shared NMC business services',()=>{
  }
 });
 
-test('login loads a bundled maritime background without referencing missing photo assets',()=>{
+test('login uses approved photo rather than the former illustrated background',()=>{
  const css=read('src/app/pages/moei-admin-login.component.css');
- const bg=read('public/branding/moei-login-maritime.svg');
- assert.match(css,/background-image:url\('\/branding\/moei-login-maritime\.svg'\)/);
- assert.doesNotMatch(css,/moei-login-maritime\.avif/);
- assert.match(bg,/<svg xmlns="http:\/\/www\.w3\.org\/2000\/svg"/);
+ assert.match(css,/background-image:url\('\/branding\/moei-login-maritime\.jpg'\)/);
+ assert.doesNotMatch(css,/background-image:url\('\/branding\/moei-login-maritime\.(?:svg|avif)'\)/);
+ assert.match(css,/background-position:39% center/);
+ // The approved JPEG is a user-provided binary file. The local deployment
+ // must copy and commit it into public/branding before building Angular.
 });
 test('SDB Start Service chooses a fresh sandbox journey; explicit deep links can resume previous applications',()=>{
  const entry=read('src/app/pages/moei-sdb-customer-services.component.ts');
