@@ -65,6 +65,9 @@ import {executeGuidedV01UploadJson} from './si-v01-upload-json.mjs';
 import {suggestCapacityExceptionActions} from './si-capacity-exception-alternatives.mjs';
 import { SiInspectionLifecycle, SiLifecycleError } from './si-inspection-lifecycle.mjs';
 import {syncSiClosureToNmc,SiNmcClosureSyncError} from './si-nmc-closure-sync.mjs';
+import {buildSiSupervisorFullReport} from './si-supervisor-report.mjs';
+import {syncSiSupervisorReviewToNmc,SiNmcReviewSyncError} from './si-nmc-review-sync.mjs';
+import {SiRegulatoryDrafts,SiRegulatoryDraftError} from './si-supervisor-regulatory-drafts.mjs';
 import {SiScheduleOrders,SiWorkOrderError} from './si-schedule-orders.mjs';
 import {runSiPocAdvisor,siFutureAdvisorCoverage,SiPocAdvisorError} from './si-poc-workflow-advisors.mjs';
 import {runSiAiriaAdvisor} from './si-airia-workflow-advisors.mjs';
@@ -480,6 +483,7 @@ const siChecklistField=new (checklistStorage==='oracle'?
   },
   getSetting:key=>runtime.get(key)
 });
+const siRegulatoryDrafts=new SiRegulatoryDrafts();
 const siLifecycle=new SiInspectionLifecycle({mode:dbMode,oracleRepository:repository,
   targeting:siTargeting,preparation:siPreparation,cases,checklists:siChecklistField,
   onClosed:async(caseId,actor)=>{
@@ -1931,6 +1935,45 @@ const server = createServer(async (req, res) => {
         }
         return respond(res,200,{status:'ok',...validated});
       }
+      // Manager read-only overview. Distinct from the inspector-owned /my-work-orders
+      // endpoint, which must NEVER leak another inspector's assignments.
+      if(path==='/api/si/v1/maritime-scheduling/inspector-assignments'&&req.method==='GET'){
+        moeiAuth.require(req);
+        dashboards.assertRole(req,'EDITOR');
+        if(!siScheduleOrders.ready)
+          return respond(res,503,{error:'SI_SCHED_MIGRATION_019_REQUIRED'});
+        const schedules=await siScheduleOrders.all();
+        const roster=new Map();
+        for(const schedule of schedules){
+          for(const order of schedule.orders||[]){
+            const a=order.assignment||{},inspectorId=String(a.inspectorId||'');
+            if(!inspectorId)continue;
+            if(!roster.has(inspectorId))roster.set(inspectorId,{
+              inspectorId,inspectorName:a.inspectorName||inspectorId,assignments:[]});
+            const bundle=siTargeting.bundles.find(x=>x.imo===order.imo);
+            roster.get(inspectorId).assignments.push({
+              orderId:order.id,scheduleId:schedule.id,planId:schedule.planId,
+              vesselName:bundle?.inlineContext?.vessel?.name||'IMO '+order.imo,
+              imo:order.imo,portName:a.portName||null,
+              startLocal:a.startLocal||null,endLocal:a.endLocal||null,
+              locationName:a.locationName||null,status:order.status,
+              caseId:order.caseId||null,scopeStatus:order.scopeStatus,
+              checklistStatus:order.checklistStatus,
+              scheduleMode:schedule.mode,operationalBookingConfirmed:
+                schedule.operationalBookingConfirmed===true
+            });
+          }
+        }
+        const inspectors=[...roster.values()].map(row=>({
+          ...row,count:row.assignments.length,
+          assignments:row.assignments.sort((a,b)=>
+            (a.startLocal||'').localeCompare(b.startLocal||''))
+        })).sort((a,b)=>a.inspectorName.localeCompare(b.inspectorName));
+        return respond(res,200,{status:'ok',inspectorCount:inspectors.length,
+          orderCount:inspectors.reduce((n,row)=>n+row.count,0),inspectors,
+          source:'PERSISTED_APPROVED_WORK_ORDERS',
+          operationalBookingsNotAssumed:true});
+      }
       // Signed-in inspector work orders, projected only from canonical Oracle 019.
       if(path==='/api/si/v1/maritime-scheduling/my-work-orders'&&req.method==='GET'){
         if(!siScheduleOrders.ready)
@@ -2440,26 +2483,85 @@ const server = createServer(async (req, res) => {
           reviewStages.has(x.stage)),count:listed.cases.filter(x=>
           reviewStages.has(x.stage)).length});
       }
-      const supervisorCase=/^\/api\/si\/v1\/supervisor\/reviews\/([a-f0-9-]{36})(?:\/(decision))?$/.exec(path);
+      const supervisorCase=/^\/api\/si\/v1\/supervisor\/reviews\/([a-f0-9-]{36})(?:\/(decision|full-report|regulatory))?$/.exec(path);
       if(supervisorCase){
         const identity=moeiAuth.require(req);
         dashboards.assertRole(req,'PUBLISHER');
         const id=supervisorCase[1],part=supervisorCase[2];
         if(!part&&req.method==='GET')
           return respond(res,200,await siLifecycle.snapshot(id));
+        if(part==='full-report'&&req.method==='GET'){
+          const view=await siLifecycle.snapshot(id);
+          const saved=await siPreparation.get(id);
+          let checklist=null;
+          try{checklist=await siChecklistField.preview(id);}
+          catch{/* Source gap must be visible, never silently invented. */}
+          const schedules=siScheduleOrders.ready?await siScheduleOrders.all():[];
+          const linked=schedules.flatMap(schedule=>(schedule.orders||[])
+            .map(order=>({schedule,order}))).find(x=>x.order.caseId===id)||null;
+          const dossier=assembleSiVesselDossier({
+            view:saved,schedule:linked?.schedule,order:linked?.order,checklist
+          });
+          return respond(res,200,buildSiSupervisorFullReport({
+            view,dossier,checklist
+          }));
+        }
+        if(part==='regulatory'&&req.method==='GET'){
+          return respond(res,200,{status:'ok',
+            drafts:siRegulatoryDrafts.list(id),
+            officialExternalIntegrationAvailable:false});
+        }
+        if(part==='regulatory'&&req.method==='POST'){
+          if(req.headers['x-moei-csrf']!=='1')
+            throw new MoeiAuthError('MOEI_CSRF_REQUIRED',403);
+          const body=await requestJson(req,4096);
+          const view=await siLifecycle.snapshot(id);
+          const draft=siRegulatoryDrafts.prepare({
+            view,type:body.type,reason:body.reason,
+            actor:identity.email||identity.username
+          });
+          return respond(res,201,{status:'PREPARED_NOT_SUBMITTED',draft,
+            transmissionAttempted:false});
+        }
         if(part==='decision'&&req.method==='POST'){
           if(req.headers['x-moei-csrf']!=='1')
             throw new MoeiAuthError('MOEI_CSRF_REQUIRED',403);
           const body=await requestJson(req,4096);
-          if(!['APPROVE_REPORT','RETURN_REPORT','CLOSE'].includes(body.action))
+          if(!['APPROVE_REPORT','RETURN_REPORT','CLOSE','ISSUE_ACTIONS']
+            .includes(body.action))
             return respond(res,422,{error:'SI_SUPERVISOR_ACTION_UNSUPPORTED'});
           const actor=identity.email||identity.username;
-          return respond(res,200,await siLifecycle.apply(id,{
+          const result=await siLifecycle.apply(id,{
             action:body.action,expectedVersion:body.expectedVersion,actor,
-            data:{reason:body.reason}
-          }));
+            data:{reason:body.reason,...(body.action==='ISSUE_ACTIONS'?
+              {actions:body.actions}: {})}
+          });
+          if(['APPROVE_REPORT','RETURN_REPORT'].includes(body.action)){
+            try{
+              const view=await siLifecycle.snapshot(id);
+              result.nmcSync=await syncSiSupervisorReviewToNmc({
+                caseId:id,inspectionCase:view.inspectionCase,
+                record:view.record,cases
+              });
+            }catch(error){
+              result.nmcSync={status:'RETRY_REQUIRED',
+                error:error?.code||'SI_NMC_REPORT_NOTIFICATION_FAILED'};
+            }
+          }
+          return respond(res,200,result);
         }
         return respond(res,405,{error:'METHOD_NOT_ALLOWED'});
+      }
+      const retryReviewNmc=/^\/api\/si\/v1\/supervisor\/cases\/([a-f0-9-]{36})\/sync-nmc-review$/.exec(path);
+      if(retryReviewNmc&&req.method==='POST'){
+        moeiAuth.require(req);dashboards.assertRole(req,'PUBLISHER');
+        if(req.headers['x-moei-csrf']!=='1')
+          throw new MoeiAuthError('MOEI_CSRF_REQUIRED',403);
+        const view=await siLifecycle.snapshot(retryReviewNmc[1]);
+        return respond(res,200,await syncSiSupervisorReviewToNmc({
+          caseId:retryReviewNmc[1],inspectionCase:view.inspectionCase,
+          record:view.record,cases
+        }));
       }
       // Unified inspection cycle: read-only timeline, explicit human-gated state changes.
       // GET never initiates an AI call or writes a case.
@@ -2740,7 +2842,7 @@ const server = createServer(async (req, res) => {
         return respond(res,409,{error:e.code,
          periodEligibility:e.periodEligibility||null});
       if(e instanceof SiError||e instanceof SiPocAdvisorError||e instanceof SiRollingPlanError||e instanceof SiIntegratedPlanError||e instanceof SiDraftCreationError||e instanceof SiDraftJobError||
-       e instanceof SiBulkApprovalError||e instanceof SiCandidateAgentError||e instanceof SiNmcClosureSyncError||e instanceof SiLifecycleError||e instanceof SiSelectionError||e instanceof SiPriorityError||e instanceof SiPreparationError||e instanceof SiWorkOrderError||e instanceof SiTargetingError||e instanceof MoeiAuthError||e instanceof DashboardError)
+       e instanceof SiBulkApprovalError||e instanceof SiCandidateAgentError||e instanceof SiRegulatoryDraftError||e instanceof SiNmcReviewSyncError||e instanceof SiNmcClosureSyncError||e instanceof SiLifecycleError||e instanceof SiSelectionError||e instanceof SiPriorityError||e instanceof SiPreparationError||e instanceof SiWorkOrderError||e instanceof SiTargetingError||e instanceof MoeiAuthError||e instanceof DashboardError)
         return respond(res,e.status,{error:e.code});
       if(Number.isInteger(e?.status)&&e.status>=400&&e.status<500)
         return respond(res,e.status,{error:'SI_REQUEST_INVALID'});

@@ -27,6 +27,7 @@ test('all Smart Inspection fixed menu links resolve to existing actual routes',(
   const expected=[
     'moei/smart-inspection/candidates',
     'moei/smart-inspection/supervisor',
+    'moei/smart-inspection/scheduling',
     'moei/smart-inspection/settings/targeting',
     'moei/smart-inspection/settings/erp'
   ];
@@ -38,7 +39,6 @@ test('all Smart Inspection fixed menu links resolve to existing actual routes',(
   assert.match(routes,/moei\/nmc\/vessel\/:imo\/smart-inspection/);
   // Hidden legacy menu links remain deep-linkable for old workflow dependencies.
   for(const legacy of ['moei/smart-inspection/preparation',
-     'moei/smart-inspection/scheduling',
      'moei/nmc/admin/operational-guidance']){
     assert.ok(routes.includes("path: '"+legacy+"'"),'Legacy route removed '+legacy);
     assert.ok(!nav.includes('routerLink="/'+legacy+'"'),'Legacy menu link still visible '+legacy);
@@ -208,4 +208,22 @@ test('Supervisor Approval reserves fixed sidebar width in LTR/RTL and collapses 
  assert.match(supervisor,/@media \(max-width:960px\)/);
  assert.match(supervisor,/\.supervisor-shell\{padding-inline-start:0\}/);
  assert.match(navCss,/\.nmc-unified-sidebar \{[\s\S]*?position: fixed;[\s\S]*?width: 240px/);
+});
+
+test('Electronic Scheduling menu opens live inspector order roster; supervisor uses source dossier and question responses',()=>{
+ const scheduler=read('src/app/pages/si-scheduling-plan-center.component.ts');
+ const supervisor=read('src/app/pages/si-supervisor-review.component.ts');
+ const server=read('ai-proxy/server.mjs');
+ assert.match(nav,/routerLink="\/moei\/smart-inspection\/scheduling"/);
+ assert.match(scheduler,/si-inspector-assignment-roster/);
+ assert.match(scheduler,/inspector-assignments/);
+ assert.match(scheduler,/selectedInspectorId/);
+ assert.match(scheduler,/inspectorName/);
+ assert.match(scheduler,/order\.imo/);
+ assert.match(server,/PERSISTED_APPROVED_WORK_ORDERS/);
+ assert.match(supervisor,/si-supervisor-vessel-dossier/);
+ assert.match(supervisor,/si-supervisor-capa/);
+ assert.match(supervisor,/si-supervisor-regulatory-actions/);
+ assert.match(supervisor,/full-report/);
+ assert.match(supervisor,/dynamicChecklist|Dynamic Checklist Answers/);
 });

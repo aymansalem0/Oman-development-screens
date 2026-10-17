@@ -385,6 +385,38 @@ export class NmcCaseWorkspace{
       return {...row,decisions:[entry,...previous]};
     },{recommendationId,decision,evidenceIds});
   }
+  /** Human supervisor report decision, informational NMC Case update only.
+   * Never marks an inspection request completed, changes vessel risk or resolves a case.
+   */
+  async inspectionReview(id,version,update,role='SI_SUPERVISOR'){
+    if(!update||!['APPROVED','RETURNED'].includes(update.decision)||
+       typeof update.inspectionId!=='string'||!isId(update.inspectionId)||
+       typeof update.referralId!=='string'||!isId(update.referralId)||
+       typeof update.reportId!=='string'||!isId(update.reportId)||
+       typeof update.summary!=='string'||update.summary.length>500)
+      throw new NmcCaseError('CASE_INSPECTION_REVIEW_INVALID',422);
+    const eventId=update.inspectionId+':'+update.reportId+':'+update.decision;
+    return this._update(id,version,'INSPECTION_SUPERVISOR_REVIEW',role,
+      'Supervisor '+update.decision+' inspection report',row=>{
+        if(row.status==='RESOLVED')throw new NmcCaseError('CASE_ALREADY_RESOLVED',409);
+        if(!row.inspectionRequests?.some(x=>x.id===update.referralId))
+          throw new NmcCaseError('CASE_INSPECTION_REFERRAL_MISMATCH',409);
+        const events=Array.isArray(row.inspectionReviewHistory)?
+          row.inspectionReviewHistory:[];
+        if(events.some(x=>x.eventId===eventId))
+          throw new NmcCaseError('CASE_INSPECTION_REVIEW_ALREADY_RECORDED',409);
+        return {...row,inspectionReviewStatus:update.decision,
+          inspectionReviewHistory:[...events,{
+            eventId,inspectionId:update.inspectionId,
+            reportId:update.reportId,referralId:update.referralId,
+            decision:update.decision,summary:update.summary,
+            inspector:update.inspector||null,supervisor:update.supervisor||null,
+            reviewedAt:now(),source:'SI_HUMAN_SUPERVISOR'
+          }],status:row.status};
+      },{inspectionId:update.inspectionId,referralId:update.referralId,
+        decision:update.decision,eventId});
+  }
+
   async inspection(id,version,outcome,role='OPERATOR'){
     if(!outcome||typeof outcome.inspectionId!=='string'||
       !/^[a-zA-Z0-9-]{1,100}$/.test(outcome.inspectionId)||
