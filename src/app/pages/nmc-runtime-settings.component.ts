@@ -459,7 +459,7 @@ export class NmcRuntimeSettingsComponent implements OnInit{
     const id=this.snapshot.values[pipelineSettingKey];
     if(typeof template!=='string'||typeof id!=='string'||
        !/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i.test(id)||
-       (template.match(/\\{pipelineId\\}/g)||[]).length!==1)return null;
+       (template.match(/\{pipelineId\}/g)||[]).length!==1)return null;
     const link=template.replace('{pipelineId}',encodeURIComponent(id));
     try{
       const u=new URL(link);
