@@ -8,6 +8,7 @@ import {randomUUID,createHash} from 'node:crypto';
 import {readFileSync,writeFileSync,mkdirSync,existsSync,renameSync} from 'node:fs';
 import {dirname} from 'node:path';
 import oracledb from 'oracledb';
+import {classifyA04ProviderFailure} from './si-a04-provider-diagnostics.mjs';
 
 export const SI_BASE_CHECKLIST=Object.freeze([
   'fire-safety','certificates','navigation','lifesaving',
