@@ -75,6 +75,7 @@ import { DriveDocumentIntelligence, DocumentError } from './drive-document-intel
 import {buildA03MultipartUserInput,summarizeA03HttpFailure} from './airia-a03-multipart.mjs';
 import { RuntimeSettings, RuntimeSettingsError } from './runtime-settings.mjs';
 import {AiCredentialVault,AiSecretError} from './ai-credential-vault.mjs';
+import {AiContinuousImprovementLedger} from './ai-continuous-improvement.mjs';
 
 const port = Number(process.env.PORT || 3000);
 const moeiAuthMode=(process.env.MOEI_AUTH_MODE||'google').toLowerCase();
@@ -89,6 +90,7 @@ const aiCredentialVault=new AiCredentialVault();
 const getAiriaKey=()=>aiCredentialVault.get();
 const runtime=new RuntimeSettings();
 runtime.load();
+const aiCiLedger=new AiContinuousImprovementLedger();
 const agentAllowed=agent=>{
   const k={a01:'NMC_A01_ENABLED',a02:'NMC_A02_ENABLED',a03:'NMC_A03_ENABLED',
     a04:'SI_A04_ENABLED',p01:'SI_P01_ENABLED',c01:'SI_C01_ENABLED',
@@ -121,15 +123,26 @@ async function fleetAgentCall(agent,input) {
   if (!getAiriaKey()) throw new Error('AIRIA_NOT_CONFIGURED');
   if(!pipelines[agent])throw new Error('AIRIA_PIPELINE_NOT_CONFIGURED');
   if (!agentAllowed(agent)) throw new Error('AIRIA_AGENT_DISABLED');
-  const upstream=await fetch(runtime.get('AIRIA_BASE_URL')+'/v1/PipelineExecution/'+pipelines[agent],{
-    method:'POST',
-    headers:{'X-API-KEY':getAiriaKey(),'Content-Type':'application/json','User-Agent':'moei-nmc-fleet/1.0'},
-    body:JSON.stringify({userInput:JSON.stringify(input),asyncOutput:false}),
-    signal:AbortSignal.timeout(airiaTimeout())
-  });
-  if (!upstream.ok) throw new Error('AIRIA_REQUEST_FAILED_'+upstream.status);
-  const raw=await upstream.text();
-  try {return JSON.parse(raw);} catch {throw new Error('AIRIA_RESPONSE_INVALID_JSON');}
+  const domain=['a04','c01','p01','s01'].includes(agent)?
+    'SMART_INSPECTION':'NMC';
+  let success=false;
+  try {
+    const upstream=await fetch(runtime.get('AIRIA_BASE_URL')+'/v1/PipelineExecution/'+pipelines[agent],{
+      method:'POST',
+      headers:{'X-API-KEY':getAiriaKey(),'Content-Type':'application/json','User-Agent':'moei-nmc-fleet/1.0'},
+      body:JSON.stringify({userInput:JSON.stringify(input),asyncOutput:false}),
+      signal:AbortSignal.timeout(airiaTimeout())
+    });
+    if (!upstream.ok) throw new Error('AIRIA_REQUEST_FAILED_'+upstream.status);
+    const raw=await upstream.text();
+    let parsed;
+    try {parsed=JSON.parse(raw);} catch {throw new Error('AIRIA_RESPONSE_INVALID_JSON');}
+    success=true;
+    return parsed;
+  } finally {
+    aiCiLedger.record({agent:agent.toUpperCase(),domain,
+      result:success?'SUCCESS':'FAILURE'});
+  }
 }
 /**
  * A03 document uploads use the partner-documented multipart pipeline route.
