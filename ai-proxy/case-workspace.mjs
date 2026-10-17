@@ -452,17 +452,29 @@ export class NmcCaseWorkspace{
   async recordPostInspectionRisk(id,result,role='NMC_AI_SYSTEM'){
     const {eventId,inspectionId,reportId,imo,assessmentId,
       previousAssessmentId,previousScore,previousLevel,
-      newScore,newLevel,policyVersion,evidenceId,factorChanges}=result||{};
+      newScore,newLevel,policyVersion,evidenceId,factorChanges,
+      findingFactorAttribution=[]}=result||{};
     if(!isId(id)||!isId(inspectionId)||!isId(reportId)||!isImo(imo)||
       !isId(assessmentId)||typeof eventId!=='string'||eventId.length>150||
       !Number.isFinite(newScore)||newScore<0||newScore>100||
       !['Normal','Watch','High','Critical'].includes(newLevel)||
       typeof evidenceId!=='string'||!evidenceId.startsWith('SI-REPORT-')||
-      !Array.isArray(factorChanges))
+      !Array.isArray(factorChanges)||factorChanges.length!==5||
+      !Array.isArray(findingFactorAttribution)||findingFactorAttribution.length>100)
       throw new NmcCaseError('CASE_AI_RISK_UPDATE_INVALID',422);
+    const allowedFactors=new Set(['movement','inspection','certificate','dataQuality','history']);
+    if(new Set(factorChanges.map(f=>f.factor)).size!==5||
+      factorChanges.some(f=>!allowedFactors.has(f.factor)||
+        !Number.isFinite(f.current)||f.current<0||f.current>100)||
+      findingFactorAttribution.some(f=>!Array.isArray(f.linkedFactors)||
+        !f.linkedFactors.length||
+        f.linkedFactors.some(x=>!allowedFactors.has(x.factor)||
+          !String(x.sourceEvidenceId||'').startsWith('SI-FINDING-'))))
+      throw new NmcCaseError('CASE_AI_FACTOR_ATTRIBUTION_INVALID',422);
     const entry={eventId,inspectionId,reportId,assessmentId,previousAssessmentId,
       previousScore,previousLevel,newScore,newLevel,policyVersion,evidenceId,
-      factorChanges,calculatedAt:now(),officialRegulatoryDecision:false};
+      factorChanges,findingFactorAttribution,
+      calculatedAt:now(),officialRegulatoryDecision:false};
     for(let tries=0;tries<3;tries++){
       const row=await this.get(id);
       if(!row||row.imo!==imo)throw new NmcCaseError('CASE_AI_RISK_SOURCE_MISMATCH',409);
@@ -474,6 +486,9 @@ export class NmcCaseWorkspace{
             score:newScore,level:newLevel,assessmentId,
             previousScore,previousLevel,sourceInspectionId:inspectionId,
             sourceReportId:reportId,evidenceId,policyVersion,updatedAt:entry.calculatedAt,
+            factorAttribution: findingFactorAttribution.map(f=>({
+              findingId:f.findingId,title:f.title,severity:f.severity,
+              factors:f.linkedFactors.map(x=>x.factor)})),
             provisional:true,regulatoryDecision:false},
           postInspectionRiskHistory:[...(current.postInspectionRiskHistory||[]),entry]
         }),{eventId,assessmentId,inspectionId,newScore,previousScore,
