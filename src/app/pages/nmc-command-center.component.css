@@ -1424,6 +1424,9 @@ a.big-risk{display:flex;flex-direction:column;align-items:center;justify-content
 .nmc-si-referral-risk b{font-size:18px;font-variant-numeric:tabular-nums}
 .nmc-si-referral-risk small,.nmc-si-referral-risk span{font-size:10px;
  line-height:1.5;overflow-wrap:anywhere}
+.nmc-si-referral-links{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.nmc-si-referral-source-link{font-size:11px;font-weight:800;color:#146c7d;text-underline-offset:3px}
+.nmc-si-referral-source-link:focus-visible{outline:2px solid #169b9b;outline-offset:4px}
 .nmc-si-referral-open{display:inline-flex;align-self:flex-start;align-items:center;
  padding:9px 13px;font-size:11px;font-weight:850;color:#fff;
  background:#126a72;border-radius:9px;text-decoration:none}
