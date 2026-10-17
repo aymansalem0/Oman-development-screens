@@ -34,11 +34,24 @@ export const SI_DASHBOARD_METRICS=Object.freeze({
  ],
  table:['siAiRunRegister','siOpsPlanRegister']
 });
+/** Keep backend widget validation aligned with the Angular CI catalogue.
+ * These are approved POC presentation IDs, NOT permission to execute arbitrary
+ * SQL, and uninstrumented AI indicators stay clearly marked illustrative.
+ */
+export const AI_CI_DASHBOARD_METRICS=Object.freeze({
+ kpi:['ciTotalCalls','ciSuccessfulCalls','ciFailedCalls','ciSuccessRate',
+  'ciOfficerReviews','ciOfficerAccept','ciOfficerModify','ciOfficerReject',
+  'ciOfficerOverrideRate','ciIncidentAssessments','ciVesselCalls',
+  'ciInspectionAiCalls','ciPhotoVision','ciDocumentAi','ciDataQuality',
+  'ciSeafarerChecks','ciAverageTime','ciReviewBacklog'],
+ bar:['ciCallsByAgent','ciCallsByDomain','ciMonthlyTrend','ciOfficerDecisionMix'],
+ table:['ciAgentRegister']
+});
 const TYPES=Object.freeze({
   kpi:['vesselCount','assessedCount','attentionCount','highCriticalCount',
-    'priorityCount','averageRisk',...SI_DASHBOARD_METRICS.kpi],
-  bar:['byRisk','byFlag','byType','byZone',...SI_DASHBOARD_METRICS.bar],
-  table:['vesselTable',...SI_DASHBOARD_METRICS.table],
+    'priorityCount','averageRisk',...SI_DASHBOARD_METRICS.kpi,...AI_CI_DASHBOARD_METRICS.kpi],
+  bar:['byRisk','byFlag','byType','byZone',...SI_DASHBOARD_METRICS.bar,...AI_CI_DASHBOARD_METRICS.bar],
+  table:['vesselTable',...SI_DASHBOARD_METRICS.table,...AI_CI_DASHBOARD_METRICS.table],
   position:['vesselPositions']
 });
 const RISK=['All','Normal','Watch','High','Critical','Pending'];
