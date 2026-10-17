@@ -78,7 +78,9 @@ function workspace({mandatory=true}={}){
     lifecycle={...lifecycle,version:lifecycle.version+1,stage:'SCOPE_APPROVED'};
    }else if(action==='ASSIGN'){
     assert.equal(data.inspector,'POC Inspector 1');
-    lifecycle={...lifecycle,version:lifecycle.version+1,stage:'ASSIGNED'};
+    lifecycle={...lifecycle,version:lifecycle.version+1,stage:'ASSIGNED',
+     assignment:{inspector:data.inspector,port:data.port,
+      startLocal:data.startLocal,mode:data.mode}};
    }else if(action==='START_FIELD'){
     assert.equal(actor,'POC Inspector 1');
     lifecycle={...lifecycle,version:lifecycle.version+1,stage:'IN_FIELD'};
