@@ -1214,8 +1214,16 @@
                     <div class="esdb-qr-info">
                       <strong>{{t('SCAN eSDB QR','امسح QR السجل الإلكتروني')}}</strong>
                       <span>{{digital.verificationReference}}</span>
-                      <small>{{t('Sandbox reference only · No online verification',
-                        'مرجع تجريبي فقط · لا توجد خدمة تحقق إلكتروني')}}</small>
+                      <small>{{t('Opens a read-only POC verification page · Not official',
+                        'يفتح صفحة تحقق تجريبية للقراءة فقط · غير رسمية')}}</small>
+                      <a *ngIf="issuedQrUrl" class="esdb-qr-verify-link"
+                        [href]="issuedQrUrl" target="_blank" rel="noopener noreferrer"
+                        data-testid="sdb-qr-open-verification">
+                       {{t('Open sample verification page ↗','فتح صفحة التحقق التجريبية ↗')}}
+                      </a>
+                      <small *ngIf="qrLocalhostOnly" class="esdb-qr-local-warning">
+                       {{t('For phone scanning, open this eSDB from a reachable HTTPS website; localhost works only on this computer.',
+                        'لمسح QR من الهاتف افتح الصفحة من موقع HTTPS متاح للهاتف؛ localhost يعمل على الكمبيوتر فقط.')}}</small>
                     </div>
                   </div>
                   <p class="esdb-qr-error" role="alert" *ngIf="issuedQrError">{{issuedQrError}}</p>
