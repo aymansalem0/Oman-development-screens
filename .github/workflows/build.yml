@@ -55,6 +55,8 @@ jobs:
         run: node --test scripts/test-nmc-si-forwarded-cases-and-incident-config.mjs
       - name: SI-origin NMC Case missing baseline and post-inspection AI diagnostics
         run: node --test scripts/test-nmc-si-risk-diagnostics.mjs
+      - name: NMC explicit cost-confirmed A01/A02 post-inspection retry and evidence validation
+        run: node --test scripts/test-nmc-si-risk-retry-ui.mjs
 
       - name: MOEI single Admin login and UI regression
         run: node --test scripts/test-moei-admin-login-ui.mjs
