@@ -42,6 +42,8 @@ jobs:
           node --test ai-proxy/test/nmc-dashboard-focus.test.mjs
       - name: Unified Smart Inspection candidates one-grid regression
         run: node --test scripts/test-si-unified-candidate-grid.mjs
+      - name: Dashboard-specific AI Continuous Improvement filters
+        run: node --test scripts/test-ai-ci-dashboard-specific-filters.mjs
 
       - name: Assigned inspector My Inspections privileges and route regression
         run: node --test scripts/test-si-my-inspections-boundary.mjs
