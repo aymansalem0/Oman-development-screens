@@ -2539,6 +2539,15 @@ const server = createServer(async (req, res) => {
           const controlled=new Set(['APPROVE_SCOPE','APPROVE_REPORT','RETURN_REPORT',
             'ISSUE_ACTIONS','VERIFY_ACTION','RECORD_FOLLOW_UP','CLOSE']);
           dashboards.assertRole(req,controlled.has(body.action)?'PUBLISHER':'EDITOR');
+          // Independent supervisor review cannot trust a browser-supplied actor
+          // on the older general lifecycle endpoint either.
+          const supervisorOnly=new Set(['APPROVE_REPORT','RETURN_REPORT','CLOSE']);
+          if(supervisorOnly.has(body.action)){
+            const user=moeiAuth.require(req);
+            if(req.headers['x-moei-csrf']!=='1')
+              throw new MoeiAuthError('MOEI_CSRF_REQUIRED',403);
+            body.actor=user.email||user.username;
+          }
           // No parallel regulatory activation path for cases owned by a saved
           // inspector Work Order. The Work Order API applies lifecycle actions
           // internally, then updates the canonical order state atomically per
