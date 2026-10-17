@@ -8,6 +8,8 @@
 import {createHash} from 'node:crypto';
 import {existsSync,readFileSync,mkdirSync,writeFileSync,renameSync} from 'node:fs';
 import {dirname} from 'node:path';
+import {approvedFindingEvidence,verifiedFindingFactorAttribution,
+ FIVE_NMC_RISK_FACTORS} from './si-risk-factor-attribution.mjs';
 
 const clone=x=>JSON.parse(JSON.stringify(x));
 const stamp=()=>new Date().toISOString();
@@ -25,13 +27,7 @@ export function approvedInspectionBundle(bundle,view){
    report.status!=='APPROVED'||!report.supervisor)
   throw new SiPostInspectionRiskError('SI_RISK_APPROVED_REPORT_REQUIRED');
  const evidenceId='SI-REPORT-'+report.id;
- const findings=(view.record.findings||[]).slice(0,100).map(row=>({
-   findingId:String(row.id||'').slice(0,100),
-   severity:String(row.severity||'').toUpperCase(),
-   finding:String(row.description||'').slice(0,1200),
-   status:String(row.status||'').slice(0,100),
-   evidenceRefs:(row.evidenceRefs||[]).filter(x=>typeof x==='string').slice(0,15)
- }));
+ const findings=approvedFindingEvidence(report,view.record.findings||[]);
  const summary=String(report.summary||'').slice(0,1500);
  const source={evidenceId,inspectionId:caseRow.id,reportId:report.id,
    status:'SUPERVISOR_APPROVED',approvedAt:report.approvedAt||null,
@@ -43,11 +39,28 @@ export function approvedInspectionBundle(bundle,view){
      context.approvedInspectionReports.filter(x=>x.inspectionId!==caseRow.id):[]),
    source
  ].slice(-20);
- // Add confirmed outcomes as report-grounded sources for the existing A02
- // inspection factor and A01 historical factor. Do NOT mutate the fixture.
+ // A01/A02 KEEP their existing 5-factor input/response contract. Each
+ // confirmed defect has its own authorized evidence ID for AI citation.
+ // Never infer a factor from severity or keyword; the AI must explicitly
+ // cite the defect ID in the appropriate factor signal.
  context.inspectionFindings=[...(context.inspectionFindings||[]),{
    sourceEvidenceId:evidenceId,origin:'SI_HUMAN_APPROVED',findings
  }].slice(-20);
+ context.postInspectionFactorAttribution={
+   reportEvidenceId:evidenceId,
+   requiredFindingEvidenceIds:findings.map(f=>f.evidenceId),
+   factors:FIVE_NMC_RISK_FACTORS,
+   instructions:[
+    'Read every confirmed human-approved defect and its actual supporting evidence.',
+    'For each of the FIVE existing risk signals, cite individual SI-FINDING evidenceIds ONLY when that defect is genuinely relevant.',
+    'Inspection is equipment / safety / recorded inspection issues; certificate requires certificate-specific evidence.',
+    'Movement requires independent vessel movement/navigation evidence; history requires real previous history.',
+    'DataQuality requires documented inconsistent/missing facts, not simply an equipment defect.',
+    'One defect may be relevant to multiple factors. Do not invent trends, documents, history, AIS observations, data gaps or risk scores.',
+    'The risk engine scores the full five-factor assessment; retain ALL required baseline evidence citations.',
+    'Every confirmed inspector defect must be cited by at least one appropriate factor, or no new risk score will be accepted.'
+   ]
+ };
  const existing=Array.isArray(context.deficiencies)?context.deficiencies:[];
  context.deficiencies=[...existing,...findings.map(f=>({
    id:f.findingId,description:f.finding,severity:
@@ -55,7 +68,8 @@ export function approvedInspectionBundle(bundle,view){
    status:'Open',sourceEvidenceId:evidenceId
  }))];
  return {...bundle,inlineContext:context,
-   evidenceIds:[...new Set([...bundle.evidenceIds,evidenceId])]};
+   evidenceIds:[...new Set([...bundle.evidenceIds,evidenceId,
+     ...findings.map(f=>f.evidenceId)])],siFindingsForAttribution:findings};
 }
 export class SiPostInspectionRisk{
  constructor({fleet,getBundle,getRiskConfig,caseWorkspace,riskPolicy,getView,
@@ -149,17 +163,20 @@ export class SiPostInspectionRisk{
     const evidenceId='SI-REPORT-'+row.reportId;
     const active=await this.getRiskConfig();
     const previous=this.fleet.getVesselResult(row.imo);
-    // The source report MUST be cited by the new A01/A02 signals.
-    // Success without citation is NOT a validated new assessment.
+    // A01/A02 assess ALL FIVE NMC factors, then the central published risk
+    // policy calculates the score. Individual source IDs bind actual inspector
+    // defects to relevant factor signals; NO keyword-based assumptions.
     const assessed=await this.fleet.assess(augmented,active.config);
-    const cited=assessed.signals.filter(s=>
-      ['inspection','history'].includes(s.factor)&&
-      s.evidenceIds.includes(evidenceId));
-    if(!cited.length)
+    const reportFindings=augmented.siFindingsForAttribution;
+    const factorAttribution=verifiedFindingFactorAttribution(
+      reportFindings,assessed.signals);
+    if(!reportFindings.length&&!assessed.signals.some(s=>
+        s.evidenceIds.includes(evidenceId)))
      throw new SiPostInspectionRiskError('SI_RISK_AI_DID_NOT_CITE_APPROVED_REPORT');
     const inputHash=createHash('sha256').update(JSON.stringify({
       prior:previous?.assessmentId||null,reportId:row.reportId,
-      evidenceId,approved:augmented.inlineContext.approvedInspectionReports,
+      evidenceId,factorAttribution,
+      approved:augmented.inlineContext.approvedInspectionReports,
       policyRevision:active.revision})).digest('hex');
     const at=stamp();
     const result={...assessed,status:'COMPLETED',inputHash,
@@ -182,10 +199,13 @@ export class SiPostInspectionRisk{
     row.result={assessmentId:result.assessmentId,score:result.score,
       level:result.level,previous:before,evidenceId,
       policyVersion:active.config.version,
+      findingFactorAttribution:factorAttribution,
       factorChanges:result.signals.map(s=>({
         factor:s.factor,previous:before.signals.find(p=>p.factor===s.factor)?.severity??null,
-        current:s.severity,
-        evidenceIds:s.evidenceIds.filter(id=>id===evidenceId)
+        current:s.severity,sourceAgent:s.sourceAgent,confidence:s.confidence,
+        reason:String(s.reason||'').slice(0,800),
+        evidenceIds:s.evidenceIds.filter(id=>id===evidenceId||
+          reportFindings.some(f=>f.evidenceId===id))
       })),createdAt:at};
     row.aiExecutionStatus='VALIDATED_SAVED';
     row.status='RISK_SAVED_NMC_PENDING';row.updatedAt=stamp();this.persist();
@@ -205,7 +225,8 @@ export class SiPostInspectionRisk{
     previousScore:result.previous.score,previousLevel:result.previous.level,
     newScore:result.score,newLevel:result.level,
     policyVersion:result.policyVersion,evidenceId:result.evidenceId,
-    factorChanges:result.factorChanges
+    factorChanges:result.factorChanges,
+    findingFactorAttribution:result.findingFactorAttribution||[]
    });
    row.status='COMPLETED';row.errorCode=null;row.updatedAt=stamp();
    this.persist();
