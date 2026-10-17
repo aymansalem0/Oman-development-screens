@@ -11,10 +11,12 @@
 
     <div class="top-actions">
       <button type="button" class="language-btn" (click)="toggleLanguage()">{{ lang.isArabic ? 'English' : 'العربية' }}</button>
-      <a class="back-link" [routerLink]="['/moei/nmc/vessel', vessel.imo, 'ai-assessment']">
+      <a class="back-link" *ngIf="!vesselProfileUnavailable"
+         [routerLink]="['/moei/nmc/vessel', vessel.imo, 'ai-assessment']">
         {{ lang.isArabic ? 'العودة إلى تقييم الذكاء الاصطناعي →' : '← Back to AI Assessment' }}
       </a>
-      <a class="secondary-btn" [routerLink]="['/moei/nmc/vessel', vessel.imo]">
+      <a class="secondary-btn" *ngIf="!vesselProfileUnavailable"
+         [routerLink]="['/moei/nmc/vessel', vessel.imo]">
         {{ copy('Vessel 360', 'ملف السفينة 360') }}
       </a>
     </div>
@@ -23,6 +25,12 @@
   <app-nmc-navigation></app-nmc-navigation>
 
   <main class="case-main">
+    <div *ngIf="vesselProfileUnavailable" class="central-case-banner" role="note"
+      data-testid="nmc-si-unknown-imo-notice">
+      {{copy('This case was forwarded from Smart Inspection. The IMO is not in the 99-vessel demonstration catalogue. Only the authoritative central case and saved risk/evidence data are available; vessel particulars and AIS are unknown.',
+        'تمت إحالة هذه الحالة من المعاينة الذكية. رقم IMO غير موجود ضمن مجموعة السفن التجريبية الـ99. ستظهر بيانات الحالة المركزية والمخاطر والأدلة المحفوظة فقط؛ أما تفاصيل السفينة وحركة AIS فغير متاحة.')}}
+      <a routerLink="/moei/nmc">{{copy('Back to Command Center','العودة إلى مركز القيادة')}}</a>
+    </div>
     <div *ngIf="centralLoading" class="central-case-banner">
       {{copy('Loading centrally recorded maritime case…','جاري تحميل الحالة البحرية المحفوظة مركزيًا…')}}
     </div>
