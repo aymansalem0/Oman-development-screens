@@ -30,6 +30,7 @@ const rawRoutes: Routes = [
   { path: 'moei/smart-inspection/checklists/:caseId', loadComponent: () => import('./pages/si-checklist-execution.component').then(m => m.SiChecklistExecutionComponent) },
   { path: 'moei/smart-inspection/plan/create/:planId', loadComponent: () => import('./pages/si-inspection-plan-wizard.component').then(m => m.SiInspectionPlanWizardComponent) },
   { path: 'moei/smart-inspection/plan/create', loadComponent: () => import('./pages/si-inspection-plan-wizard.component').then(m => m.SiInspectionPlanWizardComponent) },
+  { path: 'moei/smart-inspection/supervisor', loadComponent: () => import('./pages/si-supervisor-review.component').then(m => m.SiSupervisorReviewComponent) },
   { path: 'moei/smart-inspection/management', loadComponent: () => import('./pages/si-management-dashboard.component').then(m => m.SiManagementDashboardComponent) },
   { path: 'moei/smart-inspection/lifecycle', loadComponent: () => import('./pages/si-full-lifecycle.component').then(m => m.SiFullLifecycleComponent) },
   { path: 'moei/smart-inspection/lifecycle/:caseId', loadComponent: () => import('./pages/si-full-lifecycle.component').then(m => m.SiFullLifecycleComponent) },

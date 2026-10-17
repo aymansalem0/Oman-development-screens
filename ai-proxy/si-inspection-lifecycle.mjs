@@ -484,11 +484,17 @@ export class SiInspectionLifecycle{
       // This is a downstream planning projection, not part of legal case
       // closure. A synchronization failure can be retried without reopening
       // or rolling back an already-closed inspection.
+      let nmcSync=null;
       if(action==='CLOSE'&&this.onClosed){
-       try{await this.onClosed(id,actor);}
-       catch(e){console.error('[si-rolling] CLOSURE_SYNC_RETRY_REQUIRED '+String(e.code||'UNKNOWN'));}
+       try{nmcSync=await this.onClosed(id,actor);}
+       catch(e){
+         nmcSync={status:'RETRY_REQUIRED',
+           error:e?.code||'SI_NMC_CLOSURE_SYNC_UNAVAILABLE'};
+         console.error('[si-nmc] CLOSURE_SYNC_RETRY_REQUIRED '+
+           String(e?.code||'UNKNOWN').replace(/[^A-Z_]/gi,'').slice(0,60));
+       }
       }
-      return {status:'ok',record:next};
+      return {status:'ok',record:next,...(nmcSync?{nmcSync}:{})};
     }finally{this.active.delete(id);}
   }
 }

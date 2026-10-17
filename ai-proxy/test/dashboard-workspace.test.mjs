@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { DashboardWorkspace } from '../dashboard-workspace.mjs';
+import { DashboardWorkspace,AI_CI_DASHBOARD_METRICS } from '../dashboard-workspace.mjs';
 
 const editor='editor-test-key-abcdefghijklmnopqrstuvwxyz';
 const publisher='publisher-test-key-abcdefghijklmnopqrstuvwxyz';
@@ -371,4 +371,26 @@ test('republish updates exact existing published content and original URL after 
     assert.equal((await anotherBrowserStore.publishedMenu())[0].id,original.id);
     assert.equal((await anotherBrowserStore.revisions(original.id))[0].action,'PUBLISHED');
   }finally{close();}
+});
+
+test('all 23 AI Continuous Improvement cards can be saved/published centrally',async()=>{
+ const {workspace,close}=setup();
+ try{
+   const widgets=Object.entries(AI_CI_DASHBOARD_METRICS).flatMap(([type,ids])=>
+     ids.map((metric,index)=>({
+       id:'ci-'+type+'-'+index,type,metric,title:metric,span:'half',
+       ...(type==='bar'?{chartType:'column',palette:'ocean'}:{})
+     })));
+   assert.equal(widgets.length,23);
+   const input={...sample('dashboard-ai-ci-test'),
+     title:'AI Continuous Improvement',widgets};
+   const created=await workspace.create(input);
+   assert.equal(created.widgets.length,23);
+   const published=await workspace.publish(created.id,created.version);
+   assert.equal(published.status,'PUBLISHED');
+   assert.equal(published.widgets.find(x=>x.metric==='ciOfficerModify').type,'kpi');
+   await assert.rejects(()=>workspace.create({...input,id:'arbitrary-id',
+     widgets:[{id:'evil-widget',type:'kpi',metric:'unsafeSQL',title:'Unsafe',span:'half'}]}),
+    /DASHBOARD_WIDGET_INVALID/);
+ }finally{close();}
 });
