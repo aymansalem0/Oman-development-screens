@@ -112,8 +112,12 @@ type Decision='APPROVE_REPORT'|'RETURN_REPORT'|'CLOSE';
  </div>`,
  styles:[`
  :host{display:block;font-family:Inter,"Segoe UI",Tahoma,Arial,sans-serif;color:#113b4d}
- .supervisor-shell{display:flex;min-height:100vh;background:#f0f7fa}
- .supervisor-main{width:100%;min-width:0;padding:28px 32px 50px;max-width:1700px;margin:auto}
+ /* NMC navigation is fixed and outside document flow. Reserve its exact
+    desktop width before the main content so report and queue never go under it. */
+ .supervisor-shell{display:flex;min-height:calc(100vh - 82px);width:100%;
+  background:#f0f7fa;padding-inline-start:240px;box-sizing:border-box}
+ .supervisor-main{flex:1 1 auto;width:100%;min-width:0;
+  padding:28px 32px 50px;max-width:1700px;margin:0 auto;box-sizing:border-box}
  .si-title{display:flex;justify-content:space-between;gap:15px;align-items:center;margin-bottom:19px}
  h1{font-size:23px;margin:7px 0;color:#09354b}
  h2{font-size:16px;color:#103c50;margin:0 0 12px}
@@ -150,7 +154,21 @@ type Decision='APPROVE_REPORT'|'RETURN_REPORT'|'CLOSE';
  .notice{background:#e9f9f3;color:#126350}.error{background:#fff1ed;color:#a13b36}
  .muted,.empty{color:#718b95;font-size:12px;line-height:1.65}
  .empty{padding:100px 20px;text-align:center}
- @media(max-width:880px){.si-review-grid{grid-template-columns:1fr}.supervisor-main{padding:18px}}
+ @media (min-width:961px) and (max-width:1220px){
+   .supervisor-shell{padding-inline-start:66px}
+ }
+ @media (max-width:960px){
+   /* The sidebar becomes an off-canvas overlay with a mobile toggle. */
+   .supervisor-shell{padding-inline-start:0}
+   .si-review-grid{grid-template-columns:1fr}
+   .supervisor-main{padding:18px}
+ }
+ @media (max-width:560px){
+   .supervisor-main{padding:15px 12px}
+   .panel{padding:13px}
+   .attributes{grid-template-columns:1fr}
+   .si-title{align-items:flex-start;flex-wrap:wrap}
+ }
  `]
 })
 export class SiSupervisorReviewComponent implements OnInit{
