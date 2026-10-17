@@ -1615,10 +1615,19 @@ const server = createServer(async (req, res) => {
         // scheduling set to the IMOs deliberately saved in this Draft.
         // This removes the unscoped replan that was triggering
         // SI_DRAFT_APPROVAL_SCOPE_CHANGED_REVIEW_NEW_PLAN.
+        // Revalidate the exact supervisor-revised pre-save candidate scope.
+        // The original source-bound C01 recommendations and candidate keys
+        // remain authoritative: never invent new inclusions at approval.
         const fullSelection=selectIntegratedPlanVessels({
-          plan,inspectionPlan,dashboard,
+          plan,inspectionPlan:{
+            ...inspectionPlan,
+            aiCandidates:plan.candidateSnapshot||[],
+            aiRecommendations:plan.latest?.recommendations||[]
+          },dashboard,
           pscRiskRatePercent:body.pscRiskRatePercent,
-          uaeFlagRatePercent:body.uaeFlagRatePercent
+          uaeFlagRatePercent:body.uaeFlagRatePercent,
+          officerAdds:plan.capacityDraft?.officerSelectedAlternatives||[],
+          officerExclusions:plan.capacityDraft?.officerExclusions||[]
         });
         const selection=scopeIntegratedSelectionToSavedDraft(fullSelection,plan);
         if(!selection.roster.length)
