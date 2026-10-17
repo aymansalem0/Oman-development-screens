@@ -131,3 +131,17 @@ button:disabled{opacity:.5}.marine-notice{padding:13px;background:#eaf4f5;border
 @media(max-width:850px){.si-diagnostic-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}
  .si-diagnostic-exclusions{columns:1}}
 @media(max-width:490px){.si-diagnostic-metrics{grid-template-columns:1fr}}
+
+/* Issued work orders are deliberately read-only in Scheduling; all
+   preparation and field actions belong to the Inspector Journey. */
+.si-issued-readonly{display:flex;flex-direction:column;align-items:flex-start;gap:10px;
+  border-color:#9ccfc7;background:#eff9f7}
+.si-issued-readonly h2{margin:0;color:#0d5962}
+.si-issued-readonly p{margin:0;line-height:1.7}
+.si-journey-main-link{display:inline-flex;margin-top:6px;border-radius:9px;
+  padding:11px 17px;background:#087e77;color:#fff;text-decoration:none;font-weight:800}
+.si-scheduling-optional-ai{margin:5px 0;padding:10px 14px;border:1px solid #d5ddeb;
+  border-radius:9px;background:#f7f9ff}
+.si-scheduling-optional-ai summary{cursor:pointer;font-weight:750;color:#465d82}
+.si-scheduling-optional-ai p{max-width:700px;font-size:12px;line-height:1.7}
+.si-scheduling-optional-ai button{margin:7px 8px 0 0}
