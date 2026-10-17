@@ -126,3 +126,40 @@ test('saved capacity and inspector assignments are a native, collapsed-by-defaul
  assert.ok(css.includes('.si-saved-capacity-details[open]'));
  assert.ok(css.includes('@media(max-width:760px)'));
 });
+
+test('planning subsections default to independent disclosures and preserve source/consent action flow',()=>{
+ const names=[
+  'si-plan-policy-disclosure','si-plan-consent-disclosure',
+  'si-plan-proposal-disclosure','si-supervisor-scheduling-add-panel',
+  'si-plan-capacity-inputs-disclosure','si-plan-vessel-visit-disclosure',
+  'si-saved-plan-list-disclosure'
+ ];
+ for(const name of names)assert.ok(html.includes('data-testid="'+name+'"'),
+  'missing disclosure '+name);
+ const tags=[...html.matchAll(/<details\b[^>]*>/g)];
+ assert.equal(tags.length,(html.match(/<\/details>/g)||[]).length,
+  'all plan disclosure elements must be closed');
+ assert.ok(tags.every(x=>!/(?:^|\s)open(?:\s|=|>)/.test(x[0])),
+  'all plan subsections must default to collapsed');
+ assert.match(html,/\(click\)="generateIntegratedDraft\(\)"/);
+ assert.match(html,/\(click\)="recalculateIntegratedDraft\(\)"/);
+ assert.match(html,/\(click\)="saveIntegratedDraft\(\)"/);
+ assert.ok(html.includes('draft.mandatoryUnscheduled.join'));
+ assert.ok(html.includes('newDraftScope?.requiresOfficerAction'));
+ assert.ok(css.includes('.si-plan-disclosure[open] > .si-plan-disclosure-summary'));
+ assert.ok(css.includes('.si-plan-disclosure-summary:focus-visible'));
+});
+test('vessel inclusion and removal controls align in trailing row column in LTR and RTL',()=>{
+ assert.ok(html.includes('class="si-plan-scheduling-action-cell"'));
+ assert.ok(html.includes('class="si-plan-vessel-row-actions"'));
+ assert.ok(html.includes('class="si-plan-alternative-header"'));
+ assert.ok(html.includes('class="si-plan-alternative-actions"'));
+ assert.ok(css.includes('.si-draft-table td.si-plan-scheduling-action-cell'));
+ assert.ok(css.includes('.si-plan-vessel-row-actions{display:flex'));
+ assert.ok(css.includes('.si-plan-alternative-header{display:flex'));
+ assert.ok(css.includes('.si-plan-alternative-actions{display:flex'));
+ assert.ok(css.includes('text-align:end'));
+ assert.ok(css.includes('justify-content:flex-end'));
+ assert.match(html,/\(click\)="toggleDraftVesselForScheduling\(row\)"/);
+ assert.match(html,/\(click\)="toggleDraftAlternative\(choice,true\)"/);
+});
