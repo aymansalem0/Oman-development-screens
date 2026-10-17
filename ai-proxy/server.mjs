@@ -51,7 +51,7 @@ import {SiInspectionPlan} from './si-inspection-plan.mjs';
 import {SiRollingPlanStore,SiRollingPlanError} from './si-rolling-plan-store.mjs';
 import {SiBulkInspectionPlan,SiBulkApprovalError} from './si-bulk-inspection-plan.mjs';
 import {mockSiP01,mockSiA04,mockSiC01} from './si-agent-mock.mjs';
-import { SiInspectionPreparation, SiPreparationError, validateA04 } from './si-inspection-preparation.mjs';
+import { SiInspectionPreparation, SiPreparationError, validateA04, validateA04FieldGuidance } from './si-inspection-preparation.mjs';
 import {assembleSiVesselDossier,assemblePendingWorkOrderDossier} from './si-vessel-dossier.mjs';
 import {projectGuidedInspection,findGuidedStep,guidedFinalAssessment,
  buildA04FocusedFieldRequest,projectA04FocusedFieldAdvice
@@ -2145,7 +2145,9 @@ const server = createServer(async (req, res) => {
             try{raw=siAiProvider==='mock'?mockSiA04(request):
               await fleetAgentCall('a04',request);}
             catch{return respond(res,502,{error:'SI_FIELD_AI_PROVIDER_UNAVAILABLE'});}
-            const validated=validateA04(raw,{
+            // Inspector-only advice may discard invalid OPTIONAL checklist mappings.
+            // Official A04 dossier generation still uses strict validateA04.
+            const validated=validateA04FieldGuidance(raw,{
               checkIds:prep.context.baseChecklistItemIds,
               evidenceIds:prep.context.evidenceManifestRefs
             });
