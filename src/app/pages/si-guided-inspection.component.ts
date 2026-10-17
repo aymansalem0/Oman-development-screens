@@ -406,8 +406,11 @@ export class SiGuidedInspectionComponent implements OnInit{
      language:this.lang.dir==='rtl'?'ar':'en',confirmRun:true
    }).subscribe({
     next:r=>{this.aiBusy=false;this.aiResults[step.stepId]=r;
-     this.message=this.t('Airia guidance ready. Record your own observation separately.',
-       'تعليمات AI جاهزة. سجّل مشاهدتك الفعلية بنفسك بشكل مستقل.');},
+     this.message=r.stepSpecific?
+       this.t('AI suggested question-specific actions. Verify onboard before recording an answer.',
+        'اقترح AI خطوات مرتبطة بالسؤال؛ تحقق منها على السفينة قبل تسجيل الإجابة.'):
+       this.t('AI returned only general guidance; no verified steps for this checklist item.',
+        'رجّع AI إرشادات عامة فقط، دون خطوات موثقة خاصة بهذا البند.');},
     error:e=>{this.aiBusy=false;this.error=e?.error?.error||
       'SI_FIELD_AI_UNAVAILABLE';}
    });
@@ -445,7 +448,19 @@ export class SiGuidedInspectionComponent implements OnInit{
   this.http.post<ImageReview>(this.api+encodeURIComponent(this.orderId)+
    '/guide/ai-evidence',{stepId:step.stepId,evidenceId:file.id,confirmCost:true})
    .subscribe({next:r=>{this.aiBusy=false;this.imageReviews[step.stepId]=r;},
-     error:e=>{this.aiBusy=false;this.error=e?.error?.error||'SI_AI_PHOTO_UNAVAILABLE';}});
+     error:e=>{this.aiBusy=false;
+      if(e?.error?.error==='SI_CHECKLIST_VISION_AI_NOT_CONFIGURED_OR_NOT_CONFIRMED'){
+        const missing=e?.error?.missing||{};
+        const parts=[
+          missing.checklistAiEnabled?'SI_CHECKLIST_AIRIA_ENABLED':null,
+          missing.airiaKey?'AIRIA_MENA_KEY / Vault':null,
+          missing.checklistVisionPipeline?'AIRIA_SI_CHECKLIST_VISION_PIPELINE_ID':null
+        ].filter(Boolean).join(', ');
+        this.error=this.t(
+          'Image AI is not configured. Review AI Settings: '+(parts||'checklist vision contract'),
+          'تحليل الصورة بالذكاء الاصطناعي غير مهيأ. راجع إعدادات AI: '+(parts||'عقد تحليل الصور'));
+      }else this.error=e?.error?.error||'SI_AI_PHOTO_UNAVAILABLE';
+     }});
  }
  finishInspection():void{
   const g=this.guide;if(!g||!this.canSave||!g.finalAssessment.canSubmit||this.busy)return;

@@ -50,6 +50,14 @@ export interface DashboardFilters {
   search: string;
 }
 
+export interface ProposedDashboardMetric{
+  id:string;title:string;type:DashboardWidgetKind;
+  sourceKey:string;sourceEntity:string;fields:string[];
+  method:string;formula:string;grouping:string;filters:string;
+  rationale:string;status:'SOURCE_MAPPING_REQUIRED';
+  dataNature:'UNVERIFIED_PROPOSAL';executable:false;
+}
+
 export interface DashboardDefinition {
   id: string;
   title: string;
@@ -63,6 +71,7 @@ export interface DashboardDefinition {
   updatedAt: string;
   version: number;
   widgets: DashboardWidget[];
+  proposedMetrics?: ProposedDashboardMetric[];
   filters: DashboardFilters;
 }
 
@@ -259,6 +268,18 @@ export class NmcDashboardStoreService {
       throw new Error('INVALID_DASHBOARD_MENU_PLACEMENT');
     if(!d.id||!d.title.trim()||d.title.length>100||d.description.length>500||
        !Array.isArray(d.widgets)||d.widgets.length>30)throw new Error('INVALID_DASHBOARD');
+    if(d.proposedMetrics!==undefined){
+      if(!Array.isArray(d.proposedMetrics)||d.proposedMetrics.length>20)
+        throw new Error('INVALID_UNBOUND_METRIC_COUNT');
+      for(const m of d.proposedMetrics){
+        if(!/^[A-Za-z][A-Za-z0-9_-]{2,63}$/.test(m.id)||
+          !m.title||m.title.length>100||
+          !['kpi','bar','table','position'].includes(m.type)||
+          !m.sourceKey||!m.method||!m.formula||
+          m.status!=='SOURCE_MAPPING_REQUIRED'||m.executable!==false)
+          throw new Error('INVALID_UNBOUND_METRIC');
+      }
+    }
     const ids=new Set<string>();
     for(const w of d.widgets){
       if(w.type==='bar'&&

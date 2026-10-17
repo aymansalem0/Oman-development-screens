@@ -37,6 +37,8 @@ services:
       # by A01 situation-assessment; never a new pipeline or response schema.
       # Opt-in ONLY: explicit operator click + possible TWO paid AI requests.
       NMC_DASHBOARD_AI_FOCUS_ENABLED: ${NMC_DASHBOARD_AI_FOCUS_ENABLED:-false}
+      # NMC Desk dashboard design is an explicitly billed, opt-in pilot.
+      NMC_DASHBOARD_AI_DESIGN_ENABLED: ${NMC_DASHBOARD_AI_DESIGN_ENABLED:-false}
       # Autonomous fleet assessment is opt-in at server deployment, never a UI action.
       # Set NMC_FLEET_AUTO_ENABLED=true once after reviewing potential Airia costs.
       NMC_FLEET_AUTO_ENABLED: ${NMC_FLEET_AUTO_ENABLED:-false}

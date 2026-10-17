@@ -35,8 +35,8 @@ test('global /api/si write gate exempts only authenticated, CSRF-checked assigne
   assert.ok(start>=0&&end>start);
   const block=server.slice(start,end);
   assert.match(block,/const inspectorAction=req\.method==='POST'/);
-  assert.ok(block.includes('(?:activate|start|guide\\/answers)$'),
-    'only prepare, field start and checklist answers may bypass global ADMIN requirement');
+  assert.ok(block.includes('(?:activate|start|self-confirm-scope|guide\\/answers)$'),
+    'only assigned inspector actions, including opt-in POC-only scope, may bypass the global ADMIN requirement');
   assert.ok(block.includes('!inspectorAction'), 'all other mutations must keep the original guard');
   assert.ok(block.includes("req.headers['x-moei-csrf']!=='1'"));
   assert.ok(!block.includes('scope|approve|ai'), 'supervisor and paid AI actions must not be exempt');
@@ -107,7 +107,7 @@ test('assigned inspection stepper follows vessel, dossier, preparation, checklis
  assert.ok(workspace.includes('selected?.caseId && auth.isAdmin'));
  assert.ok(workspace.includes('selected?.caseId && !auth.isAdmin'));
  assert.ok(workspace.includes('selected?.checklistStatus===\'MANDATORY_PUBLISHED_TEMPLATE_SNAPSHOT\''));
- assert.ok(workspace.includes('selected?.status===\'READY_FOR_FIELD\''));
+ assert.ok(workspace.includes("if(['READY_FOR_FIELD','FIELD_STARTED'].includes(o.status))return 5;"));
  assert.ok(workspace.includes("'/moei/smart-inspection/my-work-orders'"));
 });
 
@@ -268,7 +268,7 @@ test('real scheduling time is normalized before lifecycle ASSIGN for inspector S
 });
 
 test('current journey step is visually distinct and stays active during FIELD_STARTED',()=>{
- assert.ok(workspace.includes("selected?.status==='FIELD_STARTED'?'step':null"));
+ assert.ok(workspace.includes("[attr.aria-current]=\"selected && activeJourneyStep===5?'step':null\""));
  assert.ok(workspace.includes('data-testid="si-current-step-indicator"'));
  assert.ok(workspace.includes('.journey-step.current{border:2px solid #6940bb'));
  assert.ok(workspace.includes("{{t('CURRENT STEP','الخطوة الحالية')}}"));

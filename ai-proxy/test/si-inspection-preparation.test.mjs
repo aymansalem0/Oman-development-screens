@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {mkdtempSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
-import {SiInspectionPreparation,SiPreparationError,validateA04,SI_BASE_CHECKLIST,
+import {SiInspectionPreparation,SiPreparationError,validateA04,validateA04FieldGuidance,SI_BASE_CHECKLIST,
  a04PocOutputGuidance}
   from '../si-inspection-preparation.mjs';
 
@@ -399,4 +399,44 @@ test('potential deficiencies stay strict hypotheses and never silently gain lega
  assert.equal(guidance.optionalPredictedDeficienciesItemShape.hypothesisOnly,true);
  assert.deepEqual(guidance.noPredictedDeficienciesResponse,{predictedDeficiencies:[]});
  assert.deepEqual(guidance.allowedChecklistItemIds,SI_BASE_CHECKLIST);
+});
+
+
+test('Field-only A04 request discards invalid optional checklist mappings but retains verified focus actions',()=>{
+ const invalid={...dossier,
+  focusAreas:[{category:'Fire safety',priority:'HIGH',
+    reason:'Check portable extinguisher labels against the source record',
+    evidenceIds:['CERT-1']}],
+  checklistFocus:[{existingItemId:'FIRE_CHECK_NOT_IN_SOURCE',focus:'VERIFY',
+    reason:'Never promote unknown statutory checks',reasonEvidenceIds:['CERT-1']},
+   {existingItemId:'certificates',focus:'Look for the current inspection stamp',
+    reasonEvidenceIds:['CERT-1']},
+   {existingItemId:'fire-safety',focus:'VERIFY',
+    reason:'Review source-linked maintenance documentation',
+    reasonEvidenceIds:['CERT-1']}]
+ };
+ const args={checkIds:SI_BASE_CHECKLIST,evidenceIds:fixture.evidenceIds};
+ assert.throws(()=>validateA04(invalid,args),
+   e=>e.code==='SI_A04_CHECKLIST_REF_INVALID');
+ const result=validateA04FieldGuidance(invalid,args);
+ assert.equal(result.discardedChecklistFocus,2);
+ assert.deepEqual(result.fieldGuidanceWarnings,
+   ['A04_INVALID_CHECKLIST_ADVICE_DISCARDED']);
+ assert.equal(result.checklistFocus.length,1);
+ assert.equal(result.checklistFocus[0].existingItemId,'fire-safety');
+ assert.equal(result.focusAreas[0].evidenceIds[0],'CERT-1');
+ assert.equal(result.requiresInspectorReview,true);
+});
+
+test('Field-only A04 guidance NEVER accepts invented source evidence or invalid focus priorities',()=>{
+ const args={checkIds:SI_BASE_CHECKLIST,evidenceIds:fixture.evidenceIds};
+ const unverified={...dossier,
+  focusAreas:[{...dossier.focusAreas[0],evidenceIds:['FAKE-EVIDENCE']}],
+  checklistFocus:[{existingItemId:'NOT_ALLOWED',focus:'INVALID'}]};
+ assert.throws(()=>validateA04FieldGuidance(unverified,args),
+   e=>e.code==='SI_A04_UNVERIFIED_EVIDENCE');
+ const unsupported={...dossier,focusAreas:[{...dossier.focusAreas[0],priority:'MEDIUM'}],
+   checklistFocus:[{existingItemId:'NOT_ALLOWED',focus:'INVALID'}]};
+ assert.throws(()=>validateA04FieldGuidance(unsupported,args),
+   e=>e.code==='SI_A04_FOCUS_INVALID');
 });

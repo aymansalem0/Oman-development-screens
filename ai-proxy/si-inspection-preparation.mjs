@@ -170,6 +170,37 @@ function atomicWrite(path,doc){
   mkdirSync(dirname(path),{recursive:true});const tmp=path+'.tmp-'+process.pid;
   writeFileSync(tmp,JSON.stringify(doc,null,2),{mode:0o600});renameSync(tmp,path);
 }
+/**
+ * Inspector-only A04 guidance: reject invalid checklist overlay entries
+ * without discarding separately verified focus advice. This is NEVER used
+ * to save or approve the official A04 dossier. Strict evidence validation
+ * (and every other source/contract safeguard) remains unchanged.
+ * One paid call only: no implicit retry or silent second provider request.
+ */
+export function validateA04FieldGuidance(raw,{checkIds,evidenceIds}){
+  const data=safeJson(raw);
+  if(!data||typeof data!=='object'||!Array.isArray(data.checklistFocus))
+    return {...validateA04(raw,{checkIds,evidenceIds}),
+      discardedChecklistFocus:0,fieldGuidanceWarnings:[]};
+  // Restrict recovery to unsupported optional checklist mappings only.
+  // Never infer a base item ID, accept a free-text enum, or invent evidence.
+  const allowed=new Set(checkIds);
+  const valid=[],invalid=[];
+  for(let i=0;i<data.checklistFocus.length;i++){
+    const row=data.checklistFocus[i];
+    const focus=typeof row?.focus==='string'?row.focus.trim().toUpperCase():'';
+    if(!row||typeof row!=='object'||Array.isArray(row)||
+      !allowed.has(row.existingItemId)||!focusTypes.includes(focus))
+      invalid.push(i);
+    else valid.push(row);
+  }
+  const cleanResult=validateA04(
+    invalid.length?{...data,checklistFocus:valid}:raw,
+    {checkIds,evidenceIds});
+  return {...cleanResult,discardedChecklistFocus:invalid.length,
+    fieldGuidanceWarnings:invalid.length?['A04_INVALID_CHECKLIST_ADVICE_DISCARDED']:[]};
+}
+
 export class SiInspectionPreparation{
   constructor({mode='json',oracleRepository=null,targeting,riskPolicy,bundles=[],
     executeA04=null,enabled=false,approvedDocuments=null,provider='airia',

@@ -255,7 +255,9 @@ export function projectA04FocusedFieldAdvice(validated,step){
  return {status:'AIRIA_A04_FIELD_GUIDANCE_ADVISORY',
   stepId:step.stepId,
   stepSpecific:specific,
-  warnings:specific?[]:['AI_RETURNED_GENERAL_SCOPE_FOCUS_ONLY'],
+  warnings:[...(validated.fieldGuidanceWarnings||[]),
+   ...(specific?[]:['AI_RETURNED_GENERAL_SCOPE_FOCUS_ONLY'])],
+  discardedChecklistFocus:validated.discardedChecklistFocus||0,
   actions,
   focusAreas:list(validated.focusAreas).map(x=>({
    title:x.category,priority:x.priority,instruction:x.reason,
