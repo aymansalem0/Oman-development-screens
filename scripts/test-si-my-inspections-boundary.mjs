@@ -292,3 +292,27 @@ test('sandbox eSDB issues scannable local QR without encoding private identity o
  assert.ok(component.includes('downloadEsdbCard()'));
  assert.ok(component.includes('this.app?.status === "ISSUED"'));
 });
+
+test('issued sandbox SDB uses platform MOEI logo and visibly fictional sample portrait',()=>{
+ const html=src('src/app/pages/moei-seafarer-readiness.component.html');
+ const css=src('src/app/pages/moei-seafarer-readiness.component.css');
+ const ts=src('src/app/pages/moei-seafarer-readiness.component.ts');
+ const portrait=src('public/branding/esdb-sample-emirati-portrait.svg');
+ const logo=src('src/app/components/nmc-ministry-logo.component.ts');
+ assert.ok(logo.includes('/branding/uae-moei-en.png'));
+ assert.ok(logo.includes('/branding/uae-moei-ar.png'));
+ assert.ok(html.includes('/branding/uae-moei-en.png'));
+ assert.ok(html.includes('/branding/uae-moei-ar.png'));
+ assert.ok(html.includes('data-testid="sdb-sample-portrait"'));
+ assert.ok(html.includes('/branding/esdb-sample-emirati-portrait.svg'));
+ assert.ok(html.includes("t('SAMPLE · NOT OFFICIAL'"));
+ assert.ok(portrait.includes('Fictional illustration'));
+ assert.ok(portrait.includes('>SAMPLE</text>'));
+ assert.ok(css.includes('.esdb-ministry-brand'));
+ assert.ok(ts.includes('private async localEsdbImage('));
+ assert.ok(ts.includes('this.localEsdbImage("/branding/esdb-sample-emirati-portrait.svg")'));
+ assert.ok(ts.includes('SPECIMEN · SANDBOX · NOT AN OFFICIAL DOCUMENT'));
+ assert.ok(ts.includes('SAMPLE · NOT OFFICIAL'));
+ assert.ok(!html.includes('<header><span>⚓ MOEI'));
+ assert.ok(!html.includes('initials(digital.name)'));
+});
