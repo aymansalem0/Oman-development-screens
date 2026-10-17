@@ -102,7 +102,11 @@ export interface NmcCentralCase {
   tasks:NmcCentralCaseTask[];decisions:NmcCentralDecision[];
   incidentEvents?:NmcCaseIncident[];
   siInspectionSources?:{eventId:string;inspectionId:string;reportId:string;
-    summary:string;receivedAt:string}[];
+    summary:string;receivedAt:string;supervisor?:string;
+    source?:'SI_APPROVED_REPORT';regulatoryDecision?:false}[];
+  inspectionReviewHistory?:{eventId:string;inspectionId:string;reportId:string;
+    decision:'APPROVED'|'RETURNED';summary:string;reviewedAt:string;
+    source:'SI_HUMAN_SUPERVISOR';supervisor:string|null}[];
   operationalRisk?:{score:number;level:string;assessmentId:string;
     previousScore:number|null;previousLevel:string|null;sourceInspectionId:string;
     sourceReportId:string;evidenceId:string;policyVersion:string;updatedAt:string;
