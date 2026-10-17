@@ -19,6 +19,8 @@ export interface DashboardAiDesignResponse{
  widgets:Array<Omit<DashboardDefinition['widgets'][number],'id'>>;
  proposedMetrics:ProposedDashboardMetric[];
  warnings:string[];draftOnly:true;automaticPublication:false;
+ incidentSource?:{key:string;configured:boolean;dataNature:string;
+  rowDataTransferredToAgent:false;sourceExecutionEnabled:false};
 }
 
 interface DashboardRevisionsResponse {status:'ok';revisions:DashboardRevision[];}
@@ -42,9 +44,13 @@ export class NmcDashboardWorkspaceService {
   }
 
   aiDesignStatus():Observable<{enabled:boolean;pipelineConfigured:boolean;
-    keyConfigured:boolean;contractVerified:boolean}>{
+    keyConfigured:boolean;contractVerified:boolean;incidentSource:{
+    key:string;configured:boolean;transport:string;dataNature:string;
+    connectionChecked:boolean;incidentRiskIsVesselRisk:false}}> {
     return this.http.get<{enabled:boolean;pipelineConfigured:boolean;
-      keyConfigured:boolean;contractVerified:boolean}>(this.root+'/ai-design/status');
+      keyConfigured:boolean;contractVerified:boolean;incidentSource:{
+      key:string;configured:boolean;transport:string;dataNature:string;
+      connectionChecked:boolean;incidentRiskIsVesselRisk:false}}>(this.root+'/ai-design/status');
   }
 
   list():Observable<DashboardListResponse>{
