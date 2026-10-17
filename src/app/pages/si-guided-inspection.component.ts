@@ -18,7 +18,16 @@ interface FieldStep{
  note:string;naReason:string;severity:string|null;answered:boolean;
 }
 interface StepEvidence{id:string;filename:string;mimeType:string;reference:string;byteLength:number;}
-interface FinalAssessment{outcome:string;total:number;recorded:number;incomplete:{stepId:string;title:string}[];open:{stepId:string;title:string;severity:string}[];notApplicable:number;canSubmit:boolean;}
+interface MissingFindingRequirement{
+ checkId:string;stepId:string|null;title:string;severity:string;
+ missingNote:boolean;missingEvidence:boolean;
+ uploadedButNotLinked:boolean;uploadedEvidenceCount:number;
+}
+interface FinalAssessment{outcome:string;total:number;recorded:number;
+ incomplete:{stepId:string;title:string}[];
+ open:{stepId:string;title:string;severity:string}[];
+ missingFindingRequirements:MissingFindingRequirement[];
+ notApplicable:number;canSubmit:boolean;}
 interface ImageReview{
  status:'AI_PHOTO_ADVISORY_ONLY';provider:'AIRIA_SI_V01'|string;
  reviewedEvidence:string;officialCompliance:false;
@@ -211,7 +220,8 @@ interface FieldAiAdvice{
        <label *ngIf="step.fields.includes('TEXT')">{{t('Recorded observation','البيان المسجل')}}
         <input name="answer-text" [(ngModel)]="answers['TEXT']"
          [disabled]="!canSave" maxlength="2000"/></label>
-       <label *ngIf="step.fields.includes('NOTE')">{{t('Inspector notes','ملاحظات المفتش')}}
+       <label *ngIf="step.fields.includes('NOTE')">
+        {{t('Inspector notes','ملاحظات المفتش')}}{{answers['BOOLEAN']==='NO'?' *':''}}
         <textarea name="answer-note" [(ngModel)]="answers['NOTE']"
          [disabled]="!canSave" maxlength="1600"></textarea></label>
        <label *ngIf="answers['BOOLEAN']==='NO'">{{t('Deficiency severity','درجة الملاحظة')}} *
@@ -219,6 +229,10 @@ interface FieldAiAdvice{
          <option value="MINOR">Minor</option><option value="MAJOR">Major</option>
          <option value="CRITICAL">Critical</option>
         </select></label>
+       <p class="warning" *ngIf="answers['BOOLEAN']==='NO'">
+        {{t('Every deficiency requires your written observation. MAJOR or CRITICAL deficiencies also require an uploaded photo or document, linked by saving this step after the upload.',
+          'كل مخالفة تحتاج ملاحظة مكتوبة من المفتش. المخالفات الجسيمة أو الحرجة تحتاج أيضًا صورة أو مستندًا مرفقًا، ثم إعادة حفظ البند لربط الدليل.')}}
+       </p>
        <label *ngIf="answers['BOOLEAN']==='NA'">{{t('Why not applicable?','سبب عدم الانطباق')}} *
         <textarea name="naReason" [(ngModel)]="naReason" maxlength="500" [disabled]="!canSave"></textarea></label>
       </div>
@@ -251,7 +265,32 @@ interface FieldAiAdvice{
      </div>
      <p class="warning" *ngFor="let item of assessment.open">⚠ {{item.title}} — {{item.severity}}</p>
      <p class="warning" *ngFor="let item of assessment.incomplete">⌛ {{item.title}}</p>
+     <div class="si-guided-finding-blockers"
+       *ngIf="assessment.missingFindingRequirements?.length"
+       data-testid="si-guided-finding-documentation-blockers" role="status">
+       <strong>{{t('Complete finding documentation before submission',
+         'استكمل توثيق المخالفات قبل إرسال التقرير')}}</strong>
+       <div class="si-guided-finding-blocker"
+         *ngFor="let issue of assessment.missingFindingRequirements">
+         <div>
+          <b>{{issue.title}} · {{issue.severity}}</b>
+          <small *ngIf="issue.missingNote">
+            {{t('Inspector observation note required','مطلوب وصف مكتوب للمخالفة من المفتش')}}</small>
+          <small *ngIf="issue.missingEvidence">
+            {{t('Photo or supporting document required for MAJOR / CRITICAL',
+              'مطلوب صورة أو مستند للمخالفة الجسيمة أو الحرجة')}}</small>
+          <small *ngIf="issue.uploadedButNotLinked">
+            {{t('Evidence was uploaded, but you must save this inspection step again to link it to the finding.',
+              'تم رفع دليل لكن يجب إعادة حفظ البند لربطه بالمخالفة.')}}</small>
+         </div>
+         <button type="button" class="secondary" *ngIf="issue.stepId"
+           (click)="goToFinding(issue.stepId)">
+           {{t('Complete this finding','استكمال المخالفة')}} ↗
+         </button>
+       </div>
+     </div>
      <strong class="status">{{assessment.outcome==='INCOMPLETE'?t('Inspection incomplete','المعاينة غير مكتملة'):
+        assessment.outcome==='FINDINGS_NEED_DOCUMENTATION'?t('Finding notes / evidence required before submission','يجب استكمال ملاحظات المخالفات والأدلة قبل الإرسال'):
         assessment.outcome==='OPEN_DEFICIENCIES'?t('Open deficiencies — not clear','مخالفات مفتوحة — ليست ناجحة'):
         t('No recorded deficiencies — pending supervisor approval','لا توجد مخالفات مسجلة — بانتظار اعتماد المشرف')}}</strong>
      <label class="final-summary">{{t('Inspector final summary','الملخص النهائي للمفتش')}}
@@ -329,6 +368,14 @@ interface FieldAiAdvice{
  .warning{background:#fff8e7;color:#956f25;border-color:#ead99c}
  .danger{background:#fff0ef;color:#9b302c;border-color:#eab2b1}
  .good{background:#e9faf2;color:#23734f;border-color:#a7dec5}
+ .si-guided-finding-blockers{background:#fff8e9;border:1px solid #eacb83;
+  border-radius:12px;padding:14px;margin:16px 0}
+ .si-guided-finding-blockers>strong{color:#80581b;display:block;margin-bottom:9px}
+ .si-guided-finding-blocker{display:flex;justify-content:space-between;align-items:center;
+  flex-wrap:wrap;gap:12px;border-top:1px solid #eeddb9;padding:11px 0}
+ .si-guided-finding-blocker>div{display:grid;gap:5px}
+ .si-guided-finding-blocker small{display:block;color:#7b5c2a;font-size:12px}
+ .si-guided-finding-blocker button{flex:none}
  @media(max-width:1200px){.workspace{grid-template-columns:275px 1fr}.summary{grid-template-columns:repeat(2,1fr)}}
  @media(max-width:980px){.content{margin:0;padding:13px}.workspace{grid-template-columns:1fr}
   .steps{max-height:350px;position:static}.fieldgrid{grid-template-columns:1fr}
@@ -370,6 +417,14 @@ export class SiGuidedInspectionComponent implements OnInit{
  statusLabel(s:string):string{
   return ({PENDING:'Pending · غير مكتمل',PASS:'Recorded · تم',DEFICIENCY:'Observation · ملاحظة',
    NA:'N/A · لا ينطبق'} as Record<string,string>)[s]||s;
+ }
+ goToFinding(stepId:string):void{
+  const step=this.guide?.steps.find(x=>x.stepId===stepId);
+  if(!step)return;
+  this.filter='ALL';
+  this.choose(step);
+  // Scroll only; never change evidence or autosave an inspection observation.
+  document.querySelector('.workspace')?.scrollIntoView({behavior:'smooth',block:'start'});
  }
  choose(step:FieldStep):void{
   this.selected=step;this.error='';this.message='';
@@ -604,6 +659,19 @@ export class SiGuidedInspectionComponent implements OnInit{
       if(code==='SI_GUIDED_FINISH_EXPLICIT_CONFIRMATION_REQUIRED'){
         this.error=this.t('Explicit submission confirmation is required.',
           'يجب تأكيد إرسال المعاينة صراحةً.');
+        return;
+      }
+      if(code==='SI_FINDING_NOTE_AND_EVIDENCE_REQUIRED'){
+        const missing=Array.isArray(e?.error?.missingFindingRequirements)?
+          e.error.missingFindingRequirements:[];
+        if(this.guide&&missing.length){
+          this.guide.finalAssessment={...this.guide.finalAssessment,
+            missingFindingRequirements:missing,canSubmit:false,
+            outcome:'FINDINGS_NEED_DOCUMENTATION'};
+        }
+        this.error=this.t(
+          'Some deficiencies need inspector notes and/or supporting evidence. Open each highlighted finding and save it before submitting.',
+          'توجد مخالفات تحتاج ملاحظات من المفتش أو أدلة مؤيدة. افتح كل مخالفة موضحة واستكملها واحفظ البند قبل الإرسال.');
         return;
       }
       this.error=code||'SI_FINISH_FAILED';
