@@ -14,7 +14,7 @@ import {
   NmcCaseStateService,
   NmcInspectionOutcome
 } from '../services/nmc-case-state.service';
-import {NmcCasesService,NmcCentralCase,NmcCentralCaseAudit,NmcAiAction,NmcDecisionCatalogueEntry} from '../services/nmc-cases.service';
+import {NmcCasesService,NmcCentralCase,NmcCentralCaseAudit,NmcAiAction,NmcDecisionCatalogueEntry,NmcSiPostInspectionRiskStatus} from '../services/nmc-cases.service';
 import {NmcAlertsService,NmcOperationalAlert} from '../services/nmc-alerts.service';
 
 type CaseStatus = 'Open' | 'In Progress' | 'Pending Verification' | 'Resolved';
@@ -66,6 +66,13 @@ export class NmcCaseWorkspaceComponent implements OnInit {
   selectedTask?: CaseTask;
   resolutionNote = '';
   centralCase:NmcCentralCase|null=null;
+  siPostInspectionRisk:NmcSiPostInspectionRiskStatus|null=null;
+  siRiskStatusLoading=false;
+  siRiskStatusError=false;
+  get isSiCaseWithoutOriginalAssessment():boolean{
+    return this.centralCase?.source==='SI_APPROVED_INSPECTION'&&
+      !this.centralCase.sourceAssessmentId;
+  }
   centralLoading=true;
   centralBusy=false;
   centralError='';
@@ -150,6 +157,25 @@ export class NmcCaseWorkspaceComponent implements OnInit {
           ?this.cases.readableError({error:{error:aiError}},this.lang.isArabic)
           :'';
         this.buildCase();
+        this.siPostInspectionRisk=null;
+        this.siRiskStatusError=false;
+        this.siRiskStatusLoading=false;
+        if(this.centralCase?.source==='SI_APPROVED_INSPECTION'){
+          const id=this.centralCase.id;
+          this.siRiskStatusLoading=true;
+          this.cases.siPostInspectionRiskStatus(id).subscribe({
+            next:result=>{
+              if(this.centralCase?.id!==id)return;
+              this.siPostInspectionRisk=result;
+              this.siRiskStatusLoading=false;
+            },
+            error:()=>{
+              if(this.centralCase?.id!==id)return;
+              this.siRiskStatusError=true;
+              this.siRiskStatusLoading=false;
+            }
+          });
+        }
         if(this.centralCase)this.loadCentralHistory();
         if(!this.centralCase||this.centralCase.status==='RESOLVED')
           this.loadCaseEligibleAlerts();
@@ -357,6 +383,10 @@ export class NmcCaseWorkspaceComponent implements OnInit {
       return task?task.title:this.copy('Document closure evidence and resolve the case',
         'توثيق أدلة المعالجة وإغلاق الحالة');
     }
+    if(!this.centralCase?.actionPlan&&this.isSiCaseWithoutOriginalAssessment)
+      return this.copy(
+        'Review post-inspection A01/A02 risk reassessment status; case A01 retry requires an original saved assessment',
+        'راجع حالة إعادة تقييم المخاطر بعد المعاينة عبر A01/A02؛ إعادة توصيات A01 للقضية تتطلب تقييمًا أصليًا محفوظًا');
     if(!this.centralCase?.actionPlan)return this.copy(
       'A01 recommendations were unavailable at case creation · retry',
       'توصيات A01 لم تتوفر عند إنشاء الحالة · إعادة المحاولة');
@@ -389,6 +419,14 @@ export class NmcCaseWorkspaceComponent implements OnInit {
 
   generateAiActions():void{
     if(!this.centralCase||this.centralBusy||this.centralCase.actionPlan)return;
+    // An SI-origin NMC case has a verified approved REPORT, not an immutable
+    // alert-era A01/A02 source assessment. Never pretend those are equivalent.
+    if(this.isSiCaseWithoutOriginalAssessment){
+      this.centralError=this.copy(
+        'This NMC Case came from an approved Smart Inspection report and has no original saved AI risk assessment. Check the separate post-inspection A01/A02 status; case A01 Retry cannot generate recommendations from a missing original assessment.',
+        'هذه الحالة محالة من تقرير معاينة ذكية معتمد ولا تحتوي تقييم مخاطر AI أصليًا محفوظًا. راجع حالة A01/A02 بعد المعاينة؛ زر إعادة توصيات A01 لا يستطيع إنشاء توصيات من تقييم أصلي غير موجود.');
+      return;
+    }
     const current=this.centralCase;
     this.centralBusy=true;this.centralError='';this.centralSuccess='';
     // Free, read-only preflight: load the immutable case source by exact
