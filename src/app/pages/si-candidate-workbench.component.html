@@ -260,20 +260,23 @@
             <strong *ngIf="!row.inCurrentPlan&&!row.mandatory" class="si-auto-outside-plan">
              {{copy('OUTSIDE CURRENT DRAFT','خارج المسودة الحالية')}}</strong>
            </td>
-           <td data-testid="si-supervisor-scheduling-vessel-action">
-            <button *ngIf="!row.mandatory" type="button"
-              (click)="toggleDraftVesselForScheduling(row)"
-              [disabled]="newDraftBusy||!auth.isAdmin">
-              {{isDraftVesselExcluded(row.imo)?
-                copy('Undo removal','إلغاء الاستبعاد'):
-                copy('Remove from scheduling draft','استبعاد من مقترح الجدولة')}}
-            </button>
-            <small *ngIf="isDraftVesselExcluded(row.imo)" class="si-auto-outside-plan">
-              {{copy('Supervisor removal pending recalculation','استبعاد المشرف ينتظر إعادة حساب الطاقة')}}
-            </small>
-            <small *ngIf="row.mandatory">
-              {{copy('Protected NMC referral — cannot remove','إحالة NMC إلزامية — لا يجوز استبعادها')}}
-            </small>
+           <td data-testid="si-supervisor-scheduling-vessel-action"
+             class="si-plan-scheduling-action-cell">
+            <div class="si-plan-vessel-row-actions">
+             <button *ngIf="!row.mandatory" type="button"
+               (click)="toggleDraftVesselForScheduling(row)"
+               [disabled]="newDraftBusy||!auth.isAdmin">
+               {{isDraftVesselExcluded(row.imo)?
+                 copy('Undo removal','إلغاء الاستبعاد'):
+                 copy('Remove from scheduling draft','استبعاد من مقترح الجدولة')}}
+             </button>
+             <small *ngIf="isDraftVesselExcluded(row.imo)" class="si-auto-outside-plan">
+               {{copy('Supervisor removal pending recalculation','استبعاد المشرف ينتظر إعادة حساب الطاقة')}}
+             </small>
+             <small *ngIf="row.mandatory">
+               {{copy('Protected NMC referral — cannot remove','إحالة NMC إلزامية — لا يجوز استبعادها')}}
+             </small>
+            </div>
            </td>
           </tr></tbody>
          </table>
@@ -315,15 +318,24 @@
          <p *ngIf="!filteredDraftAlternatives.length" class="si-rolling-note">
            {{copy('No additional C01 manual-review alternatives for this draft.',
              'لا توجد سفن إضافية مؤهلة للمراجعة اليدوية في هذه المسودة.')}}</p>
-         <div *ngFor="let choice of filteredDraftAlternatives" class="si-draft-visit">
-           <strong>{{choice.vesselName}} · IMO {{choice.imo}}</strong>
-           <small>{{choice.sourceTypes.join(' + ')}} · {{choice.priorityCriterion}}</small>
-           <small *ngIf="choice.periodStatus==='OUTSIDE_EXECUTION_PLAN'" class="notice error">
-             {{copy('Outside execution plan dates','خارج فترة تنفيذ الخطة')}}</small>
-           <button type="button" *ngIf="!isDraftAlternativeSelected(choice.imo)"
-             (click)="toggleDraftAlternative(choice,true)"
-             [disabled]="newDraftBusy||!auth.isAdmin||choice.periodStatus==='OUTSIDE_EXECUTION_PLAN'">
-             {{copy('+ Add to scheduling draft','+ إضافة لمقترح الجدولة')}}</button>
+         <div *ngFor="let choice of filteredDraftAlternatives"
+           class="si-draft-visit si-plan-alternative-vessel-row">
+           <div class="si-plan-alternative-header">
+            <div class="si-plan-alternative-identity">
+             <strong>{{choice.vesselName}} · IMO {{choice.imo}}</strong>
+             <small>{{choice.sourceTypes.join(' + ')}} · {{choice.priorityCriterion}}</small>
+             <small *ngIf="choice.periodStatus==='OUTSIDE_EXECUTION_PLAN'" class="notice error">
+              {{copy('Outside execution plan dates','خارج فترة تنفيذ الخطة')}}</small>
+            </div>
+            <div class="si-plan-alternative-actions">
+             <button type="button" *ngIf="!isDraftAlternativeSelected(choice.imo)"
+               (click)="toggleDraftAlternative(choice,true)"
+               [disabled]="newDraftBusy||!auth.isAdmin||choice.periodStatus==='OUTSIDE_EXECUTION_PLAN'">
+               {{copy('+ Add to scheduling draft','+ إضافة لمقترح الجدولة')}}</button>
+             <span *ngIf="isDraftAlternativeSelected(choice.imo)" class="si-plan-added-indicator">
+              {{copy('Added · pending recalculation','تمت الإضافة · بانتظار إعادة الحساب')}}</span>
+            </div>
+           </div>
            <div *ngIf="selectedDraftAlternative(choice.imo) as add" class="si-draft-form-grid">
              <label>{{copy('Selection basis','أساس الاختيار')}}
                <select [(ngModel)]="add.basis" (ngModelChange)="draftSelectionReasonChanged()">
