@@ -270,20 +270,49 @@ export function projectA04FocusedFieldAdvice(validated,step){
 
 /** Deterministic outcome, never an autonomous AI or regulatory decision.
  * A finding remains open until independently verified and closed. */
-export function guidedFinalAssessment(guide){
+/**
+ * Deterministic authoritative finding closeout requirements. Only SAVED
+ * lifecycle findings count: uploading an image without saving the inspector's
+ * verified answer does not silently attach it to the submitted finding.
+ * Existing source and AI evidence are not a substitute for inspector notes.
+ */
+export function guidedFindingRequirements(guide,lifecycleRecord){
+ const steps=Array.isArray(guide?.steps)?guide.steps:[];
+ const checks=Array.isArray(lifecycleRecord?.checks)?lifecycleRecord.checks:[];
+ return checks.filter(check=>check.status==='DEFICIENCY').flatMap(check=>{
+  const missingNote=typeof check.note!=='string'||!check.note.trim();
+  const missingEvidence=check.severity!=='MINOR'&&
+    (!Array.isArray(check.evidenceRefs)||check.evidenceRefs.length===0);
+  if(!missingNote&&!missingEvidence)return [];
+  const linkedStep=steps.find(step=>
+    (step.members||[]).some(m=>m.kind==='LIFECYCLE'&&m.id===check.id));
+  const available=linkedStep?(guide?.evidenceByStep?.[linkedStep.stepId]||[]):[];
+  return [{checkId:check.id,stepId:linkedStep?.stepId||null,
+    title:linkedStep?.title||check.title||check.id,
+    severity:check.severity||'UNASSESSED',
+    missingNote,missingEvidence,
+    uploadedButNotLinked:missingEvidence&&available.length>0,
+    uploadedEvidenceCount:available.length}];
+ });
+}
+/** Deterministic outcome, never an autonomous AI or regulatory decision. */
+export function guidedFinalAssessment(guide,lifecycleRecord){
  const steps=Array.isArray(guide?.steps)?guide.steps:[];
  const incomplete=steps.filter(s=>!s.answered&&
   (s.mandatory||s.members?.some(m=>m.kind==='LIFECYCLE')));
  const deficiencies=steps.filter(s=>s.currentStatus==='DEFICIENCY');
  const awaitingReview=steps.filter(s=>s.currentStatus==='NA');
+ const missingFindingRequirements=guidedFindingRequirements(guide,lifecycleRecord);
  const outcome=incomplete.length?'INCOMPLETE':
+  missingFindingRequirements.length?'FINDINGS_NEED_DOCUMENTATION':
   deficiencies.length?'OPEN_DEFICIENCIES':'NO_RECORDED_DEFICIENCIES_PENDING_REVIEW';
  return {outcome,total:steps.length,recorded:steps.filter(s=>s.answered).length,
   incomplete:incomplete.map(s=>({stepId:s.stepId,title:s.title})),
   open: deficiencies.map(s=>({stepId:s.stepId,title:s.title,
     severity:s.severity||'UNASSESSED'})),
+  missingFindingRequirements,
   notApplicable:awaitingReview.length,
-  canSubmit:incomplete.length===0&&steps.length>0,
+  canSubmit:incomplete.length===0&&steps.length>0&&missingFindingRequirements.length===0,
   officialApproval:false,inspectorMustConfirm:true,
   aiStatus:'NOT_AUTOMATICALLY_INVOKED',
   note:'No automatic compliance decision. Missing evidence must be reviewed. An independent supervisor reviews the submitted inspection report.'};

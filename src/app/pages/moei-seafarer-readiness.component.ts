@@ -55,6 +55,7 @@ export class MoeiSeafarerReadinessComponent implements OnInit, OnDestroy {
   step = 0;
   app: SdbApplication | null = null;
   issuedQrDataUrl = "";
+  issuedQrUrl = "";
   issuedQrError = "";
   issuedCardError = "";
   private issuedQrKey = "";
@@ -508,26 +509,37 @@ export class MoeiSeafarerReadinessComponent implements OnInit, OnDestroy {
    * Future production issuance must use an authenticated, revocable
    * government-backed verification endpoint and signed record.
    */
+  // Same public origin as this Angular POC. For mobile scans the POC must
+  // be served from a phone-accessible HTTPS domain, not desktop localhost.
+  private esdbSpecimenUrl(reference:string,number:string):string{
+    return window.location.origin + window.location.pathname +
+      '#/esdb/verify/' + encodeURIComponent(reference) +
+      '?number=' + encodeURIComponent(number);
+  }
+  get qrLocalhostOnly():boolean{
+    return ['localhost','127.0.0.1','::1'].includes(window.location.hostname);
+  }
   updateIssuedQr() {
     const digital = this.app?.status === "ISSUED" ? this.app.digital : null;
     if (!digital?.number || !digital.verificationReference) {
       this.issuedQrKey = "";
       this.issuedQrDataUrl = "";
+      this.issuedQrUrl = "";
       this.issuedQrError = "";
       this.issuedQrGeneration++;
       return;
     }
-    const key = digital.number + "|" + digital.verificationReference;
+    const url = this.esdbSpecimenUrl(digital.verificationReference,digital.number);
+    const key = digital.number + "|" + digital.verificationReference + "|" + url;
     if (key === this.issuedQrKey) return;
     this.issuedQrKey = key;
     this.issuedQrDataUrl = "";
+    this.issuedQrUrl = url;
     this.issuedQrError = "";
     const request = ++this.issuedQrGeneration;
-    // Never encode SID, seafarer name, national ID or payment details.
-    const text = "MOEI-eSDB-POC\\nSDB:" + digital.number +
-      "\\nVERIFY-REF:" + digital.verificationReference +
-      "\\nSANDBOX-NOT-OFFICIAL";
-    void QRCode.toDataURL(text, {
+    // The encoded value is a *navigable URL*, not plaintext. No private
+    // identity or payment data is embedded in the URL or the QR itself.
+    void QRCode.toDataURL(url, {
       errorCorrectionLevel: "M", margin: 2, width: 180,
       color: {dark: "#153d4a", light: "#ffffffff"}
     }).then(image => {
@@ -600,7 +612,8 @@ small{display:block;margin-top:20px;color:#7a4530;font-weight:bold}
 <dt>EXPIRES</dt><dd>${escape(d.expiryDate)}</dd></dl>
 <div class="qr"><img src="${this.issuedQrDataUrl}" alt="eSDB sandbox QR code">
 <div><b>SCAN QR</b><p>${escape(d.verificationReference)}</p>
-<p>Reference data only. No public verification service.</p></div></div>
+<p>Opens read-only sample verification page · NOT OFFICIAL</p>
+<p style="font-size:10px;overflow-wrap:anywhere"><a href="${escape(this.issuedQrUrl)}" target="_blank" rel="noopener noreferrer">Open the sandbox verification page</a></p></div></div>
 <small>SPECIMEN · SANDBOX · NOT AN OFFICIAL DOCUMENT</small>
 </article></body></html>`;
       const blob = new Blob([markup], {type:"text/html;charset=utf-8"});

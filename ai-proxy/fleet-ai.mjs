@@ -12,6 +12,7 @@ import {catalogFromNmcSource} from './psc-fixtures.mjs';
 import {AIRIA_DEMO_99_IMOS} from './airia-demo-cohort.mjs';
 import {evaluateDataQuality} from './data-quality.mjs';
 import {documentEvidenceChecks,documentIntegritySignal} from './document-risk-evidence.mjs';
+import {canonicalizeApprovedFindingReferences} from './si-risk-factor-attribution.mjs';
 
 const baseTs=readFileSync(new URL('./nmc-vessel-catalog.ts',import.meta.url),'utf8');
 const extraTs=readFileSync(new URL('./nmc-expanded-vessel-catalog.ts',import.meta.url),'utf8');
@@ -96,9 +97,20 @@ export function verifyFleetSignals(a01,a02,knownIds,pscIds,requirePsc){
       if(!Number.isFinite(s.severity)||s.severity<0||s.severity>100||
          !Number.isFinite(s.confidence)||s.confidence<0||s.confidence>1)
         throw new Error('FLEET_AI_INVALID_SCORE');
+      const unknownEvidence=Array.isArray(s.evidenceIds)?
+        s.evidenceIds.filter(id=>typeof id!=='string'||!allow.has(id)):[];
       if(!Array.isArray(s.evidenceIds)||!s.evidenceIds.length||
-         s.evidenceIds.some(id=>typeof id!=='string'||!allow.has(id)))
-        throw new Error('FLEET_AI_UNVERIFIED_EVIDENCE_ID');
+         unknownEvidence.length){
+        const error=new Error('FLEET_AI_UNVERIFIED_EVIDENCE_ID');
+        error.details={
+          factor,agent:agent.toUpperCase(),
+          unknownCount:unknownEvidence.length,
+          citedCount:Array.isArray(s.evidenceIds)?s.evidenceIds.length:0
+        };
+        // Do NOT log model-supplied arbitrary evidence text; the diagnostic
+        // identifies the factor and bad ID count without exposing raw data.
+        throw error;
+      }
       // Require actual PSC references where external inspection history is present.
       if(requirePsc&&((factor==='history'&&agent==='a01')||(factor==='inspection'&&agent==='a02'))&&
          !s.evidenceIds.some(id=>external.has(id)))
@@ -379,6 +391,25 @@ export class FleetAssessmentManager {
         certificatesAndExpiryBelongToA02:true,
         warning:'Document authenticity not verified. Human review is NOT validation by flag authority.'
       },
+      ...(Array.isArray(v.siFindingsForAttribution)?{
+        // A01/A02 existing input contract stays unchanged. Make exact valid
+        // evidence IDs and individual human-confirmed defects unambiguous in
+        // INLINE context so partner models cite SOURCE IDs instead of aliases
+        // or generated IDs. No acceptance of invented identifiers.
+        evidenceReferenceContract:{
+          mode:'EXACT_PROVIDED_IDENTIFIERS_ONLY',
+          allowedEvidenceIds:[...new Set(ids)],
+          allowedFindingIds:v.siFindingsForAttribution.map(f=>f.evidenceId),
+          approvedReportEvidenceId:v.inlineContext?.postInspectionFactorAttribution?.reportEvidenceId||null,
+          instructions:[
+            'In each signal.evidenceIds, copy exact case-sensitive values from allowedEvidenceIds.',
+            'Do not invent, shorten, prefix, translate, paraphrase, or use filenames as evidence IDs.',
+            'To attribute an inspector defect to a factor, cite its SI-FINDING-* ID exactly.',
+            'Retain relevant external PSC inspection or deficiency evidence when supplied.',
+            'If supporting evidence is absent, return an insufficient-evidence signal rather than inventing it.'
+          ]
+        }
+      }:{}),
       externalPsc:{
       sourceSystem:psc.sourceSystem,sourceMode:psc.sourceMode,dataNature:psc.dataNature,
       authoritative:false,verifiedByAuthority:false,coverage:psc.coverage,
@@ -394,7 +425,18 @@ export class FleetAssessmentManager {
       this.executeAgent('a01',{...base,requestedSignals:AGENT_FACTORS.a01}),
       this.executeAgent('a02',{...base,requestedSignals:AGENT_FACTORS.a02})
     ]);
-    const validated=verifyFleetSignals(a01,a02,ids,psc.evidenceIds,psc.inspections.length>0);
+    // Only for a supervisor-approved SI report: map unique, exact aliases
+    // already stored in the inspector record (checkId/findingId/evidenceRef)
+    // to the corresponding authorized SI-FINDING ID. The five-factor source
+    // verifier STILL rejects every arbitrary model-generated evidence ID.
+    const canonicalA01=Array.isArray(v.siFindingsForAttribution)?
+      canonicalizeApprovedFindingReferences(
+        unpack(a01),v.siFindingsForAttribution,ids):a01;
+    const canonicalA02=Array.isArray(v.siFindingsForAttribution)?
+      canonicalizeApprovedFindingReferences(
+        unpack(a02),v.siFindingsForAttribution,ids):a02;
+    const validated=verifyFleetSignals(
+      canonicalA01,canonicalA02,ids,psc.evidenceIds,psc.inspections.length>0);
     // Do not score the same documentary discrepancy twice inside risk.
     // A02 may use approved/provisional A03 evidence for certificate compliance,
     // but its dataQuality severity must cite OTHER structured/PSC gaps.

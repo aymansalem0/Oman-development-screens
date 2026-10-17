@@ -385,6 +385,117 @@ export class NmcCaseWorkspace{
       return {...row,decisions:[entry,...previous]};
     },{recommendationId,decision,evidenceIds});
   }
+  /**
+   * Forward an approved SI-origin report to an existing active NMC case, or
+   * open ONE human-review case. No artificial alert, inspection request,
+   * inspector assignment or regulatory decision is generated.
+   * SOURCE_ALERT_ID must permit NULL (existing incident-case migration).
+   */
+  async fromSiInspection({inspectionId,imo,reportId,summary,supervisor}={},role='SI_SUPERVISOR'){
+    if(!isId(inspectionId)||!isId(reportId)||!isImo(imo)||
+      typeof summary!=='string'||summary.length>500||
+      typeof supervisor!=='string'||supervisor.length>120||!supervisor.trim())
+      throw new NmcCaseError('CASE_SI_FORWARD_INVALID',422);
+    const eventId=inspectionId+':'+reportId+':FORWARDED';
+    const entry={eventId,inspectionId,reportId,
+      summary,supervisor,receivedAt:now(),source:'SI_APPROVED_REPORT',
+      regulatoryDecision:false};
+    const open=(await this.list()).find(row=>row.imo===imo&&row.status!=='RESOLVED');
+    if(open){
+      if((open.siInspectionSources||[]).some(x=>x.eventId===eventId))
+        return open;
+      return this._update(open.id,open.version,'SI_APPROVED_REPORT_FORWARDED',role,
+        'Approved SI inspector report forwarded for NMC review',row=>({
+          ...row,siInspectionSources:[...(row.siInspectionSources||[]),entry]
+        }),{eventId,inspectionId,reportId});
+    }
+    const id=randomUUID(),timestamp=now();
+    const record={id,imo,status:'OPEN',assignedRole:'NMC_OFFICER',
+      source:'SI_APPROVED_INSPECTION',sourceAssessmentId:null,
+      alertIds:[],sourceScore:null,sourceLevel:null,
+      createdAt:timestamp,updatedAt:timestamp,version:1,
+      tasks:[],actionPlan:null,operationalDecision:null,decisionFeedback:[],
+      restriction:null,inspectionRequests:[],decisions:[],inspectionOutcome:null,
+      siInspectionSources:[entry],postInspectionRiskHistory:[],
+      resolutionNote:null,provenance:'SYNTHETIC_POC_NON_REGULATORY'};
+    const audit=auditEntry(record,'SI_APPROVED_REPORT_FORWARDED',role,
+      'Approved inspection handed to NMC; no regulatory action',
+      {eventId,inspectionId,reportId});
+    if(this.mode==='json'){
+      const db=this._load(),existing=Object.values(db.cases).find(row=>
+        row.imo===imo&&row.status!=='RESOLVED');
+      if(existing)return this.fromSiInspection({inspectionId,imo,reportId,summary,supervisor},role);
+      db.cases[id]=record;db.history[id]=[audit];this._write(db);return clone(record);
+    }
+    return this._db(async con=>{
+      try{
+        await con.execute(`INSERT INTO NMC_CASE(
+          CASE_ID,IMO,SOURCE_ALERT_ID,ACTIVE_IMO,STATUS,VERSION_NO,DOC_JSON,UPDATED_ROLE)
+          VALUES(:id,:imo,NULL,:imo,:status,:version,:doc,:role)`,{
+          id,imo,status:record.status,version:1,doc:clob(record),role});
+        await this._audit(con,id,audit);await con.commit();return record;
+      }catch(error){
+        await con.rollback();
+        if(error?.errorNum===1){
+          const existing=await this.byImo(imo);
+          if(existing?.status!=='RESOLVED')return this.fromSiInspection(
+            {inspectionId,imo,reportId,summary,supervisor},role);
+        }
+        if(error?.errorNum===1400)throw new NmcCaseError(
+          'CASE_SI_SOURCE_ALERT_NULL_MIGRATION_REQUIRED',503);
+        throw error;
+      }
+    });
+  }
+
+  /** Save verified operational AI score without approving any NMC decisions. */
+  async recordPostInspectionRisk(id,result,role='NMC_AI_SYSTEM'){
+    const {eventId,inspectionId,reportId,imo,assessmentId,
+      previousAssessmentId,previousScore,previousLevel,
+      newScore,newLevel,policyVersion,evidenceId,factorChanges,
+      findingFactorAttribution=[]}=result||{};
+    if(!isId(id)||!isId(inspectionId)||!isId(reportId)||!isImo(imo)||
+      !isId(assessmentId)||typeof eventId!=='string'||eventId.length>150||
+      !Number.isFinite(newScore)||newScore<0||newScore>100||
+      !['Normal','Watch','High','Critical'].includes(newLevel)||
+      typeof evidenceId!=='string'||!evidenceId.startsWith('SI-REPORT-')||
+      !Array.isArray(factorChanges)||factorChanges.length!==5||
+      !Array.isArray(findingFactorAttribution)||findingFactorAttribution.length>100)
+      throw new NmcCaseError('CASE_AI_RISK_UPDATE_INVALID',422);
+    const allowedFactors=new Set(['movement','inspection','certificate','dataQuality','history']);
+    if(new Set(factorChanges.map(f=>f.factor)).size!==5||
+      factorChanges.some(f=>!allowedFactors.has(f.factor)||
+        !Number.isFinite(f.current)||f.current<0||f.current>100)||
+      findingFactorAttribution.some(f=>!Array.isArray(f.linkedFactors)||
+        !f.linkedFactors.length||
+        f.linkedFactors.some(x=>!allowedFactors.has(x.factor)||
+          !String(x.sourceEvidenceId||'').startsWith('SI-FINDING-'))))
+      throw new NmcCaseError('CASE_AI_FACTOR_ATTRIBUTION_INVALID',422);
+    const entry={eventId,inspectionId,reportId,assessmentId,previousAssessmentId,
+      previousScore,previousLevel,newScore,newLevel,policyVersion,evidenceId,
+      factorChanges,findingFactorAttribution,
+      calculatedAt:now(),officialRegulatoryDecision:false};
+    for(let tries=0;tries<3;tries++){
+      const row=await this.get(id);
+      if(!row||row.imo!==imo)throw new NmcCaseError('CASE_AI_RISK_SOURCE_MISMATCH',409);
+      if((row.postInspectionRiskHistory||[]).some(x=>x.eventId===eventId))
+        return row;
+      try{return await this._update(id,row.version,'SI_POST_INSPECTION_AI_RISK_REASSESSED',role,
+        'A01/A02 validated post-inspection operational risk; decisions remain human',current=>({
+          ...current,operationalRisk:{
+            score:newScore,level:newLevel,assessmentId,
+            previousScore,previousLevel,sourceInspectionId:inspectionId,
+            sourceReportId:reportId,evidenceId,policyVersion,updatedAt:entry.calculatedAt,
+            factorAttribution: findingFactorAttribution.map(f=>({
+              findingId:f.findingId,title:f.title,severity:f.severity,
+              factors:f.linkedFactors.map(x=>x.factor)})),
+            provisional:true,regulatoryDecision:false},
+          postInspectionRiskHistory:[...(current.postInspectionRiskHistory||[]),entry]
+        }),{eventId,assessmentId,inspectionId,newScore,previousScore,
+          evidenceId,regulatoryDecision:false});}
+      catch(error){if(error?.code!=='CASE_VERSION_CONFLICT'||tries===2)throw error;}
+    }
+  }
   /** Human supervisor report decision, informational NMC Case update only.
    * Never marks an inspection request completed, changes vessel risk or resolves a case.
    */

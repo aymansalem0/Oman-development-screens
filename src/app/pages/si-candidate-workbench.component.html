@@ -46,10 +46,29 @@
         <label>{{copy('Notes','ملاحظات')}}
          <input [(ngModel)]="newPlan.notes" (ngModelChange)="draftParametersChanged()" maxlength="1200"/></label>
        </div>
-       <section class="si-draft-scope-preview" aria-label="Capacity-first selection policy preflight">
+       <details class="si-draft-scope-preview si-plan-disclosure"
+        data-testid="si-plan-policy-disclosure">
+        <summary class="si-plan-disclosure-summary">
+         <span class="si-plan-disclosure-name">
+          <strong>{{copy('Preflight · Verified Source Obligations & Plan Policy',
+           'الفحص المسبق · إحالات المصادر المعتمدة وسياسة اختيار الخطة')}}</strong>
+          <small *ngIf="newDraftScope as scope">
+           {{scope.eligibleVessels}} {{copy('eligible','مؤهلة')}} ·
+           {{scope.protectedNmcVessels}} {{copy('protected NMC','إحالة NMC إلزامية')}} ·
+           {{scope.status==='READY'?copy('Policy verified','السياسة جاهزة'):
+             copy('Action required: review policy','مطلوب إجراء: مراجعة السياسة')}}</small>
+          <small *ngIf="!newDraftScope">{{copy('Load published plan policy','تحميل سياسة الاختيار المنشورة')}}</small>
+         </span>
+         <span class="si-plan-disclosure-controls">
+          <span *ngIf="newDraftScope?.requiresOfficerAction" class="si-plan-disclosure-warning">
+           {{copy('Action required','يلزم إجراء')}}</span>
+          <span class="si-plan-toggle-label si-plan-show-label">{{copy('Show details','عرض التفاصيل')}}</span>
+         <span class="si-plan-toggle-label si-plan-hide-label">{{copy('Hide details','إخفاء التفاصيل')}}</span>
+         <span class="si-plan-toggle-chevron" aria-hidden="true"></span>
+         </span>
+        </summary>
+        <div class="si-plan-disclosure-body">
         <div class="si-draft-scope-head">
-         <h4>{{copy('Preflight · Verified Source Obligations & Plan Policy',
-          'الفحص المسبق · إحالات المصادر المعتمدة وسياسة اختيار الخطة')}}</h4>
          <button type="button" (click)="refreshDraftScope()"
           [disabled]="newDraftBusy||newDraftScopeLoading">
           {{copy('↻ Reload Published Policy','↻ تحديث السياسة المنشورة')}}</button>
@@ -102,8 +121,24 @@
           {{copy('Published selection limits verified. C01, vessel priority and qualified-inspector capacity can now be computed together before draft save.',
            'تم التحقق من حدود الاختيار المنشورة. يمكن الآن حساب C01 وأولويات السفن وطاقة المهندسين معًا قبل حفظ المسودة.')}}</p>
         </ng-container>
-       </section>
-       <div class="si-draft-consent">
+        </div>
+       </details>
+       <details class="si-draft-consent si-plan-disclosure" data-testid="si-plan-consent-disclosure">
+        <summary class="si-plan-disclosure-summary">
+         <span class="si-plan-disclosure-name">
+          <strong>{{copy('POC capacity and C01 AI consent',
+           'طاقة POC والموافقة على تشغيل C01')}}</strong>
+          <small>{{copy('Provider','المزود')}}: {{newDraftProvider}} ·
+           {{newDraftAiConsent?copy('AI consent confirmed','تمت الموافقة على AI'):
+             copy('AI consent pending','بانتظار الموافقة على AI')}}</small>
+         </span>
+         <span class="si-plan-disclosure-controls">
+          <span class="si-plan-toggle-label si-plan-show-label">{{copy('Show details','عرض التفاصيل')}}</span>
+         <span class="si-plan-toggle-label si-plan-hide-label">{{copy('Hide details','إخفاء التفاصيل')}}</span>
+         <span class="si-plan-toggle-chevron" aria-hidden="true"></span>
+         </span>
+        </summary>
+        <div class="si-plan-disclosure-body">
         <label><input type="checkbox" [(ngModel)]="newDraftDemoMode" (ngModelChange)="draftParametersChanged()"/>
          {{copy('POC demo capacity: synthetic engineers, shifts and visit supplements; NOT official ERP',
           'طاقة POC التجريبية: مهندسون وورديات وبيانات زيارة افتراضية، وليست ERP رسمية')}}</label>
@@ -115,7 +150,8 @@
            'أوافق صراحةً على تشغيل C01 لاختيار سفن هذه المسودة وفق المصادر المعتمدة.')}}</label>
         <p class="si-rolling-note">{{copy('Priority is determined by verified ETD, then reviewed incident severity; risk scores do not set execution order. Approval and work orders remain supervisor-only.',
          'الأولوية حسب ETD المؤكد، ثم خطورة الحوادث المعتمدة؛ درجات مخاطر السفن لا تحدد ترتيب التنفيذ. الاعتماد وأوامر التكليف للمشرف فقط.')}}</p>
-       </div>
+        </div>
+       </details>
        <div *ngIf="newDraftJobId&&newDraftBusy" class="si-draft-job-progress"
          role="status" aria-live="polite">
         <strong>{{copy('C01 is analyzing the complete eligible candidate pool',
@@ -140,8 +176,32 @@
        </div>
        <p *ngIf="newDraftNotice" class="notice success">{{newDraftNotice}}</p>
        <section *ngIf="newDraftPreview as draft" class="si-integrated-preview">
-        <h3>{{copy('Unified Plan Proposal — Not Yet Saved or Approved',
-         'مقترح الخطة المتكامل — لم يُحفظ أو يُعتمد بعد')}}</h3>
+        <p *ngIf="draft.mandatoryUnscheduled.length" class="notice error" role="alert">
+         {{copy('Mandatory NMC/source inspections have no feasible assignment. Resolve before supervisor approval:',
+          'معاينات إلزامية لا تتوفر لها تكليفات صالحة، ويجب معالجتها قبل الاعتماد:')}}
+         {{draft.mandatoryUnscheduled.join(', ')}}</p>
+        <p *ngIf="draft.outsidePlanPeriod.length" class="notice error" role="alert">
+         {{copy('Proposed visits outside the selected plan period:',
+          'مواعيد مقترحة خارج فترة الخطة:')}} {{draft.outsidePlanPeriod.join(', ')}}</p>
+        <details class="si-plan-disclosure si-plan-proposal-disclosure"
+          data-testid="si-plan-proposal-disclosure">
+         <summary class="si-plan-disclosure-summary">
+          <span class="si-plan-disclosure-name">
+           <strong>{{copy('Unified Plan Proposal — Not Yet Saved or Approved',
+            'مقترح الخطة المتكامل — لم يُحفظ أو يُعتمد بعد')}}</strong>
+           <small>{{draft.candidateCount}} {{copy('candidates','سفينة مرشحة')}} ·
+            {{draft.finalPlanCount}} {{copy('in draft','داخل المسودة')}} ·
+            {{draft.outsidePlanCount}} {{copy('outside capacity','خارج الطاقة')}}</small>
+          </span>
+          <span class="si-plan-disclosure-controls">
+           <span *ngIf="draft.mandatoryUnscheduled.length||draft.outsidePlanPeriod.length"
+            class="si-plan-disclosure-warning">{{copy('Review exceptions','راجع الاستثناءات')}}</span>
+           <span class="si-plan-toggle-label si-plan-show-label">{{copy('Show details','عرض التفاصيل')}}</span>
+         <span class="si-plan-toggle-label si-plan-hide-label">{{copy('Hide details','إخفاء التفاصيل')}}</span>
+         <span class="si-plan-toggle-chevron" aria-hidden="true"></span>
+          </span>
+         </summary>
+         <div class="si-plan-disclosure-body">
         <div class="si-draft-stats">
          <div><strong>{{draft.candidateCount}}</strong><span>{{copy('Eligible candidate vessels','سفن مرشحة مؤهلة')}}</span></div>
          <div><strong>{{draft.selectedCount}}</strong><span>{{copy('AI selection + published rules','اختارها AI وفق السياسات')}}</span></div>
@@ -157,13 +217,6 @@
          <span>{{copy('3 · Engineer Capacity','٣ · طاقة المهندسين')}}</span><b>→</b>
          <span>{{copy('4 · Final Draft','٤ · المسودة النهائية')}}</span>
         </div>
-        <p *ngIf="draft.mandatoryUnscheduled.length" class="notice error">
-         {{copy('Mandatory NMC/source inspections have no feasible assignment. Resolve before supervisor approval:',
-          'معاينات إلزامية لا تتوفر لها تكليفات صالحة، ويجب معالجتها قبل الاعتماد:')}}
-         {{draft.mandatoryUnscheduled.join(', ')}}</p>
-        <p *ngIf="draft.outsidePlanPeriod.length" class="notice error">
-         {{copy('Proposed visits outside the selected plan period:',
-          'مواعيد مقترحة خارج فترة الخطة:')}} {{draft.outsidePlanPeriod.join(', ')}}</p>
         <p class="si-rolling-note">
          {{draft.demoOnly?copy('POC SYNTHETIC STAFF / VISITS — not real ERP',
           'مهندسون ومواعيد افتراضية للـPOC وليست ERP فعليًا'):
@@ -177,7 +230,8 @@
            <th>{{copy('Qualified engineer','المهندس المؤهل')}}</th>
            <th>{{copy('Visit slot','موعد الزيارة')}}</th>
            <th>{{copy('Capacity status','حالة الطاقة')}}</th>
-           <th>{{copy('Final Draft decision','قرار المسودة النهائي')}}</th></tr></thead>
+           <th>{{copy('Final Draft decision','قرار المسودة النهائي')}}</th>
+            <th>{{copy('Supervisor scheduling selection','تعديل المشرف للجدولة')}}</th></tr></thead>
           <tbody><tr *ngFor="let row of draft.items">
            <td>{{row.planRank}}</td>
            <td><b>{{row.vesselName}}</b><small>{{row.imo}}</small>
@@ -206,6 +260,24 @@
             <strong *ngIf="!row.inCurrentPlan&&!row.mandatory" class="si-auto-outside-plan">
              {{copy('OUTSIDE CURRENT DRAFT','خارج المسودة الحالية')}}</strong>
            </td>
+           <td data-testid="si-supervisor-scheduling-vessel-action"
+             class="si-plan-scheduling-action-cell">
+            <div class="si-plan-vessel-row-actions">
+             <button *ngIf="!row.mandatory" type="button"
+               (click)="toggleDraftVesselForScheduling(row)"
+               [disabled]="newDraftBusy||!auth.isAdmin">
+               {{isDraftVesselExcluded(row.imo)?
+                 copy('Undo removal','إلغاء الاستبعاد'):
+                 copy('Remove from scheduling draft','استبعاد من مقترح الجدولة')}}
+             </button>
+             <small *ngIf="isDraftVesselExcluded(row.imo)" class="si-auto-outside-plan">
+               {{copy('Supervisor removal pending recalculation','استبعاد المشرف ينتظر إعادة حساب الطاقة')}}
+             </small>
+             <small *ngIf="row.mandatory">
+               {{copy('Protected NMC referral — cannot remove','إحالة NMC إلزامية — لا يجوز استبعادها')}}
+             </small>
+            </div>
+           </td>
           </tr></tbody>
          </table>
         </div>
@@ -219,13 +291,104 @@
           {{copy('Priority','الأولوية')}} #{{missing.originalPriority}}
           · {{capacityBlockerText(missing.reasonCode)}}</div>
         </section>
-        <section class="si-draft-inputs">
+         </div>
+        </details>
+        <details class="si-draft-inputs si-plan-disclosure"
+          data-testid="si-supervisor-scheduling-add-panel">
+         <summary class="si-plan-disclosure-summary">
+          <span class="si-plan-disclosure-name">
+           <strong>{{copy('Supervisor · Add eligible vessel to scheduling draft',
+            'المشرف · إضافة سفينة مؤهلة لمقترح الجدولة')}}</strong>
+           <small>{{draft.manualAlternatives.length}}
+            {{copy('eligible alternatives','سفن بديلة مؤهلة')}} ·
+            {{newDraftOfficerAdds.length}} {{copy('selected additions','إضافات مختارة')}}</small>
+          </span>
+          <span class="si-plan-disclosure-controls">
+           <span class="si-plan-toggle-label si-plan-show-label">{{copy('Show details','عرض التفاصيل')}}</span>
+         <span class="si-plan-toggle-label si-plan-hide-label">{{copy('Hide details','إخفاء التفاصيل')}}</span>
+         <span class="si-plan-toggle-chevron" aria-hidden="true"></span>
+          </span>
+         </summary>
+         <div class="si-plan-disclosure-body">
+         <p class="si-rolling-note">{{copy(
+           'Only source-verified C01 MANUAL_REVIEW alternatives can be added, within the published quotas. Enter an auditable reason; approved NMC referrals cannot be removed. Recalculate capacity before saving.',
+           'يمكن إضافة بدائل C01 المؤهلة لمراجعة المشرف فقط وداخل الحصص المنشورة. اكتب سببًا قابلًا للتدقيق، ولا يمكن حذف إحالات NMC المعتمدة. يجب إعادة حساب الطاقة قبل الحفظ.')}}</p>
+         <input type="search" [(ngModel)]="newDraftAlternativeSearch"
+           [placeholder]="copy('Find vessel by name or IMO','ابحث باسم السفينة أو IMO')"/>
+         <p *ngIf="!filteredDraftAlternatives.length" class="si-rolling-note">
+           {{copy('No additional C01 manual-review alternatives for this draft.',
+             'لا توجد سفن إضافية مؤهلة للمراجعة اليدوية في هذه المسودة.')}}</p>
+         <div *ngFor="let choice of filteredDraftAlternatives"
+           class="si-draft-visit si-plan-alternative-vessel-row">
+           <div class="si-plan-alternative-header">
+            <div class="si-plan-alternative-identity">
+             <strong>{{choice.vesselName}} · IMO {{choice.imo}}</strong>
+             <small>{{choice.sourceTypes.join(' + ')}} · {{choice.priorityCriterion}}</small>
+             <small *ngIf="choice.periodStatus==='OUTSIDE_EXECUTION_PLAN'" class="notice error">
+              {{copy('Outside execution plan dates','خارج فترة تنفيذ الخطة')}}</small>
+            </div>
+            <div class="si-plan-alternative-actions">
+             <button type="button" *ngIf="!isDraftAlternativeSelected(choice.imo)"
+               (click)="toggleDraftAlternative(choice,true)"
+               [disabled]="newDraftBusy||!auth.isAdmin||choice.periodStatus==='OUTSIDE_EXECUTION_PLAN'">
+               {{copy('+ Add to scheduling draft','+ إضافة لمقترح الجدولة')}}</button>
+             <button type="button" *ngIf="isDraftAlternativeSelected(choice.imo)"
+               (click)="removeDraftAlternative(choice.imo)"
+               [disabled]="newDraftBusy">
+               {{copy('Undo addition','إلغاء الإضافة')}}</button>
+            </div>
+           </div>
+           <div *ngIf="selectedDraftAlternative(choice.imo) as add" class="si-draft-form-grid">
+             <label>{{copy('Selection basis','أساس الاختيار')}}
+               <select [(ngModel)]="add.basis" (ngModelChange)="draftSelectionReasonChanged()">
+                 <option *ngFor="let basis of choice.eligibleBases" [value]="basis">{{basis}}</option>
+               </select></label>
+             <label>{{copy('Supervisor reason (minimum 10 characters)','سبب المشرف (10 أحرف على الأقل)')}}
+               <input [(ngModel)]="add.reason" maxlength="500"
+                 (ngModelChange)="draftSelectionReasonChanged()"/></label>
+
+           </div>
+         </div>
+         </div>
+        </details>
+        <details class="si-draft-inputs si-plan-disclosure"
+          data-testid="si-plan-capacity-inputs-disclosure">
+         <summary class="si-plan-disclosure-summary">
+          <span class="si-plan-disclosure-name">
+           <strong>{{copy('Capacity inputs · vessel visit data',
+            'مدخلات الطاقة · بيانات زيارة السفن')}}</strong>
+           <small>{{newDraftRequests.length}} {{copy('visit records','سجلات زيارة')}} ·
+            {{copy('Open individual vessel to edit','افتح السفينة لتعديل بياناتها')}}</small>
+          </span>
+          <span class="si-plan-disclosure-controls">
+           <span *ngIf="newDraftChanged" class="si-plan-disclosure-warning">
+            {{copy('Recalculation required','يلزم إعادة الحساب')}}</span>
+           <span class="si-plan-toggle-label si-plan-show-label">{{copy('Show details','عرض التفاصيل')}}</span>
+         <span class="si-plan-toggle-label si-plan-hide-label">{{copy('Hide details','إخفاء التفاصيل')}}</span>
+         <span class="si-plan-toggle-chevron" aria-hidden="true"></span>
+          </span>
+         </summary>
+         <div class="si-plan-disclosure-body">
          <h4>{{copy('Capacity inputs — correct missing visit data, then recalculate before Save',
           'مدخلات الطاقة — استكمل بيانات الزيارة ثم أعد الحساب قبل الحفظ')}}</h4>
          <p class="si-rolling-note">{{copy('Source-final ETA, ETD and port are locked. In DEMO mode the generated synthetic fields are read-only and are not official evidence.',
           'الميناء ومواعيد ETA/ETD المعتمدة من المصدر غير قابلة للتعديل. في وضع Demo تكون البيانات الافتراضية للقراءة فقط.')}}</p>
-         <div class="si-draft-visit" *ngFor="let req of newDraftRequests;let i=index">
-          <h5>IMO {{req.imo}}</h5>
+         <details class="si-draft-visit si-plan-disclosure si-plan-vessel-visit"
+           *ngFor="let req of newDraftRequests;let i=index"
+           data-testid="si-plan-vessel-visit-disclosure">
+          <summary class="si-plan-disclosure-summary">
+           <span class="si-plan-disclosure-name">
+            <strong>IMO {{req.imo}}</strong>
+            <small>{{req.portId||'—'}} · {{req.earliestLocal||'—'}} →
+             {{req.latestFinishLocal||'—'}}</small>
+           </span>
+           <span class="si-plan-disclosure-controls">
+            <span class="si-plan-toggle-label si-plan-show-label">{{copy('Show details','عرض التفاصيل')}}</span>
+         <span class="si-plan-toggle-label si-plan-hide-label">{{copy('Hide details','إخفاء التفاصيل')}}</span>
+         <span class="si-plan-toggle-chevron" aria-hidden="true"></span>
+           </span>
+          </summary>
+          <div class="si-plan-disclosure-body">
           <div class="si-draft-form-grid">
            <label>{{copy('Port','الميناء')}}
             <select [(ngModel)]="req.portId" (ngModelChange)="draftVisitsChanged()"
@@ -264,13 +427,15 @@
             <input type="checkbox" [(ngModel)]="req.siteAccessConfirmed"
              (ngModelChange)="draftVisitsChanged()" [disabled]="newDraftDemoMode"/></label>
           </div>
+          </div>
+         </details>
          </div>
-        </section>
+        </details>
         <p *ngIf="newDraftChanged" class="notice">
-         {{copy('Visit inputs changed. Recalculate verified capacity before saving.',
-          'تم تعديل بيانات الزيارة؛ يجب إعادة حساب الطاقة قبل الحفظ.')}}</p>
+         {{copy('Visit data or supervisor vessel selection changed. Recalculate verified capacity before saving.',
+          'تم تعديل بيانات الزيارة أو اختيار المشرف للسفن؛ يجب إعادة حساب الطاقة قبل الحفظ.')}}</p>
         <div class="si-rolling-actions">
-         <button type="button" (click)="recalculateIntegratedDraft()" [disabled]="newDraftBusy||newDraftDemoMode">
+         <button type="button" (click)="recalculateIntegratedDraft()" [disabled]="newDraftBusy||(newDraftDemoMode&&!newDraftSelectionChanged)">
           {{copy('02 · Recalculate Inspector Capacity','٢ · إعادة حساب طاقة المهندسين')}}</button>
          <button type="button" class="si-plan-wizard-button" (click)="saveIntegratedDraft()"
           [disabled]="newDraftBusy||newDraftChanged">
@@ -283,7 +448,20 @@
       {{copy('No plans yet. Create one to select and rank vessels.',
         'لا توجد خطط بعد. أنشئ خطة جديدة لاختيار السفن وترتيبها.')}}
      </p>
-     <div class="si-rolling-cards">
+     <details class="si-plan-disclosure si-rolling-plan-list"
+       *ngIf="rollingPlans.length" data-testid="si-saved-plan-list-disclosure">
+      <summary class="si-plan-disclosure-summary">
+       <span class="si-plan-disclosure-name">
+        <strong>{{copy('Saved Inspection Plans','خطط المعاينات المحفوظة')}}</strong>
+        <small>{{rollingPlans.length}} {{copy('plans','خطط')}}</small>
+       </span>
+       <span class="si-plan-disclosure-controls">
+        <span class="si-plan-toggle-label si-plan-show-label">{{copy('Show details','عرض التفاصيل')}}</span>
+         <span class="si-plan-toggle-label si-plan-hide-label">{{copy('Hide details','إخفاء التفاصيل')}}</span>
+         <span class="si-plan-toggle-chevron" aria-hidden="true"></span>
+       </span>
+      </summary>
+      <div class="si-rolling-cards si-plan-disclosure-body">
        <article *ngFor="let p of rollingPlans" class="si-rolling-card"
         [class.current]="activePlanId===p.id">
          <div class="si-rolling-card-head"><strong>{{p.number}}</strong>
@@ -313,7 +491,8 @@
            {{copy('Cancel Draft','إلغاء المسودة')}}</button>
          </div>
        </article>
-     </div>
+      </div>
+     </details>
      <p *ngIf="activePlan as p" class="si-rolling-current">
        {{copy('Selected plan','الخطة المختارة')}}: <strong>{{p.number}} · {{p.title}}</strong>
        · {{p.status.replaceAll('_',' ')}} · {{p.startsOn}} → {{p.endsOn}}
@@ -331,16 +510,35 @@
        <small>{{copy('New draft shows eligible candidates before AI. Unselected vessels remain available for future plans.',
          'المسودة تعرض السفن المؤهلة قبل تشغيل AI. السفن غير المختارة تظل متاحة للخطط القادمة.')}}</small>
      </div>
-    <section *ngIf="plan?.capacityDraft as cap" class="si-integrated-preview"
-      aria-label="Saved integrated inspector capacity draft">
-      <h3>{{copy('Saved Draft · Capacity & Inspector Assignments',
-       'المسودة المحفوظة · الطاقة وتوزيع المهندسين')}}</h3>
-      <p class="si-rolling-note">
-       {{cap.status}} · {{cap.generatedAt|date:'short'}}
-       · {{cap.demoMode?copy('POC synthetic workforce — NOT ERP booking',
-        'موارد تجريبية للـPOC وليست حجوزات ERP'):
-        copy('ERP source-backed workforce snapshot','طاقة تشغيلية وفق لقطة ERP')}}
-      </p>
+    <details *ngIf="plan?.capacityDraft as cap"
+      class="si-integrated-preview si-saved-capacity-details"
+      data-testid="si-saved-capacity-details">
+      <summary class="si-saved-capacity-summary" data-testid="si-saved-capacity-toggle">
+        <span class="si-saved-capacity-heading">
+          <strong>{{copy('Saved Draft · Capacity & Inspector Assignments',
+           'المسودة المحفوظة · الطاقة وتوزيع المهندسين')}}</strong>
+          <small>{{cap.status}} · {{cap.generatedAt|date:'short'}}
+            · {{cap.demoMode?copy('POC synthetic workforce — NOT ERP booking',
+              'موارد تجريبية للـPOC وليست حجوزات ERP'):
+              copy('ERP source-backed workforce snapshot',
+              'طاقة تشغيلية وفق لقطة ERP')}}</small>
+        </span>
+        <span class="si-saved-capacity-controls">
+          <span class="si-saved-capacity-count">{{cap.selectedImos.length}}
+            {{copy('vessels','سفينة')}} · {{cap.proposedAssignments.length}}
+            {{copy('inspector assignments','تكليف مفتش')}}</span>
+          <span *ngIf="cap.mandatoryUnscheduled.length || cap.unscheduled.length"
+            class="si-saved-capacity-alert" role="status">
+            {{cap.mandatoryUnscheduled.length || cap.unscheduled.length}}
+            {{copy('capacity exception(s)','استثناء طاقة')}}</span>
+          <span class="si-saved-capacity-open-label">
+            {{copy('Show details','عرض التفاصيل')}}</span>
+          <span class="si-saved-capacity-close-label">
+            {{copy('Hide details','إخفاء التفاصيل')}}</span>
+          <span class="si-saved-capacity-chevron" aria-hidden="true"></span>
+        </span>
+      </summary>
+      <div class="si-saved-capacity-body">
       <div class="si-draft-stats">
        <div><strong>{{cap.c01SelectedImos?.length??cap.selectedImos.length}}</strong><span>{{copy('AI selected','السفن التي اختارها AI')}}</span></div>
        <div><strong>{{cap.selectedImos.length}}</strong><span>{{copy('Inside final Draft','داخل المسودة النهائية')}}</span></div>
@@ -374,7 +572,8 @@
       </p>
       <p class="si-rolling-note">{{copy('Saved allocation is provisional. Supervisor approval revalidates current ERP, source and booking conflicts before issuing any work order.',
        'التخصيص مبدئي؛ عند اعتماد المشرف تُراجع المصادر والـERP والتعارضات الحالية قبل إصدار أي أمر تكليف.')}}</p>
-    </section>
+      </div>
+    </details>
     <p class="si-rolling-note" *ngIf="plan?.readOnlyHistorical" role="status">
       {{copy('Historical plan shown from its saved approval snapshot. Current source data may differ; this plan cannot be edited.',
         'الخطة المعروضة محفوظة من وقت اعتمادها؛ قد تختلف بيانات المصادر الحالية، ولا يمكن تعديل هذه الخطة.')}}

@@ -273,6 +273,12 @@ interface DraftRow{type:RegulatoryType;state:string;preparedBy:string;
        <div class="review-form">
         <label for="supervisor-reason">{{copy('Decision reason (at least 8 characters)','سبب القرار (8 أحرف على الأقل)')}}</label>
         <textarea id="supervisor-reason" rows="3" [(ngModel)]="reason"></textarea>
+        <label class="si-nmc-ai-forward">
+          <input type="checkbox" [(ngModel)]="forwardToNmcOnApprove"
+           [disabled]="busy||v.record?.stage!=='REPORT_PENDING_REVIEW'"/>
+          {{copy('Forward approved report to NMC and automatically reassess vessel risk with A01/A02',
+           'إحالة التقرير المعتمد إلى NMC وإعادة تقييم مخاطر السفينة تلقائيًا عبر A01/A02')}}
+        </label>
         <div class="actions">
          <button type="button" class="button approve" (click)="decide('APPROVE_REPORT')"
           [disabled]="busy||v.record?.stage!=='REPORT_PENDING_REVIEW'||reason.trim().length<8">
@@ -327,6 +333,10 @@ interface DraftRow{type:RegulatoryType;state:string;preparedBy:string;
         <ng-template #noNmc><p class="muted">{{copy('No linked NMC Case. A notification draft is not a delivered NMC message.',
          'لا توجد حالة NMC مرتبطة؛ إعداد مسودة إخطار لا يعني وصول إخطار فعلي للمركز.')}}</p></ng-template>
         <p *ngIf="nmcFeedback" class="notice">{{nmcFeedback}}</p>
+        <p *ngIf="latestRiskStatus" class="notice" role="status">
+          {{copy('Automatic A01/A02 risk reassessment','إعادة تقييم المخاطر تلقائيًا باستخدام A01/A02')}}:
+          {{latestRiskStatus}}
+        </p>
        </div>
        <details class="audit"><summary>{{copy('Review Audit Trail','سجل المراجعة')}}</summary>
         <div *ngFor="let event of full?.audit" class="finding">
@@ -446,6 +456,8 @@ export class SiSupervisorReviewComponent implements OnInit{
  tab:ReviewTab='REPORT';
  full:FullReview|null=null;
  nmcFeedback='';
+ forwardToNmcOnApprove=true;
+ latestRiskStatus='';
  regulatoryType:RegulatoryType='REQUEST_ADDITIONAL_INSPECTION';
  regulatoryReason='';
  regulatoryDrafts:DraftRow[]=[];
@@ -530,14 +542,18 @@ export class SiSupervisorReviewComponent implements OnInit{
   if(!window.confirm(this.copy(
    'Confirm supervisor action: '+action+'?','هل تؤكد إجراء المشرف: '+action+'؟')))return;
   this.busy=true;this.error='';this.notice='';
-  this.http.post<{record:unknown;nmcSync?:{status:string;error?:string}}>(
+  this.http.post<{record:unknown;nmcSync?:{status:string;error?:string};
+    riskReassessment?:{status:string;errorCode?:string}}>(
    this.base+'/'+encodeURIComponent(this.selectedId)+'/decision',
-   {action,expectedVersion:v.version,reason:this.reason.trim()},
+   {action,expectedVersion:v.version,reason:this.reason.trim(),
+    forwardToNmc:action==='APPROVE_REPORT'&&this.forwardToNmcOnApprove},
    {headers:this.headers(true)})
   .subscribe({next:r=>{
     this.busy=false;
     this.notice=this.copy('Supervisor decision saved: ','تم تسجيل قرار المشرف: ')+action+
-      (r.nmcSync?' · NMC: '+r.nmcSync.status:'');
+      (r.nmcSync?' · NMC: '+r.nmcSync.status:'')+
+      (r.riskReassessment?' · A01/A02 Risk: '+r.riskReassessment.status:'');
+    this.latestRiskStatus=r.riskReassessment?.status||'';
     this.load();
    },error:e=>{this.busy=false;this.error=e?.error?.error||'SI_SUPERVISOR_ACTION_FAILED';}});
  }

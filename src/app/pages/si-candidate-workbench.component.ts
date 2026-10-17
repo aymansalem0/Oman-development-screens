@@ -24,6 +24,7 @@ interface DraftManualAlternative {
  eligibleBases:string[];requiredOfficerReason:boolean;aiAdvice:string;
 }
 interface DraftOfficerAdd {imo:string;basis:string;reason:string}
+interface DraftOfficerExclusion {imo:string;reason:string}
 interface DraftIntegratedPreview {
  previewId:string;proposalHash:string;selectionHash:string;
  metadata:{title:string;startsOn:string;endsOn:string;notes:string;demoMode:boolean};
@@ -40,6 +41,7 @@ interface DraftIntegratedPreview {
  readyForSupervisorReview:boolean;expiresInMinutes:number;
  manualAlternatives:DraftManualAlternative[];
  officerSelectedAlternatives:DraftOfficerAdd[];
+ officerExcludedVessels:DraftOfficerExclusion[];
  availablePlanSlots:number;
  visitRequests:DraftVisitRequest[];
  visitInputs:{imo:string;portSourceLocked:boolean;sourceArrivalLocked:boolean;
@@ -83,13 +85,15 @@ export class SiCandidateWorkbenchComponent implements OnInit,OnDestroy{
   rollingPlans:SiRollingPlan[]=[];activePlanId:string|null=null;
   planningError='';planningBusy=false;newPlanVisible=false;
   newPlan={title:'',startsOn:'',endsOn:'',notes:''};
-  newDraftDemoMode=true;newDraftAiConsent=false;
+  newDraftDemoMode=true;newDraftAiConsent=true;
   newDraftProvider:'AIRIA'|'MOCK'|'UNKNOWN'='UNKNOWN';
   newDraftExpectedBatches=0;newDraftPreview:DraftIntegratedPreview|null=null;
   newDraftScope:SiDraftScope|null=null;newDraftScopeLoading=false;
   newDraftScopeError='';
   newDraftRequests:DraftVisitRequest[]=[];newDraftChanged=false;
   newDraftOfficerAdds:DraftOfficerAdd[]=[];
+  newDraftOfficerExclusions:DraftOfficerExclusion[]=[];
+  newDraftSelectionChanged=false;
   newDraftAlternativeSearch='';
   newDraftBusy=false;newDraftNotice='';
   newDraftJobId='';newDraftJobPhase='';newDraftCompletedBatches=0;
@@ -119,7 +123,9 @@ export class SiCandidateWorkbenchComponent implements OnInit,OnDestroy{
   openCreatePlan():void{
     this.newPlanVisible=true;this.planningError='';this.newDraftNotice='';
     this.newDraftPreview=null;this.newDraftRequests=[];
-    this.newDraftChanged=false;this.newDraftAiConsent=false;
+    this.newDraftChanged=false;this.newDraftSelectionChanged=false;
+    this.newDraftOfficerAdds=[];this.newDraftOfficerExclusions=[];
+    this.newDraftAiConsent=true;
     const start=this.localDayOffset(1);
     this.newPlan={title:'Inspection Plan '+start,startsOn:start,
       endsOn:this.localDayOffset(7),notes:''};
@@ -137,9 +143,6 @@ export class SiCandidateWorkbenchComponent implements OnInit,OnDestroy{
         this.newDraftExpectedBatches=info.expectedBatches||0;
         this.newDraftProvider=info.provider;
         this.newDraftScope=info.draftScope||null;
-        if(this.newDraftScope?.requiresOfficerAction){
-          this.newDraftAiConsent=false;
-        }
       },
       error:e=>{
         this.newDraftScopeLoading=false;this.newDraftProvider='UNKNOWN';
@@ -150,7 +153,8 @@ export class SiCandidateWorkbenchComponent implements OnInit,OnDestroy{
   draftParametersChanged():void{
     this.newDraftPreview=null;this.newDraftRequests=[];
     this.newDraftChanged=false;this.newDraftNotice='';
-    this.newDraftOfficerAdds=[];
+    this.newDraftOfficerAdds=[];this.newDraftOfficerExclusions=[];
+    this.newDraftSelectionChanged=false;
   }
   draftVisitsChanged():void{
     this.newDraftChanged=true;this.newDraftNotice='';
@@ -160,7 +164,6 @@ export class SiCandidateWorkbenchComponent implements OnInit,OnDestroy{
     const count=e?.error?.requiredBatches;
     if(e?.error?.scope&&typeof e.error.scope==='object'){
       this.newDraftScope=e.error.scope as SiDraftScope;
-      this.newDraftAiConsent=false;
     }
     if(code==='SI_C01_BATCH_COUNT_CONFIRMATION_REQUIRED'&&
       Number.isInteger(count)&&count>0)this.newDraftExpectedBatches=count;
@@ -225,6 +228,8 @@ export class SiCandidateWorkbenchComponent implements OnInit,OnDestroy{
     this.newDraftCompletedBatches=this.newDraftExpectedBatches;
     this.newDraftRequests=draft.visitRequests.map(v=>({...v}));
     this.newDraftOfficerAdds=(draft.officerSelectedAlternatives||[]).map(v=>({...v}));
+    this.newDraftOfficerExclusions=(draft.officerExcludedVessels||[]).map(v=>({...v}));
+    this.newDraftSelectionChanged=false;
     this.newPlan={title:draft.metadata.title,startsOn:draft.metadata.startsOn,
       endsOn:draft.metadata.endsOn,notes:draft.metadata.notes};
     this.newDraftDemoMode=draft.demoOnly;
@@ -307,6 +312,8 @@ export class SiCandidateWorkbenchComponent implements OnInit,OnDestroy{
       ' دفعات C01 ثم يحسب الأولويات وطاقة المهندسين؟ لو انقطع المتصفح أعد تحميل الصفحة للاستكمال دون إعادة Airia.')))return;
     this.newDraftBusy=true;this.planningError='';this.newDraftNotice='';
     this.newDraftPreview=null;this.newDraftRequests=[];this.newDraftChanged=false;
+    this.newDraftSelectionChanged=false;
+    this.newDraftOfficerAdds=[];this.newDraftOfficerExclusions=[];
     this.newDraftCompletedBatches=0;this.newDraftJobPhase='QUEUED';
     this.newDraftTotalWorkflows=this.newDraftScope?.candidateWorkflows||0;
     this.newDraftTotalVessels=this.newDraftScope?.eligibleVessels||0;
@@ -363,17 +370,55 @@ export class SiCandidateWorkbenchComponent implements OnInit,OnDestroy{
   isDraftAlternativeSelected(imo:string):boolean{
     return this.newDraftOfficerAdds.some(v=>v.imo===imo);
   }
+  selectedDraftAlternative(imo:string):DraftOfficerAdd|undefined{
+    return this.newDraftOfficerAdds.find(v=>v.imo===imo);
+  }
+  draftSelectionReasonChanged():void{
+    this.newDraftSelectionChanged=true;this.draftVisitsChanged();
+  }
   toggleDraftAlternative(v:DraftManualAlternative,selected:boolean):void{
     this.planningError='';
     if(!selected){this.newDraftOfficerAdds=this.newDraftOfficerAdds.filter(x=>x.imo!==v.imo);}
     else if(!this.isDraftAlternativeSelected(v.imo)){
       this.newDraftOfficerAdds.push({imo:v.imo,basis:v.eligibleBases[0],reason:''});
     }
-    this.draftVisitsChanged();
+    this.newDraftSelectionChanged=true;this.draftVisitsChanged();
   }
   removeDraftAlternative(imo:string):void{
     this.newDraftOfficerAdds=this.newDraftOfficerAdds.filter(x=>x.imo!==imo);
-    this.draftVisitsChanged();
+    this.newDraftSelectionChanged=true;this.draftVisitsChanged();
+  }
+  isDraftVesselExcluded(imo:string):boolean{
+    return this.newDraftOfficerExclusions.some(x=>x.imo===imo);
+  }
+  toggleDraftVesselForScheduling(row:DraftIntegratedPreview['items'][number]):void{
+    if(!this.auth.isAdmin||this.newDraftBusy||!this.newDraftPreview)return;
+    if(this.isDraftVesselExcluded(row.imo)){
+      this.newDraftOfficerExclusions=this.newDraftOfficerExclusions
+        .filter(x=>x.imo!==row.imo);
+    }else{
+      if(row.mandatory){
+        this.planningError=this.copy(
+          'An approved mandatory NMC referral cannot be removed.',
+          'لا يمكن استبعاد إحالة NMC الإلزامية المعتمدة.');
+        return;
+      }
+      const reason=window.prompt(this.copy(
+        'Supervisor reason to remove '+row.vesselName+
+        ' from this draft scheduling proposal (at least 10 characters):',
+        'سبب المشرف لاستبعاد السفينة '+row.vesselName+
+        ' من مقترح الجدولة الحالي (10 أحرف على الأقل):'));
+      if(reason===null)return;
+      if(reason.trim().length<10||reason.length>500){
+        this.planningError=this.copy(
+          'Supervisor reason must contain 10–500 characters.',
+          'يجب أن يكون سبب المشرف من 10 إلى 500 حرف.');
+        return;
+      }
+      this.newDraftOfficerExclusions.push({imo:row.imo,reason:reason.trim()});
+    }
+    this.planningError='';
+    this.newDraftSelectionChanged=true;this.draftVisitsChanged();
   }
   recalculateIntegratedDraft():void{
     if(this.newDraftBusy||!this.newDraftPreview)return;
@@ -385,20 +430,31 @@ export class SiCandidateWorkbenchComponent implements OnInit,OnDestroy{
         'اكتب سببًا تشغيليًا واضحًا لكل سفينة إضافية، لا يقل عن 10 أحرف.');
       return;
     }
+    if(this.newDraftOfficerExclusions.some(x=>x.reason.trim().length<10)){
+      this.planningError=this.copy(
+        'Each excluded vessel requires a specific supervisor reason.',
+        'كل سفينة مستبعدة تحتاج سببًا واضحًا من المشرف.');return;
+    }
+    const original=this.newDraftPreview;
+    const scopeChanged=JSON.stringify(this.newDraftOfficerAdds)!==
+      JSON.stringify(original.officerSelectedAlternatives||[])||
+      JSON.stringify(this.newDraftOfficerExclusions)!==
+      JSON.stringify(original.officerExcludedVessels||[]);
+    if(scopeChanged&&!window.confirm(this.copy(
+      'Apply supervisor add/remove decisions and recalculate available inspector capacity? No inspection case or booking is changed.',
+      'تطبيق قرارات المشرف بإضافة أو استبعاد السفن وإعادة حساب طاقة المفتشين؟ لن تتغير حالات المعاينة أو الحجوزات.')))return;
     this.newDraftBusy=true;
     this.http.post<DraftIntegratedPreview>('/api/si/v1/inspection-plans/draft-recalculate',{
       previewId:this.newDraftPreview.previewId,
       officerAdds:this.newDraftOfficerAdds,
-      ...(this.newDraftOfficerAdds.length===
-        (this.newDraftPreview.officerSelectedAlternatives||[]).length&&
-        this.newDraftOfficerAdds.every((x,i)=>
-          x.imo===this.newDraftPreview!.officerSelectedAlternatives[i]?.imo)?
-        {requests:this.newDraftRequests}:{})
+      officerExclusions:this.newDraftOfficerExclusions,
+      ...(!scopeChanged?{requests:this.newDraftRequests}:{})
     }).subscribe({
       next:x=>{this.newDraftBusy=false;this.newDraftPreview=x;
         this.newDraftRequests=x.visitRequests.map(v=>({...v}));
         this.newDraftOfficerAdds=(x.officerSelectedAlternatives||[]).map(v=>({...v}));
-        this.newDraftChanged=false;
+        this.newDraftOfficerExclusions=(x.officerExcludedVessels||[]).map(v=>({...v}));
+        this.newDraftChanged=false;this.newDraftSelectionChanged=false;
         this.newDraftNotice=this.copy(
           'Capacity recalculated under the source rules without another AI call.',
           'أُعيد حساب الطاقة وفق المصادر دون استدعاء AI جديد.');},

@@ -11,10 +11,12 @@
 
     <div class="top-actions">
       <button type="button" class="language-btn" (click)="toggleLanguage()">{{ lang.isArabic ? 'English' : 'العربية' }}</button>
-      <a class="back-link" [routerLink]="['/moei/nmc/vessel', vessel.imo, 'ai-assessment']">
+      <a class="back-link" *ngIf="!vesselProfileUnavailable"
+         [routerLink]="['/moei/nmc/vessel', vessel.imo, 'ai-assessment']">
         {{ lang.isArabic ? 'العودة إلى تقييم الذكاء الاصطناعي →' : '← Back to AI Assessment' }}
       </a>
-      <a class="secondary-btn" [routerLink]="['/moei/nmc/vessel', vessel.imo]">
+      <a class="secondary-btn" *ngIf="!vesselProfileUnavailable"
+         [routerLink]="['/moei/nmc/vessel', vessel.imo]">
         {{ copy('Vessel 360', 'ملف السفينة 360') }}
       </a>
     </div>
@@ -23,6 +25,12 @@
   <app-nmc-navigation></app-nmc-navigation>
 
   <main class="case-main">
+    <div *ngIf="vesselProfileUnavailable" class="central-case-banner" role="note"
+      data-testid="nmc-si-unknown-imo-notice">
+      {{copy('This case was forwarded from Smart Inspection. The IMO is not in the 99-vessel demonstration catalogue. Only the authoritative central case and saved risk/evidence data are available; vessel particulars and AIS are unknown.',
+        'تمت إحالة هذه الحالة من المعاينة الذكية. رقم IMO غير موجود ضمن مجموعة السفن التجريبية الـ99. ستظهر بيانات الحالة المركزية والمخاطر والأدلة المحفوظة فقط؛ أما تفاصيل السفينة وحركة AIS فغير متاحة.')}}
+      <a routerLink="/moei/nmc">{{copy('Back to Command Center','العودة إلى مركز القيادة')}}</a>
+    </div>
     <div *ngIf="centralLoading" class="central-case-banner">
       {{copy('Loading centrally recorded maritime case…','جاري تحميل الحالة البحرية المحفوظة مركزيًا…')}}
     </div>
@@ -89,20 +97,40 @@
         <div class="case-context">
           <span>{{ copy('Case owner', 'مالك الحالة') }}: <strong>{{copy('NMC Duty Officer', 'ضابط مناوبة المركز البحري')}}</strong></span>
           <span>{{ copy('Opened', 'تاريخ الفتح') }}: <strong>{{centralCase.createdAt|date:'medium'}}</strong></span>
-          <span>{{ copy('Source', 'المصدر') }}: <strong>{{ copy('AI assessment + human approval', 'تقييم الذكاء الاصطناعي + اعتماد بشري') }}</strong></span>
+          <span>{{ copy('Source', 'المصدر') }}:
+            <strong>{{centralCase.source==='SI_APPROVED_INSPECTION'?
+              copy('Supervisor-approved Smart Inspection report','تقرير معاينة ذكية معتمد من المشرف'):
+              centralCase.source==='GOOGLE_SHEETS_INCIDENT'?
+              copy('Google Sheets maritime incident','حادث بحري من Google Sheets'):
+              copy('Saved AI assessment + human approval','تقييم مخاطر AI محفوظ + اعتماد بشري')}}</strong>
+          </span>
         </div>
       </div>
 
       <div class="case-metrics">
         <article class="metric-card risk" [ngClass]="riskClass">
           <small>{{copy('Risk at case creation (saved AI assessment)','المخاطر عند فتح الحالة (تقييم AI المحفوظ)')}}</small>
-          <strong>{{ currentRisk }}</strong>
-          <span>{{ riskLevelLabel }}</span>
+          <strong>{{ centralCase.sourceScore ?? '—' }}</strong>
+          <span>{{ centralCase.sourceLevel||'—' }}</span>
         </article>
         <article class="metric-card">
           <small>{{ copy('Post-inspection risk reassessment', 'إعادة تقييم المخاطر بعد المعاينة') }}</small>
-          <strong>{{ riskReassessmentPending ? copy('Pending', 'مطلوبة') : copy('Not applicable yet', 'غير مطلوبة حاليًا') }}</strong>
-          <span>{{ copy('No assumed risk reduction', 'لا يوجد تخفيض افتراضي للمخاطر') }}</span>
+          <strong *ngIf="centralCase.operationalRisk as updated">
+            {{updated.score}}/100 · {{updated.level}}
+          </strong>
+          <strong *ngIf="!centralCase.operationalRisk">
+            {{ riskReassessmentPending ? copy('Pending AI reassessment', 'بانتظار إعادة تقييم AI') :
+             copy('No reassessment yet', 'لم يُعد التقييم بعد') }}
+          </strong>
+          <span *ngIf="centralCase.operationalRisk as updated">
+            {{copy('Previous','السابق')}}: {{updated.previousScore??'—'}}/100
+            · {{copy('New','الجديد')}}: {{updated.score}}/100
+            · {{copy('Source','المصدر')}}: {{updated.evidenceId}}
+          </span>
+          <span *ngIf="!centralCase.operationalRisk">
+            {{copy('No assumed risk reduction; all regulatory actions remain human-controlled.',
+              'لا تخفيض افتراضي للمخاطر؛ كل القرارات الرقابية بشرية.')}}
+          </span>
         </article>
         <article class="metric-card">
           <small>{{ copy('Task completion · not case readiness', 'إنجاز المهام · ليس جاهزية الإغلاق') }}</small>
@@ -117,10 +145,133 @@
       </div>
     </section>
 
+    <section class="nmc-si-risk-diagnostic" *ngIf="centralCase?.source==='SI_APPROVED_INSPECTION'"
+      data-testid="nmc-si-risk-diagnostic" role="region"
+      [attr.aria-label]="copy('Post-inspection AI assessment status','حالة تقييم AI بعد المعاينة')">
+      <h3>{{copy('Smart Inspection → NMC · A01/A02 Risk Status',
+        'المعاينة الذكية ← NMC · حالة تقييم مخاطر A01/A02')}}</h3>
+      <p>{{copy('This NMC Case was opened from an approved human inspection report, not an AI risk alert. The original source risk is correctly unavailable. No risk score or recommendation is assumed.',
+        'فُتحت الحالة من تقرير معاينة معتمد بشريًا وليس من تنبيه مخاطر AI. لذلك لا يوجد تقييم مخاطر أصلي لهذه الحالة، ولن نفترض درجة مخاطر أو توصية.')}}</p>
+      <p *ngIf="siRiskStatusLoading" role="status">
+        {{copy('Checking persisted A01/A02 reassessment job…','جارٍ فحص مهمة إعادة تقييم A01/A02 المحفوظة…')}}</p>
+      <p *ngIf="siRiskStatusError" class="nmc-si-risk-alert" role="alert">
+        {{copy('Unable to read the saved risk job status. Risk remains unverified. Refresh the case to retry this read-only check.',
+          'تعذر قراءة حالة مهمة المخاطر المحفوظة. المخاطر غير موثقة بعد. حدّث القضية لإعادة الفحص للقراءة فقط.')}}</p>
+      <ng-container *ngIf="siPostInspectionRisk as result">
+        <p><strong>{{copy('Execution status','حالة التنفيذ')}}:</strong>
+          <span class="nmc-si-risk-code">{{result.jobStatus}}</span>
+          <span *ngIf="result.job?.updatedAt"> · {{result.job?.updatedAt|date:'medium'}}</span>
+        </p>
+        <p *ngIf="result.job?.errorCode" class="nmc-si-risk-alert" role="alert">
+          <strong>{{copy('Recorded failure reason','سبب الفشل المسجل')}}:</strong>
+          <span class="nmc-si-risk-code">{{result.job?.errorCode}}</span>
+          <span> · {{copy('Review the evidence reference error before confirming an explicit potentially paid retry.',
+            'راجع خطأ مرجع الدليل قبل الموافقة على إعادة استدعاء قد تكون مدفوعة.')}}</span>
+        </p>
+        <p *ngIf="result.job?.errorDetails as diagnostic"
+          class="nmc-si-risk-evidence-diagnostic" data-testid="nmc-si-risk-evidence-error">
+          <strong>{{copy('AI evidence mismatch at','عدم مطابقة أدلة AI عند')}}:</strong>
+          {{diagnostic.agent}} / {{diagnostic.factor}}
+          · {{copy('Unknown evidence IDs','معرفات أدلة غير معروفة')}}:
+          {{diagnostic.unknownCount}} / {{diagnostic.citedCount}}
+          <span>{{copy('Only exact source-provided evidence IDs are accepted; unknown IDs are not silently substituted.',
+            'لا تُقبل إلا معرفات الأدلة الأصلية المطابقة؛ لا يتم استبدال معرف مجهول تلقائيًا.')}}</span>
+        </p>
+        <p *ngIf="result.jobStatus==='NOT_QUEUED'">
+          {{copy('No persisted reassessment job was found for the latest approved inspection report. No AI execution is claimed.',
+            'لم توجد مهمة إعادة تقييم محفوظة لآخر تقرير معاينة معتمد؛ لا يُفترض حدوث تنفيذ AI.')}}</p>
+        <p *ngIf="result.job?.riskSaved&&!centralCase?.operationalRisk">
+          {{copy('An AI risk result was saved, but it has not been reconciled into this NMC Case. Preserve it and review the synchronization error before retrying.',
+            'حُفظت نتيجة مخاطر AI لكن لم تُربط بهذه القضية؛ احتفظ بها وراجع خطأ المزامنة قبل المحاولة مجددًا.')}}</p>
+        <p *ngIf="centralCase?.operationalRisk">
+          {{copy('Verified linked NMC risk is shown above. Regulatory decisions remain human-controlled.',
+            'يظهر تقييم NMC المحفوظ والمرتبط أعلاه؛ وتبقى القرارات الرقابية بشرية.')}}</p>
+      </ng-container>
+      <div class="nmc-si-risk-controls">
+        <button type="button" class="nmc-si-risk-refresh"
+          (click)="refreshSiPostInspectionRisk()"
+          [disabled]="siRiskStatusLoading||siRiskRetryBusy"
+          data-testid="nmc-si-risk-refresh">
+          {{copy('Refresh AI risk status','تحديث حالة تقييم AI')}}
+        </button>
+        <button *ngIf="canRetrySiPostInspectionRisk" type="button"
+          class="nmc-si-risk-retry" data-testid="nmc-si-risk-explicit-retry"
+          (click)="retrySiPostInspectionRisk()"
+          [disabled]="siRiskRetryBusy||siRiskPolling">
+          {{siPostInspectionRisk?.job?.riskSaved?
+            copy('Retry saved risk sync · No AI call','إعادة ربط المخاطر المحفوظة · بدون استدعاء AI'):
+            copy('Re-run A01/A02 on approved report · May incur cost',
+              'إعادة تشغيل A01/A02 على التقرير المعتمد · قد يتطلب تكلفة')}}
+        </button>
+      </div>
+      <p *ngIf="siRiskRetryBusy||siRiskPolling" role="status">
+        {{copy('A01/A02 request or verification in progress. Do not submit another request.',
+          'الطلب أو التحقق من نتائج A01/A02 قيد التنفيذ؛ لا ترسل طلبًا إضافيًا.')}}</p>
+      <p *ngIf="siRiskRetryNotice" role="status">{{siRiskRetryNotice}}</p>
+    </section>
+
     <div class="case-risk-reference" *ngIf="centralCase as linked">
       <span>{{copy('Immutable source assessment','التقييم الأصلي غير القابل للتعديل')}}: {{linked.sourceAssessmentId || '—'}} · {{linked.sourceLevel}}</span>
       <a [routerLink]="['/moei/nmc/vessel',linked.imo,'risk']">{{copy('View Full Risk Intelligence & Evidence →','عرض تفاصيل تحليل المخاطر والأدلة ←')}}</a>
     </div>
+    <details *ngIf="(centralCase.postInspectionRiskHistory||[]).length"
+      class="case-incident-workflow" data-testid="nmc-post-inspection-risk-history">
+      <summary><strong>{{copy('Post-Inspection Risk History · A01/A02',
+       'سجل إعادة تقييم المخاطر بعد المعاينة · A01/A02')}}</strong>
+       · {{centralCase.postInspectionRiskHistory?.length}}
+       {{copy('verified reassessment(s)','تقييمات موثقة')}}</summary>
+      <div *ngFor="let h of centralCase.postInspectionRiskHistory" class="case-incident-event">
+       <strong>{{h.previousScore??'—'}} → {{h.newScore}}/100 · {{h.newLevel}}</strong>
+       <p>{{copy('Approved inspection report','تقرير معاينة معتمد')}}:
+         {{h.reportId}} · {{h.evidenceId}}</p>
+       <p>{{copy('Assessment','التقييم')}}: {{h.assessmentId}} ·
+         {{copy('Policy','السياسة')}}: {{h.policyVersion}}</p>
+       <div class="nmc-si-five-factors" data-testid="nmc-si-five-factor-reassessment">
+        <h4>{{copy('All five AI-reassessed factors · published NMC risk policy',
+          'العوامل الخمسة بعد إعادة تقييم AI · وفق سياسة مخاطر NMC المنشورة')}}</h4>
+        <div class="nmc-si-five-factor-row" *ngFor="let factor of h.factorChanges">
+          <strong>{{factor.factor}}</strong>
+          <span>{{factor.previous===null?
+            copy('First saved assessment','أول تقييم محفوظ'):
+            factor.previous+' / 100'}}
+            → <b>{{factor.current}} / 100</b>
+          </span>
+          <small *ngIf="factor.sourceAgent">{{factor.sourceAgent}}
+            · {{copy('AI confidence','ثقة AI')}}: {{factor.confidence??'—'}}</small>
+          <p *ngIf="factor.reason">{{factor.reason}}</p>
+          <small>{{copy('Report evidence cited','أدلة التقرير المشار إليها')}}:
+            {{factor.evidenceIds.length?factor.evidenceIds.join(', '):
+              copy('No direct report citation — recalculated with other evidence',
+                'لا توجد إحالة مباشرة للتقرير؛ أُعيد تقييم العامل باستخدام أدلة أخرى')}}</small>
+        </div>
+       </div>
+       <div class="nmc-si-defect-links"
+         *ngIf="h.findingFactorAttribution?.length"
+         data-testid="nmc-si-defect-factor-attribution">
+        <h4>{{copy('AI-mapped inspector defects → impacted risk factors',
+          'ربط مخالفات المفتش بعوامل المخاطر بواسطة AI')}}</h4>
+        <p>{{copy('Each link is grounded in an exact AI-cited inspector finding ID. Attribution is not proof of a score increase or an official regulatory decision.',
+          'كل ارتباط يستند إلى معرف مخالفة محدد استشهد به AI؛ ولا يعني بالضرورة ارتفاع درجة المخاطر أو اتخاذ قرار رقابي رسمي.')}}</p>
+        <article class="nmc-si-defect-row"
+          *ngFor="let finding of h.findingFactorAttribution">
+          <strong>{{finding.title}} · {{finding.severity}}</strong>
+          <p>{{finding.description}}</p>
+          <small>{{copy('Finding evidence','دليل المخالفة')}}:
+            {{finding.findingEvidenceId}}</small>
+          <div class="nmc-si-defect-factors">
+            <div *ngFor="let link of finding.linkedFactors"
+              class="nmc-si-defect-factor-link">
+              <b>{{link.factor}}</b> · {{link.sourceAgent}}
+              · {{link.factorSeverity}}/100
+              <p *ngIf="link.reason">{{link.reason}}</p>
+            </div>
+          </div>
+        </article>
+       </div>
+       <p>{{copy('Regulatory decisions remain with NMC officers.',
+        'القرارات الرقابية من صلاحية موظفي NMC فقط.')}}</p>
+      </div>
+    </details>
     <section class="case-incident-workflow" *ngIf="(centralCase.incidentEvents||[]).length">
       <div class="case-incident-head">
         <h3>{{copy('Maritime Incidents · Automated Intake & Case Actions',
@@ -217,12 +368,18 @@
           <p>{{copy('A01 proposes. The human officer approves the operational route; the original saved risk is not changed here.',
             'يقترح A01 ويعتمد الموظف المسار التشغيلي؛ ولا تُعدّل درجة المخاطر الأصلية المحفوظة هنا.')}}</p>
         </div>
-        <button *ngIf="!centralCase.actionPlan" type="button" class="ai-plan-button"
+        <button *ngIf="!centralCase.actionPlan&&!isSiCaseWithoutOriginalAssessment"
+                type="button" class="ai-plan-button"
                 [disabled]="centralBusy||caseStatus==='Resolved'" (click)="generateAiActions()">
           ↻ {{ copy('Retry A01 recommendations', 'إعادة محاولة تحميل توصيات A01') }}
         </button>
       </div>
-      <div class="ai-plan-alert" *ngIf="!centralCase.actionPlan">
+      <div class="ai-plan-alert" *ngIf="!centralCase.actionPlan&&isSiCaseWithoutOriginalAssessment"
+        role="status" data-testid="nmc-si-original-source-unavailable">
+        {{copy('A01 Case Recommendations require an immutable original AI assessment. This case came from a human-approved inspection and has none. Use the separate A01/A02 post-inspection reassessment status above to diagnose the pending risk. No automatic AI call or fabricated baseline is allowed.',
+          'توصيات A01 للقضية تتطلب تقييم AI أصليًا محفوظًا. هذه القضية نشأت من معاينة معتمدة بشريًا ولا تملك تقييمًا أصليًا. راجع حالة إعادة التقييم A01/A02 أعلاه لتشخيص المخاطر المعلقة؛ لن يتم استدعاء AI تلقائيًا أو إنشاء تقييم افتراضي.')}}
+      </div>
+      <div class="ai-plan-alert" *ngIf="!centralCase.actionPlan&&!isSiCaseWithoutOriginalAssessment">
         {{ copy('A01 recommendations are prepared automatically when Create Maritime Case is confirmed. If this case was opened before the change or A01 failed, use Retry. No tasks are invented.',
           'يتم إعداد توصيات A01 عند تأكيد إنشاء الحالة البحرية. إذا كانت الحالة قديمة أو فشل A01، استخدم إعادة المحاولة. لن ننشئ مهام افتراضية.') }}
       </div>

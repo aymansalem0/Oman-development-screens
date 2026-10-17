@@ -1,0 +1,72 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
+const base=read('compose.yaml');
+const google=read('compose.google-psc.yaml');
+const incidentOverlay=read('compose.incident-google.yaml');
+const server=read('ai-proxy/server.mjs');
+const lifecycle=read('ai-proxy/si-nmc-review-sync.mjs');
+const nmc=read('src/app/pages/nmc-command-center.component.ts');
+const html=read('src/app/pages/nmc-command-center.component.html');
+const casePage=read('src/app/pages/nmc-case-workspace.component.ts');
+const caseHtml=read('src/app/pages/nmc-case-workspace.component.html');
+const migration=read('ai-proxy/migrations/020_si_forwarded_nmc_case_audit.sql');
+
+test('standard Docker stack includes real incident Sheet ID and shared mounted Google credentials',()=>{
+ assert.match(base,/NMC_INCIDENT_SHEET_ID: \$\{NMC_INCIDENT_SHEET_ID:-1fl6rCjHNTPKZTeS76PLSy_ylrClLQQ0Yvq12A7nhfy8\}/);
+ assert.match(base,/NMC_INCIDENT_CREDENTIALS_PATH: \/run\/secrets\/nmc-psc-google.json/);
+ assert.match(google,/\.\/secrets\/nmc-psc-google.json:\/run\/secrets\/nmc-psc-google.json:ro/);
+ assert.match(base,/NMC_INCIDENT_AUTO_TRIAGE_ENABLED: \$\{NMC_INCIDENT_AUTO_TRIAGE_ENABLED:-false\}/);
+ assert.match(incidentOverlay,/NMC_INCIDENT_AUTO_TRIAGE_ENABLED: \$\{NMC_INCIDENT_AUTO_TRIAGE_ENABLED:-true\}/);
+});
+test('NMC case list includes evidence-backed SI-forwarded vessel without widening synthetic map',()=>{
+ const start=server.indexOf("if(!first)return respond(res,200,{status:'ok',cases:");
+ const end=server.indexOf("if(first==='by-imo'",start);
+ assert.ok(start>=0&&end>start);
+ const list=server.slice(start,end);
+ assert.match(list,/AIRIA_DEMO_99_IMOS.has\(c.imo\)/);
+ assert.match(list,/Array.isArray\(c.siInspectionSources\)/);
+ assert.match(list,/x.source==='SI_APPROVED_REPORT'/);
+ assert.match(list,/x.inspectionId/);
+ assert.match(list,/x.reportId/);
+ assert.match(lifecycle,/cases.fromSiInspection\(/);
+ assert.match(lifecycle,/nmcCaseId:created.id/);
+});
+test('command center shows actual NMC case cards with both SI-origin and NMC-origin approved reports',()=>{
+ assert.match(nmc,/NmcCentralCase\[\]/);
+ assert.match(nmc,/c.siInspectionSources/);
+ assert.match(nmc,/c.inspectionReviewHistory/);
+ assert.match(nmc,/x.decision==='APPROVED'/);
+ assert.match(nmc,/c.operationalRisk\?\.sourceReportId===latest\?\.reportId/);
+ assert.match(nmc,/c.operationalRisk:null/);
+ assert.match(nmc,/this.casesService.list\(\).subscribe/);
+ assert.match(html,/data-testid="nmc-si-forwarded-cases"/);
+ assert.match(html,/data-testid="nmc-si-forwarded-case-card"/);
+ assert.match(html,/item.caseId/);
+ assert.match(html,/item.reportId/);
+ assert.match(html,/item.imo/);
+ assert.match(html,/item.risk as risk/);
+ assert.match(html,/No verified new risk saved yet/);
+ assert.match(html,/\['\/moei\/nmc\/vessel',item.imo,'case'\]/);
+ assert.match(html,/\['\/moei\/smart-inspection\/lifecycle',item.inspectionId\]/);
+ assert.doesNotMatch(nmc,/this\.inspectionReferralCases\s*=\s*AIRIA_DEMO/);
+});
+test('opening a forwarded case from an unknown IMO does not substitute a different demo vessel',()=>{
+ assert.match(casePage,/getAiriaDemoVesselByImo\(imo\)/);
+ assert.match(casePage,/vesselProfileUnavailable=!profile/);
+ assert.match(casePage,/const unspecified:NmcVesselProfile/);
+ assert.match(casePage,/name:'IMO '\+imo/);
+ assert.match(casePage,/this\.vessel=profile\?this\.riskEngine\.applyToVessel\(profile\):unspecified/);
+ assert.match(caseHtml,/data-testid="nmc-si-unknown-imo-notice"/);
+ assert.match(caseHtml,/\*ngIf="!vesselProfileUnavailable"/);
+ assert.match(casePage,/if\(!\/\^\\d\{7\}\$\/\.test\(imo\)\)/);
+});
+test('Oracle migration explicitly requires DBA and never deletes saved cases or invents alerts',()=>{
+ assert.match(migration,/ALTER TABLE NMC_CASE MODIFY \(SOURCE_ALERT_ID NULL\)/);
+ assert.match(migration,/SI_APPROVED_REPORT_FORWARDED/);
+ assert.match(migration,/SI_POST_INSPECTION_AI_RISK_REASSESSED/);
+ assert.match(migration,/CK_NMC_CASE_AUDIT_ACT_V3/);
+ assert.match(migration,/MANUAL/);
+ assert.doesNotMatch(migration,/DELETE FROM|TRUNCATE TABLE|DROP TABLE|CREATE OR REPLACE.*NMC_ALERT/i);
+});

@@ -14,6 +14,9 @@ services:
       SDB_ACADEMY_WEBHOOK_SECRET: ${SDB_ACADEMY_WEBHOOK_SECRET:-}
       SDB_MARASI_WEBHOOK_SECRET: ${SDB_MARASI_WEBHOOK_SECRET:-}
       SDB_MOI_ICP_WEBHOOK_SECRET: ${SDB_MOI_ICP_WEBHOOK_SECRET:-}
+      # Business policy: supported AI Agents are available throughout each
+      # human-controlled maritime workflow. No automatic bulk AI spend here.
+      MOEI_AI_ALWAYS_ON: ${MOEI_AI_ALWAYS_ON:-true}
       AIRIA_MENA_KEY: ${AIRIA_MENA_KEY:-}
       MOEI_AI_VAULT_MASTER_KEY: ${MOEI_AI_VAULT_MASTER_KEY:-}
       AIRIA_BASE_URL: ${AIRIA_BASE_URL:-https://api.mena.airia.ai}
@@ -137,6 +140,13 @@ services:
       PSC_SOURCE_MODE: ${PSC_SOURCE_MODE:-snapshot}
       PSC_GOOGLE_SHEET_ID: ${PSC_GOOGLE_SHEET_ID:-1sefQv6E-Avvgmklv4WQbpFBEc7MmlCAcOc0c-rI_Wmg}
       PSC_GOOGLE_CREDENTIALS_PATH: /run/secrets/nmc-psc-google.json
+      # Reuse the same mounted POC service account for the separate NMC
+      # Maritime Incident Sheet. Sheet access depends on Google sharing.
+      NMC_INCIDENT_SHEET_ID: ${NMC_INCIDENT_SHEET_ID:-1fl6rCjHNTPKZTeS76PLSy_ylrClLQQ0Yvq12A7nhfy8}
+      NMC_INCIDENT_CREDENTIALS_PATH: /run/secrets/nmc-psc-google.json
+      # Enabling the incident source DOES NOT automatically spend on Airia.
+      # Explicit per-row AI_Review_Request and scheduling opt-in are separate.
+      NMC_INCIDENT_AUTO_TRIAGE_ENABLED: ${NMC_INCIDENT_AUTO_TRIAGE_ENABLED:-false}
     volumes:
       - nmc-fleet-results:/data
     expose:

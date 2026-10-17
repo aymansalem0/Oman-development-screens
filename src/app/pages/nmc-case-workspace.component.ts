@@ -1,6 +1,7 @@
 import { NmcNavigationComponent } from '../components/nmc-navigation.component';
 import { CommonModule } from '@angular/common';
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, OnDestroy } from '@angular/core';
+import {Subscription,timer,switchMap,take} from 'rxjs';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { NmcVesselProfile } from '../data/nmc-vessel-catalog';
@@ -14,7 +15,7 @@ import {
   NmcCaseStateService,
   NmcInspectionOutcome
 } from '../services/nmc-case-state.service';
-import {NmcCasesService,NmcCentralCase,NmcCentralCaseAudit,NmcAiAction,NmcDecisionCatalogueEntry} from '../services/nmc-cases.service';
+import {NmcCasesService,NmcCentralCase,NmcCentralCaseAudit,NmcAiAction,NmcDecisionCatalogueEntry,NmcSiPostInspectionRiskStatus} from '../services/nmc-cases.service';
 import {NmcAlertsService,NmcOperationalAlert} from '../services/nmc-alerts.service';
 
 type CaseStatus = 'Open' | 'In Progress' | 'Pending Verification' | 'Resolved';
@@ -59,12 +60,31 @@ interface Stakeholder {
   templateUrl: './nmc-case-workspace.component.html',
   styleUrl: './nmc-case-workspace.component.css'
 })
-export class NmcCaseWorkspaceComponent implements OnInit {
+export class NmcCaseWorkspaceComponent implements OnInit, OnDestroy {
   vessel!: NmcVesselProfile;
+  vesselProfileUnavailable=false;
   caseStatus: CaseStatus = 'Open';
   selectedTask?: CaseTask;
   resolutionNote = '';
   centralCase:NmcCentralCase|null=null;
+  siPostInspectionRisk:NmcSiPostInspectionRiskStatus|null=null;
+  siRiskStatusLoading=false;
+  siRiskStatusError=false;
+  siRiskRetryBusy=false;
+  siRiskPolling=false;
+  siRiskRetryNotice='';
+  private siRiskPoll:Subscription|null=null;
+  get canRetrySiPostInspectionRisk():boolean{
+    return !!this.siPostInspectionRisk?.inspectionId &&
+      ['FAILED','INTERRUPTED_REVIEW_BEFORE_RETRY',
+       'RISK_SAVED_NMC_SYNC_FAILED'].includes(this.siPostInspectionRisk.jobStatus) &&
+      !this.siRiskRetryBusy && !this.siRiskPolling;
+  }
+  ngOnDestroy():void{this.siRiskPoll?.unsubscribe();}
+  get isSiCaseWithoutOriginalAssessment():boolean{
+    return this.centralCase?.source==='SI_APPROVED_INSPECTION'&&
+      !this.centralCase.sourceAssessmentId;
+  }
   centralLoading=true;
   centralBusy=false;
   centralError='';
@@ -113,9 +133,28 @@ export class NmcCaseWorkspaceComponent implements OnInit {
         'Decision catalogue unavailable — changes are disabled.',
         'كتالوج القرارات غير متاح؛ تم تعطيل التعديل.');}
     });
-    const imo = this.route.snapshot.paramMap.get('imo') || AIRIA_DEMO_99_VESSELS[0].imo;
-    const profile = getAiriaDemoVesselByImo(imo) || AIRIA_DEMO_99_VESSELS[0];
-    this.vessel = this.riskEngine.applyToVessel(profile);
+    const imo=this.route.snapshot.paramMap.get('imo')||'';
+    if(!/^\d{7}$/.test(imo)){
+      this.centralLoading=false;
+      this.centralError=this.copy('Invalid vessel IMO in case link.',
+        'رقم IMO في رابط الحالة غير صالح.');
+      return;
+    }
+    const profile=getAiriaDemoVesselByImo(imo);
+    this.vesselProfileUnavailable=!profile;
+    // SI-origin cases can belong to an IMO OUTSIDE the synthetic vessel
+    // cohort. Never silently replace it with a different demo vessel.
+    // Unknown metadata is explicitly unknown, not copied or invented.
+    const unspecified:NmcVesselProfile={
+      id:-1,name:'IMO '+imo,imo,mmsi:'—',callSign:'—',
+      flag:'—',type:'—',lengthM:0,built:0,grossTonnage:'—',
+      deadweight:'—',owner:'—',operator:'—',classSociety:'—',
+      speed:0,course:0,destination:'—',eta:'—',navStatus:'—',
+      lat:0,lng:0,risk:-1,zone:'—',lastUpdate:0,
+      routeKey:'',segmentIndex:0,direction:1,dataConfidence:0,
+      riskConfidence:0
+    };
+    this.vessel=profile?this.riskEngine.applyToVessel(profile):unspecified;
     this.loadCentralCase();
   }
 
@@ -130,6 +169,25 @@ export class NmcCaseWorkspaceComponent implements OnInit {
           ?this.cases.readableError({error:{error:aiError}},this.lang.isArabic)
           :'';
         this.buildCase();
+        this.siPostInspectionRisk=null;
+        this.siRiskStatusError=false;
+        this.siRiskStatusLoading=false;
+        if(this.centralCase?.source==='SI_APPROVED_INSPECTION'){
+          const id=this.centralCase.id;
+          this.siRiskStatusLoading=true;
+          this.cases.siPostInspectionRiskStatus(id).subscribe({
+            next:result=>{
+              if(this.centralCase?.id!==id)return;
+              this.siPostInspectionRisk=result;
+              this.siRiskStatusLoading=false;
+            },
+            error:()=>{
+              if(this.centralCase?.id!==id)return;
+              this.siRiskStatusError=true;
+              this.siRiskStatusLoading=false;
+            }
+          });
+        }
         if(this.centralCase)this.loadCentralHistory();
         if(!this.centralCase||this.centralCase.status==='RESOLVED')
           this.loadCaseEligibleAlerts();
@@ -137,6 +195,97 @@ export class NmcCaseWorkspaceComponent implements OnInit {
       error:error=>{
         this.centralLoading=false;
         this.centralError=this.cases.readableError(error,this.lang.isArabic);
+      }
+    });
+  }
+
+
+  refreshSiPostInspectionRisk():void{
+    const id=this.centralCase?.id;
+    if(!id||this.siRiskStatusLoading)return;
+    this.siRiskStatusLoading=true;this.siRiskStatusError=false;
+    this.cases.siPostInspectionRiskStatus(id).subscribe({
+      next:status=>{
+        if(this.centralCase?.id!==id)return;
+        this.siPostInspectionRisk=status;this.siRiskStatusLoading=false;
+        if(status.jobStatus==='COMPLETED')this.loadCentralCase();
+      },
+      error:()=>{
+        if(this.centralCase?.id!==id)return;
+        this.siRiskStatusError=true;this.siRiskStatusLoading=false;
+      }
+    });
+  }
+
+  retrySiPostInspectionRisk():void{
+    const current=this.centralCase;
+    const status=this.siPostInspectionRisk;
+    if(!current||!status?.inspectionId||!this.canRetrySiPostInspectionRisk)return;
+    const needsPaidCalls=!status.job?.riskSaved;
+    const message=needsPaidCalls
+      ?this.copy(
+        'Run A01 and A02 again on this EXACT supervisor-approved Smart Inspection report? This is TWO new potentially BILLABLE Airia pipeline calls. Existing source assessments and regulatory decisions will not be changed. Continue?',
+        'هل تريد إعادة استدعاء A01 وA02 لتقرير المعاينة المعتمد نفسه؟ قد ينفذ طلبان جديدان مدفوعا التكلفة عبر Airia. لن يتم تعديل تقييمات المصادر الأصلية أو القرارات الرقابية. هل توافق؟')
+      :this.copy(
+        'Retry linking the SAVED AI risk assessment to this NMC Case? No new AI call is needed.',
+        'إعادة ربط تقييم المخاطر المحفوظ بهذه القضية؟ لا يلزم استدعاء AI جديد.');
+    if(!window.confirm(message))return;
+    this.siRiskRetryBusy=true;this.siRiskRetryNotice='';
+    const caseId=current.id;
+    this.cases.retrySiPostInspectionRisk(status.inspectionId,needsPaidCalls)
+      .subscribe({
+        next:result=>{
+          if(this.centralCase?.id!==caseId)return;
+          this.siRiskRetryBusy=false;
+          this.siRiskRetryNotice=this.copy(
+            'A01/A02 risk job queued. Waiting for validated factor results. This may take a few minutes.',
+            'تمت جدولة مهمة A01/A02؛ جار انتظار نتائج العوامل بعد التحقق. قد يستغرق ذلك عدة دقائق.');
+          this.siPostInspectionRisk={...status,jobStatus:result.job.status};
+          this.pollSiPostInspectionRisk(caseId);
+        },
+        error:error=>{
+          if(this.centralCase?.id!==caseId)return;
+          this.siRiskRetryBusy=false;
+          this.centralError=this.cases.readableError(error,this.lang.isArabic);
+        }
+      });
+  }
+
+  private pollSiPostInspectionRisk(caseId:string):void{
+    this.siRiskPoll?.unsubscribe();
+    this.siRiskPolling=true;
+    let checks=0;
+    this.siRiskPoll=timer(2500,6500).pipe(
+      take(40),
+      switchMap(()=>this.cases.siPostInspectionRiskStatus(caseId))
+    ).subscribe({
+      next:result=>{
+        if(this.centralCase?.id!==caseId){
+          this.siRiskPoll?.unsubscribe();this.siRiskPolling=false;return;
+        }
+        this.siPostInspectionRisk=result;
+        checks++;
+        if(['COMPLETED','FAILED','RISK_SAVED_NMC_SYNC_FAILED',
+          'INTERRUPTED_REVIEW_BEFORE_RETRY'].includes(result.jobStatus)){
+          this.siRiskPoll?.unsubscribe();this.siRiskPolling=false;
+          this.siRiskRetryNotice=result.jobStatus==='COMPLETED'
+            ?this.copy('Five-factor AI risk reassessment saved to NMC Case.',
+              'تم حفظ تقييم المخاطر بالعوامل الخمسة في قضية NMC.')
+            :this.copy('AI attempt stopped. Review the exact recorded failure before another paid call.',
+              'توقفت المحاولة. راجع سبب الفشل المسجل قبل أي استدعاء مدفوع جديد.');
+          if(result.jobStatus==='COMPLETED')this.loadCentralCase();
+        }else if(checks===40){
+          this.siRiskPolling=false;
+          this.siRiskRetryNotice=this.copy(
+            'Risk processing is still pending. Use Refresh status to check without starting another AI call.',
+            'إعادة التقييم لا تزال قيد التنفيذ؛ استخدم تحديث الحالة دون بدء استدعاء AI جديد.');
+        }
+      },
+      error:()=>{
+        this.siRiskPolling=false;
+        this.siRiskRetryNotice=this.copy(
+          'Status polling stopped. Use Refresh status; do not repeat the paid AI call.',
+          'توقف فحص الحالة. استخدم تحديث الحالة ولا تكرر طلب AI المدفوع.');
       }
     });
   }
@@ -238,7 +387,8 @@ export class NmcCaseWorkspaceComponent implements OnInit {
   }
 
   get riskLevelLabel(): string {
-    const level = this.centralCase?.sourceLevel||this.riskEngine.levelForScore(this.currentRisk);
+    const level = this.centralCase?.operationalRisk?.level||
+      this.centralCase?.sourceLevel||this.riskEngine.levelForScore(this.currentRisk);
     const labels: Record<string,string> = {
       Critical: this.copy('Critical', 'حرج'),
       High: this.copy('High', 'مرتفع'),
@@ -249,7 +399,8 @@ export class NmcCaseWorkspaceComponent implements OnInit {
   }
 
   get riskClass(): string {
-    return (this.centralCase?.sourceLevel||this.riskEngine.levelForScore(this.currentRisk)).toLowerCase();
+    return (this.centralCase?.operationalRisk?.level||
+      this.centralCase?.sourceLevel||this.riskEngine.levelForScore(this.currentRisk)).toLowerCase();
   }
 
   get completedTasks(): number {
@@ -310,11 +461,15 @@ export class NmcCaseWorkspaceComponent implements OnInit {
   // Immutable source assessment carried by the case. Human task/inspection completion
   // must never fabricate an updated risk score or subtract fixed points.
   get currentRisk(): number {
-    return this.centralCase?.sourceScore ?? this.vessel.risk;
+    return this.centralCase?.operationalRisk?.score ??
+      this.centralCase?.sourceScore ?? this.vessel.risk;
   }
 
   get riskReassessmentPending(): boolean {
-    return !!this.centralCase?.inspectionOutcome;
+    return !!this.centralCase&&
+      (!!this.centralCase.inspectionOutcome||
+       (this.centralCase.siInspectionSources||[]).length>0)&&
+      !this.centralCase.operationalRisk;
   }
 
   get nextAction(): string {
@@ -331,6 +486,10 @@ export class NmcCaseWorkspaceComponent implements OnInit {
       return task?task.title:this.copy('Document closure evidence and resolve the case',
         'توثيق أدلة المعالجة وإغلاق الحالة');
     }
+    if(!this.centralCase?.actionPlan&&this.isSiCaseWithoutOriginalAssessment)
+      return this.copy(
+        'Review post-inspection A01/A02 risk reassessment status; case A01 retry requires an original saved assessment',
+        'راجع حالة إعادة تقييم المخاطر بعد المعاينة عبر A01/A02؛ إعادة توصيات A01 للقضية تتطلب تقييمًا أصليًا محفوظًا');
     if(!this.centralCase?.actionPlan)return this.copy(
       'A01 recommendations were unavailable at case creation · retry',
       'توصيات A01 لم تتوفر عند إنشاء الحالة · إعادة المحاولة');
@@ -363,6 +522,14 @@ export class NmcCaseWorkspaceComponent implements OnInit {
 
   generateAiActions():void{
     if(!this.centralCase||this.centralBusy||this.centralCase.actionPlan)return;
+    // An SI-origin NMC case has a verified approved REPORT, not an immutable
+    // alert-era A01/A02 source assessment. Never pretend those are equivalent.
+    if(this.isSiCaseWithoutOriginalAssessment){
+      this.centralError=this.copy(
+        'This NMC Case came from an approved Smart Inspection report and has no original saved AI risk assessment. Check the separate post-inspection A01/A02 status; case A01 Retry cannot generate recommendations from a missing original assessment.',
+        'هذه الحالة محالة من تقرير معاينة ذكية معتمد ولا تحتوي تقييم مخاطر AI أصليًا محفوظًا. راجع حالة A01/A02 بعد المعاينة؛ زر إعادة توصيات A01 لا يستطيع إنشاء توصيات من تقييم أصلي غير موجود.');
+      return;
+    }
     const current=this.centralCase;
     this.centralBusy=true;this.centralError='';this.centralSuccess='';
     // Free, read-only preflight: load the immutable case source by exact

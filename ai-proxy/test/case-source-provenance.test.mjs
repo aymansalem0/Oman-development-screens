@@ -77,3 +77,15 @@ test('missing live current snapshot demands historical review rather than silent
     ok:false,error:'CASE_HISTORICAL_ASSESSMENT_REVIEW_REQUIRED'
   });
 });
+
+test('SI-origin reports without an AI baseline do not borrow the latest fleet score',()=>{
+ const siCase={imo:'9400368',source:'SI_APPROVED_INSPECTION',
+   sourceAssessmentId:null,sourceScore:null,sourceLevel:null};
+ const unrelatedFleetAssessment={...saved(originalId,44),imo:'9400368'};
+ const preview=evaluateCaseAssessment(siCase,unrelatedFleetAssessment);
+ assert.equal(preview.ready,false);
+ assert.equal(preview.source,null);
+ assert.equal(preview.caseScore,null);
+ assert.deepEqual(historicalApprovalValid(preview),{
+   ok:false,error:'CASE_SOURCE_ASSESSMENT_UNAVAILABLE'});
+});

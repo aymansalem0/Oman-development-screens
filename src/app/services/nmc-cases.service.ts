@@ -101,6 +101,32 @@ export interface NmcCentralCase {
   createdAt:string;updatedAt:string;version:number;
   tasks:NmcCentralCaseTask[];decisions:NmcCentralDecision[];
   incidentEvents?:NmcCaseIncident[];
+  siInspectionSources?:{eventId:string;inspectionId:string;reportId:string;
+    summary:string;receivedAt:string;supervisor?:string;
+    source?:'SI_APPROVED_REPORT';regulatoryDecision?:false}[];
+  inspectionReviewHistory?:{eventId:string;inspectionId:string;reportId:string;
+    decision:'APPROVED'|'RETURNED';summary:string;reviewedAt:string;
+    source:'SI_HUMAN_SUPERVISOR';supervisor:string|null}[];
+  operationalRisk?:{score:number;level:string;assessmentId:string;
+    previousScore:number|null;previousLevel:string|null;sourceInspectionId:string;
+    sourceReportId:string;evidenceId:string;policyVersion:string;updatedAt:string;
+    provisional:true;regulatoryDecision:false;
+    factorAttribution?:{findingId:string;title:string;severity:string;
+      factors:string[]}[]}|null;
+  postInspectionRiskHistory?:{eventId:string;inspectionId:string;reportId:string;
+    assessmentId:string;previousAssessmentId:string|null;previousScore:number|null;
+    previousLevel:string|null;newScore:number;newLevel:string;
+    policyVersion:string;evidenceId:string;factorChanges:{
+      factor:string;previous:number|null;current:number;evidenceIds:string[];
+      sourceAgent?:string;confidence?:number;reason?:string}[];
+    findingFactorAttribution?:{
+      findingId:string;checkId:string|null;title:string;severity:string;
+      description:string;findingEvidenceId:string;sourceEvidenceRefs:string[];
+      attributionStatus:string;linkedFactors:{
+        factor:string;sourceAgent:string;factorSeverity:number;
+        confidence:number;reason:string;sourceEvidenceId:string}[];
+    }[];
+    calculatedAt:string;officialRegulatoryDecision:false}[];
   actionPlan?:NmcAiActionPlan|null;
   operationalDecision?:NmcOperationalDecision|null;
   decisionFeedback?:NmcDecisionFeedback[];
@@ -121,6 +147,15 @@ export interface NmcCaseA01SourcePreview {
   caseScore:number|null;latestScore:number|null;
   caseLevel:string|null;latestLevel:string|null;
   sourceAssessedAt:string|null;latestAssessedAt:string|null;
+}
+export interface NmcSiPostInspectionRiskStatus{
+  status:'ok';caseId:string;source:'SI_APPROVED_INSPECTION'|'NOT_SI_APPROVED_INSPECTION';
+  reportId:string|null;inspectionId:string|null;
+  jobStatus:string;
+  job:{status:string;aiExecutionStatus:string|null;errorCode:string|null;
+    errorDetails?:{factor:string;agent:'A01'|'A02';
+      unknownCount:number;citedCount:number}|null;
+    updatedAt:string|null;riskSaved:boolean;assessmentId:string|null}|null;
 }
 interface CaseResponse{
   status:'ok';case:NmcCentralCase|null;
@@ -186,6 +221,28 @@ export class NmcCasesService {
   actionPlanSourcePreview(id:string):Observable<NmcCaseA01SourcePreview>{
     return this.http.get<NmcCaseA01SourcePreview>(
       this.path(id)+'/action-plan-source');
+  }
+  /** Read-only: never queues A01/A02 or retries potentially billable calls. */
+  siPostInspectionRiskStatus(caseId:string):Observable<NmcSiPostInspectionRiskStatus>{
+    return this.http.get<NmcSiPostInspectionRiskStatus>(
+      this.path(caseId)+'/post-inspection-risk-status');
+  }
+  /** Explicit paid A01/A02 retry for the exact approved SI inspection event.
+   * Backend requires PUBLISHER role, session and CSRF header, and never retries
+   * a RUNNING, QUEUED or COMPLETED job.
+   */
+  retrySiPostInspectionRisk(inspectionId:string,confirmCost:boolean):Observable<{
+    status:'ok';job:{status:string;errorCode?:string|null}
+  }>{
+    return this.http.post<{
+      status:'ok';job:{status:string;errorCode?:string|null}
+    }>('/api/si/v1/supervisor/cases/'+encodeURIComponent(inspectionId)+
+       '/reassessment/retry',{confirmCost},{
+      headers:new HttpHeaders({
+        'X-NMC-DASHBOARD-KEY':this.publisherKey,
+        'X-Moei-Csrf':'1'
+      })
+    });
   }
   generateActionPlan(current:NmcCentralCase,acknowledgeHistoricalAssessment=false,
     reviewedLatestAssessmentId?:string|null):Observable<CaseResponse>{

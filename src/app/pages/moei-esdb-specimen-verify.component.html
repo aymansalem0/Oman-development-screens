@@ -1,0 +1,34 @@
+<main class="verify-shell" [attr.dir]="lang.dir">
+ <article class="verify-card">
+  <header>
+   <div class="verify-brand">
+    <img [src]="lang.isArabic?'/branding/uae-moei-ar.png':'/branding/uae-moei-en.png'" [alt]="t('Ministry of Energy and Infrastructure','وزارة الطاقة والبنية التحتية')">
+    <span>eSDB</span>
+   </div>
+   <span class="verify-sample">{{t('SAMPLE · NOT OFFICIAL','عينة تجريبية · غير رسمية')}}</span>
+  </header>
+  <h1>{{t('Electronic Seaman’s Discharge Book','سجل البحار الإلكتروني')}}</h1>
+  <p class="verify-lede">{{t('QR code landing page · read-only sandbox specimen check.','صفحة رمز QR · استعلام للقراءة فقط عن عينة تجريبية.')}}</p>
+  <section *ngIf="loading" role="status" class="verify-result">
+   {{t('Looking up the sandbox specimen…','جارٍ البحث عن العينة التجريبية…')}}
+  </section>
+  <section *ngIf="!loading && matched as found" class="verify-result" data-testid="sdb-public-qr-match">
+   <div class="verify-mark">✓ {{t('Sandbox specimen matched','تم العثور على العينة التجريبية')}}</div>
+   <dl>
+    <div><dt>{{t('SDB number','رقم سجل البحار')}}</dt><dd>{{found.number}}</dd></div>
+    <div><dt>{{t('Verification reference','الرقم المرجعي')}}</dt><dd>{{found.reference}}</dd></div>
+    <div><dt>{{t('Issue date','تاريخ الإصدار')}}</dt><dd>{{found.issuedAt}}</dd></div>
+    <div><dt>{{t('Expiry date','تاريخ الانتهاء')}}</dt><dd>{{found.expiryDate}}</dd></div>
+    <div><dt>{{t('Record category','نوع السجل')}}</dt><dd>{{t('Simulated POC record','سجل POC تجريبي')}}</dd></div>
+   </dl>
+  </section>
+  <section *ngIf="!loading && !matched" class="verify-result verify-no-match" role="status" data-testid="sdb-public-qr-not-found">
+   <strong>{{t('Specimen cannot be confirmed','تعذر العثور على العينة')}}</strong>
+   <p>{{unavailable?t('The demonstration verification service is currently unavailable. Try again later.','خدمة التحقق التجريبية غير متاحة حاليًا. حاول لاحقًا.'):t('No matching issued sandbox specimen was found for this QR reference.','لم يُعثر على عينة تجريبية صادرة تطابق بيانات رمز QR.')}}</p>
+  </section>
+  <aside class="verify-disclaimer" role="note">
+   <strong>{{t('Important: this is NOT official verification','تنبيه: هذا ليس تحققًا رسميًا')}}</strong>
+   <p>{{t('This checks only records issued by the MOEI proof-of-concept sandbox. It is not connected to an official maritime registry and does not establish the legal validity or authenticity of a seafarer credential.','هذا الاستعلام يراجع فقط سجلات صادرة من البيئة التجريبية للمشروع، ولا يرتبط بسجل بحري حكومي رسمي ولا يثبت الصلاحية القانونية أو أصالة شهادة البحار.')}}</p>
+  </aside>
+ </article>
+</main>

@@ -42,9 +42,21 @@ jobs:
           node --test ai-proxy/test/nmc-dashboard-focus.test.mjs
       - name: Unified Smart Inspection candidates one-grid regression
         run: node --test scripts/test-si-unified-candidate-grid.mjs
+      - name: Dashboard-specific AI Continuous Improvement filters
+        run: node --test scripts/test-ai-ci-dashboard-specific-filters.mjs
 
       - name: Assigned inspector My Inspections privileges and route regression
         run: node --test scripts/test-si-my-inspections-boundary.mjs
+      - name: Guided Inspection finish conflict and confirmed submission regression
+        run: node --test scripts/test-si-guided-finish-version-conflict.mjs
+      - name: Guided Inspector missing finding documentation guard
+        run: node --test scripts/test-si-guided-finding-documentation.mjs
+      - name: NMC forwarded inspection cases and Incident Google source regression
+        run: node --test scripts/test-nmc-si-forwarded-cases-and-incident-config.mjs
+      - name: SI-origin NMC Case missing baseline and post-inspection AI diagnostics
+        run: node --test scripts/test-nmc-si-risk-diagnostics.mjs
+      - name: NMC explicit cost-confirmed A01/A02 post-inspection retry and evidence validation
+        run: node --test scripts/test-nmc-si-risk-retry-ui.mjs
 
       - name: MOEI single Admin login and UI regression
         run: node --test scripts/test-moei-admin-login-ui.mjs
@@ -66,6 +78,8 @@ jobs:
 
       - name: Seafarer readiness, company clearance, source webhooks and SDB journey
         run: node --test ai-proxy/test/seafarer-workspace.test.mjs ai-proxy/test/seafarer-http.test.mjs ai-proxy/test/seafarer-sdb-service-scenarios.test.mjs ai-proxy/test/seafarer-readiness-settings.test.mjs
+      - name: eSDB QR URL and anonymous specimen landing-page regression
+        run: node --test scripts/test-esdb-qr-landing.mjs
 
       - name: Build
         run: npm run build
@@ -110,6 +124,16 @@ jobs:
         run: node --test ai-proxy/test/si-poc-small-plan-policy.test.mjs
       - name: Assigned inspector POC identity, source dossier and guided A04 step regression
         run: node --test ai-proxy/test/si-inspector-guided-work-orders.test.mjs
+
+      - name: Prepare isolated local fleet/PSC fixture imports for the SI AI factor contract test
+        # The production AI-proxy Dockerfile copies these exact files into /app.
+        # These are synthetic build-time fixtures, not external source data.
+        run: |
+          cp tools/psc/psc-fixtures.mjs ai-proxy/psc-fixtures.mjs
+          cp src/app/data/nmc-vessel-catalog.ts ai-proxy/nmc-vessel-catalog.ts
+          cp src/app/data/nmc-expanded-vessel-catalog.ts ai-proxy/nmc-expanded-vessel-catalog.ts
+      - name: Inspector confirmed defects to five A01/A02 risk factors and durable NMC case provenance
+        run: node --test ai-proxy/test/si-risk-factor-attribution.test.mjs
 
       - name: SI-01 rolling to SI-02 approval and day-two cycle end-to-end
         run: node --test ai-proxy/test/si-rolling-endtoend.test.mjs

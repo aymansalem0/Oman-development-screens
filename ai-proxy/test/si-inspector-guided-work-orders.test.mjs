@@ -6,7 +6,8 @@ import {pocInspectorIdForActor,matchesAssignedInspector,
 import {buildPocErpSchedulingOverlay} from '../si-scheduling-poc-fixtures.mjs';
 import {projectGuidedInspection,findGuidedStep,
  buildA04FocusedFieldRequest,projectA04FocusedFieldAdvice,
- normalizeInspectionQuestion} from '../si-guided-inspection.mjs';
+ normalizeInspectionQuestion,guidedFindingRequirements,guidedFinalAssessment}
+ from '../si-guided-inspection.mjs';
 import {assemblePendingWorkOrderDossier} from '../si-vessel-dossier.mjs';
 
 const actor='inspector@example.test',other='other@example.test';
@@ -184,4 +185,52 @@ test('pre-case dossier displays current saved evidence without inventing a case'
  assert.equal(d.readOnly,true);
  assert.equal(d.caseWrites,0);
  assert.equal(d.aiCallsOnGet,0);
+});
+
+test('final assessment identifies exactly which saved deficiency lacks an inspector note or proof',()=>{
+ const steps=[
+  {stepId:'STEP-MINOR',title:'Fire safety',answered:true,mandatory:true,
+   currentStatus:'DEFICIENCY',severity:'MINOR',
+   members:[{kind:'LIFECYCLE',id:'fire-safety'}]},
+  {stepId:'STEP-MAJOR',title:'Navigation equipment',answered:true,mandatory:true,
+   currentStatus:'DEFICIENCY',severity:'MAJOR',
+   members:[{kind:'LIFECYCLE',id:'navigation'}]},
+  {stepId:'STEP-CRITICAL',title:'Life saving equipment',answered:true,mandatory:true,
+   currentStatus:'DEFICIENCY',severity:'CRITICAL',
+   members:[{kind:'LIFECYCLE',id:'lifesaving'}]}
+ ];
+ const guide={steps,evidenceByStep:{
+   'STEP-MINOR':[],
+   'STEP-MAJOR':[{reference:'SI-GUIDED:uploaded-but-not-attached'}],
+   'STEP-CRITICAL':[]
+ }};
+ const record={checks:[
+  {id:'fire-safety',status:'DEFICIENCY',severity:'MINOR',
+   note:'  ',evidenceRefs:[]},
+  {id:'navigation',status:'DEFICIENCY',severity:'MAJOR',
+   note:'Verified defective navigation light',evidenceRefs:[]},
+  {id:'lifesaving',status:'DEFICIENCY',severity:'CRITICAL',
+   note:'Inflatable raft expired',evidenceRefs:['SI-EVIDENCE:linked']}
+ ]};
+ const gaps=guidedFindingRequirements(guide,record);
+ assert.equal(gaps.length,2,'critical has note and linked evidence');
+ assert.deepEqual(gaps.map(x=>x.stepId),['STEP-MINOR','STEP-MAJOR']);
+ assert.equal(gaps[0].missingNote,true);
+ assert.equal(gaps[0].missingEvidence,false,
+   'minor must not require an attachment');
+ assert.equal(gaps[1].missingNote,false);
+ assert.equal(gaps[1].missingEvidence,true);
+ assert.equal(gaps[1].uploadedButNotLinked,true,
+   'upload alone is insufficient until an inspector SAVES the finding');
+ const assessment=guidedFinalAssessment(guide,record);
+ assert.equal(assessment.outcome,'FINDINGS_NEED_DOCUMENTATION');
+ assert.equal(assessment.canSubmit,false);
+ assert.equal(assessment.missingFindingRequirements.length,2);
+ // Fill only missing authoritative inspector fields; no mocked AI evidence.
+ record.checks[0].note='Observed worn fire hose';
+ record.checks[1].evidenceRefs=['SI-GUIDED:uploaded-but-not-attached'];
+ const ready=guidedFinalAssessment(guide,record);
+ assert.equal(ready.canSubmit,true);
+ assert.equal(ready.missingFindingRequirements.length,0);
+ assert.equal(ready.outcome,'OPEN_DEFICIENCIES');
 });

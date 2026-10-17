@@ -67,6 +67,7 @@ import { SiInspectionLifecycle, SiLifecycleError } from './si-inspection-lifecyc
 import {syncSiClosureToNmc,SiNmcClosureSyncError} from './si-nmc-closure-sync.mjs';
 import {buildSiSupervisorFullReport} from './si-supervisor-report.mjs';
 import {syncSiSupervisorReviewToNmc,SiNmcReviewSyncError} from './si-nmc-review-sync.mjs';
+import {SiPostInspectionRisk,SiPostInspectionRiskError} from './si-post-inspection-risk.mjs';
 import {SiRegulatoryDrafts,SiRegulatoryDraftError} from './si-supervisor-regulatory-drafts.mjs';
 import {SiScheduleOrders,SiWorkOrderError} from './si-schedule-orders.mjs';
 import {runSiPocAdvisor,siFutureAdvisorCoverage,SiPocAdvisorError} from './si-poc-workflow-advisors.mjs';
@@ -357,7 +358,7 @@ const siRollingPlans=new SiRollingPlanStore({mode:dbMode,oracleRepository:reposi
 const siDraftPreviews=new Map(),DRAFT_TTL_MS=30*60*1000;
 const siDraftJobs=new SiIntegratedDraftJobs();
 async function calculateNewDraft({id,metadata,source,ai,identity,
- requests=null,officerAdds=[]}){
+ requests=null,officerAdds=[],officerExclusions=[]}){
  const dashboard=await siTargeting.dashboard();
  const erpSnapshot=siErp.requireSnapshot();
  const [nmcReferrals,bookings]=await Promise.all([
@@ -369,7 +370,7 @@ async function calculateNewDraft({id,metadata,source,ai,identity,
   policy:siScheduling.getPolicy(),scheduler:siScheduling,
   nmcReferrals,existingBookings:metadata.demoMode?[]:
    [...siScheduling.state.confirmed,...bookings],
-  requests,officerAdds
+  requests,officerAdds,officerExclusions
  });
 }
 function getNewDraftPreview(id,actor){
@@ -536,7 +537,7 @@ async function assignedGuidedView(sessionActor,orderId){
      .map(x=>({...x,reference:'SI-GUIDED:'+x.id}));
    guide.evidenceByStep[step.stepId]=[...canonical,...legacy];
  }
- guide.finalAssessment=guidedFinalAssessment(guide);
+ guide.finalAssessment=guidedFinalAssessment(guide,lifecycle.record);
  return {schedule,order,preparation,checklist,lifecycle,guide};
 }
 const actionPlanRuns=new Set(); // process-local duplicate A01 invocation guard; version-lock remains authoritative
@@ -619,6 +620,32 @@ const scheduler=new FleetAutoScheduler({fleet,getPscVessel,
   intervalMs:runtime.get('NMC_FLEET_REFRESH_SECONDS')*1000,
   maxVessels:runtime.get('NMC_FLEET_AUTO_MAX_VESSELS'),
   retryFailed:runtime.get('NMC_FLEET_AUTO_RETRY_FAILED')});
+// Persistent, event-triggered and never browser-triggered. No paid fleet
+// startup batch is needed for an approved inspector report to initiate A01/A02.
+const siRiskReassessor=new SiPostInspectionRisk({
+ fleet,caseWorkspace:cases,riskPolicy,
+ getView:id=>siLifecycle.snapshot(id),
+ getBundle:imo=>scheduler.bundles.find(v=>v.imo===imo)||null,
+ getRiskConfig:()=>riskPolicy.active(),
+ aiAvailable:()=>Boolean(getAiriaKey())&&agentAllowed('a01')&&
+   agentAllowed('a02')&&Boolean(pipelines.a01)&&Boolean(pipelines.a02)
+});
+function enqueueSupervisorRiskReassessment({caseId,view,nmcSync}={}){
+ if(view?.record?.report?.status!=='APPROVED'||!nmcSync?.nmcCaseId||
+    !['RECORDED','ALREADY_RECORDED'].includes(nmcSync.status))
+   return {status:'NOT_QUEUED',reason:'NMC_FORWARD_NOT_CONFIRMED'};
+ try{
+   return siRiskReassessor.enqueue({
+    caseId,imo:view.inspectionCase.imo,reportId:view.record.report.id,
+    nmcCaseId:nmcSync.nmcCaseId
+   });
+ }catch(error){
+   const code=error instanceof SiPostInspectionRiskError?
+     error.code:'SI_RISK_QUEUE_UNAVAILABLE';
+   console.error('[si-risk-reassess] QUEUE_FAILED '+code);
+   return {status:'QUEUE_FAILED',errorCode:code};
+ }
+}
 function applyRuntimeSettings(){
   siAiProvider=runtime.get('SI_AI_PROVIDER');
   siPriority.provider=siAiProvider;
@@ -1428,16 +1455,25 @@ const server = createServer(async (req, res) => {
         const fresh=await siCandidateAgent.source();
         if(fresh.snapshotHash!==cached.source.snapshotHash)
           return respond(res,409,{error:'SI_DRAFT_SOURCE_CHANGED_REGENERATE'});
+        const recalculate=draftAction[1]==='recalculate';
+        const officerAdds=recalculate&&Array.isArray(input.officerAdds)?
+          input.officerAdds:cached.result.officerAdds;
+        const officerExclusions=recalculate&&Array.isArray(input.officerExclusions)?
+          input.officerExclusions:cached.result.officerExclusions||[];
+        const changedSelection=recalculate&&(
+          JSON.stringify(officerAdds)!==JSON.stringify(cached.result.officerAdds)||
+          JSON.stringify(officerExclusions)!==
+            JSON.stringify(cached.result.officerExclusions||[]));
+        // Supervisor signoff for optional-vessel scope changes; ordinary
+        // capacity corrections remain editor-only. No official booking.
+        if(changedSelection)dashboards.assertRole(req,'PUBLISHER');
         const result=await calculateNewDraft({
           id:cached.result.id,metadata:cached.metadata,source:fresh,
-          ai:cached.ai,identity,
-          officerAdds:draftAction[1]==='recalculate'?
-           (Array.isArray(input.officerAdds)?input.officerAdds:cached.result.officerAdds):
-           cached.result.officerAdds,
-          requests:draftAction[1]==='recalculate'&&
-           Array.isArray(input.officerAdds)?null:
-           draftAction[1]==='recalculate'?input.requests:
-           cached.result.requests
+          ai:cached.ai,identity,officerAdds,officerExclusions,
+          requests:recalculate?
+            (changedSelection?null:(Array.isArray(input.requests)?
+              input.requests:cached.result.requests)):
+            cached.result.requests
         });
         if(draftAction[1]==='recalculate'){
           return respond(res,200,{status:'INTEGRATED_DRAFT_RECALCULATED',
@@ -1606,10 +1642,19 @@ const server = createServer(async (req, res) => {
         // scheduling set to the IMOs deliberately saved in this Draft.
         // This removes the unscoped replan that was triggering
         // SI_DRAFT_APPROVAL_SCOPE_CHANGED_REVIEW_NEW_PLAN.
+        // Revalidate the exact supervisor-revised pre-save candidate scope.
+        // The original source-bound C01 recommendations and candidate keys
+        // remain authoritative: never invent new inclusions at approval.
         const fullSelection=selectIntegratedPlanVessels({
-          plan,inspectionPlan,dashboard,
+          plan,inspectionPlan:{
+            ...inspectionPlan,
+            aiCandidates:plan.candidateSnapshot||[],
+            aiRecommendations:plan.latest?.recommendations||[]
+          },dashboard,
           pscRiskRatePercent:body.pscRiskRatePercent,
-          uaeFlagRatePercent:body.uaeFlagRatePercent
+          uaeFlagRatePercent:body.uaeFlagRatePercent,
+          officerAdds:plan.capacityDraft?.officerSelectedAlternatives||[],
+          officerExclusions:plan.capacityDraft?.officerExclusions||[]
         });
         const selection=scopeIntegratedSelectionToSavedDraft(fullSelection,plan);
         if(!selection.roster.length)
@@ -2204,11 +2249,39 @@ const server = createServer(async (req, res) => {
                current.guide.lifecycleStage!=='IN_FIELD')
               return respond(res,409,{error:'SI_FIELD_INSPECTION_NOT_STARTED'});
             const body=await requestJson(req,4096);
-            if(body.confirmSubmission!==true||
-               body.expectedLifecycleVersion!==current.guide.lifecycleVersion||
-               body.expectedChecklistVersion!==current.guide.publishedSnapshotVersion)
-              return respond(res,409,{error:'SI_GUIDED_FINISH_CONFIRMATION_OR_VERSION_INVALID'});
+            if(body.confirmSubmission!==true)
+              return respond(res,422,{
+                error:'SI_GUIDED_FINISH_EXPLICIT_CONFIRMATION_REQUIRED'});
+            // The source can change in another browser tab, by an evidence
+            // upload, or through an independent checklist update. Reject the
+            // stale submission *before* completing any checklist or lifecycle
+            // transition, and return only version metadata (no source data).
+            if(body.expectedLifecycleVersion!==current.guide.lifecycleVersion||
+               body.expectedChecklistVersion!==current.guide.publishedSnapshotVersion){
+              const changed=[
+                ...(body.expectedLifecycleVersion!==current.guide.lifecycleVersion?
+                  ['LIFECYCLE']:[]),
+                ...(body.expectedChecklistVersion!==current.guide.publishedSnapshotVersion?
+                  ['CHECKLIST']:[])
+              ];
+              return respond(res,409,{
+                error:'SI_GUIDED_FINISH_SOURCE_CHANGED_RELOAD_REQUIRED',
+                changedSources:changed,
+                currentLifecycleVersion:current.guide.lifecycleVersion,
+                currentChecklistVersion:current.guide.publishedSnapshotVersion,
+                submissionPerformed:false
+              });
+            }
             const assessment=current.guide.finalAssessment;
+            // Check saved lifecycle deficiencies BEFORE completing any pinned
+            // checklist snapshot. This preserves the unsubmitted case if notes
+            // or mandatory MAJOR/CRITICAL evidence are still absent.
+            if(assessment.missingFindingRequirements?.length)
+              return respond(res,409,{
+                error:'SI_FINDING_NOTE_AND_EVIDENCE_REQUIRED',
+                missingFindingRequirements:assessment.missingFindingRequirements,
+                submissionPerformed:false
+              });
             if(!assessment.canSubmit)
               return respond(res,409,{error:'SI_GUIDED_MANDATORY_STEPS_INCOMPLETE',assessment});
             if(current.checklist.saved?.templates?.length&&
@@ -2541,8 +2614,12 @@ const server = createServer(async (req, res) => {
               const view=await siLifecycle.snapshot(id);
               result.nmcSync=await syncSiSupervisorReviewToNmc({
                 caseId:id,inspectionCase:view.inspectionCase,
-                record:view.record,cases
+                record:view.record,cases,
+                forwardToNmc:body.action==='APPROVE_REPORT'&&body.forwardToNmc===true
               });
+              if(body.action==='APPROVE_REPORT')
+                result.riskReassessment=enqueueSupervisorRiskReassessment({
+                  caseId:id,view,nmcSync:result.nmcSync});
             }catch(error){
               result.nmcSync={status:'RETRY_REQUIRED',
                 error:error?.code||'SI_NMC_REPORT_NOTIFICATION_FAILED'};
@@ -2558,10 +2635,38 @@ const server = createServer(async (req, res) => {
         if(req.headers['x-moei-csrf']!=='1')
           throw new MoeiAuthError('MOEI_CSRF_REQUIRED',403);
         const view=await siLifecycle.snapshot(retryReviewNmc[1]);
-        return respond(res,200,await syncSiSupervisorReviewToNmc({
+        const forwarded=await syncSiSupervisorReviewToNmc({
           caseId:retryReviewNmc[1],inspectionCase:view.inspectionCase,
-          record:view.record,cases
-        }));
+          record:view.record,cases,forwardToNmc:view.record?.report?.status==='APPROVED'
+        });
+        return respond(res,200,{...forwarded,
+          riskReassessment:enqueueSupervisorRiskReassessment({
+            caseId:retryReviewNmc[1],view,nmcSync:forwarded})});
+      }
+      const supervisorRiskStatus=
+        /^\/api\/si\/v1\/supervisor\/cases\/([a-f0-9-]{36})\/reassessment(?:\/(retry))?$/.exec(path);
+      if(supervisorRiskStatus){
+        moeiAuth.require(req);dashboards.assertRole(req,'PUBLISHER');
+        const caseId=supervisorRiskStatus[1],action=supervisorRiskStatus[2];
+        if(req.method==='GET'&&!action)
+          return respond(res,200,{status:'ok',
+            jobs:siRiskReassessor.status(caseId)});
+        if(req.method==='POST'&&action==='retry'){
+          if(req.headers['x-moei-csrf']!=='1')
+            throw new MoeiAuthError('MOEI_CSRF_REQUIRED',403);
+          const input=await requestJson(req,1024);
+          const last=siRiskReassessor.status(caseId)[0];
+          if(!last)return respond(res,404,{error:'SI_RISK_EVENT_NOT_FOUND'});
+          try{return respond(res,200,{status:'ok',
+            job:await siRiskReassessor.retry(last.eventId,{
+              confirmCost:input.confirmCost===true})});}
+          catch(error){
+            if(error instanceof SiPostInspectionRiskError)
+              return respond(res,error.status,{error:error.code});
+            return respond(res,503,{error:'SI_RISK_RETRY_UNAVAILABLE'});
+          }
+        }
+        return respond(res,405,{error:'METHOD_NOT_ALLOWED'});
       }
       // Unified inspection cycle: read-only timeline, explicit human-gated state changes.
       // GET never initiates an AI call or writes a case.
@@ -2996,12 +3101,50 @@ const server = createServer(async (req, res) => {
           status:'ok',policyVersion:DECISION_POLICY_VERSION,
           pocOnly:true,decisions:catalogueSummaries()
         });
-        if(!first)return respond(res,200,{status:'ok',cases:(await cases.list()).filter(c=>AIRIA_DEMO_99_IMOS.has(c.imo))});
+        if(!first)return respond(res,200,{status:'ok',cases:(await cases.list()).filter(c=>
+          AIRIA_DEMO_99_IMOS.has(c.imo)||
+          // Approved inspector reports have a real central case and must not
+          // disappear from the Command Center simply because the vessel is
+          // outside the synthetic 99-vessel map cohort.
+          (Array.isArray(c.siInspectionSources)&&
+           c.siInspectionSources.some(x=>x.source==='SI_APPROVED_REPORT'&&
+             /^[a-f0-9-]{36}$/i.test(x.inspectionId)&&
+             /^[a-f0-9-]{36}$/i.test(x.reportId))))});
         if(first==='by-imo'&&/^\d{7}$/.test(action)&&!second){
           const item=await cases.byImo(action);
           return respond(res,200,{status:'ok',case:item});
         }
         if(/^[a-f\d-]{36}$/i.test(first)&&!second){
+          // Read-only SI -> NMC provenance / execution diagnostic. This endpoint
+          // never queues paid Airia calls or changes a case risk/decision.
+          if(action==='post-inspection-risk-status'){
+            moeiAuth.require(req);
+            dashboards.assertRole(req,'EDITOR');
+            const item=await cases.get(first);
+            if(!item)throw new NmcCaseError('CASE_NOT_FOUND',404);
+            const latest=[...(item.siInspectionSources||[])
+              .filter(x=>x.source==='SI_APPROVED_REPORT')]
+              .sort((a,b)=>String(b.receivedAt||'').localeCompare(String(a.receivedAt||'')))[0];
+            if(!latest)return respond(res,200,{status:'ok',caseId:first,
+              source:'NOT_SI_APPROVED_INSPECTION',jobStatus:'NOT_APPLICABLE',
+              inspectionId:null,reportId:null,job:null});
+            const rows=siRiskReassessor.status(latest.inspectionId)
+              .filter(x=>x.nmcCaseId===item.id&&x.reportId===latest.reportId);
+            const job=rows[0]||null;
+            return respond(res,200,{status:'ok',caseId:item.id,
+              source:'SI_APPROVED_INSPECTION',reportId:latest.reportId,
+              inspectionId:latest.inspectionId,
+              jobStatus:job?.status||'NOT_QUEUED',job:job?{
+                status:job.status,aiExecutionStatus:job.aiExecutionStatus||null,
+                errorCode:job.errorCode||null,
+                errorDetails:job.errorDetails||null,
+                updatedAt:job.updatedAt||null,
+                riskSaved:Boolean(job.result),
+                // Never return the full evidence, model output, request payload
+                // or personal details from the internal durable job ledger.
+                assessmentId:job.result?.assessmentId||null
+              }:null});
+          }
           if(action==='action-plan-source'){
             const item=await cases.get(first);
             if(!item)throw new NmcCaseError('CASE_NOT_FOUND',404);

@@ -1,4 +1,26 @@
-/** Safe A04 provider diagnostics: never include request/response bodies or secrets. */
+/** Safe A04 provider diagnostics: never include request/response bodies or secrets.
+ * Classify undici/node-fetch nested causes; returned reason is an allowlisted
+ * constant, NEVER a provider message, URL, hostname or arbitrary error code.
+ */
+function networkCauseCode(error){
+ const seen=new Set(),pending=[error];
+ for(let i=0;i<pending.length&&i<8;i++){
+  const current=pending[i];
+  if(!current||typeof current!=='object'||seen.has(current))continue;
+  seen.add(current);
+  const code=current.code;
+  if(typeof code==='string'&&[
+   'UND_ERR_CONNECT_TIMEOUT','UND_ERR_HEADERS_TIMEOUT','UND_ERR_BODY_TIMEOUT',
+   'ETIMEDOUT','ENOTFOUND','EAI_AGAIN','ECONNREFUSED','ECONNRESET',
+   'EHOSTUNREACH','ENETUNREACH','UND_ERR_SOCKET','CERT_HAS_EXPIRED',
+   'UNABLE_TO_VERIFY_LEAF_SIGNATURE','SELF_SIGNED_CERT_IN_CHAIN',
+   'DEPTH_ZERO_SELF_SIGNED_CERT','ERR_TLS_CERT_ALTNAME_INVALID'
+  ].includes(code))return code;
+  if(current.cause)pending.push(current.cause);
+  if(Array.isArray(current.errors))pending.push(...current.errors.slice(0,4));
+ }
+ return null;
+}
 export function classifyA04ProviderFailure(error){
  const message=typeof error?.message==='string'?error.message:'';
  const code=typeof error?.code==='string'?error.code:'';
@@ -20,11 +42,25 @@ export function classifyA04ProviderFailure(error){
   if(status>=500)return {code:'SI_A04_UPSTREAM_SERVER_ERROR',status:502,upstreamStatus:status};
   return {code:'SI_A04_UPSTREAM_HTTP_REJECTED',status:502,upstreamStatus:status};
  }
- if(code==='ETIMEDOUT'||code==='UND_ERR_CONNECT_TIMEOUT'||
-    error?.name==='TimeoutError'||error?.name==='AbortError')
-  return {code:'SI_A04_UPSTREAM_TIMEOUT',status:504};
- if(error instanceof TypeError||code==='ECONNREFUSED'||code==='ENOTFOUND'||
-    code==='ECONNRESET'||code==='EAI_AGAIN')
-  return {code:'SI_A04_NETWORK_UNAVAILABLE',status:502};
+ const cause=networkCauseCode(error);
+ if(cause&&[
+  'UND_ERR_CONNECT_TIMEOUT','UND_ERR_HEADERS_TIMEOUT','UND_ERR_BODY_TIMEOUT','ETIMEDOUT'
+ ].includes(cause))return {code:'SI_A04_UPSTREAM_TIMEOUT',status:504,transportReason:'CONNECT_OR_RESPONSE_TIMEOUT'};
+ if(error?.name==='TimeoutError'||error?.name==='AbortError')
+  return {code:'SI_A04_UPSTREAM_TIMEOUT',status:504,transportReason:'REQUEST_TIMEOUT'};
+ const reasons={
+  ENOTFOUND:'DNS_NOT_FOUND',EAI_AGAIN:'DNS_TEMPORARILY_UNAVAILABLE',
+  ECONNREFUSED:'CONNECTION_REFUSED',ECONNRESET:'CONNECTION_RESET',
+  EHOSTUNREACH:'HOST_UNREACHABLE',ENETUNREACH:'NETWORK_UNREACHABLE',
+  UND_ERR_SOCKET:'SOCKET_CLOSED',
+  CERT_HAS_EXPIRED:'TLS_CERTIFICATE_INVALID',
+  UNABLE_TO_VERIFY_LEAF_SIGNATURE:'TLS_CERTIFICATE_INVALID',
+  SELF_SIGNED_CERT_IN_CHAIN:'TLS_CERTIFICATE_INVALID',
+  DEPTH_ZERO_SELF_SIGNED_CERT:'TLS_CERTIFICATE_INVALID',
+  ERR_TLS_CERT_ALTNAME_INVALID:'TLS_CERTIFICATE_INVALID'};
+ if(cause&&reasons[cause])
+  return {code:'SI_A04_NETWORK_UNAVAILABLE',status:502,transportReason:reasons[cause]};
+ if(error instanceof TypeError||['ECONNREFUSED','ENOTFOUND','ECONNRESET','EAI_AGAIN'].includes(code))
+  return {code:'SI_A04_NETWORK_UNAVAILABLE',status:502,transportReason:'TRANSPORT_ERROR_UNCLASSIFIED'};
  return {code:'SI_A04_PROVIDER_UNAVAILABLE',status:502};
 }

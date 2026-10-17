@@ -26,3 +26,26 @@ test('unknown provider errors remain opaque and do not leak upstream message',()
  const r=classifyA04ProviderFailure(new Error('token=my-secret'));
  assert.deepEqual(r,{code:'SI_A04_PROVIDER_UNAVAILABLE',status:502});
 });
+
+test('A04 resolves nested undici fetch cause into safe transport categories',()=>{
+ const cases=[
+  ['UND_ERR_CONNECT_TIMEOUT','SI_A04_UPSTREAM_TIMEOUT',504,'CONNECT_OR_RESPONSE_TIMEOUT'],
+  ['ENOTFOUND','SI_A04_NETWORK_UNAVAILABLE',502,'DNS_NOT_FOUND'],
+  ['EAI_AGAIN','SI_A04_NETWORK_UNAVAILABLE',502,'DNS_TEMPORARILY_UNAVAILABLE'],
+  ['ECONNREFUSED','SI_A04_NETWORK_UNAVAILABLE',502,'CONNECTION_REFUSED'],
+  ['ECONNRESET','SI_A04_NETWORK_UNAVAILABLE',502,'CONNECTION_RESET'],
+  ['CERT_HAS_EXPIRED','SI_A04_NETWORK_UNAVAILABLE',502,'TLS_CERTIFICATE_INVALID'],
+  ['UNABLE_TO_VERIFY_LEAF_SIGNATURE','SI_A04_NETWORK_UNAVAILABLE',502,'TLS_CERTIFICATE_INVALID']
+ ];
+ for(const [cause,code,status,reason] of cases){
+  const error=new TypeError('fetch failed: secret https://upstream.example/secret',{
+   cause:Object.assign(new Error('upstream has private identity and URL'),{code:cause})
+  });
+  const classified=classifyA04ProviderFailure(error);
+  assert.deepEqual(classified,{code,status,transportReason:reason});
+  const printed=JSON.stringify(classified);
+  assert.ok(!printed.includes('secret'));
+  assert.ok(!printed.includes('upstream.example'));
+  assert.ok(!printed.includes('private identity'));
+ }
+});

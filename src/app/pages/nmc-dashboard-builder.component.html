@@ -193,7 +193,43 @@
       <p class="db-message" *ngIf="saveMessage">{{saveMessage}}</p>
       <p class="db-error" *ngIf="dataError&&dashboardUsesFleet">{{dataError}}</p>
 
-      <div *ngIf="viewOnly" class="db-view-filters">
+      <!-- Only this published AI CI board gets metric-relevant filters. -->
+      <div *ngIf="viewOnly&&isAiContinuousImprovementDashboard"
+        class="db-view-filters db-ai-ci-view-filters"
+        data-testid="ai-ci-contextual-results-filters">
+        <div class="db-ai-ci-filter-heading">
+          <strong>{{copy('Filter AI improvement metrics','تصفية مؤشرات التحسين المستمر للذكاء الاصطناعي')}}</strong>
+          <button type="button" class="db-outline" (click)="resetCiViewFilters()">
+            {{copy('Clear filters','مسح الفلاتر')}}
+          </button>
+        </div>
+        <label>{{copy('Metric area','مجال المؤشر')}}
+          <select [(ngModel)]="ciViewArea" data-testid="ai-ci-filter-area">
+            <option *ngFor="let area of ciViewAreas" [value]="area.id">
+              {{copy(area.en,area.ar)}}
+            </option>
+          </select>
+        </label>
+        <label>{{copy('Evidence source','مصدر المؤشر')}}
+          <select [(ngModel)]="ciViewSource" data-testid="ai-ci-filter-evidence">
+            <option value="ALL">{{copy('Measured and illustrative','المقاسة والتوضيحية')}}</option>
+            <option value="MEASURED">{{copy('Instrumented POC events','أحداث POC المسجلة')}}</option>
+            <option value="ILLUSTRATIVE">{{copy('Illustrative POC values','قيم POC التوضيحية')}}</option>
+          </select>
+        </label>
+        <label>{{copy('Find a metric','ابحث عن مؤشر')}}
+          <input [(ngModel)]="ciViewSearch" data-testid="ai-ci-filter-search"
+            [placeholder]="copy('Metric title or indicator','عنوان المؤشر أو المقياس')"/>
+        </label>
+        <p class="db-ai-ci-filter-note" role="status">
+          {{visiblePreviewWidgets.length}} / {{previewWidgets.length}}
+          {{copy('cards shown. Filters control visible widgets only; live aggregate totals are not recalculated from incomplete per-agent data.',
+            'بطاقة ظاهرة. الفلاتر تتحكم في البطاقات المعروضة فقط؛ ولا يُعاد حساب الإجماليات من بيانات غير مكتملة لكل وكيل.')}}
+        </p>
+      </div>
+
+      <div *ngIf="viewOnly&&!isAiContinuousImprovementDashboard"
+        class="db-view-filters" data-testid="nmc-vessel-results-filters">
         <strong>{{copy('Filter results','تصفية النتائج')}}</strong>
         <label>{{copy('Risk','المخاطر')}}
           <select [(ngModel)]="board.filters.risk" (ngModelChange)="tablePage=1">
@@ -351,12 +387,15 @@
               <h3>{{previewTitle}}</h3>
               <small *ngIf="dashboardUsesFleet">
                 {{filtered.length}} {{copy('vessels matching selected filters','سفينة وفق الفلاتر المختارة')}}</small>
-              <small *ngIf="dashboardHasAiCiMetrics">{{copy('Instrumentation since deployment · supplementary POC illustrations','قياسات منذ التشغيل · مؤشرات POC توضيحية')}}</small>
+              <small *ngIf="dashboardHasAiCiMetrics">
+                {{copy('Instrumentation since deployment · supplementary POC illustrations',
+                  'قياسات منذ التشغيل · مؤشرات POC توضيحية')}}</small>
               <small *ngIf="dashboardHasDemoMetrics">
                 {{copy('Synthetic Smart Inspection indicators · May to October 2026',
                 'مؤشرات المعاينة التجريبية · مايو إلى أكتوبر 2026')}}</small>
             </div>
-            <span class="db-chip">{{previewCardsCount}} {{copy('cards','بطاقات')}}</span>
+            <span class="db-chip">{{viewOnly&&isAiContinuousImprovementDashboard?
+              visiblePreviewWidgets.length:previewCardsCount}} {{copy('cards','بطاقات')}}</span>
           </div>
           <div class="db-empty" *ngIf="previewCardsCount===0">
             <div class="db-empty-symbol">＋</div>
@@ -378,8 +417,13 @@
                 {{copy('Cancel Preview','إلغاء المعاينة')}}</button>
             </div>
           </div>
+          <p *ngIf="viewOnly&&isAiContinuousImprovementDashboard&&!visiblePreviewWidgets.length"
+            class="db-empty" data-testid="ai-ci-no-matching-metrics">
+            {{copy('No AI improvement metrics match these filters. Clear filters to see all cards.',
+              'لا توجد مؤشرات تحسين مستمر تطابق الفلاتر. امسح الفلاتر لعرض جميع البطاقات.')}}
+          </p>
           <div class="db-widgets">
-            <article class="db-widget" *ngFor="let widget of previewWidgets; let i=index"
+            <article class="db-widget" *ngFor="let widget of visiblePreviewWidgets; let i=index"
                   [class.db-full]="widget.span==='full'"
                   [draggable]="!viewOnly&&!aiProposal" (dragstart)="onDragStart($event,widget.id)"
                   (dragover)="onDragOver($event)" (drop)="onDrop($event,widget.id)"

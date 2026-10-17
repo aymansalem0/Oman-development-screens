@@ -70,6 +70,49 @@ export class NmcDashboardBuilderComponent implements OnInit,OnDestroy {
   readonly aiCiCatalogue=AI_CI_METRICS;
   aiCiSnapshot:AiCiLiveSnapshot|null=null;
   aiCiReadError='';
+  // The standard NMC vessel filters are irrelevant to the published
+  // AI Continuous Improvement board. These LOCAL view controls filter cards,
+  // not stored definitions or cross-agent aggregate statistics.
+  readonly ciViewAreas=[
+    {id:'ALL',en:'All metric areas',ar:'جميع مجالات المؤشرات'},
+    {id:'EXECUTION',en:'AI execution & performance',ar:'تشغيل وأداء الذكاء الاصطناعي'},
+    {id:'HUMAN_REVIEW',en:'Officer decisions & oversight',ar:'قرارات ومراجعات المسؤولين'},
+    {id:'MARITIME',en:'Maritime services & domains',ar:'الخدمات والمجالات البحرية'},
+    {id:'QUALITY',en:'Document & data quality',ar:'المستندات وجودة البيانات'}
+  ];
+  ciViewArea='ALL';
+  ciViewSource='ALL';
+  ciViewSearch='';
+  get isAiContinuousImprovementDashboard():boolean{
+    return !!this.dashboard&&this.dashboard.title==='AI Continuous Improvement'&&
+      this.dashboard.widgets.some(w=>w.metric==='ciTotalCalls')&&
+      this.dashboard.widgets.every(w=>isAiCiMetric(w.metric));
+  }
+  ciMetricArea(metric:DashboardMetric):string{
+    if(['ciTotalCalls','ciSuccessfulCalls','ciFailedCalls','ciSuccessRate',
+       'ciAverageTime','ciCallsByAgent','ciMonthlyTrend','ciAgentRegister'].includes(metric))
+      return 'EXECUTION';
+    if(['ciOfficerReviews','ciOfficerAccept','ciOfficerModify','ciOfficerReject',
+       'ciOfficerOverrideRate','ciReviewBacklog','ciOfficerDecisionMix'].includes(metric))
+      return 'HUMAN_REVIEW';
+    if(['ciDocumentAi','ciDataQuality'].includes(metric))return 'QUALITY';
+    return 'MARITIME';
+  }
+  get visiblePreviewWidgets():DashboardWidget[]{
+    const widgets=this.previewWidgets;
+    if(!this.viewOnly||!this.isAiContinuousImprovementDashboard)return widgets;
+    const query=this.ciViewSearch.trim().toLowerCase();
+    return widgets.filter(w=>
+      (this.ciViewArea==='ALL'||this.ciMetricArea(w.metric)===this.ciViewArea)&&
+      (this.ciViewSource==='ALL'||
+        (this.ciViewSource==='MEASURED')===this.ciIsMeasured(w.metric))&&
+      (!query||w.title.toLowerCase().includes(query)||
+        this.metricName(w.metric).toLowerCase().includes(query))
+    );
+  }
+  resetCiViewFilters():void{
+    this.ciViewArea='ALL';this.ciViewSource='ALL';this.ciViewSearch='';
+  }
   get dashboardHasAiCiMetrics():boolean{
     return !!this.dashboard?.widgets.some(w=>isAiCiMetric(w.metric));
   }

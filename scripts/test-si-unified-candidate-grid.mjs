@@ -102,3 +102,83 @@ test('Inspection Candidate & Targeting is the FIRST Smart Inspection menu screen
  assert.ok(sub.includes('routerLink="/moei/smart-inspection/candidates"'),
   'Candidate targeting should lead the Smart Inspection submenu');
 });
+
+
+test('saved capacity and inspector assignments are a native, collapsed-by-default disclosure',()=>{
+ const start=html.indexOf('<details *ngIf="plan?.capacityDraft as cap"');
+ const end=html.indexOf('</details>',start);
+ assert.ok(start>=0&&end>start,
+  'Saved Draft section must be wrapped in native accessible details');
+ const body=html.slice(start,end);
+ assert.match(body,/data-testid="si-saved-capacity-details"/);
+ assert.match(body,/<summary class="si-saved-capacity-summary"/);
+ assert.match(body,/data-testid="si-saved-capacity-toggle"/);
+ assert.ok(!body.slice(0,body.indexOf('>')).includes(' open'),
+  'the long capacity section must start collapsed');
+ for(const required of [
+  "cap.status","cap.generatedAt","cap.selectedImos.length",
+  "cap.proposedAssignments.length","cap.mandatoryUnscheduled.length",
+  "cap.capacityExcluded?.length","cap.unscheduled.length",
+  'class="si-draft-saved-assignments"','class="si-draft-stats"',
+  'Show details','Hide details'
+ ])assert.ok(body.includes(required),'missing saved capacity content '+required);
+ assert.ok(css.includes('.si-saved-capacity-summary:focus-visible'));
+ assert.ok(css.includes('.si-saved-capacity-details[open]'));
+ assert.ok(css.includes('@media(max-width:760px)'));
+});
+
+test('planning subsections default to independent disclosures and preserve source/consent action flow',()=>{
+ const names=[
+  'si-plan-policy-disclosure','si-plan-consent-disclosure',
+  'si-plan-proposal-disclosure','si-supervisor-scheduling-add-panel',
+  'si-plan-capacity-inputs-disclosure','si-plan-vessel-visit-disclosure',
+  'si-saved-plan-list-disclosure'
+ ];
+ for(const name of names)assert.ok(html.includes('data-testid="'+name+'"'),
+  'missing disclosure '+name);
+ const tags=[...html.matchAll(/<details\b[^>]*>/g)];
+ assert.equal(tags.length,(html.match(/<\/details>/g)||[]).length,
+  'all plan disclosure elements must be closed');
+ assert.ok(tags.every(x=>!/(?:^|\s)open(?:\s|=|>)/.test(x[0])),
+  'all plan subsections must default to collapsed');
+ assert.match(html,/\(click\)="generateIntegratedDraft\(\)"/);
+ assert.match(html,/\(click\)="recalculateIntegratedDraft\(\)"/);
+ assert.match(html,/\(click\)="saveIntegratedDraft\(\)"/);
+ assert.ok(html.includes('draft.mandatoryUnscheduled.join'));
+ assert.ok(html.includes('newDraftScope?.requiresOfficerAction'));
+ assert.ok(css.includes('.si-plan-disclosure[open] > .si-plan-disclosure-summary'));
+ assert.ok(css.includes('.si-plan-disclosure-summary:focus-visible'));
+});
+test('vessel inclusion and removal controls align in trailing row column in LTR and RTL',()=>{
+ assert.ok(html.includes('class="si-plan-scheduling-action-cell"'));
+ assert.ok(html.includes('class="si-plan-vessel-row-actions"'));
+ assert.ok(html.includes('class="si-plan-alternative-header"'));
+ assert.ok(html.includes('class="si-plan-alternative-actions"'));
+ assert.ok(css.includes('.si-draft-table td.si-plan-scheduling-action-cell'));
+ assert.ok(css.includes('.si-plan-vessel-row-actions{display:flex'));
+ assert.ok(css.includes('.si-plan-alternative-header{display:flex'));
+ assert.ok(css.includes('.si-plan-alternative-actions{display:flex'));
+ assert.ok(css.includes('text-align:end'));
+ assert.ok(css.includes('justify-content:flex-end'));
+ assert.match(html,/\(click\)="toggleDraftVesselForScheduling\(row\)"/);
+ assert.match(html,/\(click\)="toggleDraftAlternative\(choice,true\)"/);
+});
+
+test('C01 is checked by default only when a new plan starts, and still requires manual execution confirmation',()=>{
+ assert.match(ts,/newDraftDemoMode=true;newDraftAiConsent=true;/);
+ const start=ts.indexOf('openCreatePlan():void{');
+ const end=ts.indexOf('refreshDraftScope():void{',start);
+ assert.ok(start>=0&&end>start);
+ assert.ok(ts.slice(start,end).includes('this.newDraftAiConsent=true;'));
+ const refresh=ts.slice(end,ts.indexOf('draftParametersChanged():void{',end));
+ assert.ok(!refresh.includes('this.newDraftAiConsent=false'),
+   'loading source policy should not uncheck the default or override manual opt out');
+ assert.match(html,/\[\(ngModel\)\]="newDraftAiConsent"/);
+ assert.match(ts,/this\.newDraftBusy\|\|!this\.newDraftAiConsent/);
+ const action=ts.slice(ts.indexOf('generateIntegratedDraft():void{'),
+   ts.indexOf('capacityBlockerText(',ts.indexOf('generateIntegratedDraft():void{')));
+ assert.ok(action.includes('window.confirm('),
+   'C01 job must not be started solely by the prechecked UI option');
+ assert.ok(action.includes('confirmAi:true,confirmCost:true'),
+   'AI job requires the explicit confirmation on Generate');
+});

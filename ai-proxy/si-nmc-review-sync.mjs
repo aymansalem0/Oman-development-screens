@@ -7,12 +7,24 @@ export class SiNmcReviewSyncError extends Error{
  constructor(code,status=409){super(code);this.code=code;this.status=status;}
 }
 export async function syncSiSupervisorReviewToNmc({caseId,inspectionCase,
- record,cases}={}){
- if(!inspectionCase?.nmcReferralId)
+ record,cases,forwardToNmc=false}={}){
+ if(!inspectionCase?.nmcReferralId&&forwardToNmc!==true)
    return {status:'NOT_NMC_ORIGIN',notificationCreated:false};
  if(!record?.report||!['APPROVED','RETURNED'].includes(record.report.status)||
     record.caseId!==caseId||record.imo!==inspectionCase.imo)
    throw new SiNmcReviewSyncError('SI_NMC_REVIEW_NOT_FINALIZED');
+ if(!inspectionCase.nmcReferralId){
+   // A supervisor-selected forward from a purely SI-origin report becomes a
+   // central NMC case. No fake request, official action or detention.
+   const created=await cases.fromSiInspection({
+     inspectionId:caseId,imo:inspectionCase.imo,reportId:record.report.id,
+     summary:String(record.report.summary||'Approved inspector report').slice(0,500),
+     supervisor:record.report.supervisor
+   });
+   return {status:'RECORDED',nmcCaseId:created.id,nmcCaseStatus:created.status,
+     notificationCreated:true,riskRecalculated:false,
+     officialCaseClosed:false};
+ }
  const nmcRows=await cases.list();
  const found=nmcRows.filter(c=>c.imo===inspectionCase.imo&&
   (!inspectionCase.nmcCaseId||c.id===inspectionCase.nmcCaseId)&&

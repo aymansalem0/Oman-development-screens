@@ -65,7 +65,7 @@ export function reportDraftPeriodExceptions(proposal,metadata){
 export function buildIntegratedDraft({
  id,metadata,source,dashboard,ai,erpSnapshot,actor,policy,
  nmcReferrals=[],existingBookings=[],scheduler,requests=null,officerAdds=[],
- clock=()=>Date.now()
+ officerExclusions=[],clock=()=>Date.now()
 }={}){
  if(!id||!source?.snapshotHash||!dashboard?.policy||!erpSnapshot?.snapshotId)
   fail('SI_DRAFT_SOURCE_CONTEXT_REQUIRED',409);
@@ -104,7 +104,7 @@ export function buildIntegratedDraft({
    aiRecommendations:ai?.recommendations||[],aiCandidates:source.candidates,
    agentRunId:ai?.agentRunId||null},dashboard,
   pscRiskRatePercent:rates.pscRiskRatePercent,
-  uaeFlagRatePercent:rates.uaeFlagRatePercent,officerAdds
+  uaeFlagRatePercent:rates.uaeFlagRatePercent,officerAdds,officerExclusions
  });
  if(!selection.roster.length)fail('SI_DRAFT_NO_VERIFIED_SELECTED_VESSELS',409);
  if(selection.roster.length>SI_DRAFT_SOLVER_MAX_VESSELS)
@@ -156,6 +156,7 @@ export function buildIntegratedDraft({
   erpSnapshotId:erpSnapshot.snapshotId,
   effectiveErpSnapshotId:workforce.snapshotId,ai,
   rows,selection,context,requests:requested,proposal,pipeline,officerAdds,
+   officerExclusions:selection.quotas.officerExclusions,
   alternatives:(()=>{
     const advice=new Map((ai?.recommendations||[]).map(r=>[r.candidateKey,r]));
     const chosen=new Set(selection.roster.map(r=>r.imo)),keys=new Map();
@@ -220,6 +221,7 @@ export function publicDraftPreview(p,previewId){
   demoOnly:p.metadata.demoMode,
   manualAlternatives:p.alternatives,
   officerSelectedAlternatives:p.officerAdds||[],
+   officerExcludedVessels:p.officerExclusions||[],
   availablePlanSlots:Math.max(0,(p.selection.quotas.maxPlannedVessels||
     p.selection.roster.length)-p.selection.roster.length),
   items:p.selection.roster.map(v=>{
