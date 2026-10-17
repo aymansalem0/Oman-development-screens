@@ -1206,7 +1206,8 @@ const server = createServer(async (req, res) => {
           return respond(res,200,{...preview,fieldAccess:{
             role:grant.kind,canMutate:grant.kind==='SUPERVISOR'||
               grant.inspectionStatus==='FIELD_STARTED',
-            inspectionStatus:grant.inspectionStatus||null
+            inspectionStatus:grant.inspectionStatus||null,
+            mode:grant.mode||null
           }});
         }
         if(req.method==='POST'&&operation==='start')
