@@ -122,3 +122,22 @@ test('AI proposal produces live preview cards and accepted editable unbound metr
  // Never introduce a live KPI renderer based on unbound proposal ID.
  assert.doesNotMatch(template,/metricNumber\(proposed\.id\)/);
 });
+
+test('AI Continuous Improvement is seeded once and visible in Dashboard Manager; Airia actions are discoverable',()=>{
+ const root=new URL('../../src/app/',import.meta.url);
+ const store=new URL('services/nmc-dashboard-store.service.ts',root);
+ if(!existsSync(store))return; // Backend container excludes frontend source.
+ const s=readFileSync(store,'utf8');
+ const manager=readFileSync(new URL('pages/nmc-dashboard-builder.component.html',root),'utf8');
+ const runtime=readFileSync(new URL('pages/nmc-runtime-settings.component.ts',root),'utf8');
+ assert.match(s,/ai-continuous-improvement-local/);
+ assert.match(s,/ai-ci-seed-v1/);
+ assert.match(s,/localStorage\.setItem\(marker,'1'\)/);
+ assert.match(manager,/createAiContinuousImprovement\(\)/);
+ assert.match(manager,/AI Continuous Improvement/);
+ assert.match(runtime,/airia-agent-header-link/);
+ assert.match(runtime,/pipelineSettingForGroup\(group\)/);
+ assert.match(runtime,/\[disabled\]="!airiaConsoleUrl\(agentPipeline\)"/);
+ assert.match(runtime,/AIRIA_CONSOLE_PIPELINE_URL_TEMPLATE/);
+ assert.match(runtime,/Open inside Platform/);
+});
