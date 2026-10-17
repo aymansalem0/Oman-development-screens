@@ -51,8 +51,13 @@ interface A04Dossier{saved?:{status:string;dossier?:{
    <div class="notice warning" *ngIf="preview?.fieldAccess&&!canUseField" data-testid="si-field-not-started">
     <strong>{{t('Checklist review only — field execution has not started.',
      'القائمة للعرض والمراجعة فقط — المعاينة الميدانية لم تبدأ بعد.')}}</strong>
-    <p>{{t('A04 dossier approval does not authorize field execution. Supervisor scope approval and Execute Work Order are needed before answers, files or AI field actions become available.',
-     'اعتماد A04 لا يبدأ المعاينة. يلزم اعتماد النطاق من المشرف، ثم Execute Work Order لتفعيل الإجابات والمرفقات وإجراءات AI الميدانية.')}}</p>
+    <p *ngIf="preview?.fieldAccess?.mode==='POC_MOCK'&&preview?.fieldAccess?.inspectionStatus==='READY_FOR_SCOPE_REVIEW'"
+       data-testid="si-poc-field-start-guidance">
+     {{t('The mandatory checklist is ready. Return to My Inspection Journey and use Step 5: Execute Work Order · Confirm & Start (POC). The assigned inspector can start this demo without a separate supervisor scope approval; approving A04 alone does not start field work.',
+       'القائمة الإلزامية جاهزة. ارجع إلى رحلة المعاينة ثم اضغط الخطوة الخامسة: تنفيذ أمر التكليف · تأكيد وبدء (POC). المفتش المسند يستطيع البدء في التجربة دون اعتماد نطاق منفصل من المشرف؛ واعتماد A04 وحده لا يبدأ التنفيذ.')}}</p>
+    <p *ngIf="preview?.fieldAccess?.mode!=='POC_MOCK'||preview?.fieldAccess?.inspectionStatus!=='READY_FOR_SCOPE_REVIEW'">
+     {{t('Field answers unlock only after the assigned work order is started through the authorized inspection journey. Formal assignments retain their approval requirements.',
+       'تُفعّل إجابات المعاينة فقط بعد بدء أمر التكليف من الرحلة المصرح بها. التكليفات الرسمية تحتفظ بمتطلبات الاعتماد.')}}</p>
     <p>{{t('Current work order status','حالة أمر التكليف الحالية')}}: <b>{{preview?.fieldAccess?.inspectionStatus||'—'}}</b></p>
     <a routerLink="/moei/smart-inspection/my-work-orders"
      [queryParams]="returnOrderId?{orderId:returnOrderId}:{}" data-testid="si-checklist-continue-in-stepper">
