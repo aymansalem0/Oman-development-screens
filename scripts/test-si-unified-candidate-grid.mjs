@@ -113,7 +113,7 @@ test('saved capacity and inspector assignments are a native, collapsed-by-defaul
  assert.match(body,/data-testid="si-saved-capacity-details"/);
  assert.match(body,/<summary class="si-saved-capacity-summary"/);
  assert.match(body,/data-testid="si-saved-capacity-toggle"/);
- assert.doesNotMatch(body,/<details[^>]+\\sopen(?:=|[ >])/,
+ assert.ok(!body.slice(0,body.indexOf('>')).includes(' open'),
   'the long capacity section must start collapsed');
  for(const required of [
   "cap.status","cap.generatedAt","cap.selectedImos.length",
@@ -122,7 +122,7 @@ test('saved capacity and inspector assignments are a native, collapsed-by-defaul
   'class="si-draft-saved-assignments"','class="si-draft-stats"',
   'Show details','Hide details'
  ])assert.ok(body.includes(required),'missing saved capacity content '+required);
- assert.match(css,/\\.si-saved-capacity-summary:focus-visible/);
- assert.match(css,/\\.si-saved-capacity-details\\[open\\]/);
- assert.match(css,/@media\\(max-width:760px\\)/);
+ assert.ok(css.includes('.si-saved-capacity-summary:focus-visible'));
+ assert.ok(css.includes('.si-saved-capacity-details[open]'));
+ assert.ok(css.includes('@media(max-width:760px)'));
 });
