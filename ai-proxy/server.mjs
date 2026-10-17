@@ -3115,6 +3115,33 @@ const server = createServer(async (req, res) => {
           return respond(res,200,{status:'ok',case:item});
         }
         if(/^[a-f\d-]{36}$/i.test(first)&&!second){
+          // Read-only SI -> NMC provenance / execution diagnostic. This endpoint
+          // never queues paid Airia calls or changes a case risk/decision.
+          if(action==='post-inspection-risk-status'){
+            moeiAuth.require(req);
+            dashboards.assertRole(req,'EDITOR');
+            const item=await cases.get(first);
+            if(!item)throw new NmcCaseError('CASE_NOT_FOUND',404);
+            const latest=[...(item.siInspectionSources||[])
+              .filter(x=>x.source==='SI_APPROVED_REPORT')]
+              .sort((a,b)=>String(b.receivedAt||'').localeCompare(String(a.receivedAt||'')))[0];
+            if(!latest)return respond(res,200,{status:'ok',caseId:first,
+              source:'NOT_SI_APPROVED_INSPECTION',jobStatus:'NOT_APPLICABLE',
+              reportId:null,job:null});
+            const rows=siRiskReassessor.status(latest.inspectionId)
+              .filter(x=>x.nmcCaseId===item.id&&x.reportId===latest.reportId);
+            const job=rows[0]||null;
+            return respond(res,200,{status:'ok',caseId:item.id,
+              source:'SI_APPROVED_INSPECTION',reportId:latest.reportId,
+              jobStatus:job?.status||'NOT_QUEUED',job:job?{
+                status:job.status,aiExecutionStatus:job.aiExecutionStatus||null,
+                errorCode:job.errorCode||null,updatedAt:job.updatedAt||null,
+                riskSaved:Boolean(job.result),
+                // Never return the full evidence, model output, request payload
+                // or personal details from the internal durable job ledger.
+                assessmentId:job.result?.assessmentId||null
+              }:null});
+          }
           if(action==='action-plan-source'){
             const item=await cases.get(first);
             if(!item)throw new NmcCaseError('CASE_NOT_FOUND',404);
