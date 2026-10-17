@@ -275,20 +275,24 @@ test('current journey step is visually distinct and stays active during FIELD_ST
  assert.ok(!workspace.includes('[class.complete]="selected?.status===\'FIELD_STARTED\'"'));
 });
 
-test('sandbox eSDB issues scannable local QR without encoding private identity or asserting live verification',()=>{
+test('sandbox eSDB QR points to sample page without encoding private identity or asserting official verification',()=>{
  const component=src('src/app/pages/moei-seafarer-readiness.component.ts');
  const template=src('src/app/pages/moei-seafarer-readiness.component.html');
  const manifest=src('package.json');
- const payload=component.slice(component.indexOf('const text = "MOEI-eSDB-POC'),
+ const payload=component.slice(component.indexOf('private esdbSpecimenUrl('),
   component.indexOf('void QRCode.toDataURL('));
  assert.ok(component.includes('import QRCode from "qrcode"'));
  assert.ok(manifest.includes('"qrcode": "^1.5.4"'));
  assert.ok(payload.includes('digital.number'));
  assert.ok(payload.includes('digital.verificationReference'));
+ assert.ok(payload.includes("'#/esdb/verify/'"));
+ assert.ok(component.includes('QRCode.toDataURL(url,'));
  assert.ok(!payload.includes('digital.name')&&!payload.includes('digital.sid'));
+ assert.ok(!payload.includes('digital.nationalId')&&!payload.includes('digital.payment'));
  assert.ok(template.includes('data-testid="sdb-issued-qr"'));
  assert.ok(template.includes('data-testid="sdb-download-esdb-qr"'));
- assert.ok(template.includes('No online verification'));
+ assert.ok(template.includes('data-testid="sdb-qr-open-verification"'));
+ assert.ok(template.includes('Not official'));
  assert.ok(component.includes('downloadEsdbCard()'));
  assert.ok(component.includes('this.app?.status === "ISSUED"'));
 });
