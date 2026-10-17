@@ -1931,6 +1931,45 @@ const server = createServer(async (req, res) => {
         }
         return respond(res,200,{status:'ok',...validated});
       }
+      // Manager read-only overview. Distinct from the inspector-owned /my-work-orders
+      // endpoint, which must NEVER leak another inspector's assignments.
+      if(path==='/api/si/v1/maritime-scheduling/inspector-assignments'&&req.method==='GET'){
+        moeiAuth.require(req);
+        dashboards.assertRole(req,'EDITOR');
+        if(!siScheduleOrders.ready)
+          return respond(res,503,{error:'SI_SCHED_MIGRATION_019_REQUIRED'});
+        const schedules=await siScheduleOrders.all();
+        const roster=new Map();
+        for(const schedule of schedules){
+          for(const order of schedule.orders||[]){
+            const a=order.assignment||{},inspectorId=String(a.inspectorId||'');
+            if(!inspectorId)continue;
+            if(!roster.has(inspectorId))roster.set(inspectorId,{
+              inspectorId,inspectorName:a.inspectorName||inspectorId,assignments:[]});
+            const bundle=siTargeting.bundles.find(x=>x.imo===order.imo);
+            roster.get(inspectorId).assignments.push({
+              orderId:order.id,scheduleId:schedule.id,planId:schedule.planId,
+              vesselName:bundle?.inlineContext?.vessel?.name||'IMO '+order.imo,
+              imo:order.imo,portName:a.portName||null,
+              startLocal:a.startLocal||null,endLocal:a.endLocal||null,
+              locationName:a.locationName||null,status:order.status,
+              caseId:order.caseId||null,scopeStatus:order.scopeStatus,
+              checklistStatus:order.checklistStatus,
+              scheduleMode:schedule.mode,operationalBookingConfirmed:
+                schedule.operationalBookingConfirmed===true
+            });
+          }
+        }
+        const inspectors=[...roster.values()].map(row=>({
+          ...row,count:row.assignments.length,
+          assignments:row.assignments.sort((a,b)=>
+            (a.startLocal||'').localeCompare(b.startLocal||''))
+        })).sort((a,b)=>a.inspectorName.localeCompare(b.inspectorName));
+        return respond(res,200,{status:'ok',inspectorCount:inspectors.length,
+          orderCount:inspectors.reduce((n,row)=>n+row.count,0),inspectors,
+          source:'PERSISTED_APPROVED_WORK_ORDERS',
+          operationalBookingsNotAssumed:true});
+      }
       // Signed-in inspector work orders, projected only from canonical Oracle 019.
       if(path==='/api/si/v1/maritime-scheduling/my-work-orders'&&req.method==='GET'){
         if(!siScheduleOrders.ready)
