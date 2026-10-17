@@ -244,3 +244,62 @@ test('source-selected shortlist changes, missing mandatory NMC, or stale capacit
  const legacy=scopeIntegratedSelectionToSavedDraft(full,plan);
  assert.equal(legacy,full,'legacy no-capacity draft stays supported');
 });
+
+test('supervisor excludes optional vessel only from unsaved capacity selection with source evidence retained',()=>{
+ const regular=select();
+ const amended=selectIntegratedPlanVessels({
+  plan,inspectionPlan,dashboard,pscRiskRatePercent:50,uaeFlagRatePercent:100,
+  officerExclusions:[{imo:'9400101',reason:'Supervisor rescheduled optional vessel to another plan'}]
+ });
+ assert.ok(regular.roster.some(x=>x.imo==='9400101'));
+ assert.ok(!amended.roster.some(x=>x.imo==='9400101'));
+ assert.ok(amended.roster.some(x=>x.imo==='9400106'),
+  'mandatory NMC source must remain scheduled');
+ assert.equal(amended.quotas.officerExclusions[0].imo,'9400101');
+ assert.notEqual(amended.selectionHash,regular.selectionHash);
+ assert.equal(amended.advisoryOnly,true);
+ assert.equal(dashboard.vesselCandidates.length,6,'candidate pool not changed');
+});
+test('supervisor cannot remove mandatory NMC referral, unknown or unselected vessel',()=>{
+ const remove=imo=>selectIntegratedPlanVessels({
+  plan,inspectionPlan,dashboard,pscRiskRatePercent:50,uaeFlagRatePercent:100,
+  officerExclusions:[{imo,reason:'Supervisor inspection planning reason'}]
+ });
+ assert.throws(()=>remove('9400106'),
+  /SI_DRAFT_PROTECTED_OR_UNSELECTED_VESSEL_CANNOT_REMOVE/);
+ assert.throws(()=>remove('9400103'),
+  /SI_DRAFT_PROTECTED_OR_UNSELECTED_VESSEL_CANNOT_REMOVE/);
+ assert.throws(()=>remove('9999999'),
+  /SI_DRAFT_PROTECTED_OR_UNSELECTED_VESSEL_CANNOT_REMOVE/);
+ assert.throws(()=>selectIntegratedPlanVessels({
+  plan,inspectionPlan,dashboard,pscRiskRatePercent:50,uaeFlagRatePercent:100,
+  officerExclusions:[{imo:'9400101',reason:'short'}]
+ }),/SI_DRAFT_OFFICER_EXCLUSION_REASON_INVALID/);
+});
+test('audited exclusion can free a published PSC quota for an eligible officer-selected replacement',()=>{
+ const ai={aiSelectionValidated:true,snapshotHash:inspectionPlan.sourceHash,
+  policyRevision:8,maxPlannedVessels:12,
+  pscRisk:{eligibleImos:4,aiSelectedImos:['9400101'],cap:1},
+  uaeFlag:{eligibleImos:2,aiSelectedImos:['9400105'],cap:1},
+  serviceRequests:{eligibleImos:1,aiSelectedImos:[],cap:1,
+   waitingInBacklogImos:[]},overlappingImos:[]};
+ const withAi={...inspectionPlan,agentRunId:'C01',
+  selectionProposal:ai,
+  aiCandidates:dashboard.candidates.map(c=>({
+   imo:c.imo,candidateKey:c.key
+  })),
+  aiRecommendations:[{candidateKey:'KEY-9400104',recommendation:'MANUAL_REVIEW'}]};
+ const amended=selectIntegratedPlanVessels({
+  plan,inspectionPlan:withAi,dashboard,
+  pscRiskRatePercent:50,uaeFlagRatePercent:100,
+  officerExclusions:[{imo:'9400101',
+   reason:'Supervisor capacity shift to suitable alternate vessel'}],
+  officerAdds:[{imo:'9400104',basis:'PSC_RISK',
+   reason:'Supervisor selected another eligible port state vessel'}]
+ });
+ assert.ok(amended.roster.some(x=>x.imo==='9400104'));
+ assert.ok(!amended.roster.some(x=>x.imo==='9400101'));
+ assert.ok(amended.roster.some(x=>x.imo==='9400106'));
+ assert.equal(amended.quotas.pscRisk.targetedImos,1);
+ assert.equal(amended.quotas.officerSelectedAlternatives[0].imo,'9400104');
+});
