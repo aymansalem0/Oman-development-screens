@@ -59,6 +59,7 @@ import {projectGuidedInspection,findGuidedStep,guidedFinalAssessment,
 } from './si-guided-inspection.mjs';
 import {pocInspectorIdForActor} from './si-inspector-identity.mjs';
 import {saveGuidedEvidence,listGuidedEvidence,readGuidedImage} from './si-guided-evidence.mjs';
+import {loadGuidedV01Image,buildGuidedV01Input,validateGuidedV01Reply} from './si-guided-v01.mjs';
 import {suggestCapacityExceptionActions} from './si-capacity-exception-alternatives.mjs';
 import { SiInspectionLifecycle, SiLifecycleError } from './si-inspection-lifecycle.mjs';
 import {SiScheduleOrders,SiWorkOrderError} from './si-schedule-orders.mjs';
