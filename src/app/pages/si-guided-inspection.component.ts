@@ -451,6 +451,13 @@ export class SiGuidedInspectionComponent implements OnInit{
      error:e=>{this.aiBusy=false;
       if(e?.error?.error==='SI_CHECKLIST_VISION_AI_NOT_CONFIGURED_OR_NOT_CONFIRMED'){
         const missing=e?.error?.missing||{};
+        const alternative=e?.error?.alternateV01;
+        if(alternative?.pipelineConfigured&&alternative?.keyConfigured&&!alternative?.enabled){
+          this.error=this.t(
+            'SI-V01 is mapped. Enable SI_V01_ENABLED in AI Settings to analyze this photo; Checklist Vision is a separate contract.',
+            'تم ربط SI-V01. فعّل SI_V01_ENABLED من إعدادات AI لتحليل الصورة؛ Checklist Vision لها عقد مختلف.');
+          return;
+        }
         const parts=[
           missing.checklistAiEnabled?'SI_CHECKLIST_AIRIA_ENABLED':null,
           missing.airiaKey?'AIRIA_MENA_KEY / Vault':null,
@@ -459,6 +466,10 @@ export class SiGuidedInspectionComponent implements OnInit{
         this.error=this.t(
           'Image AI is not configured. Review AI Settings: '+(parts||'checklist vision contract'),
           'تحليل الصورة بالذكاء الاصطناعي غير مهيأ. راجع إعدادات AI: '+(parts||'عقد تحليل الصور'));
+      }else if(e?.error?.error==='SI_V01_UPSTREAM_PROVIDER_UNAVAILABLE'||
+                e?.error?.error==='SI_V01_UPSTREAM_TIMEOUT'){
+        this.error=this.t('SI-V01 photo request failed. Verify the Airia pipeline contract and proxy logs.',
+          'فشل استدعاء SI-V01 لتحليل الصورة. تحقق من عقد الاستجابة وسجلات AI Proxy.');
       }else this.error=e?.error?.error||'SI_AI_PHOTO_UNAVAILABLE';
      }});
  }
