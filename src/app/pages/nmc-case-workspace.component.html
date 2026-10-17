@@ -196,8 +196,47 @@
          {{h.reportId}} · {{h.evidenceId}}</p>
        <p>{{copy('Assessment','التقييم')}}: {{h.assessmentId}} ·
          {{copy('Policy','السياسة')}}: {{h.policyVersion}}</p>
-       <div *ngFor="let factor of h.factorChanges">
-        {{factor.factor}}: {{factor.previous??'—'}} → {{factor.current}}
+       <div class="nmc-si-five-factors" data-testid="nmc-si-five-factor-reassessment">
+        <h4>{{copy('All five AI-reassessed factors · published NMC risk policy',
+          'العوامل الخمسة بعد إعادة تقييم AI · وفق سياسة مخاطر NMC المنشورة')}}</h4>
+        <div class="nmc-si-five-factor-row" *ngFor="let factor of h.factorChanges">
+          <strong>{{factor.factor}}</strong>
+          <span>{{factor.previous===null?
+            copy('First saved assessment','أول تقييم محفوظ'):
+            factor.previous+' / 100'}}
+            → <b>{{factor.current}} / 100</b>
+          </span>
+          <small *ngIf="factor.sourceAgent">{{factor.sourceAgent}}
+            · {{copy('AI confidence','ثقة AI')}}: {{factor.confidence??'—'}}</small>
+          <p *ngIf="factor.reason">{{factor.reason}}</p>
+          <small>{{copy('Report evidence cited','أدلة التقرير المشار إليها')}}:
+            {{factor.evidenceIds.length?factor.evidenceIds.join(', '):
+              copy('No direct report citation — recalculated with other evidence',
+                'لا توجد إحالة مباشرة للتقرير؛ أُعيد تقييم العامل باستخدام أدلة أخرى')}}</small>
+        </div>
+       </div>
+       <div class="nmc-si-defect-links"
+         *ngIf="h.findingFactorAttribution?.length"
+         data-testid="nmc-si-defect-factor-attribution">
+        <h4>{{copy('AI-mapped inspector defects → impacted risk factors',
+          'ربط مخالفات المفتش بعوامل المخاطر بواسطة AI')}}</h4>
+        <p>{{copy('Each link is grounded in an exact AI-cited inspector finding ID. Attribution is not proof of a score increase or an official regulatory decision.',
+          'كل ارتباط يستند إلى معرف مخالفة محدد استشهد به AI؛ ولا يعني بالضرورة ارتفاع درجة المخاطر أو اتخاذ قرار رقابي رسمي.')}}</p>
+        <article class="nmc-si-defect-row"
+          *ngFor="let finding of h.findingFactorAttribution">
+          <strong>{{finding.title}} · {{finding.severity}}</strong>
+          <p>{{finding.description}}</p>
+          <small>{{copy('Finding evidence','دليل المخالفة')}}:
+            {{finding.findingEvidenceId}}</small>
+          <div class="nmc-si-defect-factors">
+            <div *ngFor="let link of finding.linkedFactors"
+              class="nmc-si-defect-factor-link">
+              <b>{{link.factor}}</b> · {{link.sourceAgent}}
+              · {{link.factorSeverity}}/100
+              <p *ngIf="link.reason">{{link.reason}}</p>
+            </div>
+          </div>
+        </article>
        </div>
        <p>{{copy('Regulatory decisions remain with NMC officers.',
         'القرارات الرقابية من صلاحية موظفي NMC فقط.')}}</p>
