@@ -406,8 +406,11 @@ export class SiGuidedInspectionComponent implements OnInit{
      language:this.lang.dir==='rtl'?'ar':'en',confirmRun:true
    }).subscribe({
     next:r=>{this.aiBusy=false;this.aiResults[step.stepId]=r;
-     this.message=this.t('Airia guidance ready. Record your own observation separately.',
-       'تعليمات AI جاهزة. سجّل مشاهدتك الفعلية بنفسك بشكل مستقل.');},
+     this.message=r.stepSpecific?
+       this.t('AI suggested question-specific actions. Verify onboard before recording an answer.',
+        'اقترح AI خطوات مرتبطة بالسؤال؛ تحقق منها على السفينة قبل تسجيل الإجابة.'):
+       this.t('AI returned only general guidance; no verified steps for this checklist item.',
+        'رجّع AI إرشادات عامة فقط، دون خطوات موثقة خاصة بهذا البند.');},
     error:e=>{this.aiBusy=false;this.error=e?.error?.error||
       'SI_FIELD_AI_UNAVAILABLE';}
    });
