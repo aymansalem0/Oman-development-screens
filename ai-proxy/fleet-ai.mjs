@@ -96,9 +96,20 @@ export function verifyFleetSignals(a01,a02,knownIds,pscIds,requirePsc){
       if(!Number.isFinite(s.severity)||s.severity<0||s.severity>100||
          !Number.isFinite(s.confidence)||s.confidence<0||s.confidence>1)
         throw new Error('FLEET_AI_INVALID_SCORE');
+      const unknownEvidence=Array.isArray(s.evidenceIds)?
+        s.evidenceIds.filter(id=>typeof id!=='string'||!allow.has(id)):[];
       if(!Array.isArray(s.evidenceIds)||!s.evidenceIds.length||
-         s.evidenceIds.some(id=>typeof id!=='string'||!allow.has(id)))
-        throw new Error('FLEET_AI_UNVERIFIED_EVIDENCE_ID');
+         unknownEvidence.length){
+        const error=new Error('FLEET_AI_UNVERIFIED_EVIDENCE_ID');
+        error.details={
+          factor,agent:agent.toUpperCase(),
+          unknownCount:unknownEvidence.length,
+          citedCount:Array.isArray(s.evidenceIds)?s.evidenceIds.length:0
+        };
+        // Do NOT log model-supplied arbitrary evidence text; the diagnostic
+        // identifies the factor and bad ID count without exposing raw data.
+        throw error;
+      }
       // Require actual PSC references where external inspection history is present.
       if(requirePsc&&((factor==='history'&&agent==='a01')||(factor==='inspection'&&agent==='a02'))&&
          !s.evidenceIds.some(id=>external.has(id)))
