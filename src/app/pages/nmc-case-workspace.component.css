@@ -703,3 +703,12 @@ a, button, textarea { font:inherit; }
  border-radius:9px;font-size:11px;margin-top:10px;}
 .case-incident-approved p{margin:7px 0;}
 @media(max-width:720px){.case-incident-workflow{padding:12px;}.case-incident-summary{flex-wrap:wrap;}}
+
+/* Read-only Smart Inspection -> NMC AI execution diagnostic. */
+.nmc-si-risk-diagnostic{margin:15px 0;padding:17px 20px;border:1px solid #c7dce8;
+  background:#f6fbfd;border-radius:12px;color:#245267;line-height:1.55}
+.nmc-si-risk-diagnostic h3{font-size:14px;margin:0 0 8px;color:#17475d}
+.nmc-si-risk-diagnostic p{font-size:12px;margin:7px 0;overflow-wrap:anywhere}
+.nmc-si-risk-code{font-family:Consolas,monospace;font-size:11px;overflow-wrap:anywhere}
+.nmc-si-risk-alert{padding:9px 12px;background:#fff0eb;color:#9e3e32;border-radius:8px;
+ border:1px solid #f4d1c7}
