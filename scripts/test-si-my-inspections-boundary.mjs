@@ -224,3 +224,37 @@ test('A04 approval does not itself unlock field execution',()=>{
  assert.ok(workspace.includes("o.status==='READY_FOR_FIELD'"));
  assert.ok(workspace.includes("o.status==='FIELD_STARTED'"));
 });
+
+test('approved A04 returns to selected order journey after authoritative saved review',()=>{
+ const prep=src('src/app/pages/si-inspection-preparation.component.ts');
+ const prepUi=src('src/app/pages/si-inspection-preparation.component.html');
+ assert.ok(prep.includes('import {ActivatedRoute,Router,RouterLink}'));
+ assert.ok(prep.includes('private completed(message:string,returnAfterApproval=false)'));
+ assert.ok(prep.includes("r.saved?.status==='APPROVED'&&this.returnOrderId"));
+ assert.ok(prep.includes("this.router.navigate(['/moei/smart-inspection/my-work-orders']"));
+ assert.ok(prep.includes('queryParams:{orderId:this.returnOrderId}'));
+ assert.ok(prep.includes("this.reviewDecision==='APPROVE'"));
+ assert.ok(workspace.includes('id="inspection-journey"'));
+ assert.ok(prepUi.includes('data-testid="si-return-to-order"'));
+ assert.ok(!prepUi.includes('← Candidate Center'));
+ assert.ok(!prepUi.includes("['/moei/smart-inspection/checklists',id]"));
+});
+
+test('scheduling is immutable after order issuance and delegates inspector actions',()=>{
+ const scheduleUi=src('src/app/pages/si-maritime-batch-scheduling.component.html');
+ const schedule=src('src/app/pages/si-maritime-batch-scheduling.component.ts');
+ assert.ok(scheduleUi.includes('data-testid="si-issued-schedule-locked"'));
+ assert.ok(scheduleUi.includes('data-testid="si-scheduling-continue-journey"'));
+ assert.ok(scheduleUi.includes('scheduleStatusLoaded&&!approvedSchedule'));
+ assert.ok(scheduleUi.includes('!approvedSchedule&&proposal as p'));
+ assert.ok(scheduleUi.includes('data-testid="si-scheduling-optional-ai"'));
+ assert.ok(!scheduleUi.includes("copy('1 · Calculate feasible schedules'"));
+ assert.ok(!scheduleUi.includes("copy('2 · AI Schedule with SI-S01'"));
+ assert.ok(!scheduleUi.includes("(click)=\"workOrderAction(order,'scope')\""));
+ assert.ok(!scheduleUi.includes("(click)=\"workOrderAction(order,'start')\""));
+ assert.ok(!scheduleUi.includes("(click)=\"workOrderAction(order,'activate')\""));
+ assert.ok(schedule.includes('scheduleStatusLoaded=false'));
+ assert.ok(schedule.includes('if(r.schedule){this.proposal=null;this.baselineProposal=null;this.aiAdvice=null;}'));
+ assert.ok(schedule.includes('if(!this.approvedSchedule)this.calculateFeasible(false)'));
+ assert.ok(scheduleUi.includes("routerLink=\"/moei/smart-inspection/my-work-orders\""));
+});
