@@ -85,7 +85,7 @@ export class SiCandidateWorkbenchComponent implements OnInit,OnDestroy{
   rollingPlans:SiRollingPlan[]=[];activePlanId:string|null=null;
   planningError='';planningBusy=false;newPlanVisible=false;
   newPlan={title:'',startsOn:'',endsOn:'',notes:''};
-  newDraftDemoMode=true;newDraftAiConsent=false;
+  newDraftDemoMode=true;newDraftAiConsent=true;
   newDraftProvider:'AIRIA'|'MOCK'|'UNKNOWN'='UNKNOWN';
   newDraftExpectedBatches=0;newDraftPreview:DraftIntegratedPreview|null=null;
   newDraftScope:SiDraftScope|null=null;newDraftScopeLoading=false;
@@ -125,7 +125,7 @@ export class SiCandidateWorkbenchComponent implements OnInit,OnDestroy{
     this.newDraftPreview=null;this.newDraftRequests=[];
     this.newDraftChanged=false;this.newDraftSelectionChanged=false;
     this.newDraftOfficerAdds=[];this.newDraftOfficerExclusions=[];
-    this.newDraftAiConsent=false;
+    this.newDraftAiConsent=true;
     const start=this.localDayOffset(1);
     this.newPlan={title:'Inspection Plan '+start,startsOn:start,
       endsOn:this.localDayOffset(7),notes:''};
@@ -143,9 +143,6 @@ export class SiCandidateWorkbenchComponent implements OnInit,OnDestroy{
         this.newDraftExpectedBatches=info.expectedBatches||0;
         this.newDraftProvider=info.provider;
         this.newDraftScope=info.draftScope||null;
-        if(this.newDraftScope?.requiresOfficerAction){
-          this.newDraftAiConsent=false;
-        }
       },
       error:e=>{
         this.newDraftScopeLoading=false;this.newDraftProvider='UNKNOWN';
@@ -167,7 +164,6 @@ export class SiCandidateWorkbenchComponent implements OnInit,OnDestroy{
     const count=e?.error?.requiredBatches;
     if(e?.error?.scope&&typeof e.error.scope==='object'){
       this.newDraftScope=e.error.scope as SiDraftScope;
-      this.newDraftAiConsent=false;
     }
     if(code==='SI_C01_BATCH_COUNT_CONFIRMATION_REQUIRED'&&
       Number.isInteger(count)&&count>0)this.newDraftExpectedBatches=count;
