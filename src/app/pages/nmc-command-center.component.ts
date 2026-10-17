@@ -101,7 +101,10 @@ export class NmcCommandCenterComponent implements OnInit, AfterViewInit, OnDestr
         status:c.status,reportId:latest?.reportId||null,
         inspectionId:latest?.inspectionId||null,
         summary:latest?.summary||'',forwardedAt:latest?.at||c.updatedAt,
-        risk:c.operationalRisk||null};
+        // Newer approved report invalidates the previous *displayed* AI risk
+        // until a reassessment specifically cites that report ID.
+        risk:c.operationalRisk?.sourceReportId===latest?.reportId?
+          c.operationalRisk:null};
     }).sort((a,b)=>
       (a.status==='RESOLVED'?1:0)-(b.status==='RESOLVED'?1:0)||
       b.forwardedAt.localeCompare(a.forwardedAt));
