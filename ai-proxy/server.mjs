@@ -2014,6 +2014,44 @@ const server = createServer(async (req, res) => {
               .find(x=>x.id===body.evidenceId);
             if(!evidence||!evidence.mimeType.startsWith('image/'))
               return respond(res,409,{error:'SI_GUIDED_AI_LINKED_IMAGE_REQUIRED'});
+            if(useV01){
+              let media,request;
+              try{
+                media=loadGuidedV01Image({
+                  caseId:current.order.caseId,step,evidence,
+                  evidenceRoot:process.env.SI_CHECKLIST_EVIDENCE_PATH||'/data/si-checklist-evidence'
+                });
+                request=buildGuidedV01Input({
+                  caseId:current.order.caseId,imo:current.order.imo,
+                  step,media,caseVersion:current.guide.lifecycleVersion
+                });
+              }catch(error){
+                return respond(res,error.status||409,{
+                  error:error.code||'SI_V01_FIELD_IMAGE_INVALID'
+                });
+              }
+              let upstream;
+              try{upstream=await callSiVisionAiria(request,media);}
+              catch(error){
+                const timeout=error?.name==='TimeoutError'||error?.name==='AbortError';
+                console.error('[si-v01] GUIDED_VISION_UPSTREAM_FAILED '+JSON.stringify({
+                  category:timeout?'TIMEOUT':'PROVIDER_UNAVAILABLE',
+                  caseId:current.order.caseId
+                }));
+                return respond(res,timeout?504:502,{
+                  error:timeout?'SI_V01_UPSTREAM_TIMEOUT':'SI_V01_UPSTREAM_PROVIDER_UNAVAILABLE'
+                });
+              }
+              try{
+                return respond(res,200,validateGuidedV01Reply(upstream,{
+                  caseId:current.order.caseId,media
+                }));
+              }catch(error){
+                return respond(res,error.status||502,{
+                  error:error.code||'SI_V01_AIRIA_CONTRACT_INVALID'
+                });
+              }
+            }
             const published=step.members.find(m=>m.kind==='PUBLISHED'&&m.id===evidence.itemId);
             let advice;
             if(published){
