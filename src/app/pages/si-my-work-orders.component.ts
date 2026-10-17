@@ -88,7 +88,8 @@ interface Dossier{
     </div>
    </header>
    <ol class="journey-track">
-    <li class="journey-step" [class.complete]="!!selected" [class.current]="!selected" data-testid="si-step-select-vessel">
+    <li class="journey-step" [class.complete]="!!selected" [class.current]="!selected"
+     [attr.aria-current]="!selected?'step':null" data-testid="si-step-select-vessel">
      <span class="journey-number">{{selected?'✓':'1'}}</span>
      <strong>{{t('1. Select Vessel','١. اختيار السفينة')}}</strong>
      <p>{{t('Choose one of your assigned vessels from the list below.','اختر سفينة من قائمة المعاينات المسندة إليك أدناه.')}}</p>
@@ -96,7 +97,9 @@ interface Dossier{
      <span class="journey-wait" *ngIf="!selected">{{t('Select a vessel to start','اختر سفينة للبدء')}}</span>
     </li>
     <li class="journey-step" [class.complete]="selected?.checklistStatus==='MANDATORY_PUBLISHED_TEMPLATE_SNAPSHOT'"
-     [class.current]="selected && canActivate(selected)" data-testid="si-step-prepare-dossier">
+     [class.current]="selected && canActivate(selected)"
+     [attr.aria-current]="selected && canActivate(selected)?'step':null"
+     data-testid="si-step-prepare-dossier">
      <span class="journey-number">{{selected?.checklistStatus==='MANDATORY_PUBLISHED_TEMPLATE_SNAPSHOT'?'✓':'2'}}</span>
      <strong>{{t('2. Prepare Inspection Dossier','٢. تجهيز ملف المعاينة')}}</strong>
      <p>{{t('Prepare evidence and pin the mandatory published checklist. No AI request.',
@@ -119,7 +122,7 @@ interface Dossier{
      <span class="journey-number">{{dossier?.readiness?.preparationSaved?'✓':'3'}}</span>
      <strong>{{t('3. Review Preparation & Optional A04','٣. مراجعة التحضير وA04 الاختياري')}}</strong>
      <p>{{t('Review saved source evidence and optional A04 advice. A04 APPROVED does not authorize field execution; regulatory approval is Step 5.',
-      'راجع أدلة المصدر وتوصيات A04 الاختيارية. اعتماد A04 لا يبدأ المعاينة؛ اعتماد النطاق بالخطوة الخامسة.')}}</p>
+      'راجع أدلة المصدر وتوصيات A04 الاختيارية. اعتماد A04 لا يبدأ المعاينة؛ في تجربة POC يبدأ المفتش بنفسه من الخطوة الخامسة.')}}</p>
      <a *ngIf="selected?.caseId && auth.isAdmin" class="journey-action"
       [routerLink]="['/moei/smart-inspection/preparation',selected!.caseId]"
       [queryParams]="{orderId:selected!.orderId}" data-testid="si-stepper-open-preparation">
@@ -163,9 +166,15 @@ interface Dossier{
      <span *ngIf="selected?.checklistStatus!=='MANDATORY_PUBLISHED_TEMPLATE_SNAPSHOT'"
       class="journey-wait">{{t('Requires published checklist preparation','يتطلب تجهيز القائمة المنشورة')}}</span>
     </li>
-    <li class="journey-step" [class.current]="selected?.status==='READY_FOR_SCOPE_REVIEW'||selected?.status==='READY_FOR_FIELD'"
-     [class.complete]="selected?.status==='FIELD_STARTED'" data-testid="si-step-execute-order">
-     <span class="journey-number">{{selected?.status==='FIELD_STARTED'?'✓':'5'}}</span>
+    <li class="journey-step"
+     [class.current]="selected?.status==='READY_FOR_SCOPE_REVIEW'||selected?.status==='READY_FOR_FIELD'||selected?.status==='FIELD_STARTED'"
+     [attr.aria-current]="selected?.status==='READY_FOR_SCOPE_REVIEW'||selected?.status==='READY_FOR_FIELD'||selected?.status==='FIELD_STARTED'?'step':null"
+     data-testid="si-step-execute-order">
+     <span class="journey-number">5</span>
+     <span *ngIf="selected?.status==='READY_FOR_SCOPE_REVIEW'||selected?.status==='READY_FOR_FIELD'||selected?.status==='FIELD_STARTED'"
+       class="journey-current-label" data-testid="si-current-step-indicator">
+       {{t('CURRENT STEP','الخطوة الحالية')}}
+     </span>
      <strong>{{t('5. Execute Work Order · Fill Checklist','٥. تنفيذ أمر التكليف وتعبئة القائمة')}}</strong>
      <p>{{t('In POC demo, the assigned inspector confirms the pinned mandatory scope, then starts field execution. No separate supervisor approval, no paid AI call and no change to the mandatory checklist.',
       'في تجربة POC، يؤكد المفتش المسند القائمة الإلزامية المثبتة ثم يبدأ المعاينة مباشرة، من غير اعتماد مشرف منفصل أو استدعاء AI أو تعديل للقائمة.')}}</p>
@@ -470,13 +479,19 @@ interface Dossier{
   gap:10px;padding:0;margin:0;align-items:stretch}
  .journey-step{position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:8px;
   min-width:0;background:#f6f9fb;border:1px solid #dbe7eb;border-radius:12px;padding:13px}
- .journey-step.current{border-color:#067e74;background:#ebfbf8;box-shadow:0 0 0 1px #067e7440}
+ .journey-step.current{border:2px solid #6940bb;background:#f3efff;
+   box-shadow:0 0 0 3px #6940bb20,0 7px 17px #50349518}
+ .journey-step.current strong{color:#45258f}
+ .journey-step.current::before{content:'';position:absolute;inset:0 auto 0 0;
+   width:5px;background:#6940bb;border-radius:12px 0 0 12px}
+ .journey-current-label{order:-1;border-radius:999px;background:#6940bb;
+   color:#fff;padding:4px 9px;font-weight:900;font-size:10px;letter-spacing:.45px}
  .journey-step.complete{border-color:#93c9ac;background:#f2faf5}
  .journey-step.ready{border-color:#a5d7d2;background:#f3fbfa}
  .journey-number{display:inline-flex;justify-content:center;align-items:center;
   width:28px;height:28px;flex:0 0 28px;border-radius:50%;background:#dce9ef;color:#1d6373;
   font-size:13px;font-weight:900}
- .journey-step.current .journey-number{color:#fff;background:#087e76}
+ .journey-step.current .journey-number{color:#fff;background:#6940bb}
  .journey-step.complete .journey-number{color:#fff;background:#28865e}
  .journey-step strong{color:#1a495a;font-size:12px}
  .journey-step p{font-size:11px;color:#688390;line-height:1.65;margin:0;flex:1}
