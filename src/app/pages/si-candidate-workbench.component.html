@@ -332,8 +332,10 @@
                (click)="toggleDraftAlternative(choice,true)"
                [disabled]="newDraftBusy||!auth.isAdmin||choice.periodStatus==='OUTSIDE_EXECUTION_PLAN'">
                {{copy('+ Add to scheduling draft','+ إضافة لمقترح الجدولة')}}</button>
-             <span *ngIf="isDraftAlternativeSelected(choice.imo)" class="si-plan-added-indicator">
-              {{copy('Added · pending recalculation','تمت الإضافة · بانتظار إعادة الحساب')}}</span>
+             <button type="button" *ngIf="isDraftAlternativeSelected(choice.imo)"
+               (click)="removeDraftAlternative(choice.imo)"
+               [disabled]="newDraftBusy">
+               {{copy('Undo addition','إلغاء الإضافة')}}</button>
             </div>
            </div>
            <div *ngIf="selectedDraftAlternative(choice.imo) as add" class="si-draft-form-grid">
@@ -344,8 +346,9 @@
              <label>{{copy('Supervisor reason (minimum 10 characters)','سبب المشرف (10 أحرف على الأقل)')}}
                <input [(ngModel)]="add.reason" maxlength="500"
                  (ngModelChange)="draftSelectionReasonChanged()"/></label>
-             <button type="button" (click)="removeDraftAlternative(choice.imo)"
-               [disabled]="newDraftBusy">{{copy('Undo addition','إلغاء الإضافة')}}</button>
+             <small class="si-plan-added-indicator">
+              {{copy('Added · pending capacity recalculation',
+               'تمت الإضافة · يلزم إعادة حساب الطاقة')}}</small>
            </div>
          </div>
          </div>
