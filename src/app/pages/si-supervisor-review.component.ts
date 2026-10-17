@@ -1,13 +1,57 @@
 import {CommonModule} from '@angular/common';
 import {HttpClient,HttpHeaders} from '@angular/common/http';
 import {Component,OnInit} from '@angular/core';
+import {forkJoin} from 'rxjs';
 import {FormsModule} from '@angular/forms';
 import {RouterLink} from '@angular/router';
 import {NmcNavigationComponent} from '../components/nmc-navigation.component';
 import {LanguageService} from '../services/language.service';
 import {SiLifecycleCase,SiLifecycleView} from '../services/si-lifecycle.service';
 
-type Decision='APPROVE_REPORT'|'RETURN_REPORT'|'CLOSE';
+type Decision='APPROVE_REPORT'|'RETURN_REPORT'|'CLOSE'|'ISSUE_ACTIONS';
+type ReviewTab='DOSSIER'|'REPORT'|'CAPA'|'DECISION';
+interface DetailAnswer{source:string;title:string;itemId:string;answerStatus:string;
+ answers:Record<string,unknown>;answeredBy:string|null;answerUpdatedAt:string|null;
+ evidenceRefs:string[];templateTitle:string;groupTitle:string|null;}
+interface DossierItem{[key:string]:unknown;}
+interface FullReview{
+ caseId:string;imo:string;
+ dossier:{status:string;revision:number|null;missingEvidence:string[];
+  sections:{
+   identity?:{vesselName?:string;imo?:string;flag?:string;vesselType?:string;
+     regime?:string;regimes?:string[];approvedBy?:string};
+   risk?:{score?:number;level?:string;evaluationId?:string;status?:string}|null;
+   assignments?:{inspectorName?:string;portName?:string;startLocal?:string;
+     operationalBookingConfirmed?:boolean}|null;
+   referrals?:{allSourceReasons?:DossierItem[];objectives?:string[];inspectionScopes?:string[]};
+   sourceEvidence?:{certificates?:DossierItem[];inspectionHistory?:DossierItem[];
+     documents?:DossierItem[];openDeficiencies?:DossierItem[];
+     externalDocumentsVerified?:boolean};
+   aiAnalysis?:{status:string;generated:boolean;modelDraft?:{focusAreas?:DossierItem[];
+     predictedDeficiencies?:DossierItem[]}|null};
+  }|null;
+ };
+ inspector:{checks:{checkId:string;title:string;decision:string;mandatory:boolean;
+  inspectorNote:string;naReason:string;severity:string|null;evidenceRefs:string[]}[];
+  publishedChecklist:DetailAnswer[];evidenceFiles:{id:string;filename:string|null;
+   itemId:string|null;mimeType:string|null}[];
+  confirmedFindings:{id:string;title:string;severity:string;description:string;
+   evidenceRefs:string[]}[];
+  publishedChecklistState:string;
+  signatures:{submittedBy:string|null;submittedAt:string|null;
+   supervisor:string|null;approvedAt:string|null};
+  counts:{checked:number;passed:number;deficiencies:number;notApplicable:number;dynamicQuestions:number}};
+ nmc:{linked:boolean;referralId:string|null;linkedCaseId:string|null;
+   booking:{id:string;status:string}|null};
+ regulatory:{riyadhMouReportingPotentiallyApplicable:boolean;
+  officialRiyadhIntegrationConfirmed:false;transmissionStatus:string};
+ audit:{id:string;version:number;action:string;actor:string;at:string;reason:string}[];
+}
+type RegulatoryType='PREPARE_RIYADH_MOU_REPORT'|'REFER_DETENTION_REVIEW'|
+ 'REQUEST_ADDITIONAL_INSPECTION'|'PREPARE_NMC_NOTIFICATION';
+interface DraftRow{type:RegulatoryType;state:string;preparedBy:string;
+ preparedAt:string;reason:string;officialSubmission:false;}
+
 @Component({
  selector:'app-si-supervisor-review',standalone:true,
  imports:[CommonModule,FormsModule,RouterLink,NmcNavigationComponent],
@@ -58,7 +102,74 @@ type Decision='APPROVE_REPORT'|'RETURN_REPORT'|'CLOSE';
        <div><span>{{copy('Inspection ID','رقم المعاينة')}}</span>
         <strong>{{v.inspectionCase.id}}</strong></div>
       </div>
-      <article class="report" *ngIf="v.record?.report as report;else noReport">
+      <nav class="review-tabs" role="tablist" aria-label="Supervisor inspection review sections">
+       <button type="button" *ngFor="let section of reviewTabs"
+        [class.selected]="tab===section.id" [attr.aria-selected]="tab===section.id"
+        (click)="tab=section.id">
+        {{copy(section.en,section.ar)}}
+       </button>
+      </nav>
+      <section *ngIf="tab==='DOSSIER'" class="review-section" data-testid="si-supervisor-vessel-dossier">
+       <ng-container *ngIf="full as detail;else sourceLoading">
+        <h3>{{copy('Complete Vessel Dossier','ملف السفينة الكامل')}}</h3>
+        <p class="muted">{{copy('Source-grounded vessel information. Missing evidence is shown explicitly.',
+          'بيانات السفينة من المصادر المحفوظة؛ الأدلة غير المتاحة موضحة بشكل صريح.')}}</p>
+        <div class="source-chip">{{detail.dossier.status}} · v{{detail.dossier.revision||'—'}}</div>
+        <ng-container *ngIf="detail.dossier.sections as d">
+         <div class="attributes dossier-grid">
+          <div><span>{{copy('Vessel / IMO','السفينة / IMO')}}</span>
+           <strong>{{d.identity?.vesselName||currentVesselName}} · {{detail.imo}}</strong></div>
+          <div><span>{{copy('Flag / Vessel Type','العلم / نوع السفينة')}}</span>
+           <strong>{{d.identity?.flag||'—'}} / {{d.identity?.vesselType||'—'}}</strong></div>
+          <div><span>{{copy('Regime / Scopes','نوع المعاينة / النطاقات')}}</span>
+           <strong>{{d.identity?.regime||v.inspectionCase.regime}} · {{d.identity?.regimes?.join(', ')||'—'}}</strong></div>
+          <div><span>{{copy('Saved Risk Assessment','تقييم المخاطر المحفوظ')}}</span>
+           <strong>{{d.risk?.level||'—'}} · {{d.risk?.score??'—'}}</strong></div>
+          <div><span>{{copy('Assigned Inspector','المعاين المكلف')}}</span>
+           <strong>{{d.assignments?.inspectorName||v.record?.assignment?.inspector||'—'}}</strong></div>
+          <div><span>{{copy('Port / Schedule','الميناء / الجدولة')}}</span>
+           <strong>{{d.assignments?.portName||v.record?.assignment?.port||'—'}}
+            · {{d.assignments?.startLocal||'—'}}</strong></div>
+         </div>
+         <div class="dossier-collections">
+          <div class="dossier-box"><h3>{{copy('Certificates & Documents','الشهادات والمستندات')}}</h3>
+           <small>{{copy('Certificates','الشهادات')}}: {{d.sourceEvidence?.certificates?.length||0}}
+            · {{copy('Documents','المستندات')}}: {{d.sourceEvidence?.documents?.length||0}}</small>
+           <div class="finding" *ngFor="let item of d.sourceEvidence?.certificates">
+            {{sourceTitle(item)}}</div>
+           <div class="finding" *ngFor="let item of d.sourceEvidence?.documents">
+            {{sourceTitle(item)}}</div>
+           <p class="muted" *ngIf="!d.sourceEvidence?.certificates?.length&&!d.sourceEvidence?.documents?.length">
+            {{copy('No verified certificates or documents in the available source bundle.',
+             'لا توجد شهادات أو مستندات مؤكدة ضمن المصدر المتاح.')}}</p>
+          </div>
+          <div class="dossier-box"><h3>{{copy('Prior Inspections & Open Deficiencies','المعاينات السابقة والملاحظات المفتوحة')}}</h3>
+           <div class="finding" *ngFor="let item of d.sourceEvidence?.inspectionHistory">
+            {{sourceTitle(item)}}</div>
+           <div class="finding" *ngFor="let item of d.sourceEvidence?.openDeficiencies">
+            {{sourceTitle(item)}}</div>
+           <p *ngIf="!d.sourceEvidence?.inspectionHistory?.length&&!d.sourceEvidence?.openDeficiencies?.length" class="muted">
+            {{copy('No inspection history or open deficiencies in the available source.',
+             'لا يوجد سجل معاينات أو مخالفات مفتوحة في البيانات المتاحة.')}}</p>
+          </div>
+          <div class="dossier-box"><h3>{{copy('Inspection Referrals & Intelligence','الإحالات وأسباب الاختيار')}}</h3>
+           <div class="finding" *ngFor="let source of d.referrals?.allSourceReasons">
+            {{sourceTitle(source)}}</div>
+           <p class="muted" *ngIf="!d.referrals?.allSourceReasons?.length">
+            {{copy('No source referrals recorded.','لا توجد إحالات محفوظة.')}}</p>
+           <p *ngIf="d.aiAnalysis?.modelDraft?.predictedDeficiencies?.length" class="origin">
+            {{copy('A04 AI hypotheses are advisory only; they are not confirmed deficiencies.',
+             'توقعات A04 استشارية فقط، ولا تمثل مخالفات مثبتة.')}}</p>
+          </div>
+         </div>
+        </ng-container>
+        <div class="origin" *ngIf="detail.dossier.missingEvidence.length">
+         <b>{{copy('Missing / Unverified Data','بيانات ناقصة أو غير متحقق منها')}}</b>
+         <ul><li *ngFor="let gap of detail.dossier.missingEvidence">{{gap}}</li></ul>
+        </div>
+       </ng-container>
+      </section>
+      <article class="report review-section" *ngIf="tab==='REPORT'&&v.record?.report as report;else noReport">
        <h3>{{copy('Inspector Report','تقرير المفتش')}}</h3>
        <p>{{report.summary}}</p>
        <div class="attributes">
@@ -67,43 +178,168 @@ type Decision='APPROVE_REPORT'|'RETURN_REPORT'|'CLOSE';
         <div><span>{{copy('Confirmed findings','الملاحظات المؤكدة')}}</span><b>{{report.findingsCount}}</b></div>
         <div><span>{{copy('Major / Critical','كبيرة / حرجة')}}</span><b>{{report.majorCount}} / {{report.criticalCount}}</b></div>
        </div>
+       <h3>{{copy('Inspector Checklist · Item by Item','قائمة المعاينة · قرار المفتش في كل بند')}}</h3>
+       <p class="muted">{{copy('These are recorded human inspector decisions, not AI-generated compliance findings.',
+        'القرارات المعروضة مسجلة بواسطة المفتش، وليست مخالفات تم إنشاؤها تلقائيًا بواسطة AI.')}}</p>
+       <div class="review-table-wrap"><table class="review-table">
+        <thead><tr><th>{{copy('Inspection Item','بند المعاينة')}}</th>
+         <th>{{copy('Decision','قرار المفتش')}}</th>
+         <th>{{copy('Inspector Note','ملاحظات المفتش')}}</th>
+         <th>{{copy('Evidence','الأدلة')}}</th></tr></thead>
+        <tbody><tr *ngFor="let check of full?.inspector?.checks">
+         <td>{{check.title}}<small>{{check.checkId}}</small></td>
+         <td><span class="decision-chip">{{check.decision}}</span>
+          <small *ngIf="check.severity">{{check.severity}}</small></td>
+         <td>{{check.inspectorNote||check.naReason||'—'}}</td>
+         <td>{{check.evidenceRefs.join(', ')||'—'}}</td>
+        </tr></tbody>
+       </table></div>
+       <h3>{{copy('Dynamic Checklist Answers','إجابات قوائم المعاينة الديناميكية')}}</h3>
+       <small *ngIf="full">{{copy('Checklist status','حالة القائمة')}}:
+        {{full.inspector.publishedChecklistState}}</small>
+       <div *ngFor="let answer of full?.inspector?.publishedChecklist" class="question-answer">
+        <div class="question-head"><b>{{answer.title}}</b><span class="status">{{answer.answerStatus}}</span></div>
+        <small>{{answer.templateTitle}} · {{answer.groupTitle||'—'}} · {{answer.answeredBy||'—'}}</small>
+        <div class="answer-fields">
+         <span *ngFor="let field of answer.answers|keyvalue">
+          <b>{{field.key}}:</b> {{field.value}}</span>
+        </div>
+        <small>{{copy('Evidence','الأدلة')}}: {{answer.evidenceRefs.join(', ')||'—'}}</small>
+       </div>
+       <div *ngIf="full?.inspector?.evidenceFiles?.length" class="dossier-box">
+        <h3>{{copy('Uploaded Evidence Register','سجل الملفات والمرفقات')}}</h3>
+        <p *ngFor="let evidence of full?.inspector?.evidenceFiles" class="evidence-row">
+         <b>{{evidence.filename||evidence.id}}</b>
+         <small>{{evidence.mimeType||'—'}} · {{evidence.id}} · {{evidence.itemId||'—'}}</small>
+        </p>
+        <small>{{copy('Evidence metadata is shown. Opening restricted original files requires a separate authorized evidence viewer.',
+         'تُعرض بيانات المرفقات؛ فتح الملفات الأصلية يتطلب عارض أدلة مُصرحًا به.')}}</small>
+       </div>
+       <p *ngIf="full?.inspector?.signatures as signatures" class="origin">
+        {{copy('Submitted by','مقدم التقرير')}}: {{signatures.submittedBy||'—'}}
+        · {{copy('Submitted at','وقت التقديم')}}: {{signatures.submittedAt||'—'}}
+        · {{copy('Supervisor','المشرف')}}: {{signatures.supervisor||'—'}}
+       </p>
        <h3>{{copy('Inspector Findings','ملاحظات المفتش')}}</h3>
        <p *ngIf="!v.record?.findings?.length" class="muted">{{copy('No deficiencies recorded','لم يسجل المفتش مخالفات')}}</p>
        <div class="finding" *ngFor="let finding of v.record?.findings">
         <b>{{finding.title}} · {{finding.severity}}</b><p>{{finding.description}}</p>
         <small>{{copy('Evidence references','مراجع الأدلة')}}: {{finding.evidenceRefs.join(', ')||'—'}}</small>
        </div>
-       <h3 *ngIf="v.record?.actions?.length">{{copy('Corrective Actions','الإجراءات التصحيحية')}}</h3>
-       <div class="finding" *ngFor="let action of v.record?.actions">
-        {{action.instruction}} · <b>{{action.status}}</b>
+      </article>
+      <section *ngIf="tab==='CAPA'" class="review-section" data-testid="si-supervisor-capa">
+       <h3>{{copy('Corrective Action Plan (CAPA)','خطة الإجراءات التصحيحية')}}</h3>
+       <p class="muted">{{copy('An approved inspector finding requires a traceable corrective owner, due date and follow-up verification before closure.',
+        'كل مخالفة معتمدة تتطلب مسؤولًا عن التصحيح وموعدًا نهائيًا ومتابعة قبل الإغلاق.')}}</p>
+       <p *ngIf="!v.record?.findings?.length" class="origin">
+        {{copy('No confirmed findings: CAPA is not required for this report.',
+          'لا توجد مخالفات مؤكدة؛ لا يلزم إصدار خطة إجراءات تصحيحية لهذا التقرير.')}}</p>
+       <div *ngFor="let finding of v.record?.findings" class="finding">
+        <b>{{finding.title}} · {{finding.severity}}</b>
+        <p>{{finding.description}}</p>
+        <small>{{copy('Evidence','الأدلة')}}: {{finding.evidenceRefs.join(', ')||'—'}}</small>
+        <div class="capa-form" *ngIf="v.record?.stage==='REPORT_APPROVED'">
+         <label>{{copy('Action Owner','المسؤول عن التصحيح')}}
+          <input [(ngModel)]="capaDraft[finding.id].owner" maxlength="120"/></label>
+         <label>{{copy('Due Date','التاريخ المستهدف')}}
+          <input type="date" [(ngModel)]="capaDraft[finding.id].dueDate"/></label>
+         <label>{{copy('Corrective Instruction','تعليمات التصحيح')}}
+          <textarea rows="2" [(ngModel)]="capaDraft[finding.id].instruction" maxlength="900"></textarea></label>
+        </div>
        </div>
+       <div *ngFor="let action of v.record?.actions" class="finding">
+        <b>{{action.instruction}}</b><small>{{action.status}} · {{action.owner}} · {{action.dueDate}}</small>
+        <p>{{copy('Evidence','الأدلة')}}: {{action.evidenceRefs.join(', ')||'—'}}</p>
+       </div>
+       <button type="button" class="button approve" (click)="issueActions()"
+        *ngIf="v.record?.stage==='REPORT_APPROVED'&&v.record?.findings?.length"
+        [disabled]="busy||!canIssueActions">
+         {{copy('Issue Corrective Actions','إصدار الإجراءات التصحيحية')}}</button>
+       <h3>{{copy('Follow-Up Inspections','معاينات المتابعة')}}</h3>
+       <div *ngFor="let follow of v.record?.followUps" class="finding">
+        <b>{{follow.mode}} · {{follow.result}}</b><p>{{follow.note}}</p>
+        <small>{{follow.inspector}} · {{follow.at}}</small>
+       </div>
+       <p *ngIf="!v.record?.followUps?.length" class="muted">
+        {{copy('No follow-up verification has been recorded yet.','لم يتم تسجيل معاينة متابعة حتى الآن.')}}</p>
+      </section>
+      <section *ngIf="tab==='DECISION'" class="review-section" data-testid="si-supervisor-regulatory-actions">
+       <h3>{{copy('Supervisor Decision & Regulatory Routing','قرار المشرف ومسارات الإبلاغ الرقابي')}}</h3>
        <div class="origin" *ngIf="v.inspectionCase.nmcReferralId">
-        {{copy('NMC referral:','طلب NMC:')}} {{v.inspectionCase.nmcReferralId}}.
-        {{copy('When closed, the approved inspection outcome is recorded in the linked NMC Case. NMC risk is not recalculated automatically.',
-           'بعد الإغلاق، تُسجَّل نتيجة المعاينة المعتمدة في حالة NMC المرتبطة، دون تغيير درجة مخاطر NMC تلقائيًا.')}}
-       </div>
+        {{copy('This inspection originates from NMC referral','هذه المعاينة واردة من إحالة NMC')}}
+        <b>{{v.inspectionCase.nmcReferralId}}</b>.
+        {{copy('Approval / return is recorded in the linked NMC Case. Closing records the final inspection outcome.',
+         'يتم تسجيل الاعتماد أو الإرجاع في NMC Case المرتبطة، ثم تُسجَّل النتيجة النهائية بعد إغلاق المعاينة.')}}</div>
        <div class="review-form">
-        <label for="supervisor-reason">{{copy('Supervisor decision reason (at least 8 characters)','سبب قرار المشرف (8 أحرف على الأقل)')}}</label>
+        <label for="supervisor-reason">{{copy('Decision reason (at least 8 characters)','سبب القرار (8 أحرف على الأقل)')}}</label>
         <textarea id="supervisor-reason" rows="3" [(ngModel)]="reason"></textarea>
         <div class="actions">
          <button type="button" class="button approve" (click)="decide('APPROVE_REPORT')"
           [disabled]="busy||v.record?.stage!=='REPORT_PENDING_REVIEW'||reason.trim().length<8">
-           {{copy('Approve Inspector Report','اعتماد تقرير المفتش')}}</button>
+          {{copy('Approve Inspector Report','اعتماد تقرير المفتش')}}</button>
          <button type="button" class="button return" (click)="decide('RETURN_REPORT')"
           [disabled]="busy||v.record?.stage!=='REPORT_PENDING_REVIEW'||reason.trim().length<8">
-           {{copy('Return to Inspector','إرجاع للمفتش')}}</button>
+          {{copy('Return to Inspector','إرجاع للمفتش')}}</button>
          <button type="button" class="button close" (click)="decide('CLOSE')"
           [disabled]="busy||!canClose||reason.trim().length<8">
-           {{copy('Close Inspection Case','إغلاق حالة المعاينة')}}</button>
-         <button type="button" *ngIf="v.inspectionCase.nmcReferralId&&v.record?.stage==='CLOSED'"
-          class="button" (click)="retryNmc()" [disabled]="busy">
-           {{copy('Verify / Retry NMC Sync','فحص / إعادة مزامنة NMC')}}</button>
+          {{copy('Close Inspection Case','إغلاق المعاينة')}}</button>
         </div>
-        <p class="muted">{{copy('Closing requires an approved report and all corrective actions verified. A separate risk reassessment remains required where applicable.',
-          'الإغلاق يتطلب تقريرًا معتمدًا والتحقق من الإجراءات التصحيحية. تحديث تقييم المخاطر إجراء مستقل عند الحاجة.')}}</p>
+        <p class="muted">{{copy('Approve is not close. A confirmed deficiency needs verified CAPA and follow-up before closure.',
+         'الاعتماد غير الإغلاق؛ المخالفات المؤكدة تتطلب تصحيحًا متحققًا منه ومتابعة قبل الإغلاق.')}}</p>
        </div>
-      </article>
-      <ng-template #noReport><p class="muted">{{copy('No submitted inspector report yet.','لم يتم تقديم تقرير المعاينة بعد.')}}</p></ng-template>
+       <div class="dossier-box regulation">
+        <h3>{{copy('Prepare Regulatory / Interagency Action','تجهيز إجراء رقابي أو إخطار جهة')}}</h3>
+        <p>{{copy('These actions create tracked drafts for human authorization only. They do not transmit to Riyadh MoU, detain a vessel, or create an official case.',
+          'هذه الإجراءات تنشئ مسودات مراجعة بشرية فقط؛ ولا ترسل إلى مذكرة الرياض، ولا تحتجز سفينة، ولا تنشئ قضية رسمية.')}}</p>
+        <label>{{copy('Proposed action','الإجراء المقترح')}}</label>
+        <select [(ngModel)]="regulatoryType">
+         <option value="REQUEST_ADDITIONAL_INSPECTION">{{copy('Request Additional Inspection','طلب معاينة إضافية')}}</option>
+         <option value="REFER_DETENTION_REVIEW">{{copy('Refer for Detention Review','إحالة لمراجعة الاحتجاز')}}</option>
+         <option value="PREPARE_NMC_NOTIFICATION">{{copy('Prepare NMC Notification','إعداد إخطار إلى NMC')}}</option>
+         <option value="PREPARE_RIYADH_MOU_REPORT"
+          [disabled]="!full?.regulatory?.riyadhMouReportingPotentiallyApplicable">
+          {{copy('Prepare Riyadh MoU PSC Report','تجهيز تقرير PSC لمذكرة الرياض')}}</option>
+        </select>
+        <label>{{copy('Regulatory review reason','مبررات الإحالة أو التقرير')}}</label>
+        <textarea rows="3" [(ngModel)]="regulatoryReason" maxlength="1200"></textarea>
+        <button type="button" class="button approve" (click)="prepareRegulatory()"
+          [disabled]="busy||v.record?.report?.status!=='APPROVED'||regulatoryReason.trim().length<8">
+          {{copy('Prepare for Human Review','تجهيز للمراجعة البشرية')}}</button>
+        <p class="muted">{{copy('Riyadh MoU transmission: NOT CONNECTED / NOT SENT.',
+          'الإرسال إلى مذكرة الرياض: غير متصل / لم يتم الإرسال.')}}</p>
+        <div *ngFor="let draft of regulatoryDrafts" class="finding">
+         <b>{{draft.type}}</b><small>{{draft.state}} · {{draft.preparedBy}} · {{draft.preparedAt}}</small>
+         <p>{{draft.reason}}</p>
+        </div>
+       </div>
+       <div class="dossier-box">
+        <h3>{{copy('NMC Case Notification & Reconciliation','إخطار NMC وتسوية الحالة')}}</h3>
+        <div *ngIf="full?.nmc?.linked;else noNmc">
+         <p>{{copy('Linked NMC Case','حالة NMC المرتبطة')}}: {{full?.nmc?.linkedCaseId||'—'}}</p>
+         <p>{{copy('Referral','الإحالة')}}: {{full?.nmc?.referralId||'—'}}</p>
+         <button type="button" class="button" (click)="retryNmcReview()"
+          *ngIf="v.record?.report?.status==='APPROVED'||v.record?.report?.status==='RETURNED'"
+          [disabled]="busy">{{copy('Verify / Retry NMC Review Notification','فحص / إعادة إخطار NMC بقرار المشرف')}}</button>
+         <button type="button" class="button" (click)="retryNmc()"
+          *ngIf="v.record?.stage==='CLOSED'" [disabled]="busy">
+          {{copy('Verify / Retry NMC Closure','فحص / إعادة إغلاق إحالة NMC')}}</button>
+        </div>
+        <ng-template #noNmc><p class="muted">{{copy('No linked NMC Case. A notification draft is not a delivered NMC message.',
+         'لا توجد حالة NMC مرتبطة؛ إعداد مسودة إخطار لا يعني وصول إخطار فعلي للمركز.')}}</p></ng-template>
+        <p *ngIf="nmcFeedback" class="notice">{{nmcFeedback}}</p>
+       </div>
+       <details class="audit"><summary>{{copy('Review Audit Trail','سجل المراجعة')}}</summary>
+        <div *ngFor="let event of full?.audit" class="finding">
+         {{event.action}} · {{event.actor}} · {{event.at}}<small>{{event.reason}}</small>
+        </div>
+       </details>
+      </section>
+      <ng-template #sourceLoading>
+       <p class="muted">{{busy?copy('Loading source dossier…','جاري تحميل ملف السفينة…'):
+         copy('Source dossier is currently unavailable.','ملف السفينة غير متاح حاليًا.')}}</p>
+      </ng-template>
+      <ng-template #noReport><p *ngIf="tab==='REPORT'" class="muted">
+       {{copy('No submitted inspector report yet.','لم يتم تقديم تقرير المعاينة بعد.')}}</p></ng-template><p class="muted">{{copy('No submitted inspector report yet.','لم يتم تقديم تقرير المعاينة بعد.')}}</p></ng-template>
      </ng-container>
      <ng-template #noSelection><div class="empty">{{copy('Choose a returned inspection to review its vessel and report.','اختر معاينة لعرض بيانات السفينة وتقرير المفتش.')}}</div></ng-template>
     </section>
