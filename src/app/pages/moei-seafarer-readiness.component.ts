@@ -513,7 +513,7 @@ export class MoeiSeafarerReadinessComponent implements OnInit, OnDestroy {
   // be served from a phone-accessible HTTPS domain, not desktop localhost.
   private esdbSpecimenUrl(reference:string,number:string):string{
     return window.location.origin + window.location.pathname +
-      '#/moei/seafarers/verify/' + encodeURIComponent(reference) +
+      '#/esdb/verify/' + encodeURIComponent(reference) +
       '?number=' + encodeURIComponent(number);
   }
   get qrLocalhostOnly():boolean{
