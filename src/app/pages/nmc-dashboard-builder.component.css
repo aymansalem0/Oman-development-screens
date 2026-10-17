@@ -129,3 +129,14 @@ app-nmc-distribution-chart{display:block;min-width:0}
  padding:7px;font-size:10px;color:#285f57;background:#fff}
 @media(max-width:750px){.db-ai-preview-banner{flex-direction:column;align-items:stretch}
 .db-ai-preview-actions{width:100%}.db-ai-preview-actions button{flex:1;white-space:normal}}
+
+/* Continuous improvement overview: observed events and POC illustrative cards. */
+.db-ai-ci-create{background:linear-gradient(120deg,#087b82,#235b92);border-color:#167a85}
+.db-ai-ci-status{padding:14px 16px;border:1px solid #a7d9dd;background:#f0f9fc;
+  border-radius:13px;margin:10px 0 16px;display:flex;gap:9px;flex-wrap:wrap;align-items:center}
+.db-ai-ci-status strong{font-size:12px;color:#155b75}
+.db-ai-ci-status span{display:block;flex:1 1 360px;font-size:10px;line-height:1.65;color:#436f82}
+.db-ai-ci-status .db-outline{flex:none}
+.db-ai-ci-source{padding:6px 9px;background:#edf7fd;color:#23718a;font-size:9px;font-weight:800;
+  border:1px solid #c5e0eb;border-radius:7px;margin:9px 0}
+@media(max-width:650px){.db-ai-ci-status{flex-direction:column;align-items:stretch}}
