@@ -380,16 +380,35 @@
        <small>{{copy('New draft shows eligible candidates before AI. Unselected vessels remain available for future plans.',
          'المسودة تعرض السفن المؤهلة قبل تشغيل AI. السفن غير المختارة تظل متاحة للخطط القادمة.')}}</small>
      </div>
-    <section *ngIf="plan?.capacityDraft as cap" class="si-integrated-preview"
-      aria-label="Saved integrated inspector capacity draft">
-      <h3>{{copy('Saved Draft · Capacity & Inspector Assignments',
-       'المسودة المحفوظة · الطاقة وتوزيع المهندسين')}}</h3>
-      <p class="si-rolling-note">
-       {{cap.status}} · {{cap.generatedAt|date:'short'}}
-       · {{cap.demoMode?copy('POC synthetic workforce — NOT ERP booking',
-        'موارد تجريبية للـPOC وليست حجوزات ERP'):
-        copy('ERP source-backed workforce snapshot','طاقة تشغيلية وفق لقطة ERP')}}
-      </p>
+    <details *ngIf="plan?.capacityDraft as cap"
+      class="si-integrated-preview si-saved-capacity-details"
+      data-testid="si-saved-capacity-details">
+      <summary class="si-saved-capacity-summary" data-testid="si-saved-capacity-toggle">
+        <span class="si-saved-capacity-heading">
+          <strong>{{copy('Saved Draft · Capacity & Inspector Assignments',
+           'المسودة المحفوظة · الطاقة وتوزيع المهندسين')}}</strong>
+          <small>{{cap.status}} · {{cap.generatedAt|date:'short'}}
+            · {{cap.demoMode?copy('POC synthetic workforce — NOT ERP booking',
+              'موارد تجريبية للـPOC وليست حجوزات ERP'):
+              copy('ERP source-backed workforce snapshot',
+              'طاقة تشغيلية وفق لقطة ERP')}}</small>
+        </span>
+        <span class="si-saved-capacity-controls">
+          <span class="si-saved-capacity-count">{{cap.selectedImos.length}}
+            {{copy('vessels','سفينة')}} · {{cap.proposedAssignments.length}}
+            {{copy('inspector assignments','تكليف مفتش')}}</span>
+          <span *ngIf="cap.mandatoryUnscheduled.length || cap.unscheduled.length"
+            class="si-saved-capacity-alert" role="status">
+            {{cap.mandatoryUnscheduled.length || cap.unscheduled.length}}
+            {{copy('capacity exception(s)','استثناء طاقة')}}</span>
+          <span class="si-saved-capacity-open-label">
+            {{copy('Show details','عرض التفاصيل')}}</span>
+          <span class="si-saved-capacity-close-label">
+            {{copy('Hide details','إخفاء التفاصيل')}}</span>
+          <span class="si-saved-capacity-chevron" aria-hidden="true"></span>
+        </span>
+      </summary>
+      <div class="si-saved-capacity-body">
       <div class="si-draft-stats">
        <div><strong>{{cap.c01SelectedImos?.length??cap.selectedImos.length}}</strong><span>{{copy('AI selected','السفن التي اختارها AI')}}</span></div>
        <div><strong>{{cap.selectedImos.length}}</strong><span>{{copy('Inside final Draft','داخل المسودة النهائية')}}</span></div>
@@ -423,7 +442,8 @@
       </p>
       <p class="si-rolling-note">{{copy('Saved allocation is provisional. Supervisor approval revalidates current ERP, source and booking conflicts before issuing any work order.',
        'التخصيص مبدئي؛ عند اعتماد المشرف تُراجع المصادر والـERP والتعارضات الحالية قبل إصدار أي أمر تكليف.')}}</p>
-    </section>
+      </div>
+    </details>
     <p class="si-rolling-note" *ngIf="plan?.readOnlyHistorical" role="status">
       {{copy('Historical plan shown from its saved approval snapshot. Current source data may differ; this plan cannot be edited.',
         'الخطة المعروضة محفوظة من وقت اعتمادها؛ قد تختلف بيانات المصادر الحالية، ولا يمكن تعديل هذه الخطة.')}}
