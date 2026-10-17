@@ -613,7 +613,7 @@ small{display:block;margin-top:20px;color:#7a4530;font-weight:bold}
 <div class="qr"><img src="${this.issuedQrDataUrl}" alt="eSDB sandbox QR code">
 <div><b>SCAN QR</b><p>${escape(d.verificationReference)}</p>
 <p>Opens read-only sample verification page · NOT OFFICIAL</p>
-<p style="font-size:10px;overflow-wrap:anywhere">${escape(this.issuedQrUrl)}</p></div></div>
+<p style="font-size:10px;overflow-wrap:anywhere"><a href="${escape(this.issuedQrUrl)}" target="_blank" rel="noopener noreferrer">Open the sandbox verification page</a></p></div></div>
 <small>SPECIMEN · SANDBOX · NOT AN OFFICIAL DOCUMENT</small>
 </article></body></html>`;
       const blob = new Blob([markup], {type:"text/html;charset=utf-8"});
