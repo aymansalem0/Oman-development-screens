@@ -161,13 +161,13 @@ function envConfig(env){
     const raw=env[d.key],def=DEFAULTS[d.key];
     if(d.type==='boolean')value[d.key]=raw===undefined?def:bool(raw);
     if(d.type==='number')value[d.key]=num(raw,def,d.min,d.max);
-    if(d.type==='pipeline'||d.type==='choice'){
+    if(d.type==='pipeline'||d.type==='choice'||d.type==='ui-template'){
       try{value[d.key]=normalize(d.key,raw===undefined?def:raw);}
       catch{value[d.key]=def;}
     }
     if(d.type==='url'){
       try{value[d.key]=validateAiriaUrl(raw||def);}
-      catch{value[d.key]=d.type==='ui-template'?'':DEFAULTS.AIRIA_BASE_URL;}
+      catch{value[d.key]=DEFAULTS.AIRIA_BASE_URL;}
     }
   }
   // Old ENV true must not reactivate SI-P01 in this POC.
