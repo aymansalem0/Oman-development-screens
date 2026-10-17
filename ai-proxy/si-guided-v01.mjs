@@ -55,6 +55,18 @@ export function buildGuidedV01Input({caseId,imo,step,media,caseVersion}){
   context:{baseCheckMandatory:media.baseCheckMandatory,
     question:label(step.title,220),instructions:label(step.systemAction,1200)},
   requestedOutputs:['CANDIDATE_VISUAL_OBSERVATIONS','VISIBLE_FACTS','LIMITATIONS'],
+  outputGuidance:{
+    format:'SINGLE_JSON_OBJECT_NO_MARKDOWN',
+    requiredFields:['officialFindingCreated','requiresInspectorConfirmation',
+      'inspectionCaseId','evidenceId','checklistItemId','confidence','candidateFinding'],
+    requiredValues:{officialFindingCreated:false,requiresInspectorConfirmation:true,
+      inspectionCaseId:caseId,evidenceId:media.evidenceId,
+      checklistItemId:media.checklistItemId},
+    candidateFinding:{reason:'observed photo facts only',
+      visibleFacts:['specific visible details'],limitations:['uncertainty or missing proof']},
+    confidenceRange:'0.0 to 1.0',
+    noFabricatedComplianceResult:true
+  },
   constraints:{officialFindingCreated:false,requiresInspectorConfirmation:true,
     noAutoComplianceDecision:true}
  };
