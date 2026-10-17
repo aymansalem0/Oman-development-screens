@@ -777,16 +777,17 @@ export class SeafarerWorkspace {
   /**
    * Explicit READY-only sandbox fixture selection, scoped to the signed-in
    * operations user. Existing real/sandbox profiles and applications NEVER
-   * change when the demo scenario is selected.
+   * change when the demo scenario is selected. An explicitly new start creates
+   * a separate sandbox applicant rather than reopening an issued SDB.
    */
-  beginReadyDemoJourney(actor,scenarioId,syntheticProfile){
+  beginReadyDemoJourney(actor,scenarioId,syntheticProfile,{newJourney=false}={}){
     this.assertOperations(actor);
     if(!['CADET_READY','RENEWAL_READY'].includes(scenarioId)||
       !syntheticProfile||typeof syntheticProfile!=='object')
       fail('SDB_READY_SCENARIO_REQUIRED',422);
     const current=this.state.profiles.find(p=>p.demoJourney?.operatorKey===
       actor.key&&p.demoJourney.scenarioId===scenarioId);
-    if(current){
+    if(current&&!newJourney){
       const r=this.evaluate(current);
       if(r.status!=='READY')fail('SDB_READINESS_CHANGED',409);
       return {profileId:current.id,scenarioId,readiness:r,
