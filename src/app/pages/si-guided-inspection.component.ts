@@ -17,7 +17,11 @@ interface FieldStep{
  savedAnswer:Partial<Record<FieldKind,string|number>>;
  note:string;naReason:string;severity:string|null;answered:boolean;
 }
+interface StepEvidence{id:string;filename:string;mimeType:string;reference:string;byteLength:number;}
+interface FinalAssessment{outcome:string;total:number;recorded:number;incomplete:{stepId:string;title:string}[];open:{stepId:string;title:string;severity:string}[];notApplicable:number;canSubmit:boolean;}
+interface ImageReview{recommendations:{rationale:string;instruction:string;dataGaps:string[]}[];}
 interface FieldGuide{
+ evidenceByStep:Record<string,StepEvidence[]>;finalAssessment:FinalAssessment;
  status:string;orderId:string;planId:string;caseId:string;
  imo:string;vesselName:string;orderStatus:string;lifecycleStage:string;
  publishedSnapshotVersion:number|null;lifecycleVersion:number;
@@ -136,8 +140,30 @@ interface FieldAiAdvice{
        {{t('Ask Airia for source-backed field guidance. The response does not answer the checklist or create findings.',
         'اطلب من Airia خطوات تنفيذ مدعومة بالأدلة؛ الاستجابة لا تجيب عن السؤال ولا تُنشئ ملاحظات رسمية.')}}</p>
      </div>
+     <section class="help evidence" data-testid="si-guided-evidence">
+      <h3>3 · {{t('Question attachments and AI review','مرفقات السؤال وتحليل AI')}}</h3>
+      <p>{{t('Upload a photo or PDF for this exact question. Upload does not call AI or record compliance.',
+      'ارفع صورة أو PDF للسؤال الحالي. الرفع لا يشغّل AI ولا يسجّل نجاح الفحص.')}}</p>
+      <label class="file-upload">{{uploadBusy?t('Uploading…','جارٍ الرفع…'):t('＋ Attach Photo / Document','＋ رفع صورة / مستند')}}
+       <input type="file" data-testid="si-guided-file" accept="image/png,image/jpeg,application/pdf"
+        (change)="uploadEvidence($event)" [disabled]="!canSave||busy||uploadBusy"></label>
+      <ul class="files"><li *ngFor="let file of selectedEvidence">
+       📎 {{file.filename}}
+       <button type="button" *ngIf="file.mimeType.startsWith('image/')"
+        data-testid="si-guided-analyze-image" (click)="analyzeImage(step,file)"
+        [disabled]="!canSave||busy||aiBusy||uploadBusy">
+        {{t('Analyze Image with AI','تحليل الصورة بالذكاء الاصطناعي')}}</button>
+       <small *ngIf="file.mimeType==='application/pdf'">{{t('PDF saved; visual AI only supports images.','تم حفظ PDF؛ التحليل البصري للصور فقط.')}}</small>
+      </li></ul>
+      <article *ngIf="imageReviews[step.stepId] as review" class="advice">
+       <b>{{t('AI suggestions — inspector verification required','توصيات AI — يجب أن يتحقق المفتش')}}</b>
+       <p *ngFor="let result of review.recommendations">
+        {{result.instruction||result.rationale}}
+        <small>{{result.dataGaps.join(' · ')}}</small></p>
+      </article>
+     </section>
      <form (ngSubmit)="save()" class="answer">
-      <h3>3 · {{t('Your own inspection observations','سجل نتيجة معاينتك بنفسك')}}</h3>
+      <h3>4 · {{t('Your own inspection observations','سجل نتيجة معاينتك بنفسك')}}</h3>
       <p *ngIf="g.orderStatus!=='FIELD_STARTED'" class="warning">
        {{t('The assigned work order must be started before recording answers.',
         'لا يمكن تسجيل نتائج المعاينة إلا بعد بدء أمر التكليف للمفتش المسند.')}}</p>
@@ -191,6 +217,29 @@ interface FieldAiAdvice{
       <button type="button" (click)="next()">{{t('Next Inspection Step','الخطوة التالية')}}</button></div>
     </section>
    </div>
+   <section class="closeout" *ngIf="g.finalAssessment as assessment" data-testid="si-guided-final-assessment">
+     <h2>{{t('Final Inspection Assessment','التقييم النهائي للمعاينة')}}</h2>
+     <p>{{t('Computed from inspector observations, not an automatic AI regulatory decision. AI image reviews remain advisory.',
+       'حساب مبني على نتائج المفتش، وليس قرارًا تنظيميًا تلقائيًا من AI.')}}</p>
+     <div class="final-numbers">
+      <div>{{assessment.recorded}} / {{assessment.total}}<small>{{t('Completed','مكتمل')}}</small></div>
+      <div>{{assessment.incomplete.length}}<small>{{t('Pending','متبقي')}}</small></div>
+      <div>{{assessment.open.length}}<small>{{t('Open findings','مخالفات مفتوحة')}}</small></div>
+     </div>
+     <p class="warning" *ngFor="let item of assessment.open">⚠ {{item.title}} — {{item.severity}}</p>
+     <p class="warning" *ngFor="let item of assessment.incomplete">⌛ {{item.title}}</p>
+     <strong class="status">{{assessment.outcome==='INCOMPLETE'?t('Inspection incomplete','المعاينة غير مكتملة'):
+        assessment.outcome==='OPEN_DEFICIENCIES'?t('Open deficiencies — not clear','مخالفات مفتوحة — ليست ناجحة'):
+        t('No recorded deficiencies — pending supervisor approval','لا توجد مخالفات مسجلة — بانتظار اعتماد المشرف')}}</strong>
+     <label class="final-summary">{{t('Inspector final summary','الملخص النهائي للمفتش')}}
+      <textarea [(ngModel)]="inspectorSummary" maxlength="1800" [disabled]="!canSave||busy"></textarea></label>
+     <button type="button" data-testid="si-guided-finish" (click)="finishInspection()"
+       [disabled]="!canSave||busy||!assessment.canSubmit">
+       {{t('Finish Inspection · Inspector Sign & Submit for Review',
+        'إنهاء المعاينة · اعتماد المفتش وإرسال للمراجعة')}}</button>
+     <p *ngIf="g.lifecycleStage==='REPORT_PENDING_REVIEW'">
+      {{t('Report awaiting independent supervisor approval.','التقرير بانتظار اعتماد المشرف المستقل.')}}</p>
+    </section>
   </ng-container>
  </main></div>`,
  styles:[`
@@ -223,6 +272,17 @@ interface FieldAiAdvice{
  .help,.answer{border:1px solid #dfebef;border-radius:12px;margin:17px 0;padding:17px}
  .help{background:#f7fafb}.help p,.advice p{font-size:12px;line-height:1.8;color:#536b79}
  .help.ai{background:#f0faf8;border-color:#bce4df}
+ .help.evidence{background:#f4faff;border-color:#bedde6}
+ .file-upload{position:relative;display:inline-block;background:#087e7b;color:white;
+  font-size:12px;font-weight:800;padding:12px;border-radius:8px;cursor:pointer}
+ .file-upload input{position:absolute;opacity:0;width:1px;height:1px;pointer-events:none}
+ .files{padding:0;list-style:none;font-size:12px}.files li{padding:9px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;border-bottom:1px solid #dce9ee}
+ .closeout{background:#fff;border:1px solid #dce8ed;border-radius:16px;padding:24px;margin-top:20px}
+ .closeout p{font-size:12px}.final-numbers{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:15px 0}
+ .final-numbers div{background:#eef8fa;padding:13px;border-radius:9px;font-size:22px;font-weight:800}
+ .final-numbers small{display:block;font-size:11px;font-weight:400}
+ .final-summary{display:block;font-size:12px;font-weight:800;margin:16px 0}
+ .final-summary textarea{display:block;width:100%;margin-top:8px}
  .advice{padding:12px 16px;border-inline-start:3px solid #16a79b;background:#fff;border-radius:9px;margin:9px 0}
  .advice li{font-size:12px;padding:6px 0}.advice small,.help small{display:block;font-size:10px;color:#6f8793;margin-top:8px}
  .ai-btn{background:#087d77!important;color:#fff!important;border-color:#087d77!important;white-space:normal}
@@ -251,7 +311,8 @@ export class SiGuidedInspectionComponent implements OnInit{
  orderId='';guide:FieldGuide|null=null;selected:FieldStep|null=null;
  filter:'ALL'|'PENDING'|'COMPLETED'|'A04'='ALL';
  answers:Partial<Record<FieldKind,string|number>>={};
- severity='MINOR';naReason='';busy=false;aiBusy=false;error='';message='';
+ severity='MINOR';naReason='';busy=false;aiBusy=false;uploadBusy=false;error='';message='';
+ inspectorSummary='';imageReviews:Record<string,ImageReview>={};
  aiResults:Record<string,FieldAiAdvice>={};
  private readonly api='/api/si/v1/maritime-scheduling/my-work-orders/';
  constructor(private readonly http:HttpClient,private readonly route:ActivatedRoute,
@@ -264,6 +325,7 @@ export class SiGuidedInspectionComponent implements OnInit{
    this.filter==='COMPLETED'&&x.answered||
    this.filter==='A04'&&x.origin==='A04_APPROVED');
  }
+ get selectedEvidence():StepEvidence[]{return this.guide?.evidenceByStep?.[this.selected?.stepId||'']||[];}
  get canSave():boolean{
   return this.guide?.orderStatus==='FIELD_STARTED'&&
     this.guide?.lifecycleStage==='IN_FIELD';
@@ -322,7 +384,8 @@ export class SiGuidedInspectionComponent implements OnInit{
   }
   const body={stepId:step.stepId,values,severity:this.severity,
    naReason:this.naReason,expectedChecklistVersion:g.publishedSnapshotVersion,
-   expectedLifecycleVersion:g.lifecycleVersion,evidenceRefs:[]};
+   expectedLifecycleVersion:g.lifecycleVersion,
+    evidenceRefs:this.selectedEvidence.map(x=>x.reference).slice(0,12)};
   this.busy=true;this.error='';
   this.http.post<{guide:FieldGuide}>(this.api+encodeURIComponent(this.orderId)+
    '/guide/answers',body).subscribe({
@@ -348,6 +411,54 @@ export class SiGuidedInspectionComponent implements OnInit{
     error:e=>{this.aiBusy=false;this.error=e?.error?.error||
       'SI_FIELD_AI_UNAVAILABLE';}
    });
+ }
+ async uploadEvidence(event:Event):Promise<void>{
+  const input=event.target as HTMLInputElement,file=input.files?.[0],step=this.selected;
+  if(!file||!step||!this.canSave)return;
+  input.value='';
+  if(!['image/png','image/jpeg','application/pdf'].includes(file.type)||
+     file.size===0||file.size>5*1024*1024){
+    this.error=this.t('JPG, PNG or PDF up to 5 MB.','JPG أو PNG أو PDF حتى 5 ميجابايت.');return;
+  }
+  this.uploadBusy=true;this.error='';
+  try{
+    const base64=await new Promise<string>((resolve,reject)=>{
+      const reader=new FileReader();reader.onerror=()=>reject(new Error('READ_FAILED'));
+      reader.onload=()=>resolve(String(reader.result||'').split(',')[1]||'');
+      reader.readAsDataURL(file);
+    });
+    this.http.post<{guide:FieldGuide}>(this.api+encodeURIComponent(this.orderId)+
+      '/guide/evidence',{stepId:step.stepId,file:{
+        filename:file.name,mimeType:file.type,base64}}).subscribe({
+       next:r=>{this.uploadBusy=false;this.guide=r.guide;
+         this.selected=r.guide.steps.find(x=>x.stepId===step.stepId)||step;
+         this.message=this.t('Evidence uploaded; AI analysis is optional.','تم حفظ الدليل. تحليل AI اختياري.');},
+       error:e=>{this.uploadBusy=false;this.error=e?.error?.error||'SI_GUIDED_UPLOAD_FAILED';}
+      });
+  }catch{this.uploadBusy=false;this.error='SI_GUIDED_FILE_READ_FAILED';}
+ }
+ analyzeImage(step:FieldStep,file:StepEvidence):void{
+  if(!this.canSave||this.aiBusy||!file.mimeType.startsWith('image/'))return;
+  if(!window.confirm(this.t('Send photo to Airia AI? A charge may apply. AI is advisory only.',
+     'تأكيد إرسال الصورة إلى Airia AI؟ قد توجد تكلفة. النتيجة استشارية فقط.')))return;
+  this.aiBusy=true;this.error='';
+  this.http.post<ImageReview>(this.api+encodeURIComponent(this.orderId)+
+   '/guide/ai-evidence',{stepId:step.stepId,evidenceId:file.id,confirmCost:true})
+   .subscribe({next:r=>{this.aiBusy=false;this.imageReviews[step.stepId]=r;},
+     error:e=>{this.aiBusy=false;this.error=e?.error?.error||'SI_AI_PHOTO_UNAVAILABLE';}});
+ }
+ finishInspection():void{
+  const g=this.guide;if(!g||!this.canSave||!g.finalAssessment.canSubmit||this.busy)return;
+  if(!window.confirm(this.t('Submit for supervisor review with '+
+      g.finalAssessment.open.length+' open findings? This is not official approval.',
+      'إرسال للمشرف مع '+g.finalAssessment.open.length+' مخالفات مفتوحة؟ هذا ليس اعتمادًا رسميًا.')))return;
+  this.busy=true;this.error='';
+  this.http.post<{guide:FieldGuide}>(this.api+encodeURIComponent(this.orderId)+
+    '/guide/finish',{confirmSubmission:true,inspectorSummary:this.inspectorSummary,
+      expectedChecklistVersion:g.publishedSnapshotVersion,expectedLifecycleVersion:g.lifecycleVersion})
+  .subscribe({next:r=>{this.busy=false;this.guide=r.guide;
+      this.message=this.t('Submitted for supervisor approval.','تم تسليم التقرير لاعتماد المشرف.');},
+    error:e=>{this.busy=false;this.error=e?.error?.error||'SI_FINISH_FAILED';}});
  }
  next():void{
   const all=this.guide?.steps||[];if(!all.length)return;
