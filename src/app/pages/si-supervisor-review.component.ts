@@ -374,6 +374,34 @@ interface DraftRow{type:RegulatoryType;state:string;preparedBy:string;
  .attributes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px;padding:16px 0}
  .attributes div{display:grid;gap:5px;font-size:11px;overflow-wrap:anywhere}
  .attributes span{color:#66858d}.attributes strong{font-size:12px;color:#13475a}
+ .review-tabs{display:flex;gap:7px;flex-wrap:wrap;border-bottom:1px solid #d7e7e9;padding:11px 0;margin:10px 0 20px}
+ .review-tabs button{border:1px solid #c9e1e5;border-radius:9px;padding:10px 13px;
+  color:#1d6575;background:#f5fbfb;font-size:11px;font-weight:700;cursor:pointer}
+ .review-tabs button.selected{background:#087f83;color:#fff;border-color:#087f83}
+ .review-section{padding:4px 0 15px;min-height:230px}
+ .source-chip,.decision-chip{display:inline-block;background:#e9f5f5;border:1px solid #c3e3e7;
+  padding:5px 8px;border-radius:8px;color:#18747b;font-size:10px}
+ .dossier-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .dossier-collections{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+ .dossier-box{padding:14px;border:1px solid #dae9ed;border-radius:12px;margin:10px 0;background:#fcfefe}
+ .dossier-box h3{margin-top:0}
+ .review-table-wrap{overflow-x:auto;margin:13px 0}
+ .review-table{border-collapse:collapse;min-width:650px;width:100%}
+ .review-table th,.review-table td{padding:10px;border:1px solid #e1ecef;text-align:start;
+  vertical-align:top;font-size:11px;overflow-wrap:anywhere}
+ .review-table th{background:#edf7f7;color:#1d596b}
+ .review-table small,.question-answer small,.evidence-row small{display:block;font-size:10px;color:#647c8a;margin:4px 0}
+ .question-answer{border:1px solid #e0eeef;background:#fbfefe;border-radius:10px;padding:12px;margin:10px 0}
+ .question-head{display:flex;justify-content:space-between;gap:14px;align-items:center}
+ .answer-fields{display:flex;gap:6px;flex-wrap:wrap;padding:8px 0}
+ .answer-fields span{background:#f1f8f9;padding:5px 8px;border-radius:7px;font-size:11px;overflow-wrap:anywhere}
+ .evidence-row{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}
+ .capa-form{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+ .capa-form label:last-child{grid-column:1 / -1}
+ .capa-form label,.regulation label{font-size:11px;font-weight:700;display:grid;gap:6px}
+ .regulation select{width:100%;margin:8px 0 12px;padding:9px;border:1px solid #cadfe2;border-radius:8px}
+ .regulation textarea{margin:8px 0 12px}
+ .audit{margin-top:18px;font-size:12px}
  .report{border-top:1px solid #e0eef1;padding-top:13px}
  .finding{border:1px solid #e4eff0;border-radius:10px;padding:12px;margin:9px 0;font-size:12px}
  .finding p{margin:4px 0}.finding small{color:#66858d}
@@ -403,11 +431,25 @@ interface DraftRow{type:RegulatoryType;state:string;preparedBy:string;
    .supervisor-main{padding:15px 12px}
    .panel{padding:13px}
    .attributes{grid-template-columns:1fr}
+   .dossier-collections,.capa-form{grid-template-columns:1fr}
    .si-title{align-items:flex-start;flex-wrap:wrap}
  }
  `]
 })
 export class SiSupervisorReviewComponent implements OnInit{
+ readonly reviewTabs:{id:ReviewTab;en:string;ar:string}[]=[
+  {id:'DOSSIER',en:'Vessel Dossier',ar:'ملف السفينة'},
+  {id:'REPORT',en:'Inspector Report',ar:'تقرير المفتش'},
+  {id:'CAPA',en:'Corrective Actions',ar:'الإجراءات التصحيحية'},
+  {id:'DECISION',en:'Decision & Notifications',ar:'القرار والإخطارات'}
+ ];
+ tab:ReviewTab='REPORT';
+ full:FullReview|null=null;
+ nmcFeedback='';
+ regulatoryType:RegulatoryType='REQUEST_ADDITIONAL_INSPECTION';
+ regulatoryReason='';
+ regulatoryDrafts:DraftRow[]=[];
+ capaDraft:Record<string,{owner:string;dueDate:string;instruction:string}>={};
  cases:SiLifecycleCase[]=[];view:SiLifecycleView|null=null;
  search='';selectedId='';reason='';notice='';error='';busy=false;
  private readonly key='MOEI_SESSION';
@@ -428,6 +470,20 @@ export class SiSupervisorReviewComponent implements OnInit{
  get currentVesselName():string{
   return this.cases.find(x=>x.id===this.selectedId)?.vesselName||
    this.view?.inspectionCase.imo||'';
+ }
+ sourceTitle(row:DossierItem):string{
+  return String(row['title']||row['name']||row['description']||
+   row['reference']||row['sourceReference']||row['id']||
+   this.copy('Source record available','السجل متاح من المصدر'));
+ }
+ get canIssueActions():boolean{
+  const r=this.view?.record;
+  return !!r?.findings?.length&&r.stage==='REPORT_APPROVED'&&
+   r.findings.every(f=>{
+    const d=this.capaDraft[f.id];
+    return !!d?.owner.trim()&&/^\d{4}-\d{2}-\d{2}$/.test(d.dueDate)&&
+     !!d?.instruction.trim();
+   });
  }
  get canClose():boolean{
   const v=this.view?.record;
@@ -451,10 +507,22 @@ export class SiSupervisorReviewComponent implements OnInit{
  }
  open(id:string):void{
   this.busy=true;this.error='';this.selectedId=id;this.reason='';
-  this.http.get<SiLifecycleView>(this.base+'/'+encodeURIComponent(id),
-   {headers:this.headers()})
-  .subscribe({next:r=>{this.busy=false;this.view=r;},
-   error:e=>{this.busy=false;this.error=e?.error?.error||'SI_SUPERVISOR_REPORT_UNAVAILABLE';}});
+  this.full=null;
+  const base=this.base+'/'+encodeURIComponent(id);
+  forkJoin({
+    view:this.http.get<SiLifecycleView>(base,{headers:this.headers()}),
+    full:this.http.get<FullReview>(base+'/full-report',{headers:this.headers()}),
+    regulatory:this.http.get<{drafts:DraftRow[]}>(base+'/regulatory',{headers:this.headers()})
+  }).subscribe({next:r=>{
+    if(id!==this.selectedId)return;
+    this.busy=false;this.view=r.view;this.full=r.full;
+    this.regulatoryDrafts=r.regulatory.drafts||[];
+    this.capaDraft=Object.fromEntries((r.view.record?.findings||[]).map(f=>[
+      f.id,{owner:'',dueDate:'',instruction:'Rectify '+f.title}
+    ]));
+  },error:e=>{
+    this.busy=false;this.error=e?.error?.error||'SI_SUPERVISOR_FULL_REVIEW_UNAVAILABLE';
+  }});
  }
  decide(action:Decision):void{
   const v=this.view?.record;
@@ -472,6 +540,62 @@ export class SiSupervisorReviewComponent implements OnInit{
       (r.nmcSync?' · NMC: '+r.nmcSync.status:'');
     this.load();
    },error:e=>{this.busy=false;this.error=e?.error?.error||'SI_SUPERVISOR_ACTION_FAILED';}});
+ }
+ issueActions():void{
+  if(!this.canIssueActions||!this.view?.record||this.busy)return;
+  if(!window.confirm(this.copy('Issue corrective actions for all confirmed deficiencies?',
+    'هل تؤكد إصدار الإجراءات التصحيحية لكل المخالفات المؤكدة؟')))return;
+  const actions=this.view.record.findings.map(f=>({
+    findingId:f.id,...this.capaDraft[f.id]
+  }));
+  this.busy=true;this.error='';this.notice='';
+  this.http.post<{status:string}>(this.base+'/'+encodeURIComponent(this.selectedId)+'/decision',
+   {action:'ISSUE_ACTIONS',expectedVersion:this.view.record.version,
+    reason:'Human supervisor approved the corrective action plan',actions},
+   {headers:this.headers(true)}).subscribe({
+    next:()=>{
+      this.busy=false;this.notice=this.copy(
+        'Corrective actions issued and assigned to owners.','تم إصدار الإجراءات التصحيحية وإسنادها.');
+      this.load();
+    },error:e=>{
+      this.busy=false;this.error=e?.error?.error||'SI_CAPA_ISSUE_FAILED';
+    }
+   });
+ }
+ prepareRegulatory():void{
+  if(this.busy||!this.view?.record||
+     this.view.record.report?.status!=='APPROVED'||
+     this.regulatoryReason.trim().length<8)return;
+  if(!window.confirm(this.copy(
+    'Prepare an internal regulatory draft? This does not send data externally.',
+    'تجهيز مسودة داخلية؟ لن يتم إرسال أي بيانات إلى جهة خارجية.')))return;
+  this.busy=true;this.error='';this.notice='';
+  this.http.post<{status:string;draft:DraftRow}>(
+    this.base+'/'+encodeURIComponent(this.selectedId)+'/regulatory',
+    {type:this.regulatoryType,reason:this.regulatoryReason.trim()},
+    {headers:this.headers(true)}).subscribe({
+     next:r=>{
+      this.busy=false;this.regulatoryDrafts=[...this.regulatoryDrafts,r.draft];
+      this.notice=this.copy('Draft prepared; no regulatory transmission was made.',
+       'تم إعداد المسودة دون إرسال أي تقرير رقابي.');
+      this.regulatoryReason='';
+     },error:e=>{
+      this.busy=false;this.error=e?.error?.error||'SI_REGULATORY_DRAFT_UNAVAILABLE';
+     }
+    });
+ }
+ retryNmcReview():void{
+  if(!this.view?.record?.report||this.busy||!this.full?.nmc.linked)return;
+  this.busy=true;this.error='';this.nmcFeedback='';
+  this.http.post<{status:string}>(
+    '/api/si/v1/supervisor/cases/'+encodeURIComponent(this.selectedId)+'/sync-nmc-review',
+    {},{headers:this.headers(true)}).subscribe({
+      next:r=>{
+        this.busy=false;this.nmcFeedback='NMC: '+r.status;
+      },error:e=>{
+        this.busy=false;this.error=e?.error?.error||'SI_NMC_REVIEW_NOTIFICATION_RETRY_REQUIRED';
+      }
+    });
  }
  retryNmc():void{
   if(!this.view?.record||this.view.record.stage!=='CLOSED'||this.busy)return;
