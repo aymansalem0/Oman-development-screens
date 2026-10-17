@@ -270,7 +270,8 @@ export function projectA04FocusedFieldAdvice(validated,step){
  * A finding remains open until independently verified and closed. */
 export function guidedFinalAssessment(guide){
  const steps=Array.isArray(guide?.steps)?guide.steps:[];
- const incomplete=steps.filter(s=>s.mandatory&&!s.answered);
+ const incomplete=steps.filter(s=>!s.answered&&
+  (s.mandatory||s.members?.some(m=>m.kind==='LIFECYCLE')));
  const deficiencies=steps.filter(s=>s.currentStatus==='DEFICIENCY');
  const awaitingReview=steps.filter(s=>s.currentStatus==='NA');
  const outcome=incomplete.length?'INCOMPLETE':
