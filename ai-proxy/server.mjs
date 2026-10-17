@@ -67,6 +67,7 @@ import { SiInspectionLifecycle, SiLifecycleError } from './si-inspection-lifecyc
 import {syncSiClosureToNmc,SiNmcClosureSyncError} from './si-nmc-closure-sync.mjs';
 import {buildSiSupervisorFullReport} from './si-supervisor-report.mjs';
 import {syncSiSupervisorReviewToNmc,SiNmcReviewSyncError} from './si-nmc-review-sync.mjs';
+import {SiRegulatoryDrafts,SiRegulatoryDraftError} from './si-supervisor-regulatory-drafts.mjs';
 import {SiScheduleOrders,SiWorkOrderError} from './si-schedule-orders.mjs';
 import {runSiPocAdvisor,siFutureAdvisorCoverage,SiPocAdvisorError} from './si-poc-workflow-advisors.mjs';
 import {runSiAiriaAdvisor} from './si-airia-workflow-advisors.mjs';
@@ -482,6 +483,7 @@ const siChecklistField=new (checklistStorage==='oracle'?
   },
   getSetting:key=>runtime.get(key)
 });
+const siRegulatoryDrafts=new SiRegulatoryDrafts();
 const siLifecycle=new SiInspectionLifecycle({mode:dbMode,oracleRepository:repository,
   targeting:siTargeting,preparation:siPreparation,cases,checklists:siChecklistField,
   onClosed:async(caseId,actor)=>{
@@ -2481,7 +2483,7 @@ const server = createServer(async (req, res) => {
           reviewStages.has(x.stage)),count:listed.cases.filter(x=>
           reviewStages.has(x.stage)).length});
       }
-      const supervisorCase=/^\/api\/si\/v1\/supervisor\/reviews\/([a-f0-9-]{36})(?:\/(decision|full-report))?$/.exec(path);
+      const supervisorCase=/^\/api\/si\/v1\/supervisor\/reviews\/([a-f0-9-]{36})(?:\/(decision|full-report|regulatory))?$/.exec(path);
       if(supervisorCase){
         const identity=moeiAuth.require(req);
         dashboards.assertRole(req,'PUBLISHER');
@@ -2503,6 +2505,23 @@ const server = createServer(async (req, res) => {
           return respond(res,200,buildSiSupervisorFullReport({
             view,dossier,checklist
           }));
+        }
+        if(part==='regulatory'&&req.method==='GET'){
+          return respond(res,200,{status:'ok',
+            drafts:siRegulatoryDrafts.list(id),
+            officialExternalIntegrationAvailable:false});
+        }
+        if(part==='regulatory'&&req.method==='POST'){
+          if(req.headers['x-moei-csrf']!=='1')
+            throw new MoeiAuthError('MOEI_CSRF_REQUIRED',403);
+          const body=await requestJson(req,4096);
+          const view=await siLifecycle.snapshot(id);
+          const draft=siRegulatoryDrafts.prepare({
+            view,type:body.type,reason:body.reason,
+            actor:identity.email||identity.username
+          });
+          return respond(res,201,{status:'PREPARED_NOT_SUBMITTED',draft,
+            transmissionAttempted:false});
         }
         if(part==='decision'&&req.method==='POST'){
           if(req.headers['x-moei-csrf']!=='1')
@@ -2823,7 +2842,7 @@ const server = createServer(async (req, res) => {
         return respond(res,409,{error:e.code,
          periodEligibility:e.periodEligibility||null});
       if(e instanceof SiError||e instanceof SiPocAdvisorError||e instanceof SiRollingPlanError||e instanceof SiIntegratedPlanError||e instanceof SiDraftCreationError||e instanceof SiDraftJobError||
-       e instanceof SiBulkApprovalError||e instanceof SiCandidateAgentError||e instanceof SiNmcReviewSyncError||e instanceof SiNmcClosureSyncError||e instanceof SiLifecycleError||e instanceof SiSelectionError||e instanceof SiPriorityError||e instanceof SiPreparationError||e instanceof SiWorkOrderError||e instanceof SiTargetingError||e instanceof MoeiAuthError||e instanceof DashboardError)
+       e instanceof SiBulkApprovalError||e instanceof SiCandidateAgentError||e instanceof SiRegulatoryDraftError||e instanceof SiNmcReviewSyncError||e instanceof SiNmcClosureSyncError||e instanceof SiLifecycleError||e instanceof SiSelectionError||e instanceof SiPriorityError||e instanceof SiPreparationError||e instanceof SiWorkOrderError||e instanceof SiTargetingError||e instanceof MoeiAuthError||e instanceof DashboardError)
         return respond(res,e.status,{error:e.code});
       if(Number.isInteger(e?.status)&&e.status>=400&&e.status<500)
         return respond(res,e.status,{error:'SI_REQUEST_INVALID'});
