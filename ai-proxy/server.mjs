@@ -357,7 +357,7 @@ const siRollingPlans=new SiRollingPlanStore({mode:dbMode,oracleRepository:reposi
 const siDraftPreviews=new Map(),DRAFT_TTL_MS=30*60*1000;
 const siDraftJobs=new SiIntegratedDraftJobs();
 async function calculateNewDraft({id,metadata,source,ai,identity,
- requests=null,officerAdds=[]}){
+ requests=null,officerAdds=[],officerExclusions=[]}){
  const dashboard=await siTargeting.dashboard();
  const erpSnapshot=siErp.requireSnapshot();
  const [nmcReferrals,bookings]=await Promise.all([
@@ -369,7 +369,7 @@ async function calculateNewDraft({id,metadata,source,ai,identity,
   policy:siScheduling.getPolicy(),scheduler:siScheduling,
   nmcReferrals,existingBookings:metadata.demoMode?[]:
    [...siScheduling.state.confirmed,...bookings],
-  requests,officerAdds
+  requests,officerAdds,officerExclusions
  });
 }
 function getNewDraftPreview(id,actor){
@@ -1428,16 +1428,25 @@ const server = createServer(async (req, res) => {
         const fresh=await siCandidateAgent.source();
         if(fresh.snapshotHash!==cached.source.snapshotHash)
           return respond(res,409,{error:'SI_DRAFT_SOURCE_CHANGED_REGENERATE'});
+        const recalculate=draftAction[1]==='recalculate';
+        const officerAdds=recalculate&&Array.isArray(input.officerAdds)?
+          input.officerAdds:cached.result.officerAdds;
+        const officerExclusions=recalculate&&Array.isArray(input.officerExclusions)?
+          input.officerExclusions:cached.result.officerExclusions||[];
+        const changedSelection=recalculate&&(
+          JSON.stringify(officerAdds)!==JSON.stringify(cached.result.officerAdds)||
+          JSON.stringify(officerExclusions)!==
+            JSON.stringify(cached.result.officerExclusions||[]));
+        // Supervisor signoff for optional-vessel scope changes; ordinary
+        // capacity corrections remain editor-only. No official booking.
+        if(changedSelection)dashboards.assertRole(req,'PUBLISHER');
         const result=await calculateNewDraft({
           id:cached.result.id,metadata:cached.metadata,source:fresh,
-          ai:cached.ai,identity,
-          officerAdds:draftAction[1]==='recalculate'?
-           (Array.isArray(input.officerAdds)?input.officerAdds:cached.result.officerAdds):
-           cached.result.officerAdds,
-          requests:draftAction[1]==='recalculate'&&
-           Array.isArray(input.officerAdds)?null:
-           draftAction[1]==='recalculate'?input.requests:
-           cached.result.requests
+          ai:cached.ai,identity,officerAdds,officerExclusions,
+          requests:recalculate?
+            (changedSelection?null:(Array.isArray(input.requests)?
+              input.requests:cached.result.requests)):
+            cached.result.requests
         });
         if(draftAction[1]==='recalculate'){
           return respond(res,200,{status:'INTEGRATED_DRAFT_RECALCULATED',
