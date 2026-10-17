@@ -185,6 +185,7 @@ export class NmcDashboardBuilderComponent implements OnInit,OnDestroy {
           next:result=>{
             if(this.viewOnly){
               this.dashboard=JSON.parse(JSON.stringify(result.dashboard)) as DashboardDefinition;
+              this.refreshAiCi();
               this.viewLoading=false;
             }
           },
@@ -198,6 +199,7 @@ export class NmcDashboardBuilderComponent implements OnInit,OnDestroy {
         this.subs.add(req);
       } else {
         this.dashboard=id?this.store.get(id):null;
+        this.refreshAiCi();
         if(this.dashboard&&!this.dashboard.menuPlacement)this.dashboard.menuPlacement='NMC_CENTER';
         // Populate editor selectors for legacy shared/local charts without
         // silently marking the user's existing saved dashboard as modified.
