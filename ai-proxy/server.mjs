@@ -2249,10 +2249,29 @@ const server = createServer(async (req, res) => {
                current.guide.lifecycleStage!=='IN_FIELD')
               return respond(res,409,{error:'SI_FIELD_INSPECTION_NOT_STARTED'});
             const body=await requestJson(req,4096);
-            if(body.confirmSubmission!==true||
-               body.expectedLifecycleVersion!==current.guide.lifecycleVersion||
-               body.expectedChecklistVersion!==current.guide.publishedSnapshotVersion)
-              return respond(res,409,{error:'SI_GUIDED_FINISH_CONFIRMATION_OR_VERSION_INVALID'});
+            if(body.confirmSubmission!==true)
+              return respond(res,422,{
+                error:'SI_GUIDED_FINISH_EXPLICIT_CONFIRMATION_REQUIRED'});
+            // The source can change in another browser tab, by an evidence
+            // upload, or through an independent checklist update. Reject the
+            // stale submission *before* completing any checklist or lifecycle
+            // transition, and return only version metadata (no source data).
+            if(body.expectedLifecycleVersion!==current.guide.lifecycleVersion||
+               body.expectedChecklistVersion!==current.guide.publishedSnapshotVersion){
+              const changed=[
+                ...(body.expectedLifecycleVersion!==current.guide.lifecycleVersion?
+                  ['LIFECYCLE']:[]),
+                ...(body.expectedChecklistVersion!==current.guide.publishedSnapshotVersion?
+                  ['CHECKLIST']:[])
+              ];
+              return respond(res,409,{
+                error:'SI_GUIDED_FINISH_SOURCE_CHANGED_RELOAD_REQUIRED',
+                changedSources:changed,
+                currentLifecycleVersion:current.guide.lifecycleVersion,
+                currentChecklistVersion:current.guide.publishedSnapshotVersion,
+                submissionPerformed:false
+              });
+            }
             const assessment=current.guide.finalAssessment;
             if(!assessment.canSubmit)
               return respond(res,409,{error:'SI_GUIDED_MANDATORY_STEPS_INCOMPLETE',assessment});
