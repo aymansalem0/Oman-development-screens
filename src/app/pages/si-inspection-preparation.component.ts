@@ -97,9 +97,16 @@ export class SiInspectionPreparationComponent implements OnInit{
       code==='SI_A04_PREDICTION_NOT_ADVISORY'?
       this.copy('Airia A04 returned a potential deficiency without the required advisory-only fields. The proposal was rejected; the mandatory checklist is unchanged.',
        'أرجع Airia A04 مخالفة محتملة دون الحقول الاستشارية المطلوبة. تم رفض الاقتراح وتظل القائمة الإلزامية دون تغيير.'):
+      code?.startsWith('SI_A04_UPSTREAM_')||code==='SI_A04_NETWORK_UNAVAILABLE'||
+       code==='SI_A04_VAULT_UNAVAILABLE'||code==='SI_A04_KEY_MISSING'||
+       code==='SI_A04_PIPELINE_MISSING'?
+      this.copy('Airia connection or pipeline request failed: '+code+
+        '. Check provider credentials, pipeline ID and AI Proxy logs. No dossier was approved.',
+        'فشل اتصال Airia أو استدعاء الـPipeline: '+code+
+        '. راجع إعدادات الاتصال والـPipeline ID وسجل AI Proxy. لم يتم اعتماد أي ملف.'):
       code?.startsWith('SI_A04_')?
-      this.copy('A04 response validation failed: '+code+'. No inspection findings were recorded.',
-       'فشل التحقق من استجابة A04: '+code+'. لم يتم تسجيل مخالفات معاينة.'):
+      this.copy('A04 response was not accepted: '+code+'. No inspection findings were recorded.',
+       'لم تُقبل استجابة A04: '+code+'. لم يتم تسجيل مخالفات معاينة.'):
       this.copy('Unable to load or update inspection preparation. Check the request status and API error; Oracle migration 010 is not necessarily missing.',
         'تعذر تحميل أو تحديث تحضير المعاينة. راجع حالة الطلب والخطأ الفعلي؛ ليس بالضرورة أن ترحيل Oracle رقم 010 ناقص.');
     this.busy=false;this.loading=false;

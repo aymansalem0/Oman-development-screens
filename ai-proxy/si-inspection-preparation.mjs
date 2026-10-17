@@ -8,6 +8,7 @@ import {randomUUID,createHash} from 'node:crypto';
 import {readFileSync,writeFileSync,mkdirSync,existsSync,renameSync} from 'node:fs';
 import {dirname} from 'node:path';
 import oracledb from 'oracledb';
+import {classifyA04ProviderFailure} from './si-a04-provider-diagnostics.mjs';
 
 export const SI_BASE_CHECKLIST=Object.freeze([
   'fire-safety','certificates','navigation','lifesaving',
@@ -490,7 +491,12 @@ export class SiInspectionPreparation{
       }catch(e){
         const current=await this.record(id);
         if(current?.version===generating.version&&current?.correlationId===correlationId){
-          const failure=e instanceof SiPreparationError?e.code:'SI_A04_PROVIDER_UNAVAILABLE';
+          const upstream=e instanceof SiPreparationError?null:classifyA04ProviderFailure(e);
+          const failure=e instanceof SiPreparationError?e.code:upstream.code;
+          if(upstream)console.error('[si-a04] UPSTREAM_FAILURE '+JSON.stringify({
+            correlationId,caseId:id,category:upstream.code,
+            ...(upstream.upstreamStatus?{upstreamStatus:upstream.upstreamStatus}:{})
+          }));
           const field=e instanceof SiPreparationError?e.field:null;
           if(failure==='SI_A04_FOCUS_INVALID'||
              failure==='SI_A04_CHECKLIST_REF_INVALID'||
@@ -507,7 +513,8 @@ export class SiInspectionPreparation{
             lastFailureField:field||null,dossier:null},'A04_FAILED',actor,failure);
         }
         if(e instanceof SiPreparationError)throw e;
-        throw new SiPreparationError('SI_A04_PROVIDER_UNAVAILABLE',502);
+        const upstream=classifyA04ProviderFailure(e);
+        throw new SiPreparationError(upstream.code,upstream.status);
       }
     }finally{this.active.delete(id);}
   }

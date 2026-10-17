@@ -59,6 +59,7 @@ import {projectGuidedInspection,findGuidedStep,guidedFinalAssessment,
 } from './si-guided-inspection.mjs';
 import {pocInspectorIdForActor} from './si-inspector-identity.mjs';
 import {saveGuidedEvidence,listGuidedEvidence,readGuidedImage} from './si-guided-evidence.mjs';
+import {loadGuidedV01Image,buildGuidedV01Input,validateGuidedV01Reply} from './si-guided-v01.mjs';
 import {suggestCapacityExceptionActions} from './si-capacity-exception-alternatives.mjs';
 import { SiInspectionLifecycle, SiLifecycleError } from './si-inspection-lifecycle.mjs';
 import {SiScheduleOrders,SiWorkOrderError} from './si-schedule-orders.mjs';
@@ -1986,9 +1987,12 @@ const server = createServer(async (req, res) => {
               return respond(res,409,{error:'SI_FIELD_INSPECTION_NOT_STARTED'});
             const body=await requestJson(req,4096);
             if(body.confirmCost!==true)
-              return respond(res,422,{error:'SI_CHECKLIST_VISION_COST_CONFIRMATION_REQUIRED'});
+              return respond(res,422,{error:'SI_FIELD_IMAGE_AI_COST_CONFIRMATION_REQUIRED'});
+            // Prefer SI-V01's typed, evidence-bound contract. This option is
+            // explicitly enabled separately from the legacy Checklist Vision.
+            const useV01=agentAllowed('v01')&&Boolean(pipelines.v01)&&Boolean(getAiriaKey());
             const visionState=siChecklistAiria.status();
-            if(!visionState.visionConfigured)
+            if(!useV01&&!visionState.visionConfigured)
               return respond(res,503,{
                 error:'SI_CHECKLIST_VISION_AI_NOT_CONFIGURED_OR_NOT_CONFIRMED',
                 missing:{
@@ -1997,6 +2001,11 @@ const server = createServer(async (req, res) => {
                   checklistVisionPipeline:!visionState.visionPipelineMapped
                 },
                 // A mapped pipeline ID is not proof of a verified media schema.
+                alternateV01:{
+                  enabled:agentAllowed('v01'),pipelineConfigured:Boolean(pipelines.v01),
+                  keyConfigured:Boolean(getAiriaKey()),
+                  contractVerified:false,explicitOptInRequired:true
+                },
                 providerContractVerified:false
               });
             const step=findGuidedStep(current.guide,body.stepId);
@@ -2005,6 +2014,44 @@ const server = createServer(async (req, res) => {
               .find(x=>x.id===body.evidenceId);
             if(!evidence||!evidence.mimeType.startsWith('image/'))
               return respond(res,409,{error:'SI_GUIDED_AI_LINKED_IMAGE_REQUIRED'});
+            if(useV01){
+              let media,request;
+              try{
+                media=loadGuidedV01Image({
+                  caseId:current.order.caseId,step,evidence,
+                  evidenceRoot:process.env.SI_CHECKLIST_EVIDENCE_PATH||'/data/si-checklist-evidence'
+                });
+                request=buildGuidedV01Input({
+                  caseId:current.order.caseId,imo:current.order.imo,
+                  step,media,caseVersion:current.guide.lifecycleVersion
+                });
+              }catch(error){
+                return respond(res,error.status||409,{
+                  error:error.code||'SI_V01_FIELD_IMAGE_INVALID'
+                });
+              }
+              let upstream;
+              try{upstream=await callSiVisionAiria(request,media);}
+              catch(error){
+                const timeout=error?.name==='TimeoutError'||error?.name==='AbortError';
+                console.error('[si-v01] GUIDED_VISION_UPSTREAM_FAILED '+JSON.stringify({
+                  category:timeout?'TIMEOUT':'PROVIDER_UNAVAILABLE',
+                  caseId:current.order.caseId
+                }));
+                return respond(res,timeout?504:502,{
+                  error:timeout?'SI_V01_UPSTREAM_TIMEOUT':'SI_V01_UPSTREAM_PROVIDER_UNAVAILABLE'
+                });
+              }
+              try{
+                return respond(res,200,validateGuidedV01Reply(upstream,{
+                  caseId:current.order.caseId,media
+                }));
+              }catch(error){
+                return respond(res,error.status||502,{
+                  error:error.code||'SI_V01_AIRIA_CONTRACT_INVALID'
+                });
+              }
+            }
             const published=step.members.find(m=>m.kind==='PUBLISHED'&&m.id===evidence.itemId);
             let advice;
             if(published){
