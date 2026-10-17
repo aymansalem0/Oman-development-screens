@@ -225,6 +225,7 @@ const fs = require("node:fs");
   });
   await route("readiness");
   await page.locator(".candidate-row").first().click();
+  const candidatesBeforeNewEvent=await page.locator(".candidate-row").count();
   await page.locator("details.sandbox-tools summary").click();
   await page
     .getByRole("button", {
@@ -233,7 +234,8 @@ const fs = require("node:fs");
     })
     .click();
   await page.waitForFunction(
-    () => document.querySelectorAll(".candidate-row").length === 8,
+    (previous) => document.querySelectorAll(".candidate-row").length > previous,
+    candidatesBeforeNewEvent,
   );
   await ctx.request.get(base + "/api/seafarers/v1/dashboard");
   await page.setViewportSize({ width: 390, height: 844 });
