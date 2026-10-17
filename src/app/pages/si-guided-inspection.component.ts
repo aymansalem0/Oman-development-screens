@@ -257,7 +257,7 @@ interface FieldAiAdvice{
      <label class="final-summary">{{t('Inspector final summary','الملخص النهائي للمفتش')}}
       <textarea [(ngModel)]="inspectorSummary" maxlength="1800" [disabled]="!canSave||busy"></textarea></label>
      <button type="button" data-testid="si-guided-finish" (click)="finishInspection()"
-       [disabled]="!canSave||busy||!assessment.canSubmit">
+       [disabled]="!canSave||busy||uploadBusy||!assessment.canSubmit">
        {{t('Finish Inspection · Inspector Sign & Submit for Review',
         'إنهاء المعاينة · اعتماد المفتش وإرسال للمراجعة')}}</button>
      <p *ngIf="g.lifecycleStage==='REPORT_PENDING_REVIEW'">
@@ -551,8 +551,36 @@ export class SiGuidedInspectionComponent implements OnInit{
       this.error=''; // The failure belongs to this photo, not the entire inspection.
      }});
  }
+ /** The backend version lock prevents submitting an obsolete inspection.
+  * Refresh only the guide and require another explicit human confirmation.
+  * Never automatically retry this irreversible submission on conflict.
+  */
+ private refreshAfterFinishConflict(changedSources:string[]):void{
+  const selectedId=this.selected?.stepId;
+  this.busy=true;
+  this.http.get<FieldGuide>(this.api+encodeURIComponent(this.orderId)+'/guide')
+   .subscribe({
+    next:g=>{
+      this.busy=false;this.guide=g;
+      const step=g.steps.find(x=>x.stepId===selectedId)||g.steps[0];
+      if(step)this.choose(step);
+      const changed=changedSources.filter(x=>['LIFECYCLE','CHECKLIST'].includes(x));
+      const label=changed.length?' ('+changed.join(' + ')+')':'';
+      this.error=this.t(
+        'Inspection data changed'+label+'. Latest saved answers have been loaded. Review them and confirm Finish again; nothing was submitted.',
+        'تم تحديث بيانات المعاينة'+label+'. عُرضت آخر الإجابات المحفوظة. راجعها وأكد إنهاء المعاينة مجددًا؛ لم يُرسل التقرير.');
+    },
+    error:()=>{
+      this.busy=false;
+      this.error=this.t(
+        'Inspection versions changed, but refresh failed. Use Refresh and review saved answers before trying Finish again.',
+        'تغير إصدار المعاينة وتعذر التحديث. اضغط تحديث وراجع الإجابات المحفوظة قبل إعادة محاولة الإنهاء.');
+    }
+   });
+ }
  finishInspection():void{
-  const g=this.guide;if(!g||!this.canSave||!g.finalAssessment.canSubmit||this.busy)return;
+  const g=this.guide;if(!g||!this.canSave||!g.finalAssessment.canSubmit||
+    this.busy||this.uploadBusy)return;
   if(!window.confirm(this.t('Submit for supervisor review with '+
       g.finalAssessment.open.length+' open findings? This is not official approval.',
       'إرسال للمشرف مع '+g.finalAssessment.open.length+' مخالفات مفتوحة؟ هذا ليس اعتمادًا رسميًا.')))return;
@@ -562,7 +590,24 @@ export class SiGuidedInspectionComponent implements OnInit{
       expectedChecklistVersion:g.publishedSnapshotVersion,expectedLifecycleVersion:g.lifecycleVersion})
   .subscribe({next:r=>{this.busy=false;this.guide=r.guide;
       this.message=this.t('Submitted for supervisor approval.','تم تسليم التقرير لاعتماد المشرف.');},
-    error:e=>{this.busy=false;this.error=e?.error?.error||'SI_FINISH_FAILED';}});
+    error:e=>{
+      this.busy=false;
+      const code=e?.error?.error;
+      if(e?.status===409&&
+        (code==='SI_GUIDED_FINISH_SOURCE_CHANGED_RELOAD_REQUIRED'||
+         code==='SI_GUIDED_FINISH_CONFIRMATION_OR_VERSION_INVALID')){
+        const sources=Array.isArray(e?.error?.changedSources)?
+          e.error.changedSources.filter((x:unknown)=>typeof x==='string'):[];
+        this.refreshAfterFinishConflict(sources);
+        return;
+      }
+      if(code==='SI_GUIDED_FINISH_EXPLICIT_CONFIRMATION_REQUIRED'){
+        this.error=this.t('Explicit submission confirmation is required.',
+          'يجب تأكيد إرسال المعاينة صراحةً.');
+        return;
+      }
+      this.error=code||'SI_FINISH_FAILED';
+    }});
  }
  next():void{
   const all=this.guide?.steps||[];if(!all.length)return;
