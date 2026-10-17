@@ -13,7 +13,8 @@ import { getPscVessel, getPscHealth } from './psc-reader.mjs';
 import { FleetAssessmentManager } from './fleet-ai.mjs';
 import {airiaDemoVessels,AIRIA_DEMO_COHORT,AIRIA_DEMO_99_IMOS} from './airia-demo-cohort.mjs';
 import { FleetAutoScheduler } from './fleet-scheduler.mjs';
-import { DashboardWorkspace, DashboardError } from './dashboard-workspace.mjs';
+import { DashboardWorkspace, DashboardError, SI_DASHBOARD_METRICS } from './dashboard-workspace.mjs';
+import {buildDashboardAiPrompt,validateDashboardAiDesign,DashboardAiDesignError,DESIGN_SOURCES} from './dashboard-ai-designer.mjs';
 import {classifySiApprovalFailure} from './si-approval-diagnostics.mjs';
 import {DashboardAiFocus,DashboardFocusError,selectDashboardFocusVessel} from './nmc-dashboard-focus.mjs';
 import { NmcAlertWorkspace, NmcAlertError } from './alert-workspace.mjs';
@@ -2920,6 +2921,57 @@ const server = createServer(async (req, res) => {
         return respond(res,error.status,{error:error.code});
       console.error('[nmc-kpi-focus] AI_REQUEST_FAILED');
       return respond(res,503,{error:'DASHBOARD_FOCUS_AI_UNAVAILABLE'});
+    }
+  }
+
+  // Human-confirmed AI suggestions only. No metric queries, no auto-publish.
+  // Reuses partner NMC Desk PROSE candidate, whose JSON contract is not verified:
+  // fail closed if the response cannot be validated. Never invent a dashboard.
+  if(path==='/api/ai/dashboards/ai-design/status'&&req.method==='GET'){
+    dashboards.assertRole(req,'EDITOR');
+    return respond(res,200,{status:'ok',enabled:runtime.get('NMC_DASHBOARD_AI_DESIGN_ENABLED'),
+      provider:'AIRIA_NMC_DESK',pipelineConfigured:Boolean(runtime.get('AIRIA_NMC_DESK_PIPELINE_ID')),
+      keyConfigured:Boolean(getAiriaKey()),contractVerified:false,
+      allowedSources:DESIGN_SOURCES,automaticCalls:false});
+  }
+  if(path==='/api/ai/dashboards/ai-design'&&req.method==='POST'){
+    try{
+      dashboards.assertRole(req,'EDITOR');
+      moeiAuth.require(req,{mutate:true});
+      const body=await requestJson(req,8192);
+      if(body.confirmCost!==true)
+        return respond(res,422,{error:'DASHBOARD_AI_EXPLICIT_COST_CONFIRMATION_REQUIRED'});
+      if(!runtime.get('NMC_DASHBOARD_AI_DESIGN_ENABLED')||!getAiriaKey()||
+         !runtime.get('AIRIA_NMC_DESK_PIPELINE_ID'))
+        return respond(res,503,{error:'DASHBOARD_AI_NOT_CONFIGURED'});
+      const metricCatalog={
+        kpi:[...new Set(['vesselCount','assessedCount','attentionCount','highCriticalCount','priorityCount','averageRisk',...SI_DASHBOARD_METRICS.kpi])],
+        bar:[...new Set(['byRisk','byFlag','byType','byZone',...SI_DASHBOARD_METRICS.bar])],
+        table:['vesselTable',...SI_DASHBOARD_METRICS.table],position:['vesselPositions']
+      };
+      const request=buildDashboardAiPrompt(body.prompt,body.placement,metricCatalog);
+      let raw;
+      try{
+        const reply=await fetch(runtime.get('AIRIA_BASE_URL')+'/v1/PipelineExecution/'+
+          runtime.get('AIRIA_NMC_DESK_PIPELINE_ID'),{
+          method:'POST',
+          headers:{'X-API-KEY':getAiriaKey(),'Content-Type':'application/json',
+            'User-Agent':'moei-dashboard-design-poc/1.0'},
+          body:JSON.stringify({userInput:JSON.stringify(request),asyncOutput:false}),
+          signal:AbortSignal.timeout(airiaTimeout())});
+        if(!reply.ok)throw Error('AIRIA_DESIGN_REQUEST_FAILED');
+        raw=await reply.json();
+      }catch{
+        return respond(res,502,{error:'DASHBOARD_AI_PROVIDER_UNAVAILABLE'});
+      }
+      return respond(res,200,validateDashboardAiDesign(raw,{
+        metricCatalog,placement:body.placement}));
+    }catch(error){
+      if(error instanceof DashboardAiDesignError||error instanceof DashboardError||
+         error instanceof MoeiAuthError)
+        return respond(res,error.status,{error:error.code});
+      console.error('[nmc-dashboard-design] AI_DESIGN_FAILED');
+      return respond(res,503,{error:'DASHBOARD_AI_DESIGN_UNAVAILABLE'});
     }
   }
 
