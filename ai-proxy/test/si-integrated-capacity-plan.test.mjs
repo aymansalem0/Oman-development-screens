@@ -303,3 +303,22 @@ test('audited exclusion can free a published PSC quota for an eligible officer-s
  assert.equal(amended.quotas.pscRisk.targetedImos,1);
  assert.equal(amended.quotas.officerSelectedAlternatives[0].imo,'9400104');
 });
+
+test('saved integrated draft freezes reviewed supervisor exclusions through approval revalidation',()=>{
+ const amended=selectIntegratedPlanVessels({
+  plan,inspectionPlan,dashboard,pscRiskRatePercent:50,uaeFlagRatePercent:100,
+  officerExclusions:[{imo:'9400101',
+   reason:'Supervisor excluded optional vessel from current scheduling period'}]
+ });
+ const approvedImos=amended.roster.map(v=>v.imo);
+ const saved={capacityDraft:{
+  status:'CAPACITY_VERIFIED_DRAFT',sourceHash:amended.sourceHash,
+  c01SelectedImos:approvedImos,selectedImos:approvedImos,
+  officerExclusions:amended.quotas.officerExclusions,capacityExcluded:[]
+ }};
+ const scoped=scopeIntegratedSelectionToSavedDraft(amended,saved);
+ assert.deepEqual(scoped.roster.map(v=>v.imo),approvedImos);
+ assert.ok(!scoped.roster.some(v=>v.imo==='9400101'));
+ assert.ok(scoped.roster.some(v=>v.imo==='9400106'));
+ assert.equal(scoped.draftScope.locked,true);
+});
