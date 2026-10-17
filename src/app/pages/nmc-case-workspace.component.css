@@ -735,3 +735,14 @@ a, button, textarea { font:inherit; }
  border:1px solid #cde5e1;border-radius:9px;color:#0e6065;font-size:11px}
 .nmc-si-defect-factor-link p{font-size:10px;color:#407274}
 @media(max-width:620px){.nmc-si-five-factor-row{grid-template-columns:1fr}}
+
+/* Explicit operator-controlled AI re-assessment (no auto billable retry). */
+.nmc-si-risk-controls{display:flex;gap:9px;flex-wrap:wrap;margin:14px 0 8px}
+.nmc-si-risk-controls button{padding:10px 13px;border-radius:9px;
+  font-weight:700;font-size:11px;cursor:pointer}
+.nmc-si-risk-controls button:disabled{cursor:not-allowed;opacity:.55}
+.nmc-si-risk-refresh{background:#fff;border:1px solid #b4cfda;color:#185b69}
+.nmc-si-risk-retry{background:#096e6d;border:1px solid #087271;color:#fff}
+.nmc-si-risk-evidence-diagnostic{border:1px solid #e4ceb0;
+  border-radius:9px;padding:10px 12px;background:#fff9ee}
+.nmc-si-risk-evidence-diagnostic span{display:block;margin-top:5px}
