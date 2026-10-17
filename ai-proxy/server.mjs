@@ -61,6 +61,7 @@ import {pocInspectorIdForActor} from './si-inspector-identity.mjs';
 import {saveGuidedEvidence,listGuidedEvidence,readGuidedImage} from './si-guided-evidence.mjs';
 import {loadGuidedV01Image,buildGuidedV01Input,validateGuidedV01Reply} from './si-guided-v01.mjs';
 import {classifySiV01Failure,summarizeSiV01Rejection} from './si-v01-provider-diagnostics.mjs';
+import {executeGuidedV01UploadJson} from './si-v01-upload-json.mjs';
 import {suggestCapacityExceptionActions} from './si-capacity-exception-alternatives.mjs';
 import { SiInspectionLifecycle, SiLifecycleError } from './si-inspection-lifecycle.mjs';
 import {SiScheduleOrders,SiWorkOrderError} from './si-schedule-orders.mjs';
@@ -2055,11 +2056,21 @@ const server = createServer(async (req, res) => {
                 });
               }
               let upstream;
-              try{upstream=await callSiVisionAiria(request,media);}
+              try{
+                upstream=await executeGuidedV01UploadJson({
+                  request,media,baseUrl:runtime.get('AIRIA_BASE_URL'),
+                  key:getAiriaKey(),pipelineId:pipelines.v01,
+                  timeoutMs:airiaTimeout()
+                });
+              }
               catch(error){
-                const failure=classifySiV01Failure(error);
+                const failure=error?.code?.startsWith('SI_V01_')?
+                  {error:error.code,status:error.status||502,
+                    upstreamStatus:error.safeDiagnostic?.upstreamStatus}:
+                  classifySiV01Failure(error);
                 console.error('[si-v01] GUIDED_VISION_UPSTREAM_FAILED '+JSON.stringify({
                   code:failure.error,caseId:current.order.caseId,
+                  transportStage:error?.stage||'UNKNOWN',
                   correlationId:request.requestMeta.correlationId,
                   ...(failure.upstreamStatus?{upstreamStatus:failure.upstreamStatus}:{}),
                   ...(error.safeDiagnostic?{rejection:error.safeDiagnostic}:{})

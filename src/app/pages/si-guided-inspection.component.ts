@@ -466,6 +466,17 @@ export class SiGuidedInspectionComponent implements OnInit{
         this.error=this.t(
           'Image AI is not configured. Review AI Settings: '+(parts||'checklist vision contract'),
           'تحليل الصورة بالذكاء الاصطناعي غير مهيأ. راجع إعدادات AI: '+(parts||'عقد تحليل الصور'));
+      }else if(typeof e?.error?.error==='string'&&
+                 (e.error.error.startsWith('SI_V01_UPLOAD_')||
+                  e.error.error.startsWith('SI_V01_JSON_EXECUTION_'))){
+        const code=e.error.error;
+        const stage=e?.error?.rejection?.stage||
+          (code.startsWith('SI_V01_UPLOAD_')?'UPLOAD':'JSON_EXECUTION');
+        this.error=this.t(
+          'SI-V01 '+stage+' could not complete: '+code+
+          '. No image finding was created. Check the Airia adapter logs; do not retry without reviewing the cause.',
+          'لم يكتمل تحليل SI-V01 في مرحلة '+stage+': '+code+
+          '. لم يتم إنشاء مخالفة. راجع سجل تكامل Airia قبل إعادة المحاولة.');
       }else if(e?.error?.error==='SI_V01_MULTIPART_REQUEST_REJECTED'){
         const rejection=e?.error?.rejection||{};
         const fields=Array.isArray(rejection.validationFields)?
