@@ -511,6 +511,9 @@ interface Dossier{
    color:#fff;padding:4px 9px;font-weight:900;font-size:10px;letter-spacing:.45px}
  .journey-step.complete{border-color:#93c9ac;background:#f2faf5}
  .journey-step.ready{border-color:#a5d7d2;background:#f3fbfa}
+ /* A prepared dossier can also be the current review step: current wins. */
+ .journey-step.current.complete,.journey-step.current.ready{
+  border:2px solid #6940bb;background:#f3efff}
  .journey-number{display:inline-flex;justify-content:center;align-items:center;
   width:28px;height:28px;flex:0 0 28px;border-radius:50%;background:#dce9ef;color:#1d6373;
   font-size:13px;font-weight:900}
