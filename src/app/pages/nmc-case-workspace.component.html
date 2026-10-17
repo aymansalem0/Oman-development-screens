@@ -165,8 +165,17 @@
         <p *ngIf="result.job?.errorCode" class="nmc-si-risk-alert" role="alert">
           <strong>{{copy('Recorded failure reason','سبب الفشل المسجل')}}:</strong>
           <span class="nmc-si-risk-code">{{result.job?.errorCode}}</span>
-          <span> · {{copy('Do not repeat billable A01/A02 calls until the cause is reviewed.',
-            'لا تكرر استدعاءات A01/A02 المدفوعة قبل مراجعة السبب.')}}</span>
+          <span> · {{copy('Review the evidence reference error before confirming an explicit potentially paid retry.',
+            'راجع خطأ مرجع الدليل قبل الموافقة على إعادة استدعاء قد تكون مدفوعة.')}}</span>
+        </p>
+        <p *ngIf="result.job?.errorDetails as diagnostic"
+          class="nmc-si-risk-evidence-diagnostic" data-testid="nmc-si-risk-evidence-error">
+          <strong>{{copy('AI evidence mismatch at','عدم مطابقة أدلة AI عند')}}:</strong>
+          {{diagnostic.agent}} / {{diagnostic.factor}}
+          · {{copy('Unknown evidence IDs','معرفات أدلة غير معروفة')}}:
+          {{diagnostic.unknownCount}} / {{diagnostic.citedCount}}
+          <span>{{copy('Only exact source-provided evidence IDs are accepted; unknown IDs are not silently substituted.',
+            'لا تُقبل إلا معرفات الأدلة الأصلية المطابقة؛ لا يتم استبدال معرف مجهول تلقائيًا.')}}</span>
         </p>
         <p *ngIf="result.jobStatus==='NOT_QUEUED'">
           {{copy('No persisted reassessment job was found for the latest approved inspection report. No AI execution is claimed.',
@@ -178,6 +187,27 @@
           {{copy('Verified linked NMC risk is shown above. Regulatory decisions remain human-controlled.',
             'يظهر تقييم NMC المحفوظ والمرتبط أعلاه؛ وتبقى القرارات الرقابية بشرية.')}}</p>
       </ng-container>
+      <div class="nmc-si-risk-controls">
+        <button type="button" class="nmc-si-risk-refresh"
+          (click)="refreshSiPostInspectionRisk()"
+          [disabled]="siRiskStatusLoading||siRiskRetryBusy"
+          data-testid="nmc-si-risk-refresh">
+          {{copy('Refresh AI risk status','تحديث حالة تقييم AI')}}
+        </button>
+        <button *ngIf="canRetrySiPostInspectionRisk" type="button"
+          class="nmc-si-risk-retry" data-testid="nmc-si-risk-explicit-retry"
+          (click)="retrySiPostInspectionRisk()"
+          [disabled]="siRiskRetryBusy||siRiskPolling">
+          {{siPostInspectionRisk?.job?.riskSaved?
+            copy('Retry saved risk sync · No AI call','إعادة ربط المخاطر المحفوظة · بدون استدعاء AI'):
+            copy('Re-run A01/A02 on approved report · May incur cost',
+              'إعادة تشغيل A01/A02 على التقرير المعتمد · قد يتطلب تكلفة')}}
+        </button>
+      </div>
+      <p *ngIf="siRiskRetryBusy||siRiskPolling" role="status">
+        {{copy('A01/A02 request or verification in progress. Do not submit another request.',
+          'الطلب أو التحقق من نتائج A01/A02 قيد التنفيذ؛ لا ترسل طلبًا إضافيًا.')}}</p>
+      <p *ngIf="siRiskRetryNotice" role="status">{{siRiskRetryNotice}}</p>
     </section>
 
     <div class="case-risk-reference" *ngIf="centralCase as linked">
