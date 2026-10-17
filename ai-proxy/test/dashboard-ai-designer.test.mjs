@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
 import {buildDashboardAiPrompt,validateDashboardAiDesign,DashboardAiDesignError,NMC_INCIDENT_SOURCE_SCHEMA}
  from '../dashboard-ai-designer.mjs';
 const catalog={kpi:['vesselCount'],bar:['byRisk'],table:['vesselTable'],position:[]};
@@ -83,4 +84,13 @@ test('Incident KPI proposal is retained only with exact Google Sheet fields',()=
  assert.deepEqual(result.warnings,[
   'NMC_INCIDENT_FIELD_NOT_IN_GOOGLE_SHEET_CONTRACT',
   'NMC_INCIDENT_FIELD_NOT_IN_GOOGLE_SHEET_CONTRACT']);
+});
+
+test('AI Dashboard Designer flag is visible in governance and linked from the designer UI',()=>{
+ const governance=readFileSync(new URL('../../src/app/pages/nmc-runtime-settings.component.ts',import.meta.url),'utf8');
+ const builder=readFileSync(new URL('../../src/app/pages/nmc-dashboard-builder.component.html',import.meta.url),'utf8');
+ assert.match(governance,/id:'agent-dashboard-designer'.*keys:\['NMC_DASHBOARD_AI_DESIGN_ENABLED'\]/);
+ assert.match(builder,/routerLink="\/moei\/settings\/ai-governance"/);
+ assert.match(builder,/useIncidentsPrompt\(\)/);
+ assert.match(builder,/refreshAiDesignStatus\(\)/);
 });
