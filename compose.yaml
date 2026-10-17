@@ -14,6 +14,9 @@ services:
       SDB_ACADEMY_WEBHOOK_SECRET: ${SDB_ACADEMY_WEBHOOK_SECRET:-}
       SDB_MARASI_WEBHOOK_SECRET: ${SDB_MARASI_WEBHOOK_SECRET:-}
       SDB_MOI_ICP_WEBHOOK_SECRET: ${SDB_MOI_ICP_WEBHOOK_SECRET:-}
+      # Business policy: supported AI Agents are available throughout each
+      # human-controlled maritime workflow. No automatic bulk AI spend here.
+      MOEI_AI_ALWAYS_ON: ${MOEI_AI_ALWAYS_ON:-true}
       AIRIA_MENA_KEY: ${AIRIA_MENA_KEY:-}
       MOEI_AI_VAULT_MASTER_KEY: ${MOEI_AI_VAULT_MASTER_KEY:-}
       AIRIA_BASE_URL: ${AIRIA_BASE_URL:-https://api.mena.airia.ai}
