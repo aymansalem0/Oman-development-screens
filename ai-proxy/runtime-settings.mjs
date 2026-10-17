@@ -65,6 +65,7 @@ export const SETTINGS_DESCRIPTORS=Object.freeze([
     description:'Image evidence transport: partner-documented multipart (recommended), inline only if pipeline verified'},
   {key:'SI_CHECKLIST_AI_MAX_CALLS_PER_CASE',type:'number',min:1,max:30,group:'checklist',
     description:'Maximum explicit AI suggestion calls per inspected case'},
+  {key:'AIRIA_CONSOLE_PIPELINE_URL_TEMPLATE',type:'ui-template',group:'connectivity',description:'Airia management UI URL template; place {pipelineId} in the URL. Opens browser only, never invokes API.'},
   {key:'AIRIA_BASE_URL',type:'url',group:'connectivity',description:'Allowlisted HTTPS Airia MENA API endpoint (no secrets)'}
 ]);
 const allowed=Object.fromEntries(SETTINGS_DESCRIPTORS.map(d=>[d.key,d]));
@@ -100,6 +101,7 @@ const DEFAULTS={
   AIRIA_SI_CHECKLIST_VISION_PIPELINE_ID:'',
   SI_CHECKLIST_VISION_TRANSPORT:'multipart',
   SI_CHECKLIST_AI_MAX_CALLS_PER_CASE:10,
+  AIRIA_CONSOLE_PIPELINE_URL_TEMPLATE:'',
   AIRIA_BASE_URL:'https://api.mena.airia.ai'
 };
 export class RuntimeSettingsError extends Error{
@@ -113,6 +115,22 @@ export function validateAiriaUrl(v){
     u.username||u.password||u.port||u.pathname!=='/'||u.search||u.hash)
     throw new RuntimeSettingsError('AIRIA_BASE_URL_NOT_ALLOWED');
   return u.origin;
+}
+export function validateAiriaConsoleTemplate(value){
+  if(value==='')return '';
+  if(typeof value!=='string'||value.length>1200||
+     (value.match(/\\{pipelineId\\}/g)||[]).length!==1)
+    throw new RuntimeSettingsError('AIRIA_CONSOLE_URL_TEMPLATE_INVALID');
+  let url;
+  try{url=new URL(value.replace('{pipelineId}','00000000-0000-0000-0000-000000000000'));}
+  catch{throw new RuntimeSettingsError('AIRIA_CONSOLE_URL_TEMPLATE_INVALID');}
+  const host=url.hostname.toLowerCase();
+  const allowedUiHost=(host==='airia.ai'||host.endsWith('.airia.ai')||
+     host==='airia.com'||host.endsWith('.airia.com'));
+  if(url.protocol!=='https:'||!allowedUiHost||url.username||url.password||
+     url.port||url.hash||url.pathname.startsWith('/v1/'))
+    throw new RuntimeSettingsError('AIRIA_CONSOLE_URL_NOT_ALLOWED');
+  return value;
 }
 const normalize=(key,value)=>{
   const d=allowed[key];if(!d)throw new RuntimeSettingsError('RUNTIME_SETTING_UNKNOWN');
@@ -130,6 +148,7 @@ const normalize=(key,value)=>{
       throw new RuntimeSettingsError('AIRIA_PIPELINE_UUID_INVALID');
     return value;
   }
+  if(d.type==='ui-template')return validateAiriaConsoleTemplate(value);
   if(d.type==='choice'){
     if(!d.options.includes(value))throw new RuntimeSettingsError('RUNTIME_SETTING_CHOICE_INVALID');
     return value;
@@ -148,7 +167,7 @@ function envConfig(env){
     }
     if(d.type==='url'){
       try{value[d.key]=validateAiriaUrl(raw||def);}
-      catch{value[d.key]=DEFAULTS.AIRIA_BASE_URL;}
+      catch{value[d.key]=d.type==='ui-template'?'':DEFAULTS.AIRIA_BASE_URL;}
     }
   }
   // Old ENV true must not reactivate SI-P01 in this POC.
