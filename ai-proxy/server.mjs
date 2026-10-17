@@ -2508,6 +2508,9 @@ const server = createServer(async (req, res) => {
       // Can retry downstream Case Management sync without re-closing SI.
       const retryNmc=/^\/api\/si\/v1\/supervisor\/cases\/([a-f0-9-]{36})\/sync-nmc$/.exec(path);
       if(retryNmc&&req.method==='POST'){
+        moeiAuth.require(req);
+        if(req.headers['x-moei-csrf']!=='1')
+          throw new MoeiAuthError('MOEI_CSRF_REQUIRED',403);
         dashboards.assertRole(req,'PUBLISHER');
         const view=await siLifecycle.snapshot(retryNmc[1]);
         return respond(res,200,await syncSiClosureToNmc({
