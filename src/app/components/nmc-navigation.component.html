@@ -167,6 +167,13 @@
           <span class="nav-icon">▥</span>
           <span class="nav-label">{{copy('Inspection Management','إدارة المعاينات')}}</span>
         </a>
+        <a class="nav-link" routerLink="/moei/smart-inspection/supervisor"
+           [class.active]="currentPath.startsWith('/moei/smart-inspection/supervisor')"
+           [attr.aria-current]="currentPath.startsWith('/moei/smart-inspection/supervisor')?'page':null"
+           [title]="copy('Supervisor Review & Closure','اعتماد تقارير المعاينات والإغلاق')">
+          <span class="nav-icon">☑</span>
+          <span class="nav-label">{{copy('Supervisor Approval','اعتماد المشرف')}}</span>
+        </a>
         <a class="nav-link" routerLink="/moei/smart-inspection/my-work-orders"
            [class.active]="currentPath.startsWith('/moei/smart-inspection/my-work-orders')"
            [attr.aria-current]="currentPath.startsWith('/moei/smart-inspection/my-work-orders')?'page':null"
@@ -174,27 +181,9 @@
           <span class="nav-icon">◷</span>
           <span class="nav-label">{{copy('My Inspection Journey','رحلة معايناتي')}}</span>
         </a>
-        <a class="nav-link" routerLink="/moei/smart-inspection/preparation"
-           [class.active]="isInspectionPreparation"
-           [attr.aria-current]="isInspectionPreparation?'page':null"
-           [title]="copy('Inspection Preparation & A04','تحضير المعاينة وملف A04')">
-          <span class="nav-icon">▤</span>
-          <span class="nav-label">{{copy('Inspection Preparation & A04','تحضير المعاينة وملف A04')}}</span>
-        </a>
-        <a class="nav-link" routerLink="/moei/smart-inspection/scheduling"
-           [class.active]="isInspectionScheduling"
-           [attr.aria-current]="isInspectionScheduling?'page':null"
-           [title]="copy('Electronic Scheduling','الجدولة الإلكترونية')">
-          <span class="nav-icon">▦</span>
-          <span class="nav-label">{{copy('Electronic Scheduling','الجدولة الإلكترونية')}}</span>
-        </a>
-        <a class="nav-link" [routerLink]="inspectionWorkbenchRoute"
-           [class.active]="isInspectionWorkbench"
-           [attr.aria-current]="isInspectionWorkbench?'page':null"
-           [title]="selectedImo ? copy('NMC Legacy Vessel Inspection Workbench (POC)','واجهة معاينة السفينة القديمة الخاصة بالمركز البحري (تجريبية)') : vesselHint">
-          <span class="nav-icon">⌖</span>
-          <span class="nav-label">{{copy('NMC Legacy Inspection (POC)','معاينة NMC القديمة (تجريبية)')}}</span>
-        </a>
+        
+        
+        
         <div class="nav-dashboard-group" *ngIf="dashboardItems('SMART_INSPECTION').length">
           <button class="nav-subgroup" type="button"
                   (click)="toggleDashboard('smart')"
@@ -255,12 +244,7 @@
               <span class="nav-icon">▤</span>
               <span class="nav-label">{{copy('Data Quality Management','إدارة جودة البيانات')}}</span>
             </a>
-            <a class="nav-link" routerLink="/moei/nmc/admin/operational-guidance"
-               [class.active]="isGuidanceConfig" [attr.aria-current]="isGuidanceConfig?'page':null"
-               [title]="copy('Operational Guidance Rules','قواعد الإرشاد التشغيلي')">
-              <span class="nav-icon">⚙</span>
-              <span class="nav-label">{{copy('Operational Guidance Rules','قواعد الإرشاد التشغيلي')}}</span>
-            </a>
+            
             <a class="nav-link" routerLink="/moei/nmc/dashboards"
                [class.active]="isDashboardManager" [attr.aria-current]="isDashboardManager?'page':null"
                [title]="copy('Dashboard Manager','مدير لوحات المعلومات')">
