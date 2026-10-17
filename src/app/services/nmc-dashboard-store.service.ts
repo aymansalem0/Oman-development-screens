@@ -226,6 +226,9 @@ export class NmcDashboardStoreService {
   }
 
   createAiContinuousImprovement():DashboardDefinition{
+    const already=this.subject.value.find(x=>x.title==='AI Continuous Improvement'&&
+      x.widgets.some(w=>w.metric==='ciTotalCalls'));
+    if(already)return clone(already);
     const board=buildAiContinuousImprovementDashboard();
     const draft:DashboardDefinition={
       ...board,id:'dashboard-'+(globalThis.crypto?.randomUUID?.()||Date.now().toString(36)),
@@ -338,15 +341,34 @@ export class NmcDashboardStoreService {
   }
 
   private load():DashboardDefinition[] {
-    try {
+    let existing:DashboardDefinition[]=[dashboardDefaults()];
+    try{
       const raw=localStorage.getItem(this.key);
-      if(!raw)return [dashboardDefaults()];
-      const parsed:unknown=JSON.parse(raw);
-      if(!Array.isArray(parsed))return [dashboardDefaults()];
-      return parsed.filter((x):x is DashboardDefinition=>
-        !!x&&typeof x.id==='string'&&typeof x.title==='string'&&
-        Array.isArray(x.widgets)&&x.filters&&typeof x.filters==='object');
-    }catch{return [dashboardDefaults()];}
+      if(raw){
+        const parsed:unknown=JSON.parse(raw);
+        if(Array.isArray(parsed))existing=parsed.filter((x):x is DashboardDefinition=>
+          !!x&&typeof x.id==='string'&&typeof x.title==='string'&&
+          Array.isArray(x.widgets)&&x.filters&&typeof x.filters==='object');
+      }
+    }catch{/* Keep the original dashboard when old browser storage cannot be read. */}
+    // One-time, non-destructive template migration. A draft is created once per
+    // browser; never overwrite an existing board or silently auto-publish.
+    // A user who deletes the draft will not have it recreated on the next visit.
+    try{
+      const marker=this.key+'-ai-ci-seed-v1';
+      if(localStorage.getItem(marker)!=='1'){
+        if(!existing.some(x=>x.title==='AI Continuous Improvement'||
+          x.widgets?.some(w=>w.metric==='ciTotalCalls'))){
+          const draft=buildAiContinuousImprovementDashboard();
+          draft.id='ai-continuous-improvement-local';
+          draft.updatedAt=new Date().toISOString();
+          existing=[...existing,draft];
+          localStorage.setItem(this.key,JSON.stringify(existing));
+        }
+        localStorage.setItem(marker,'1');
+      }
+    }catch{/* A storage quota or private mode must not break other dashboards. */}
+    return existing;
   }
 
   private commit(rows:DashboardDefinition[]):void {
