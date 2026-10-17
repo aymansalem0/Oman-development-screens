@@ -60,6 +60,7 @@ import {projectGuidedInspection,findGuidedStep,guidedFinalAssessment,
 import {pocInspectorIdForActor} from './si-inspector-identity.mjs';
 import {saveGuidedEvidence,listGuidedEvidence,readGuidedImage} from './si-guided-evidence.mjs';
 import {loadGuidedV01Image,buildGuidedV01Input,validateGuidedV01Reply} from './si-guided-v01.mjs';
+import {classifySiV01Failure} from './si-v01-provider-diagnostics.mjs';
 import {suggestCapacityExceptionActions} from './si-capacity-exception-alternatives.mjs';
 import { SiInspectionLifecycle, SiLifecycleError } from './si-inspection-lifecycle.mjs';
 import {SiScheduleOrders,SiWorkOrderError} from './si-schedule-orders.mjs';
@@ -406,7 +407,9 @@ async function callSiVisionAiria(request,media){
     body:form,signal:AbortSignal.timeout(airiaTimeout())
   });
   if(!upstream.ok)throw new Error('AIRIA_V01_HTTP_'+upstream.status);
-  return upstream.json();
+  // A provider success status is not proof of JSON. Never expose the raw body.
+  try{return await upstream.json();}
+  catch{throw new Error('AIRIA_V01_RESPONSE_INVALID_JSON');}
 }
 
 const siBulkPlan=new SiBulkInspectionPlan({
@@ -2033,14 +2036,14 @@ const server = createServer(async (req, res) => {
               let upstream;
               try{upstream=await callSiVisionAiria(request,media);}
               catch(error){
-                const timeout=error?.name==='TimeoutError'||error?.name==='AbortError';
+                const failure=classifySiV01Failure(error);
                 console.error('[si-v01] GUIDED_VISION_UPSTREAM_FAILED '+JSON.stringify({
-                  category:timeout?'TIMEOUT':'PROVIDER_UNAVAILABLE',
-                  caseId:current.order.caseId
+                  code:failure.error,caseId:current.order.caseId,
+                  correlationId:request.requestMeta.correlationId,
+                  ...(failure.upstreamStatus?{upstreamStatus:failure.upstreamStatus}:{})
                 }));
-                return respond(res,timeout?504:502,{
-                  error:timeout?'SI_V01_UPSTREAM_TIMEOUT':'SI_V01_UPSTREAM_PROVIDER_UNAVAILABLE'
-                });
+                return respond(res,failure.status,{error:failure.error,
+                  correlationId:request.requestMeta.correlationId});
               }
               try{
                 return respond(res,200,validateGuidedV01Reply(upstream,{
