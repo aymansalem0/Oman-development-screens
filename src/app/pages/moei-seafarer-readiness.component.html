@@ -1190,6 +1190,24 @@
                       <small>EXPIRES</small><b>{{ digital.expiryDate }}</b>
                     </div>
                   </div>
+                  <div class="esdb-qr" data-testid="sdb-issued-qr">
+                    <div class="esdb-qr-frame" *ngIf="issuedQrDataUrl; else qrWaiting">
+                      <img [src]="issuedQrDataUrl" width="180" height="180"
+                           [alt]="t('Scannable sandbox eSDB reference QR','رمز QR لمرجع سجل البحار التجريبي')">
+                    </div>
+                    <ng-template #qrWaiting>
+                      <div class="esdb-qr-placeholder" *ngIf="!issuedQrError">
+                        {{t('Generating QR…','جارٍ إنشاء QR…')}}
+                      </div>
+                    </ng-template>
+                    <div class="esdb-qr-info">
+                      <strong>{{t('SCAN eSDB QR','امسح QR السجل الإلكتروني')}}</strong>
+                      <span>{{digital.verificationReference}}</span>
+                      <small>{{t('Sandbox reference only · No online verification',
+                        'مرجع تجريبي فقط · لا توجد خدمة تحقق إلكتروني')}}</small>
+                    </div>
+                  </div>
+                  <p class="esdb-qr-error" role="alert" *ngIf="issuedQrError">{{issuedQrError}}</p>
                   <footer>SPECIMEN · SANDBOX · NOT AN OFFICIAL DOCUMENT</footer>
                 </article>
                 <aside class="issued-summary">
@@ -1209,6 +1227,11 @@
                     <b>{{ t("Previous SDB", "السجل السابق") }}</b>
                     {{ digital.previousSdb }}
                   </p>
+                  <button class="primary" (click)="downloadEsdbCard()"
+                          [disabled]="!issuedQrDataUrl"
+                          data-testid="sdb-download-esdb-qr">
+                    {{t('↓ Download eSDB Card with QR','↓ تنزيل السجل الإلكتروني مع QR')}}
+                  </button>
                   <button class="quiet" (click)="download()">
                     ↓
                     {{

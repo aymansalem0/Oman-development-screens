@@ -40,6 +40,20 @@ const okSlot=o=>o&&/^[0-9]{7}$/.test(o.imo)&&
  label(o.portId,100)&&label(o.portName,120)&&
  Number.isFinite(Date.parse(o.startUtc))&&Number.isFinite(Date.parse(o.endUtc))&&
  Date.parse(o.endUtc)>Date.parse(o.startUtc);
+// The scheduler stores UAE-local times as YYYY-MM-DD HH:mm, while the
+// inspection lifecycle ASSIGN contract requires YYYY-MM-DDTHH:mm.
+// Normalize notation only: no timezone conversion or guessed date.
+export function lifecycleLocalStart(value){
+ const source=label(value,40);
+ if(!source||!/^\d{4}-\d\d-\d\d[ T]\d\d:\d\d$/.test(source))
+  err('SI_ASSIGNMENT_SCHEDULE_START_INVALID',422);
+ const normalized=source.replace(' ','T');
+ const utc=Date.parse(normalized+':00+04:00');
+ if(!Number.isFinite(utc)||
+    new Date(utc+4*3600000).toISOString().slice(0,16)!==normalized)
+  err('SI_ASSIGNMENT_SCHEDULE_START_INVALID',422);
+ return normalized;
+}
 const batchReason=r=>({
  eventKey:r.eventKey,candidateKey:r.candidateKey,
  sourceType:r.sourceType,sourceEventId:r.sourceEventId,
@@ -593,7 +607,7 @@ export class SiScheduleOrders{
    expectedVersion:approved.record.version,actor,
    data:{inspector:order.assignment.inspectorName,
     port:order.assignment.portName,
-    startLocal:order.assignment.startLocal,
+    startLocal:lifecycleLocalStart(order.assignment.startLocal),
     mode:order.assignment.sourceType==='NMC_CASE'?
      'NMC_SCHEDULED':(await this.targeting.inspectionCase(order.caseId))
        ?.nmcReferralId?'NMC_SCHEDULED':'POC_MANUAL'}});

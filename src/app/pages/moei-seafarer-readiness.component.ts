@@ -3,6 +3,7 @@ import { Component, OnDestroy, OnInit } from "@angular/core";
 import { FormsModule } from "@angular/forms";
 import { ActivatedRoute, RouterLink } from "@angular/router";
 import { Subscription, interval, switchMap } from "rxjs";
+import QRCode from "qrcode";
 import { NmcNavigationComponent } from "../components/nmc-navigation.component";
 import { NmcPlatformHeaderComponent } from "../components/nmc-platform-chrome.component";
 import { LanguageService } from "../services/language.service";
@@ -53,6 +54,10 @@ export class MoeiSeafarerReadinessComponent implements OnInit, OnDestroy {
   demoDirectory: SdbProfile[] = [];
   step = 0;
   app: SdbApplication | null = null;
+  issuedQrDataUrl = "";
+  issuedQrError = "";
+  private issuedQrKey = "";
+  private issuedQrGeneration = 0;
   format: "ELECTRONIC" | "ELECTRONIC_PRINT" = "ELECTRONIC";
   delivery: "POST" | "PICKUP" = "POST";
   recipient: SdbRecipient = {
@@ -266,6 +271,7 @@ export class MoeiSeafarerReadinessComponent implements OnInit, OnDestroy {
             const a = p.applications[p.applications.length - 1];
             if (a) this.restore(a);
           }
+          this.updateIssuedQr();
           // A READY scenario selected by an operator goes straight into the
           // existing SDB draft wizard, not a second readiness dead-end.
           // Re-check genuine profile readiness; non-READY profiles cannot
@@ -308,6 +314,7 @@ export class MoeiSeafarerReadinessComponent implements OnInit, OnDestroy {
   }
   restore(a: SdbApplication) {
     this.app = a;
+    this.updateIssuedQr();
     this.format = a.format;
     this.delivery = a.delivery === "PICKUP" ? "PICKUP" : "POST";
     this.recipient = { ...a.recipient };
@@ -379,6 +386,7 @@ export class MoeiSeafarerReadinessComponent implements OnInit, OnDestroy {
             this.busy = false;
             if (a.status === "ISSUED") {
               this.step = 5;
+              this.updateIssuedQr();
               this.notice = this.t(
                 "Electronic SDB is available. Delivery updates will appear in your notifications.",
                 "السجل الإلكتروني متاح. ستصلك تحديثات الاستلام في الإشعارات.",
@@ -491,6 +499,76 @@ export class MoeiSeafarerReadinessComponent implements OnInit, OnDestroy {
           error: (e) => this.actionError(e),
         }),
     );
+  }
+  /**
+   * Offline QR is generated only for an issued sandbox eSDB. It contains no
+   * personal identity data and does not imply public regulatory verification.
+   * Future production issuance must use an authenticated, revocable
+   * government-backed verification endpoint and signed record.
+   */
+  updateIssuedQr() {
+    const digital = this.app?.status === "ISSUED" ? this.app.digital : null;
+    if (!digital?.number || !digital.verificationReference) {
+      this.issuedQrKey = "";
+      this.issuedQrDataUrl = "";
+      this.issuedQrError = "";
+      this.issuedQrGeneration++;
+      return;
+    }
+    const key = digital.number + "|" + digital.verificationReference;
+    if (key === this.issuedQrKey) return;
+    this.issuedQrKey = key;
+    this.issuedQrDataUrl = "";
+    this.issuedQrError = "";
+    const request = ++this.issuedQrGeneration;
+    // Never encode SID, seafarer name, national ID or payment details.
+    const text = "MOEI-eSDB-POC\\nSDB:" + digital.number +
+      "\\nVERIFY-REF:" + digital.verificationReference +
+      "\\nSANDBOX-NOT-OFFICIAL";
+    void QRCode.toDataURL(text, {
+      errorCorrectionLevel: "M", margin: 2, width: 180,
+      color: {dark: "#153d4a", light: "#ffffffff"}
+    }).then(image => {
+      if (this.issuedQrGeneration === request) this.issuedQrDataUrl = image;
+    }).catch(() => {
+      if (this.issuedQrGeneration === request)
+        this.issuedQrError = this.t(
+          "Could not generate QR. Your issued SDB is unchanged.",
+          "تعذر إنشاء QR. سجل البحار الصادر لم يتغير.");
+    });
+  }
+  downloadEsdbCard() {
+    const d = this.app?.status === "ISSUED" ? this.app.digital : null;
+    if (!d || !this.issuedQrDataUrl) return;
+    const escape = (value:string) => value.replace(/[&<>"']/g, c =>
+      ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"} as Record<string,string>)[c]);
+    const markup = `<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>eSDB · ${escape(d.number)}</title>
+<style>body{font:15px Arial,sans-serif;padding:38px;background:#f4f8f8;color:#164451}
+.card{max-width:580px;margin:auto;background:#fff;border:2px solid #106d6b;border-radius:16px;padding:30px}
+h1{margin:0 0 6px;color:#0a625e}dt{font-size:11px;color:#708b91;margin-top:16px}
+dd{margin:4px 0 0;font-weight:bold;overflow-wrap:anywhere}
+.qr{margin-top:25px;display:flex;align-items:center;gap:15px}
+.qr img{width:180px;height:180px;background:#fff}
+small{display:block;margin-top:20px;color:#7a4530;font-weight:bold}
+@media print{body{background:#fff;padding:0}.card{border-color:#bbb}}</style></head>
+<body><article class="card"><h1>MOEI · eSDB</h1><p>SEAMAN'S DISCHARGE BOOK</p>
+<dl><dt>SEAFARER</dt><dd>${escape(d.name)}</dd><dt>SID</dt><dd>${escape(d.sid)}</dd>
+<dt>SDB NUMBER</dt><dd>${escape(d.number)}</dd>
+<dt>ISSUED</dt><dd>${escape(d.issuedAt)}</dd>
+<dt>EXPIRES</dt><dd>${escape(d.expiryDate)}</dd></dl>
+<div class="qr"><img src="${this.issuedQrDataUrl}" alt="eSDB sandbox QR code">
+<div><b>SCAN QR</b><p>${escape(d.verificationReference)}</p>
+<p>Reference data only. No public verification service.</p></div></div>
+<small>SPECIMEN · SANDBOX · NOT AN OFFICIAL DOCUMENT</small></article></body></html>`;
+    const blob = new Blob([markup], {type:"text/html;charset=utf-8"});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = d.number + "-eSDB-with-QR.html";
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
   download() {
     if (!this.app?.digital) return;
