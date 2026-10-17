@@ -621,7 +621,7 @@ export class NmcDashboardBuilderComponent implements OnInit,OnDestroy {
     const items=this.dashboard.proposedMetrics;
     const from=items.findIndex(m=>m.id===metricId),to=from+direction;
     if(from<0||to<0||to>=items.length)return;
-    [items[from],items[to]]=[items[to],items[from];
+    [items[from],items[to]]=[items[to],items[from]];
     this.touch();
   }
 
