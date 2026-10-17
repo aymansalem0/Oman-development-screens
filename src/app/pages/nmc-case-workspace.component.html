@@ -97,7 +97,13 @@
         <div class="case-context">
           <span>{{ copy('Case owner', 'مالك الحالة') }}: <strong>{{copy('NMC Duty Officer', 'ضابط مناوبة المركز البحري')}}</strong></span>
           <span>{{ copy('Opened', 'تاريخ الفتح') }}: <strong>{{centralCase.createdAt|date:'medium'}}</strong></span>
-          <span>{{ copy('Source', 'المصدر') }}: <strong>{{ copy('AI assessment + human approval', 'تقييم الذكاء الاصطناعي + اعتماد بشري') }}</strong></span>
+          <span>{{ copy('Source', 'المصدر') }}:
+            <strong>{{centralCase.source==='SI_APPROVED_INSPECTION'?
+              copy('Supervisor-approved Smart Inspection report','تقرير معاينة ذكية معتمد من المشرف'):
+              centralCase.source==='GOOGLE_SHEETS_INCIDENT'?
+              copy('Google Sheets maritime incident','حادث بحري من Google Sheets'):
+              copy('Saved AI assessment + human approval','تقييم مخاطر AI محفوظ + اعتماد بشري')}}</strong>
+          </span>
         </div>
       </div>
 
@@ -137,6 +143,41 @@
           <span>{{ copy('operational actions', 'إجراءات تشغيلية') }}</span>
         </article>
       </div>
+    </section>
+
+    <section class="nmc-si-risk-diagnostic" *ngIf="centralCase?.source==='SI_APPROVED_INSPECTION'"
+      data-testid="nmc-si-risk-diagnostic" role="region"
+      [attr.aria-label]="copy('Post-inspection AI assessment status','حالة تقييم AI بعد المعاينة')">
+      <h3>{{copy('Smart Inspection → NMC · A01/A02 Risk Status',
+        'المعاينة الذكية ← NMC · حالة تقييم مخاطر A01/A02')}}</h3>
+      <p>{{copy('This NMC Case was opened from an approved human inspection report, not an AI risk alert. The original source risk is correctly unavailable. No risk score or recommendation is assumed.',
+        'فُتحت الحالة من تقرير معاينة معتمد بشريًا وليس من تنبيه مخاطر AI. لذلك لا يوجد تقييم مخاطر أصلي لهذه الحالة، ولن نفترض درجة مخاطر أو توصية.')}}</p>
+      <p *ngIf="siRiskStatusLoading" role="status">
+        {{copy('Checking persisted A01/A02 reassessment job…','جارٍ فحص مهمة إعادة تقييم A01/A02 المحفوظة…')}}</p>
+      <p *ngIf="siRiskStatusError" class="nmc-si-risk-alert" role="alert">
+        {{copy('Unable to read the saved risk job status. Risk remains unverified. Refresh the case to retry this read-only check.',
+          'تعذر قراءة حالة مهمة المخاطر المحفوظة. المخاطر غير موثقة بعد. حدّث القضية لإعادة الفحص للقراءة فقط.')}}</p>
+      <ng-container *ngIf="siPostInspectionRisk as result">
+        <p><strong>{{copy('Execution status','حالة التنفيذ')}}:</strong>
+          <span class="nmc-si-risk-code">{{result.jobStatus}}</span>
+          <span *ngIf="result.job?.updatedAt"> · {{result.job?.updatedAt|date:'medium'}}</span>
+        </p>
+        <p *ngIf="result.job?.errorCode" class="nmc-si-risk-alert" role="alert">
+          <strong>{{copy('Recorded failure reason','سبب الفشل المسجل')}}:</strong>
+          <span class="nmc-si-risk-code">{{result.job?.errorCode}}</span>
+          <span> · {{copy('Do not repeat billable A01/A02 calls until the cause is reviewed.',
+            'لا تكرر استدعاءات A01/A02 المدفوعة قبل مراجعة السبب.')}}</span>
+        </p>
+        <p *ngIf="result.jobStatus==='NOT_QUEUED'">
+          {{copy('No persisted reassessment job was found for the latest approved inspection report. No AI execution is claimed.',
+            'لم توجد مهمة إعادة تقييم محفوظة لآخر تقرير معاينة معتمد؛ لا يُفترض حدوث تنفيذ AI.')}}</p>
+        <p *ngIf="result.job?.riskSaved&&!centralCase?.operationalRisk">
+          {{copy('An AI risk result was saved, but it has not been reconciled into this NMC Case. Preserve it and review the synchronization error before retrying.',
+            'حُفظت نتيجة مخاطر AI لكن لم تُربط بهذه القضية؛ احتفظ بها وراجع خطأ المزامنة قبل المحاولة مجددًا.')}}</p>
+        <p *ngIf="centralCase?.operationalRisk">
+          {{copy('Verified linked NMC risk is shown above. Regulatory decisions remain human-controlled.',
+            'يظهر تقييم NMC المحفوظ والمرتبط أعلاه؛ وتبقى القرارات الرقابية بشرية.')}}</p>
+      </ng-container>
     </section>
 
     <div class="case-risk-reference" *ngIf="centralCase as linked">
@@ -258,12 +299,18 @@
           <p>{{copy('A01 proposes. The human officer approves the operational route; the original saved risk is not changed here.',
             'يقترح A01 ويعتمد الموظف المسار التشغيلي؛ ولا تُعدّل درجة المخاطر الأصلية المحفوظة هنا.')}}</p>
         </div>
-        <button *ngIf="!centralCase.actionPlan" type="button" class="ai-plan-button"
+        <button *ngIf="!centralCase.actionPlan&&!isSiCaseWithoutOriginalAssessment"
+                type="button" class="ai-plan-button"
                 [disabled]="centralBusy||caseStatus==='Resolved'" (click)="generateAiActions()">
           ↻ {{ copy('Retry A01 recommendations', 'إعادة محاولة تحميل توصيات A01') }}
         </button>
       </div>
-      <div class="ai-plan-alert" *ngIf="!centralCase.actionPlan">
+      <div class="ai-plan-alert" *ngIf="!centralCase.actionPlan&&isSiCaseWithoutOriginalAssessment"
+        role="status" data-testid="nmc-si-original-source-unavailable">
+        {{copy('A01 Case Recommendations require an immutable original AI assessment. This case came from a human-approved inspection and has none. Use the separate A01/A02 post-inspection reassessment status above to diagnose the pending risk. No automatic AI call or fabricated baseline is allowed.',
+          'توصيات A01 للقضية تتطلب تقييم AI أصليًا محفوظًا. هذه القضية نشأت من معاينة معتمدة بشريًا ولا تملك تقييمًا أصليًا. راجع حالة إعادة التقييم A01/A02 أعلاه لتشخيص المخاطر المعلقة؛ لن يتم استدعاء AI تلقائيًا أو إنشاء تقييم افتراضي.')}}
+      </div>
+      <div class="ai-plan-alert" *ngIf="!centralCase.actionPlan&&!isSiCaseWithoutOriginalAssessment">
         {{ copy('A01 recommendations are prepared automatically when Create Maritime Case is confirmed. If this case was opened before the change or A01 failed, use Retry. No tasks are invented.',
           'يتم إعداد توصيات A01 عند تأكيد إنشاء الحالة البحرية. إذا كانت الحالة قديمة أو فشل A01، استخدم إعادة المحاولة. لن ننشئ مهام افتراضية.') }}
       </div>
