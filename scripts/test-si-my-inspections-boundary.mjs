@@ -258,3 +258,37 @@ test('scheduling is immutable after order issuance and delegates inspector actio
  assert.ok(schedule.includes('if(!this.approvedSchedule)this.calculateFeasible(false)'));
  assert.ok(scheduleUi.includes("routerLink=\"/moei/smart-inspection/my-work-orders\""));
 });
+
+test('real scheduling time is normalized before lifecycle ASSIGN for inspector Step 5',()=>{
+ const orderService=src('ai-proxy/si-schedule-orders.mjs');
+ const cycle=src('ai-proxy/si-inspection-lifecycle.mjs');
+ assert.ok(orderService.includes('export function lifecycleLocalStart(value)'));
+ assert.ok(orderService.includes('startLocal:lifecycleLocalStart(order.assignment.startLocal)'));
+ assert.ok(cycle.includes("fails('SI_ASSIGNMENT_FIELDS_REQUIRED')"));
+});
+
+test('current journey step is visually distinct and stays active during FIELD_STARTED',()=>{
+ assert.ok(workspace.includes("selected?.status==='FIELD_STARTED'?'step':null"));
+ assert.ok(workspace.includes('data-testid="si-current-step-indicator"'));
+ assert.ok(workspace.includes('.journey-step.current{border:2px solid #6940bb'));
+ assert.ok(workspace.includes("{{t('CURRENT STEP','الخطوة الحالية')}}"));
+ assert.ok(!workspace.includes('[class.complete]="selected?.status===\'FIELD_STARTED\'"'));
+});
+
+test('sandbox eSDB issues scannable local QR without encoding private identity or asserting live verification',()=>{
+ const component=src('src/app/pages/moei-seafarer-readiness.component.ts');
+ const template=src('src/app/pages/moei-seafarer-readiness.component.html');
+ const manifest=src('package.json');
+ const payload=component.slice(component.indexOf('const text = "MOEI-eSDB-POC'),
+  component.indexOf('void QRCode.toDataURL('));
+ assert.ok(component.includes('import QRCode from "qrcode"'));
+ assert.ok(manifest.includes('"qrcode": "^1.5.4"'));
+ assert.ok(payload.includes('digital.number'));
+ assert.ok(payload.includes('digital.verificationReference'));
+ assert.ok(!payload.includes('digital.name')&&!payload.includes('digital.sid'));
+ assert.ok(template.includes('data-testid="sdb-issued-qr"'));
+ assert.ok(template.includes('data-testid="sdb-download-esdb-qr"'));
+ assert.ok(template.includes('No online verification'));
+ assert.ok(component.includes('downloadEsdbCard()'));
+ assert.ok(component.includes('this.app?.status === "ISSUED"'));
+});
