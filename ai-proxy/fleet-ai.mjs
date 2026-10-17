@@ -379,6 +379,25 @@ export class FleetAssessmentManager {
         certificatesAndExpiryBelongToA02:true,
         warning:'Document authenticity not verified. Human review is NOT validation by flag authority.'
       },
+      ...(Array.isArray(v.siFindingsForAttribution)?{
+        // A01/A02 existing input contract stays unchanged. Make exact valid
+        // evidence IDs and individual human-confirmed defects unambiguous in
+        // INLINE context so partner models cite SOURCE IDs instead of aliases
+        // or generated IDs. No acceptance of invented identifiers.
+        evidenceReferenceContract:{
+          mode:'EXACT_PROVIDED_IDENTIFIERS_ONLY',
+          allowedEvidenceIds:[...new Set(ids)],
+          allowedFindingIds:v.siFindingsForAttribution.map(f=>f.evidenceId),
+          approvedReportEvidenceId:v.inlineContext?.postInspectionFactorAttribution?.reportEvidenceId||null,
+          instructions:[
+            'In each signal.evidenceIds, copy exact case-sensitive values from allowedEvidenceIds.',
+            'Do not invent, shorten, prefix, translate, paraphrase, or use filenames as evidence IDs.',
+            'To attribute an inspector defect to a factor, cite its SI-FINDING-* ID exactly.',
+            'Retain relevant external PSC inspection or deficiency evidence when supplied.',
+            'If supporting evidence is absent, return an insufficient-evidence signal rather than inventing it.'
+          ]
+        }
+      }:{}),
       externalPsc:{
       sourceSystem:psc.sourceSystem,sourceMode:psc.sourceMode,dataNature:psc.dataNature,
       authoritative:false,verifiedByAuthority:false,coverage:psc.coverage,
