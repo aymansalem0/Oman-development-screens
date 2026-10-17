@@ -224,8 +224,23 @@
               <strong>{{copy('Post-inspection AI Risk','مخاطر AI بعد المعاينة')}}</strong>
               <b>{{risk.score}}/100 · {{risk.level}}</b>
               <small>{{copy('Previous risk','المخاطر السابقة')}}:
-                {{risk.previousScore??'—'}}/100
+                {{risk.previousScore===null?
+                  copy('No prior saved assessment','لا يوجد تقييم سابق'):
+                  risk.previousScore+'/100'}}
                 · {{copy('Validated evidence','الدليل المعتمد')}}: {{risk.evidenceId}}</small>
+              <div class="nmc-si-referral-factor-summary"
+                *ngIf="risk.factorAttribution?.length"
+                data-testid="nmc-si-referral-attribution">
+                <strong>{{copy('AI-cited defect → risk factors',
+                  'ربط المخالفات بعوامل المخاطر بواسطة AI')}}</strong>
+                <small *ngFor="let defect of risk.factorAttribution | slice:0:3">
+                  {{defect.title}}: {{defect.factors.join(', ')}}
+                </small>
+                <small *ngIf="(risk.factorAttribution?.length||0)>3">
+                  {{copy('Open case for all mapped defects',
+                    'افتح الحالة لعرض جميع المخالفات المرتبطة')}}
+                </small>
+              </div>
             </ng-container>
             <ng-template #awaitingReassessment>
               <strong>{{copy('AI Risk Reassessment','إعادة تقييم المخاطر باستخدام AI')}}</strong>
