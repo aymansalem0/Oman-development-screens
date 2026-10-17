@@ -478,7 +478,7 @@ export class SiGuidedInspectionComponent implements OnInit{
   if(!window.confirm(this.t('Send photo to Airia AI? A charge may apply. AI is advisory only.',
      'تأكيد إرسال الصورة إلى Airia AI؟ قد توجد تكلفة. النتيجة استشارية فقط.')))return;
   const key=this.imageReviewKey(step.stepId,file.id);
-  this.aiBusy=true;this.imageLoadingKey=key;this.error='';
+  this.aiBusy=true;this.imageLoadingKey=key;this.error='';this.message='';
   delete this.imageReviewErrors[key];
   delete this.imageReviews[key]; // A failed retry must not leave a stale success.
   this.http.post<ImageReview>(this.api+encodeURIComponent(this.orderId)+
@@ -509,6 +509,7 @@ export class SiGuidedInspectionComponent implements OnInit{
             'SI-V01 is mapped. Enable SI_V01_ENABLED in AI Settings to analyze this photo; Checklist Vision is a separate contract.',
             'تم ربط SI-V01. فعّل SI_V01_ENABLED من إعدادات AI لتحليل الصورة؛ Checklist Vision لها عقد مختلف.');
           this.imageReviewErrors[key]=this.error;
+          this.error='';
           return;
         }
         const parts=[
@@ -547,6 +548,7 @@ export class SiGuidedInspectionComponent implements OnInit{
           'فشل استدعاء SI-V01 لتحليل الصورة. تحقق من عقد الاستجابة وسجلات AI Proxy.');
       }else this.error=e?.error?.error||'SI_AI_PHOTO_UNAVAILABLE';
       this.imageReviewErrors[key]=this.error;
+      this.error=''; // The failure belongs to this photo, not the entire inspection.
      }});
  }
  finishInspection():void{
