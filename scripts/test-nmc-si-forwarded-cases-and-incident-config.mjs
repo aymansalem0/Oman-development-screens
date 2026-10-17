@@ -49,6 +49,7 @@ test('command center shows actual NMC case cards with both SI-origin and NMC-ori
  assert.match(html,/item.risk as risk/);
  assert.match(html,/No verified new risk saved yet/);
  assert.match(html,/\['\/moei\/nmc\/vessel',item.imo,'case'\]/);
+ assert.match(html,/\['\/moei\/smart-inspection\/lifecycle',item.inspectionId\]/);
  assert.doesNotMatch(nmc,/this\.inspectionReferralCases\s*=\s*AIRIA_DEMO/);
 });
 test('opening a forwarded case from an unknown IMO does not substitute a different demo vessel',()=>{
