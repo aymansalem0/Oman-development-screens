@@ -163,6 +163,8 @@ async function a03AgentCall(payload) {
   form.set('userInput',JSON.stringify(buildA03MultipartUserInput(input)));
   form.set('file',new Blob([attachment.bytes],{type:'application/pdf'}),
     attachment.fileName);
+  let ciA03Success=false;
+  try{
   let upstream;
   try{
     upstream=await fetch(runtime.get('AIRIA_BASE_URL')+
@@ -188,8 +190,15 @@ async function a03AgentCall(payload) {
   let raw;
   try{raw=await upstream.text();}
   catch{throw new DocumentError('AIRIA_A03_RESPONSE_READ_FAILED',502);}
-  try{return JSON.parse(raw);}
-  catch{throw new DocumentError('AIRIA_A03_RESPONSE_INVALID_JSON',502);}
+  try{
+    const result=JSON.parse(raw);
+    ciA03Success=true;
+    return result;
+  }catch{throw new DocumentError('AIRIA_A03_RESPONSE_INVALID_JSON',502);}
+  }finally{
+    aiCiLedger.record({agent:'A03',domain:'NMC',
+      result:ciA03Success?'SUCCESS':'FAILURE'});
+  }
 }
 
 const dbMode=(process.env.NMC_DB_MODE || 'json').toLowerCase();
@@ -2077,6 +2086,7 @@ const server = createServer(async (req, res) => {
                 });
               }
               catch(error){
+                aiCiLedger.record({agent:'V01',domain:'SMART_INSPECTION',result:'FAILURE'});
                 const failure=error?.code?.startsWith('SI_V01_')?
                   {error:error.code,status:error.status||502,
                     upstreamStatus:error.safeDiagnostic?.upstreamStatus}:
@@ -2093,10 +2103,13 @@ const server = createServer(async (req, res) => {
                   ...(error.safeDiagnostic?{rejection:error.safeDiagnostic}:{})});
               }
               try{
-                return respond(res,200,validateGuidedV01Reply(upstream,{
+                const advice=validateGuidedV01Reply(upstream,{
                   caseId:current.order.caseId,media
-                }));
+                });
+                aiCiLedger.record({agent:'V01',domain:'SMART_INSPECTION',result:'SUCCESS'});
+                return respond(res,200,advice);
               }catch(error){
+                aiCiLedger.record({agent:'V01',domain:'SMART_INSPECTION',result:'FAILURE'});
                 return respond(res,error.status||502,{
                   error:error.code||'SI_V01_AIRIA_CONTRACT_INVALID'
                 });
@@ -3034,6 +3047,24 @@ const server = createServer(async (req, res) => {
     }
   }
 
+  // Read-only AI continuous-improvement metrics. No AI calls on read,
+  // no prompts, private identifiers or maritime regulatory changes.
+  if(path==='/api/ai/continuous-improvement'&&req.method==='GET'){
+    try{
+      moeiAuth.require(req);
+      let incidents=null;
+      if(incidentFeed.configured){
+        try{const feed=await incidentFeed.load();incidents=feed.incidents;}
+        catch{/* Source outage is unknown, NOT an incident count of zero. */}
+      }
+      return respond(res,200,aiCiLedger.snapshot(incidents));
+    }catch(error){
+      if(error instanceof MoeiAuthError)
+        return respond(res,error.status,{error:error.code});
+      return respond(res,503,{error:'AI_CI_METRICS_UNAVAILABLE'});
+    }
+  }
+
   // Human-confirmed AI suggestions only. No metric queries, no auto-publish.
   // Reuses partner NMC Desk PROSE candidate, whose JSON contract is not verified:
   // fail closed if the response cannot be validated. Never invent a dashboard.
@@ -3066,6 +3097,7 @@ const server = createServer(async (req, res) => {
       const request=buildDashboardAiPrompt(body.prompt,body.placement,
         metricCatalog,{incidentSourceConfigured:incidentFeed.configured});
       let raw;
+      let ciDesignSuccess=false;
       try{
         const reply=await fetch(runtime.get('AIRIA_BASE_URL')+'/v1/PipelineExecution/'+
           runtime.get('AIRIA_NMC_DESK_PIPELINE_ID'),{
@@ -3076,8 +3108,12 @@ const server = createServer(async (req, res) => {
           signal:AbortSignal.timeout(airiaTimeout())});
         if(!reply.ok)throw Error('AIRIA_DESIGN_REQUEST_FAILED');
         raw=await reply.json();
+        ciDesignSuccess=true;
       }catch{
         return respond(res,502,{error:'DASHBOARD_AI_PROVIDER_UNAVAILABLE'});
+      }finally{
+        aiCiLedger.record({agent:'NMC_DESK',domain:'NMC',
+          result:ciDesignSuccess?'SUCCESS':'FAILURE'});
       }
       const proposal=validateDashboardAiDesign(raw,{
         metricCatalog,placement:body.placement});
