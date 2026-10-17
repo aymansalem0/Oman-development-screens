@@ -96,7 +96,7 @@ export class SiMaritimeBatchSchedulingComponent implements OnInit{
  readonly demoMode=true; // POC demo data always enabled on this presentation screen.
  aiAdvice:S01Response|null=null;loading=false;busy=false;aiBusy=false;
  scheduleBusy=false;orderBusyId:string|null=null;error='';notice='';
- workOrdersError='';approvedSchedule:ApprovedSchedule|null=null;
+ workOrdersError='';approvedSchedule:ApprovedSchedule|null=null;scheduleStatusLoaded=false;
  boardView:'VESSELS'|'ENGINEERS'|'DATES'='VESSELS';
  selectedUnscheduledImo:string|null=null;
  get selectedUnscheduled():ScheduleRow|null{
@@ -183,6 +183,7 @@ export class SiMaritimeBatchSchedulingComponent implements OnInit{
 
  get assignedEngineerCount():number{return this.proposal?.board?.engineers.length||0;}
  invalidateProposal():void{
+  if(this.approvedSchedule)return;
   // The inputs changed after preview; never show obsolete slots as though
   // they were still valid, and never carry them into a future approval action.
   this.proposal=null;this.baselineProposal=null;this.aiAdvice=null;
@@ -196,7 +197,7 @@ export class SiMaritimeBatchSchedulingComponent implements OnInit{
  copy(en:string,ar:string):string{return this.lang.pick(en,ar);}
  ngOnInit():void{this.loadContext();this.loadWorkOrders();}
  get canApproveSchedule():boolean{
-  return !!this.context&&!!this.proposal&&
+  return this.scheduleStatusLoaded&&!!this.context&&!!this.proposal&&
    this.proposal.summary.total>0&&this.proposal.summary.unscheduled===0&&
    !!(this.baselineProposal?.variants?.length)&&
    !this.approvedSchedule&&!this.workOrdersError&&
@@ -212,10 +213,14 @@ export class SiMaritimeBatchSchedulingComponent implements OnInit{
  loadWorkOrders():void{
   const planId=this.route.snapshot.paramMap.get('planId');
   if(!planId)return;
+  this.scheduleStatusLoaded=false;
   this.http.get<{schedule:ApprovedSchedule|null}>(
    this.api+encodeURIComponent(planId)+'/work-orders').subscribe({
-   next:r=>{this.approvedSchedule=r.schedule;this.workOrdersError='';},
-   error:e=>{this.workOrdersError=e?.error?.error||
+   next:r=>{
+    this.approvedSchedule=r.schedule;this.workOrdersError='';this.scheduleStatusLoaded=true;
+    if(r.schedule){this.proposal=null;this.baselineProposal=null;this.aiAdvice=null;}
+   },
+   error:e=>{this.scheduleStatusLoaded=true;this.workOrdersError=e?.error?.error||
     'SI_SCHED_WORK_ORDERS_NOT_READY';
     if(e?.status!==503)this.error=this.workOrdersError;}
   });
@@ -343,9 +348,9 @@ export class SiMaritimeBatchSchedulingComponent implements OnInit{
     x.windowEvidenceReference||x.nmcReferrals[0]?.id||'POC_OPERATOR_FINAL_WINDOW'
   }));
  }
- preview():void{this.calculateFeasible(false);}
+ preview():void{if(!this.approvedSchedule)this.calculateFeasible(false);}
  private calculateFeasible(continueToAi:boolean):void{
-  if(!this.context||this.busy||this.aiBusy)return;
+  if(!this.context||this.busy||this.aiBusy||this.approvedSchedule)return;
   this.busy=true;this.error='';this.notice='';
   this.proposal=null;this.baselineProposal=null;this.aiAdvice=null;
   this.selectedUnscheduledImo=null;
