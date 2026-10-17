@@ -197,3 +197,15 @@ test('Seafarer Management is a first-class maritime menu and all five pages are 
   assert.ok(chrome.includes("'smart-inspection'|'seafarers'"),
     'shared maritime header must support Seafarer page context');
 });
+
+test('Supervisor Approval reserves fixed sidebar width in LTR/RTL and collapses it on mobile',()=>{
+ const supervisor=read('src/app/pages/si-supervisor-review.component.ts');
+ assert.match(supervisor,/class="supervisor-shell" \[attr\.dir\]="lang\.dir"/);
+ assert.match(supervisor,/\.supervisor-shell\{display:flex;min-height:calc\(100vh - 82px\);width:100%/);
+ assert.match(supervisor,/padding-inline-start:240px/);
+ assert.match(supervisor,/@media \(min-width:961px\) and \(max-width:1220px\)/);
+ assert.match(supervisor,/\.supervisor-shell\{padding-inline-start:66px\}/);
+ assert.match(supervisor,/@media \(max-width:960px\)/);
+ assert.match(supervisor,/\.supervisor-shell\{padding-inline-start:0\}/);
+ assert.match(navCss,/\.nmc-unified-sidebar \{[\s\S]*?position: fixed;[\s\S]*?width: 240px/);
+});
