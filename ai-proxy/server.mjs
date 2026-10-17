@@ -53,10 +53,11 @@ import {SiBulkInspectionPlan,SiBulkApprovalError} from './si-bulk-inspection-pla
 import {mockSiP01,mockSiA04,mockSiC01} from './si-agent-mock.mjs';
 import { SiInspectionPreparation, SiPreparationError, validateA04 } from './si-inspection-preparation.mjs';
 import {assembleSiVesselDossier,assemblePendingWorkOrderDossier} from './si-vessel-dossier.mjs';
-import {projectGuidedInspection,findGuidedStep,
+import {projectGuidedInspection,findGuidedStep,guidedFinalAssessment,
  buildA04FocusedFieldRequest,projectA04FocusedFieldAdvice
 } from './si-guided-inspection.mjs';
 import {pocInspectorIdForActor} from './si-inspector-identity.mjs';
+import {saveGuidedEvidence,listGuidedEvidence,readGuidedImage} from './si-guided-evidence.mjs';
 import {suggestCapacityExceptionActions} from './si-capacity-exception-alternatives.mjs';
 import { SiInspectionLifecycle, SiLifecycleError } from './si-inspection-lifecycle.mjs';
 import {SiScheduleOrders,SiWorkOrderError} from './si-schedule-orders.mjs';
@@ -460,8 +461,22 @@ async function assignedGuidedView(sessionActor,orderId){
    siPreparation.get(order.caseId),siChecklistField.preview(order.caseId),
    siLifecycle.snapshot(order.caseId)
  ]);
- return {schedule,order,preparation,checklist,lifecycle,
-   guide:projectGuidedInspection({order,preparation,checklist,lifecycle})};
+ const guide=projectGuidedInspection({order,preparation,checklist,lifecycle});
+ guide.evidenceByStep={};
+ for(const step of guide.steps){
+   const publishedIds=new Set(step.members.filter(m=>m.kind==='PUBLISHED').map(m=>m.id));
+   const canonical=(checklist.saved?.evidenceFiles||[])
+     .filter(x=>publishedIds.has(x.itemId)).map(x=>({
+       id:x.id,itemId:x.itemId,filename:x.filename,mimeType:x.mimeType,
+       sha256:x.sha256,byteLength:x.byteLength,provenance:x.provenance,
+       reference:'SI-EVIDENCE:'+x.id
+     }));
+   const legacy=listGuidedEvidence(order.caseId,step.stepId)
+     .map(x=>({...x,reference:'SI-GUIDED:'+x.id}));
+   guide.evidenceByStep[step.stepId]=[...canonical,...legacy];
+ }
+ guide.finalAssessment=guidedFinalAssessment(guide);
+ return {schedule,order,preparation,checklist,lifecycle,guide};
 }
 const actionPlanRuns=new Set(); // process-local duplicate A01 invocation guard; version-lock remains authoritative
 let alertScanTimer=null;
@@ -1874,7 +1889,7 @@ const server = createServer(async (req, res) => {
       // Inspector workspace: all reads and writes are bound to the
       // authenticated session's assigned order, never a client-supplied IMO
       // or inspector ID. No unrelated vessel dossiers are exposed.
-      const myOrder=/^\/api\/si\/v1\/maritime-scheduling\/my-work-orders\/([a-f0-9-]{36})(?:\/(dossier|guide|activate|start|self-confirm-scope)(?:\/(answers|ai))?)?$/.exec(path);
+      const myOrder=/^\/api\/si\/v1\/maritime-scheduling\/my-work-orders\/([a-f0-9-]{36})(?:\/(dossier|guide|activate|start|self-confirm-scope)(?:\/(answers|ai|evidence|ai-evidence|assessment|finish))?)?$/.exec(path);
       if(myOrder){
         // Both ADMIN and VIEWER inspectors are allowed here; every order
         // is independently checked against the authenticated session.
@@ -1934,6 +1949,109 @@ const server = createServer(async (req, res) => {
           const current=await assignedGuidedView(actor,orderId);
           if(!task&&req.method==='GET')
             return respond(res,200,current.guide);
+          if(task==='assessment'&&req.method==='GET')
+            return respond(res,200,current.guide.finalAssessment);
+          if(task==='evidence'&&req.method==='POST'){
+            if(current.order.status!=='FIELD_STARTED'||
+               current.guide.lifecycleStage!=='IN_FIELD')
+              return respond(res,409,{error:'SI_FIELD_INSPECTION_NOT_STARTED'});
+            const body=await requestJson(req,8*1024*1024);
+            const step=findGuidedStep(current.guide,body.stepId);
+            if(!step)return respond(res,404,{error:'SI_GUIDED_STEP_NOT_FOUND'});
+            const previous=current.guide.evidenceByStep[step.stepId]||[];
+            if(previous.length>=8)return respond(res,409,{error:'SI_GUIDED_EVIDENCE_LIMIT'});
+            const published=step.members.find(m=>m.kind==='PUBLISHED');
+            let evidence;
+            if(published){
+              const saved=await siChecklistField.attachEvidence(current.order.caseId,{
+                itemId:published.id,expectedVersion:current.guide.publishedSnapshotVersion,
+                file:body.file,actor:current.order.assignment.inspectorName
+              });
+              evidence={...saved.evidence,reference:'SI-EVIDENCE:'+saved.evidence.id};
+            }else{
+              try{
+                evidence=saveGuidedEvidence(current.order.caseId,step.stepId,actor,body.file);
+                evidence.reference='SI-GUIDED:'+evidence.id;
+              }catch(e){return respond(res,e.status||422,{error:e.code||'SI_GUIDED_EVIDENCE_FAILED'});}
+            }
+            const next=await assignedGuidedView(actor,orderId);
+            return respond(res,201,{status:'EVIDENCE_ATTACHED_NO_AI_CALL',
+              evidence,guide:next.guide});
+          }
+          if(task==='ai-evidence'&&req.method==='POST'){
+            if(current.order.status!=='FIELD_STARTED'||
+               current.guide.lifecycleStage!=='IN_FIELD')
+              return respond(res,409,{error:'SI_FIELD_INSPECTION_NOT_STARTED'});
+            const body=await requestJson(req,4096);
+            if(body.confirmCost!==true||!siChecklistAiria.status().visionConfigured)
+              return respond(res,503,{error:'SI_CHECKLIST_VISION_AI_NOT_CONFIGURED_OR_NOT_CONFIRMED'});
+            const step=findGuidedStep(current.guide,body.stepId);
+            if(!step)return respond(res,404,{error:'SI_GUIDED_STEP_NOT_FOUND'});
+            const evidence=(current.guide.evidenceByStep[step.stepId]||[])
+              .find(x=>x.id===body.evidenceId);
+            if(!evidence||!evidence.mimeType.startsWith('image/'))
+              return respond(res,409,{error:'SI_GUIDED_AI_LINKED_IMAGE_REQUIRED'});
+            const published=step.members.find(m=>m.kind==='PUBLISHED'&&m.id===evidence.itemId);
+            let advice;
+            if(published){
+              const result=await siChecklistField.suggest(current.order.caseId,{
+                level:'ITEM',itemId:published.id,evidenceId:evidence.id,
+                text:'Inspect the uploaded photo for this question: '+step.title+
+                  '. Identify visible details, uncertain evidence and further checks. Do not decide compliance.',
+                actor:current.order.assignment.inspectorName,confirmCost:true
+              });
+              advice=result.proposal?.recommendations||[];
+            }else{
+              let image;
+              try{image=readGuidedImage(current.order.caseId,step.stepId,evidence.id);}
+              catch(e){return respond(res,e.status||409,{error:e.code||'SI_GUIDED_IMAGE_UNAVAILABLE'});}
+              const result=await siChecklistAiria.call('vision',{
+                schemaVersion:'SI-CHECKLIST-VISION-v1',level:'ITEM',
+                vessel:{imo:current.order.imo},scope:{level:'ITEM',itemId:step.stepId},
+                items:[{itemId:step.stepId,title:step.title,description:step.systemAction}],
+                operatorInput:'Review the inspector photo only. Identify observable facts, uncertainty and required follow-up checks. No regulatory decision.',
+                image,instructions:'Return recommendations[] with itemId, rationale, suggestedInstruction, dataGaps[] and confidence. Never mark compliance automatically.'
+              });
+              advice=Array.isArray(result?.recommendations)?result.recommendations:[];
+            }
+            return respond(res,200,{status:'AI_PHOTO_ADVISORY_ONLY',
+              reviewedEvidence:evidence.id,provider:'AIRIA',
+              recommendations:advice.slice(0,5).map(x=>({
+                rationale:String(x.rationale||'').slice(0,1200),
+                instruction:String(x.suggestedInstruction||'').slice(0,1200),
+                dataGaps:Array.isArray(x.dataGaps)?x.dataGaps.slice(0,8):[],
+                confidence:Number.isFinite(Number(x.confidence))?Number(x.confidence):null
+              })),officialCompliance:false,inspectorReviewRequired:true});
+          }
+          if(task==='finish'&&req.method==='POST'){
+            if(current.order.status!=='FIELD_STARTED'||
+               current.guide.lifecycleStage!=='IN_FIELD')
+              return respond(res,409,{error:'SI_FIELD_INSPECTION_NOT_STARTED'});
+            const body=await requestJson(req,4096);
+            if(body.confirmSubmission!==true||
+               body.expectedLifecycleVersion!==current.guide.lifecycleVersion||
+               body.expectedChecklistVersion!==current.guide.publishedSnapshotVersion)
+              return respond(res,409,{error:'SI_GUIDED_FINISH_CONFIRMATION_OR_VERSION_INVALID'});
+            const assessment=current.guide.finalAssessment;
+            if(!assessment.canSubmit)
+              return respond(res,409,{error:'SI_GUIDED_MANDATORY_STEPS_INCOMPLETE',assessment});
+            if(current.checklist.saved?.templates?.length&&
+               current.checklist.saved.status==='IN_PROGRESS')
+              await siChecklistField.complete(current.order.caseId,{
+                expectedVersion:current.guide.publishedSnapshotVersion,
+                actor:current.order.assignment.inspectorName
+              });
+            await siLifecycle.apply(current.order.caseId,{
+              action:'SUBMIT_FIELD',expectedVersion:current.guide.lifecycleVersion,
+              actor:current.order.assignment.inspectorName,
+              data:{summary:typeof body.inspectorSummary==='string'?
+                body.inspectorSummary.slice(0,1800):''}
+            });
+            const next=await assignedGuidedView(actor,orderId);
+            return respond(res,200,{status:'INSPECTION_SUBMITTED_FOR_INDEPENDENT_REVIEW',
+              finalAssessment:next.guide.finalAssessment,
+              officialApproval:false,supervisorReviewRequired:true,guide:next.guide});
+          }
           if(task==='answers'&&req.method==='POST'){
             if(current.order.status!=='FIELD_STARTED'||
                current.guide.lifecycleStage!=='IN_FIELD')
@@ -1957,7 +2075,10 @@ const server = createServer(async (req, res) => {
                !['YES','NO','NA',undefined].includes(response)||
                note.length>1600||naReason.length>500||
                evidenceRefs.length>12||evidenceRefs.some(x=>
-                 typeof x!=='string'||!current.preparation.context.evidenceManifestRefs.includes(x)))
+                 typeof x!=='string'||![
+                  ...current.preparation.context.evidenceManifestRefs,
+                  ...(current.guide.evidenceByStep[step.stepId]||[]).map(e=>e.reference)
+                 ].includes(x)))
               return respond(res,422,{error:'SI_GUIDED_ANSWER_FIELDS_INVALID'});
             const life=step.members.filter(x=>x.kind==='LIFECYCLE');
             const published=step.members.filter(x=>x.kind==='PUBLISHED');
