@@ -98,3 +98,27 @@ test('AI Dashboard Designer flag is visible in governance and linked from the de
  assert.match(builder,/useIncidentsPrompt\(\)/);
  assert.match(builder,/refreshAiDesignStatus\(\)/);
 });
+
+test('AI proposal produces live preview cards and accepted editable unbound metric cards',()=>{
+ const ui=new URL('../../src/app/pages/nmc-dashboard-builder.component.html',import.meta.url);
+ if(!existsSync(ui))return; // Backend-only container excludes Angular sources.
+ const template=readFileSync(ui,'utf8');
+ const component=readFileSync(new URL('../../src/app/pages/nmc-dashboard-builder.component.ts',import.meta.url),'utf8');
+ const client=readFileSync(new URL('../../src/app/services/nmc-dashboard-store.service.ts',import.meta.url),'utf8');
+ const api=readFileSync(new URL('../dashboard-workspace.mjs',import.meta.url),'utf8');
+ assert.match(template,/\*ngFor="let proposed of previewProposedMetrics/);
+ assert.match(template,/dashboard-proposed-card-/);
+ assert.match(template,/\*ngFor="let widget of previewWidgets/);
+ assert.match(template,/previewCardsCount/);
+ assert.match(template,/\(click\)="applyDashboardAi\(\)"/);
+ assert.match(template,/NEW METRIC · SOURCE NOT CONNECTED/);
+ assert.match(template,/Waiting for verified calculation/);
+ assert.match(component,/get previewProposedMetrics\(\)/);
+ assert.match(component,/aiPreviewWidgets=design.widgets.map/);
+ assert.match(component,/board.proposedMetrics=design.proposedMetrics.map/);
+ assert.match(component,/removeProposedMetric\(metricId:string\)/);
+ assert.match(client,/proposedMetrics\?: ProposedDashboardMetric\[\]/);
+ assert.match(api,/widgets:safeWidgets,proposedMetrics/);
+ // Never introduce a live KPI renderer based on unbound proposal ID.
+ assert.doesNotMatch(template,/metricNumber\(proposed\.id\)/);
+});
