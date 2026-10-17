@@ -1130,6 +1130,35 @@ export class SeafarerWorkspace {
       return a;
     });
   }
+  /**
+   * Read-only public look-up for SAMPLE electronic SDB cards only.
+   * This is NOT official issuance or regulatory credential validation.
+   * Two separately printed specimen identifiers must agree. Never expose
+   * profile, name, SID, national ID, company, contact or payment details.
+   */
+  verifyEsdbSpecimen(reference, number) {
+    if (typeof reference !== "string" ||
+        !/^VERIFY-SANDBOX-[a-f0-9]{8}$/.test(reference) ||
+        typeof number !== "string" ||
+        !/^SDB-SANDBOX-[a-f0-9]{8}-[a-f0-9]$/.test(number))
+      fail("SDB_SPECIMEN_NOT_FOUND", 404);
+    const application = this.state.applications.find(a =>
+      a.status === "ISSUED" &&
+      a.digital?.status === "SIMULATED" &&
+      a.digital?.verificationReference === reference &&
+      a.digital?.number === number);
+    if (!application) fail("SDB_SPECIMEN_NOT_FOUND", 404);
+    return {
+      mode: "CONTRACT_SANDBOX",
+      specimen: true,
+      officialVerification: false,
+      result: "MATCHED_SANDBOX_SPECIMEN",
+      reference, number,
+      issuedAt: application.digital.issuedAt,
+      expiryDate: application.digital.expiryDate,
+      documentStatus: "SIMULATED",
+    };
+  }
   application(actor, id) {
     const a =
       this.state.applications.find((a) => a.id === id) ||
