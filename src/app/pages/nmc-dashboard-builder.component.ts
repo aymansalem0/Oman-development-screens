@@ -13,7 +13,7 @@ import {
   DashboardAnalyticsResponse, DashboardVessel, NmcDashboardDataService
 } from '../services/nmc-dashboard-data.service';
 import { NmcRiskEngineService } from '../services/nmc-risk-engine.service';
-import { NmcDashboardWorkspaceService, DashboardRevision } from '../services/nmc-dashboard-workspace.service';
+import { NmcDashboardWorkspaceService, DashboardRevision, DashboardAiDesignResponse } from '../services/nmc-dashboard-workspace.service';
 import { NmcDashboardNavigationService } from '../services/nmc-dashboard-navigation.service';
 import { NmcDistributionChartComponent } from '../components/nmc-distribution-chart.component';
 import {
@@ -61,6 +61,12 @@ export class NmcDashboardBuilderComponent implements OnInit,OnDestroy {
     return siDemoTable(id);
   }
 
+  aiPrompt='';
+  aiBusy=false;
+  aiError='';
+  aiProposal:DashboardAiDesignResponse|null=null;
+  aiStatus:{enabled:boolean;pipelineConfigured:boolean;keyConfigured:boolean;
+    contractVerified:boolean}|null=null;
   readonly chartTypes=NMC_CHART_TYPES;
   readonly chartPalettes=NMC_CHART_PALETTES;
   readonly menuPlacements=DASHBOARD_MENU_PLACEMENTS;
@@ -109,6 +115,10 @@ export class NmcDashboardBuilderComponent implements OnInit,OnDestroy {
   ){}
 
   ngOnInit():void {
+    this.subs.add(this.workspace.aiDesignStatus().subscribe({
+      next:value=>{this.aiStatus=value;},
+      error:()=>{this.aiStatus=null;}
+    }));
     this.subs.add(this.store.dashboards$.subscribe(items=>this.dashboards=items));
     this.subs.add(this.route.paramMap.subscribe(params=>{
       const id=params.get('id');
@@ -504,6 +514,52 @@ export class NmcDashboardBuilderComponent implements OnInit,OnDestroy {
       next:r=>this.sharedHistory=r.revisions,
       error:error=>this.sharedError=this.workspace.readableError(error,this.lang.isArabic)
     }));
+  }
+
+  generateDashboardAi():void{
+    if(!this.dashboard||this.viewOnly||this.aiBusy)return;
+    const prompt=this.aiPrompt.trim();
+    if(prompt.length<15){
+      this.aiError=this.copy('Describe the dashboard in at least 15 characters.',
+        'صف لوحة المعلومات المطلوبة في 15 حرفًا على الأقل.');
+      return;
+    }
+    if(!window.confirm(this.copy(
+      'Send the dashboard request to Airia NMC Desk? An AI request may incur a charge. Nothing is published automatically.',
+      'هل تريد إرسال طلب التصميم إلى Airia NMC Desk؟ قد توجد تكلفة لاستدعاء AI. لن يتم نشر أي لوحة تلقائيًا.')))return;
+    this.aiBusy=true;this.aiError='';this.aiProposal=null;
+    this.subs.add(this.workspace.aiDesign(prompt,this.dashboard.menuPlacement||'NMC_CENTER')
+      .subscribe({
+        next:design=>{this.aiBusy=false;this.aiProposal=design;},
+        error:error=>{
+          this.aiBusy=false;
+          const code=error?.error?.error||'DASHBOARD_AI_DESIGN_UNAVAILABLE';
+          this.aiError=code==='DASHBOARD_AI_NOT_CONFIGURED'?
+            this.copy('Enable Dashboard AI Design under AI Settings and configure an Airia key.',
+              'فعّل Dashboard AI Design من إعدادات الذكاء الاصطناعي وتأكد من وجود مفتاح Airia.'):
+            code==='DASHBOARD_AI_OUTPUT_NOT_STRUCTURED'?
+            this.copy('NMC Desk returned prose instead of the required JSON. A dedicated Dashboard Designer agent may be needed.',
+              'رجّع NMC Desk نصًا بدل JSON المطلوب. قد نحتاج Agent متخصص لتصميم اللوحات.'):
+            code;
+        }
+      }));
+  }
+
+  applyDashboardAi():void{
+    const design=this.aiProposal,board=this.dashboard;
+    if(!design||!board||this.viewOnly)return;
+    if(!window.confirm(this.copy(
+      'Apply these suggestions to the current draft? Existing widgets will be replaced. New unbound metrics remain proposals, not live data.',
+      'تطبيق هذه المقترحات على المسودة؟ سيتم استبدال المؤشرات الحالية. المؤشرات الجديدة ستظل مقترحات دون ربط بيانات حقيقية.')))return;
+    board.title=design.title;
+    board.description=design.description;
+    board.widgets=design.widgets.map((w,i)=>({
+      ...w,id:'widget-'+(globalThis.crypto?.randomUUID?.()||Date.now().toString(36)+'-'+i)
+    }));
+    board.proposedMetrics=design.proposedMetrics.map(m=>({...m}));
+    this.touch();this.aiProposal=null;
+    this.saveMessage=this.copy('Suggestions applied. Review source mapping and save the draft.',
+      'تم تطبيق المقترحات. راجع مصادر البيانات ثم احفظ المسودة.');
   }
 
   createFromTemplate(kind:DashboardTemplateKind):void {
