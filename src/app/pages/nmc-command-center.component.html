@@ -233,10 +233,16 @@
                 'لم يُحفظ تقييم مخاطر جديد موثق بعد؛ راجع حالة NMC.')}}</span>
             </ng-template>
           </div>
-          <a class="nmc-si-referral-open"
-            [routerLink]="['/moei/nmc/vessel',item.imo,'case']">
-            {{copy('Open NMC Case','فتح حالة NMC')}} ↗
-          </a>
+          <div class="nmc-si-referral-links">
+            <a class="nmc-si-referral-open"
+              [routerLink]="['/moei/nmc/vessel',item.imo,'case']">
+              {{copy('Open NMC Case','فتح حالة NMC')}} ↗
+            </a>
+            <a *ngIf="item.inspectionId" class="nmc-si-referral-source-link"
+              [routerLink]="['/moei/smart-inspection/lifecycle',item.inspectionId]">
+              {{copy('Inspector report','تقرير المعاينة')}} ↗
+            </a>
+          </div>
         </article>
       </div>
       <button type="button" class="secondary-btn nmc-si-referral-more"
