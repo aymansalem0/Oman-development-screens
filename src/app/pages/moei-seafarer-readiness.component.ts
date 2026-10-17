@@ -56,6 +56,7 @@ export class MoeiSeafarerReadinessComponent implements OnInit, OnDestroy {
   app: SdbApplication | null = null;
   issuedQrDataUrl = "";
   issuedQrError = "";
+  issuedCardError = "";
   private issuedQrKey = "";
   private issuedQrGeneration = 0;
   format: "ELECTRONIC" | "ELECTRONIC_PRINT" = "ELECTRONIC";
@@ -537,38 +538,82 @@ export class MoeiSeafarerReadinessComponent implements OnInit, OnDestroy {
           "تعذر إنشاء QR. سجل البحار الصادر لم يتغير.");
     });
   }
+  /** Preserve the shared government wordmark and fictional SAMPLE portrait
+   * in the offline printable specimen, rather than broken relative URLs. */
+  private async localEsdbImage(url: string): Promise<string> {
+    const response = await fetch(url, {credentials: "same-origin"});
+    if (!response.ok) throw new Error("ESDB_SAMPLE_ARTWORK_NOT_AVAILABLE");
+    const blob = await response.blob();
+    if (!["image/png","image/svg+xml"].includes(blob.type)) {
+      throw new Error("ESDB_SAMPLE_ARTWORK_TYPE_INVALID");
+    }
+    return await new Promise<string>((resolve,reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error("ESDB_SAMPLE_ARTWORK_READ_FAILED"));
+      reader.onload = () => resolve(String(reader.result || ""));
+      reader.readAsDataURL(blob);
+    });
+  }
   downloadEsdbCard() {
     const d = this.app?.status === "ISSUED" ? this.app.digital : null;
     if (!d || !this.issuedQrDataUrl) return;
-    const escape = (value:string) => value.replace(/[&<>"']/g, c =>
-      ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"} as Record<string,string>)[c]);
-    const markup = `<!doctype html><html lang="en"><head><meta charset="utf-8">
+    this.issuedCardError = "";
+    const logoFile = this.lang.isArabic ?
+      "/branding/uae-moei-ar.png" : "/branding/uae-moei-en.png";
+    void Promise.all([
+      this.localEsdbImage(logoFile),
+      this.localEsdbImage("/branding/esdb-sample-emirati-portrait.svg")
+    ]).then(([logo,portrait]) => {
+      if (this.app?.status !== "ISSUED" ||
+          this.app.digital?.number !== d.number) return;
+      const escape = (value:string) => String(value).replace(/[&<>"']/g,c =>
+        ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"} as Record<string,string>)[c]);
+      const markup = `<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>eSDB · ${escape(d.number)}</title>
-<style>body{font:15px Arial,sans-serif;padding:38px;background:#f4f8f8;color:#164451}
-.card{max-width:580px;margin:auto;background:#fff;border:2px solid #106d6b;border-radius:16px;padding:30px}
-h1{margin:0 0 6px;color:#0a625e}dt{font-size:11px;color:#708b91;margin-top:16px}
+<title>Sample eSDB · ${escape(d.number)}</title>
+<style>
+body{font:15px Arial,sans-serif;padding:26px;background:#f4f8f8;color:#164451}
+.card{max-width:580px;margin:auto;background:#fff;border:2px solid #106d6b;border-radius:16px;padding:26px}
+header{display:flex;justify-content:space-between;align-items:center;gap:15px}
+.brand{width:218px;max-width:75%;height:65px;object-fit:contain;background:#133947;
+padding:8px;border-radius:9px}
+mark{display:block;width:max-content;margin-top:18px;padding:7px 12px;color:#884122;
+background:#fff3d9;border-radius:5px;font-size:12px;font-weight:900}
+h1{margin:20px 0 5px;color:#0a625e;font-size:23px}
+.identity{display:flex;gap:22px;align-items:center;margin:20px 0}
+.identity img{height:122px;width:95px;object-fit:cover;border:1px solid #b7cbca}
+dt{font-size:11px;color:#708b91;margin-top:12px}
 dd{margin:4px 0 0;font-weight:bold;overflow-wrap:anywhere}
-.qr{margin-top:25px;display:flex;align-items:center;gap:15px}
-.qr img{width:180px;height:180px;background:#fff}
+.qr{margin-top:22px;display:flex;align-items:center;gap:15px}
+.qr img{width:160px;height:160px;background:#fff}
 small{display:block;margin-top:20px;color:#7a4530;font-weight:bold}
-@media print{body{background:#fff;padding:0}.card{border-color:#bbb}}</style></head>
-<body><article class="card"><h1>MOEI · eSDB</h1><p>SEAMAN'S DISCHARGE BOOK</p>
-<dl><dt>SEAFARER</dt><dd>${escape(d.name)}</dd><dt>SID</dt><dd>${escape(d.sid)}</dd>
-<dt>SDB NUMBER</dt><dd>${escape(d.number)}</dd>
+@media print{body{background:#fff;padding:0}.card{border-color:#bbb}}
+</style></head><body><article class="card">
+<header><img class="brand" src="${logo}" alt="UAE Ministry of Energy and Infrastructure"><b>eSDB</b></header>
+<mark>SAMPLE · NOT OFFICIAL</mark>
+<h1>SEAMAN'S DISCHARGE BOOK</h1>
+<div class="identity"><img src="${portrait}" alt="Fictional SAMPLE illustration">
+<dl><dt>SEAFARER</dt><dd>${escape(d.name)}</dd><dt>SID</dt><dd>${escape(d.sid)}</dd></dl></div>
+<dl><dt>SDB NUMBER</dt><dd>${escape(d.number)}</dd>
 <dt>ISSUED</dt><dd>${escape(d.issuedAt)}</dd>
 <dt>EXPIRES</dt><dd>${escape(d.expiryDate)}</dd></dl>
 <div class="qr"><img src="${this.issuedQrDataUrl}" alt="eSDB sandbox QR code">
 <div><b>SCAN QR</b><p>${escape(d.verificationReference)}</p>
 <p>Reference data only. No public verification service.</p></div></div>
-<small>SPECIMEN · SANDBOX · NOT AN OFFICIAL DOCUMENT</small></article></body></html>`;
-    const blob = new Blob([markup], {type:"text/html;charset=utf-8"});
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = d.number + "-eSDB-with-QR.html";
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
+<small>SPECIMEN · SANDBOX · NOT AN OFFICIAL DOCUMENT</small>
+</article></body></html>`;
+      const blob = new Blob([markup], {type:"text/html;charset=utf-8"});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = d.number + "-SAMPLE-eSDB-with-QR.html";
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }).catch(() => {
+      this.issuedCardError = this.t(
+        "Unable to include ministry branding and sample portrait. Card download was not created.",
+        "تعذر تضمين شعار الوزارة والصورة التوضيحية؛ لم يتم إنشاء الملف.");
+    });
   }
   download() {
     if (!this.app?.digital) return;

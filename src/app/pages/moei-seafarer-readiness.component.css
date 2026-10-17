@@ -1414,13 +1414,16 @@ details summary {
   box-shadow: 0 9px 22px #144b4e29;
 }
 .digital-sdb:after {
-  content: "⚓";
+  content: "SAMPLE";
   position: absolute;
-  inset-inline-end: -30px;
-  bottom: 15px;
-  font-size: 230px;
+  inset-inline-end: -48px;
+  bottom: 32px;
+  font-size: 104px;
+  font-weight: 900;
+  transform: rotate(-24deg);
+  letter-spacing: 8px;
   line-height: 1;
-  color: #dceee90b;
+  color: #dceee919;
   pointer-events: none;
 }
 .digital-sdb header {
@@ -1430,6 +1433,14 @@ details summary {
   font-size: 18px;
   color: #d8e8e4;
 }
+.esdb-ministry-brand{display:flex;align-items:center;width:min(65%,215px);
+  height:57px;background:#133947;border:1px solid #3c7178;
+  padding:7px 9px;border-radius:9px}
+.esdb-ministry-brand img{display:block;width:100%;height:100%;object-fit:contain;
+  object-position:left center}
+.esdb-specimen-mark{position:relative;z-index:2;margin-top:-10px;
+  margin-bottom:17px;font-size:10px;letter-spacing:1.1px;
+  font-weight:800;color:#fce6b6}
 .digital-sdb header b {
   font-size: 23px;
   letter-spacing: 1px;
@@ -1456,15 +1467,17 @@ details summary {
 .digital-photo {
   display: grid;
   place-items: center;
-  width: 63px;
-  height: 77px;
+  width: 78px;
+  height: 94px;
   border-radius: 5px;
-  background: #c8dfd61c;
-  border: 1px solid #adc9bf30;
-  color: #adc9bf;
-  font-size: 22px;
+  background: #e7f1ed;
+  border: 2px solid #ffffffa6;
+  overflow: hidden;
   flex: none;
+  position: relative;
+  z-index: 1;
 }
+.digital-photo img{display:block;width:100%;height:100%;object-fit:cover}
 .digital-identity > div {
   display: flex;
   flex-direction: column;
