@@ -115,7 +115,7 @@ export class NmcCaseWorkspaceComponent implements OnInit {
         'كتالوج القرارات غير متاح؛ تم تعطيل التعديل.');}
     });
     const imo=this.route.snapshot.paramMap.get('imo')||'';
-    if(!/^\\d{7}$/.test(imo)){
+    if(!/^\d{7}$/.test(imo)){
       this.centralLoading=false;
       this.centralError=this.copy('Invalid vessel IMO in case link.',
         'رقم IMO في رابط الحالة غير صالح.');
