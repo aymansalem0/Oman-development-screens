@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpErrorResponse, HttpHeaders } from '@angular/common/http';
 import { Observable, catchError, throwError } from 'rxjs';
-import { DashboardDefinition, DashboardMenuPlacement } from './nmc-dashboard-store.service';
+import { DashboardDefinition, DashboardMenuPlacement, ProposedDashboardMetric } from './nmc-dashboard-store.service';
 
 interface DashboardListResponse {status:'ok';dashboards:DashboardDefinition[];}
 export interface PublishedDashboardMenuItem {
@@ -12,6 +12,15 @@ interface PublishedDashboardMenuResponse {
 }
 interface DashboardOneResponse {status:'ok';dashboard:DashboardDefinition;}
 export interface DashboardRevision {version:number;action:string;role:string;at:string;}
+export interface DashboardAiDesignResponse{
+ status:'AI_DASHBOARD_PROPOSAL_REVIEW_REQUIRED';
+ provider:'AIRIA_NMC_DESK';title:string;description:string;
+ placement:DashboardMenuPlacement;
+ widgets:Array<Omit<DashboardDefinition['widgets'][number],'id'>>;
+ proposedMetrics:ProposedDashboardMetric[];
+ warnings:string[];draftOnly:true;automaticPublication:false;
+}
+
 interface DashboardRevisionsResponse {status:'ok';revisions:DashboardRevision[];}
 
 @Injectable({providedIn:'root'})
@@ -25,6 +34,17 @@ export class NmcDashboardWorkspaceService {
   /** Lists published dashboard links only; never includes drafts or widget data. */
   publishedMenu():Observable<PublishedDashboardMenuResponse>{
     return this.http.get<PublishedDashboardMenuResponse>(this.root+'/published');
+  }
+
+  aiDesign(prompt:string,placement:DashboardMenuPlacement):Observable<DashboardAiDesignResponse>{
+    return this.http.post<DashboardAiDesignResponse>(this.root+'/ai-design',
+      {prompt,placement,confirmCost:true});
+  }
+
+  aiDesignStatus():Observable<{enabled:boolean;pipelineConfigured:boolean;
+    keyConfigured:boolean;contractVerified:boolean}>{
+    return this.http.get<{enabled:boolean;pipelineConfigured:boolean;
+      keyConfigured:boolean;contractVerified:boolean}>(this.root+'/ai-design/status');
   }
 
   list():Observable<DashboardListResponse>{
