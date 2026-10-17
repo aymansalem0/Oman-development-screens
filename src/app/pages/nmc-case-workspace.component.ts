@@ -61,6 +61,7 @@ interface Stakeholder {
 })
 export class NmcCaseWorkspaceComponent implements OnInit {
   vessel!: NmcVesselProfile;
+  vesselProfileUnavailable=false;
   caseStatus: CaseStatus = 'Open';
   selectedTask?: CaseTask;
   resolutionNote = '';
@@ -113,9 +114,28 @@ export class NmcCaseWorkspaceComponent implements OnInit {
         'Decision catalogue unavailable — changes are disabled.',
         'كتالوج القرارات غير متاح؛ تم تعطيل التعديل.');}
     });
-    const imo = this.route.snapshot.paramMap.get('imo') || AIRIA_DEMO_99_VESSELS[0].imo;
-    const profile = getAiriaDemoVesselByImo(imo) || AIRIA_DEMO_99_VESSELS[0];
-    this.vessel = this.riskEngine.applyToVessel(profile);
+    const imo=this.route.snapshot.paramMap.get('imo')||'';
+    if(!/^\\d{7}$/.test(imo)){
+      this.centralLoading=false;
+      this.centralError=this.copy('Invalid vessel IMO in case link.',
+        'رقم IMO في رابط الحالة غير صالح.');
+      return;
+    }
+    const profile=getAiriaDemoVesselByImo(imo);
+    this.vesselProfileUnavailable=!profile;
+    // SI-origin cases can belong to an IMO OUTSIDE the synthetic vessel
+    // cohort. Never silently replace it with a different demo vessel.
+    // Unknown metadata is explicitly unknown, not copied or invented.
+    const unspecified:NmcVesselProfile={
+      id:-1,name:'IMO '+imo,imo,mmsi:'—',callSign:'—',
+      flag:'—',type:'—',lengthM:0,built:0,grossTonnage:'—',
+      deadweight:'—',owner:'—',operator:'—',classSociety:'—',
+      speed:0,course:0,destination:'—',eta:'—',navStatus:'—',
+      lat:0,lng:0,risk:-1,zone:'—',lastUpdate:0,
+      routeKey:'',segmentIndex:0,direction:1,dataConfidence:0,
+      riskConfidence:0
+    };
+    this.vessel=profile?this.riskEngine.applyToVessel(profile):unspecified;
     this.loadCentralCase();
   }
 
