@@ -8,16 +8,17 @@
 .moei-auth-scene,.moei-auth-shade{position:absolute;inset:0;pointer-events:none}
 .moei-auth-scene{
   background-color:#072f48;
-  /* Tracked, shipped asset. The old AVIF reference was not in the repo and
-     could silently 404 on Docker deployments. */
-  background-image:url('/branding/moei-login-maritime.svg');
-  background-size:cover;background-position:center center;
-  background-repeat:no-repeat;transform:scale(1.018);
-  filter:saturate(.95) contrast(1.045)
+  /* Approved photographic maritime-login asset (user-supplied).
+     Deploy /public/branding/moei-login-maritime.jpg alongside this CSS.
+     Do NOT revert to the dark illustrated SVG on later PR deployments. */
+  background-image:url('/branding/moei-login-maritime.jpg');
+  background-size:cover;background-position:39% center;
+  background-repeat:no-repeat;transform:none;
+  filter:none
 }
 .moei-auth-shade{
-  background:linear-gradient(90deg,rgba(1,18,34,.48) 0%,rgba(1,23,39,.31) 47%,rgba(1,19,35,.67) 100%),
-    linear-gradient(0deg,rgba(2,21,34,.64),transparent 34%);
+  background:linear-gradient(90deg,rgba(1,22,43,.25) 0%,rgba(2,24,46,.31) 41%,rgba(2,20,41,.65) 100%),
+    linear-gradient(0deg,rgba(2,21,34,.22),transparent 45%);
 }
 .moei-auth-layout{
   position:relative;z-index:1;display:grid;
@@ -127,7 +128,7 @@ input:focus{outline:2px solid #85D5CE;border-color:#11928A}
   .moei-auth-layout{display:flex;justify-content:center;min-height:100vh;padding:24px}
   .moei-auth-showcase{display:none}
   .moei-auth-card{justify-self:auto;width:min(100%,480px)}
-  .moei-auth-shade{background:rgba(2,22,36,.67)}
+  .moei-auth-shade{background:rgba(2,22,36,.40)}
 }
 @media(max-width:490px){
   .moei-auth-layout{padding:14px;align-items:center}
