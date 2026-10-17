@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {mkdtempSync,rmSync,readFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
-import {RuntimeSettings,RuntimeSettingsError,validateAiriaUrl,
+import {RuntimeSettings,RuntimeSettingsError,validateAiriaUrl,validateAiriaConsoleTemplate,
   SETTINGS_DESCRIPTORS} from '../runtime-settings.mjs';
 const scratch=()=>mkdtempSync(join(tmpdir(),'moei-runtime-settings-'));
 const sample=()=>({
@@ -79,4 +79,40 @@ test('invalid settings, unknown secrets, inactive dependencies and excessive sch
     await assert.rejects(request({...base,NMC_A01_ENABLED:false,NMC_FLEET_AUTO_ENABLED:true}),
       /RUNTIME_FLEET_REQUIRES_A01_A02/);
   }finally{rmSync(dir,{recursive:true,force:true});}
+});
+
+test('Airia UI console template is separate from API endpoint and securely resolves pipeline UUID',async()=>{
+ const sampleTemplate='https://console.airia.ai/pipelines/{pipelineId}/edit';
+ assert.equal(validateAiriaConsoleTemplate(sampleTemplate),sampleTemplate);
+ assert.equal(validateAiriaConsoleTemplate(''),'');
+ for(const invalid of [
+   'http://console.airia.ai/pipelines/{pipelineId}',
+   'https://console.airia.ai.evil.test/pipelines/{pipelineId}',
+   'https://console.airia.ai/pipelines/abc',
+   'https://console.airia.ai/pipelines/{pipelineId}/{pipelineId}',
+   'javascript:alert(1)',
+   'https://user:password@console.airia.ai/pipelines/{pipelineId}',
+   'https://console.airia.ai:8080/pipelines/{pipelineId}',
+   'https://api.mena.airia.ai/v1/PipelineExecution/{pipelineId}',
+   'https://evil.test/?redirect=https://console.airia.ai/{pipelineId}'
+ ]){
+   assert.throws(()=>validateAiriaConsoleTemplate(invalid),
+     RuntimeSettingsError,invalid);
+ }
+ const dir=scratch();
+ try{
+   const saved=new RuntimeSettings({file:join(dir,'config.json'),env:sample()});
+   assert.equal(saved.get('AIRIA_CONSOLE_PIPELINE_URL_TEMPLATE'),'');
+   const values={...saved.publicView().values,
+     AIRIA_CONSOLE_PIPELINE_URL_TEMPLATE:sampleTemplate};
+   const updated=await saved.publish({
+     expectedVersion:0,values,actor:'MOEI Admin',
+     reason:'Set reviewed navigation-only Airia link template',
+     confirmCost:false
+   });
+   assert.equal(updated.values.AIRIA_CONSOLE_PIPELINE_URL_TEMPLATE,sampleTemplate);
+   const restarted=new RuntimeSettings({file:join(dir,'config.json'),env:sample()});
+   restarted.load();
+   assert.equal(restarted.get('AIRIA_CONSOLE_PIPELINE_URL_TEMPLATE'),sampleTemplate);
+ }finally{rmSync(dir,{recursive:true,force:true});}
 });

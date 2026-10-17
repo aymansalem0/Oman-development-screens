@@ -1,4 +1,5 @@
 import { CommonModule } from '@angular/common';
+import {HttpClient} from '@angular/common/http';
 import { Component, OnDestroy, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
@@ -20,6 +21,8 @@ import {
  SI_DEMO_DATA_NATURE,SI_DEMO_PERIOD,isSiDashboardMetric,siMetricMeta,
  siDemoMetricNumber,siDemoChartRows,siDemoTable,SiDemoTable
 } from '../services/si-dashboard-metric-catalog';
+import {AI_CI_METRICS,AiCiLiveSnapshot,isAiCiMetric,aiCiMetricNumber,
+  aiCiChartRows,aiCiAgentTable,aiCiIsMeasured} from '../services/ai-continuous-improvement-catalog';
 
 type BarRow={name:string;count:number;percent:number};
 
@@ -37,9 +40,11 @@ export class NmcDashboardBuilderComponent implements OnInit,OnDestroy {
   // Catalogue is already wired into the existing Dashboard Manager; no
   // separate dashboards are created, auto-published or added to navigation.
   metricGroupOptions(kind:DashboardWidgetKind,
-   group:'NMC'|'AI_PERFORMANCE'|'INSPECTION_OPERATIONS'):
+   group:'NMC'|'AI_PERFORMANCE'|'INSPECTION_OPERATIONS'|'AI_CONTINUOUS_IMPROVEMENT'):
     Array<{value:DashboardMetric;en:string;ar:string}>{
     return this.catalog[kind].filter(m=>{
+      if(group==='AI_CONTINUOUS_IMPROVEMENT')return isAiCiMetric(m.value);
+      if(isAiCiMetric(m.value))return false;
       const meta=siMetricMeta(m.value);
       return group==='NMC'?!meta:meta?.group===group;
     });
@@ -47,11 +52,12 @@ export class NmcDashboardBuilderComponent implements OnInit,OnDestroy {
   isSiDemoMetric(id:DashboardMetric):boolean{
     return isSiDashboardMetric(id);
   }
+  isAiCiMetric(id:DashboardMetric):boolean{return isAiCiMetric(id);}
   get dashboardHasDemoMetrics():boolean{
     return this.dashboard?.widgets.some(w=>this.isSiDemoMetric(w.metric))||false;
   }
   get dashboardUsesFleet():boolean{
-    return this.dashboard?.widgets.some(w=>!this.isSiDemoMetric(w.metric))||false;
+    return this.dashboard?.widgets.some(w=>!this.isSiDemoMetric(w.metric)&&!isAiCiMetric(w.metric))||false;
   }
   siMetricExplanation(id:DashboardMetric):string{
     const meta=siMetricMeta(id);
@@ -59,6 +65,34 @@ export class NmcDashboardBuilderComponent implements OnInit,OnDestroy {
   }
   siDemoTableFor(id:DashboardMetric):SiDemoTable|null{
     return siDemoTable(id);
+  }
+
+  readonly aiCiCatalogue=AI_CI_METRICS;
+  aiCiSnapshot:AiCiLiveSnapshot|null=null;
+  aiCiReadError='';
+  get dashboardHasAiCiMetrics():boolean{
+    return !!this.dashboard?.widgets.some(w=>isAiCiMetric(w.metric));
+  }
+  ciIsMeasured(metric:string):boolean{
+    return aiCiIsMeasured(metric,this.aiCiSnapshot);
+  }
+  ciAgentRows():Array<{agent:string;calls:number}>{
+    return aiCiAgentTable(this.aiCiSnapshot);
+  }
+  refreshAiCi():void{
+    if(!this.dashboardHasAiCiMetrics)return;
+    const sub=this.http.get<AiCiLiveSnapshot>('/api/ai/continuous-improvement').subscribe({
+      next:result=>{
+        this.aiCiSnapshot=result;this.aiCiReadError='';
+      },
+      error:()=>{
+        this.aiCiSnapshot=null;
+        this.aiCiReadError=this.copy(
+          'Live AI usage source is unavailable; illustrative POC figures are shown.',
+          'مصدر استدعاءات AI غير متاح؛ المعروض هو المؤشرات التوضيحية للـPOC.');
+      }
+    });
+    this.subs.add(sub);
   }
 
   aiPrompt='';
@@ -129,7 +163,8 @@ export class NmcDashboardBuilderComponent implements OnInit,OnDestroy {
     private readonly data:NmcDashboardDataService,
     private readonly riskEngine:NmcRiskEngineService,
     private readonly workspace:NmcDashboardWorkspaceService,
-    private readonly dashboardNavigation:NmcDashboardNavigationService
+    private readonly dashboardNavigation:NmcDashboardNavigationService,
+    private readonly http:HttpClient
   ){}
 
   ngOnInit():void {
@@ -150,6 +185,7 @@ export class NmcDashboardBuilderComponent implements OnInit,OnDestroy {
           next:result=>{
             if(this.viewOnly){
               this.dashboard=JSON.parse(JSON.stringify(result.dashboard)) as DashboardDefinition;
+              this.refreshAiCi();
               this.viewLoading=false;
             }
           },
@@ -163,6 +199,7 @@ export class NmcDashboardBuilderComponent implements OnInit,OnDestroy {
         this.subs.add(req);
       } else {
         this.dashboard=id?this.store.get(id):null;
+        this.refreshAiCi();
         if(this.dashboard&&!this.dashboard.menuPlacement)this.dashboard.menuPlacement='NMC_CENTER';
         // Populate editor selectors for legacy shared/local charts without
         // silently marking the user's existing saved dashboard as modified.
@@ -179,8 +216,9 @@ export class NmcDashboardBuilderComponent implements OnInit,OnDestroy {
       if(this.raw)this.fleet=this.data.compose(this.raw);
     }));
     this.refresh();
+    this.refreshAiCi();
     this.loadShared();
-    this.poller=setInterval(()=>this.refresh(true),30000);
+    this.poller=setInterval(()=>{this.refresh(true);this.refreshAiCi();},30000);
   }
 
   ngOnDestroy():void {
@@ -630,6 +668,16 @@ export class NmcDashboardBuilderComponent implements OnInit,OnDestroy {
     this.aiProposal=null;this.aiPreviewWidgets=[];
   }
 
+  createAiContinuousImprovement():void{
+    try{
+      const board=this.store.createAiContinuousImprovement();
+      this.open(board.id);
+    }catch{
+      this.saveMessage=this.copy('Unable to create AI Continuous Improvement dashboard.',
+        'تعذر إنشاء لوحة التحسين المستمر للذكاء الاصطناعي.');
+    }
+  }
+
   createFromTemplate(kind:DashboardTemplateKind):void {
     try {
       const board=this.store.createFromTemplate(kind);
@@ -776,6 +824,8 @@ export class NmcDashboardBuilderComponent implements OnInit,OnDestroy {
   get riskVersion():string{return this.riskEngine.config.version;}
 
   metricNumber(metric:DashboardMetric):string {
+    if(isAiCiMetric(metric))
+      return aiCiMetricNumber(metric,this.aiCiSnapshot)||'—';
     const example=siDemoMetricNumber(metric);
     if(example!==null)return example;
     const rows=this.filtered,assessed=this.assessed;
@@ -793,6 +843,8 @@ export class NmcDashboardBuilderComponent implements OnInit,OnDestroy {
   }
 
   barRows(metric:DashboardMetric):BarRow[]{
+    const ciRows=aiCiChartRows(metric,this.aiCiSnapshot);
+    if(ciRows!==null)return ciRows;
     const example=siDemoChartRows(metric);
     if(example!==null)return example;
     const rows=this.filtered;

@@ -1,4 +1,5 @@
 import {CommonModule} from '@angular/common';
+import {DomSanitizer,SafeResourceUrl} from '@angular/platform-browser';
 import {Component,OnInit} from '@angular/core';
 import {FormsModule} from '@angular/forms';
 import {HttpClient,HttpHeaders} from '@angular/common/http';
@@ -8,7 +9,7 @@ import {NmcMinistryLogoComponent} from '../components/nmc-ministry-logo.componen
 import {LanguageService} from '../services/language.service';
 
 interface SettingDescriptor {
-  key:string;type:'boolean'|'number'|'url'|'pipeline'|'choice';group:string;options?:string[];
+  key:string;type:'boolean'|'number'|'url'|'pipeline'|'choice'|'ui-template';group:string;options?:string[];
   min?:number;max?:number;description:string;cost?:boolean;
 }
 interface AiriaCredentialStatus{
@@ -48,7 +49,7 @@ export const AI_GOVERNANCE_SECTIONS=[
  {id:'platform-orchestration',en:'Platform · Orchestration & Providers',ar:'المنصة · التنسيق ومزود الذكاء',keys:['SI_AI_PROVIDER','NMC_DASHBOARD_AI_FOCUS_ENABLED'],desc:'Shared settings · not a separate agent'},
  {id:'platform-fleet',en:'Platform · Fleet Assessment Schedule',ar:'المنصة · جدولة تقييم الأسطول',keys:['NMC_FLEET_AUTO_ENABLED','NMC_FLEET_AUTO_MAX_VESSELS','NMC_FLEET_AUTO_RETRY_FAILED','NMC_FLEET_REFRESH_SECONDS'],desc:'Background cost and vessel limits'},
  {id:'platform-alerts',en:'Platform · Alerts & Escalation',ar:'المنصة · التنبيهات والتصعيد',keys:['NMC_ALERT_SCAN_ENABLED','NMC_ALERT_SCAN_SECONDS','NMC_ALERT_ESCALATE_MINUTES'],desc:'Saved risk alerts and incident escalation'},
- {id:'platform-connectivity',en:'Platform · Airia Connection',ar:'المنصة · اتصال Airia',keys:['AIRIA_BASE_URL','AIRIA_TIMEOUT_MS'],desc:'Shared endpoint / timeout; credentials are below'}
+ {id:'platform-connectivity',en:'Platform · Airia Connection',ar:'المنصة · اتصال Airia',keys:['AIRIA_BASE_URL','AIRIA_CONSOLE_PIPELINE_URL_TEMPLATE','AIRIA_TIMEOUT_MS'],desc:'Shared endpoint / timeout; credentials are below'}
 ] as const;
 export function auditAiGovernanceGrouping(descriptors:ReadonlyArray<{key:string}>):string[]{
  const names=AI_GOVERNANCE_SECTIONS.flatMap(s=>[...s.keys]);
@@ -146,6 +147,13 @@ export function auditAiGovernanceGrouping(descriptors:ReadonlyArray<{key:string}
                      (ngModelChange)="draft[item.key]=$event"/>
                   <small>https://api.mena.airia.ai / https://mena.api.airia.ai</small>
                 </ng-container>
+                <ng-container *ngIf="item.type==='ui-template'">
+                  <input class="url-field" type="text" spellcheck="false"
+                    [ngModel]="draft[item.key]" (ngModelChange)="draft[item.key]=$event"
+                    placeholder="https://your-airia-console.airia.ai/.../{pipelineId}"/>
+                  <small>{{tr('Paste an actual Airia console Pipeline URL and replace its pipeline UUID with {pipelineId}. This is a website link, NOT the Airia API endpoint.',
+                    'ضع رابط شاشة Pipeline الحقيقية في Airia، واستبدل معرّف Pipeline بـ {pipelineId}. هذا رابط للواجهة وليس API.')}}</small>
+                </ng-container>
                 <ng-container *ngIf="item.type==='pipeline'">
                   <input class="url-field" type="text" spellcheck="false"
                     [attr.aria-label]="item.description" [ngModel]="draft[item.key]"
@@ -153,6 +161,12 @@ export function auditAiGovernanceGrouping(descriptors:ReadonlyArray<{key:string}
                     placeholder="Airia Pipeline UUID — leave blank if not verified"/>
                   <small>{{tr('Use a real pipeline ID. A01–A04 default IDs follow the partner guide; Builder/Vision output contracts must be tested before activation.',
                    'استخدم المعرف الحقيقي. قيم A01–A04 من دليل Airia، ويجب اختبار مخرجات Builder وVision قبل التفعيل.')}}</small>
+                  <div class="airia-link-actions" *ngIf="airiaConsoleUrl(item.key) as consoleUrl">
+                    <button class="restore" type="button" (click)="openAiriaEmbedded(item.key)">
+                      {{tr('Open in Airia panel','فتح داخل المنصة')}}</button>
+                    <button class="restore" type="button" (click)="openAiriaExternal(item.key)">
+                      {{tr('Open in Airia ↗','فتح Airia في تبويب جديد ↗')}}</button>
+                  </div>
                   <button class="restore" type="button"
                     *ngIf="item.key==='AIRIA_SI_CHECKLIST_VISION_PIPELINE_ID'"
                     (click)="selectKnownAgent('vision')">
@@ -175,6 +189,26 @@ export function auditAiGovernanceGrouping(descriptors:ReadonlyArray<{key:string}
             </article>
           </div>
         </details>
+        <section class="publish-card airia-embed-panel" *ngIf="airiaEmbedUrl">
+          <div class="airia-embed-heading">
+            <div>
+              <h2>{{tr('Airia Agent Workspace','مساحة عمل Agent على Airia')}}</h2>
+              <p>{{airiaEmbedAgent}} · {{tr('You may need to log in to Airia separately. Some providers block embedded frames; use New Tab if blank.',
+                'قد يلزم تسجيل الدخول إلى Airia. بعض الجهات تمنع فتح الواجهة داخل إطار؛ استخدم تبويب جديد إن لم تظهر.')}}</p>
+            </div>
+            <div class="airia-link-actions">
+              <button type="button" class="restore" (click)="openAiriaExternal(airiaEmbedAgent)">
+                {{tr('Open in new tab ↗','فتح في تبويب جديد ↗')}}</button>
+              <button type="button" class="restore" (click)="closeAiriaEmbedded()">
+                {{tr('Close panel','إغلاق')}}</button>
+            </div>
+          </div>
+          <iframe [src]="airiaEmbedUrl"
+                  sandbox="allow-forms allow-scripts allow-same-origin allow-popups"
+                  referrerpolicy="no-referrer"
+                  title="Airia Agent Workspace"
+                  class="airia-embed-frame"></iframe>
+        </section>
         <section class="publish-card">
           <h2>{{tr('AI Governance Controls · Always Enforced',
             'ضوابط حوكمة الذكاء الاصطناعي · إلزامية دائمًا')}}</h2>
@@ -276,6 +310,13 @@ export function auditAiGovernanceGrouping(descriptors:ReadonlyArray<{key:string}
     .runtime-status>button{margin-inline-start:auto}
     .runtime-info{background:#eaf6f4;border-inline-start:4px solid #0e9a90;padding:18px;border-radius:11px;margin:19px 0}
     .runtime-info strong{font-size:12px}.runtime-info p{line-height:1.8;font-size:11px;margin:7px 0 0;color:#4b7078}
+    .airia-link-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+    .airia-embed-panel{position:fixed;inset:18px;z-index:9999;overflow:auto;
+      background:#fff;box-shadow:0 16px 64px #0e2d4599;border:2px solid #8acbc6;
+      border-radius:16px;padding:18px;margin:0}
+    .airia-embed-heading{display:flex;gap:12px;justify-content:space-between;align-items:center;flex-wrap:wrap}
+    .airia-embed-frame{display:block;width:100%;height:min(75vh,800px);min-height:480px;
+      margin-top:14px;border:1px solid #dbe8ef;border-radius:12px;background:#f4f8fb}
     .group-card,.publish-card{background:white;border:1px solid #dee9ed;border-radius:15px;margin-top:20px;padding:23px}
     .agent-directory{margin-top:18px;border:1px solid #c7dfe5;border-radius:14px;background:#f0f9fa;padding:16px}
     .agent-directory strong{color:#0b6471;font-size:15px}
@@ -350,13 +391,16 @@ export function auditAiGovernanceGrouping(descriptors:ReadonlyArray<{key:string}
   `]
 })
 export class NmcRuntimeSettingsComponent implements OnInit{
+  airiaEmbedUrl:SafeResourceUrl|null=null;
+  airiaEmbedAgent='';
   snapshot:RuntimeSnapshot|null=null;
   draft:Record<string,boolean|number|string>={};
   readonly groups=AI_GOVERNANCE_SECTIONS.map(s=>s.id);
   credentialStatus:AiriaCredentialStatus|null=null;
   newApiKey='';credentialReason='';credentialSaving=false;
   actor='admin';reason='';error='';success='';loading=false;saving=false;
-  constructor(private readonly http:HttpClient,public lang:LanguageService){}
+  constructor(private readonly http:HttpClient,public lang:LanguageService,
+    private readonly sanitizer:DomSanitizer){}
   tr(en:string,ar:string){return this.lang.pick(en,ar);}
   ngOnInit(){this.load();this.loadCredentialStatus();}
   load(){
@@ -406,6 +450,41 @@ export class NmcRuntimeSettingsComponent implements OnInit{
       'platform-connectivity':'عنوان Airia والمهلة المشتركة؛ المفتاح محفوظ بصورة آمنة'
     };
     return section?this.tr(section.desc,arabic[g]||section.desc):'';
+  }
+  /** Only allow Airia HTTPS console hosts. The link is navigation, not an API call.
+   * Use published backend configuration to prevent unreviewed draft links.
+   */
+  airiaConsoleUrl(pipelineSettingKey:string):string|null{
+    if(!pipelineSettingKey.startsWith('AIRIA_')||
+       !pipelineSettingKey.endsWith('_PIPELINE_ID')||!this.snapshot)return null;
+    const template=this.snapshot.values['AIRIA_CONSOLE_PIPELINE_URL_TEMPLATE'];
+    const id=this.snapshot.values[pipelineSettingKey];
+    if(typeof template!=='string'||typeof id!=='string'||
+       !/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i.test(id)||
+       (template.match(/\{pipelineId\}/g)||[]).length!==1)return null;
+    const link=template.replace('{pipelineId}',encodeURIComponent(id));
+    try{
+      const u=new URL(link);
+      const hostname=u.hostname.toLowerCase();
+      if(u.protocol!=='https:'||u.username||u.password||u.port||
+         !(hostname==='airia.ai'||hostname.endsWith('.airia.ai')||
+           hostname==='airia.com'||hostname.endsWith('.airia.com'))||
+         u.pathname.startsWith('/v1/'))return null;
+      return u.toString();
+    }catch{return null;}
+  }
+  openAiriaEmbedded(key:string):void{
+    const link=this.airiaConsoleUrl(key);
+    if(!link)return;
+    this.airiaEmbedAgent=key;
+    this.airiaEmbedUrl=this.sanitizer.bypassSecurityTrustResourceUrl(link);
+  }
+  openAiriaExternal(key:string):void{
+    const link=this.airiaConsoleUrl(key);
+    if(link)window.open(link,'_blank','noopener,noreferrer');
+  }
+  closeAiriaEmbedded():void{
+    this.airiaEmbedUrl=null;this.airiaEmbedAgent='';
   }
   loadCredentialStatus():void{
     this.http.get<AiriaCredentialStatus>('/api/ai/admin/governance/credentials')

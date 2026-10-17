@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject } from 'rxjs';
 import {SI_DASHBOARD_METRIC_DEFINITIONS} from './si-dashboard-metric-catalog';
+import {AI_CI_METRICS} from './ai-continuous-improvement-catalog';
 
 export type DashboardWidgetKind = 'kpi' | 'bar' | 'table' | 'position';
 /** The 'bar' widget kind is a distribution widget; chartType selects the renderer. */
@@ -86,6 +87,8 @@ export const DASHBOARD_METRICS: Record<DashboardWidgetKind, Array<{
     {value:'priorityCount',en:'Priority review vessels',ar:'السفن ذات أولوية المراجعة'},
     {value:'averageRisk',en:'Average assessed risk',ar:'متوسط مخاطر السفن المقيمة'},
     ...SI_DASHBOARD_METRIC_DEFINITIONS.filter(m=>m.kind==='kpi')
+      .map(m=>({value:m.id,en:m.en,ar:m.ar})),
+    ...AI_CI_METRICS.filter(m=>m.kind==='kpi')
       .map(m=>({value:m.id,en:m.en,ar:m.ar}))
   ],
   bar: [
@@ -94,11 +97,15 @@ export const DASHBOARD_METRICS: Record<DashboardWidgetKind, Array<{
     {value:'byType',en:'Vessels by type',ar:'السفن حسب النوع'},
     {value:'byZone',en:'Vessels by operational area',ar:'السفن حسب المنطقة التشغيلية'},
     ...SI_DASHBOARD_METRIC_DEFINITIONS.filter(m=>m.kind==='bar')
+      .map(m=>({value:m.id,en:m.en,ar:m.ar})),
+    ...AI_CI_METRICS.filter(m=>m.kind==='bar')
       .map(m=>({value:m.id,en:m.en,ar:m.ar}))
   ],
   table: [
     {value:'vesselTable',en:'Vessel monitoring table',ar:'جدول متابعة السفن'},
     ...SI_DASHBOARD_METRIC_DEFINITIONS.filter(m=>m.kind==='table')
+      .map(m=>({value:m.id,en:m.en,ar:m.ar})),
+    ...AI_CI_METRICS.filter(m=>m.kind==='table')
       .map(m=>({value:m.id,en:m.en,ar:m.ar}))
   ],
   position: [{value:'vesselPositions',en:'Vessel position plot',ar:'توزيع مواقع السفن'}]
@@ -126,6 +133,32 @@ export function dashboardDefaults(): DashboardDefinition {
   };
 }
 
+
+/** AI Continuous Improvement is an explicit POC draft, never auto-published. */
+export function buildAiContinuousImprovementDashboard():DashboardDefinition{
+ const board=dashboardDefaults();
+ const ids=[
+   'ciTotalCalls','ciSuccessfulCalls','ciFailedCalls','ciSuccessRate',
+   'ciOfficerReviews','ciOfficerAccept','ciOfficerModify','ciOfficerReject',
+   'ciOfficerOverrideRate','ciIncidentAssessments',
+   'ciVesselCalls','ciInspectionAiCalls','ciPhotoVision','ciDocumentAi',
+   'ciDataQuality','ciSeafarerChecks','ciAverageTime','ciReviewBacklog',
+   'ciCallsByAgent','ciCallsByDomain','ciMonthlyTrend',
+   'ciOfficerDecisionMix','ciAgentRegister'
+ ];
+ board.title='AI Continuous Improvement';
+ board.description='AI operational adoption, officer review decisions, agent usage and continuous improvement across maritime domains.';
+ board.menuPlacement='NMC_CENTER';
+ board.widgets=ids.map((id,index):DashboardWidget=>{
+   const metric=AI_CI_METRICS.find(m=>m.id===id);
+   if(!metric)throw new Error('AI_CI_METRIC_MISSING');
+   return {id:'ci-'+index,type:metric.kind,metric:id,title:metric.en,
+      span:metric.kind==='table'?'full':'half',
+      ...(metric.kind==='bar'?{chartType:'column' as NmcChartType,
+          palette:'ocean' as NmcChartPalette}:{})};
+ });
+ return board;
+}
 
 export type DashboardTemplateKind = 'operational' | 'management' | 'executive';
 
@@ -188,6 +221,17 @@ export class NmcDashboardStoreService {
         ...w,id:'widget-'+(globalThis.crypto?.randomUUID?.()||Math.random().toString(36).slice(2))
       }))
     };
+    this.commit([...this.subject.value,draft]);
+    return clone(draft);
+  }
+
+  createAiContinuousImprovement():DashboardDefinition{
+    const board=buildAiContinuousImprovementDashboard();
+    const draft:DashboardDefinition={
+      ...board,id:'dashboard-'+(globalThis.crypto?.randomUUID?.()||Date.now().toString(36)),
+      status:'DRAFT',version:1,updatedAt:new Date().toISOString()
+    };
+    this.validate(draft);
     this.commit([...this.subject.value,draft]);
     return clone(draft);
   }
