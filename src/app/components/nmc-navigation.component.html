@@ -167,6 +167,13 @@
           <span class="nav-icon">▥</span>
           <span class="nav-label">{{copy('Inspection Management','إدارة المعاينات')}}</span>
         </a>
+        <a class="nav-link" routerLink="/moei/smart-inspection/scheduling"
+           [class.active]="currentPath==='/moei/smart-inspection/scheduling'||currentPath.startsWith('/moei/smart-inspection/scheduling/plan/')"
+           [attr.aria-current]="currentPath.startsWith('/moei/smart-inspection/scheduling')?'page':null"
+           [title]="copy('Electronic Scheduling · Who Inspects Which Vessels','الجدولة الإلكترونية وتكليفات كل معاين')">
+          <span class="nav-icon">▦</span>
+          <span class="nav-label">{{copy('Electronic Scheduling','الجدولة الإلكترونية')}}</span>
+        </a>
         <a class="nav-link" routerLink="/moei/smart-inspection/supervisor"
            [class.active]="currentPath.startsWith('/moei/smart-inspection/supervisor')"
            [attr.aria-current]="currentPath.startsWith('/moei/smart-inspection/supervisor')?'page':null"
