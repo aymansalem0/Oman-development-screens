@@ -123,6 +123,13 @@ jobs:
       - name: Assigned inspector POC identity, source dossier and guided A04 step regression
         run: node --test ai-proxy/test/si-inspector-guided-work-orders.test.mjs
 
+      - name: Prepare isolated local fleet/PSC fixture imports for the SI AI factor contract test
+        # The production AI-proxy Dockerfile copies these exact files into /app.
+        # These are synthetic build-time fixtures, not external source data.
+        run: |
+          cp tools/psc/psc-fixtures.mjs ai-proxy/psc-fixtures.mjs
+          cp src/app/data/nmc-vessel-catalog.ts ai-proxy/nmc-vessel-catalog.ts
+          cp src/app/data/nmc-expanded-vessel-catalog.ts ai-proxy/nmc-expanded-vessel-catalog.ts
       - name: Inspector confirmed defects to five A01/A02 risk factors and durable NMC case provenance
         run: node --test ai-proxy/test/si-risk-factor-attribution.test.mjs
 
