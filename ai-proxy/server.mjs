@@ -65,6 +65,7 @@ import {executeGuidedV01UploadJson} from './si-v01-upload-json.mjs';
 import {suggestCapacityExceptionActions} from './si-capacity-exception-alternatives.mjs';
 import { SiInspectionLifecycle, SiLifecycleError } from './si-inspection-lifecycle.mjs';
 import {syncSiClosureToNmc,SiNmcClosureSyncError} from './si-nmc-closure-sync.mjs';
+import {buildSiSupervisorFullReport} from './si-supervisor-report.mjs';
 import {SiScheduleOrders,SiWorkOrderError} from './si-schedule-orders.mjs';
 import {runSiPocAdvisor,siFutureAdvisorCoverage,SiPocAdvisorError} from './si-poc-workflow-advisors.mjs';
 import {runSiAiriaAdvisor} from './si-airia-workflow-advisors.mjs';
@@ -2479,13 +2480,29 @@ const server = createServer(async (req, res) => {
           reviewStages.has(x.stage)),count:listed.cases.filter(x=>
           reviewStages.has(x.stage)).length});
       }
-      const supervisorCase=/^\/api\/si\/v1\/supervisor\/reviews\/([a-f0-9-]{36})(?:\/(decision))?$/.exec(path);
+      const supervisorCase=/^\/api\/si\/v1\/supervisor\/reviews\/([a-f0-9-]{36})(?:\/(decision|full-report))?$/.exec(path);
       if(supervisorCase){
         const identity=moeiAuth.require(req);
         dashboards.assertRole(req,'PUBLISHER');
         const id=supervisorCase[1],part=supervisorCase[2];
         if(!part&&req.method==='GET')
           return respond(res,200,await siLifecycle.snapshot(id));
+        if(part==='full-report'&&req.method==='GET'){
+          const view=await siLifecycle.snapshot(id);
+          const saved=await siPreparation.get(id);
+          let checklist=null;
+          try{checklist=await siChecklistField.preview(id);}
+          catch{/* Source gap must be visible, never silently invented. */}
+          const schedules=siScheduleOrders.ready?await siScheduleOrders.all():[];
+          const linked=schedules.flatMap(schedule=>(schedule.orders||[])
+            .map(order=>({schedule,order}))).find(x=>x.order.caseId===id)||null;
+          const dossier=assembleSiVesselDossier({
+            view:saved,schedule:linked?.schedule,order:linked?.order,checklist
+          });
+          return respond(res,200,buildSiSupervisorFullReport({
+            view,dossier,checklist
+          }));
+        }
         if(part==='decision'&&req.method==='POST'){
           if(req.headers['x-moei-csrf']!=='1')
             throw new MoeiAuthError('MOEI_CSRF_REQUIRED',403);
