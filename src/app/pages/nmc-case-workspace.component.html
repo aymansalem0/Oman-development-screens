@@ -96,13 +96,27 @@
       <div class="case-metrics">
         <article class="metric-card risk" [ngClass]="riskClass">
           <small>{{copy('Risk at case creation (saved AI assessment)','المخاطر عند فتح الحالة (تقييم AI المحفوظ)')}}</small>
-          <strong>{{ currentRisk }}</strong>
-          <span>{{ riskLevelLabel }}</span>
+          <strong>{{ centralCase.sourceScore ?? '—' }}</strong>
+          <span>{{ centralCase.sourceLevel||'—' }}</span>
         </article>
         <article class="metric-card">
           <small>{{ copy('Post-inspection risk reassessment', 'إعادة تقييم المخاطر بعد المعاينة') }}</small>
-          <strong>{{ riskReassessmentPending ? copy('Pending', 'مطلوبة') : copy('Not applicable yet', 'غير مطلوبة حاليًا') }}</strong>
-          <span>{{ copy('No assumed risk reduction', 'لا يوجد تخفيض افتراضي للمخاطر') }}</span>
+          <strong *ngIf="centralCase.operationalRisk as updated">
+            {{updated.score}}/100 · {{updated.level}}
+          </strong>
+          <strong *ngIf="!centralCase.operationalRisk">
+            {{ riskReassessmentPending ? copy('Pending AI reassessment', 'بانتظار إعادة تقييم AI') :
+             copy('No reassessment yet', 'لم يُعد التقييم بعد') }}
+          </strong>
+          <span *ngIf="centralCase.operationalRisk as updated">
+            {{copy('Previous','السابق')}}: {{updated.previousScore??'—'}}/100
+            · {{copy('New','الجديد')}}: {{updated.score}}/100
+            · {{copy('Source','المصدر')}}: {{updated.evidenceId}}
+          </span>
+          <span *ngIf="!centralCase.operationalRisk">
+            {{copy('No assumed risk reduction; all regulatory actions remain human-controlled.',
+              'لا تخفيض افتراضي للمخاطر؛ كل القرارات الرقابية بشرية.')}}
+          </span>
         </article>
         <article class="metric-card">
           <small>{{ copy('Task completion · not case readiness', 'إنجاز المهام · ليس جاهزية الإغلاق') }}</small>
@@ -121,6 +135,25 @@
       <span>{{copy('Immutable source assessment','التقييم الأصلي غير القابل للتعديل')}}: {{linked.sourceAssessmentId || '—'}} · {{linked.sourceLevel}}</span>
       <a [routerLink]="['/moei/nmc/vessel',linked.imo,'risk']">{{copy('View Full Risk Intelligence & Evidence →','عرض تفاصيل تحليل المخاطر والأدلة ←')}}</a>
     </div>
+    <details *ngIf="(centralCase.postInspectionRiskHistory||[]).length"
+      class="case-incident-workflow" data-testid="nmc-post-inspection-risk-history">
+      <summary><strong>{{copy('Post-Inspection Risk History · A01/A02',
+       'سجل إعادة تقييم المخاطر بعد المعاينة · A01/A02')}}</strong>
+       · {{centralCase.postInspectionRiskHistory?.length}}
+       {{copy('verified reassessment(s)','تقييمات موثقة')}}</summary>
+      <div *ngFor="let h of centralCase.postInspectionRiskHistory" class="case-incident-event">
+       <strong>{{h.previousScore??'—'}} → {{h.newScore}}/100 · {{h.newLevel}}</strong>
+       <p>{{copy('Approved inspection report','تقرير معاينة معتمد')}}:
+         {{h.reportId}} · {{h.evidenceId}}</p>
+       <p>{{copy('Assessment','التقييم')}}: {{h.assessmentId}} ·
+         {{copy('Policy','السياسة')}}: {{h.policyVersion}}</p>
+       <div *ngFor="let factor of h.factorChanges">
+        {{factor.factor}}: {{factor.previous??'—'}} → {{factor.current}}
+       </div>
+       <p>{{copy('Regulatory decisions remain with NMC officers.',
+        'القرارات الرقابية من صلاحية موظفي NMC فقط.')}}</p>
+      </div>
+    </details>
     <section class="case-incident-workflow" *ngIf="(centralCase.incidentEvents||[]).length">
       <div class="case-incident-head">
         <h3>{{copy('Maritime Incidents · Automated Intake & Case Actions',
