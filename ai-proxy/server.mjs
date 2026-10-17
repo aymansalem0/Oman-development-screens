@@ -1985,8 +1985,20 @@ const server = createServer(async (req, res) => {
                current.guide.lifecycleStage!=='IN_FIELD')
               return respond(res,409,{error:'SI_FIELD_INSPECTION_NOT_STARTED'});
             const body=await requestJson(req,4096);
-            if(body.confirmCost!==true||!siChecklistAiria.status().visionConfigured)
-              return respond(res,503,{error:'SI_CHECKLIST_VISION_AI_NOT_CONFIGURED_OR_NOT_CONFIRMED'});
+            if(body.confirmCost!==true)
+              return respond(res,422,{error:'SI_CHECKLIST_VISION_COST_CONFIRMATION_REQUIRED'});
+            const visionState=siChecklistAiria.status();
+            if(!visionState.visionConfigured)
+              return respond(res,503,{
+                error:'SI_CHECKLIST_VISION_AI_NOT_CONFIGURED_OR_NOT_CONFIRMED',
+                missing:{
+                  checklistAiEnabled:!visionState.enabled,
+                  airiaKey:!visionState.apiKeyConfigured,
+                  checklistVisionPipeline:!visionState.visionPipelineMapped
+                },
+                // A mapped pipeline ID is not proof of a verified media schema.
+                providerContractVerified:false
+              });
             const step=findGuidedStep(current.guide,body.stepId);
             if(!step)return respond(res,404,{error:'SI_GUIDED_STEP_NOT_FOUND'});
             const evidence=(current.guide.evidenceByStep[step.stepId]||[])
