@@ -30,6 +30,7 @@
         <div class="db-heading-actions">
           <button class="db-outline" type="button" (click)="createFromTemplate('management')">▥ {{copy('Management View','لوحة الإدارة')}}</button>
           <button class="db-outline" type="button" (click)="createFromTemplate('executive')">◆ {{copy('Executive View','لوحة الإدارة العليا')}}</button>
+          <button class="db-primary db-ai-ci-create" type="button" (click)="createAiContinuousImprovement()">✦ {{copy('AI Continuous Improvement','التحسين المستمر للذكاء الاصطناعي')}}</button>
           <button class="db-primary" type="button" (click)="create()">＋ {{copy('Create Dashboard','إنشاء لوحة معلومات')}}</button>
         </div>
       </div>
@@ -170,6 +171,13 @@
         ✎ {{copy('Editing the next revision of an existing published dashboard. The live version stays available until Republish.',
                   'تعديل الإصدار التالي من لوحة منشورة. النسخة الحالية تظل متاحة حتى إعادة النشر.')}}
       </p>
+      <div *ngIf="dashboardHasAiCiMetrics" class="db-ai-ci-status" role="note">
+        <strong>✦ {{copy('AI Continuous Improvement · POC Monitoring','التحسين المستمر للذكاء الاصطناعي · مراقبة POC')}}</strong>
+        <span>{{copy('New execution counters cover instrumented calls from deployment; officer decisions use reviewed Google Sheets assessments. Any unconnected indicator uses an illustrative POC value rather than actual government operations.',
+          'عدادات الاستدعاء الجديدة تبدأ منذ تشغيل النسخة، وقرارات الضباط من التقييمات المراجعة في Google Sheets. المؤشرات غير المرتبطة تعرض قيمًا توضيحية للـPOC وليست نتائج تشغيل حكومية فعلية.')}}</span>
+        <button type="button" class="db-outline" (click)="refreshAiCi()">↻ {{copy('Refresh Metrics','تحديث المؤشرات')}}</button>
+      </div>
+      <p class="db-message" *ngIf="dashboardHasAiCiMetrics&&aiCiReadError">{{aiCiReadError}}</p>
       <div *ngIf="dashboardHasDemoMetrics" class="db-poc-metric-banner" role="note">
         <strong>{{copy('POC SYNTHETIC DATA · illustrative only','بيانات تجريبية افتراضية للـPOC · للعرض فقط')}}</strong>
         <span>{{copy('Sample period','الفترة التوضيحية')}}: {{siDemoPeriod}}.
@@ -343,6 +351,7 @@
               <h3>{{previewTitle}}</h3>
               <small *ngIf="dashboardUsesFleet">
                 {{filtered.length}} {{copy('vessels matching selected filters','سفينة وفق الفلاتر المختارة')}}</small>
+              <small *ngIf="dashboardHasAiCiMetrics">{{copy('Instrumentation since deployment · supplementary POC illustrations','قياسات منذ التشغيل · مؤشرات POC توضيحية')}}</small>
               <small *ngIf="dashboardHasDemoMetrics">
                 {{copy('Synthetic Smart Inspection indicators · May to October 2026',
                 'مؤشرات المعاينة التجريبية · مايو إلى أكتوبر 2026')}}</small>
@@ -387,6 +396,11 @@
                 </span>
               </div>
 
+              <div *ngIf="isAiCiMetric(widget.metric)" class="db-ai-ci-source">
+                {{ciIsMeasured(widget.metric)?
+                  copy('INSTRUMENTED POC EVENTS','أحداث POC مسجلة'):
+                  copy('ILLUSTRATIVE POC VALUE','قيمة توضيحية للـPOC')}}
+              </div>
               <div *ngIf="isSiDemoMetric(widget.metric)" class="db-demo-widget-source"
                 [title]="siMetricExplanation(widget.metric)">
                 {{copy('STATIC POC DATA · NOT OFFICIAL','بيانات افتراضية ثابتة · ليست رسمية')}}
@@ -397,6 +411,9 @@
                     <optgroup [label]="copy('Maritime / NMC','البيانات البحرية / NMC')">
                       <option *ngFor="let option of metricGroupOptions(widget.type,'NMC')"
                        [value]="option.value">{{copy(option.en,option.ar)}}</option>
+                    </optgroup>
+                    <optgroup [label]="copy('AI Continuous Improvement','التحسين المستمر للذكاء الاصطناعي')">
+                      <option *ngFor="let option of metricGroupOptions(widget.type,'AI_CONTINUOUS_IMPROVEMENT')" [value]="option.value">{{copy(option.en,option.ar)}}</option>
                     </optgroup>
                     <optgroup [label]="copy('Smart Inspection · AI Performance','المعاينة الذكية · أداء AI')">
                       <option *ngFor="let option of metricGroupOptions(widget.type,'AI_PERFORMANCE')"
@@ -431,7 +448,7 @@
                 </small>
               </div>
               <div class="db-kpi" *ngIf="widget.type==='kpi'">
-                <strong>{{isSiDemoMetric(widget.metric)?metricNumber(widget.metric):isLoading?'…':metricNumber(widget.metric)}}</strong>
+                <strong>{{isSiDemoMetric(widget.metric)||isAiCiMetric(widget.metric)?metricNumber(widget.metric):isLoading?'…':metricNumber(widget.metric)}}</strong>
                 <span>{{metricName(widget.metric)}}</span>
               </div>
 
@@ -445,6 +462,13 @@
               </app-nmc-distribution-chart>
 
               <div class="db-table-wrap" *ngIf="widget.type==='table'">
+                <ng-container *ngIf="widget.metric==='ciAgentRegister'; else standardTables">
+                  <table class="db-table">
+                    <thead><tr><th>{{copy('AI Agent','الوكيل الذكي')}}</th><th>{{copy('Calls','الاستدعاءات')}}</th></tr></thead>
+                    <tbody><tr *ngFor="let row of ciAgentRows()"><td>{{row.agent}}</td><td>{{row.calls}}</td></tr></tbody>
+                  </table>
+                </ng-container>
+                <ng-template #standardTables>
                 <ng-container *ngIf="siDemoTableFor(widget.metric) as data; else nmcFleetTable">
                   <table class="db-table">
                     <thead><tr><th *ngFor="let header of data.headers">
@@ -479,6 +503,7 @@
                   <span>{{tablePage}} / {{tablePages}}</span>
                   <button type="button" (click)="setPage(tablePage+1)" [disabled]="tablePage>=tablePages">›</button>
                 </div>
+                </ng-template>
                 </ng-template>
               </div>
 
