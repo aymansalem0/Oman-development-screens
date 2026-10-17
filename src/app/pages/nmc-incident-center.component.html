@@ -31,20 +31,24 @@
     {{copy('source rows are incomplete or invalid; valid incidents remain visible.',
       'صفوف بيانات غير مكتملة أو خاطئة في المصدر؛ الحوادث الصحيحة ما زالت ظاهرة.')}}
   </div>
-  <div *ngIf="!health?.sourceConfigured" class="message warn">
+  <div *ngIf="health && !health.sourceConfigured" class="message warn">
    {{copy('The sheet is ready. The Docker incident data source still needs service-account configuration. No sample data is silently substituted.',
       'الشيت جاهز، لكن ربط Docker بحساب خدمة Google لا يزال يحتاج إعدادًا. لن يتم عرض بيانات وهمية بدل المصدر.')}}</div>
+  <div *ngIf="health?.sourceStatus==='CREDENTIALS_FILE_MISSING'" class="message error" role="alert">
+    {{copy('Incident Google Sheet is configured, but the service-account JSON file is NOT mounted inside the AI Proxy. Mount secrets/nmc-psc-google.json in the active worktree and recreate ai-proxy. Nothing has been reset.',
+      'معرّف Google Sheet موجود، لكن ملف Google Service Account غير مرتبط داخل AI Proxy. اربط secrets/nmc-psc-google.json في نسخة التشغيل الحالية وأعد إنشاء ai-proxy دون مسح البيانات.')}}
+  </div>
   <section class="score-cards">
    <article><span>{{copy('Received incidents','الحوادث المستلمة')}}</span><strong>{{data?.summary?.total ?? '—'}}</strong><small>{{copy('Google Sheet source records','سجلات Google Sheet')}}</small></article>
    <article><span>{{copy('Open / under follow-up','مفتوحة / تحت المتابعة')}}</span><strong>{{data?.summary?.unresolved ?? '—'}}</strong><small>{{copy('Status owned by reporting officers','الحالة يحددها الموظفون')}}</small></article>
-   <article><span>{{copy('A01/A02-informed incidents','حوادث تم تفسيرها باستخدام A01/A02')}}</span><strong>{{assessedCount}}</strong><small>{{copy('Separate incident risk model','نموذج مخاطر خاص بالحوادث')}}</small></article>
-   <article><span>{{copy('High / Critical incident risk','مخاطر الحوادث مرتفعة / حرجة')}}</span><strong>{{urgentCount}}</strong><small>{{copy('Rules-based incident score · not vessel risk','درجة حادث بقواعد NMC، وليست مخاطر السفينة')}}</small></article>
+   <article><span>{{copy('A01/A02-informed incidents','حوادث تم تفسيرها باستخدام A01/A02')}}</span><strong>{{data ? assessedCount : '—'}}</strong><small>{{copy('Separate incident risk model','نموذج مخاطر خاص بالحوادث')}}</small></article>
+   <article><span>{{copy('High / Critical incident risk','مخاطر الحوادث مرتفعة / حرجة')}}</span><strong>{{data ? urgentCount : '—'}}</strong><small>{{copy('Rules-based incident score · not vessel risk','درجة حادث بقواعد NMC، وليست مخاطر السفينة')}}</small></article>
   </section>
   <section class="workbench">
    <aside class="incident-list">
     <div class="list-header">
      <h3>{{copy('Incident Intake Queue','قائمة البلاغات المستلمة')}}</h3>
-     <span class="count">{{filtered.length}}</span>
+     <span class="count">{{data ? filtered.length : '—'}}</span>
     </div>
     <div class="filters">
      <input type="search" [(ngModel)]="search" [placeholder]="copy('Search IMO, vessel or incident','بحث بالسفينة أو IMO أو الحادث')"/>

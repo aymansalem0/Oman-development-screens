@@ -1,5 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {mkdtempSync,mkdirSync,writeFileSync,rmSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
 import {
   NmcIncidentFeed,IncidentTriageError,parseIncidentSheet,validateIncidentAI
 } from '../nmc-incident-feed.mjs';
@@ -242,4 +245,27 @@ test('case persistence unavailable does not trigger expensive repeated analysis'
  assert.equal(second.assessed,0);
  assert.equal(second.casesFailed,1);
  assert.equal(appended.length,1);
+});
+
+test('Google Incident health distinguishes configured spreadsheet from absent or directory-only credential mount',()=>{
+ const dir=mkdtempSync(join(tmpdir(),'moei-incident-creds-'));
+ try{
+  const missing=join(dir,'missing.json');
+  const feed=new NmcIncidentFeed({sheetId:'SHEET-TEST',credentialsPath:missing,
+   agentEnabled:()=>false});
+  assert.equal(feed.health().sourceConfigured,true);
+  assert.equal(feed.health().googleCredentialFileMounted,false);
+  assert.equal(feed.health().sourceStatus,'CREDENTIALS_FILE_MISSING');
+  mkdirSync(missing);
+  assert.equal(feed.health().googleCredentialFileMounted,false);
+  assert.equal(feed.health().sourceStatus,'CREDENTIALS_FILE_MISSING');
+  const key=join(dir,'service-account.json');
+  writeFileSync(key,'{}');
+  const mounted=new NmcIncidentFeed({sheetId:'SHEET-TEST',credentialsPath:key,
+   agentEnabled:()=>false});
+  assert.equal(mounted.health().googleCredentialFileMounted,true);
+  assert.equal(mounted.health().sourceStatus,'READY_TO_FETCH');
+  assert.equal(mounted.health().googleCredentialReadyToAuthenticate,true);
+  assert.equal(JSON.stringify(mounted.health()).includes(key),false);
+ }finally{rmSync(dir,{recursive:true,force:true});}
 });

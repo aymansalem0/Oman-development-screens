@@ -5,7 +5,7 @@
  * No case, detention, port ban, or vessel risk is changed.
  */
 import {createHash,createSign,randomUUID} from 'node:crypto';
-import {readFileSync} from 'node:fs';
+import {readFileSync,existsSync,statSync} from 'node:fs';
 
 const INCIDENT_COLUMNS=[
  'Incident_ID','Source_Type','Source_Organization','Source_Reference',
@@ -219,13 +219,23 @@ export class NmcIncidentFeed {
  get configured(){return !!this.sheetId;}
  get aiConfigured(){return typeof this.executeIncidentAgents==='function'&&
    this.agentEnabled()===true;}
- health(){return {sourceConfigured:this.configured,aiConfigured:this.aiConfigured,
+ get credentialFileMounted(){
+  if(this.credentials)return true; // injected test credentials, not a mount
+  try{return existsSync(this.credentialsPath)&&statSync(this.credentialsPath).isFile();}
+  catch{return false;}
+ }
+ health(){return {sourceConfigured:this.configured,
+   googleCredentialFileMounted:this.credentialFileMounted,
+   googleCredentialReadyToAuthenticate:this.configured&&this.credentialFileMounted,
+   aiConfigured:this.aiConfigured,
    aiProvider:this.provider,scorePolicy:SCORE_VERSION,
    incidentAgentContract:'A01_A02_EXISTING_CONTRACTS_V1',
    incidentGroundingRequirement:'A01_REPORT_EVIDENCE_CITATION_REQUIRED',
    automaticTriageEnabled:this.autoEnabled,
    autoMaxPerCycle:this.autoMaxPerCycle,lastAutoRun:this.lastAutoRun,
-   sourceStatus:this.configured?'READY_TO_FETCH':'NOT_CONFIGURED',
+   sourceStatus:!this.configured?'NOT_CONFIGURED':
+    !this.credentialFileMounted?'CREDENTIALS_FILE_MISSING':'READY_TO_FETCH',
+   credentialDiagnostic:'Mount a real service-account JSON file. Existence is not proof of Google access.',
    realEnforcementEnabled:false,officialVesselRiskAffected:false};}
  async accessToken(){
   if(this.token&&this.token.until>Date.now()+90000)return this.token.value;

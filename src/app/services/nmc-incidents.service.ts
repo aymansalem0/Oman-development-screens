@@ -44,6 +44,9 @@ export interface IncidentFeedResponse{
 }
 export interface IncidentFeedHealth{
   status:'ok';sourceConfigured:boolean;aiConfigured:boolean;
+  googleCredentialFileMounted?:boolean;googleCredentialReadyToAuthenticate?:boolean;
+  sourceStatus?:'NOT_CONFIGURED'|'CREDENTIALS_FILE_MISSING'|'READY_TO_FETCH';
+  credentialDiagnostic?:string;
   aiProvider:string;scorePolicy:string;realEnforcementEnabled:false;
   automaticTriageEnabled?:boolean;autoMaxPerCycle?:number;
   lastAutoRun?:{at:string;assessed:number;failed:number;skipped:number}|null;
