@@ -199,6 +199,8 @@ export class SiRollingPlanStore{
     c01SelectedImos:integratedDraft.selection.roster.map(x=>x.imo),
     pipelineStages:integratedDraft.pipeline.stages,
     capacityExcluded:integratedDraft.pipeline.outsidePlan,
+    officerExclusions:integratedDraft.officerExclusions||[],
+    officerSelectedAlternatives:integratedDraft.officerAdds||[],
     inPlanCount:integratedDraft.pipeline.inPlanCount,
     mandatoryUnscheduled:integratedDraft.mandatoryUnscheduled,
     outsidePlanPeriod:integratedDraft.outsidePeriod,
@@ -222,6 +224,8 @@ export class SiRollingPlanStore{
      c01SelectedImos:integratedDraft.selection.roster.map(x=>x.imo),
      selectedImos:integratedDraft.pipeline.plannedImos,
      capacityExcluded:integratedDraft.pipeline.outsidePlan,
+    officerExclusions:integratedDraft.officerExclusions||[],
+    officerSelectedAlternatives:integratedDraft.officerAdds||[],
      feasible:integratedDraft.proposal.summary.proposed,
      blocked:integratedDraft.proposal.summary.unscheduled}]:[])],
    approvedBatchId:null,approvedVessels:[],approvedBy:null,approvedAt:null};
