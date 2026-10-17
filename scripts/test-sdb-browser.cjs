@@ -191,7 +191,7 @@ const fs = require("node:fs");
   assert.ok(await page.locator(".person-row").count() >= 5);
   // Newly issued sandbox first-issue books have no recorded sea service.
   // Select a pre-existing experienced SDB holder with fixture voyages.
-  await page.locator(".person-row").filter({hasText:"Mariam Al Shamsi"}).click();
+  await page.locator(".person-row").filter({hasText:"SF-003"}).click();
   await page.getByRole("button", {name:"Sea Service History"}).click();
   await page.locator(".leg").first().waitFor();
   assert.ok((await page.locator(".leg-grid").first().innerText()).includes("Engine power"));
