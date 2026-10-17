@@ -152,20 +152,38 @@ interface FieldAiAdvice{
       <label class="file-upload">{{uploadBusy?t('Uploading…','جارٍ الرفع…'):t('＋ Attach Photo / Document','＋ رفع صورة / مستند')}}
        <input type="file" data-testid="si-guided-file" accept="image/png,image/jpeg,application/pdf"
         (change)="uploadEvidence($event)" [disabled]="!canSave||busy||uploadBusy"></label>
-      <ul class="files"><li *ngFor="let file of selectedEvidence">
-       📎 {{file.filename}}
-       <button type="button" *ngIf="file.mimeType.startsWith('image/')"
-        data-testid="si-guided-analyze-image" (click)="analyzeImage(step,file)"
-        [disabled]="!canSave||busy||aiBusy||uploadBusy">
-        {{t('Analyze Image with AI','تحليل الصورة بالذكاء الاصطناعي')}}</button>
-       <small *ngIf="file.mimeType==='application/pdf'">{{t('PDF saved; visual AI only supports images.','تم حفظ PDF؛ التحليل البصري للصور فقط.')}}</small>
-      </li></ul>
-      <article *ngIf="imageReviews[step.stepId] as review" class="advice">
-       <b>{{t('AI suggestions — inspector verification required','توصيات AI — يجب أن يتحقق المفتش')}}</b>
-       <p *ngFor="let result of review.recommendations">
-        {{result.instruction||result.rationale}}
-        <small>{{result.dataGaps.join(' · ')}}</small></p>
-      </article>
+      <ul class="files">
+       <li *ngFor="let file of selectedEvidence" class="image-review-item">
+        <div class="image-file-actions">
+         <span>📎 {{file.filename}}</span>
+         <button type="button" *ngIf="file.mimeType.startsWith('image/')"
+          data-testid="si-guided-analyze-image" (click)="analyzeImage(step,file)"
+          [disabled]="!canSave||busy||aiBusy||uploadBusy">
+          {{imageLoadingKey===imageReviewKey(step.stepId,file.id)?
+           t('Analyzing this image…','جارٍ تحليل هذه الصورة…'):
+           t('Analyze Image with AI','تحليل الصورة بالذكاء الاصطناعي')}}</button>
+         <small *ngIf="file.mimeType==='application/pdf'">
+          {{t('PDF saved; visual AI only supports images.','تم حفظ PDF؛ التحليل البصري للصور فقط.')}}</small>
+        </div>
+        <p class="image-review-error" role="alert"
+           *ngIf="imageReviewErrors[imageReviewKey(step.stepId,file.id)] as photoError">
+          {{t('AI analysis failed for this image','فشل تحليل هذه الصورة')}}: {{photoError}}
+        </p>
+        <article *ngIf="imageReviews[imageReviewKey(step.stepId,file.id)] as review"
+           class="advice image-review-result"
+           [attr.data-evidence-id]="file.id"
+           data-testid="si-guided-image-advice">
+         <b>{{t('AI suggestions for','توصيات AI للصورة')}} {{file.filename}} —
+            {{t('inspector verification required','تتطلب تحقق المفتش')}}</b>
+         <small>{{t('Source image','الصورة المصدر')}}: {{review.reviewedEvidence}}
+          · {{t('Advisory only — no official finding created',
+            'استشاري فقط — لم يتم إنشاء مخالفة رسمية')}}</small>
+         <p *ngFor="let result of review.recommendations">
+          {{result.instruction||result.rationale}}
+          <small>{{result.dataGaps.join(' · ')}}</small></p>
+        </article>
+       </li>
+      </ul>
      </section>
      <form (ngSubmit)="save()" class="answer">
       <h3>4 · {{t('Your own inspection observations','سجل نتيجة معاينتك بنفسك')}}</h3>
@@ -281,6 +299,11 @@ interface FieldAiAdvice{
  .file-upload{position:relative;display:inline-block;background:#087e7b;color:white;
   font-size:12px;font-weight:800;padding:12px;border-radius:8px;cursor:pointer}
  .file-upload input{position:absolute;opacity:0;width:1px;height:1px;pointer-events:none}
+ .image-review-item{display:block!important}
+ .image-file-actions{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+ .image-review-result{width:100%;margin:12px 0 4px}
+ .image-review-error{width:100%;padding:10px;border:1px solid #e8beb8;
+  color:#a23e38;background:#fff5f3;border-radius:8px;font-size:11px;overflow-wrap:anywhere}
  .files{padding:0;list-style:none;font-size:12px}.files li{padding:9px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;border-bottom:1px solid #dce9ee}
  .closeout{background:#fff;border:1px solid #dce8ed;border-radius:16px;padding:24px;margin-top:20px}
  .closeout p{font-size:12px}.final-numbers{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:15px 0}
