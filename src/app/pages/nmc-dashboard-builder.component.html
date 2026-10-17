@@ -236,6 +236,53 @@
             </p>
           </section>
 
+          <section class="db-panel" data-testid="ai-dashboard-designer">
+            <h3>✦ {{copy('Generate Dashboard with AI','إنشاء لوحة معلومات بالذكاء الاصطناعي')}}</h3>
+            <p>{{copy('Describe business questions. AI proposes available widgets and NEW KPIs with sources and formulas.',
+              'اكتب احتياجات الأعمال. يقترح AI مؤشرات موجودة وجديدة مع مصادرها ومعادلات حسابها.')}}</p>
+            <textarea [(ngModel)]="aiPrompt" rows="4" maxlength="2000"
+              [placeholder]="copy('Example: Plan inspection KPIs, overdue CAPA, and average vessel inspection duration.',
+                'مثال: مؤشرات خطط المعاينات والإجراءات التصحيحية المتأخرة ومتوسط مدة المعاينة.')"></textarea>
+            <p *ngIf="aiStatus&&!aiStatus.enabled" class="db-message">
+              {{copy('AI Dashboard Design is disabled in AI Settings. Enable it to make a paid, explicit request.',
+                'تصميم اللوحات بالذكاء الاصطناعي غير مفعل. يمكن تفعيله من إعدادات AI قبل أي طلب مدفوع.')}}</p>
+            <p *ngIf="aiStatus&&!aiStatus.contractVerified" class="db-message">
+              {{copy('NMC Desk JSON response contract is not yet verified; proposals require review.',
+                'لم يتم اعتماد توافق JSON مع NMC Desk بعد؛ المقترحات تتطلب المراجعة.')}}</p>
+            <button type="button" class="db-primary" (click)="generateDashboardAi()"
+              [disabled]="aiBusy||!aiPrompt.trim()||aiStatus?.enabled===false">
+              ✦ {{aiBusy?copy('Generating…','جارٍ الاقتراح…'):
+                copy('Suggest Dashboard & New Metrics','اقترح لوحة ومؤشرات جديدة')}}</button>
+            <p *ngIf="aiError" class="db-error">{{aiError}}</p>
+            <div *ngIf="aiProposal as suggestion" class="db-panel">
+              <h4>{{suggestion.title}}</h4>
+              <p>{{suggestion.description}}</p>
+              <p>{{suggestion.widgets.length}} {{copy('available widgets','مؤشرات متاحة')}} ·
+                {{suggestion.proposedMetrics.length}} {{copy('new metric specifications','مؤشرات جديدة مقترحة')}}</p>
+              <div *ngFor="let metric of suggestion.proposedMetrics" class="db-board-meta">
+                <strong>{{metric.title}}</strong>
+                <p>{{copy('Suggested source','المصدر المقترح')}}: {{metric.sourceKey}} / {{metric.sourceEntity}}</p>
+                <p>{{copy('Calculation','طريقة الحساب')}}: {{metric.method}} — {{metric.formula}}</p>
+                <small>{{copy('NOT CONNECTED · Requires data-owner verification',
+                  'غير مرتبط بالبيانات · يحتاج اعتماد الجهة المالكة')}}</small>
+              </div>
+              <p *ngIf="suggestion.warnings.length" class="db-message">
+                {{copy('Some unsupported AI suggestions were omitted.','تم استبعاد بعض المقترحات غير المدعومة.')}}</p>
+              <button type="button" class="db-primary" (click)="applyDashboardAi()">
+                {{copy('Apply to Current Draft','تطبيق على المسودة الحالية')}}</button>
+            </div>
+            <div *ngIf="board.proposedMetrics?.length" class="db-board-meta">
+              <h4>{{copy('Unbound KPIs retained in this draft','مؤشرات جديدة تنتظر ربط البيانات')}}</h4>
+              <div *ngFor="let proposed of board.proposedMetrics">
+                <strong>{{proposed.title}}</strong>
+                <p>{{proposed.sourceKey}} → {{proposed.sourceEntity}} · {{proposed.method}}</p>
+                <p>{{proposed.formula}}</p>
+                <small>{{copy('Unverified source mapping — not displayed as live KPI.',
+                  'مصدر لم يتم اعتماده؛ لن يُعرض كمؤشر تشغيلي حقيقي.')}}</small>
+              </div>
+            </div>
+          </section>
+
           <section class="db-panel">
             <h3>{{copy('Widget Library','مكتبة المؤشرات')}}</h3>
             <p>{{copy('Add new business indicators to the canvas.','أضف مؤشرات الأعمال إلى مساحة التصميم.')}}</p>
