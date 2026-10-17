@@ -110,12 +110,22 @@ export interface NmcCentralCase {
   operationalRisk?:{score:number;level:string;assessmentId:string;
     previousScore:number|null;previousLevel:string|null;sourceInspectionId:string;
     sourceReportId:string;evidenceId:string;policyVersion:string;updatedAt:string;
-    provisional:true;regulatoryDecision:false}|null;
+    provisional:true;regulatoryDecision:false;
+    factorAttribution?:{findingId:string;title:string;severity:string;
+      factors:string[]}[]}|null;
   postInspectionRiskHistory?:{eventId:string;inspectionId:string;reportId:string;
     assessmentId:string;previousAssessmentId:string|null;previousScore:number|null;
     previousLevel:string|null;newScore:number;newLevel:string;
     policyVersion:string;evidenceId:string;factorChanges:{
-      factor:string;previous:number|null;current:number;evidenceIds:string[]}[];
+      factor:string;previous:number|null;current:number;evidenceIds:string[];
+      sourceAgent?:string;confidence?:number;reason?:string}[];
+    findingFactorAttribution?:{
+      findingId:string;checkId:string|null;title:string;severity:string;
+      description:string;findingEvidenceId:string;sourceEvidenceRefs:string[];
+      attributionStatus:string;linkedFactors:{
+        factor:string;sourceAgent:string;factorSeverity:number;
+        confidence:number;reason:string;sourceEvidenceId:string}[];
+    }[];
     calculatedAt:string;officialRegulatoryDecision:false}[];
   actionPlan?:NmcAiActionPlan|null;
   operationalDecision?:NmcOperationalDecision|null;
