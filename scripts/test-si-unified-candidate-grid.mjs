@@ -102,3 +102,27 @@ test('Inspection Candidate & Targeting is the FIRST Smart Inspection menu screen
  assert.ok(sub.includes('routerLink="/moei/smart-inspection/candidates"'),
   'Candidate targeting should lead the Smart Inspection submenu');
 });
+
+
+test('saved capacity and inspector assignments are a native, collapsed-by-default disclosure',()=>{
+ const start=html.indexOf('<details *ngIf="plan?.capacityDraft as cap"');
+ const end=html.indexOf('</details>',start);
+ assert.ok(start>=0&&end>start,
+  'Saved Draft section must be wrapped in native accessible details');
+ const body=html.slice(start,end);
+ assert.match(body,/data-testid="si-saved-capacity-details"/);
+ assert.match(body,/<summary class="si-saved-capacity-summary"/);
+ assert.match(body,/data-testid="si-saved-capacity-toggle"/);
+ assert.doesNotMatch(body,/<details[^>]+\\sopen(?:=|[ >])/,
+  'the long capacity section must start collapsed');
+ for(const required of [
+  "cap.status","cap.generatedAt","cap.selectedImos.length",
+  "cap.proposedAssignments.length","cap.mandatoryUnscheduled.length",
+  "cap.capacityExcluded?.length","cap.unscheduled.length",
+  'class="si-draft-saved-assignments"','class="si-draft-stats"',
+  'Show details','Hide details'
+ ])assert.ok(body.includes(required),'missing saved capacity content '+required);
+ assert.match(css,/\\.si-saved-capacity-summary:focus-visible/);
+ assert.match(css,/\\.si-saved-capacity-details\\[open\\]/);
+ assert.match(css,/@media\\(max-width:760px\\)/);
+});
