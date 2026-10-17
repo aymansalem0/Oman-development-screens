@@ -49,6 +49,8 @@ jobs:
         run: node --test scripts/test-si-my-inspections-boundary.mjs
       - name: Guided Inspection finish conflict and confirmed submission regression
         run: node --test scripts/test-si-guided-finish-version-conflict.mjs
+      - name: Guided Inspector missing finding documentation guard
+        run: node --test scripts/test-si-guided-finding-documentation.mjs
 
       - name: MOEI single Admin login and UI regression
         run: node --test scripts/test-moei-admin-login-ui.mjs
