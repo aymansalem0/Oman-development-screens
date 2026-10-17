@@ -108,7 +108,8 @@ test('AI proposal produces live preview cards and accepted editable unbound metr
  const api=readFileSync(new URL('../dashboard-workspace.mjs',import.meta.url),'utf8');
  assert.match(template,/\*ngFor="let proposed of previewProposedMetrics/);
  assert.match(template,/dashboard-proposed-card-/);
- assert.match(template,/\*ngFor="let widget of previewWidgets/);
+ assert.match(template,/\*ngFor="let widget of visiblePreviewWidgets/);
+ assert.match(component,/get visiblePreviewWidgets\(\):DashboardWidget\[\]/);
  assert.match(template,/previewCardsCount/);
  assert.match(template,/\(click\)="applyDashboardAi\(\)"/);
  assert.match(template,/NEW METRIC · SOURCE NOT CONNECTED/);
