@@ -374,6 +374,12 @@ export class SiCandidateWorkbenchComponent implements OnInit,OnDestroy{
   isDraftAlternativeSelected(imo:string):boolean{
     return this.newDraftOfficerAdds.some(v=>v.imo===imo);
   }
+  selectedDraftAlternative(imo:string):DraftOfficerAdd|undefined{
+    return this.newDraftOfficerAdds.find(v=>v.imo===imo);
+  }
+  draftSelectionReasonChanged():void{
+    this.newDraftSelectionChanged=true;this.draftVisitsChanged();
+  }
   toggleDraftAlternative(v:DraftManualAlternative,selected:boolean):void{
     this.planningError='';
     if(!selected){this.newDraftOfficerAdds=this.newDraftOfficerAdds.filter(x=>x.imo!==v.imo);}
