@@ -1,6 +1,7 @@
 import { NmcNavigationComponent } from '../components/nmc-navigation.component';
 import { CommonModule } from '@angular/common';
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, OnDestroy } from '@angular/core';
+import {Subscription,timer,switchMap,take} from 'rxjs';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { NmcVesselProfile } from '../data/nmc-vessel-catalog';
@@ -59,7 +60,7 @@ interface Stakeholder {
   templateUrl: './nmc-case-workspace.component.html',
   styleUrl: './nmc-case-workspace.component.css'
 })
-export class NmcCaseWorkspaceComponent implements OnInit {
+export class NmcCaseWorkspaceComponent implements OnInit, OnDestroy {
   vessel!: NmcVesselProfile;
   vesselProfileUnavailable=false;
   caseStatus: CaseStatus = 'Open';
@@ -69,6 +70,17 @@ export class NmcCaseWorkspaceComponent implements OnInit {
   siPostInspectionRisk:NmcSiPostInspectionRiskStatus|null=null;
   siRiskStatusLoading=false;
   siRiskStatusError=false;
+  siRiskRetryBusy=false;
+  siRiskPolling=false;
+  siRiskRetryNotice='';
+  private siRiskPoll:Subscription|null=null;
+  get canRetrySiPostInspectionRisk():boolean{
+    return !!this.siPostInspectionRisk?.inspectionId &&
+      ['FAILED','INTERRUPTED_REVIEW_BEFORE_RETRY',
+       'RISK_SAVED_NMC_SYNC_FAILED'].includes(this.siPostInspectionRisk.jobStatus) &&
+      !this.siRiskRetryBusy && !this.siRiskPolling;
+  }
+  ngOnDestroy():void{this.siRiskPoll?.unsubscribe();}
   get isSiCaseWithoutOriginalAssessment():boolean{
     return this.centralCase?.source==='SI_APPROVED_INSPECTION'&&
       !this.centralCase.sourceAssessmentId;
@@ -183,6 +195,97 @@ export class NmcCaseWorkspaceComponent implements OnInit {
       error:error=>{
         this.centralLoading=false;
         this.centralError=this.cases.readableError(error,this.lang.isArabic);
+      }
+    });
+  }
+
+
+  refreshSiPostInspectionRisk():void{
+    const id=this.centralCase?.id;
+    if(!id||this.siRiskStatusLoading)return;
+    this.siRiskStatusLoading=true;this.siRiskStatusError=false;
+    this.cases.siPostInspectionRiskStatus(id).subscribe({
+      next:status=>{
+        if(this.centralCase?.id!==id)return;
+        this.siPostInspectionRisk=status;this.siRiskStatusLoading=false;
+        if(status.jobStatus==='COMPLETED')this.loadCentralCase();
+      },
+      error:()=>{
+        if(this.centralCase?.id!==id)return;
+        this.siRiskStatusError=true;this.siRiskStatusLoading=false;
+      }
+    });
+  }
+
+  retrySiPostInspectionRisk():void{
+    const current=this.centralCase;
+    const status=this.siPostInspectionRisk;
+    if(!current||!status?.inspectionId||!this.canRetrySiPostInspectionRisk)return;
+    const needsPaidCalls=!status.job?.riskSaved;
+    const message=needsPaidCalls
+      ?this.copy(
+        'Run A01 and A02 again on this EXACT supervisor-approved Smart Inspection report? This is TWO new potentially BILLABLE Airia pipeline calls. Existing source assessments and regulatory decisions will not be changed. Continue?',
+        'هل تريد إعادة استدعاء A01 وA02 لتقرير المعاينة المعتمد نفسه؟ قد ينفذ طلبان جديدان مدفوعا التكلفة عبر Airia. لن يتم تعديل تقييمات المصادر الأصلية أو القرارات الرقابية. هل توافق؟')
+      :this.copy(
+        'Retry linking the SAVED AI risk assessment to this NMC Case? No new AI call is needed.',
+        'إعادة ربط تقييم المخاطر المحفوظ بهذه القضية؟ لا يلزم استدعاء AI جديد.');
+    if(!window.confirm(message))return;
+    this.siRiskRetryBusy=true;this.siRiskRetryNotice='';
+    const caseId=current.id;
+    this.cases.retrySiPostInspectionRisk(status.inspectionId,needsPaidCalls)
+      .subscribe({
+        next:result=>{
+          if(this.centralCase?.id!==caseId)return;
+          this.siRiskRetryBusy=false;
+          this.siRiskRetryNotice=this.copy(
+            'A01/A02 risk job queued. Waiting for validated factor results. This may take a few minutes.',
+            'تمت جدولة مهمة A01/A02؛ جار انتظار نتائج العوامل بعد التحقق. قد يستغرق ذلك عدة دقائق.');
+          this.siPostInspectionRisk={...status,jobStatus:result.job.status};
+          this.pollSiPostInspectionRisk(caseId);
+        },
+        error:error=>{
+          if(this.centralCase?.id!==caseId)return;
+          this.siRiskRetryBusy=false;
+          this.centralError=this.cases.readableError(error,this.lang.isArabic);
+        }
+      });
+  }
+
+  private pollSiPostInspectionRisk(caseId:string):void{
+    this.siRiskPoll?.unsubscribe();
+    this.siRiskPolling=true;
+    let checks=0;
+    this.siRiskPoll=timer(2500,6500).pipe(
+      take(40),
+      switchMap(()=>this.cases.siPostInspectionRiskStatus(caseId))
+    ).subscribe({
+      next:result=>{
+        if(this.centralCase?.id!==caseId){
+          this.siRiskPoll?.unsubscribe();this.siRiskPolling=false;return;
+        }
+        this.siPostInspectionRisk=result;
+        checks++;
+        if(['COMPLETED','FAILED','RISK_SAVED_NMC_SYNC_FAILED',
+          'INTERRUPTED_REVIEW_BEFORE_RETRY'].includes(result.jobStatus)){
+          this.siRiskPoll?.unsubscribe();this.siRiskPolling=false;
+          this.siRiskRetryNotice=result.jobStatus==='COMPLETED'
+            ?this.copy('Five-factor AI risk reassessment saved to NMC Case.',
+              'تم حفظ تقييم المخاطر بالعوامل الخمسة في قضية NMC.')
+            :this.copy('AI attempt stopped. Review the exact recorded failure before another paid call.',
+              'توقفت المحاولة. راجع سبب الفشل المسجل قبل أي استدعاء مدفوع جديد.');
+          if(result.jobStatus==='COMPLETED')this.loadCentralCase();
+        }else if(checks===40){
+          this.siRiskPolling=false;
+          this.siRiskRetryNotice=this.copy(
+            'Risk processing is still pending. Use Refresh status to check without starting another AI call.',
+            'إعادة التقييم لا تزال قيد التنفيذ؛ استخدم تحديث الحالة دون بدء استدعاء AI جديد.');
+        }
+      },
+      error:()=>{
+        this.siRiskPolling=false;
+        this.siRiskRetryNotice=this.copy(
+          'Status polling stopped. Use Refresh status; do not repeat the paid AI call.',
+          'توقف فحص الحالة. استخدم تحديث الحالة ولا تكرر طلب AI المدفوع.');
       }
     });
   }
