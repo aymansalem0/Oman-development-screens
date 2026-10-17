@@ -2,6 +2,7 @@ import { randomUUID, timingSafeEqual } from 'node:crypto';
 import { mkdirSync, existsSync, readFileSync, writeFileSync, renameSync } from 'node:fs';
 import { dirname } from 'node:path';
 import oracledb from 'oracledb';
+import {DESIGN_SOURCES} from './dashboard-ai-designer.mjs';
 
 export class DashboardError extends Error {
   constructor(code, status=400) { super(code); this.code=code; this.status=status; }
@@ -80,6 +81,32 @@ function normalize(input,{id,status='DRAFT',version=1}={}){
       }:{})
     };
   });
+  // Specifications only: never execute queries or render an unbound metric.
+  const incoming=input.proposedMetrics??[];
+  if(!Array.isArray(incoming)||incoming.length>20)
+    throw new DashboardError('DASHBOARD_UNBOUND_METRICS_LIMIT');
+  const allowedSources=new Set(DESIGN_SOURCES.map(s=>s.key));
+  const allowedMethods=new Set(['COUNT','COUNT_DISTINCT','SUM','AVERAGE','RATIO','DURATION','GROUP_COUNT','LATEST']);
+  const proposedIds=new Set();
+  const proposedMetrics=incoming.map(m=>{
+    if(!m||typeof m!=='object'||Array.isArray(m)||
+       typeof m.id!=='string'||!/^[A-Za-z][A-Za-z0-9_-]{2,63}$/.test(m.id)||
+       proposedIds.has(m.id)||!['kpi','bar','table','position'].includes(m.type)||
+       typeof m.title!=='string'||!m.title.trim()||m.title.length>100||
+       !allowedSources.has(m.sourceKey)||!allowedMethods.has(m.method)||
+       typeof m.formula!=='string'||!m.formula.trim()||m.formula.length>300||
+       !Array.isArray(m.fields)||m.fields.length>15||
+       m.fields.some(f=>typeof f!=='string'||!/^[A-Za-z][A-Za-z0-9_.]{0,79}$/.test(f)))
+      throw new DashboardError('DASHBOARD_UNBOUND_METRIC_INVALID');
+    proposedIds.add(m.id);
+    const limit=(v,n)=>typeof v==='string'?v.trim().slice(0,n):'';
+    return {id:m.id,title:m.title.trim(),type:m.type,sourceKey:m.sourceKey,
+      sourceEntity:limit(m.sourceEntity,100),fields:m.fields,method:m.method,
+      formula:m.formula.trim(),grouping:limit(m.grouping,100),
+      filters:limit(m.filters,200),rationale:limit(m.rationale,450),
+      status:'SOURCE_MAPPING_REQUIRED',dataNature:'UNVERIFIED_PROPOSAL',
+      executable:false};
+  });
   const f=input.filters;
   if(!f||typeof f!=='object'||!RISK.includes(f.risk)||
      typeof f.type!=='string'||f.type.length>80||
@@ -91,7 +118,7 @@ function normalize(input,{id,status='DRAFT',version=1}={}){
     throw new DashboardError('DASHBOARD_MENU_PLACEMENT_INVALID');
   return {
     id,status,version,title,description,menuPlacement:menuPlacementOf(input),
-    updatedAt:now(),widgets:safeWidgets,
+    updatedAt:now(),widgets:safeWidgets,proposedMetrics,
     filters:{risk:f.risk,type:f.type,flag:f.flag,search:f.search}
   };
 }
@@ -291,7 +318,7 @@ export class DashboardWorkspace {
     });
     const contentOf=row=>JSON.stringify({
       title:row.title,description:row.description,
-      menuPlacement:row.menuPlacement,widgets:row.widgets,filters:row.filters
+      menuPlacement:row.menuPlacement,widgets:row.widgets,proposedMetrics:row.proposedMetrics,filters:row.filters
     });
     if(contentOf(next)===contentOf(normalizedLive))
       throw new DashboardError('DASHBOARD_REVISION_UNCHANGED',409);
