@@ -10,6 +10,8 @@ import { ActivityClassificationMappingComponent } from './pages/activity-classif
 const base = 'dashboard/maritime-navigation/navigation-aids-installation-approval';
 
 const rawRoutes: Routes = [
+  // SAMPLE eSDB QR check: public read-only page; other MOEI/SDB routes remain guarded.
+  { path: 'esdb/verify/:reference', loadComponent: () => import('./pages/moei-esdb-specimen-verify.component').then(m => m.MoeiEsdbSpecimenVerifyComponent) },
   { path: 'moei/seafarers', redirectTo: 'moei/seafarers/services', pathMatch: 'full' },
   { path: 'moei/seafarers/readiness', data:{view:'readiness'}, loadComponent: () => import('./pages/moei-seafarer-readiness.component').then(m => m.MoeiSeafarerReadinessComponent) },
   { path: 'moei/seafarers/services', loadComponent: () => import('./pages/moei-sdb-customer-services.component').then(m => m.MoeiSdbCustomerServicesComponent) },
