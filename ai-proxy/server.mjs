@@ -537,7 +537,7 @@ async function assignedGuidedView(sessionActor,orderId){
      .map(x=>({...x,reference:'SI-GUIDED:'+x.id}));
    guide.evidenceByStep[step.stepId]=[...canonical,...legacy];
  }
- guide.finalAssessment=guidedFinalAssessment(guide);
+ guide.finalAssessment=guidedFinalAssessment(guide,lifecycle.record);
  return {schedule,order,preparation,checklist,lifecycle,guide};
 }
 const actionPlanRuns=new Set(); // process-local duplicate A01 invocation guard; version-lock remains authoritative
@@ -2273,6 +2273,15 @@ const server = createServer(async (req, res) => {
               });
             }
             const assessment=current.guide.finalAssessment;
+            // Check saved lifecycle deficiencies BEFORE completing any pinned
+            // checklist snapshot. This preserves the unsubmitted case if notes
+            // or mandatory MAJOR/CRITICAL evidence are still absent.
+            if(assessment.missingFindingRequirements?.length)
+              return respond(res,409,{
+                error:'SI_FINDING_NOTE_AND_EVIDENCE_REQUIRED',
+                missingFindingRequirements:assessment.missingFindingRequirements,
+                submissionPerformed:false
+              });
             if(!assessment.canSubmit)
               return respond(res,409,{error:'SI_GUIDED_MANDATORY_STEPS_INCOMPLETE',assessment});
             if(current.checklist.saved?.templates?.length&&
