@@ -265,3 +265,24 @@ export function projectA04FocusedFieldAdvice(validated,step){
   inspectorMustVerify:true,findingsCreated:0,answersSaved:0
  };
 }
+
+/** Deterministic outcome, never an autonomous AI or regulatory decision.
+ * A finding remains open until independently verified and closed. */
+export function guidedFinalAssessment(guide){
+ const steps=Array.isArray(guide?.steps)?guide.steps:[];
+ const incomplete=steps.filter(s=>!s.answered&&
+  (s.mandatory||s.members?.some(m=>m.kind==='LIFECYCLE')));
+ const deficiencies=steps.filter(s=>s.currentStatus==='DEFICIENCY');
+ const awaitingReview=steps.filter(s=>s.currentStatus==='NA');
+ const outcome=incomplete.length?'INCOMPLETE':
+  deficiencies.length?'OPEN_DEFICIENCIES':'NO_RECORDED_DEFICIENCIES_PENDING_REVIEW';
+ return {outcome,total:steps.length,recorded:steps.filter(s=>s.answered).length,
+  incomplete:incomplete.map(s=>({stepId:s.stepId,title:s.title})),
+  open: deficiencies.map(s=>({stepId:s.stepId,title:s.title,
+    severity:s.severity||'UNASSESSED'})),
+  notApplicable:awaitingReview.length,
+  canSubmit:incomplete.length===0&&steps.length>0,
+  officialApproval:false,inspectorMustConfirm:true,
+  aiStatus:'NOT_AUTOMATICALLY_INVOKED',
+  note:'No automatic compliance decision. Missing evidence must be reviewed. An independent supervisor reviews the submitted inspection report.'};
+}
