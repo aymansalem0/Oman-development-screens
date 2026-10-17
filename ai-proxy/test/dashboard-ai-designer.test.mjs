@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {buildDashboardAiPrompt,validateDashboardAiDesign,DashboardAiDesignError}
+import {readFileSync,existsSync} from 'node:fs';
+import {buildDashboardAiPrompt,validateDashboardAiDesign,DashboardAiDesignError,NMC_INCIDENT_SOURCE_SCHEMA}
  from '../dashboard-ai-designer.mjs';
 const catalog={kpi:['vesselCount'],bar:['byRisk'],table:['vesselTable'],position:[]};
 const context={metricCatalog:catalog,placement:'NMC_CENTER'};
@@ -39,4 +40,61 @@ test('request sends only vetted metric names and review constraints to AI',()=>{
  assert.equal(request.allowedExistingWidgets.kpi[0],'vesselCount');
  assert.match(request.instructions.join(' '),/Never query databases/);
  assert.throws(()=>buildDashboardAiPrompt('short','NMC_CENTER',catalog),/DASHBOARD_AI_PROMPT_INVALID/);
+});
+
+test('Dashboard AI knows actual Google Sheets incident columns, not fictitious Oracle tables',()=>{
+ const prompt=buildDashboardAiPrompt(
+   'Create NMC incident response metrics by type and operational status',
+   'NMC_CENTER',catalog,{incidentSourceConfigured:true});
+ const source=prompt.verifiedSourceSchemas.find(s=>s.key==='NMC_INCIDENTS_GOOGLE_SHEETS');
+ assert.equal(source.transport,'GOOGLE_SHEETS_API');
+ assert.equal(source.dataNature,'SYNTHETIC_POC');
+ assert.equal(source.sourceConfigured,true);
+ assert.equal(source.liveFetchVerified,false);
+ assert.ok(source.tables.Incident_Registry.includes('Operational_Status'));
+ assert.ok(source.tables.Incident_Registry.includes('Incident_Type'));
+ assert.ok(source.tables.AI_Assessments.includes('Officer_Decision'));
+ assert.equal(source.incidentRiskIsVesselRisk,false);
+ assert.ok(!JSON.stringify(prompt).includes('Incident_Description":"'));
+ const cold=buildDashboardAiPrompt(
+   'Create NMC incident dashboard proposals without reading source rows',
+   'NMC_CENTER',catalog);
+ assert.equal(cold.verifiedSourceSchemas[0].sourceConfigured,false);
+ assert.equal(cold.verifiedSourceSchemas[0].liveFetchVerified,false);
+ assert.equal(NMC_INCIDENT_SOURCE_SCHEMA.tables.Incident_Registry.length,26);
+});
+test('Incident KPI proposal is retained only with exact Google Sheet fields',()=>{
+ const proposal={
+  id:'openIncidentCount',title:'Open incidents',type:'kpi',
+  sourceKey:'NMC_INCIDENTS_GOOGLE_SHEETS',sourceEntity:'Incident_Registry',
+  fields:['Incident_ID','Operational_Status'],method:'COUNT_DISTINCT',
+  formula:'Distinct Incident_ID excluding RESOLVED and CLOSED',
+  filters:'Operational_Status NOT IN RESOLVED,CLOSED',rationale:'Track open incident cases'};
+ const result=validateDashboardAiDesign({
+  title:'NMC Incident Situation',widgets:[],newMetrics:[
+    proposal,
+    {...proposal,id:'fictitious',fields:['incident_status_oracle']},
+    {...proposal,id:'fictitiousJoin',sourceEntity:'NON_EXISTENT_TABLE'},
+    {...proposal,id:'aiReviewed',sourceEntity:'AI_Assessments',
+       fields:['Incident_ID','Assessment_Status'],formula:'Reviewed assessment count'}
+  ]},context);
+ assert.equal(result.proposedMetrics.length,2);
+ assert.equal(result.proposedMetrics[0].sourceKey,'NMC_INCIDENTS_GOOGLE_SHEETS');
+ assert.equal(result.proposedMetrics[0].executable,false);
+ assert.deepEqual(result.warnings,[
+  'NMC_INCIDENT_FIELD_NOT_IN_GOOGLE_SHEET_CONTRACT',
+  'NMC_INCIDENT_FIELD_NOT_IN_GOOGLE_SHEET_CONTRACT']);
+});
+
+test('AI Dashboard Designer flag is visible in governance and linked from the designer UI',()=>{
+ // The compact AI-proxy Docker image intentionally does not contain Angular sources.
+ // Validate the UI contract when testing from the full repository checkout.
+ const uiFile=new URL('../../src/app/pages/nmc-runtime-settings.component.ts',import.meta.url);
+ if(!existsSync(uiFile))return;
+ const governance=readFileSync(uiFile,'utf8');
+ const builder=readFileSync(new URL('../../src/app/pages/nmc-dashboard-builder.component.html',import.meta.url),'utf8');
+ assert.match(governance,/id:'agent-dashboard-designer'.*keys:\['NMC_DASHBOARD_AI_DESIGN_ENABLED'\]/);
+ assert.match(builder,/routerLink="\/moei\/settings\/ai-governance"/);
+ assert.match(builder,/useIncidentsPrompt\(\)/);
+ assert.match(builder,/refreshAiDesignStatus\(\)/);
 });

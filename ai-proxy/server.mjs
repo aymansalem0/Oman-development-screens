@@ -14,7 +14,7 @@ import { FleetAssessmentManager } from './fleet-ai.mjs';
 import {airiaDemoVessels,AIRIA_DEMO_COHORT,AIRIA_DEMO_99_IMOS} from './airia-demo-cohort.mjs';
 import { FleetAutoScheduler } from './fleet-scheduler.mjs';
 import { DashboardWorkspace, DashboardError, SI_DASHBOARD_METRICS } from './dashboard-workspace.mjs';
-import {buildDashboardAiPrompt,validateDashboardAiDesign,DashboardAiDesignError,DESIGN_SOURCES} from './dashboard-ai-designer.mjs';
+import {buildDashboardAiPrompt,validateDashboardAiDesign,DashboardAiDesignError,DESIGN_SOURCES,NMC_INCIDENT_SOURCE_SCHEMA} from './dashboard-ai-designer.mjs';
 import {classifySiApprovalFailure} from './si-approval-diagnostics.mjs';
 import {DashboardAiFocus,DashboardFocusError,selectDashboardFocusVessel} from './nmc-dashboard-focus.mjs';
 import { NmcAlertWorkspace, NmcAlertError } from './alert-workspace.mjs';
@@ -2991,7 +2991,11 @@ const server = createServer(async (req, res) => {
     return respond(res,200,{status:'ok',enabled:runtime.get('NMC_DASHBOARD_AI_DESIGN_ENABLED'),
       provider:'AIRIA_NMC_DESK',pipelineConfigured:Boolean(runtime.get('AIRIA_NMC_DESK_PIPELINE_ID')),
       keyConfigured:Boolean(getAiriaKey()),contractVerified:false,
-      allowedSources:DESIGN_SOURCES,automaticCalls:false});
+      allowedSources:DESIGN_SOURCES,automaticCalls:false,
+      incidentSource:{key:NMC_INCIDENT_SOURCE_SCHEMA.key,
+        configured:incidentFeed.configured,transport:'GOOGLE_SHEETS_API',
+        dataNature:'SYNTHETIC_POC',connectionChecked:false,
+        incidentRiskIsVesselRisk:false}});
   }
   if(path==='/api/ai/dashboards/ai-design'&&req.method==='POST'){
     try{
@@ -3008,7 +3012,8 @@ const server = createServer(async (req, res) => {
         bar:[...new Set(['byRisk','byFlag','byType','byZone',...SI_DASHBOARD_METRICS.bar])],
         table:['vesselTable',...SI_DASHBOARD_METRICS.table],position:['vesselPositions']
       };
-      const request=buildDashboardAiPrompt(body.prompt,body.placement,metricCatalog);
+      const request=buildDashboardAiPrompt(body.prompt,body.placement,
+        metricCatalog,{incidentSourceConfigured:incidentFeed.configured});
       let raw;
       try{
         const reply=await fetch(runtime.get('AIRIA_BASE_URL')+'/v1/PipelineExecution/'+
@@ -3023,8 +3028,13 @@ const server = createServer(async (req, res) => {
       }catch{
         return respond(res,502,{error:'DASHBOARD_AI_PROVIDER_UNAVAILABLE'});
       }
-      return respond(res,200,validateDashboardAiDesign(raw,{
-        metricCatalog,placement:body.placement}));
+      const proposal=validateDashboardAiDesign(raw,{
+        metricCatalog,placement:body.placement});
+      return respond(res,200,{...proposal,incidentSource:{
+        key:NMC_INCIDENT_SOURCE_SCHEMA.key,
+        configured:incidentFeed.configured,dataNature:'SYNTHETIC_POC',
+        rowDataTransferredToAgent:false,sourceExecutionEnabled:false
+      }});
     }catch(error){
       if(error instanceof DashboardAiDesignError||error instanceof DashboardError||
          error instanceof MoeiAuthError)

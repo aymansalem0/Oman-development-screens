@@ -2,6 +2,7 @@
 export class DashboardAiDesignError extends Error{constructor(code,status=422){super(code);this.code=code;this.status=status;}}
 export const DESIGN_SOURCES=Object.freeze([
  {key:'NMC_FLEET',label:'NMC vessel and risk assessments'},
+ {key:'NMC_INCIDENTS_GOOGLE_SHEETS',label:'NMC Incident Registry in Google Sheets, SYNTHETIC_POC source data and separately reviewed AI assessments'},
  {key:'SI_WORK_ORDERS',label:'Smart Inspection plans and work orders'},
  {key:'SI_FIELD_FINDINGS',label:'Inspector-confirmed findings and CAPA'},
  {key:'SDB_READINESS',label:'Seafarer readiness sandbox or approved real service'},
@@ -11,6 +12,49 @@ export const DESIGN_SOURCES=Object.freeze([
  {key:'LEGISLATION',label:'Maritime legislation'},
  {key:'EXTERNAL',label:'External approved source'}
 ]);
+/** Read-only schema contract, NOT Google Sheet rows or a claim of live availability.
+ * Incident_Registry is the POC source of operational incident status.
+ * AI_Assessments contains separately produced assessments, not verified facts.
+ */
+export const NMC_INCIDENT_SOURCE_SCHEMA=Object.freeze({
+  key:'NMC_INCIDENTS_GOOGLE_SHEETS',
+  transport:'GOOGLE_SHEETS_API',
+  dataNature:'SYNTHETIC_POC',
+  dashboardReadEndpoint:'/api/ai/nmc/incidents',
+  incidentRiskIsVesselRisk:false,
+  tables:{
+    Incident_Registry:[
+      'Incident_ID','Source_Type','Source_Organization','Source_Reference',
+      'Reported_At_UTC','Occurred_At_UTC','IMO','Vessel_Name','Incident_Type',
+      'Port_or_Zone','Latitude','Longitude','Incident_Description',
+      'Source_Incident_Status','Operational_Status','Reported_Severity',
+      'Persons_Affected','Pollution_Reported','Evidence_Reference','Source_URL',
+      'Received_At_UTC','Updated_At_UTC','Assigned_Officer','Officer_Notes',
+      'Data_Nature','AI_Review_Request'
+    ],
+    AI_Assessments:[
+      'Incident_ID','Description_SHA256','Assessment_ID','Assessed_At_UTC',
+      'AI_Provider','AI_Model','AI_Incident_Category','Policy_Impact_0_5',
+      'Policy_Urgency_0_5','Policy_Exposure_0_5','Policy_Recurrence_0_5',
+      'Incident_Risk_Score_0_100','Incident_Risk_Band','AI_Proposed_Followup',
+      'AI_Reasoning','AI_Confidence_0_1','Missing_Information',
+      'Officer_Decision','Officer_Name','Officer_Reviewed_At_UTC',
+      'Approved_Followup_Status','Linked_Case_ID','Assessment_Status',
+      'Governance_Notice','AI_Suggested_Followup_State',
+      'Officer_Approved_Followup_State','Officer_Review_Reason',
+      'A01_Incident_Evidence_IDs','A02_Incident_Compliance_Status',
+      'A02_Incident_Evidence_IDs','A02_Incident_Reasoning',
+      'Incident_Agent_Contract_Version'
+    ]
+  },
+  restrictions:[
+    'Google Sheets is the source of POC incidents, not Oracle fleet risk',
+    'Read no sheet row values for AI Dashboard generation',
+    'Officer-reviewed assessment is distinct from unreviewed AI advice',
+    'The displayed incident cohort can be filtered by NMC case-linking policies',
+    'Metrics require implemented and approved source mapping before they are executable'
+  ]
+});
 const SOURCES=new Set(DESIGN_SOURCES.map(x=>x.key));
 const METHODS=new Set(['COUNT','COUNT_DISTINCT','SUM','AVERAGE','RATIO','DURATION','GROUP_COUNT','LATEST']);
 const CHARTS=new Set(['horizontalBar','column','pie','donut','line','area']);
@@ -34,11 +78,13 @@ function unwrap(raw){
  }
  reject('DASHBOARD_AI_OUTPUT_NOT_STRUCTURED');
 }
-export function buildDashboardAiPrompt(prompt,placement,metricCatalog){
+export function buildDashboardAiPrompt(prompt,placement,metricCatalog,{incidentSourceConfigured=false}={}){
  const question=take(prompt,2000);
  if(question.length<15||!PLACEMENTS.has(placement))throw new DashboardAiDesignError('DASHBOARD_AI_PROMPT_INVALID',422);
  return {task:'MOEI_AI_DASHBOARD_DESIGN_V1',domain:placement,question,
   allowedExistingWidgets:metricCatalog,suggestedDataSourceTypes:DESIGN_SOURCES,
+  verifiedSourceSchemas:[{...NMC_INCIDENT_SOURCE_SCHEMA,
+    sourceConfigured:incidentSourceConfigured,liveFetchVerified:false}],
   expectedOutput:{title:'dashboard title',description:'business purpose',
    widgets:[{type:'kpi|bar|table|position',metric:'exact existing metric ID',title:'title',span:'half|full'}],
    newMetrics:[{id:'proposedId',title:'title',type:'kpi|bar|table|position',
@@ -52,6 +98,9 @@ export function buildDashboardAiPrompt(prompt,placement,metricCatalog){
    'Suggest new metrics separately in newMetrics, with datasource and calculation metadata.',
    'No SQL, Javascript, code, invented live numbers or unsupported datasource claims.',
    'All new fields, datasets and formulas are UNVERIFIED until a business owner maps and approves them.',
+   'For NMC incident KPIs, use NMC_INCIDENTS_GOOGLE_SHEETS and EXACT column names from Incident_Registry or AI_Assessments. Do not invent Oracle incident tables.',
+   'A configured Google Sheet source is not proof of successful row retrieval. Distinguish synthetic POC incidents from official cases and vessel risk.',
+   'Only propose incidents as newMetrics until live aggregation/reporting is implemented; no invented chart data.',
    'Never query databases, bind a source, publish a dashboard or alter statutory decisions.'
   ]};
 }
@@ -79,6 +128,12 @@ export function validateDashboardAiDesign(raw,{metricCatalog,placement}){
    !Array.isArray(fields)||fields.length>15||
    fields.some(f=>typeof f!=='string'||!/^([a-zA-Z][a-zA-Z0-9_.]{0,79})$/.test(f))){
    warnings.push('NEW_METRIC_REQUIRES_BUSINESS_REVIEW');continue;}
+  if(m.sourceKey==='NMC_INCIDENTS_GOOGLE_SHEETS'){
+    const allowed=NMC_INCIDENT_SOURCE_SCHEMA.tables[m.sourceEntity];
+    if(!Array.isArray(allowed)||fields.some(f=>!allowed.includes(f))){
+      warnings.push('NMC_INCIDENT_FIELD_NOT_IN_GOOGLE_SHEET_CONTRACT');continue;
+    }
+  }
   ids.add(id);proposedMetrics.push({id,title:take(m.title,100),type:m.type,
    sourceKey:m.sourceKey,sourceEntity:take(m.sourceEntity,100),
    fields,method:m.method,formula:take(m.formula,300),

@@ -66,7 +66,10 @@ export class NmcDashboardBuilderComponent implements OnInit,OnDestroy {
   aiError='';
   aiProposal:DashboardAiDesignResponse|null=null;
   aiStatus:{enabled:boolean;pipelineConfigured:boolean;keyConfigured:boolean;
-    contractVerified:boolean}|null=null;
+    contractVerified:boolean;incidentSource:{
+      key:string;configured:boolean;transport:string;dataNature:string;
+      connectionChecked:boolean;incidentRiskIsVesselRisk:false}}|null=null;
+  aiStatusError='';
   readonly chartTypes=NMC_CHART_TYPES;
   readonly chartPalettes=NMC_CHART_PALETTES;
   readonly menuPlacements=DASHBOARD_MENU_PLACEMENTS;
@@ -115,10 +118,7 @@ export class NmcDashboardBuilderComponent implements OnInit,OnDestroy {
   ){}
 
   ngOnInit():void {
-    this.subs.add(this.workspace.aiDesignStatus().subscribe({
-      next:value=>{this.aiStatus=value;},
-      error:()=>{this.aiStatus=null;}
-    }));
+    this.refreshAiDesignStatus();
     this.subs.add(this.store.dashboards$.subscribe(items=>this.dashboards=items));
     this.subs.add(this.route.paramMap.subscribe(params=>{
       const id=params.get('id');
@@ -516,8 +516,30 @@ export class NmcDashboardBuilderComponent implements OnInit,OnDestroy {
     }));
   }
 
+  refreshAiDesignStatus():void{
+    this.aiStatusError='';
+    this.subs.add(this.workspace.aiDesignStatus().subscribe({
+      next:value=>{this.aiStatus=value;this.aiStatusError='';},
+      error:()=>{this.aiStatus=null;this.aiStatusError=this.copy(
+        'Cannot read AI Settings. Check editor permissions and log in.',
+        'تعذر قراءة إعدادات AI. تحقق من صلاحيات التعديل وتسجيل الدخول.');}
+    }));
+  }
+
+  useIncidentsPrompt():void{
+    this.aiPrompt=this.copy(
+      'Design an NMC Incident Dashboard based on Google Sheets Incident_Registry and AI_Assessments: total incidents, unresolved by Operational_Status, incidents by Incident_Type and Port_or_Zone, AI review queue and elapsed hours between Occurred_At_UTC and Reported_At_UTC. Propose new KPI source columns and calculations explicitly; do not invent data.',
+      'صمّم Dashboard لحوادث المركز البحري الوطني من Google Sheets، أوراق Incident_Registry وAI_Assessments: إجمالي الحوادث، الحوادث المفتوحة حسب Operational_Status، التوزيع حسب Incident_Type وPort_or_Zone، طابور مراجعة AI، والوقت بين Occurred_At_UTC وReported_At_UTC. اقترح مؤشرات جديدة مع الحقول وطريقة الحساب دون اختلاق بيانات.');
+  }
+
   generateDashboardAi():void{
     if(!this.dashboard||this.viewOnly||this.aiBusy)return;
+    if(this.aiStatus?.enabled===false){
+      this.aiError=this.copy(
+        'Dashboard AI is disabled. Open AI Settings & Governance and publish NMC_DASHBOARD_AI_DESIGN_ENABLED=true.',
+        'مصمم لوحات AI غير مفعل. افتح إعدادات الحوكمة وانشر NMC_DASHBOARD_AI_DESIGN_ENABLED=true.');
+      return;
+    }
     const prompt=this.aiPrompt.trim();
     if(prompt.length<15){
       this.aiError=this.copy('Describe the dashboard in at least 15 characters.',
