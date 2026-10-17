@@ -311,7 +311,9 @@ export function auditAiGovernanceGrouping(descriptors:ReadonlyArray<{key:string}
     .runtime-info{background:#eaf6f4;border-inline-start:4px solid #0e9a90;padding:18px;border-radius:11px;margin:19px 0}
     .runtime-info strong{font-size:12px}.runtime-info p{line-height:1.8;font-size:11px;margin:7px 0 0;color:#4b7078}
     .airia-link-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
-    .airia-embed-panel{padding:18px}
+    .airia-embed-panel{position:fixed;inset:18px;z-index:9999;overflow:auto;
+      background:#fff;box-shadow:0 16px 64px #0e2d4599;border:2px solid #8acbc6;
+      border-radius:16px;padding:18px;margin:0}
     .airia-embed-heading{display:flex;gap:12px;justify-content:space-between;align-items:center;flex-wrap:wrap}
     .airia-embed-frame{display:block;width:100%;height:min(75vh,800px);min-height:480px;
       margin-top:14px;border:1px solid #dbe8ef;border-radius:12px;background:#f4f8fb}
