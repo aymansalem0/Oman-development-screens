@@ -9,7 +9,7 @@ export class SiNmcReviewSyncError extends Error{
 export async function syncSiSupervisorReviewToNmc({caseId,inspectionCase,
  record,cases,forwardToNmc=false}={}){
  if(!inspectionCase?.nmcReferralId&&forwardToNmc!==true)
-   return {status:'NOT_FORWARDED_TO_NMC',notificationCreated:false};
+   return {status:'NOT_NMC_ORIGIN',notificationCreated:false};
  if(!record?.report||!['APPROVED','RETURNED'].includes(record.report.status)||
     record.caseId!==caseId||record.imo!==inspectionCase.imo)
    throw new SiNmcReviewSyncError('SI_NMC_REVIEW_NOT_FINALIZED');
