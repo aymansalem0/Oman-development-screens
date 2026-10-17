@@ -26,8 +26,7 @@ test('shared header/footer show exact platform name and Arabic equivalence',()=>
 test('all Smart Inspection fixed menu links resolve to existing actual routes',()=>{
   const expected=[
     'moei/smart-inspection/candidates',
-    'moei/smart-inspection/preparation',
-    'moei/smart-inspection/scheduling',
+    'moei/smart-inspection/supervisor',
     'moei/smart-inspection/settings/targeting',
     'moei/smart-inspection/settings/erp'
   ];
@@ -37,7 +36,15 @@ test('all Smart Inspection fixed menu links resolve to existing actual routes',(
   }
   assert.match(routes,/moei\/smart-inspection\/preparation\/:caseId/);
   assert.match(routes,/moei\/nmc\/vessel\/:imo\/smart-inspection/);
-  assert.match(nav,/inspectionWorkbenchRoute/);
+  // Hidden legacy menu links remain deep-linkable for old workflow dependencies.
+  for(const legacy of ['moei/smart-inspection/preparation',
+     'moei/smart-inspection/scheduling',
+     'moei/nmc/admin/operational-guidance']){
+    assert.ok(routes.includes("path: '"+legacy+"'"),'Legacy route removed '+legacy);
+    assert.ok(!nav.includes('routerLink="/'+legacy+'"'),'Legacy menu link still visible '+legacy);
+  }
+  assert.ok(!nav.includes('[routerLink]="inspectionWorkbenchRoute"'));
+  assert.match(nav,/Supervisor Approval/);
 });
 test('Settings group headings, links and active markers are separate',()=>{
   assert.match(nav,/aria-controls="nmc-settings-children"/);
@@ -46,7 +53,7 @@ test('Settings group headings, links and active markers are separate',()=>{
   assert.match(nav,/inspectionSettingsExpanded/);
   assert.match(nav,/copy\('NMC Settings','إعدادات المركز البحري'\)/);
   assert.match(nav,/copy\('Inspection Settings','إعدادات المعاينات'\)/);
-  for(const route of ['risk-configuration','data-quality','operational-guidance','/moei/nmc/dashboards'])
+  for(const route of ['risk-configuration','data-quality','/moei/nmc/dashboards'])
     assert.ok(nav.includes(route),'Missing NMC settings child '+route);
   assert.match(navTs,/isInspectionCandidates/);
   assert.match(navTs,/isInspectionPreparation/);
