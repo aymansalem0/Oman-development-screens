@@ -513,7 +513,8 @@ export class SiInspectionPreparation{
             lastFailureField:field||null,dossier:null},'A04_FAILED',actor,failure);
         }
         if(e instanceof SiPreparationError)throw e;
-        throw new SiPreparationError('SI_A04_PROVIDER_UNAVAILABLE',502);
+        const upstream=classifyA04ProviderFailure(e);
+        throw new SiPreparationError(upstream.code,upstream.status);
       }
     }finally{this.active.delete(id);}
   }
