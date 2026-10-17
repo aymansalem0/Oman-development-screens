@@ -1,4 +1,5 @@
 import {CommonModule} from '@angular/common';
+import {FormsModule} from '@angular/forms';
 import {Component,OnInit} from '@angular/core';
 import {HttpClient} from '@angular/common/http';
 import {RouterLink} from '@angular/router';
@@ -10,9 +11,18 @@ interface Plan{
  startsOn:string;endsOn:string;approvedAt?:string|null;
  vesselCount:number;
 }
+interface InspectorAssignment{
+ orderId:string;scheduleId:string;planId:string;vesselName:string;imo:string;
+ portName:string|null;startLocal:string|null;endLocal:string|null;
+ locationName:string|null;status:string;caseId:string|null;scopeStatus:string;
+ checklistStatus:string;scheduleMode:string;operationalBookingConfirmed:boolean;
+}
+interface InspectorRoster{
+ inspectorId:string;inspectorName:string;count:number;assignments:InspectorAssignment[];
+}
 @Component({
  selector:'app-si-scheduling-plan-center',standalone:true,
- imports:[CommonModule,RouterLink,NmcNavigationComponent],
+ imports:[CommonModule,FormsModule,RouterLink,NmcNavigationComponent],
  template:`
  <div class="schedule-hub" [attr.dir]="lang.dir">
   <app-nmc-navigation/>
@@ -37,6 +47,59 @@ interface Plan{
     <article><span>{{copy('Vessels ready for scheduling','سفن جاهزة للجدولة')}}</span>
      <strong>{{approvedVesselCount}}</strong></article>
     <article><span>{{copy('Other plans','خطط أخرى')}}</span><strong>{{other.length}}</strong></article>
+   </section>
+   <section class="panel" id="inspector-assignments" data-testid="si-inspector-assignment-roster">
+    <div class="roster-title">
+     <div><h2>{{copy('Inspector Schedule · Who Inspects What','جدول المعاينين · كل معاين هيعاين إيه')}}</h2>
+      <p>{{copy('Issued work orders grouped by the approved assigned inspector, sourced from saved schedules (not AI suggestions).',
+        'أوامر المعاينة الصادرة لكل معاين طبقًا للجدولة المحفوظة، وليست مجرد اقتراحات AI.')}}</p></div>
+     <button type="button" (click)="loadRoster()" [disabled]="rosterLoading">
+      ↻ {{copy('Refresh Inspector Roster','تحديث جدول المعاينين')}}</button>
+    </div>
+    <div class="summary roster-totals">
+     <article><span>{{copy('Assigned Inspectors','المعاينون المكلفون')}}</span>
+      <strong>{{inspectorRoster.length}}</strong></article>
+     <article><span>{{copy('Issued Work Orders','أوامر التكليف')}}</span>
+      <strong>{{rosterOrderCount}}</strong></article>
+     <article><span>{{copy('Selected Inspector Visits','زيارات المعاين المختار')}}</span>
+      <strong>{{filteredRosterOrderCount}}</strong></article>
+    </div>
+    <div class="roster-controls">
+     <label>{{copy('Inspector','المعاين')}}</label>
+     <select [(ngModel)]="selectedInspectorId">
+      <option value="">{{copy('All Inspectors','كل المعاينين')}}</option>
+      <option *ngFor="let officer of inspectorRoster" [value]="officer.inspectorId">
+       {{officer.inspectorName}} ({{officer.count}})</option>
+     </select>
+     <label>{{copy('Search Vessel / IMO','البحث عن سفينة / IMO')}}</label>
+     <input type="search" [(ngModel)]="vesselSearch" [placeholder]="copy('Vessel name or IMO','اسم السفينة أو رقم IMO')"/>
+    </div>
+    <p *ngIf="rosterLoading" class="notice">{{copy('Loading inspector assignments…','جاري تحميل تكليفات المعاينين…')}}</p>
+    <p *ngIf="rosterError" class="notice error" role="alert">{{rosterError}}</p>
+    <p *ngIf="!rosterLoading&&!rosterError&&!inspectorRoster.length" class="notice">
+     {{copy('No issued work orders yet. Schedule and approve an inspection plan first.',
+      'لا توجد تكليفات صادرة حاليًا؛ جدْول خطة المعاينات واعتمد إصدار أوامر التكليف أولًا.')}}</p>
+    <div class="inspector-group" *ngFor="let officer of filteredRoster">
+     <div class="inspector-head"><h3>{{officer.inspectorName}}</h3>
+      <span>{{officer.assignments.length}} {{copy('assigned vessels','سفن مسندة')}}</span></div>
+     <div class="table-wrap"><table>
+      <thead><tr><th>{{copy('Vessel / IMO','السفينة / IMO')}}</th>
+       <th>{{copy('Port / Location','الميناء / الموقع')}}</th>
+       <th>{{copy('Inspection Window','موعد المعاينة')}}</th>
+       <th>{{copy('Order & Checklist Status','حالة التكليف والقائمة')}}</th>
+       <th>{{copy('Schedule Source','مصدر الجدولة')}}</th>
+       <th>{{copy('Action','الإجراء')}}</th></tr></thead>
+      <tbody><tr *ngFor="let order of officer.assignments">
+       <td><strong>{{order.vesselName}}</strong><small>IMO {{order.imo}}</small></td>
+       <td>{{order.portName||'—'}}<small>{{order.locationName||'—'}}</small></td>
+       <td>{{order.startLocal||'—'}}<small>{{order.endLocal||'—'}}</small></td>
+       <td>{{order.status}}<small>{{order.checklistStatus}}</small></td>
+       <td>{{order.scheduleMode}}<small *ngIf="!order.operationalBookingConfirmed">
+        {{copy('Not a confirmed ERP booking','ليس حجز ERP مؤكدًا')}}</small></td>
+       <td><a [routerLink]="['/moei/smart-inspection/scheduling/plan',order.planId]">
+        {{copy('View Plan','عرض الخطة')}}</a></td>
+      </tr></tbody></table></div>
+    </div>
    </section>
    <section class="panel">
     <h2>{{copy('Approved inspection plans · ready to schedule','خطط المعاينات المعتمدة · جاهزة للجدولة')}}</h2>
@@ -76,7 +139,16 @@ interface Plan{
  </div>`,
  styles:[`
  .schedule-hub{min-height:100vh;background:#edf4f7;color:#123f53}
- .schedule-hub-main{margin-inline-start:232px;padding:30px 28px;max-width:1650px}
+ .schedule-hub-main{margin-inline-start:240px;padding:30px 28px;max-width:1650px;box-sizing:border-box}
+ .roster-title,.inspector-head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+ .roster-controls{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:12px 0}
+ .roster-controls label{font-size:11px;font-weight:700}
+ .roster-controls select,.roster-controls input{border:1px solid #cbdde2;border-radius:7px;padding:8px;min-width:170px;background:#fff;color:#15455a}
+ .inspector-group{border:1px solid #d4e7e7;border-radius:12px;margin-top:16px;padding:12px}
+ .inspector-head{background:#edf8f8;padding:10px 12px;border-radius:8px}
+ .inspector-head h3{font-size:14px;margin:0}.inspector-head span{font-size:11px;color:#436e77}
+ .roster-totals{margin:15px 0}
+ @media(min-width:961px) and (max-width:1220px){.schedule-hub-main{margin-inline-start:66px}}
  header,section.panel{background:#fff;border:1px solid #d7e6eb;border-radius:14px;padding:22px;margin:0 0 17px}
  header small{font-size:10px;letter-spacing:1px;font-weight:800;color:#008a8e}
  h1{font-size:26px;margin:12px 0}h2{font-size:17px;margin:0 0 9px}
@@ -97,17 +169,42 @@ interface Plan{
  .notice{padding:12px;border:1px solid #d0e5e8;background:#fff;border-radius:8px}
  .error{color:#a73531;background:#fff2f0;border-color:#f1c1b8}
  footer{padding:10px 0}footer a{margin-inline-start:8px}
- @media(max-width:1050px){.schedule-hub-main{margin:0;padding:14px}.summary{grid-template-columns:1fr}}
+ @media(max-width:960px){.schedule-hub-main{margin:0;padding:14px}.summary{grid-template-columns:1fr}}
  `]
 })
 export class SiSchedulingPlanCenterComponent implements OnInit{
  plans:Plan[]=[];loading=false;error='';
+ inspectorRoster:InspectorRoster[]=[];rosterLoading=false;rosterError='';
+ selectedInspectorId='';vesselSearch='';rosterOrderCount=0;
+ get filteredRoster():InspectorRoster[]{
+  const search=this.vesselSearch.trim().toLowerCase();
+  return this.inspectorRoster.filter(x=>!this.selectedInspectorId||
+    x.inspectorId===this.selectedInspectorId).map(x=>({
+    ...x,assignments:x.assignments.filter(a=>!search||
+      a.vesselName.toLowerCase().includes(search)||a.imo.includes(search))
+  })).filter(x=>x.assignments.length>0);
+ }
+ get filteredRosterOrderCount(){return this.filteredRoster.reduce((n,x)=>n+x.assignments.length,0);}
+ loadRoster(){
+  this.rosterLoading=true;this.rosterError='';
+  this.http.get<{inspectors:InspectorRoster[];orderCount:number}>(
+    '/api/si/v1/maritime-scheduling/inspector-assignments').subscribe({
+    next:r=>{
+      this.inspectorRoster=r.inspectors||[];this.rosterOrderCount=r.orderCount||0;
+      this.rosterLoading=false;
+    },
+    error:e=>{
+      this.rosterLoading=false;this.rosterError=e?.error?.error||
+        this.copy('Inspector roster is unavailable','تعذر تحميل جدول تكليفات المعاينين');
+    }
+  });
+ }
  constructor(private readonly http:HttpClient,public readonly lang:LanguageService){}
  copy(en:string,ar:string){return this.lang.pick(en,ar);}
  get approved(){return this.plans.filter(p=>p.status==='APPROVED'&&p.vesselCount>0);}
  get other(){return this.plans.filter(p=>p.status!=='APPROVED');}
  get approvedVesselCount(){return this.approved.reduce((n,p)=>n+(p.vesselCount||0),0);}
- ngOnInit(){this.load();}
+ ngOnInit(){this.load();this.loadRoster();}
  load(){
   this.loading=true;this.error='';
   this.http.get<{plans:Plan[]}>('/api/si/v1/inspection-plans').subscribe({
