@@ -123,6 +123,9 @@ jobs:
       - name: Assigned inspector POC identity, source dossier and guided A04 step regression
         run: node --test ai-proxy/test/si-inspector-guided-work-orders.test.mjs
 
+      - name: Inspector confirmed defects to five A01/A02 risk factors and durable NMC case provenance
+        run: node --test ai-proxy/test/si-risk-factor-attribution.test.mjs
+
       - name: SI-01 rolling to SI-02 approval and day-two cycle end-to-end
         run: node --test ai-proxy/test/si-rolling-endtoend.test.mjs
 
