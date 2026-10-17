@@ -95,8 +95,8 @@ export class SiMaritimeBatchSchedulingComponent implements OnInit{
  context:Context|null=null;proposal:Proposal|null=null;baselineProposal:Proposal|null=null;
  readonly demoMode=true; // POC demo data always enabled on this presentation screen.
  aiAdvice:S01Response|null=null;loading=false;busy=false;aiBusy=false;
- scheduleBusy=false;orderBusyId:string|null=null;error='';notice='';
- workOrdersError='';approvedSchedule:ApprovedSchedule|null=null;
+ scheduleBusy=false;error='';notice='';
+ workOrdersError='';approvedSchedule:ApprovedSchedule|null=null;scheduleStatusLoaded=false;
  boardView:'VESSELS'|'ENGINEERS'|'DATES'='VESSELS';
  selectedUnscheduledImo:string|null=null;
  get selectedUnscheduled():ScheduleRow|null{
@@ -183,6 +183,7 @@ export class SiMaritimeBatchSchedulingComponent implements OnInit{
 
  get assignedEngineerCount():number{return this.proposal?.board?.engineers.length||0;}
  invalidateProposal():void{
+  if(this.approvedSchedule)return;
   // The inputs changed after preview; never show obsolete slots as though
   // they were still valid, and never carry them into a future approval action.
   this.proposal=null;this.baselineProposal=null;this.aiAdvice=null;
@@ -196,7 +197,7 @@ export class SiMaritimeBatchSchedulingComponent implements OnInit{
  copy(en:string,ar:string):string{return this.lang.pick(en,ar);}
  ngOnInit():void{this.loadContext();this.loadWorkOrders();}
  get canApproveSchedule():boolean{
-  return !!this.context&&!!this.proposal&&
+  return this.scheduleStatusLoaded&&!!this.context&&!!this.proposal&&
    this.proposal.summary.total>0&&this.proposal.summary.unscheduled===0&&
    !!(this.baselineProposal?.variants?.length)&&
    !this.approvedSchedule&&!this.workOrdersError&&
@@ -212,10 +213,14 @@ export class SiMaritimeBatchSchedulingComponent implements OnInit{
  loadWorkOrders():void{
   const planId=this.route.snapshot.paramMap.get('planId');
   if(!planId)return;
+  this.scheduleStatusLoaded=false;
   this.http.get<{schedule:ApprovedSchedule|null}>(
    this.api+encodeURIComponent(planId)+'/work-orders').subscribe({
-   next:r=>{this.approvedSchedule=r.schedule;this.workOrdersError='';},
-   error:e=>{this.workOrdersError=e?.error?.error||
+   next:r=>{
+    this.approvedSchedule=r.schedule;this.workOrdersError='';this.scheduleStatusLoaded=true;
+    if(r.schedule){this.proposal=null;this.baselineProposal=null;this.aiAdvice=null;}
+   },
+   error:e=>{this.scheduleStatusLoaded=true;this.workOrdersError=e?.error?.error||
     'SI_SCHED_WORK_ORDERS_NOT_READY';
     if(e?.status!==503)this.error=this.workOrdersError;}
   });
@@ -263,57 +268,6 @@ export class SiMaritimeBatchSchedulingComponent implements OnInit{
     error:e=>{this.scheduleBusy=false;this.showError(e);}
    });
  }
- workOrderAction(order:WorkOrder,action:'activate'|'scope'|'start'):void{
-  if(this.orderBusyId||!this.approvedSchedule)return;
-  let request:{[key:string]:unknown}={};
-  if(action==='activate'){
-   const generateAi=window.confirm(this.copy(
-    'Prepare mandatory checklist now. Also request optional A04 AI checklist additions if sources permit? A real Airia call may cost money.',
-    'سيتم تجهيز القائمة الإلزامية الآن. هل تريد أيضًا مقترحات A04 AI إذا سمحت المصادر؟ قد يكون استدعاء Airia مدفوعًا.'));
-   request={generateAi,confirmAiCost:generateAi};
-  }else if(action==='scope'){
-   const reason=window.prompt(this.copy(
-    'Supervisor: reason for mandatory checklist scope approval:',
-    'المشرف: سبب اعتماد نطاق قوائم المعاينة الإلزامية:'));
-   if(!reason||reason.trim().length<8)return;
-   // A04 review happens in the separate preparation page after the
-   // order is issued. The order's earlier status can still show DRAFT even
-   // when a publisher has approved the overlay in that page. The server
-   // checks the LATEST preparation revision before accepting additions.
-   const includeAiSuggestions=order.aiStatus.startsWith('A04_')&&
-    window.confirm(this.copy(
-     'Include A04 additions ONLY if a supervisor has already approved their draft in Dossier Review? Otherwise choose Cancel and approve mandatory scope alone.',
-     'هل تريد ضم إضافات A04 بعد اعتماد مسودتها من المسؤول في شاشة الدوسيه؟ اضغط إلغاء لاعتماد البنود الإلزامية فقط.'));
-   request={reason:reason.trim(),includeAiSuggestions};
-  }else{
-   const poc=this.approvedSchedule.mode==='POC_MOCK';
-   if(!window.confirm(poc?
-    this.copy('POC DEMO: start on behalf of the assigned mock engineer? Audited delegation, not official inspector authentication.',
-     'محاكاة POC: بدء المعاينة نيابة عن المهندس التجريبي؟ سيتم توثيق التفويض وليس إثبات دخول رسمي للمفتش.'):
-    this.copy('Start as the authenticated assigned inspector?',
-     'هل تبدأ المعاينة بهوية المفتش المسند إليه الأمر؟')))return;
-   request={confirmPocDelegation:poc};
-  }
-  this.orderBusyId=order.id;this.error='';this.notice='';
-  this.http.post<{order:WorkOrder}>(
-   this.baseUrl()+'/work-orders/'+encodeURIComponent(order.id)+'/'+action,
-   request).subscribe({
-    next:r=>{
-     this.orderBusyId=null;
-     const idx=this.approvedSchedule?.orders.findIndex(x=>x.id===order.id)??-1;
-     if(this.approvedSchedule&&idx>=0)this.approvedSchedule.orders[idx]=r.order;
-     this.notice=action==='activate'?
-      this.copy('Mandatory checklist prepared. A04 AI additions, if generated, need separate review. Supervisor must approve scope.',
-       'تم تجهيز القائمة الإلزامية. بنود A04 الإضافية تحتاج مراجعة، ثم يعتمد المشرف نطاق المعاينة.'):
-      action==='scope'?
-       this.copy('Scope approved and engineer assigned; inspector may start the field visit.',
-        'تم اعتماد النطاق وإسناد المهندس؛ يمكن الآن بدء المعاينة الميدانية.'):
-       this.copy('Inspection started; open its case checklist.',
-        'بدأت المعاينة؛ افتح قائمة المعاينة الخاصة بالحالة.');
-    },
-    error:e=>{this.orderBusyId=null;this.showError(e);this.loadWorkOrders();}
-   });
- }
  loadContext():void{
   const id=this.route.snapshot.paramMap.get('planId');
   if(!id){this.error='Approved plan ID is required';return;}
@@ -343,9 +297,9 @@ export class SiMaritimeBatchSchedulingComponent implements OnInit{
     x.windowEvidenceReference||x.nmcReferrals[0]?.id||'POC_OPERATOR_FINAL_WINDOW'
   }));
  }
- preview():void{this.calculateFeasible(false);}
+ preview():void{if(!this.approvedSchedule)this.calculateFeasible(false);}
  private calculateFeasible(continueToAi:boolean):void{
-  if(!this.context||this.busy||this.aiBusy)return;
+  if(!this.context||this.busy||this.aiBusy||this.approvedSchedule)return;
   this.busy=true;this.error='';this.notice='';
   this.proposal=null;this.baselineProposal=null;this.aiAdvice=null;
   this.selectedUnscheduledImo=null;

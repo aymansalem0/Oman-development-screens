@@ -2,7 +2,7 @@ import {LanguageService} from '../services/language.service';
 import {CommonModule} from '@angular/common';
 import {Component,OnInit} from '@angular/core';
 import {FormsModule} from '@angular/forms';
-import {ActivatedRoute,RouterLink} from '@angular/router';
+import {ActivatedRoute,Router,RouterLink} from '@angular/router';
 import {NmcNavigationComponent} from '../components/nmc-navigation.component';
 import {SiPreparationService,SiPreparationView,SiPrepStatus,
  SiCompleteVesselDossier} from '../services/si-preparation.service';
@@ -31,7 +31,8 @@ export class SiInspectionPreparationComponent implements OnInit{
     'hull-machinery':'Hull & Machinery',
     security:'Security and Access'
   };
-  constructor(private route:ActivatedRoute,private api:SiPreparationService,public readonly lang:LanguageService){}
+  constructor(private route:ActivatedRoute,private readonly router:Router,
+    private api:SiPreparationService,public readonly lang:LanguageService){}
   copy(en:string,ar:string):string{return this.lang.pick(en,ar);}
   get returnOrderId():string{
     const orderId=this.route.snapshot.queryParamMap.get('orderId')||'';
@@ -104,11 +105,22 @@ export class SiInspectionPreparationComponent implements OnInit{
     this.busy=false;this.loading=false;
     if(err?.status===401)this.error='Your login session expired.';
   }
-  private completed(message:string):void{
+  private completed(message:string,returnAfterApproval=false):void{
     this.busy=false;
     this.api.get(this.id,this.editorKey.trim()).subscribe({
-      next:r=>{this.data=r;this.error='';this.success=message;
-        this.loadFullDossier();},
+      next:r=>{
+        this.data=r;this.error='';this.success=message;
+        // Navigate only after the authoritative saved A04 revision confirms
+        // approval; include the exact assigned Order ID for a fresh journey.
+        if(returnAfterApproval&&r.saved?.status==='APPROVED'&&this.returnOrderId){
+          void this.router.navigate(['/moei/smart-inspection/my-work-orders'],{
+            queryParams:{orderId:this.returnOrderId},
+            fragment:'inspection-journey'
+          });
+          return;
+        }
+        this.loadFullDossier();
+      },
       error:e=>this.fail(e)
     });
   }
@@ -157,7 +169,8 @@ export class SiInspectionPreparationComponent implements OnInit{
     this.api.review(this.id,this.publisherKey.trim(),{
       actor:this.actor.trim(),decision:this.reviewDecision,
       reason:this.reason.trim(),expectedVersion:this.nextVersion}).subscribe({
-        next:()=>this.completed('Supervisor decision recorded centrally. Base checklist unchanged.'),
+        next:()=>this.completed('A04 advisory decision saved. Mandatory checklist unchanged.',
+          this.reviewDecision==='APPROVE'),
         error:e=>this.fail(e)
       });
   }

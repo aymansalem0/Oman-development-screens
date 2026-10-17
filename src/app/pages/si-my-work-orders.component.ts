@@ -71,7 +71,7 @@ interface Dossier{
    <code>{{me?.inspectorPocId}}</code> ·
    {{t('Added only to synthetic scheduling when POC demo mode is used. Official ERP access still requires the authorised identity map.',
     'تدخل ضمن المهندسين التجريبيين عند تشغيل الجدولة بوضع POC فقط؛ الإسناد الرسمي يتطلب ربط حسابك برقم المفتش في ERP.')}}</p>
-  <section class="inspection-journey" aria-label="My inspection progress" data-testid="si-assigned-inspection-stepper">
+  <section id="inspection-journey" class="inspection-journey" aria-label="My inspection progress" data-testid="si-assigned-inspection-stepper">
    <header class="journey-head">
     <div>
      <small>SMART INSPECTION · INSPECTOR GUIDED JOURNEY</small>

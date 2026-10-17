@@ -2,21 +2,15 @@
   <app-nmc-navigation></app-nmc-navigation>
   <main class="prep-main">
     <header class="prep-hero">
-      <div><small>{{copy("MOEI · SMART INSPECTION · STEPS 05–08","وزارة الطاقة والبنية التحتية · المعاينة الذكية · المراحل ٠٥–٠٨")}}</small>
+      <div><small>{{copy("MOEI · SMART INSPECTION · PREPARATION DETAIL","وزارة الطاقة والبنية التحتية · المعاينة الذكية · تفاصيل التحضير")}}</small>
         <h1>{{copy("Inspection Preparation & AI Dossier","تحضير المعاينة وملف الذكاء الاصطناعي")}}</h1>
-        <p>{{copy('Approved case → Evidence review → Explicit A04 → Supervisor validation','حالة معتمدة ← مراجعة الأدلة ← تشغيل A04 بعد موافقة ← اعتماد المشرف')}}</p>
+        <p>{{copy('Review evidence, request optional A04, and save its advisory review. Return automatically to the assigned inspection journey after A04 approval.','مراجعة الأدلة وطلب A04 اختياريًا وحفظ مراجعة توصياته؛ ثم العودة تلقائيًا إلى رحلة المعاينة بعد اعتماد A04.')}}</p>
       </div>
       <div class="hero-actions">
-        <a *ngIf="returnOrderId" routerLink="/moei/smart-inspection/my-work-orders"
-         [queryParams]="{orderId:returnOrderId}" data-testid="si-return-to-order">
-         {{copy('← Return to My Inspection Steps','← العودة إلى خطوات المعاينة')}}</a>
-        <a routerLink="/moei/smart-inspection/candidates">{{copy("← Candidate Center","← مركز مرشحي المعاينة")}}</a>
         <a routerLink="/moei/smart-inspection/my-work-orders"
-         [queryParams]="returnOrderId?{orderId:returnOrderId}:{}">
-          {{copy('My Inspection Journey →','رحلة المعاينة الموحدة ←')}}</a>
-        <a [routerLink]="['/moei/smart-inspection/checklists',id]">
-          {{copy('Dynamic Checklists & AI Assistant','قوائم المعاينة الديناميكية ومساعد AI')}}
-        </a>
+         [queryParams]="returnOrderId?{orderId:returnOrderId}:{}"
+         data-testid="si-return-to-order">
+         {{copy('← My Inspection Journey','← رحلة المعاينة الموحدة')}}</a>
         <button (click)="load()" [disabled]="busy||loading">{{copy("↻ Refresh","↻ تحديث")}}</button>
       </div>
     </header>

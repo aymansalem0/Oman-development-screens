@@ -3,14 +3,19 @@
  <main class="marine-main">
   <header class="marine-hero">
    <small>MOEI · SMART INSPECTION · V2 MARITIME SCHEDULING</small>
-   <h1>{{copy('Comprehensive Electronic Inspection Scheduling','الجدولة الإلكترونية الشاملة للمعاينات')}}</h1>
-   <p>{{copy('Approved Inspection Plan → ERP engineer availability → verified feasible scheduling alternatives → SI-S01 AI ranking → supervisor review.',
-     'خطة المعاينات المعتمدة ← إتاحة مهندسي ERP ← بدائل جدولة صالحة ← ترتيب SI-S01 بالذكاء الاصطناعي ← مراجعة واعتماد المسؤول.')}}</p>
+   <h1>{{approvedSchedule?
+     copy('Issued Inspection Work Orders · Read-Only','أوامر تكليف المعاينات الصادرة · عرض فقط'):
+     copy('Comprehensive Electronic Inspection Scheduling','الجدولة الإلكترونية الشاملة للمعاينات')}}</h1>
+   <p>{{approvedSchedule?
+     copy('Assignments have been issued. Continue all inspector activities from My Inspection Journey.','صدرت أوامر التكليف؛ استكمل جميع إجراءات المفتش من رحلة المعاينة الموحدة.'):
+     copy('Approved plan → ERP feasibility → review assignments → issue work orders. AI comparison is optional.',
+      'خطة معتمدة ← التحقق من إتاحة ERP ← مراجعة التوزيع ← إصدار أوامر التكليف. مقارنة AI اختيارية.')}}</p>
    <a routerLink="/moei/smart-inspection/scheduling">{{copy('← Approved Plans','← الخطط المعتمدة')}}</a>
   </header>
   <div class="marine-error" *ngIf="error" role="alert">{{error}}</div>
   <div class="marine-notice" *ngIf="notice" role="status">{{notice}}</div>
   <div class="marine-notice" *ngIf="loading">{{copy('Loading approved plan and workforce…','تحميل الخطة المعتمدة والمهندسين…')}}</div>
+  <p *ngIf="!scheduleStatusLoaded" class="marine-notice" role="status">{{copy('Checking issued orders before enabling schedule editing…','جارٍ التحقق من أوامر التكليف قبل إتاحة تحرير الجدولة…')}}</p>
   <ng-container *ngIf="context as ctx">
    <div *ngIf="ctx.demoMode" class="marine-demo-banner" role="status">
     <strong>{{copy('POC DEMO · SYNTHETIC SCHEDULING DATA',
@@ -20,13 +25,23 @@
     <small>{{copy('Vessels completed with POC data','سفن تم استكمالها ببيانات تجريبية')}}: {{ctx.demoFilledVessels||0}}
       · {{copy('ERP basis','مرجع ERP')}}: {{ctx.erpSnapshotId}}</small>
    </div>
+   <section *ngIf="approvedSchedule as issued" class="marine-panel si-issued-readonly" data-testid="si-issued-schedule-locked">
+    <h2>{{copy('Work Orders Issued · Scheduling Locked','تم إصدار أوامر التكليف · الجدولة مغلقة')}}</h2>
+    <p>{{copy('Assignments are saved. Editing visit times or recalculating issued orders is no longer part of the inspection journey. Continue from My Inspection Journey.',
+     'تم حفظ أوامر التكليف. لا تُعدل المواعيد أو تعاد الجدولة بعد إصدار الأوامر من نفس الرحلة. استكمل من رحلة المفتش الموحدة.')}}</p>
+    <strong>{{issued.orders.length}} {{copy('issued orders','أوامر تكليف صادرة')}}</strong>
+    <a class="si-journey-main-link" routerLink="/moei/smart-inspection/my-work-orders"
+       data-testid="si-scheduling-continue-journey">
+      {{copy('Continue to My Inspection Journey →','استكمال رحلة المعاينة ←')}}
+    </a>
+   </section>
    <section class="marine-kpis">
     <div><span>{{copy('Approved vessels','السفن المعتمدة')}}</span><strong>{{ctx.approvedVessels}}</strong></div>
-    <div><span>{{copy('Proposed slots','المواعيد المقترحة')}}</span><strong>{{proposal?.summary?.proposed??'—'}}</strong></div>
+    <div><span>{{copy('Assigned slots','المواعيد المسندة')}}</span><strong>{{approvedSchedule?.orders?.length??proposal?.summary?.proposed??'—'}}</strong></div>
     <div><span>{{copy('Unscheduled','غير المجدولة')}}</span><strong>{{proposal?.summary?.unscheduled??'—'}}</strong></div>
-    <div><span>{{copy('Cases / bookings created','الحالات والحجوزات')}}</span><strong>0 / 0</strong></div>
+    <div><span>{{copy('Work orders issued','أوامر التكليف الصادرة')}}</span><strong>{{approvedSchedule?.orders?.length??0}}</strong></div>
    </section>
-   <section class="marine-panel">
+   <section class="marine-panel" *ngIf="scheduleStatusLoaded&&!approvedSchedule">
     <h2>{{copy('Vessels from the approved inspection plan · visit inputs','السفن الناتجة عن خطة المعاينات المعتمدة · بيانات الزيارة')}}</h2>
     <p *ngIf="ctx.demoMode" class="marine-demo-notice">{{copy('The presentation fields below use an explicitly synthetic POC overlay; approved vessel identities and original ERP/source records remain unchanged.',
       'تستخدم حقول العرض بيانات POC تجريبية واضحة، مع الحفاظ على هوية السفن المعتمدة وسجلات المصادر وERP الأصلية دون تعديل.')}}</p>
@@ -68,17 +83,21 @@
      </tr></tbody>
     </table></div>
     <div class="marine-actions">
-     <button type="button" [disabled]="busy||aiBusy" (click)="preview()">
-      {{busy?copy('Calculating ERP availability…','جارٍ تحليل إتاحة ERP…'):
-       copy('1 · Calculate feasible schedules','١ · حساب بدائل الجدولة الممكنة')}}</button>
-     <button type="button" class="marine-ai-button"
-      [disabled]="busy||aiBusy" (click)="runAi()">
-      {{aiBusy?copy('Analyzing with Airia…','جارٍ تحليل Airia…'):
-       copy('2 · AI Schedule with SI-S01','٢ · الجدولة باستخدام SI-S01 AI')}}</button>
-     <button type="button" *ngIf="aiAdvice" (click)="restoreBaseline()" [disabled]="aiBusy">
-       {{copy('Compare ERP baseline','مقارنة جدول ERP الأساسي')}}</button>
-     <small>{{copy('You may click AI Schedule directly: it automatically runs the free ERP feasibility check first. Airia is called only if a valid alternative exists AND you separately confirm a potentially billable call.',
-      'يمكنك الضغط مباشرة على جدولة AI: سيحسب النظام إتاحة ERP مجانًا أولًا. لن يستدعي Airia إلا بوجود بديل صالح وبعد موافقتك الصريحة على استدعاء قد يكون مدفوعًا.')}}</small>
+     <button type="button" [disabled]="busy||aiBusy" (click)="preview()"
+      data-testid="si-scheduling-review-feasible">
+      {{busy?copy('Checking ERP feasibility…','جارٍ فحص إتاحة ERP…'):
+       copy('Review Feasible Assignments','مراجعة توزيع المعاينات الممكن')}}</button>
+     <details class="si-scheduling-optional-ai" data-testid="si-scheduling-optional-ai">
+      <summary>{{copy('Optional: AI Scheduling Comparison (SI-S01)','اختياري: مقارنة جدولة الذكاء الاصطناعي SI-S01')}}</summary>
+      <p>{{copy('Available only before issuing orders. AI cannot book or approve assignments. Airia calls need separate confirmation.',
+        'متاح قبل إصدار التكليف فقط. لا يحجز AI أو يعتمد الإسناد، ويستلزم استدعاء Airia المدفوع موافقة مستقلة.')}}</p>
+      <button type="button" class="marine-ai-button"
+       [disabled]="busy||aiBusy" (click)="runAi()">
+       {{aiBusy?copy('Analyzing with Airia…','جارٍ تحليل Airia…'):
+        copy('Compare AI Scheduling Alternatives','مقارنة بدائل الجدولة عبر AI')}}</button>
+      <button type="button" *ngIf="aiAdvice" (click)="restoreBaseline()" [disabled]="aiBusy">
+       {{copy('Compare ERP baseline','مقارنة الجدولة الأساسية')}}</button>
+     </details>
     </div>
     <p class="marine-ai-readiness" role="status">{{aiBlockedReason}}</p>
     <section *ngIf="readinessIssues.length" class="marine-readiness-panel"
@@ -95,7 +114,7 @@
      </ul>
     </section>
    </section>
-   <section class="marine-panel" *ngIf="ctx.workforce?.length">
+   <section class="marine-panel" *ngIf="scheduleStatusLoaded&&!approvedSchedule&&ctx.workforce?.length">
     <div class="marine-title-line">
       <h2>{{copy('Available engineer roster — ERP POC snapshot',
         'المهندسون المتاحون — من بيانات ERP التجريبية')}}</h2>
@@ -125,7 +144,7 @@
       </article>
     </div>
    </section>
-   <section *ngIf="proposal as p" class="marine-panel">
+   <section *ngIf="!approvedSchedule&&proposal as p" class="marine-panel">
     <h2>{{copy('Inspector assignments and scheduling exceptions','توزيع المهندسين واستثناءات الجدولة')}}</h2>
      <p class="marine-note">{{copy(
        'If an eligible inspector is unavailable at the vessel port, the scheduler also considers qualified engineers from other ports. Travel time, shifts, conflicts and explicit supervisor approval still apply; demo travel times are synthetic.',
@@ -325,13 +344,14 @@
        {{workOrdersError}}</p>
     <div class="marine-title-line">
       <div>
-        <h2>{{copy('03 · Approve Schedule & Issue Inspector Work Orders',
-          '٠٣ · اعتماد الجدولة وإصدار أوامر تكليف المهندسين')}}</h2>
-        <p class="marine-note">{{copy(
-         'An authorized supervisor approves the entire source-verified schedule once. Each vessel receives its own traceable assignment order. This POC does not book live ERP resources.',
-         'يعتمد المسؤول المخوّل الجدول بالكامل مرة واحدة ثم يصدر أمر تكليف مستقل لكل سفينة. لا يتم حجز موارد ERP الفعلية في هذا الـPOC.')}}</p>
+        <h2>{{approvedSchedule?
+          copy('03 · Issued Work Orders · Read-Only','٠٣ · أوامر التكليف الصادرة · عرض فقط'):
+          copy('03 · Review Schedule & Issue Inspector Work Orders','٠٣ · مراجعة الجدولة وإصدار أوامر التكليف')}}</h2>
+        <p class="marine-note">{{approvedSchedule?
+         copy('Approved assignment register only. Continue preparation and field execution from My Inspection Journey.','سجل أوامر التكليف المعتمدة للعرض فقط. استكمل التحضير والتنفيذ من رحلة المفتش الموحدة.'):
+         copy('Review feasibility, then issue one traceable work order per vessel. No live ERP booking is created.','راجع إمكانية التنفيذ ثم أصدر أمر تكليف مستقل لكل سفينة؛ دون إنشاء حجز ERP فعلي.')}}</p>
       </div>
-      <button type="button" [disabled]="!canApproveSchedule" (click)="approveSchedule()"
+      <button *ngIf="!approvedSchedule" type="button" [disabled]="!canApproveSchedule" (click)="approveSchedule()"
        class="si-schedule-approve">
        {{scheduleBusy?copy('Saving approval…','جارٍ حفظ الاعتماد…'):
        copy('Approve Complete Schedule & Issue Orders',
@@ -341,7 +361,7 @@
     <p *ngIf="proposal && proposal.summary.unscheduled>0" class="marine-preview-warning">
       {{copy('Schedule approval requires an assignment for EVERY selected vessel. Correct the unscheduled rows and recalculate.',
         'اعتماد الجدولة يتطلب توزيع مهندس وموعد لكل سفينة معتمدة. استكمل السفن غير المجدولة ثم أعد الحساب.')}}</p>
-    <p *ngIf="!approvedSchedule && !proposal" class="marine-note">
+    <p *ngIf="!approvedSchedule && !proposal && scheduleStatusLoaded" class="marine-note">
       {{copy('Calculate the schedule or run SI-S01 first. The supervisor approval action will appear when all selected vessels can be assigned.',
        'احسب الجدولة أو شغّل SI-S01 أولًا. سيتاح الاعتماد بعد إمكانية توزيع جميع سفن الخطة.')}}</p>
     <ng-container *ngIf="approvedSchedule as schedule">
@@ -355,7 +375,7 @@
           <th>{{copy('Assigned engineer','المهندس المكلف')}}</th>
           <th>{{copy('Port / Date','الميناء / الموعد')}}</th>
           <th>{{copy('Checklist & AI','القوائم و AI')}}</th>
-          <th>{{copy('Status & action','الحالة والإجراء')}}</th>
+          <th>{{copy('Saved status','الحالة المحفوظة')}}</th>
         </tr></thead>
         <tbody><tr *ngFor="let order of schedule.orders">
           <td><strong>IMO {{order.imo}}</strong>
@@ -371,34 +391,12 @@
             <small>{{order.assignment.startLocal}}</small></td>
           <td><strong>{{order.checklistStatus}}</strong>
             <small>{{order.aiStatus}}</small>
-            <div *ngIf="order.caseId" class="si-order-links">
-              <a [routerLink]="['/moei/smart-inspection/checklists',order.caseId]">
-                {{copy('Mandatory checklist','قائمة المعاينة')}}</a>
-              <a [routerLink]="['/moei/smart-inspection/preparation',order.caseId]">
-                {{copy('A04 dossier & review','ملف A04 ومراجعته')}}</a>
-              <a [routerLink]="['/moei/smart-inspection/lifecycle',order.caseId]">
-                {{copy('Inspection workflow','دورة المعاينة')}}</a>
-            </div>
+
           </td>
           <td><strong>{{order.status}}</strong>
             <small *ngIf="order.error" class="si-order-error">{{order.error}}</small>
-            <div class="si-workorder-actions">
-              <button type="button" [disabled]="!!orderBusyId"
-                *ngIf="['ISSUED','PREPARATION_NEEDS_REVIEW','PREPARING'].includes(order.status)"
-                (click)="workOrderAction(order,'activate')">
-                {{copy('Execute assignment · Prepare Checklist',
-                 'تنفيذ أمر التكليف · تجهيز القائمة')}}</button>
-              <button type="button" [disabled]="!!orderBusyId"
-                *ngIf="order.status==='READY_FOR_SCOPE_REVIEW'"
-                (click)="workOrderAction(order,'scope')">
-                {{copy('Supervisor: Approve Scope','المشرف: اعتماد النطاق')}}</button>
-              <button type="button" [disabled]="!!orderBusyId"
-                *ngIf="order.status==='READY_FOR_FIELD'"
-                (click)="workOrderAction(order,'start')">
-                {{copy('Inspector: Start Inspection','المفتش: بدء المعاينة')}}</button>
-              <span *ngIf="order.status==='FIELD_STARTED'" class="si-field-started">
-                {{copy('Field inspection started','بدأت المعاينة الميدانية')}}</span>
-            </div>
+            <small class="marine-note">{{copy('Actions are available in My Inspection Journey.',
+              'جميع إجراءات المعاينة في رحلة المفتش الموحدة.')}}</small>
           </td>
         </tr></tbody>
       </table></div>
