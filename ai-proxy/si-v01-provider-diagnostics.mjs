@@ -1,4 +1,19 @@
-/** Safe SI-V01 transport errors; expose status category, never key/prompt/image/URL. */
+/** Safe SI-V01 transport errors; expose only allowlisted error-shape metadata.
+ * Never reveal provider error strings, request JSON, evidence or API secrets.
+ */
+import {summarizeA03HttpFailure} from './airia-a03-multipart.mjs';
+/** Return safe 4xx diagnostics: validation field NAMES and problem category.
+ * The supplier's raw response/body is NEVER returned to browser or logged.
+ */
+export function summarizeSiV01Rejection(status,rawBody,contentType=''){
+  const result=summarizeA03HttpFailure(status,rawBody,contentType);
+  const allowed=new Set(['userInput','file','files','attachment','pipelineId',
+    'asyncOutput','payload','document','metadata']);
+  return {category:result.category,
+    validationFields:result.validationFields.filter(f=>allowed.has(f)),
+    responseShape:result.responseShape,media:result.media};
+}
+
 export function classifySiV01Failure(error){
  const msg=typeof error?.message==='string'?error.message:'';
  const code=typeof error?.code==='string'?error.code:'';
