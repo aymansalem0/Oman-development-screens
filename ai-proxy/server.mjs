@@ -3127,15 +3127,18 @@ const server = createServer(async (req, res) => {
               .sort((a,b)=>String(b.receivedAt||'').localeCompare(String(a.receivedAt||'')))[0];
             if(!latest)return respond(res,200,{status:'ok',caseId:first,
               source:'NOT_SI_APPROVED_INSPECTION',jobStatus:'NOT_APPLICABLE',
-              reportId:null,job:null});
+              inspectionId:null,reportId:null,job:null});
             const rows=siRiskReassessor.status(latest.inspectionId)
               .filter(x=>x.nmcCaseId===item.id&&x.reportId===latest.reportId);
             const job=rows[0]||null;
             return respond(res,200,{status:'ok',caseId:item.id,
               source:'SI_APPROVED_INSPECTION',reportId:latest.reportId,
+              inspectionId:latest.inspectionId,
               jobStatus:job?.status||'NOT_QUEUED',job:job?{
                 status:job.status,aiExecutionStatus:job.aiExecutionStatus||null,
-                errorCode:job.errorCode||null,updatedAt:job.updatedAt||null,
+                errorCode:job.errorCode||null,
+                errorDetails:job.errorDetails||null,
+                updatedAt:job.updatedAt||null,
                 riskSaved:Boolean(job.result),
                 // Never return the full evidence, model output, request payload
                 // or personal details from the internal durable job ledger.
