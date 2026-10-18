@@ -167,10 +167,13 @@ interface FieldAiAdvice{
          <span>📎 {{file.filename}}</span>
          <button type="button" *ngIf="file.mimeType.startsWith('image/')"
           data-testid="si-guided-analyze-image" (click)="analyzeImage(step,file)"
-          [disabled]="!canSave||busy||aiBusy||uploadBusy">
+          [disabled]="!canSave||busy||aiBusy||uploadBusy||file.byteLength>aiImageMaxBytes">
           {{imageLoadingKey===imageReviewKey(step.stepId,file.id)?
            t('Analyzing this image…','جارٍ تحليل هذه الصورة…'):
            t('Analyze Image with AI','تحليل الصورة بالذكاء الاصطناعي')}}</button>
+         <small *ngIf="file.mimeType.startsWith('image/')&&file.byteLength>aiImageMaxBytes">
+          {{t('Saved as inspection evidence. This image exceeds the 2 MiB AI limit; attach an optimized JPEG as a separate photo for AI review.',
+            'تم حفظ الصورة كدليل للمعاينة. حجمها أكبر من حد تحليل AI البالغ 2 ميجابايت؛ أرفق نسخة JPEG أصغر كصورة إضافية للتحليل.')}}</small>
          <small *ngIf="file.mimeType==='application/pdf'">
           {{t('PDF saved; visual AI only supports images.','تم حفظ PDF؛ التحليل البصري للصور فقط.')}}</small>
         </div>
@@ -383,6 +386,7 @@ interface FieldAiAdvice{
  `]
 })
 export class SiGuidedInspectionComponent implements OnInit{
+ readonly aiImageMaxBytes=2*1024*1024;
  orderId='';guide:FieldGuide|null=null;selected:FieldStep|null=null;
  filter:'ALL'|'PENDING'|'COMPLETED'|'A04'='ALL';
  answers:Partial<Record<FieldKind,string|number>>={};
@@ -529,7 +533,8 @@ export class SiGuidedInspectionComponent implements OnInit{
   }catch{this.uploadBusy=false;this.error='SI_GUIDED_FILE_READ_FAILED';}
  }
  analyzeImage(step:FieldStep,file:StepEvidence):void{
-  if(!this.canSave||this.aiBusy||!file.mimeType.startsWith('image/'))return;
+  if(!this.canSave||this.aiBusy||!file.mimeType.startsWith('image/')||
+     file.byteLength>this.aiImageMaxBytes)return;
   if(!window.confirm(this.t('Send photo to Airia AI? A charge may apply. AI is advisory only.',
      'تأكيد إرسال الصورة إلى Airia AI؟ قد توجد تكلفة. النتيجة استشارية فقط.')))return;
   const key=this.imageReviewKey(step.stepId,file.id);
@@ -556,7 +561,11 @@ export class SiGuidedInspectionComponent implements OnInit{
          'تم تحليل صورة '+file.filename+'. راجع الملاحظات بنفسك قبل تسجيل نتيجة المعاينة.');
      },
      error:e=>{this.aiBusy=false;this.imageLoadingKey=null;
-      if(e?.error?.error==='SI_CHECKLIST_VISION_AI_NOT_CONFIGURED_OR_NOT_CONFIRMED'){
+      if(e?.error?.error==='SI_V01_IMAGE_TOO_LARGE_FOR_AI'){
+        this.error=this.t(
+          'This photo is larger than the 2 MiB SI-V01 AI limit. The original evidence is saved; attach a smaller JPEG separately for AI review.',
+          'الصورة أكبر من الحد المسموح لتحليل SI-V01 وهو 2 ميجابايت. الدليل الأصلي محفوظ؛ أرفق نسخة JPEG أصغر بشكل منفصل للتحليل.');
+      }else if(e?.error?.error==='SI_CHECKLIST_VISION_AI_NOT_CONFIGURED_OR_NOT_CONFIRMED'){
         const missing=e?.error?.missing||{};
         const alternative=e?.error?.alternateV01;
         if(alternative?.pipelineConfigured&&alternative?.keyConfigured&&!alternative?.enabled){
