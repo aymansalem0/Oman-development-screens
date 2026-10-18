@@ -171,7 +171,8 @@
       data-testid="nmc-si-forwarded-cases"
       [attr.aria-label]="copy('Smart Inspection cases received by NMC',
         'حالات المعاينة الذكية المحالة إلى المركز البحري الوطني')">
-      <header class="nmc-si-referrals-header">
+      <details class="nmc-si-referrals-disclosure" data-testid="nmc-si-forwarded-disclosure">
+        <summary class="nmc-si-referrals-header">
         <div>
           <span class="nmc-si-referrals-eyebrow">
             {{copy('SMART INSPECTION → NMC · CASE INBOX',
@@ -182,11 +183,19 @@
           <p>{{copy('Only supervisor-approved inspection reports with a saved central NMC Case. AI risk updates require verified A01/A02 evidence; regulatory actions remain human-controlled.',
             'تقارير معاينة معتمدة من المشرف ومرتبطة بحالات محفوظة في NMC فقط. تحديث مخاطر AI يستلزم أدلة A01/A02 معتمدة، وتبقى القرارات الرقابية بشرية.')}}</p>
         </div>
-        <span class="nmc-si-referrals-count">
-          {{inspectionReferralError?'—':forwardedInspectionCases.length}}
-          {{copy('Cases','حالات')}}
-        </span>
-      </header>
+          <span class="nmc-si-referrals-controls">
+            <span class="nmc-si-referrals-count">
+              {{inspectionReferralError?'—':forwardedInspectionCases.length}}
+              {{copy('Cases','حالات')}}
+            </span>
+            <span class="nmc-si-referrals-toggle">
+              <span class="nmc-si-referrals-show">{{copy('Show details','عرض التفاصيل')}}</span>
+              <span class="nmc-si-referrals-hide">{{copy('Hide details','إخفاء التفاصيل')}}</span>
+              <span class="nmc-si-referrals-chevron" aria-hidden="true">▾</span>
+            </span>
+          </span>
+        </summary>
+        <div class="nmc-si-referrals-body">
 
       <p *ngIf="inspectionReferralLoading" class="nmc-si-referrals-note" role="status">
         {{copy('Loading saved inspection cases…','جارٍ تحميل حالات المعاينة المحفوظة…')}}
@@ -268,6 +277,8 @@
           copy('Show fewer cases','عرض عدد أقل'):
           copy('Show all forwarded cases','عرض جميع الحالات المحالة')}}
       </button>
+        </div>
+      </details>
     </section>
 
     <section class="workspace-grid">
