@@ -28,13 +28,16 @@ export function loadGuidedV01Image({caseId,step,evidence,evidenceRoot='/data/si-
   if(raw.mimeType!==evidence.mimeType)fail('SI_V01_IMAGE_INTEGRITY_FAILED');
   bytes=Buffer.from(raw.base64,'base64');
  }
- if(!Buffer.isBuffer(bytes)||!bytes.length||bytes.length>2*1024*1024||
-   sha(bytes)!==evidence.sha256)fail('SI_V01_IMAGE_INTEGRITY_FAILED');
+ if(!Buffer.isBuffer(bytes)||!bytes.length||sha(bytes)!==evidence.sha256)
+  fail('SI_V01_IMAGE_INTEGRITY_FAILED');
  const magic=(evidence.mimeType==='image/jpeg'&&bytes.subarray(0,3).toString('hex')==='ffd8ff')||
    (evidence.mimeType==='image/png'&&bytes.subarray(0,8).toString('hex')==='89504e470d0a1a0a')||
    (evidence.mimeType==='image/webp'&&bytes.subarray(0,4).toString()==='RIFF'&&
     bytes.subarray(8,12).toString()==='WEBP');
  if(!magic)fail('SI_V01_IMAGE_INTEGRITY_FAILED');
+ // Upload may allow a 5 MiB evidence original, but the V01 transport permits 2 MiB.
+ // This is a capacity issue, never proof of modified/tampered inspector evidence.
+ if(bytes.length>2*1024*1024)fail('SI_V01_IMAGE_TOO_LARGE_FOR_AI',413);
  return {caseId,bytes,evidenceId:evidence.id,mimeType:evidence.mimeType,sha256:evidence.sha256,
    checklistItemId:published?evidence.itemId:step.stepId,
    checklistVersion:published?String(step.members.find(m=>m.kind==='PUBLISHED'&&m.id===evidence.itemId)?.revision||''):'',
