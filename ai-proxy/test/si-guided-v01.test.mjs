@@ -41,6 +41,18 @@ test('SI-V01 accepts only case-owned, hash-checked published photo and builds ty
   assert.throws(()=>loadGuidedV01Image({caseId,step,
    evidence:{...evidence,sha256:'0'.repeat(64)},evidenceRoot:dir}),
    /SI_V01_IMAGE_INTEGRITY_FAILED/);
+  // 5 MiB inspector evidence upload policy must not be confused with V01's 2 MiB cap.
+  // Preserve the saved image: the operator can attach a separate smaller JPEG.
+  const largePhoto=Buffer.concat([Buffer.from('89504e470d0a1a0a','hex'),
+   Buffer.alloc(2*1024*1024)]);
+  writeFileSync(join(dir,caseId,imageId+'.png'),largePhoto);
+  assert.throws(()=>loadGuidedV01Image({caseId,step,
+   evidence:{...evidence,sha256:hash(largePhoto)},evidenceRoot:dir}),
+   error=>error.code==='SI_V01_IMAGE_TOO_LARGE_FOR_AI'&&error.status===413);
+  assert.throws(()=>loadGuidedV01Image({caseId,step,
+   evidence:{...evidence,sha256:'0'.repeat(64)},evidenceRoot:dir}),
+   /SI_V01_IMAGE_INTEGRITY_FAILED/);
+  writeFileSync(join(dir,caseId,imageId+'.png'),bytes);
   assert.throws(()=>loadGuidedV01Image({caseId,step,
    evidence:{...evidence,itemId:'other-question'},evidenceRoot:dir}),
    /SI_V01_IMAGE_NOT_LINKED_TO_STEP/);
