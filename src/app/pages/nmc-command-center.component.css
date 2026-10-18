@@ -1443,3 +1443,19 @@ a.big-risk{display:flex;flex-direction:column;align-items:center;justify-content
 .nmc-si-referral-factor-summary{padding:8px 9px;border-top:1px solid #d6e9e8;display:grid;gap:4px}
 .nmc-si-referral-factor-summary strong{font-size:10px;color:#14666e}
 .nmc-si-referral-factor-summary small{font-size:10px;color:#406879;overflow-wrap:anywhere}
+
+/* Native, keyboard-accessible disclosure for supervisor-approved SI -> NMC referrals. */
+.nmc-si-referrals-disclosure > summary{list-style:none;cursor:pointer}
+.nmc-si-referrals-disclosure > summary::-webkit-details-marker{display:none}
+.nmc-si-referrals-disclosure > summary:focus-visible{outline:3px solid #149b96;outline-offset:4px;border-radius:7px}
+.nmc-si-referrals-disclosure > .nmc-si-referrals-header{margin-bottom:0}
+.nmc-si-referrals-body{margin-top:15px}
+.nmc-si-referrals-controls{display:flex;align-items:center;gap:13px;flex-wrap:wrap}
+.nmc-si-referrals-toggle{display:inline-flex;align-items:center;gap:7px;color:#146c7d;font-size:11px;font-weight:800;white-space:nowrap}
+.nmc-si-referrals-chevron{display:inline-block;font-size:15px;transition:transform .18s ease}
+.nmc-si-referrals-disclosure[open] .nmc-si-referrals-chevron{transform:rotate(180deg)}
+.nmc-si-referrals-hide{display:none}
+.nmc-si-referrals-disclosure[open] .nmc-si-referrals-show{display:none}
+.nmc-si-referrals-disclosure[open] .nmc-si-referrals-hide{display:inline}
+@media(max-width:680px){.nmc-si-referrals-controls{gap:9px}}
+@media(prefers-reduced-motion:reduce){.nmc-si-referrals-chevron{transition:none}}
