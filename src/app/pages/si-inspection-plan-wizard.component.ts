@@ -307,10 +307,35 @@ interface CapacityPreview{
       </p>
       <p class="hint">{{copy('Source-backed mandatory candidates and separately recorded officer inclusions may add vessels beyond the two optional quota totals. The combined roster has one row per IMO.',
        'قد تزيد السفن الإلزامية والاختيارات اليدوية الموثقة عن إجمالي الحصتين الاختياريتين، مع عدم تكرار أي IMO.')}}</p>
-      <div class="capacity-vessel-form" *ngFor="let v of ctx.items">
-       <div class="capacity-vessel-title"><b>IMO {{v.imo}} · {{v.name}}</b>
-        <span>{{v.regimes.join(' · ')}}</span></div>
-       <div class="capacity-input-grid">
+      <details class="capacity-vessel-list" data-testid="si-capacity-vessel-list">
+       <summary class="capacity-vessel-list-title">
+        <strong>{{copy('Vessel visit & capacity inputs','بيانات زيارات السفن والطاقة التشغيلية')}}</strong>
+        <span class="capacity-vessel-list-count">{{ctx.items.length}} {{copy('vessels','سفينة')}}</span>
+        <span class="capacity-disclosure-label">
+         <span class="capacity-when-closed">{{copy('Show vessels','عرض السفن')}}</span>
+         <span class="capacity-when-open">{{copy('Hide vessels','إخفاء السفن')}}</span>
+         <span class="capacity-disclosure-chevron" aria-hidden="true">▾</span>
+        </span>
+       </summary>
+       <p class="hint">{{copy('Open any vessel to review or edit its visit and capacity inputs. Collapsing does not change entered values.',
+         'افتح أي سفينة لمراجعة أو تعديل بيانات الزيارة والطاقة. إخفاء التفاصيل لا يغير القيم المدخلة.')}}</p>
+       <details class="capacity-vessel-form" *ngFor="let v of ctx.items"
+        [attr.data-vessel-imo]="v.imo" data-testid="si-capacity-vessel-disclosure">
+        <summary class="capacity-vessel-title">
+         <b>IMO {{v.imo}} · {{v.name}}</b>
+         <span class="capacity-vessel-meta">
+          <span>{{v.regimes.join(' · ')}}</span>
+          <small>{{copy('Port','الميناء')}}: {{v.portId||'—'}} ·
+           {{copy('Duration','المدة')}}: {{v.durationMinutes}} {{copy('min','دقيقة')}}</small>
+         </span>
+         <span class="capacity-disclosure-label">
+          <span class="capacity-when-closed">{{copy('Show details','عرض التفاصيل')}}</span>
+          <span class="capacity-when-open">{{copy('Hide details','إخفاء التفاصيل')}}</span>
+          <span class="capacity-disclosure-chevron" aria-hidden="true">▾</span>
+         </span>
+        </summary>
+        <div class="capacity-vessel-body">
+         <div class="capacity-input-grid">
         <label>{{copy('Inspection port','ميناء المعاينة')}}
          <select [(ngModel)]="v.portId" [disabled]="v.portSourceLocked||capacityDemoMode"
           (ngModelChange)="invalidateCapacityPreview()">
@@ -360,7 +385,9 @@ interface CapacityPreview{
           </span>
          </ng-container>
         </span></div>
-      </div>
+        </div>
+       </details>
+      </details>
       <button class="next" type="button" (click)="previewCapacity()"
        [disabled]="capacityBusy||capacityAiBusy">
        {{copy('02 · Verify Capacity & Create Plan Alternatives',
@@ -551,7 +578,7 @@ interface CapacityPreview{
  `,
  styles:[`
  :host{display:block;min-height:100vh;background:#edf4f7;color:#143c53}
- .si-layout{min-height:100vh}.wizard-main{margin-inline-start:264px;padding:28px 36px 55px;max-width:1700px}
+ .si-layout{min-height:100vh}.wizard-main{margin-inline-start:240px;padding:20px 16px 48px;max-width:1700px}
  .wizard-hero{display:flex;justify-content:space-between;align-items:center;gap:22px;margin:10px 0 23px}
  .eyebrow{font-size:11px;letter-spacing:1.3px;color:#04887f;font-weight:850;margin:0 0 8px}
  h1{font-size:29px;color:#0d3651;margin:0 0 9px}h2{font-size:21px;margin:0 0 9px}
@@ -590,6 +617,34 @@ interface CapacityPreview{
  .capacity-vessel-form{border:1px solid #d7e7eb;border-radius:10px;padding:15px;margin:12px 0;background:#fcfefe}
  .capacity-vessel-title{display:flex;justify-content:space-between;gap:12px;
   flex-wrap:wrap;font-size:12px;color:#126e7e;margin-bottom:12px}
+
+ /* Accessible, data-preserving two-level capacity form disclosures. */
+ .capacity-vessel-list{border:1px solid #c9e0e6;background:#f6fafb;
+  border-radius:11px;padding:11px 12px;margin:15px 0}
+ .capacity-vessel-list-title,.capacity-vessel-form > summary{
+  list-style:none;cursor:pointer;display:flex;align-items:center;gap:13px;flex-wrap:wrap}
+ .capacity-vessel-list-title::-webkit-details-marker,
+ .capacity-vessel-form > summary::-webkit-details-marker{display:none}
+ .capacity-vessel-list-title > strong{font-size:13px;color:#1c5066}
+ .capacity-vessel-list-count{font-size:11px;font-weight:850;color:#0b766d;
+  padding:6px 10px;background:#e2f5ef;border-radius:999px}
+ .capacity-vessel-list > summary:focus-visible,
+ .capacity-vessel-form > summary:focus-visible{outline:3px solid #0e8d86;outline-offset:4px;border-radius:7px}
+ .capacity-vessel-list > .hint{margin:12px 3px}
+ .capacity-vessel-list .capacity-vessel-form{margin:10px 0;padding:11px 12px;background:#fff}
+ .capacity-vessel-form > summary{margin-bottom:0}
+ .capacity-vessel-form .capacity-vessel-body{margin-top:13px}
+ .capacity-vessel-meta{display:grid;gap:4px;min-width:140px;flex:1}
+ .capacity-vessel-meta > span{color:#648292}
+ .capacity-vessel-meta small{font-size:10px;color:#537789;font-weight:650}
+ .capacity-disclosure-label{display:inline-flex;align-items:center;gap:7px;
+  margin-inline-start:auto;font-size:11px;font-weight:800;color:#0b766d;white-space:nowrap}
+ .capacity-when-open{display:none}
+ details[open] > summary > .capacity-disclosure-label .capacity-when-closed{display:none}
+ details[open] > summary > .capacity-disclosure-label .capacity-when-open{display:inline}
+ .capacity-disclosure-chevron{display:inline-block;font-size:16px;transition:transform .18s ease}
+ details[open] > summary > .capacity-disclosure-label .capacity-disclosure-chevron{transform:rotate(180deg)}
+ @media(prefers-reduced-motion:reduce){.capacity-disclosure-chevron{transition:none}}
  .capacity-vessel-title span{color:#648292}
  .capacity-input-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
  .capacity-input-grid label{display:grid;gap:5px;font-size:11px;color:#31546a;font-weight:800}
@@ -666,7 +721,7 @@ interface CapacityPreview{
  .step-actions span{color:#607988;font-weight:850}.job-chip{padding:8px 12px;border-radius:16px;background:#dcf5e6;color:#087450}
  .job-chip.warning{background:#fff1de;color:#935e25}
  .error-text{color:#aa503b}
- @media(max-width:1220px){.wizard-main{margin-inline-start:90px;padding:24px}}
+ @media(min-width:961px) and (max-width:1220px){.wizard-main{margin-inline-start:66px;padding:18px 14px}}
  @media(max-width:960px){.wizard-main{margin-inline-start:0;padding:20px}.steps{grid-template-columns:repeat(2,1fr)}}
  @media(max-width:600px){.wizard-main{padding:13px}.wizard-hero,.panel-head{display:block}.steps{gap:4px}.step-item{font-size:10px;padding:7px}
  .panel{padding:15px}.summary,.review-stats{grid-template-columns:1fr}.step-actions{gap:7px}}
