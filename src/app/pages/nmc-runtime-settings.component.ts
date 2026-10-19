@@ -124,7 +124,7 @@ export function auditAiGovernanceGrouping(descriptors:ReadonlyArray<{key:string}
                 [disabled]="!airiaConsoleUrl(agentPipeline)"
                 [title]="airiaConsoleUrl(agentPipeline)?
                  tr('Open this Agent in Airia','فتح هذا الوكيل على Airia'):
-                 tr('Configure and publish Airia Console URL first','اضبط وانشر رابط واجهة Airia أولًا')">
+                 tr('Configure a valid Agent Pipeline ID first','اضبط معرّف Pipeline صحيحًا للوكيل أولًا')">
                 Airia ↗
               </button>
             </ng-container>
@@ -158,11 +158,8 @@ export function auditAiGovernanceGrouping(descriptors:ReadonlyArray<{key:string}
                   <small>https://api.mena.airia.ai / https://mena.api.airia.ai</small>
                 </ng-container>
                 <ng-container *ngIf="item.type==='ui-template'">
-                  <input class="url-field" type="text" spellcheck="false"
-                    [ngModel]="draft[item.key]" (ngModelChange)="draft[item.key]=$event"
-                    placeholder="https://your-airia-console.airia.ai/.../{pipelineId}"/>
-                  <small>{{tr('Paste an actual Airia console Pipeline URL and replace its pipeline UUID with {pipelineId}. This is a website link, NOT the Airia API endpoint.',
-                    'ضع رابط شاشة Pipeline الحقيقية في Airia، واستبدل معرّف Pipeline بـ {pipelineId}. هذا رابط للواجهة وليس API.')}}</small>
+                  <small>{{tr('Legacy console template retained in backend settings for compatibility. Agent buttons now open the fixed Airia MENA workspace URL using each saved Pipeline ID; nothing needs to be configured here.',
+                    'تم الاحتفاظ بإعداد رابط الواجهة القديم في الخادم للتوافق. أزرار الوكلاء تستخدم الآن رابط مساحة عمل Airia MENA الثابت ومعرّف Pipeline المحفوظ لكل وكيل؛ لا يلزم ضبط هذا الحقل.')}}</small>
                 </ng-container>
                 <ng-container *ngIf="item.type==='pipeline'">
                   <input class="url-field" type="text" spellcheck="false"
@@ -174,15 +171,15 @@ export function auditAiGovernanceGrouping(descriptors:ReadonlyArray<{key:string}
                   <div class="airia-link-actions">
                     <button class="restore" type="button" (click)="openAiriaEmbedded(item.key)"
                       [disabled]="!airiaConsoleUrl(item.key)"
-                      [title]="airiaConsoleUrl(item.key)?tr('Open Airia UI inside MOEI','فتح واجهة Airia داخل المنصة'):tr('Configure and publish Airia Console URL in Platform · Airia Connection first','اضبط وانشر رابط واجهة Airia في قسم الاتصال أولًا')">
+                      [title]="airiaConsoleUrl(item.key)?tr('Open Airia UI inside MOEI','فتح واجهة Airia داخل المنصة'):tr('Configure a valid saved Agent Pipeline ID first','اضبط معرّف Pipeline محفوظًا وصحيحًا للوكيل أولًا')">
                       {{tr('Open inside Platform','فتح داخل المنصة')}}</button>
                     <button class="restore" type="button" (click)="openAiriaExternal(item.key)"
                       [disabled]="!airiaConsoleUrl(item.key)"
-                      [title]="airiaConsoleUrl(item.key)?tr('Open Agent page in a new tab','فتح صفحة الوكيل في تبويب جديد'):tr('Airia Console URL has not been published yet','رابط واجهة Airia لم يُنشر بعد')">
+                      [title]="airiaConsoleUrl(item.key)?tr('Open Agent page in a new tab','فتح صفحة الوكيل في تبويب جديد'):tr('A valid saved Agent Pipeline ID is required','مطلوب معرّف Pipeline محفوظ وصحيح للوكيل')">
                       {{tr('Open in Airia ↗','فتح Airia في تبويب جديد ↗')}}</button>
                     <small class="airia-console-note" *ngIf="!airiaConsoleUrl(item.key)">
-                      {{tr('To enable: set AIRIA_CONSOLE_PIPELINE_URL_TEMPLATE under Platform · Airia Connection, then Publish to backend.',
-                        'للتفعيل: اضبط AIRIA_CONSOLE_PIPELINE_URL_TEMPLATE في Platform · Airia Connection ثم اضغط Publish to backend.')}}</small>
+                      {{tr('To enable: configure a valid Pipeline ID for this Agent and publish the Agent setting.',
+                        'للتفعيل: أدخل معرّف Pipeline صحيحًا لهذا الوكيل ثم انشر إعداد الوكيل.')}}</small>
                   </div>
                   <button class="restore" type="button"
                     *ngIf="item.key==='AIRIA_SI_CHECKLIST_VISION_PIPELINE_ID'"
@@ -475,27 +472,19 @@ export class NmcRuntimeSettingsComponent implements OnInit{
     const section=AI_GOVERNANCE_SECTIONS.find(x=>x.id===group);
     return section?.keys.find(k=>k.startsWith('AIRIA_')&&k.endsWith('_PIPELINE_ID'))||null;
   }
-  /** Only allow Airia HTTPS console hosts. The link is navigation, not an API call.
-   * Use published backend configuration to prevent unreviewed draft links.
+  /** Frontend-only Airia agent navigation for the agreed MENA tenant.
+   * Reuse each PUBLISHED pipeline UUID as the agent route identifier.
+   * No runtime template, environment variable, Airia API call, or backend change.
+   * Keep UUID validation so an invalid or unset ID never produces a link.
    */
   airiaConsoleUrl(pipelineSettingKey:string):string|null{
     if(!pipelineSettingKey.startsWith('AIRIA_')||
        !pipelineSettingKey.endsWith('_PIPELINE_ID')||!this.snapshot)return null;
-    const template=this.snapshot.values['AIRIA_CONSOLE_PIPELINE_URL_TEMPLATE'];
     const id=this.snapshot.values[pipelineSettingKey];
-    if(typeof template!=='string'||typeof id!=='string'||
-       !/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i.test(id)||
-       (template.match(/\{pipelineId\}/g)||[]).length!==1)return null;
-    const link=template.replace('{pipelineId}',encodeURIComponent(id));
-    try{
-      const u=new URL(link);
-      const hostname=u.hostname.toLowerCase();
-      if(u.protocol!=='https:'||u.username||u.password||u.port||
-         !(hostname==='airia.ai'||hostname.endsWith('.airia.ai')||
-           hostname==='airia.com'||hostname.endsWith('.airia.com'))||
-         u.pathname.startsWith('/v1/'))return null;
-      return u.toString();
-    }catch{return null;}
+    if(typeof id!=='string'||
+       !/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i.test(id))return null;
+    return 'https://mena.airia.ai/01a0a9c2-c849-7527-bb48-8b4a92520cd7/agents/'+
+      id+'/1.00';
   }
   openAiriaEmbedded(key:string):void{
     const link=this.airiaConsoleUrl(key);
